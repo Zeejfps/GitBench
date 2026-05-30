@@ -40,6 +40,7 @@ public sealed record CommitsViewStyles(
     uint BadgeLocalBackground,
     uint BadgeRemoteBackground,
     uint BadgeHeadBackground,
+    uint BadgeTagBackground,
     uint BadgeText);
 
 public partial record ThemeStyles
@@ -88,5 +89,6 @@ public partial record ThemeStyles
             BadgeLocalBackground: badge.LocalBg,
             BadgeRemoteBackground: badge.RemoteBg,
             BadgeHeadBackground: badge.HeadBg,
+            BadgeTagBackground: badge.TagBg,
             BadgeText: badge.Text);
 }

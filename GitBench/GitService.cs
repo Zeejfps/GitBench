@@ -103,6 +103,16 @@ public sealed class GitService : IGitService
                 stashIndex++;
             }
 
+            // Tags peel to the commit they ultimately reference (annotated tags point at a
+            // tag object, lightweight ones directly at the commit). Adding the commit as a
+            // ref tip keeps tagged history reachable even when no branch points at it.
+            foreach (var tag in lg.Tags)
+            {
+                if (tag.PeeledTarget is not Commit tagged) continue;
+                refTips.Add(tagged);
+                AddBadge(refsBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
+            }
+
             if (refTips.Count == 0 && headTip != null)
                 refTips.Add(headTip);
 

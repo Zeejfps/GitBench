@@ -24,13 +24,13 @@ jobs:
             rid: osx-arm64
             channel: osx-arm64
             exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon_mac.png
+            icon: GitBench/Assets/commit_bench_icon_mac.icns
             extra: "--bundleId com.gitbench.app"
           - os: macos-13               # Intel runner
             rid: osx-x64
             channel: osx-x64
             exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon_mac.png
+            icon: GitBench/Assets/commit_bench_icon_mac.icns
             extra: "--bundleId com.gitbench.app"
           - os: ubuntu-latest
             rid: linux-x64
@@ -68,6 +68,13 @@ jobs:
         id: ver
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"   # v1.2.3 -> 1.2.3
+
+      # vpk pack --icon requires an .icns on macOS; convert the PNG with sips/iconutil
+      # (same logic local .app builds use). Windows (.ico) and Linux (.png) need no conversion.
+      - name: Generate macOS .icns
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash GitBench/png-to-icns.sh GitBench/Assets/commit_bench_icon_mac.png GitBench/Assets/commit_bench_icon_mac.icns
 
       - name: Publish (Native AOT, per-RID)
         shell: bash

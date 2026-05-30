@@ -457,6 +457,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 RefKind.Stash => LucideIcons.Stash,
                 RefKind.LocalBranch => LucideIcons.Branch,
                 RefKind.RemoteBranch => LucideIcons.Branch,
+                RefKind.Tag => LucideIcons.Tag,
                 _ => null,
             };
             var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, _badgeIconStyle) : 0f;
@@ -468,6 +469,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 RefKind.LocalBranch => _styles.BadgeLocalBackground,
                 RefKind.RemoteBranch => _styles.BadgeRemoteBackground,
                 RefKind.Head => _styles.BadgeHeadBackground,
+                RefKind.Tag => _styles.BadgeTagBackground,
                 _ => _styles.BadgeLocalBackground,
             };
             c.DrawRect(new DrawRectInputs

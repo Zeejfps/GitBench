@@ -94,6 +94,7 @@ public partial record ThemeStyles
             LocalBg: 0xFFDBEAFEu,
             RemoteBg: 0xFFEDE9FEu,
             HeadBg: 0xFFFEF3C7u,
+            TagBg: 0xFFD1FAE5u,
             Text: p.TextBody);
 
         return BuildStyles(p, status, banner, tooltip, hunkButton, commitBadge);
