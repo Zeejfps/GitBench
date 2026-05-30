@@ -1,0 +1,118 @@
+name: release
+
+# Push a SemVer tag (e.g. v1.2.3) to build + publish a release for every platform.
+on:
+  push:
+    tags: [ 'v*' ]
+
+permissions:
+  contents: write          # vpk upload uses GITHUB_TOKEN to create/attach release assets
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false     # one platform failing must not strand the others mid-upload
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            channel: win-x64
+            exe: GitBench.exe
+            icon: GitBench/Assets/commit_bench_icon.ico
+            extra: ""
+          - os: macos-latest          # Apple Silicon runner
+            rid: osx-arm64
+            channel: osx-arm64
+            exe: GitBench
+            icon: GitBench/Assets/commit_bench_icon_mac.png
+            extra: "--bundleId com.gitbench.app"
+          - os: macos-13               # Intel runner
+            rid: osx-x64
+            channel: osx-x64
+            exe: GitBench
+            icon: GitBench/Assets/commit_bench_icon_mac.png
+            extra: "--bundleId com.gitbench.app"
+          - os: ubuntu-latest
+            rid: linux-x64
+            channel: linux-x64
+            exe: GitBench
+            icon: GitBench/Assets/commit_bench_icon.png
+            extra: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # .gitmodules points at the framework over SSH, but the repo is public — rewrite to
+      # HTTPS so the default runner credentials can clone it (no deploy key needed).
+      - name: Init public submodule over HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Ensure global tools on PATH
+        shell: bash
+        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Install vpk
+        shell: bash
+        run: dotnet tool install -g vpk
+
+      - name: Compute version from tag
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"   # v1.2.3 -> 1.2.3
+
+      - name: Publish (Native AOT, per-RID)
+        shell: bash
+        run: >
+          dotnet publish GitBench/GitBench.csproj
+          -c Release -r ${{ matrix.rid }}
+          -p:BuildMacBundle=false
+          -o publish/${{ matrix.rid }}
+
+      # Pull this channel's prior release so vpk can build delta packages. The first release
+      # for a channel has nothing to download, so don't fail the job.
+      - name: Download prior release (for deltas)
+        shell: bash
+        continue-on-error: true
+        run: >
+          vpk download github
+          --repoUrl https://github.com/Zeejfps/GitBench
+          --channel ${{ matrix.channel }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pack
+        shell: bash
+        run: >
+          vpk pack
+          --packId GitBench
+          --packVersion ${{ steps.ver.outputs.version }}
+          --packDir publish/${{ matrix.rid }}
+          --mainExe ${{ matrix.exe }}
+          --packTitle GitBench
+          --packAuthors Zeejfps
+          --channel ${{ matrix.channel }}
+          --runtime ${{ matrix.rid }}
+          --icon ${{ matrix.icon }}
+          ${{ matrix.extra }}
+
+      # All four jobs upload to the same tag but a distinct channel, so Velopack's per-channel
+      # assets and releases.<channel>.json manifests sit side-by-side in one GitHub Release
+      # without clobbering each other.
+      - name: Upload to GitHub Release
+        shell: bash
+        run: >
+          vpk upload github
+          --repoUrl https://github.com/Zeejfps/GitBench
+          --token ${{ secrets.GITHUB_TOKEN }}
+          --channel ${{ matrix.channel }}
+          --releaseName "GitBench ${{ steps.ver.outputs.version }}"
+          --tag ${{ github.ref_name }}
+          --publish

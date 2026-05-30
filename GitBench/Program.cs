@@ -1,13 +1,20 @@
 using System.Runtime.InteropServices;
 using GitGui;
+using Velopack;
+using Velopack.Sources;
 using ZGF.AppUtils;
 using ZGF.Core;
 using ZGF.Gui;
 using ZGF.Observable;
 
+// Must be the very first thing that runs: Velopack's install/update hooks are driven by
+// special CLI args the installer/updater passes, and any file I/O or GUI work before this
+// can leave an update half-applied. No callbacks here — the DI container doesn't exist yet.
+VelopackApp.Build().Run();
+
 var prefsPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-    "GitGui",
+    "GitBench",
     "preferences.json");
 using var preferences = new PreferencesService(PreferencesStore.Load(prefsPath), prefsPath);
 var initialPrefs = preferences.Current;
@@ -37,7 +44,7 @@ context.AddService<IPopupNativeDecorator>(
 
 var statePath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-    "GitGui",
+    "GitBench",
     "state.json");
 var initialState = RepoStateStore.Load(statePath);
 var registry = new RepoRegistry(initialState, statePath);
@@ -48,10 +55,13 @@ context.AddService<IGitService>(new GitService(repoActivity));
 context.AddService<IDragController>(new DragController(registry));
 context.AddService(new LocalChangesSelectionStore());
 
-var appView = new AppView(preferences);
+var updateService = new UpdateService();
+context.AddService(updateService);
+
+var appView = new AppView(preferences, updateService);
 var appHost = GuiApp.CreateDefault(new StartupConfig
 {
-    WindowTitle = "GitGui",
+    WindowTitle = "GitBench",
     WindowWidth = initialPrefs.WindowWidth,
     WindowHeight = initialPrefs.WindowHeight,
     IsUndecorated = false
@@ -87,5 +97,33 @@ using var submoduleSync = new SubmoduleSyncService(
     context.Require<IGitService>(),
     context.Require<IUiDispatcher>(),
     messageBus);
+
+// Check GitHub Releases for an update off the UI thread. The per-OS/arch channel must match
+// the --channel vpk packs with in CI (see .github/workflows/release.yml). Velopack only finds
+// updates from an installed build, so a plain `dotnet run` quietly no-ops via the catch.
+static string RuntimeChannel() =>
+    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win-x64"
+    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+        ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64")
+        : "linux-x64";
+
+Func<Task> checkForUpdatesAsync = async () =>
+{
+    try
+    {
+        var source = new GithubSource("https://github.com/Zeejfps/GitBench", null, false);
+        var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = RuntimeChannel() });
+        var update = await manager.CheckForUpdatesAsync();
+        if (update is null) return;
+        await manager.DownloadUpdatesAsync(update);
+        // Marshal back to the UI thread — State<T>/views are single-threaded.
+        context.Require<IUiDispatcher>().Post(() => updateService.OfferUpdate(manager, update));
+    }
+    catch
+    {
+        // Offline, no published release for this channel yet, or a non-installed dev build.
+    }
+};
+_ = Task.Run(checkForUpdatesAsync);
 
 appHost.Run();

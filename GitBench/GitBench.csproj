@@ -12,6 +12,7 @@
 
     <ItemGroup>
         <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
+        <PackageReference Include="Velopack" Version="1.0.1" />
     </ItemGroup>
 
     <ItemGroup>
@@ -34,13 +35,20 @@
         <ProjectReference Include="..\framework\ZGF.Observable\ZGF.Observable.csproj" />
     </ItemGroup>
 
+    <!-- Defaults true so local `dotnet publish -r osx-*` still yields a runnable .app. CI release
+         builds pass -p:BuildMacBundle=false so vpk owns the macOS bundle (it embeds the Velopack
+         update structure); otherwise we'd ship a non-updatable hand-rolled bundle. -->
+    <PropertyGroup>
+        <BuildMacBundle Condition="'$(BuildMacBundle)' == ''">true</BuildMacBundle>
+    </PropertyGroup>
+
     <!-- Run after the NativeAOT SDK's CopyNativeBinary/_CopyAotSymbols (both AfterTargets="Publish"),
          not after Publish itself — otherwise PublishDir still contains the singlefilehost bootstrap. -->
     <Target Name="CreateMacAppBundle" AfterTargets="CopyNativeBinary;_CopyAotSymbols"
-            Condition="'$(RuntimeIdentifier)' != '' AND $(RuntimeIdentifier.StartsWith('osx'))">
+            Condition="'$(BuildMacBundle)' == 'true' AND '$(RuntimeIdentifier)' != '' AND $(RuntimeIdentifier.StartsWith('osx'))">
         <PropertyGroup>
-            <MacBundleId>com.gitgui.app</MacBundleId>
-            <MacBundleDisplayName>GitGui</MacBundleDisplayName>
+            <MacBundleId>com.gitbench.app</MacBundleId>
+            <MacBundleDisplayName>GitBench</MacBundleDisplayName>
             <MacBundleVersion>1.0.0</MacBundleVersion>
             <MacBundleIcon>$(MSBuildThisFileDirectory)Assets/commit_bench_icon_mac.png</MacBundleIcon>
             <MacAppBundleDir>$([System.IO.Path]::GetFullPath('$(PublishDir)../$(AssemblyName).app'))</MacAppBundleDir>

@@ -7,7 +7,7 @@ namespace GitGui;
 
 public sealed class AppView : MultiChildView
 {
-    public AppView(PreferencesService preferences)
+    public AppView(PreferencesService preferences, UpdateService updateService)
     {
         var prefs = preferences.Current;
         Children.Add(new BorderLayoutView
@@ -38,6 +38,7 @@ public sealed class AppView : MultiChildView
                         CrossAxisAlignment = CrossAxisAlignment.Stretch,
                         Children =
                         {
+                            new UpdateBannerView(updateService),
                             new OperationBannerView(),
                             new ActionsToolbar(),
                         },
