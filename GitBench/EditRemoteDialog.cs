@@ -25,16 +25,30 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
     private bool _suppressUrlChanged;
 
     public EditRemoteDialog(Repo repo, string remoteName, Action onClose)
+        : this(new EditRemoteRequest(repo, remoteName),
+               "Remote", "Edit URL of the remote repository", "Save", onClose)
+    {
+    }
+
+    // Add-mode: seeds the remote name with the conventional "origin" and runs
+    // `git remote add` on save instead of rename/set-url.
+    public EditRemoteDialog(Repo repo, Action onClose)
+        : this(new EditRemoteRequest(repo, "origin", IsAdd: true),
+               "Add Remote", "Add a new remote repository", "Add", onClose)
+    {
+    }
+
+    private EditRemoteDialog(EditRemoteRequest request, string title, string subtitleText, string confirmLabel, Action onClose)
     {
         Width = 540f;
         _onClose = onClose;
 
-        var subtitle = new TextView { Text = "Edit URL of the remote repository" };
+        var subtitle = new TextView { Text = subtitleText };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
         var nameLabel = DialogFrame.Label("Remote");
         _nameInput = DialogFrame.TextInput();
-        _nameInput.Enter(remoteName);
+        _nameInput.Enter(request.RemoteName);
         var nameBox = DialogFrame.WrapInput(_nameInput);
 
         var urlLabel = DialogFrame.Label("Repository URL");
@@ -55,9 +69,9 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _saveButton = new DialogButton("Save") { Height = DialogFrame.DefaultButtonHeight };
+        _saveButton = new DialogButton(confirmLabel) { Height = DialogFrame.DefaultButtonHeight };
 
-        AddChildToSelf(DialogFrame.Build("Remote", onClose, new FlexColumnView
+        AddChildToSelf(DialogFrame.Build(title, onClose, new FlexColumnView
         {
             Gap = 10,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
@@ -81,7 +95,6 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         _nameInput.UseController(_ => _nameController);
         _urlInput.UseController(_ => new CheckoutDialogKbmController(_urlInput, Confirm, onClose));
 
-        var request = new EditRemoteRequest(repo, remoteName);
         this.UseViewModel(
             ctx => new EditRemoteDialogViewModel(
                 request,

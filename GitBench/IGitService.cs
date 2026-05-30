@@ -20,6 +20,7 @@ public interface IGitService
     IReadOnlyList<string> GetRemoteNames(Repo repo);
     string? GetRemoteUrl(Repo repo, string remoteName);
     EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url);
+    EditRemoteOutcome AddRemote(Repo repo, string name, string url);
     PullOutcome Pull(Repo repo);
     FetchOutcome Fetch(Repo repo);
     FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null);

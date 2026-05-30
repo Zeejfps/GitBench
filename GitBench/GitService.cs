@@ -1007,6 +1007,25 @@ public sealed class GitService : IGitService
         }
     }
 
+    public EditRemoteOutcome AddRemote(Repo repo, string name, string url)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new EditRemoteOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+            var (added, addError) = RunMutation(repo.Path, new[] { "remote", "add", name, url });
+            if (!added) return new EditRemoteOutcome(false, addError ?? "Failed to add remote.");
+
+            return new EditRemoteOutcome(true, null);
+        }
+        catch (Exception ex)
+        {
+            return new EditRemoteOutcome(false, ex.Message);
+        }
+    }
+
     public PullOutcome Pull(Repo repo)
     {
         try

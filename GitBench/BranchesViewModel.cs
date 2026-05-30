@@ -559,6 +559,22 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return items;
     }
 
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildRemotesHeaderMenuItems()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
+
+        var capturedRepo = repo;
+        return new List<RepoBarContextMenu.Item>
+        {
+            new RepoBarContextMenu.Item(
+                "Add remote…",
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog(
+                    capturedRepo, onClose))),
+                LucideIcons.Fetch),
+        };
+    }
+
     public IReadOnlyList<RepoBarContextMenu.Item> BuildRemoteHeaderMenuItems(string remoteName)
     {
         var repo = _registry.Active.Value;

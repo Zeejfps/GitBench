@@ -52,8 +52,9 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
             dispatcher,
             work: () =>
             {
-                var outcome = gitService.EditRemote(
-                    request.Repo, request.RemoteName, _name.Value.Trim(), _url.Value.Trim());
+                var outcome = request.IsAdd
+                    ? gitService.AddRemote(request.Repo, _name.Value.Trim(), _url.Value.Trim())
+                    : gitService.EditRemote(request.Repo, request.RemoteName, _name.Value.Trim(), _url.Value.Trim());
                 return outcome.Success ? null : (outcome.ErrorMessage ?? "Failed to edit remote.");
             },
             onSuccess: () =>
@@ -63,16 +64,20 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
             },
             gate: gate);
 
-        Task.Run(() =>
+        // Add-mode has no existing remote to read a URL from; leave the field blank.
+        if (!request.IsAdd)
         {
-            var url = gitService.GetRemoteUrl(request.Repo, request.RemoteName) ?? string.Empty;
-            dispatcher.Post(() =>
+            Task.Run(() =>
             {
-                _originalUrl = url;
-                _url.Value = url;
-                UrlReplaced?.Invoke(url);
+                var url = gitService.GetRemoteUrl(request.Repo, request.RemoteName) ?? string.Empty;
+                dispatcher.Post(() =>
+                {
+                    _originalUrl = url;
+                    _url.Value = url;
+                    UrlReplaced?.Invoke(url);
+                });
             });
-        });
+        }
     }
 
     public void SetName(string value) => _name.Value = value;
@@ -90,4 +95,4 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
     public void Dispose() { }
 }
 
-public readonly record struct EditRemoteRequest(Repo Repo, string RemoteName);
+public readonly record struct EditRemoteRequest(Repo Repo, string RemoteName, bool IsAdd = false);
