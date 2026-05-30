@@ -42,8 +42,9 @@ public sealed record CommitsViewStyles(
     uint BadgeHeadBackground,
     uint BadgeTagBackground,
     uint BadgeText,
-    uint BadgeBranchTrackedIcon,
-    uint BadgeBranchLocalOnlyIcon);
+    uint BadgeBranchInSyncIcon,
+    uint BadgeBranchDivergedIcon,
+    uint BadgeBranchUntrackedIcon);
 
 public partial record ThemeStyles
 {
@@ -93,6 +94,7 @@ public partial record ThemeStyles
             BadgeHeadBackground: badge.HeadBg,
             BadgeTagBackground: badge.TagBg,
             BadgeText: badge.Text,
-            BadgeBranchTrackedIcon: badge.TrackedIcon,
-            BadgeBranchLocalOnlyIcon: badge.LocalOnlyIcon);
+            BadgeBranchInSyncIcon: badge.BranchInSyncIcon,
+            BadgeBranchDivergedIcon: badge.BranchDivergedIcon,
+            BadgeBranchUntrackedIcon: badge.BranchUntrackedIcon);
 }

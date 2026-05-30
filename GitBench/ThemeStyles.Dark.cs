@@ -94,8 +94,9 @@ public partial record ThemeStyles
             HeadBg: 0xFF6B4A2Fu,
             TagBg: 0xFF2F6B57u,
             Text: p.TextPrimary,
-            TrackedIcon: status.SuccessSoft,
-            LocalOnlyIcon: p.TextDisabled);
+            BranchInSyncIcon: status.Success,
+            BranchDivergedIcon: status.Warning,
+            BranchUntrackedIcon: p.TextDisabled);
 
         return BuildStyles(p, status, banner, tooltip, hunkButton, commitBadge);
     }

@@ -90,5 +90,6 @@ public sealed record CommitBadgePalette(
     uint HeadBg,
     uint TagBg,
     uint Text,
-    uint TrackedIcon,
-    uint LocalOnlyIcon);
+    uint BranchInSyncIcon,
+    uint BranchDivergedIcon,
+    uint BranchUntrackedIcon);
