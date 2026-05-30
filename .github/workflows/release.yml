@@ -6,12 +6,15 @@ on:
     tags: [ 'v*' ]
 
 permissions:
-  contents: write          # vpk upload uses GITHUB_TOKEN to create/attach release assets
+  contents: write          # the publish job uses GITHUB_TOKEN to create/attach release assets
 
 jobs:
-  release:
+  # Build + Velopack-pack each platform on its own runner (Native AOT can't cross-compile),
+  # then hand the packaged output to the publish job as an artifact. No job touches GitHub
+  # Releases here, so the matrix jobs never race over who creates the release.
+  build:
     strategy:
-      fail-fast: false     # one platform failing must not strand the others mid-upload
+      fail-fast: false     # one platform failing shouldn't abandon the others
       matrix:
         include:
           - os: windows-latest
@@ -110,16 +113,58 @@ jobs:
           --icon ${{ matrix.icon }}
           ${{ matrix.extra }}
 
-      # All four jobs upload to the same tag but a distinct channel, so Velopack's per-channel
-      # assets and releases.<channel>.json manifests sit side-by-side in one GitHub Release
-      # without clobbering each other.
-      - name: Upload to GitHub Release
+      # vpk writes per-channel asset names, so the four artifacts merge cleanly later.
+      - name: Upload packaged release as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.channel }}
+          path: Releases/
+          if-no-files-found: error
+
+  # All platforms are packed — collect every channel's assets into one folder and publish a
+  # single GitHub Release. Sequential uploads (one per channel) mean no create-vs-create race.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Ensure global tools on PATH
         shell: bash
-        run: >
-          vpk upload github
-          --repoUrl https://github.com/Zeejfps/GitBench
-          --token ${{ secrets.GITHUB_TOKEN }}
-          --channel ${{ matrix.channel }}
-          --releaseName "GitBench ${{ steps.ver.outputs.version }}"
-          --tag ${{ github.ref_name }}
-          --publish
+        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Install vpk
+        shell: bash
+        run: dotnet tool install -g vpk
+
+      - name: Collect all channels into one folder
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: Releases
+          merge-multiple: true
+
+      - name: Compute version from tag
+        id: ver
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # vpk upload --channel selects only that channel's assets from the folder, and each
+      # channel's releases.<channel>.json is uniquely named, so the four uploads sit
+      # side-by-side in one release. --merge lets channels 2..N attach to the release the
+      # first channel created.
+      - name: Publish all channels to one GitHub Release
+        shell: bash
+        run: |
+          for ch in win-x64 osx-arm64 osx-x64 linux-x64; do
+            vpk upload github \
+              --repoUrl https://github.com/Zeejfps/GitBench \
+              --token "${{ secrets.GITHUB_TOKEN }}" \
+              --channel "$ch" \
+              --releaseName "GitBench ${{ steps.ver.outputs.version }}" \
+              --tag "${{ github.ref_name }}" \
+              --merge \
+              --publish
+          done
