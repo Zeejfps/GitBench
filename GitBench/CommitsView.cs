@@ -51,7 +51,14 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private readonly TextStyle _placeholderStyle = TextStyles.Centered(0u);
     private readonly TextStyle _badgeTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _badgeIconStyle = TextStyles.Icon(0u, 12f);
-    private readonly TextStyle _badgeCurrentStyle = TextStyles.Row(0u);
+    // Bold variant for the checked-out branch's name — mirrors how the Branches view marks
+    // the current branch (FontWeight.Bold) instead of drawing a separate HEAD marker.
+    private readonly TextStyle _badgeTextBoldStyle = new()
+    {
+        FontWeight = FontWeight.Bold,
+        VerticalAlignment = TextAlignment.Center,
+        HorizontalAlignment = TextAlignment.Start,
+    };
     private readonly TextStyle _hashTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _hashTextActiveStyle = TextStyles.Row(0u);
 
@@ -80,10 +87,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             _placeholderStyle.TextColor = _styles.PlaceholderText;
             _badgeTextStyle.TextColor = _styles.BadgeText;
             _badgeIconStyle.TextColor = _styles.BadgeText;
-            // The "current branch" dot reuses the HEAD accent so the checked-out branch reads
-            // at a glance now that HEAD no longer has its own badge.
-            _badgeCurrentStyle.TextColor = _styles.BadgeHeadBackground;
-            _badgeCurrentStyle.FontSize = 9f;
+            _badgeTextBoldStyle.TextColor = _styles.BadgeText;
             _hashTextStyle.TextColor = _styles.RowTextDim;
             _hashTextActiveStyle.TextColor = _styles.RowTextActive;
             SetDirty();
@@ -453,8 +457,6 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
         const float IconGap = 4f;
 
-        const string CurrentDot = "●";
-
         var x = left;
         var badgeY = rowBottom + (RowHeight - BadgeHeight) * 0.5f;
         foreach (var badge in node.Refs)
@@ -468,15 +470,15 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 _ => null,
             };
 
-            // Optional leading "current branch" dot and trailing "synced with remote" glyph
-            // — these fold the former standalone HEAD and origin/<branch> badges into one.
-            var dotWidth = badge.IsCurrent ? Context.Canvas.MeasureTextWidth(CurrentDot, _badgeCurrentStyle) : 0f;
+            // The checked-out branch's name is bolded (like the Branches view) rather than
+            // carrying a separate HEAD marker. A trailing "synced with remote" glyph folds the
+            // duplicate origin/<branch> badge into this one.
+            var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
             var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, _badgeIconStyle) : 0f;
-            var textWidth = Context.Canvas.MeasureTextWidth(badge.Name, _badgeTextStyle);
+            var textWidth = Context.Canvas.MeasureTextWidth(badge.Name, nameStyle);
             var syncWidth = badge.IsSynced ? Context.Canvas.MeasureTextWidth(LucideIcons.CloudCheck, _badgeIconStyle) : 0f;
 
             var badgeW = BadgePaddingX * 2 + textWidth
-                       + (badge.IsCurrent ? dotWidth + IconGap : 0f)
                        + (icon != null ? iconWidth + IconGap : 0f)
                        + (badge.IsSynced ? syncWidth + IconGap : 0f);
             var bg = badge.Kind switch
@@ -498,17 +500,6 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 ZIndex = z,
             });
             var contentX = x + BadgePaddingX;
-            if (badge.IsCurrent)
-            {
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = new RectF(contentX, badgeY, dotWidth, BadgeHeight),
-                    Text = CurrentDot,
-                    Style = _badgeCurrentStyle,
-                    ZIndex = z + 1,
-                });
-                contentX += dotWidth + IconGap;
-            }
             if (icon != null)
             {
                 c.DrawText(new DrawTextInputs
@@ -524,7 +515,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             {
                 Position = new RectF(contentX, badgeY, textWidth, BadgeHeight),
                 Text = badge.Name,
-                Style = _badgeTextStyle,
+                Style = nameStyle,
                 ZIndex = z + 1,
             });
             contentX += textWidth;
