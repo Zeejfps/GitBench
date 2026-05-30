@@ -72,20 +72,57 @@ public sealed class GitService : IGitService
 
             var headTip = lg.Head?.Tip;
             var headSha = headTip?.Sha;
+            var isDetached = lg.Info.IsHeadDetached;
+            var currentBranchName = isDetached ? null : lg.Head?.FriendlyName;
 
             var refTips = new List<Commit>();
             var refsBySha = new Dictionary<string, List<RefBadge>>();
 
+            // Split branches by kind so the local pass can absorb matching remotes. Drop the
+            // remote's symbolic "origin/HEAD" ref — it only ever mirrors the remote's default
+            // branch, so it's pure noise next to the branch it points at.
+            var localBranches = new List<Branch>();
+            var remoteBranches = new List<Branch>();
             foreach (var branch in lg.Branches)
             {
                 var tip = branch.Tip;
                 if (tip == null) continue;
+                if (branch.IsRemote)
+                {
+                    if (branch.FriendlyName.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
+                    remoteBranches.Add(branch);
+                }
+                else
+                {
+                    localBranches.Add(branch);
+                }
                 refTips.Add(tip);
-                var kind = branch.IsRemote ? RefKind.RemoteBranch : RefKind.LocalBranch;
-                AddBadge(refsBySha, tip.Sha, new RefBadge(branch.FriendlyName, kind));
             }
 
-            if (headSha != null)
+            // A local branch sitting on the same commit as its tracking remote absorbs that
+            // remote into a single "synced" badge; record the absorbed remote names so the
+            // remote pass skips them. The checked-out branch also absorbs the HEAD badge.
+            var absorbedRemotes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var local in localBranches)
+            {
+                var tip = local.Tip!;
+                var isCurrent = !isDetached && local.FriendlyName == currentBranchName;
+                var tracked = local.TrackedBranch;
+                var synced = tracked?.Tip != null && tracked.Tip.Sha == tip.Sha;
+                if (synced) absorbedRemotes.Add(tracked!.FriendlyName);
+                AddBadge(refsBySha, tip.Sha,
+                    new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, IsSynced: synced));
+            }
+
+            foreach (var remote in remoteBranches)
+            {
+                if (absorbedRemotes.Contains(remote.FriendlyName)) continue;
+                AddBadge(refsBySha, remote.Tip!.Sha, new RefBadge(remote.FriendlyName, RefKind.RemoteBranch));
+            }
+
+            // HEAD only gets its own badge when detached; otherwise it's represented by the
+            // current branch's badge (IsCurrent above).
+            if (headSha != null && isDetached)
                 AddBadge(refsBySha, headSha, new RefBadge("HEAD", RefKind.Head));
 
             // Walk stash tips too so stash commits show in the graph. Stash entries are

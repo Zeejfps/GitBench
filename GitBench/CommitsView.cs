@@ -51,6 +51,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private readonly TextStyle _placeholderStyle = TextStyles.Centered(0u);
     private readonly TextStyle _badgeTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _badgeIconStyle = TextStyles.Icon(0u, 12f);
+    private readonly TextStyle _badgeCurrentStyle = TextStyles.Row(0u);
     private readonly TextStyle _hashTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _hashTextActiveStyle = TextStyles.Row(0u);
 
@@ -79,6 +80,10 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             _placeholderStyle.TextColor = _styles.PlaceholderText;
             _badgeTextStyle.TextColor = _styles.BadgeText;
             _badgeIconStyle.TextColor = _styles.BadgeText;
+            // The "current branch" dot reuses the HEAD accent so the checked-out branch reads
+            // at a glance now that HEAD no longer has its own badge.
+            _badgeCurrentStyle.TextColor = _styles.BadgeHeadBackground;
+            _badgeCurrentStyle.FontSize = 9f;
             _hashTextStyle.TextColor = _styles.RowTextDim;
             _hashTextActiveStyle.TextColor = _styles.RowTextActive;
             SetDirty();
@@ -448,6 +453,8 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
         const float IconGap = 4f;
 
+        const string CurrentDot = "●";
+
         var x = left;
         var badgeY = rowBottom + (RowHeight - BadgeHeight) * 0.5f;
         foreach (var badge in node.Refs)
@@ -460,10 +467,18 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 RefKind.Tag => LucideIcons.Tag,
                 _ => null,
             };
+
+            // Optional leading "current branch" dot and trailing "synced with remote" glyph
+            // — these fold the former standalone HEAD and origin/<branch> badges into one.
+            var dotWidth = badge.IsCurrent ? Context.Canvas.MeasureTextWidth(CurrentDot, _badgeCurrentStyle) : 0f;
             var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, _badgeIconStyle) : 0f;
             var textWidth = Context.Canvas.MeasureTextWidth(badge.Name, _badgeTextStyle);
+            var syncWidth = badge.IsSynced ? Context.Canvas.MeasureTextWidth(LucideIcons.CloudCheck, _badgeIconStyle) : 0f;
+
             var badgeW = BadgePaddingX * 2 + textWidth
-                       + (icon != null ? iconWidth + IconGap : 0f);
+                       + (badge.IsCurrent ? dotWidth + IconGap : 0f)
+                       + (icon != null ? iconWidth + IconGap : 0f)
+                       + (badge.IsSynced ? syncWidth + IconGap : 0f);
             var bg = badge.Kind switch
             {
                 RefKind.LocalBranch => _styles.BadgeLocalBackground,
@@ -483,6 +498,17 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 ZIndex = z,
             });
             var contentX = x + BadgePaddingX;
+            if (badge.IsCurrent)
+            {
+                c.DrawText(new DrawTextInputs
+                {
+                    Position = new RectF(contentX, badgeY, dotWidth, BadgeHeight),
+                    Text = CurrentDot,
+                    Style = _badgeCurrentStyle,
+                    ZIndex = z + 1,
+                });
+                contentX += dotWidth + IconGap;
+            }
             if (icon != null)
             {
                 c.DrawText(new DrawTextInputs
@@ -501,6 +527,18 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 Style = _badgeTextStyle,
                 ZIndex = z + 1,
             });
+            contentX += textWidth;
+            if (badge.IsSynced)
+            {
+                contentX += IconGap;
+                c.DrawText(new DrawTextInputs
+                {
+                    Position = new RectF(contentX, badgeY, syncWidth, BadgeHeight),
+                    Text = LucideIcons.CloudCheck,
+                    Style = _badgeIconStyle,
+                    ZIndex = z + 1,
+                });
+            }
             x += badgeW + BadgeGap;
         }
         return x + BadgeGap;

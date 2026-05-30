@@ -9,7 +9,11 @@ public enum RefKind
     Tag,
 }
 
-public readonly record struct RefBadge(string Name, RefKind Kind);
+// IsCurrent marks the local branch that HEAD points at (the checked-out branch) so it can
+// absorb the standalone "HEAD" badge. IsSynced marks a local branch sitting on the same
+// commit as its tracking remote, so the duplicate remote badge folds into a single badge
+// with a "synced" indicator.
+public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent = false, bool IsSynced = false);
 
 public readonly record struct ParentLink(int ParentIndex, int Lane);
 
