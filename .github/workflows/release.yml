@@ -153,10 +153,26 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # vpk creates releases as a draft then PUBLISHES them, and publishing a draft makes
+      # GitHub create the git tag — which already exists (we pushed it to trigger), so vpk's
+      # publish step 422s with "tag_name already_exists". Pre-create the PUBLISHED release with
+      # gh (it binds to the existing tag instead of recreating it); each vpk upload then finds a
+      # non-draft release and skips the publish step entirely. Idempotent across re-runs.
+      - name: Ensure published GitHub Release exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${{ github.ref_name }}" --repo Zeejfps/GitBench >/dev/null 2>&1; then
+            gh release create "${{ github.ref_name }}" \
+              --repo Zeejfps/GitBench \
+              --title "GitBench ${{ steps.ver.outputs.version }}" \
+              --generate-notes
+          fi
+
       # vpk upload --channel selects only that channel's assets from the folder, and each
-      # channel's releases.<channel>.json is uniquely named, so the four uploads sit
-      # side-by-side in one release. --merge lets channels 2..N attach to the release the
-      # first channel created.
+      # channel's releases.<channel>.json is uniquely named, so the uploads sit side-by-side in
+      # one release. --merge attaches each channel's assets to the pre-created release above.
       - name: Publish all channels to one GitHub Release
         shell: bash
         run: |
