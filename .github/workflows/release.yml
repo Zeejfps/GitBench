@@ -29,12 +29,14 @@ jobs:
             exe: GitBench
             icon: GitBench/Assets/commit_bench_icon_mac.icns
             extra: "--bundleId com.gitbench.app"
-          - os: macos-13               # Intel runner
-            rid: osx-x64
-            channel: osx-x64
-            exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon_mac.icns
-            extra: "--bundleId com.gitbench.app"
+          # Intel macOS runners (macos-13) are queue-constrained and were stalling. Re-enable
+          # this row (and add osx-x64 back to the publish loop below) to ship Intel builds.
+          # - os: macos-13               # Intel runner
+          #   rid: osx-x64
+          #   channel: osx-x64
+          #   exe: GitBench
+          #   icon: GitBench/Assets/commit_bench_icon_mac.icns
+          #   extra: "--bundleId com.gitbench.app"
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux-x64
@@ -43,7 +45,7 @@ jobs:
             extra: ""
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -55,7 +57,7 @@ jobs:
           git config --global url."https://github.com/".insteadOf "git@github.com:"
           git submodule update --init --recursive
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -115,7 +117,7 @@ jobs:
 
       # vpk writes per-channel asset names, so the four artifacts merge cleanly later.
       - name: Upload packaged release as artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-${{ matrix.channel }}
           path: Releases/
@@ -127,7 +129,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -140,7 +142,7 @@ jobs:
         run: dotnet tool install -g vpk
 
       - name: Collect all channels into one folder
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: release-*
           path: Releases
@@ -158,7 +160,7 @@ jobs:
       - name: Publish all channels to one GitHub Release
         shell: bash
         run: |
-          for ch in win-x64 osx-arm64 osx-x64 linux-x64; do
+          for ch in win-x64 osx-arm64 linux-x64; do
             vpk upload github \
               --repoUrl https://github.com/Zeejfps/GitBench \
               --token "${{ secrets.GITHUB_TOKEN }}" \
