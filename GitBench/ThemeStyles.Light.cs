@@ -95,7 +95,9 @@ public partial record ThemeStyles
             RemoteBg: 0xFFEDE9FEu,
             HeadBg: 0xFFFEF3C7u,
             TagBg: 0xFFD1FAE5u,
-            Text: p.TextBody);
+            Text: p.TextBody,
+            TrackedIcon: status.SuccessSoft,
+            LocalOnlyIcon: p.TextDisabled);
 
         return BuildStyles(p, status, banner, tooltip, hunkButton, commitBadge);
     }

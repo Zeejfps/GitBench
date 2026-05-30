@@ -51,6 +51,10 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private readonly TextStyle _placeholderStyle = TextStyles.Centered(0u);
     private readonly TextStyle _badgeTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _badgeIconStyle = TextStyles.Icon(0u, 12f);
+    // Branch-glyph tints mirroring the Branches view: green when the branch has a live
+    // upstream, gray when it's local-only.
+    private readonly TextStyle _badgeIconTrackedStyle = TextStyles.Icon(0u, 12f);
+    private readonly TextStyle _badgeIconLocalOnlyStyle = TextStyles.Icon(0u, 12f);
     // Bold variant for the checked-out branch's name — mirrors how the Branches view marks
     // the current branch (FontWeight.Bold) instead of drawing a separate HEAD marker.
     private readonly TextStyle _badgeTextBoldStyle = new()
@@ -87,6 +91,8 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             _placeholderStyle.TextColor = _styles.PlaceholderText;
             _badgeTextStyle.TextColor = _styles.BadgeText;
             _badgeIconStyle.TextColor = _styles.BadgeText;
+            _badgeIconTrackedStyle.TextColor = _styles.BadgeBranchTrackedIcon;
+            _badgeIconLocalOnlyStyle.TextColor = _styles.BadgeBranchLocalOnlyIcon;
             _badgeTextBoldStyle.TextColor = _styles.BadgeText;
             _hashTextStyle.TextColor = _styles.RowTextDim;
             _hashTextActiveStyle.TextColor = _styles.RowTextActive;
@@ -471,16 +477,17 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             };
 
             // The checked-out branch's name is bolded (like the Branches view) rather than
-            // carrying a separate HEAD marker. A trailing "synced with remote" glyph folds the
-            // duplicate origin/<branch> badge into this one.
+            // carrying a separate HEAD marker. The branch glyph is tinted green/gray to show
+            // upstream tracking — the duplicate origin/<branch> badge is already folded away.
+            var iconStyle = badge.Kind == RefKind.LocalBranch
+                ? (badge.IsTracked ? _badgeIconTrackedStyle : _badgeIconLocalOnlyStyle)
+                : _badgeIconStyle;
             var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
-            var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, _badgeIconStyle) : 0f;
+            var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, iconStyle) : 0f;
             var textWidth = Context.Canvas.MeasureTextWidth(badge.Name, nameStyle);
-            var syncWidth = badge.IsSynced ? Context.Canvas.MeasureTextWidth(LucideIcons.CloudCheck, _badgeIconStyle) : 0f;
 
             var badgeW = BadgePaddingX * 2 + textWidth
-                       + (icon != null ? iconWidth + IconGap : 0f)
-                       + (badge.IsSynced ? syncWidth + IconGap : 0f);
+                       + (icon != null ? iconWidth + IconGap : 0f);
             var bg = badge.Kind switch
             {
                 RefKind.LocalBranch => _styles.BadgeLocalBackground,
@@ -506,7 +513,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 {
                     Position = new RectF(contentX, badgeY, iconWidth, BadgeHeight),
                     Text = icon,
-                    Style = _badgeIconStyle,
+                    Style = iconStyle,
                     ZIndex = z + 1,
                 });
                 contentX += iconWidth + IconGap;
@@ -518,18 +525,6 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 Style = nameStyle,
                 ZIndex = z + 1,
             });
-            contentX += textWidth;
-            if (badge.IsSynced)
-            {
-                contentX += IconGap;
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = new RectF(contentX, badgeY, syncWidth, BadgeHeight),
-                    Text = LucideIcons.CloudCheck,
-                    Style = _badgeIconStyle,
-                    ZIndex = z + 1,
-                });
-            }
             x += badgeW + BadgeGap;
         }
         return x + BadgeGap;

@@ -10,10 +10,10 @@ public enum RefKind
 }
 
 // IsCurrent marks the local branch that HEAD points at (the checked-out branch) so it can
-// absorb the standalone "HEAD" badge. IsSynced marks a local branch sitting on the same
-// commit as its tracking remote, so the duplicate remote badge folds into a single badge
-// with a "synced" indicator.
-public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent = false, bool IsSynced = false);
+// absorb the standalone "HEAD" badge (rendered with a bold name). IsTracked marks a local
+// branch that has a live upstream — its branch glyph is tinted green, gray when local-only,
+// mirroring the Branches view's tracking cue.
+public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent = false, bool IsTracked = false);
 
 public readonly record struct ParentLink(int ParentIndex, int Lane);
 

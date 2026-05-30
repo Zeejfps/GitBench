@@ -41,7 +41,9 @@ public sealed record CommitsViewStyles(
     uint BadgeRemoteBackground,
     uint BadgeHeadBackground,
     uint BadgeTagBackground,
-    uint BadgeText);
+    uint BadgeText,
+    uint BadgeBranchTrackedIcon,
+    uint BadgeBranchLocalOnlyIcon);
 
 public partial record ThemeStyles
 {
@@ -90,5 +92,7 @@ public partial record ThemeStyles
             BadgeRemoteBackground: badge.RemoteBg,
             BadgeHeadBackground: badge.HeadBg,
             BadgeTagBackground: badge.TagBg,
-            BadgeText: badge.Text);
+            BadgeText: badge.Text,
+            BadgeBranchTrackedIcon: badge.TrackedIcon,
+            BadgeBranchLocalOnlyIcon: badge.LocalOnlyIcon);
 }

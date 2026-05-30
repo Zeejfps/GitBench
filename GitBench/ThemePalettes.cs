@@ -89,4 +89,6 @@ public sealed record CommitBadgePalette(
     uint RemoteBg,
     uint HeadBg,
     uint TagBg,
-    uint Text);
+    uint Text,
+    uint TrackedIcon,
+    uint LocalOnlyIcon);

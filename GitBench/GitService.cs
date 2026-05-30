@@ -108,10 +108,12 @@ public sealed class GitService : IGitService
                 var tip = local.Tip!;
                 var isCurrent = !isDetached && local.FriendlyName == currentBranchName;
                 var tracked = local.TrackedBranch;
-                var synced = tracked?.Tip != null && tracked.Tip.Sha == tip.Sha;
-                if (synced) absorbedRemotes.Add(tracked!.FriendlyName);
+                var hasUpstream = tracked?.Tip != null;
+                // Fold the duplicate remote badge in only when the upstream sits on this very
+                // commit; an ahead/behind upstream lives on a different row and stays separate.
+                if (hasUpstream && tracked!.Tip.Sha == tip.Sha) absorbedRemotes.Add(tracked.FriendlyName);
                 AddBadge(refsBySha, tip.Sha,
-                    new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, IsSynced: synced));
+                    new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, IsTracked: hasUpstream));
             }
 
             foreach (var remote in remoteBranches)
