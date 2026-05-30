@@ -1202,6 +1202,55 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Creates an annotated tag when a message is supplied (`git tag -a <name> -m <msg> <sha>`),
+    // otherwise a lightweight tag (`git tag <name> <sha>`). When pushToAllRemotes is set, the new
+    // tag ref is pushed to every configured remote; the first push failure aborts and is reported
+    // (the local tag has already been created at that point).
+    public CreateTagOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new CreateTagOutcome(false, "Not a git repository.");
+            if (string.IsNullOrWhiteSpace(name))
+                return new CreateTagOutcome(false, "Tag name is required.");
+
+            using var _ = LockRepo(repo.Path);
+
+            var tagArgs = new List<string> { "tag" };
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                tagArgs.Add("-a");
+                tagArgs.Add(name);
+                tagArgs.Add("-m");
+                tagArgs.Add(message);
+            }
+            else
+            {
+                tagArgs.Add(name);
+            }
+            tagArgs.Add(commitSha);
+
+            var (tagged, tagError) = RunMutation(repo.Path, tagArgs);
+            if (!tagged) return new CreateTagOutcome(false, tagError ?? "Failed to create tag.");
+
+            if (pushToAllRemotes)
+            {
+                foreach (var remote in GetRemoteNames(repo))
+                {
+                    var (pushed, pushError) = RunMutation(repo.Path, new[] { "push", remote, "refs/tags/" + name });
+                    if (!pushed) return new CreateTagOutcome(false, pushError ?? $"Failed to push tag to '{remote}'.");
+                }
+            }
+
+            return new CreateTagOutcome(true, null);
+        }
+        catch (Exception ex)
+        {
+            return new CreateTagOutcome(false, ex.Message);
+        }
+    }
+
     // `git branch -m` (or -M with force) renames a local branch in-place. Allowed on the
     // currently-checked-out branch — git updates HEAD's symbolic ref to point at the new name.
     public RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force)

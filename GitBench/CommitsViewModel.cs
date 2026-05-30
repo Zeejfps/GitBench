@@ -156,6 +156,26 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             lane: _resetGen);
     }
 
+    // ---- create tag ----
+
+    // Opens the CreateTagDialog targeting the given commit. No probe needed: tag creation
+    // never touches the working tree, so we hand the dialog the commit's short SHA and
+    // summary (looked up from the current snapshot) and let it run the git op itself.
+    public void RequestCreateTag(string sha)
+    {
+        var snap = _snapshot;
+        if (snap == null) return;
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != snap.RepoId) return;
+
+        var shortSha = sha.Length >= 7 ? sha[..7] : sha;
+        var summary = LookupSummary(snap, sha) ?? string.Empty;
+        var capturedRepo = repo;
+        var capturedSha = sha;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateTagDialog(
+            capturedRepo, capturedSha, shortSha, summary, onClose)));
+    }
+
     // Outcome of the off-thread reset probe, handed from work to onResult above.
     private abstract record ResetProbe
     {

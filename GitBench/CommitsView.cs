@@ -621,24 +621,29 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     {
         var capturedSha = sha;
         var head = _snapshot?.HeadBranchName;
+        var items = new List<RepoBarContextMenu.Item>();
         if (head != null)
         {
-            return new[]
-            {
-                new RepoBarContextMenu.Item(
-                    $"Reset {head} to here",
-                    () => _vm?.RequestReset(capturedSha),
-                    LucideIcons.Branch,
-                    LabelSegments: BuildResetSegments(head)),
-            };
+            items.Add(new RepoBarContextMenu.Item(
+                $"Reset {head} to here",
+                () => _vm?.RequestReset(capturedSha),
+                LucideIcons.Branch,
+                LabelSegments: BuildResetSegments(head)));
         }
-        return new[]
+        else
         {
-            new RepoBarContextMenu.Item(
+            items.Add(new RepoBarContextMenu.Item(
                 "Reset to this commit",
                 () => _vm?.RequestReset(capturedSha),
-                LucideIcons.Branch),
-        };
+                LucideIcons.Branch));
+        }
+
+        items.Add(new RepoBarContextMenu.Item(
+            "Create Tag…",
+            () => _vm?.RequestCreateTag(capturedSha),
+            LucideIcons.Tag));
+
+        return items;
     }
 
     private static IReadOnlyList<MenuLabelSegment> BuildResetSegments(string branch) =>
