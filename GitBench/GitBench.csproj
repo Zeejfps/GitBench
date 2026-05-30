@@ -29,9 +29,9 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\ZGF.AppUtils\ZGF.AppUtils.csproj" />
-        <ProjectReference Include="..\ZGF.Gui\ZGF.Gui.csproj" />
-        <ProjectReference Include="..\ZGF.Observable\ZGF.Observable.csproj" />
+        <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
+        <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />
+        <ProjectReference Include="..\framework\ZGF.Observable\ZGF.Observable.csproj" />
     </ItemGroup>
 
     <!-- Run after the NativeAOT SDK's CopyNativeBinary/_CopyAotSymbols (both AfterTargets="Publish"),

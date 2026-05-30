@@ -2,6 +2,8 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GitBench", "GitBench\GitBench.csproj", "{83B03EC0-B059-45BC-B2BF-E8FE1571986F}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGF.Gui", "framework\ZGF.Gui\ZGF.Gui.csproj", "{C149ADC6-8D56-4E2D-B045-8F1925138B80}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -12,5 +14,9 @@ Global
 		{83B03EC0-B059-45BC-B2BF-E8FE1571986F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{83B03EC0-B059-45BC-B2BF-E8FE1571986F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{83B03EC0-B059-45BC-B2BF-E8FE1571986F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C149ADC6-8D56-4E2D-B045-8F1925138B80}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C149ADC6-8D56-4E2D-B045-8F1925138B80}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C149ADC6-8D56-4E2D-B045-8F1925138B80}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C149ADC6-8D56-4E2D-B045-8F1925138B80}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
