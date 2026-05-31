@@ -109,12 +109,35 @@ public sealed class GitService : IGitService
                 var isCurrent = !isDetached && local.FriendlyName == currentBranchName;
                 var tracked = local.TrackedBranch;
                 var hasUpstream = tracked?.Tip != null;
-                // Equal tips means neither ahead nor behind — in sync. A divergent upstream
-                // lives on a different commit (its own row), so only fold the remote badge in
-                // when the two are level.
-                var inSync = hasUpstream && tracked!.Tip.Sha == tip.Sha;
-                var sync = !hasUpstream ? BranchSync.Untracked : inSync ? BranchSync.InSync : BranchSync.Diverged;
-                if (inSync) absorbedRemotes.Add(tracked!.FriendlyName);
+                BranchSync sync;
+                if (hasUpstream)
+                {
+                    // Equal tips means neither ahead nor behind — in sync. A divergent upstream
+                    // lives on a different commit (its own row), so only fold the remote badge in
+                    // when the two are level.
+                    var inSync = tracked!.Tip.Sha == tip.Sha;
+                    sync = inSync ? BranchSync.InSync : BranchSync.Diverged;
+                    if (inSync) absorbedRemotes.Add(tracked.FriendlyName);
+                }
+                else
+                {
+                    // No upstream configured (e.g. pushed without -u, or the upstream was later
+                    // unset). Git records no relationship, but if a remote branch with the
+                    // conventional "<remote>/<name>" name sits on this exact commit it's
+                    // effectively the same ref — fold it into one synced badge rather than
+                    // showing a redundant local/remote pair on the same commit.
+                    var twin = remoteBranches.FirstOrDefault(r =>
+                        r.Tip!.Sha == tip.Sha && RemoteBranchShortName(r) == local.FriendlyName);
+                    if (twin != null)
+                    {
+                        sync = BranchSync.InSync;
+                        absorbedRemotes.Add(twin.FriendlyName);
+                    }
+                    else
+                    {
+                        sync = BranchSync.Untracked;
+                    }
+                }
                 AddBadge(refsBySha, tip.Sha,
                     new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, Sync: sync));
             }
@@ -226,6 +249,15 @@ public sealed class GitService : IGitService
 
     private static CommitSnapshot Error(Repo repo, string message)
         => new(repo.Id, repo.Path, Array.Empty<CommitNode>(), 0, false, message);
+
+    // "origin/main" -> "main"; "origin/feature/x" -> "feature/x". Remote names can't contain
+    // slashes, so the local-branch name is everything after the first segment.
+    private static string RemoteBranchShortName(Branch remote)
+    {
+        var name = remote.FriendlyName;
+        var slash = name.IndexOf('/');
+        return slash >= 0 ? name[(slash + 1)..] : name;
+    }
 
     private static void AddBadge(Dictionary<string, List<RefBadge>> map, string sha, RefBadge badge)
     {
