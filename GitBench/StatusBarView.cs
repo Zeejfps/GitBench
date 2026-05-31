@@ -27,6 +27,12 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
 
     public StatusBarView()
     {
+        // Fix the bar height here (not on the inner RectView): the inner view also carries a
+        // 1px top border, so giving it an explicit Height would make its measured size exceed
+        // its laid-out size by the border and leave a 1px gap above the bar. Sizing the outer
+        // view and letting the RectView fill the region keeps it flush against the content.
+        Height = BarHeight;
+
         (_repoCluster, _repoName) = Segment(LucideIcons.FolderGit2);
         (_branchCluster, _branchName) = Segment(LucideIcons.Branch);
         (_aheadCluster, _aheadText) = Segment(LucideIcons.ChevronUp);
@@ -52,7 +58,6 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
 
         var bar = new RectView
         {
-            Height = BarHeight,
             BorderSize = new BorderSizeStyle { Top = 1 },
             Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
             Children =
