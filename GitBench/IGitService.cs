@@ -29,6 +29,7 @@ public interface IGitService
     ResetOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
     CreateBranchOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout);
     CreateTagOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
+    DeleteTagOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
     RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
     DeleteBranchOutcome DeleteBranch(Repo repo, string name, bool force);
     DeleteRemoteBranchOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName);
@@ -143,6 +144,8 @@ public sealed record ResetOutcome(bool Success, string? ErrorMessage);
 public sealed record CreateBranchOutcome(bool Success, string? ErrorMessage);
 
 public sealed record CreateTagOutcome(bool Success, string? ErrorMessage);
+
+public sealed record DeleteTagOutcome(bool Success, string? ErrorMessage);
 
 public sealed record RenameBranchOutcome(bool Success, string? ErrorMessage);
 

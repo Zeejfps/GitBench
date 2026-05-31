@@ -635,9 +635,9 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         if (Context == null) return;
         var snap = _snapshot;
         if (snap == null || rowIndex < 0 || rowIndex >= snap.Commits.Count) return;
-        var sha = snap.Commits[rowIndex].Sha;
+        var node = snap.Commits[rowIndex];
 
-        var items = BuildCommitMenuItems(sha);
+        var items = BuildCommitMenuItems(node);
         if (items.Count == 0) return;
 
         _list.SetContextHighlight(rowIndex);
@@ -650,11 +650,34 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         opened.Closed += () => _list.SetContextHighlight(null);
     }
 
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildCommitMenuItems(string sha)
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildCommitMenuItems(CommitNode node)
     {
-        var capturedSha = sha;
+        var capturedSha = node.Sha;
         var head = _snapshot?.HeadBranchName;
         var items = new List<RepoBarContextMenu.Item>();
+
+        // Per-tag entries at the top: each tag on this commit opens a submenu (hover) that
+        // currently offers "Delete Tag…". More per-tag actions can be added here later.
+        var hasTag = false;
+        foreach (var badge in node.Refs)
+        {
+            if (badge.Kind != RefKind.Tag) continue;
+            hasTag = true;
+            var tagName = badge.Name;
+            items.Add(new RepoBarContextMenu.Item(
+                tagName,
+                () => { },
+                LucideIcons.Tag,
+                Submenu:
+                [
+                    new RepoBarContextMenu.Item(
+                        "Delete Tag…",
+                        () => _vm?.RequestDeleteTag(tagName),
+                        LucideIcons.Trash),
+                ]));
+        }
+        if (hasTag) items.Add(RepoBarContextMenu.Separator);
+
         if (head != null)
         {
             items.Add(new RepoBarContextMenu.Item(

@@ -16,7 +16,8 @@ public static class RepoBarContextMenu
         bool Enabled = true,
         IReadOnlyList<MenuLabelSegment>? LabelSegments = null,
         bool IsSeparator = false,
-        string? Shortcut = null);
+        string? Shortcut = null,
+        IReadOnlyList<Item>? Submenu = null);
 
     public static readonly Item Separator = new(string.Empty, static () => { }, IsSeparator: true);
 
@@ -28,6 +29,21 @@ public static class RepoBarContextMenu
 
         manager.CloseAllImmediately();
 
+        var menu = BuildMenu(manager, items);
+
+        var coords = context.Get<IWindowCoordinates>();
+        var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
+        var opened = manager.ShowContextMenu(menu, screen);
+        if (opened == null) return null;
+
+        menu.UseController(_ => new ContextMenuKbmController(opened));
+        return opened;
+    }
+
+    // Builds a themed menu from the item list. Recursed (via a per-item factory) for
+    // submenus so nested menus share the same styling and click-to-close behavior.
+    private static ContextMenu BuildMenu(ContextMenuManager manager, IReadOnlyList<Item> items)
+    {
         var menu = new ContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
@@ -70,21 +86,32 @@ public static class RepoBarContextMenu
                 menuItem.SetLabelView(BuildSegmentsView(segs, item.Enabled));
 
             var captured = item;
-            menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
+            if (captured.Submenu is { Count: > 0 } submenu)
             {
-                manager.RequestCloseMenu(menu);
-                captured.OnSelected();
-            }));
+                // Parent items open their submenu on hover and have no click action. The
+                // trailing chevron is drawn as a Lucide glyph (set before the controller
+                // flips IsArrowVisible on).
+                menuItem.ArrowGlyph = LucideIcons.ChevronRight;
+                menuItem.ArrowFontFamily = LucideIcons.FontFamily;
+                menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(
+                    menuItem, ctx,
+                    subMenuFactory: () => BuildMenu(manager, submenu)));
+            }
+            else
+            {
+                menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
+                {
+                    // Dismiss the entire menu chain (parent + any open submenus), then act.
+                    // Deferred close — a synchronous teardown here would unregister controllers
+                    // mid-dispatch and mutate the input system's focus queue while it iterates.
+                    manager.RequestCloseAll();
+                    captured.OnSelected();
+                }));
+            }
             menu.Children.Add(menuItem);
         }
 
-        var coords = context.Get<IWindowCoordinates>();
-        var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
-        var opened = manager.ShowContextMenu(menu, screen);
-        if (opened == null) return null;
-
-        menu.UseController(_ => new ContextMenuKbmController(opened));
-        return opened;
+        return menu;
     }
 
     private static MultiChildView BuildSegmentsView(IReadOnlyList<MenuLabelSegment> segments, bool enabled)

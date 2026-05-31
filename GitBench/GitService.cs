@@ -1303,6 +1303,41 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Deletes a tag locally (`git tag -d`). When deleteFromRemotes is set, the tag is also
+    // removed from every configured remote (`git push <remote> --delete refs/tags/<name>`) —
+    // mirroring CreateTag's push-to-all-remotes loop. Local deletion happens first; a later
+    // remote failure is surfaced but the local tag is already gone.
+    public DeleteTagOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new DeleteTagOutcome(false, "Not a git repository.");
+            if (string.IsNullOrWhiteSpace(name))
+                return new DeleteTagOutcome(false, "Tag name is required.");
+
+            using var _ = LockRepo(repo.Path);
+
+            var (deleted, deleteError) = RunMutation(repo.Path, new[] { "tag", "-d", name });
+            if (!deleted) return new DeleteTagOutcome(false, deleteError ?? "Failed to delete tag.");
+
+            if (deleteFromRemotes)
+            {
+                foreach (var remote in GetRemoteNames(repo))
+                {
+                    var (pushed, pushError) = RunMutation(repo.Path, new[] { "push", remote, "--delete", "refs/tags/" + name });
+                    if (!pushed) return new DeleteTagOutcome(false, pushError ?? $"Failed to delete tag from '{remote}'.");
+                }
+            }
+
+            return new DeleteTagOutcome(true, null);
+        }
+        catch (Exception ex)
+        {
+            return new DeleteTagOutcome(false, ex.Message);
+        }
+    }
+
     // `git branch -m` (or -M with force) renames a local branch in-place. Allowed on the
     // currently-checked-out branch — git updates HEAD's symbolic ref to point at the new name.
     public RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force)

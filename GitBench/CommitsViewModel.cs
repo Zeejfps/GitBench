@@ -176,6 +176,23 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             capturedRepo, capturedSha, shortSha, summary, onClose)));
     }
 
+    // ---- delete tag ----
+
+    // Opens the DeleteTagDialog for the given tag. Like tag creation, deleting a tag never
+    // touches the working tree, so no probe is needed — the dialog runs the git op itself.
+    public void RequestDeleteTag(string tagName)
+    {
+        var snap = _snapshot;
+        if (snap == null) return;
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != snap.RepoId) return;
+
+        var capturedRepo = repo;
+        var capturedTag = tagName;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteTagDialog(
+            capturedRepo, capturedTag, onClose)));
+    }
+
     // Outcome of the off-thread reset probe, handed from work to onResult above.
     private abstract record ResetProbe
     {
