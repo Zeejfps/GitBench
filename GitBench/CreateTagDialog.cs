@@ -55,10 +55,11 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
             {
                 subtitle,
                 targetRow,
-                nameLabel,
-                nameBox,
-                messageLabel,
-                _messageField,
+                // Each label sits tight against its field (small intra-group gap); the column's
+                // larger Gap separates one section from the next so labels read as attached to
+                // their inputs rather than floating midway between them.
+                LabeledField(nameLabel, nameBox),
+                LabeledField(messageLabel, _messageField),
                 _pushCheckbox,
                 _errorView,
                 new MultiChildView { Height = 4 },
@@ -100,6 +101,15 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         _nameController.BeginEditing();
     }
 
+    // Label stacked tightly above its input. The 4px intra-group gap keeps the label visually
+    // bound to its field; the parent column's wider Gap does the section spacing.
+    private static FlexColumnView LabeledField(View label, View field) => new()
+    {
+        Gap = 4,
+        CrossAxisAlignment = CrossAxisAlignment.Stretch,
+        Children = { label, field },
+    };
+
     private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
     {
         var labelText = new TextView { Text = label, VerticalTextAlignment = TextAlignment.Center };
@@ -139,14 +149,16 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         var shaLabel = new TextView { Text = shortSha, VerticalTextAlignment = TextAlignment.Center };
         shaLabel.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
+        // Ellipsis (…) on overflow rather than NoWrap-in-a-ClippingView: the clip let the
+        // single line run past the dialog's right edge instead of truncating it. Ellipsis
+        // measures against the laid-out Grow width and cuts the text with a trailing "…".
         var summaryLabel = new TextView
         {
             Text = summary,
             VerticalTextAlignment = TextAlignment.Center,
-            TextWrap = TextWrap.NoWrap,
+            TextOverflow = TextOverflow.Ellipsis,
         };
         summaryLabel.BindThemedTextColor(s => s.DialogBody.BodyText);
-        var summaryClip = new ClippingView { Children = { summaryLabel } };
 
         return new FlexRowView
         {
@@ -156,7 +168,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
             {
                 dot,
                 shaLabel,
-                new FlexItem { Grow = 1, Child = summaryClip },
+                new FlexItem { Grow = 1, Child = summaryLabel },
             },
         };
     }
