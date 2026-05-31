@@ -88,7 +88,6 @@ jobs:
         run: >
           dotnet publish GitBench/GitBench.csproj
           -c Release -r ${{ matrix.rid }}
-          -p:BuildMacBundle=false
           -o publish/${{ matrix.rid }}
 
       - name: Pack
