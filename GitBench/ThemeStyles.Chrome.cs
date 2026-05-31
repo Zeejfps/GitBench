@@ -11,6 +11,11 @@ public sealed record RepoBarStyles(
     uint Background,
     uint RightBorder);
 
+public sealed record StatusBarStyles(
+    uint Background,
+    uint TopBorder,
+    uint Text);
+
 public sealed record ActionsToolbarStyles(
     uint Background,
     uint BorderBottom,
@@ -60,6 +65,12 @@ public partial record ThemeStyles
         new(
             Background: p.Surface,
             RightBorder: p.Border);
+
+    private static StatusBarStyles BuildStatusBar(ThemePalette p) =>
+        new(
+            Background: p.BarSurface,
+            TopBorder: p.Border,
+            Text: p.TextMuted);
 
     private static ActionsToolbarStyles BuildActionsToolbar(ThemePalette p, StatusPalette status) =>
         new(

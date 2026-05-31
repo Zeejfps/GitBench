@@ -46,6 +46,7 @@ public sealed class AppView : MultiChildView
                     Center = new MainContentView(),
                 },
             },
+            South = new StatusBarView(),
         });
         Children.Add(new DragOverlay());
 

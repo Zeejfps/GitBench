@@ -23,6 +23,7 @@ public sealed partial record ThemeStyles
     public required RepoBarRowStyles RepoBarRow { get; init; }
     public required BranchesViewStyles BranchesView { get; init; }
     public required RepoBarStyles RepoBar { get; init; }
+    public required StatusBarStyles StatusBar { get; init; }
     public required DiffViewStyles DiffView { get; init; }
     public required DiffContentStyles DiffContent { get; init; }
     public required DiffHunkButtonStyles DiffHunkButton { get; init; }

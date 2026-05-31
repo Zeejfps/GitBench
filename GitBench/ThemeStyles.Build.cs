@@ -32,6 +32,7 @@ public partial record ThemeStyles
             RepoBarRow = BuildRepoBarRow(p, status),
             BranchesView = BuildBranchesView(p, status),
             RepoBar = BuildRepoBar(p),
+            StatusBar = BuildStatusBar(p),
             DiffView = BuildDiffView(p),
             DiffContent = BuildDiffContent(p, status),
             DiffHunkButton = BuildDiffHunkButton(hunkButton),

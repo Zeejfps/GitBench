@@ -8,6 +8,9 @@
         <PublishAot>true</PublishAot>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <ApplicationIcon>Assets\commit_bench_icon.ico</ApplicationIcon>
+        <!-- Default for local/dev builds. CI overrides with a -p:Version=<tag> publish arg
+             (see release.yml) so the version shown in-app matches the release tag. -->
+        <Version>0.0.0-dev</Version>
     </PropertyGroup>
 
     <ItemGroup>
