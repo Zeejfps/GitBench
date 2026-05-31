@@ -103,6 +103,9 @@ public sealed class ActionButton : HoverableButton
     private uint SelectLabelForeground(ThemeStyles s)
     {
         if (!IsEnabled) return s.ActionButton.TextDisabled;
+        // On a colored-background button the label must match the (white) icon, not the
+        // theme's default text color — otherwise dark text on the green fill is unreadable.
+        if (_iconColor is uint ic) return ic;
         return IsHovered ? s.ActionButton.TextHover : s.ActionButton.TextIdle;
     }
 

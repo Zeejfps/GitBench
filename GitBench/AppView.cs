@@ -10,43 +10,59 @@ public sealed class AppView : MultiChildView
     public AppView(PreferencesService preferences, UpdateService updateService)
     {
         var prefs = preferences.Current;
-        Children.Add(new BorderLayoutView
+        // Full-width update banner stacked above the main layout. It self-hides (collapsing
+        // its layout slot) until an update is staged, so the FlexColumn shows no residual bar.
+        // Kept separate from the per-repo operations banner below.
+        Children.Add(new FlexColumnView
         {
-            West = ResizableLeftSidebar.Build(
-                new RepoBar(),
-                initialWidth: prefs.RepoBarWidth,
-                minWidth: 220f,
-                onWidthChanged: preferences.SetRepoBarWidth),
-            Center = new BorderLayoutView
+            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            Children =
             {
-                West = ResizableLeftSidebar.Build(
-                    new FlexColumnView
-                    {
-                        CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                        Children =
-                        {
-                            new BranchesHeader(),
-                            new FlexItem { Grow = 1, Child = new BranchesView() },
-                        },
-                    },
-                    initialWidth: prefs.BranchesWidth,
-                    onWidthChanged: preferences.SetBranchesWidth),
-                Center = new BorderLayoutView
+                new UpdateBannerView(updateService),
+                new FlexItem
                 {
-                    North = new FlexColumnView
+                    Grow = 1,
+                    // Wrapped in a MultiChildView so it satisfies FlexItem.Child (BorderLayoutView
+                    // is a plain View); the wrapper stretches the layout to fill the grow region.
+                    Child = new MultiChildView { Children = { new BorderLayoutView
                     {
-                        CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                        Children =
+                        West = ResizableLeftSidebar.Build(
+                            new RepoBar(),
+                            initialWidth: prefs.RepoBarWidth,
+                            minWidth: 220f,
+                            onWidthChanged: preferences.SetRepoBarWidth),
+                        Center = new BorderLayoutView
                         {
-                            new UpdateBannerView(updateService),
-                            new OperationBannerView(),
-                            new ActionsToolbar(),
+                            West = ResizableLeftSidebar.Build(
+                                new FlexColumnView
+                                {
+                                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                                    Children =
+                                    {
+                                        new BranchesHeader(),
+                                        new FlexItem { Grow = 1, Child = new BranchesView() },
+                                    },
+                                },
+                                initialWidth: prefs.BranchesWidth,
+                                onWidthChanged: preferences.SetBranchesWidth),
+                            Center = new BorderLayoutView
+                            {
+                                North = new FlexColumnView
+                                {
+                                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                                    Children =
+                                    {
+                                        new OperationBannerView(),
+                                        new ActionsToolbar(),
+                                    },
+                                },
+                                Center = new MainContentView(),
+                            },
                         },
-                    },
-                    Center = new MainContentView(),
+                        South = new StatusBarView(),
+                    } } },
                 },
             },
-            South = new StatusBarView(),
         });
         Children.Add(new DragOverlay());
 
