@@ -18,7 +18,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
     private readonly ActionButton _stashButton;
     private readonly ActionButton _openFolderButton;
     private readonly ActionButton _openTerminalButton;
-    private readonly ActionButton _toggleThemeButton;
     private readonly ErrorBarView _errorBar;
 
     public ActionsToolbar()
@@ -32,7 +31,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
         _stashButton = new ActionButton(LucideIcons.Stash, "Stash");
         _openFolderButton = new ActionButton(LucideIcons.FolderOpen, tooltip: "Open in file explorer");
         _openTerminalButton = new ActionButton(LucideIcons.SquareTerminal, tooltip: "Open in terminal");
-        _toggleThemeButton = new ActionButton(LucideIcons.Sun, tooltip: "Toggle theme");
 
         _errorBar = new ErrorBarView(verticalPadding: 2);
         var contentRow = new FlexRowView
@@ -52,7 +50,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
                 new FlexItem { Grow = 1, Child = new MultiChildView() },
                 _openFolderButton,
                 _openTerminalButton,
-                _toggleThemeButton,
                 _errorBar,
             }
         };
@@ -83,8 +80,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
         _stashButton.BindCommand(vm.Stash);
         _openFolderButton.BindCommand(vm.OpenFolder);
         _openTerminalButton.BindCommand(vm.OpenTerminal);
-        _toggleThemeButton.BindCommand(vm.ToggleTheme);
-        _toggleThemeButton.Icon.BindTo(vm.Theme, m => m == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon);
 
         _pushButton.Badge.BindTo(vm.PushBadge);
         _pullButton.Badge.BindTo(vm.PullBadge);
