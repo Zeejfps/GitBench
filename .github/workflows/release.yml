@@ -65,9 +65,11 @@ jobs:
         shell: bash
         run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
+      # Pin vpk to the same version as the Velopack library referenced by the app, so the
+      # generated release feed matches what the installed app's UpdateManager expects.
       - name: Install vpk
         shell: bash
-        run: dotnet tool install -g vpk
+        run: dotnet tool install -g vpk --version 1.1.1
 
       - name: Compute version from tag
         id: ver
@@ -88,17 +90,6 @@ jobs:
           -c Release -r ${{ matrix.rid }}
           -p:BuildMacBundle=false
           -o publish/${{ matrix.rid }}
-
-      # Pull this channel's prior release so vpk can build delta packages. The first release
-      # for a channel has nothing to download, so don't fail the job.
-      - name: Download prior release (for deltas)
-        shell: bash
-        continue-on-error: true
-        run: >
-          vpk download github
-          --repoUrl https://github.com/Zeejfps/GitBench
-          --channel ${{ matrix.channel }}
-          --token ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pack
         shell: bash
@@ -124,23 +115,16 @@ jobs:
           if-no-files-found: error
 
   # All platforms are packed — collect every channel's assets into one folder and publish a
-  # single GitHub Release. Sequential uploads (one per channel) mean no create-vs-create race.
+  # single GitHub Release with `gh`. We deliberately do NOT use `vpk upload github`: vpk creates
+  # the release as a draft then publishes it, and publishing a draft makes GitHub try to create
+  # the git tag, which already exists (we pushed it to trigger) -> 422 "tag_name already_exists".
+  # `gh release create` instead binds a published release to the existing tag, and `vpk pack`
+  # already wrote each channel's releases.<channel>.json feed + installers, so uploading those
+  # assets directly is all the app's UpdateManager needs.
   publish:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Ensure global tools on PATH
-        shell: bash
-        run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
-
-      - name: Install vpk
-        shell: bash
-        run: dotnet tool install -g vpk
-
       - name: Collect all channels into one folder
         uses: actions/download-artifact@v8
         with:
@@ -153,36 +137,22 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # vpk creates releases as a draft then PUBLISHES them, and publishing a draft makes
-      # GitHub create the git tag — which already exists (we pushed it to trigger), so vpk's
-      # publish step 422s with "tag_name already_exists". Pre-create the PUBLISHED release with
-      # gh (it binds to the existing tag instead of recreating it); each vpk upload then finds a
-      # non-draft release and skips the publish step entirely. Idempotent across re-runs.
-      - name: Ensure published GitHub Release exists
+      - name: Create release and upload assets
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view "${{ github.ref_name }}" --repo Zeejfps/GitBench >/dev/null 2>&1; then
-            gh release create "${{ github.ref_name }}" \
-              --repo Zeejfps/GitBench \
-              --title "GitBench ${{ steps.ver.outputs.version }}" \
-              --generate-notes
-          fi
-
-      # vpk upload --channel selects only that channel's assets from the folder, and each
-      # channel's releases.<channel>.json is uniquely named, so the uploads sit side-by-side in
-      # one release. --merge attaches each channel's assets to the pre-created release above.
-      - name: Publish all channels to one GitHub Release
-        shell: bash
-        run: |
-          for ch in win-x64 osx-arm64 linux-x64; do
-            vpk upload github \
-              --repoUrl https://github.com/Zeejfps/GitBench \
-              --token "${{ secrets.GITHUB_TOKEN }}" \
-              --channel "$ch" \
-              --releaseName "GitBench ${{ steps.ver.outputs.version }}" \
-              --tag "${{ github.ref_name }}" \
-              --merge \
-              --publish
-          done
+          set -euo pipefail
+          tag="${{ github.ref_name }}"
+          # Start clean: drop any prior/partial release for this tag (keeps the git tag itself),
+          # then create a fresh published release bound to the existing tag.
+          gh release delete "$tag" --repo Zeejfps/GitBench --yes 2>/dev/null || true
+          gh release create "$tag" \
+            --repo Zeejfps/GitBench \
+            --title "GitBench ${{ steps.ver.outputs.version }}" \
+            --generate-notes
+          # Upload every packaged asset (nupkgs, installers, portable, releases.<channel>.json),
+          # excluding vpk's local build metadata which the update feed doesn't reference.
+          mapfile -t files < <(find Releases -type f ! -name 'assets.*.json')
+          printf 'Uploading: %s\n' "${files[@]}"
+          gh release upload "$tag" "${files[@]}" --repo Zeejfps/GitBench --clobber
