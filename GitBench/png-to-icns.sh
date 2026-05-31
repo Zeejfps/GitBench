@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Converts a square PNG into a macOS .icns (requires macOS `sips` + `iconutil`).
-# Shared by build-macos-bundle.sh (local .app builds) and the release workflow
-# (vpk pack --icon, which rejects anything without an .icns extension).
+# Used by the release workflow to feed `vpk pack --icon`, which rejects anything
+# without an .icns extension.
 
 if [[ $# -ne 2 ]]; then
   echo "usage: $0 <icon.png> <out.icns>" >&2
