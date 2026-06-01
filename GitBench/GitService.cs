@@ -968,6 +968,25 @@ public sealed class GitService : IGitService
         }
     }
 
+    public bool IsHeadDetachedAtRisk(Repo repo)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return false;
+            if (!GetHeadInfo(repo.Path).IsDetached) return false;
+            // Detached, but if any branch/tag already points at the HEAD commit it's reachable
+            // by name — nothing to lose. Only when no named ref lands on HEAD are these commits
+            // reachable solely from HEAD and orphaned by a checkout.
+            var pointed = RunGit(repo.Path, out _, "for-each-ref", "--points-at=HEAD",
+                "--format=%(refname)", "refs/heads", "refs/remotes", "refs/tags");
+            return string.IsNullOrWhiteSpace(pointed);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     // Shells out to the `git` CLI so we inherit the user's credential helpers
     // (ssh-agent, osxkeychain, GitHub CLI, …) — libgit2's macOS SSH path is too brittle.
     //

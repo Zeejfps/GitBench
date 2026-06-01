@@ -176,6 +176,22 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             capturedRepo, capturedSha, shortSha, summary, onClose)));
     }
 
+    // ---- create branch ----
+
+    // Opens the CreateBranchDialog seeded with the given starting point (a commit SHA, or
+    // "HEAD" for the detached-HEAD banner). The dialog defaults its "checkout after create"
+    // box on, so the common flow captures the commits onto a branch and lands you on it.
+    // Branch creation never touches the working tree, so no probe is needed.
+    public void RequestCreateBranch(string startPoint)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var capturedRepo = repo;
+        var capturedStart = startPoint;
+        _bus.Broadcast(new ShowDialogMessage(onClose =>
+            new CreateBranchDialog(capturedRepo, capturedStart, onClose)));
+    }
+
     // ---- delete tag ----
 
     // Opens the DeleteTagDialog for the given tag. Like tag creation, deleting a tag never

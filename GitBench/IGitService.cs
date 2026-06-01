@@ -15,6 +15,7 @@ public interface IGitService
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
     IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo);
     PushStatus GetPushStatus(Repo repo);
+    bool IsHeadDetachedAtRisk(Repo repo);
     PushOutcome Push(Repo repo, bool force = false);
     PushOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
     IReadOnlyList<string> GetRemoteNames(Repo repo);

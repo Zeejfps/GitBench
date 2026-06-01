@@ -31,32 +31,49 @@ public sealed class AppView : MultiChildView
                             initialWidth: prefs.RepoBarWidth,
                             minWidth: 220f,
                             onWidthChanged: preferences.SetRepoBarWidth),
-                        Center = new BorderLayoutView
+                        Center = new FlexColumnView
                         {
-                            West = ResizableLeftSidebar.Build(
-                                new FlexColumnView
-                                {
-                                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                                    Children =
-                                    {
-                                        new BranchesHeader(),
-                                        new FlexItem { Grow = 1, Child = new BranchesView() },
-                                    },
-                                },
-                                initialWidth: prefs.BranchesWidth,
-                                onWidthChanged: preferences.SetBranchesWidth),
-                            Center = new BorderLayoutView
+                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                            Children =
                             {
-                                North = new FlexColumnView
+                                // Repo-level detached-HEAD warning, stacked above both the
+                                // branches sidebar and the main content so it's visible on any
+                                // tab. Self-hides (collapsing its slot) when nothing's at risk.
+                                new DetachedHeadBannerView(),
+                                new FlexItem
                                 {
-                                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                                    Children =
+                                    Grow = 1,
+                                    // MultiChildView wrapper stretches the BorderLayout to fill
+                                    // the grow region (BorderLayoutView is a plain View).
+                                    Child = new MultiChildView { Children = { new BorderLayoutView
                                     {
-                                        new OperationBannerView(),
-                                        new ActionsToolbar(),
-                                    },
+                                        West = ResizableLeftSidebar.Build(
+                                            new FlexColumnView
+                                            {
+                                                CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                                                Children =
+                                                {
+                                                    new BranchesHeader(),
+                                                    new FlexItem { Grow = 1, Child = new BranchesView() },
+                                                },
+                                            },
+                                            initialWidth: prefs.BranchesWidth,
+                                            onWidthChanged: preferences.SetBranchesWidth),
+                                        Center = new BorderLayoutView
+                                        {
+                                            North = new FlexColumnView
+                                            {
+                                                CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                                                Children =
+                                                {
+                                                    new OperationBannerView(),
+                                                    new ActionsToolbar(),
+                                                },
+                                            },
+                                            Center = new MainContentView(),
+                                        },
+                                    } } },
                                 },
-                                Center = new MainContentView(),
                             },
                         },
                         South = new StatusBarView(),
