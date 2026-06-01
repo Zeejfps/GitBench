@@ -29,6 +29,8 @@ public interface IGitService
     CheckoutOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
     ResetOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
     CreateBranchOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout);
+    MoveBranchOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
+    bool IsAncestor(Repo repo, string maybeAncestor, string descendant);
     CreateTagOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
     DeleteTagOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
     RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
@@ -143,6 +145,8 @@ public enum ResetMode
 public sealed record ResetOutcome(bool Success, string? ErrorMessage);
 
 public sealed record CreateBranchOutcome(bool Success, string? ErrorMessage);
+
+public sealed record MoveBranchOutcome(bool Success, string? ErrorMessage);
 
 public sealed record CreateTagOutcome(bool Success, string? ErrorMessage);
 

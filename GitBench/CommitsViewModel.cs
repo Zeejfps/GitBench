@@ -39,10 +39,14 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private CommitSnapshot? _snapshot;
     private Guid _loadingRepoId;
     private bool _isCheckingOutCommit;
+    private bool _isMovingBranch;
 
     // Lane for the reset probe/apply op. Serialized by _isCheckingOutCommit; kept off the
     // default Gen lane so a repo-switch reload never drops an in-flight reset's result.
     private readonly GenerationGuard _resetGen;
+
+    // Same idea for the detached-HEAD "reset branch to here" probe/move, on its own lane.
+    private readonly GenerationGuard _moveGen;
 
     public CommitsViewModel(
         IRepoRegistry registry,
@@ -56,6 +60,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         _bus = bus;
 
         _resetGen = CreateLane();
+        _moveGen = CreateLane();
 
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
@@ -190,6 +195,72 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var capturedStart = startPoint;
         _bus.Broadcast(new ShowDialogMessage(onClose =>
             new CreateBranchDialog(capturedRepo, capturedStart, onClose)));
+    }
+
+    // ---- reset a branch to here (detached-HEAD recovery) ----
+
+    // Detached-HEAD flow for "Reset <branch> to here": force-move the chosen branch to this
+    // commit and check it out, bringing the detached commits onto a real branch. Probes
+    // ancestry off-thread — a fast-forward (the branch tip is an ancestor of this commit) is
+    // safe and applied immediately; otherwise the move would orphan the branch's unique
+    // commits, so we open MoveBranchDialog to confirm first.
+    public void RequestMoveBranch(string branchName, string sha)
+    {
+        if (_isMovingBranch) return;
+        var snap = _snapshot;
+        if (snap == null) return;
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != snap.RepoId) return;
+
+        _isMovingBranch = true;
+        var capturedRepo = repo;
+        var capturedBranch = branchName;
+        var capturedSha = sha;
+
+        RunBackground<MoveBranchProbe>(
+            work: () =>
+            {
+                if (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha))
+                {
+                    var outcome = _gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true);
+                    return (new MoveBranchProbe.Moved(outcome.Success, outcome.ErrorMessage), null);
+                }
+                return (new MoveBranchProbe.NeedsConfirm(), null);
+            },
+            onResult: (probe, error) =>
+            {
+                _isMovingBranch = false;
+                if (error != null)
+                {
+                    _bus.Broadcast(new ShowOperationErrorMessage("Reset branch failed", error));
+                    return;
+                }
+                switch (probe)
+                {
+                    case MoveBranchProbe.Moved m when m.Success:
+                        _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
+                        _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
+                        break;
+                    case MoveBranchProbe.Moved m:
+                        _bus.Broadcast(new ShowOperationErrorMessage(
+                            "Reset branch failed", m.Error ?? "Reset branch failed."));
+                        break;
+                    case MoveBranchProbe.NeedsConfirm:
+                        var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
+                        var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
+                        _bus.Broadcast(new ShowDialogMessage(onClose => new MoveBranchDialog(
+                            capturedRepo, capturedBranch, capturedSha, shortSha, summary, onClose)));
+                        break;
+                }
+            },
+            lane: _moveGen);
+    }
+
+    // Outcome of the off-thread move probe, handed from work to onResult above.
+    private abstract record MoveBranchProbe
+    {
+        public sealed record Moved(bool Success, string? Error) : MoveBranchProbe;
+        public sealed record NeedsConfirm : MoveBranchProbe;
     }
 
     // ---- delete tag ----

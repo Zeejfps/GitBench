@@ -688,11 +688,40 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         }
         else
         {
-            items.Add(new RepoBarContextMenu.Item(
-                "Reset to this commit",
-                () => _vm?.RequestReset(capturedSha),
-                LucideIcons.Branch));
+            // Detached: there's no current branch to reset, so let the user pick which local
+            // branch to move to this commit (git branch -f + checkout). Falls back to moving
+            // the detached HEAD itself when the repo has no local branches.
+            var branches = CollectLocalBranchNames();
+            if (branches.Count > 0)
+            {
+                var submenu = new List<RepoBarContextMenu.Item>(branches.Count);
+                foreach (var name in branches)
+                {
+                    var branch = name;
+                    submenu.Add(new RepoBarContextMenu.Item(
+                        branch,
+                        () => _vm?.RequestMoveBranch(branch, capturedSha),
+                        LucideIcons.Branch));
+                }
+                items.Add(new RepoBarContextMenu.Item(
+                    "Reset branch to here",
+                    () => { },
+                    LucideIcons.Branch,
+                    Submenu: submenu));
+            }
+            else
+            {
+                items.Add(new RepoBarContextMenu.Item(
+                    "Reset to this commit",
+                    () => _vm?.RequestReset(capturedSha),
+                    LucideIcons.Branch));
+            }
         }
+
+        items.Add(new RepoBarContextMenu.Item(
+            "Create branch here…",
+            () => _vm?.RequestCreateBranch(capturedSha),
+            LucideIcons.Branch));
 
         items.Add(new RepoBarContextMenu.Item(
             "Create Tag…",
@@ -700,6 +729,25 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             LucideIcons.Tag));
 
         return items;
+    }
+
+    // Distinct local-branch names across the snapshot, sorted for a stable submenu order.
+    // Harvested from rendered ref badges so it needs no extra git call; a branch whose tip
+    // falls outside the (capped) walk simply won't appear, which is acceptable.
+    private IReadOnlyList<string> CollectLocalBranchNames()
+    {
+        var snap = _snapshot;
+        if (snap == null) return Array.Empty<string>();
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var node in snap.Commits)
+        {
+            foreach (var badge in node.Refs)
+            {
+                if (badge.Kind == RefKind.LocalBranch)
+                    names.Add(badge.Name);
+            }
+        }
+        return names.Count == 0 ? Array.Empty<string>() : new List<string>(names);
     }
 
     private static IReadOnlyList<MenuLabelSegment> BuildResetSegments(string branch) =>

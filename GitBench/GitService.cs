@@ -1309,6 +1309,48 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Force-moves an existing branch to point at commitSha. With checkout=true uses
+    // `git checkout -B <branch> <sha>` (reset the ref AND switch to it in one step) — the path
+    // used to bring detached-HEAD commits back onto a branch and land on it. The branch must
+    // not be the currently checked-out one; callers only invoke this while detached, so it
+    // never is. Force can orphan the branch's prior unique commits — callers guard via
+    // IsAncestor and confirm before calling when it isn't a fast-forward.
+    public MoveBranchOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new MoveBranchOutcome(false, "Not a git repository.");
+
+            var args = checkout
+                ? new[] { "checkout", "-B", branchName, commitSha }
+                : new[] { "branch", "-f", branchName, commitSha };
+
+            using var _ = LockRepo(repo.Path);
+            var result = _runner.Run(repo.Path, args);
+            return result.Ok
+                ? new MoveBranchOutcome(true, null)
+                : new MoveBranchOutcome(false, result.FirstLineError($"git {(checkout ? "checkout" : "branch")}"));
+        }
+        catch (Exception ex)
+        {
+            return new MoveBranchOutcome(false, ex.Message);
+        }
+    }
+
+    // True when maybeAncestor (a ref or SHA) is an ancestor of descendant — i.e. moving
+    // maybeAncestor forward to descendant is a fast-forward that orphans nothing. Exit 0 =
+    // ancestor, 1 = not, other = error (treated as "not", so callers confirm before forcing).
+    public bool IsAncestor(Repo repo, string maybeAncestor, string descendant)
+    {
+        if (!IsGitRepo(repo.Path)) return false;
+        var result = _runner.Run(
+            repo.Path,
+            new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant },
+            GitProcessRunner.GitLaunch.Direct);
+        return result.ExitCode == 0;
+    }
+
     // Creates an annotated tag when a message is supplied (`git tag -a <name> -m <msg> <sha>`),
     // otherwise a lightweight tag (`git tag <name> <sha>`). When pushToAllRemotes is set, the new
     // tag ref is pushed to every configured remote; the first push failure aborts and is reported
