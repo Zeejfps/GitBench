@@ -4,7 +4,6 @@ A fast, cross-platform desktop Git client.
 
 [![Latest release](https://img.shields.io/github/v/release/Zeejfps/GitBench?sort=semver)](https://github.com/Zeejfps/GitBench/releases/latest)
 [![Release build](https://img.shields.io/github/actions/workflow/status/Zeejfps/GitBench/release.yml?label=release%20build)](https://github.com/Zeejfps/GitBench/actions/workflows/release.yml)
-[![Downloads](https://img.shields.io/github/downloads/Zeejfps/GitBench/total)](https://github.com/Zeejfps/GitBench/releases)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![AI-assisted](https://img.shields.io/badge/AI--assisted-Claude%20Code-8A2BE2)
