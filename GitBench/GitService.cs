@@ -2263,7 +2263,13 @@ public sealed class GitService : IGitService
             if (patchText == null)
                 return DiffError(repo, path, side, error ?? "git diff failed.");
 
-            return ParseGitDiff(repo.Id, path, side, patchText);
+            var result = ParseGitDiff(repo.Id, path, side, patchText);
+            // LFS status only matters for binary files (the diff body is hidden, so the
+            // badge is the only place the user learns how the blob is stored). Querying
+            // check-attr is an extra git invocation, so we skip it for ordinary text diffs.
+            if (result.IsBinary)
+                result = result with { IsLfs = IsLfsTracked(repo.Path, path) };
+            return result;
         }
         catch (Exception ex)
         {
@@ -2294,6 +2300,18 @@ public sealed class GitService : IGitService
             new[] { "ls-files", "--error-unmatch", "--", path },
             GitProcessRunner.GitLaunch.Direct);
         return result.Ok;
+    }
+
+    // A path is LFS-tracked when .gitattributes assigns it the `lfs` filter. `git check-attr`
+    // resolves the attribute the same way the smudge/clean machinery does, so it reflects the
+    // effective rule for this path. Output is one line: "<path>: filter: <value>".
+    private bool IsLfsTracked(string workingDir, string path)
+    {
+        var result = _runner.Run(
+            workingDir,
+            new[] { "check-attr", "filter", "--", path },
+            GitProcessRunner.GitLaunch.Direct);
+        return result.Ok && result.Stdout.Contains("filter: lfs");
     }
 
     private static DiffResult ParseGitDiff(Guid repoId, string path, DiffSide side, string patchText)

@@ -33,7 +33,7 @@ public partial record ThemeStyles
             BranchesView = BuildBranchesView(p, status),
             RepoBar = BuildRepoBar(p),
             StatusBar = BuildStatusBar(p),
-            DiffView = BuildDiffView(p),
+            DiffView = BuildDiffView(p, status),
             DiffContent = BuildDiffContent(p, status),
             DiffHunkButton = BuildDiffHunkButton(hunkButton),
             ActionsToolbar = BuildActionsToolbar(p, status),

@@ -11,6 +11,10 @@ public abstract record DiffRenderState
     public sealed record Loaded(DiffResult Result) : DiffRenderState;
 }
 
+// Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is
+// stored inline. Text diffs and placeholders produce None, which hides the badge.
+internal enum LfsBadge { None, Tracked, NotTracked }
+
 internal sealed record DiffState(DiffRenderState Render, string? OpError);
 
 internal sealed class DiffViewModel : ViewModelBase<DiffState>
@@ -26,6 +30,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<string?> OpError { get; }
+    public IReadable<LfsBadge> LfsStatus { get; }
 
     public DiffViewModel(
         IReadable<DiffTarget?> target,
@@ -42,6 +47,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
         RenderState = Slice(s => s.Render);
         OpError = Slice(s => s.OpError);
+        LfsStatus = Slice(s => s.Render is DiffRenderState.Loaded { Result.IsBinary: true } loaded
+            ? (loaded.Result.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked)
+            : LfsBadge.None);
 
         Subscriptions.Add(_target.Subscribe(_ =>
         {

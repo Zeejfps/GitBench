@@ -26,6 +26,7 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
     public const float HeaderHeight = 24f;
 
     private readonly State<bool> _isCollapsed = new(false);
+    private readonly State<LfsBadge> _lfsState = new(LfsBadge.None);
 
     private readonly DiffContentView _content;
 
@@ -65,6 +66,7 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
     public void Bind(DiffViewModel vm)
     {
         vm.RenderState.Subscribe(_content.SetRenderState);
+        vm.LfsStatus.Subscribe(s => _lfsState.Value = s);
         _content.OnStageHunk = vm.StageHunk;
         _content.OnUnstageHunk = vm.UnstageHunk;
         _content.OnDiscardHunk = vm.RequestDiscardHunk;
@@ -107,6 +109,7 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
                     Children =
                     {
                         new FlexItem { Grow = 1, Child = title },
+                        BuildLfsBadge(),
                         chevron,
                     },
                 },
@@ -125,5 +128,42 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
             h => hovered.Value = h));
 
         return bar;
+    }
+
+    // Small pill in the header that reports a binary file's storage. It only surfaces for
+    // binary files (the VM yields None otherwise) so the user can tell at a glance whether a
+    // blob lives in Git LFS or is committed inline. Colors/text are bound to _lfsState, which
+    // mirrors the VM's LfsStatus; selectors re-read it on each repaint, the same way the
+    // header title re-reads its hover state.
+    private View BuildLfsBadge()
+    {
+        var label = new TextView
+        {
+            FontSize = 10f,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+        };
+        label.BindText(_lfsState, s => s switch
+        {
+            LfsBadge.Tracked => "Git LFS",
+            LfsBadge.NotTracked => "Not in LFS",
+            _ => string.Empty,
+        });
+        label.BindThemedTextColor(s => _lfsState.Value == LfsBadge.Tracked
+            ? s.DiffView.LfsBadgeTrackedText
+            : s.DiffView.LfsBadgeUntrackedText);
+
+        var badge = new RectView
+        {
+            Height = 16f,
+            BorderRadius = BorderRadiusStyle.All(8),
+            Padding = new PaddingStyle { Left = 7, Right = 7 },
+            Children = { label },
+        };
+        badge.BindThemedBackgroundColor(s => _lfsState.Value == LfsBadge.Tracked
+            ? s.DiffView.LfsBadgeTrackedBackground
+            : s.DiffView.LfsBadgeUntrackedBackground);
+        badge.BindIsVisible(_lfsState, s => s != LfsBadge.None);
+        return badge;
     }
 }

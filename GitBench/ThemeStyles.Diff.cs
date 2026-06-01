@@ -7,7 +7,11 @@ public sealed record DiffViewStyles(
     uint HeaderBorderTop,
     uint HeaderBorderBottom,
     uint HeaderTitleIdle,
-    uint HeaderTitleHover);
+    uint HeaderTitleHover,
+    uint LfsBadgeTrackedBackground,
+    uint LfsBadgeTrackedText,
+    uint LfsBadgeUntrackedBackground,
+    uint LfsBadgeUntrackedText);
 
 public sealed record DiffContentStyles(
     uint Background,
@@ -33,7 +37,7 @@ public sealed record DiffHunkButtonStyles(
 
 public partial record ThemeStyles
 {
-    private static DiffViewStyles BuildDiffView(ThemePalette p) =>
+    private static DiffViewStyles BuildDiffView(ThemePalette p, StatusPalette status) =>
         new(
             PanelBackground: p.Surface,
             HeaderBackgroundIdle: p.SurfaceRaised,
@@ -41,7 +45,14 @@ public partial record ThemeStyles
             HeaderBorderTop: p.Border,
             HeaderBorderBottom: p.Border,
             HeaderTitleIdle: p.TextSubtle,
-            HeaderTitleHover: p.TextStrong);
+            HeaderTitleHover: p.TextStrong,
+            // Tracked: a filled "info" pill — LFS storage is the expected/healthy state for a
+            // binary. Untracked: a muted neutral pill — informational, not an error, so it
+            // shouldn't shout the way a warning color would.
+            LfsBadgeTrackedBackground: status.Info,
+            LfsBadgeTrackedText: p.OnStatusText,
+            LfsBadgeUntrackedBackground: p.SurfaceSunken,
+            LfsBadgeUntrackedText: p.TextMuted);
 
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status) =>
         new(

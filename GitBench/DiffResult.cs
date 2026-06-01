@@ -29,4 +29,7 @@ public sealed record DiffResult(
     int? NewMode,
     IReadOnlyList<DiffHunk> Hunks,
     bool Truncated,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    // Whether the file is tracked by Git LFS (per .gitattributes). Only meaningful for
+    // binary files — text diffs leave this false and the UI shows no LFS badge for them.
+    bool IsLfs = false);
