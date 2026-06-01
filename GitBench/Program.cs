@@ -42,6 +42,11 @@ context.AddService<IPopupNativeDecorator>(
     : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? new MacOsPopupDecorator()
     : new NoopPopupDecorator());
 
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    context.AddService<IWindowChrome>(new WindowsWindowChrome());
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+    context.AddService<IWindowChrome>(new MacOsWindowChrome());
+
 var statePath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
     "GitBench",
@@ -67,6 +72,10 @@ var appHost = GuiApp.CreateDefault(new StartupConfig
     IsUndecorated = false
 }, context, appView);
 appHost.OnWindowResized += preferences.SetWindowSize;
+
+// Match the native title bar to the active theme, and keep it in sync on toggle.
+appHost.SetTitleBarDark(themeMode.Value == ThemeMode.Dark);
+themeMode.Changed += mode => appHost.SetTitleBarDark(mode == ThemeMode.Dark);
 
 var fontAssembly = typeof(LucideIcons).Assembly;
 appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);

@@ -178,7 +178,11 @@ public sealed class GitService : IGitService
                 AddBadge(refsBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
             }
 
-            if (refTips.Count == 0 && headTip != null)
+            // Always seed the walk from HEAD. On a branch this tip is already in refTips and
+            // libgit2 dedupes by reachability, so it's a no-op. When detached, HEAD's commits
+            // may be reachable from no other ref (ahead of every branch) — without this they'd
+            // be silently excluded from the graph, making committed work look lost.
+            if (headTip != null)
                 refTips.Add(headTip);
 
             var filter = new CommitFilter
