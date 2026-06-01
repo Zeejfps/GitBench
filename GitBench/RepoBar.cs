@@ -88,9 +88,16 @@ internal sealed class RepoBar : MultiChildView, IBind<RepoBarViewModel>
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems()
     {
-        return
-        [
+        var items = new List<RepoBarContextMenu.Item>
+        {
             new RepoBarContextMenu.Item("New group", () => _vm?.NewGroup.Execute(), LucideIcons.FolderPlus),
-        ];
+        };
+        if (_vm?.HasMultipleGroups == true)
+        {
+            items.Add(RepoBarContextMenu.Separator);
+            items.Add(new RepoBarContextMenu.Item("Expand All", () => _vm?.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item("Collapse All", () => _vm?.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
+        }
+        return items;
     }
 }

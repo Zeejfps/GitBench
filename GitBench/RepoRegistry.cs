@@ -86,6 +86,18 @@ public sealed class RepoRegistry : IRepoRegistry
         }
     }
 
+    public void SetAllGroupsCollapsed(bool collapsed)
+    {
+        var changed = false;
+        for (var i = 0; i < Groups.Count; i++)
+        {
+            if (Groups[i].IsCollapsed == collapsed) continue;
+            Groups.Replace(i, Groups[i] with { IsCollapsed = collapsed });
+            changed = true;
+        }
+        if (changed) Save();
+    }
+
     public Guid CreateGroup(string name)
     {
         var displayName = string.IsNullOrWhiteSpace(name) ? DefaultNewGroupName : name;

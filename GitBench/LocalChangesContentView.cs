@@ -283,7 +283,20 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             () => _vm.DiscardAll.Execute(),
             LucideIcons.Trash,
             Enabled: _vm.DiscardAll.CanExecute.Value));
+        AppendExpandCollapseItems(items, DiffSide.Unstaged);
         return items;
+    }
+
+    // In tree view, offer whole-side expand/collapse alongside the "All" actions. Hidden in
+    // flat view, where there are no folders to fold.
+    private void AppendExpandCollapseItems(List<RepoBarContextMenu.Item> items, DiffSide side)
+    {
+        if (_vm == null || _vm.ViewMode.Value != FileViewMode.Tree) return;
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            "Expand All", () => _vm.ExpandAllFolders(side), LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item(
+            "Collapse All", () => _vm.CollapseAllFolders(side), LucideIcons.ChevronRight));
     }
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildStagedMenu(FileRow? target)
@@ -307,6 +320,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             () => _vm.UnstageAll.Execute(),
             LucideIcons.ChevronsLeft,
             Enabled: _vm.UnstageAll.CanExecute.Value));
+        AppendExpandCollapseItems(items, DiffSide.Staged);
         return items;
     }
 

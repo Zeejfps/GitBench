@@ -19,8 +19,9 @@ namespace GitGui;
 /// right-click the "Local" section header to create a new
 /// branch (same as the toolbar's Branch button); right-click the "Remotes" section
 /// header to add a new remote; right-click a remote header (e.g.
-/// "origin") to edit that remote's URL. Collapse state is persisted per-repo via
-/// IRepoRegistry.
+/// "origin") to edit that remote's URL. Section headers, remote headers, and folder rows
+/// also offer "Expand All" / "Collapse All", which flip every collapsible descendant
+/// within that subtree. Collapse state is persisted per-repo via IRepoRegistry.
 ///
 /// Scroll/hit-test/hover/double-click plumbing lives in <see cref="VirtualRowListView"/>;
 /// row flattening lives in <see cref="BranchTreeBuilder"/>. This view owns the row
@@ -560,6 +561,8 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
                 return vm.BuildRemotesHeaderMenuItems();
             case BranchRowKind.RemoteHeader when row.RemoteName != null:
                 return vm.BuildRemoteHeaderMenuItems(row.RemoteName);
+            case BranchRowKind.Folder when row.FullPath != null:
+                return vm.BuildFolderMenuItems(row.RemoteName, row.FullPath);
             case BranchRowKind.LocalBranch when row.FullPath != null:
                 return vm.BuildLocalBranchMenuItems(row.FullPath, row.IsHead);
             case BranchRowKind.RemoteBranch when row.RemoteName != null && row.FullPath != null:

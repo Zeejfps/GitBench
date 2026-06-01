@@ -316,6 +316,45 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     }
 
     /// <summary>
+    /// Expands every folder on the given side by clearing its collapsed set (tree mode only).
+    /// </summary>
+    public void ExpandAllFolders(DiffSide side)
+    {
+        Update(s =>
+        {
+            var set = side == DiffSide.Unstaged ? s.UnstagedCollapsed : s.StagedCollapsed;
+            if (set.Count == 0) return s;
+            var empty = new HashSet<string>();
+            return side == DiffSide.Unstaged
+                ? s with { UnstagedCollapsed = empty }
+                : s with { StagedCollapsed = empty };
+        });
+    }
+
+    /// <summary>
+    /// Collapses every folder on the given side (tree mode only). The full folder set is
+    /// derived from the file list with an empty collapsed set so nested folders aren't
+    /// hidden from the walk.
+    /// </summary>
+    public void CollapseAllFolders(DiffSide side)
+    {
+        Update(s =>
+        {
+            var files = side == DiffSide.Unstaged ? s.Unstaged : s.Staged;
+            var allRows = FileTreeBuilder.BuildRows(files, side, FileViewMode.Tree, EmptyCollapsed);
+            var folders = new HashSet<string>();
+            foreach (var row in allRows)
+                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+            if (folders.Count == 0) return s;
+            return side == DiffSide.Unstaged
+                ? s with { UnstagedCollapsed = folders }
+                : s with { StagedCollapsed = folders };
+        });
+    }
+
+    private static readonly IReadOnlySet<string> EmptyCollapsed = new HashSet<string>();
+
+    /// <summary>
     /// Expands (<paramref name="expand"/> true) or collapses the folder the keyboard cursor
     /// sits on. No-op when the cursor isn't on a folder or it's already in that state.
     /// Wired to Right / Left arrows.

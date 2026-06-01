@@ -236,6 +236,107 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public void ToggleFolder(string key) =>
         MutateUi(ui => ui.FolderOpen[key] = !ui.FolderOpen.GetValueOrDefault(key, true));
 
+    // ---- expand-all / collapse-all (scoped to a parent's descendants) ----
+    //
+    // Each method leaves the clicked parent itself open and flips every collapsible
+    // descendant within its subtree, so "Collapse All" on a folder hides its sub-folders
+    // while keeping the folder you clicked visible. Missing keys default to open, so
+    // collapsing writes explicit `false` entries and expanding writes explicit `true`.
+
+    public void SetLocalDescendantsOpen(bool open)
+    {
+        var listing = State.Value.Listing;
+        if (listing == null) return;
+        MutateUi(ui =>
+        {
+            foreach (var path in BranchTreeBuilder.FolderPaths(listing.LocalBranches.Select(b => b.Name)))
+                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: false, null, path)] = open;
+        });
+    }
+
+    public void SetRemotesDescendantsOpen(bool open)
+    {
+        var listing = State.Value.Listing;
+        if (listing == null) return;
+        MutateUi(ui =>
+        {
+            foreach (var rg in listing.Remotes)
+            {
+                ui.RemoteOpen[rg.Name] = open;
+                foreach (var path in BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)))
+                    ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: true, rg.Name, path)] = open;
+            }
+        });
+    }
+
+    public void SetRemoteDescendantsOpen(string remoteName, bool open)
+    {
+        var rg = FindRemote(remoteName);
+        if (rg == null) return;
+        MutateUi(ui =>
+        {
+            foreach (var path in BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)))
+                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: true, remoteName, path)] = open;
+        });
+    }
+
+    public void SetFolderDescendantsOpen(string? remoteName, string basePath, bool open)
+    {
+        var names = BranchNamesIn(remoteName);
+        if (names == null) return;
+        var prefix = basePath + "/";
+        var isRemote = remoteName != null;
+        MutateUi(ui =>
+        {
+            foreach (var path in BranchTreeBuilder.FolderPaths(names))
+            {
+                if (!path.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote, remoteName, path)] = open;
+            }
+        });
+    }
+
+    private RemoteGroup? FindRemote(string remoteName)
+    {
+        var listing = State.Value.Listing;
+        if (listing == null) return null;
+        foreach (var rg in listing.Remotes)
+            if (rg.Name == remoteName) return rg;
+        return null;
+    }
+
+    private IEnumerable<string>? BranchNamesIn(string? remoteName)
+    {
+        if (remoteName == null)
+            return State.Value.Listing?.LocalBranches.Select(b => b.Name);
+        return FindRemote(remoteName)?.Branches.Select(b => b.Name);
+    }
+
+    // True when the subtree holds at least one collapsible node, so the menu can hide the
+    // Expand/Collapse-All items where they'd be no-ops (e.g. a flat local branch list).
+    private bool LocalHasFolders()
+        => State.Value.Listing != null
+           && BranchTreeBuilder.FolderPaths(State.Value.Listing!.LocalBranches.Select(b => b.Name)).Any();
+
+    private bool RemotesHaveCollapsibles()
+        => State.Value.Listing != null && State.Value.Listing!.Remotes.Count > 0;
+
+    private bool RemoteHasFolders(string remoteName)
+    {
+        var rg = FindRemote(remoteName);
+        return rg != null && BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)).Any();
+    }
+
+    private bool FolderHasSubFolders(string? remoteName, string basePath)
+    {
+        var names = BranchNamesIn(remoteName);
+        if (names == null) return false;
+        var prefix = basePath + "/";
+        foreach (var path in BranchTreeBuilder.FolderPaths(names))
+            if (path.StartsWith(prefix, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     private void MutateUi(Action<BranchesUiState> mutate)
     {
         Update(s =>
@@ -453,13 +554,36 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
-        return new List<RepoBarContextMenu.Item>
+        var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
                 "New branch…",
                 CreateBranch,
                 LucideIcons.Branch),
         };
+        if (LocalHasFolders())
+            AppendExpandCollapseItems(items, () => SetLocalDescendantsOpen(true), () => SetLocalDescendantsOpen(false));
+        return items;
+    }
+
+    // Appends a separator followed by Expand All / Collapse All. Shared by every parent
+    // row's menu so the wording, icons, and ordering stay consistent across the tree.
+    private static void AppendExpandCollapseItems(List<RepoBarContextMenu.Item> items, Action expandAll, Action collapseAll)
+    {
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item("Expand All", expandAll, LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item("Collapse All", collapseAll, LucideIcons.ChevronRight));
+    }
+
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderMenuItems(string? remoteName, string folderPath)
+    {
+        if (State.Value.Listing == null) return Array.Empty<RepoBarContextMenu.Item>();
+        if (!FolderHasSubFolders(remoteName, folderPath)) return Array.Empty<RepoBarContextMenu.Item>();
+
+        var items = new List<RepoBarContextMenu.Item>();
+        items.Add(new RepoBarContextMenu.Item("Expand All", () => SetFolderDescendantsOpen(remoteName, folderPath, true), LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item("Collapse All", () => SetFolderDescendantsOpen(remoteName, folderPath, false), LucideIcons.ChevronRight));
+        return items;
     }
 
     public void CreateBranch()
@@ -565,7 +689,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var capturedRepo = repo;
-        return new List<RepoBarContextMenu.Item>
+        var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
                 "Add remote…",
@@ -573,6 +697,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                     capturedRepo, onClose))),
                 LucideIcons.Fetch),
         };
+        if (RemotesHaveCollapsibles())
+            AppendExpandCollapseItems(items, () => SetRemotesDescendantsOpen(true), () => SetRemotesDescendantsOpen(false));
+        return items;
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildRemoteHeaderMenuItems(string remoteName)
@@ -581,7 +708,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var capturedRemote = remoteName;
-        return new List<RepoBarContextMenu.Item>
+        var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
                 $"Edit {capturedRemote}…",
@@ -589,6 +716,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                     repo, capturedRemote, onClose))),
                 LucideIcons.PencilLine),
         };
+        if (RemoteHasFolders(capturedRemote))
+            AppendExpandCollapseItems(items, () => SetRemoteDescendantsOpen(capturedRemote, true), () => SetRemoteDescendantsOpen(capturedRemote, false));
+        return items;
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildRemoteBranchMenuItems(string remoteName, string fullPath)

@@ -101,6 +101,25 @@ internal static class BranchTreeBuilder
         }
     }
 
-    private static string MakeFolderKey(bool isRemote, string? remoteName, string path) =>
+    internal static string MakeFolderKey(bool isRemote, string? remoteName, string path) =>
         isRemote ? $"remote:{remoteName}:{path}" : $"local:{path}";
+
+    /// Every folder path implied by a set of slash-separated branch names. A branch
+    /// "feature/admin/login" contributes the folders "feature" and "feature/admin" (the
+    /// final segment is the leaf branch, not a folder). The order is unspecified — callers
+    /// use these only as keys into the open/closed map.
+    internal static IEnumerable<string> FolderPaths(IEnumerable<string> branchNames)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var name in branchNames)
+        {
+            var slash = name.IndexOf('/');
+            while (slash >= 0)
+            {
+                var prefix = name.Substring(0, slash);
+                if (seen.Add(prefix)) yield return prefix;
+                slash = name.IndexOf('/', slash + 1);
+            }
+        }
+    }
 }

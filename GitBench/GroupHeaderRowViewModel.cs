@@ -16,6 +16,12 @@ internal sealed class GroupHeaderRowViewModel : IDisposable
     public Command BeginRename { get; }
     public Command Delete { get; }
     public Command NewGroup { get; }
+    public Command ExpandAllGroups { get; }
+    public Command CollapseAllGroups { get; }
+
+    // Only meaningful to offer "Collapse/Expand All" when there's more than one group;
+    // with a single group the header's own chevron already does the job.
+    public bool HasMultipleGroups => _registry.Groups.Count > 1;
 
     public GroupHeaderRowViewModel(Group group, IRepoRegistry registry, Command newGroup)
     {
@@ -27,6 +33,8 @@ internal sealed class GroupHeaderRowViewModel : IDisposable
         ToggleCollapsed = new Command(() => _registry.ToggleGroupCollapsed(_group.Id));
         BeginRename = new Command(() => _registry.BeginRenameGroup(_group.Id));
         Delete = new Command(() => _registry.DeleteGroup(_group.Id));
+        ExpandAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(false));
+        CollapseAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(true));
     }
 
     public void Dispose() => _isRenaming.Dispose();

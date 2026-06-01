@@ -15,6 +15,8 @@ public interface IRepoRegistry
     void Open(string path);
     void SetActive(Guid id);
     void ToggleGroupCollapsed(Guid groupId);
+    // Collapses or expands every group at once (RepoBar's "Collapse All" / "Expand All").
+    void SetAllGroupsCollapsed(bool collapsed);
     Guid CreateGroup(string name);
     void RenameGroup(Guid id, string newName);
     void DeleteGroup(Guid id);

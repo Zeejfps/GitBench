@@ -92,6 +92,13 @@ internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewM
             items.Add(new RepoBarContextMenu.Item("Delete group", vm.Delete.Execute, LucideIcons.Trash));
 
         items.Add(new RepoBarContextMenu.Item("New group", vm.NewGroup.Execute, LucideIcons.FolderPlus));
+
+        if (vm.HasMultipleGroups)
+        {
+            items.Add(RepoBarContextMenu.Separator);
+            items.Add(new RepoBarContextMenu.Item("Expand All", vm.ExpandAllGroups.Execute, LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item("Collapse All", vm.CollapseAllGroups.Execute, LucideIcons.ChevronRight));
+        }
         return items;
     }
 
