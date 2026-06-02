@@ -65,6 +65,30 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         });
     }
 
+    // Up/Down arrow navigation through the loaded file list. Moves the single selection by
+    // <paramref name="delta"/> rows, clamped to the list bounds. With nothing selected yet, a
+    // Down lands on the first row and an Up on the last so the cursor has a visible start.
+    public void MoveSelection(int delta)
+    {
+        if (State.Value.Render is not CommitDetailsRenderState.Loaded loaded) return;
+        var files = loaded.Details.Files;
+        if (files.Count == 0) return;
+
+        var current = State.Value.SelectedPath;
+        var index = current == null ? -1 : IndexOfPath(files, current);
+        var next = index < 0
+            ? (delta > 0 ? 0 : files.Count - 1)
+            : Math.Clamp(index + delta, 0, files.Count - 1);
+        SelectFile(files[next].Path);
+    }
+
+    private static int IndexOfPath(IReadOnlyList<FileChange> files, string path)
+    {
+        for (var i = 0; i < files.Count; i++)
+            if (files[i].Path == path) return i;
+        return -1;
+    }
+
     private void OnCommitSelected(CommitSelectedMessage msg)
     {
         if (string.IsNullOrEmpty(msg.Sha))

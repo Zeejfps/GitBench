@@ -138,6 +138,20 @@ public sealed class FileChangesSection : MultiChildView, IScrollableContent
         NotifyScrollChanged();
     }
 
+    // Scrolls just enough to bring the row for <paramref name="path"/> into view, so arrow-key
+    // navigation that moves the selection past the viewport edge follows the cursor.
+    public void EnsureRowVisible(string path)
+    {
+        for (var i = 0; i < _files.Count; i++)
+        {
+            if (_files[i].Path == path)
+            {
+                _list.EnsureRowVisible(i);
+                return;
+            }
+        }
+    }
+
     protected override void OnDrawSelf(ICanvas c)
     {
         // Resync every frame so layout changes (splitter drag, window resize) immediately

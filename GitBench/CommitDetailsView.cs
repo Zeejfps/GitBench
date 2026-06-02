@@ -40,6 +40,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
     private readonly State<string?> _selectedPath = new(null);
+    private readonly LocalChangesArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
 
     public CommitDetailsView()
@@ -62,7 +63,11 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         _changesSection = new FileChangesSection(
             "Changes",
             selectedPath: _selectedPath,
-            onRowClicked: f => _vm?.SelectFile(f.Path));
+            onRowClicked: f =>
+            {
+                _vm?.SelectFile(f.Path);
+                _arrowController.TakeFocus();
+            });
 
         var innerSplitterHovered = new State<bool>(false);
         var innerSplitter = new RectView();
@@ -112,6 +117,17 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
 
         this.UseBehavior(_ => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
 
+        // Up/Down arrow navigation over the Changes list, mirroring the local-changes panels.
+        // The list is a flat single-select list, so there are no folders to expand and no
+        // stage/discard actions — only row movement is wired.
+        _arrowController = new LocalChangesArrowKbmController(
+            this,
+            (delta, _) => _vm?.MoveSelection(delta),
+            _ => { },
+            () => { },
+            () => { });
+        this.UseController(_ => _arrowController);
+
         this.UseViewModel(this);
     }
 
@@ -122,6 +138,10 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         _diffView.Bind(vm.DiffVm);
         _diffHeader.Bind(vm.DiffVm);
         _selectedPath.BindTo(vm.SelectedPath);
+        vm.SelectedPath.Subscribe(path =>
+        {
+            if (path != null) _changesSection.EnsureRowVisible(path);
+        });
         _splitContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
         _splitContainer.BindBottomCollapsed(_diffHeader.IsCollapsed, DiffPaneHeader.HeaderHeight);
     }
