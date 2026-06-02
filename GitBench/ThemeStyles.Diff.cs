@@ -70,6 +70,10 @@ public partial record ThemeStyles
             LfsBadgeUntrackedBackground: p.SurfaceSunken,
             LfsBadgeUntrackedText: p.TextMuted);
 
+    // Opacity applied to the diff's add/remove row background tints so syntax colors stay
+    // legible through them. 0x00 = invisible, 0xFF = fully opaque (the pre-highlighting look).
+    private const byte DiffLineTintAlpha = 0x80;
+
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
@@ -77,9 +81,12 @@ public partial record ThemeStyles
             ErrorText: status.DiffError,
             LineText: p.TextEmphasis,
             LineNumberText: p.TextFaint,
-            LineAddedBackground: status.SuccessLineBg,
+            // Dial the add/remove row tints back to ~50% so syntax-highlighted code reads
+            // clearly through them; the full-strength +/- glyphs still signal the line kind.
+            // Lower the alpha (e.g. 0x66) for a fainter tint, raise it (e.g. 0xB3) for a bolder one.
+            LineAddedBackground: WithAlpha(status.SuccessLineBg, DiffLineTintAlpha),
             LineAddedGlyph: status.SuccessLineGlyph,
-            LineRemovedBackground: status.DangerLineBg,
+            LineRemovedBackground: WithAlpha(status.DangerLineBg, DiffLineTintAlpha),
             LineRemovedGlyph: status.DangerLineGlyph,
             LineContextGlyph: p.TextMuted,
             SectionBackground: p.SurfaceRaised,
