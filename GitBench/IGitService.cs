@@ -41,6 +41,11 @@ public interface IGitService
     StashOutcome DropStash(Repo repo, int index);
     StashOutcome RenameStash(Repo repo, int index, string newMessage);
     DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null);
+    // Full file text for one side of a diff, used by syntax highlighting's whole-file tokenize.
+    // oldSide picks the "before" content (removed lines), else the "after" content (added/
+    // context). Returns null when that side has no content (root commit's parent, pure add/
+    // delete) or on any failure — the caller then renders that side plain.
+    string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null);
     RepoOperationState GetOperationState(Repo repo);
     AbortOperationOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOperationOutcome ContinueOperation(Repo repo, RepoOperationState state);

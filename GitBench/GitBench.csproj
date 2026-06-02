@@ -16,6 +16,16 @@
     <ItemGroup>
         <PackageReference Include="LibGit2Sharp" Version="0.31.0" />
         <PackageReference Include="Velopack" Version="1.1.1" />
+        <!-- TextMate-grammar tokenizer for diff syntax highlighting (MIT). Ships a per-RID
+             Oniguruma native (libonigwrap) as a runtime asset; verified NativeAOT-clean. -->
+        <PackageReference Include="TextMateSharp" Version="2.0.3" />
+        <PackageReference Include="TextMateSharp.Grammars" Version="2.0.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The diff syntax-highlighting logic modules are internal; the test project drives
+             them directly. -->
+        <InternalsVisibleTo Include="GitBench.Tests" />
     </ItemGroup>
 
     <ItemGroup>

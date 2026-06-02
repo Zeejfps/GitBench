@@ -8,6 +8,7 @@ public partial record ThemeStyles
         BannerStyles banner,
         TooltipPalette tooltip,
         DiffHunkButtonPalette hunkButton,
+        DiffSyntaxPalette diffSyntax,
         CommitBadgePalette commitBadge) =>
         new()
         {
@@ -34,7 +35,7 @@ public partial record ThemeStyles
             RepoBar = BuildRepoBar(p),
             StatusBar = BuildStatusBar(p),
             DiffView = BuildDiffView(p, status),
-            DiffContent = BuildDiffContent(p, status),
+            DiffContent = BuildDiffContent(p, status, diffSyntax),
             DiffHunkButton = BuildDiffHunkButton(hunkButton),
             ActionsToolbar = BuildActionsToolbar(p, status),
             SidebarSplitter = BuildSidebarSplitter(p),

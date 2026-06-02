@@ -11,12 +11,14 @@ internal abstract record DiffRow
     public sealed record HunkSeparator(string Range, string? Header) : DiffRow;
     /// <summary>
     /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
-    /// work doesn't allocate.
+    /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the
+    /// same tab-expanded column space as <see cref="Text"/>; null/empty means plain rendering.
     /// </summary>
     public sealed record Line(
         DiffLineKind Kind,
         string OldNumber,
         string NewNumber,
         string Text,
-        int Chars) : DiffRow;
+        int Chars,
+        IReadOnlyList<TokenSpan>? Spans = null) : DiffRow;
 }

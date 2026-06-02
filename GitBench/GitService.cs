@@ -2348,6 +2348,55 @@ public sealed class GitService : IGitService
         }
     }
 
+    public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return null;
+
+            switch (side)
+            {
+                case DiffSide.Commit:
+                    if (string.IsNullOrEmpty(commitSha)) return null;
+                    // old = the commit's first parent; new = the commit itself. A root commit has
+                    // no parent, so `<sha>~1:` fails and old comes back null (all-add diff anyway).
+                    return ShowBlob(repo.Path, oldSide ? $"{commitSha}~1:{path}" : $"{commitSha}:{path}");
+
+                case DiffSide.Staged:
+                    // Staged diff is index-vs-HEAD: old = HEAD blob, new = staged (index) blob.
+                    return ShowBlob(repo.Path, oldSide ? $"HEAD:{path}" : $":{path}");
+
+                default: // Unstaged: working-tree-vs-index. old = index blob, new = file on disk.
+                    return oldSide ? ShowBlob(repo.Path, $":{path}") : ReadWorkingFile(repo.Path, path);
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // `git show <rev>:<path>` prints a blob's raw contents. Returns null on any non-zero exit
+    // (path absent on that side, bad rev, etc.) so the caller falls back to plain rendering.
+    private string? ShowBlob(string workingDir, string revPath)
+    {
+        var result = _runner.Run(workingDir, new[] { "show", revPath }, GitProcessRunner.GitLaunch.Direct);
+        return result.Ok ? result.Stdout : null;
+    }
+
+    private static string? ReadWorkingFile(string workingDir, string path)
+    {
+        try
+        {
+            var full = Path.IsPathRooted(path) ? path : Path.Combine(workingDir, path);
+            return File.Exists(full) ? File.ReadAllText(full) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private string RunGit(string workingDir, out string? error, params string[] args)
         => RunGitInternal(workingDir, allowExitCode1: false, out error, args)!;
 

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <!-- The project under test is AOT-published, but the test host runs on the CLR; don't
+             inherit AOT/trim settings here. -->
+        <PublishAot>false</PublishAot>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="xunit" Version="2.9.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\GitBench\GitBench.csproj" />
+    </ItemGroup>
+
+</Project>

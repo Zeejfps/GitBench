@@ -27,7 +27,23 @@ public sealed record DiffContentStyles(
     uint SectionBackground,
     uint SectionMutedText,
     uint HunkSeparatorRangeText,
-    uint HunkOutline);
+    uint HunkOutline,
+    DiffSyntaxStyles Syntax);
+
+// Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
+// internal, so slot → color resolution lives in the renderer (DiffContentView); this record is
+// plain color data.
+public sealed record DiffSyntaxStyles(
+    uint Keyword,
+    uint String,
+    uint Comment,
+    uint Number,
+    uint Type,
+    uint Function,
+    uint Variable,
+    uint Operator,
+    uint Punctuation,
+    uint Constant);
 
 public sealed record DiffHunkButtonStyles(
     uint BackgroundIdle,
@@ -54,7 +70,7 @@ public partial record ThemeStyles
             LfsBadgeUntrackedBackground: p.SurfaceSunken,
             LfsBadgeUntrackedText: p.TextMuted);
 
-    private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status) =>
+    private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
             PlaceholderText: p.TextMuted,
@@ -69,7 +85,18 @@ public partial record ThemeStyles
             SectionBackground: p.SurfaceRaised,
             SectionMutedText: p.TextSecondary,
             HunkSeparatorRangeText: p.TextMuted,
-            HunkOutline: p.HunkOutline);
+            HunkOutline: p.HunkOutline,
+            Syntax: new DiffSyntaxStyles(
+                Keyword: syntax.Keyword,
+                String: syntax.String,
+                Comment: syntax.Comment,
+                Number: syntax.Number,
+                Type: syntax.Type,
+                Function: syntax.Function,
+                Variable: syntax.Variable,
+                Operator: syntax.Operator,
+                Punctuation: syntax.Punctuation,
+                Constant: syntax.Constant));
 
     private static DiffHunkButtonStyles BuildDiffHunkButton(DiffHunkButtonPalette hunkButton) =>
         new(

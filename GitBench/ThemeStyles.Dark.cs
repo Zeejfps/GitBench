@@ -88,6 +88,20 @@ public partial record ThemeStyles
             Border: 0xFF4A5060u,
             Text: 0xFFE6E8ECu);
 
+        // Editor-native foregrounds over the dark surface (VS Code Dark+ lineage). Operator and
+        // punctuation stay near the body text color so structure reads without visual noise.
+        var diffSyntax = new DiffSyntaxPalette(
+            Keyword: 0xFF569CD6u,
+            String: 0xFFCE9178u,
+            Comment: 0xFF6A9955u,
+            Number: 0xFFB5CEA8u,
+            Type: 0xFF4EC9B0u,
+            Function: 0xFFDCDCAAu,
+            Variable: 0xFF9CDCFEu,
+            Operator: 0xFFD4D4D4u,
+            Punctuation: 0xFF969A9Du,
+            Constant: 0xFF4FC1FFu);
+
         var commitBadge = new CommitBadgePalette(
             LocalBg: 0xFF2F4A6Bu,
             RemoteBg: 0xFF4A2F6Bu,
@@ -98,6 +112,6 @@ public partial record ThemeStyles
             BranchDivergedIcon: status.Warning,
             BranchUntrackedIcon: p.TextDisabled);
 
-        return BuildStyles(p, status, banner, tooltip, hunkButton, commitBadge);
+        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge);
     }
 }

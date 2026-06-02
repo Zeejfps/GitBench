@@ -5,10 +5,12 @@ namespace GitGui;
 
 public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null);
 
-public abstract record DiffRenderState
+internal abstract record DiffRenderState
 {
     public sealed record Placeholder(string Text) : DiffRenderState;
-    public sealed record Loaded(DiffResult Result) : DiffRenderState;
+    // Highlight is null until the async syntax pass completes (or stays null when highlighting
+    // is off/unsupported/failed) — the view renders plain in that case, identical to before.
+    public sealed record Loaded(DiffResult Result, DiffHighlight? Highlight = null) : DiffRenderState;
 }
 
 // Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is
@@ -27,6 +29,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private bool _deferReloadToWorkingTreeChange;
+
+    // Syntax highlighting runs on its own lane so an in-flight highlight for a file we've
+    // navigated away from is dropped, and so it never invalidates the diff-load lane (Gen).
+    private readonly GenerationGuard _highlightLane;
 
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<string?> OpError { get; }
@@ -49,6 +55,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _highlightLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
         OpError = Slice(s => s.OpError);
@@ -161,7 +168,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             var remainingHunks = new List<DiffHunk>(diff.Hunks.Count - 1);
             for (var i = 0; i < diff.Hunks.Count; i++)
                 if (i != hunkIndex) remainingHunks.Add(diff.Hunks[i]);
-            Update(s => s with { Render = new DiffRenderState.Loaded(diff with { Hunks = remainingHunks }) });
+            // Whole-file line numbering is unchanged by dropping a hunk, so the existing spans
+            // stay valid — carry them through to avoid a highlight flicker before the reload.
+            var highlight = CurrentHighlight();
+            Update(s => s with { Render = new DiffRenderState.Loaded(diff with { Hunks = remainingHunks }, highlight) });
         }
         else if (toSide.HasValue)
         {
@@ -193,7 +203,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                     // change so LocalChangesViewModel re-syncs its lists against the truth
                     // (we may have optimistically moved the file in OnHunkAppliedOptimistic).
                     if (State.Value.Render is DiffRenderState.Loaded)
-                        Update(s => s with { Render = new DiffRenderState.Loaded(original) });
+                        Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
                     bus.Broadcast(new WorkingTreeChangedMessage(repoId));
                     return;
                 }
@@ -202,6 +212,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             });
         });
     }
+
+    private DiffHighlight? CurrentHighlight()
+        => State.Value.Render is DiffRenderState.Loaded l ? l.Highlight : null;
 
     private bool TryGetPatchContext(int hunkIndex, out Repo repo, out DiffResult diff)
     {
@@ -219,6 +232,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     private void StartLoad()
     {
+        // Any in-flight highlight is for the previous target; invalidate it up front so its
+        // result can't land on the diff we're about to load.
+        _highlightLane.Bump();
+
         var target = _target.Value;
         if (target == null)
         {
@@ -239,9 +256,28 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         RunBackground<DiffRenderState>(
             work: () => (new DiffRenderState.Loaded(_gitService.GetDiff(repo, path, side, commitSha)), null),
             onResult: (result, error) =>
-                Update(s => s with
-                {
-                    Render = error != null ? new DiffRenderState.Placeholder(error) : result!,
-                }));
+            {
+                var render = error != null ? new DiffRenderState.Placeholder(error) : result!;
+                Update(s => s with { Render = render });
+                if (render is DiffRenderState.Loaded loaded)
+                    StartHighlight(repo, loaded.Result, commitSha);
+            });
+    }
+
+    // Tokenizes the diff's file(s) off-thread and, when done, re-emits the same Loaded state
+    // carrying the spans. Runs on the highlight lane (stale results dropped) and only attaches
+    // to the still-current diff — an optimistic hunk apply may have swapped Result underneath us.
+    private void StartHighlight(Repo repo, DiffResult diff, string? commitSha)
+    {
+        var git = _gitService;
+        RunBackground<DiffHighlight>(
+            work: () => (DiffHighlightCoordinator.Compute(git, repo, diff, commitSha), null),
+            onResult: (highlight, _) =>
+            {
+                if (highlight == null) return; // plain rendering — nothing to apply
+                if (State.Value.Render is DiffRenderState.Loaded cur && ReferenceEquals(cur.Result, diff))
+                    Update(s => s with { Render = new DiffRenderState.Loaded(diff, highlight) });
+            },
+            lane: _highlightLane);
     }
 }

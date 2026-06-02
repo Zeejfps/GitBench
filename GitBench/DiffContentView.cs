@@ -171,7 +171,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         {
             _diffSide = loaded.Result.Side;
             _hunksPatchable = HunkPatchBuilder.CanPatchHunk(loaded.Result);
-            FlattenRows(loaded.Result);
+            FlattenRows(loaded.Result, loaded.Highlight);
         }
 
         _list.ItemCount = _rows.Count;
@@ -180,7 +180,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         SetDirty();
     }
 
-    private void FlattenRows(DiffResult r)
+    private void FlattenRows(DiffResult r, DiffHighlight? highlight)
     {
         if (r.ErrorMessage != null) return;
         if (r.IsBinary) return;
@@ -216,13 +216,17 @@ internal sealed class DiffContentView : View, IScrollableContent
 
             foreach (var l in h.Lines)
             {
-                var text = ExpandTabs(l.Text);
+                var text = DiffText.ExpandTabs(l.Text);
+                // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
+                var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
+                if (spans != null && spans.Count == 0) spans = null;
                 var row = new DiffRow.Line(
                     l.Kind,
                     l.OldLineNumber?.ToString() ?? string.Empty,
                     l.NewLineNumber?.ToString() ?? string.Empty,
                     text,
-                    text.Length);
+                    text.Length,
+                    spans);
                 _rows.Add(row);
                 if (text.Length > _maxRowChars) _maxRowChars = text.Length;
             }
@@ -608,10 +612,63 @@ internal sealed class DiffContentView : View, IScrollableContent
         DrawMonoText(c, glyph, x, bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, z + 1);
         x += GlyphColumnWidth + 4f;
 
-        var textWidth = Math.Max(0f, left + width - x);
-        DrawMonoText(c, l.Text, x, bottom, textWidth,
-            _styles.LineText, TextAlignment.Start, z + 1);
+        DrawLineText(c, l, x, bottom, left + width, z + 1);
     }
+
+    // Draws the line's text either as one run (no spans → plain, identical to before) or as a
+    // sequence of colored runs interleaved with base-colored gaps. The font is monospace, so
+    // each run sits at textStart + column*advance and every DrawText batches into one GPU draw.
+    private void DrawLineText(ICanvas c, DiffRow.Line l, float textStart, float bottom, float maxRight, int z)
+    {
+        var spans = l.Spans;
+        if (spans == null || spans.Count == 0)
+        {
+            DrawMonoText(c, l.Text, textStart, bottom, Math.Max(0f, maxRight - textStart),
+                _styles.LineText, TextAlignment.Start, z);
+            return;
+        }
+
+        var text = l.Text;
+        var len = text.Length;
+        var col = 0;
+        foreach (var span in spans)
+        {
+            var start = Math.Clamp(span.Start, 0, len);
+            var end = Math.Clamp(span.Start + span.Length, 0, len);
+            if (start > col)
+                DrawTextRun(c, text, col, start, textStart, bottom, maxRight, _styles.LineText, z);
+            if (end > start)
+                DrawTextRun(c, text, start, end, textStart, bottom, maxRight, SlotColor(span.Slot), z);
+            if (end > col) col = end;
+        }
+        if (col < len)
+            DrawTextRun(c, text, col, len, textStart, bottom, maxRight, _styles.LineText, z);
+    }
+
+    private void DrawTextRun(
+        ICanvas c, string text, int from, int to, float textStart, float bottom, float maxRight, uint color, int z)
+    {
+        if (to <= from) return;
+        var x = textStart + from * _monoAdvance;
+        var w = Math.Max(0f, maxRight - x);
+        if (w <= 0) return;
+        DrawMonoText(c, text.Substring(from, to - from), x, bottom, w, color, TextAlignment.Start, z);
+    }
+
+    private uint SlotColor(TokenColorSlot slot) => slot switch
+    {
+        TokenColorSlot.Keyword => _styles.Syntax.Keyword,
+        TokenColorSlot.String => _styles.Syntax.String,
+        TokenColorSlot.Comment => _styles.Syntax.Comment,
+        TokenColorSlot.Number => _styles.Syntax.Number,
+        TokenColorSlot.Type => _styles.Syntax.Type,
+        TokenColorSlot.Function => _styles.Syntax.Function,
+        TokenColorSlot.Variable => _styles.Syntax.Variable,
+        TokenColorSlot.Operator => _styles.Syntax.Operator,
+        TokenColorSlot.Punctuation => _styles.Syntax.Punctuation,
+        TokenColorSlot.Constant => _styles.Syntax.Constant,
+        _ => _styles.LineText,
+    };
 
     private void DrawMonoText(
         ICanvas c, string text, float left, float bottom, float width,
@@ -801,14 +858,6 @@ internal sealed class DiffContentView : View, IScrollableContent
         while (n > 0) { d++; n /= 10; }
         return d;
     }
-
-    private static string ExpandTabs(string s)
-    {
-        if (s.IndexOf('\t') < 0) return s;
-        return s.Replace("\t", TabReplacement);
-    }
-
-    private static readonly string TabReplacement = new(' ', DiffOptions.TabWidth);
 
     private static string FormatMode(int? mode)
         => mode is int m ? Convert.ToString(m, 8).PadLeft(6, '0') : "-";

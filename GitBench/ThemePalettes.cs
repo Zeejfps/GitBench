@@ -84,6 +84,21 @@ public sealed record DiffHunkButtonPalette(
     uint Border,
     uint Text);
 
+// Curated foreground colors for diff syntax highlighting, one per non-default TokenColorSlot.
+// Chosen per theme to read as native editor colors and stay legible over the diff's
+// add/remove background tints (which are foreground-independent).
+public sealed record DiffSyntaxPalette(
+    uint Keyword,
+    uint String,
+    uint Comment,
+    uint Number,
+    uint Type,
+    uint Function,
+    uint Variable,
+    uint Operator,
+    uint Punctuation,
+    uint Constant);
+
 public sealed record CommitBadgePalette(
     uint LocalBg,
     uint RemoteBg,
