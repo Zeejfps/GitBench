@@ -4,6 +4,8 @@ internal static class LucideIcons
 {
     public const string FontFamily = "lucide";
 
+    public const string FileText = ""; // file-text (full-file diff view toggle)
+
     public const string ExternalLink = ""; // external-link
 
     public const string Fetch = "";        // cloud-download

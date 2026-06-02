@@ -126,6 +126,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
             _ => { },
             () => { },
             () => { });
+        _arrowController.OnToggleFullFile = () => _vm?.DiffVm.ToggleFullFile();
         this.UseController(_ => _arrowController);
 
         this.UseViewModel(this);

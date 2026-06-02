@@ -29,6 +29,10 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     public Action? OnTab { get; set; }
     public Action? OnShiftTab { get; set; }
 
+    // Optional "F" hotkey for the paired diff's full-file toggle. Left null on lists with no
+    // diff pane (e.g. the commit history list), where F should do nothing.
+    public Action? OnToggleFullFile { get; set; }
+
     public ListArrowKbmController(
         View view,
         Action<int, bool> onMove,
@@ -86,6 +90,11 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
         else if (e.Key == KeyboardKey.Delete)
         {
             _onDelete();
+            e.Consume();
+        }
+        else if (e.Key == KeyboardKey.F && OnToggleFullFile != null)
+        {
+            OnToggleFullFile();
             e.Consume();
         }
     }

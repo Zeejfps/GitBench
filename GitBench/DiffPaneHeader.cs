@@ -22,8 +22,11 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
 
     private readonly State<bool> _isCollapsed = new(false);
     private readonly LfsBadgeView _lfsBadge = new();
+    // Mirrors the bound VM's Mode so the full-file toggle button can paint its active tint.
+    private readonly State<bool> _fullFileActive = new(false);
 
     private Action? _onOpenInWindow;
+    private Action? _onToggleFullFile;
 
     public DiffPaneHeader()
     {
@@ -64,6 +67,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
                         chevron,
                         new FlexItem { Grow = 1, Child = title },
                         _lfsBadge,
+                        BuildFullFileToggleButton(),
                         BuildOpenInWindowButton(),
                     },
                 },
@@ -94,6 +98,34 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
     {
         vm.LfsStatus.Subscribe(_lfsBadge.SetStatus);
         _onOpenInWindow = vm.RequestOpenInWindow;
+        _onToggleFullFile = vm.ToggleFullFile;
+        vm.Mode.Subscribe(m => _fullFileActive.Value = m == DiffViewMode.FullFile);
+    }
+
+    // Toggles the diff body between the normal diff and the after-side full file. Tinted while
+    // active so it reads as an engaged toggle, not a one-shot action.
+    private View BuildFullFileToggleButton()
+    {
+        var hovered = new State<bool>(false);
+
+        var icon = new TextView
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 12f,
+            Text = LucideIcons.FileText,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+            Width = 16f,
+        };
+        icon.BindThemedTextColor(s => _fullFileActive.Value
+            ? s.DiffView.HeaderToggleActive
+            : hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+
+        var btn = new RectView { Children = { icon } };
+        btn.UseController(_ => new HoverableButtonController(
+            () => _onToggleFullFile?.Invoke(),
+            h => hovered.Value = h));
+        return btn;
     }
 
     private View BuildOpenInWindowButton()

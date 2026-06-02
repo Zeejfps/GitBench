@@ -16,11 +16,13 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
     public const float ToolbarHeight = 28f;
 
     private readonly State<DiffSide?> _side = new(null);
+    private readonly State<bool> _fullFileActive = new(false);
     private readonly LfsBadgeView _lfsBadge = new();
     private readonly TextView _title;
 
     private Action? _onStageFile;
     private Action? _onUnstageFile;
+    private Action? _onToggleFullFile;
 
     public DiffWindowToolbar(string title)
     {
@@ -47,6 +49,7 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
                     {
                         new FlexItem { Grow = 1, Child = _title },
                         _lfsBadge,
+                        BuildFullFileToggleButton(),
                         BuildStageButton(),
                     },
                 },
@@ -64,6 +67,34 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
         vm.CurrentSide.Subscribe(s => _side.Value = s);
         _onStageFile = vm.StageFile;
         _onUnstageFile = vm.UnstageFile;
+        _onToggleFullFile = vm.ToggleFullFile;
+        vm.Mode.Subscribe(m => _fullFileActive.Value = m == DiffViewMode.FullFile);
+    }
+
+    // Mirrors the embedded header's full-file toggle. The pop-out window opens in Diff mode
+    // (fresh VM), so this starts inactive.
+    private View BuildFullFileToggleButton()
+    {
+        var hovered = new State<bool>(false);
+
+        var icon = new TextView
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 12f,
+            Text = LucideIcons.FileText,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+            Width = 16f,
+        };
+        icon.BindThemedTextColor(s => _fullFileActive.Value
+            ? s.DiffView.HeaderToggleActive
+            : hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+
+        var btn = new RectView { Children = { icon } };
+        btn.UseController(_ => new HoverableButtonController(
+            () => _onToggleFullFile?.Invoke(),
+            h => hovered.Value = h));
+        return btn;
     }
 
     // Side-aware file-level action: "Stage" for unstaged changes, "Unstage" for staged, hidden

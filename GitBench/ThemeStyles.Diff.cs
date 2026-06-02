@@ -8,6 +8,8 @@ public sealed record DiffViewStyles(
     uint HeaderBorderBottom,
     uint HeaderTitleIdle,
     uint HeaderTitleHover,
+    // Tint for an engaged header toggle (e.g. the full-file view button when active).
+    uint HeaderToggleActive,
     uint LfsBadgeTrackedBackground,
     uint LfsBadgeTrackedText,
     uint LfsBadgeUntrackedBackground,
@@ -62,6 +64,7 @@ public partial record ThemeStyles
             HeaderBorderBottom: p.Border,
             HeaderTitleIdle: p.TextSubtle,
             HeaderTitleHover: p.TextStrong,
+            HeaderToggleActive: p.Accent,
             // Tracked: a filled "info" pill — LFS storage is the expected/healthy state for a
             // binary. Untracked: a muted neutral pill — informational, not an error, so it
             // shouldn't shout the way a warning color would.

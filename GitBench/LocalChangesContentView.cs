@@ -132,6 +132,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             expand => _vm?.SetCursorFolderExpanded(expand),
             OnActivateSelection,
             OnDeleteSelection);
+        _arrowController.OnToggleFullFile = () => _vm?.DiffVm.ToggleFullFile();
         this.UseController(_ => _arrowController);
     }
 
