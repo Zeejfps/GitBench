@@ -36,6 +36,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
     private readonly DiffView _diffView;
+    private readonly DiffPaneHeader _diffHeader;
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
     private readonly State<string?> _selectedPath = new(null);
@@ -78,13 +79,21 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
             h => innerSplitterHovered.Value = h));
 
         _diffView = new DiffView();
+        _diffHeader = new DiffPaneHeader();
+
+        var diffPane = new BorderLayoutView
+        {
+            North = _diffHeader,
+            Center = _diffView,
+        };
+        _diffHeader.IsCollapsed.Subscribe(c => diffPane.Center = c ? null : _diffView);
 
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
         splitter.BindThemedBackgroundColor(s =>
             splitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
 
-        _splitContainer = new VerticalSplitContainer(_innerSplit, _diffView, splitter, bottomFraction: 1f / 2f);
+        _splitContainer = new VerticalSplitContainer(_innerSplit, diffPane, splitter, bottomFraction: 1f / 2f);
 
         splitter.UseController(ctx => new SplitterController(
             ctx,
@@ -111,9 +120,10 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         _vm = vm;
         vm.RenderState.Subscribe(SetRenderState);
         _diffView.Bind(vm.DiffVm);
+        _diffHeader.Bind(vm.DiffVm);
         _selectedPath.BindTo(vm.SelectedPath);
         _splitContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _splitContainer.BindBottomCollapsed(_diffView.IsCollapsed, DiffView.HeaderHeight);
+        _splitContainer.BindBottomCollapsed(_diffHeader.IsCollapsed, DiffPaneHeader.HeaderHeight);
     }
 
     private void SetRenderState(CommitDetailsRenderState state)
