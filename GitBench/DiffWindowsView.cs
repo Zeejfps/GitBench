@@ -59,12 +59,11 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
     {
         if (_windows.ContainsKey(windowVm)) return;
 
-        var view = new DiffView(showOpenInWindow: false);
-        view.Bind(windowVm.Diff);
+        var root = new DiffWindowRootView(windowVm);
 
         var win = Context!.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
         {
-            Root = view,
+            Root = root,
             Title = windowVm.Title,
             Width = 900,
             Height = 700,

@@ -22,6 +22,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
     private readonly TextView _placeholder;
     private readonly RectView _centerContainer;
     private readonly DiffView _diffView;
+    private readonly DiffPaneHeader _diffHeader;
     private readonly VerticalSplitContainer _snapshotContainer;
     private readonly LocalChangesHeaderActionButton _discardButton;
     private readonly LocalChangesHeaderActionButton _stageSelectedButton;
@@ -88,18 +89,28 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             onStage: path => _vm?.StageSubmodulePointer(path),
             onReset: path => _vm?.ResetSubmoduleToRecorded(path));
 
-        _diffView = new DiffView(); 
-        
+        _diffView = new DiffView();
+        _diffHeader = new DiffPaneHeader();
+
+        // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
+        // only the header strip remains (the split container pins the pane to header height).
+        var diffPane = new BorderLayoutView
+        {
+            North = _diffHeader,
+            Center = _diffView,
+        };
+        _diffHeader.IsCollapsed.Subscribe(c => diffPane.Center = c ? null : _diffView);
+
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
         splitter.BindThemedBackgroundColor(s =>
             splitterHovered.Value ? s.LocalChangesContent.SplitterHover : s.LocalChangesContent.SplitterIdle);
-        
+
         _topHalf = new BorderLayoutView
         {
             Center = BuildContentRow(),
         };
-        _snapshotContainer = new VerticalSplitContainer(_topHalf, _diffView, splitter, bottomFraction: 2f / 3f);
+        _snapshotContainer = new VerticalSplitContainer(_topHalf, diffPane, splitter, bottomFraction: 2f / 3f);
 
         splitter.UseController(ctx => new SplitterController(
             ctx,
@@ -169,8 +180,9 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             _stagedPanel.EnsureRowVisible(cursor);
         });
         _diffView.Bind(vm.DiffVm);
+        _diffHeader.Bind(vm.DiffVm);
         _snapshotContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _snapshotContainer.BindBottomCollapsed(_diffView.IsCollapsed, DiffView.HeaderHeight);
+        _snapshotContainer.BindBottomCollapsed(_diffHeader.IsCollapsed, DiffPaneHeader.HeaderHeight);
 
         _discardButton.BindCommand(vm.Discard);
         _stageSelectedButton.BindCommand(vm.StageSelected);
