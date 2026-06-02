@@ -40,6 +40,10 @@ public sealed class AppView : MultiChildView
                                 // branches sidebar and the main content so it's visible on any
                                 // tab. Self-hides (collapsing its slot) when nothing's at risk.
                                 new DetachedHeadBannerView(),
+                                // Sits just below: warns when submodules are out of date with
+                                // the recorded pointer and offers a one-click update. Also
+                                // self-hides when everything's in sync.
+                                new SubmoduleStatusBannerView(),
                                 new FlexItem
                                 {
                                     Grow = 1,

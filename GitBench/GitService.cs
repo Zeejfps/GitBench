@@ -1151,7 +1151,11 @@ public sealed class GitService : IGitService
                     $"Branch '{name}' has no upstream. Set one with: git branch --set-upstream-to=<remote>/<branch>");
             }
 
-            var result = _runner.Run(repo.Path, new[] { "pull" });
+            // --recurse-submodules fetches the submodule commits referenced by the new
+            // superproject tree AND checks each submodule's working tree out to the SHA the
+            // parent now records — so the user doesn't end up with the gitlink pointer moved
+            // but the submodule still sitting on its old commit (which shows up as "modified").
+            var result = _runner.Run(repo.Path, new[] { "pull", "--recurse-submodules" });
             return result.Ok ? new PullOutcome(true, null) : new PullOutcome(false, result.FirstLineError("git pull"));
         }
         catch (Exception ex)
@@ -1168,7 +1172,9 @@ public sealed class GitService : IGitService
                 return new FetchOutcome(false, "Not a git repository.");
 
             using var _ = LockRepo(repo.Path);
-            var result = _runner.Run(repo.Path, new[] { "fetch", "--all", "--prune" });
+            // --recurse-submodules downloads the commits each submodule is pinned to so they're
+            // present locally; it does NOT touch submodule working trees (that's pull's job).
+            var result = _runner.Run(repo.Path, new[] { "fetch", "--all", "--prune", "--recurse-submodules" });
             return result.Ok ? new FetchOutcome(true, null) : new FetchOutcome(false, result.FirstLineError("git fetch"));
         }
         catch (Exception ex)
