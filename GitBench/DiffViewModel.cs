@@ -32,6 +32,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public IReadable<string?> OpError { get; }
     public IReadable<LfsBadge> LfsStatus { get; }
 
+    // The side of the currently-loaded diff (null until a diff loads). Drives the header's
+    // file-level Stage/Unstage button: Unstaged → "Stage file", Staged → "Unstage file",
+    // Commit → hidden (history diffs aren't stageable).
+    public IReadable<DiffSide?> CurrentSide { get; }
+
     public DiffViewModel(
         IReadable<DiffTarget?> target,
         IRepoRegistry registry,
@@ -50,6 +55,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         LfsStatus = Slice(s => s.Render is DiffRenderState.Loaded { Result.IsBinary: true } loaded
             ? (loaded.Result.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked)
             : LfsBadge.None);
+        CurrentSide = Slice(s => s.Render is DiffRenderState.Loaded l ? l.Result.Side : (DiffSide?)null);
 
         Subscriptions.Add(_target.Subscribe(_ =>
         {
@@ -73,6 +79,57 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public void StageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: false);
 
     public void UnstageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: true);
+
+    // Pops the current diff into its own top-level window. DiffWindowPresenter handles the
+    // message and spins up an independent, live DiffViewModel pinned to this target.
+    public void RequestOpenInWindow()
+    {
+        var target = _target.Value;
+        if (target == null) return;
+        _bus.Broadcast(new OpenDiffWindowMessage(target));
+    }
+
+    public void StageFile() => RunFileIndexOp(stage: true);
+
+    public void UnstageFile() => RunFileIndexOp(stage: false);
+
+    // Stages/unstages the whole current file. Mirrors ApplyHunk's pattern: run the git op
+    // off the UI thread, then broadcast a working-tree change so every list (and this diff)
+    // re-syncs against the truth — LocalChangesViewModel owns the optimistic list updates.
+    private void RunFileIndexOp(bool stage)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var target = _target.Value;
+        if (target == null) return;
+
+        var path = target.Path;
+        var service = _gitService;
+        var bus = _bus;
+        var dispatcher = Dispatcher;
+        var repoId = repo.Id;
+        Task.Run(() =>
+        {
+            string? error = null;
+            try
+            {
+                if (stage) service.Stage(repo, new[] { path });
+                else service.Unstage(repo, new[] { path });
+            }
+            catch (Exception ex) { error = ex.Message; }
+
+            dispatcher.Post(() =>
+            {
+                if (error != null)
+                {
+                    Update(s => s with { OpError = error });
+                    return;
+                }
+                Update(s => s with { OpError = null });
+                bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+            });
+        });
+    }
 
     public void RequestDiscardHunk(int hunkIndex)
     {

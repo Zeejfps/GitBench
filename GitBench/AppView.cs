@@ -92,6 +92,9 @@ public sealed class AppView : MultiChildView
 
         Behaviors.Add(new DialogPresenter(dialogSurfaceView));
 
+        // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
+        Children.Add(new DiffWindowsView());
+
         this.UseController(ctx => new AppKeybindController(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IMessageBus>()));

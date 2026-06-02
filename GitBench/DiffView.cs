@@ -1,5 +1,6 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -27,11 +28,20 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
 
     private readonly State<bool> _isCollapsed = new(false);
     private readonly State<LfsBadge> _lfsState = new(LfsBadge.None);
+    private readonly State<DiffSide?> _side = new(null);
 
     private readonly DiffContentView _content;
+    private readonly bool _showOpenInWindow;
 
-    public DiffView()
+    // Header button actions, wired in Bind. Held as fields so the buttons (built in the ctor)
+    // invoke whatever VM is currently bound.
+    private Action? _onOpenInWindow;
+    private Action? _onStageFile;
+    private Action? _onUnstageFile;
+
+    public DiffView(bool showOpenInWindow = true)
     {
+        _showOpenInWindow = showOpenInWindow;
         _content = new DiffContentView();
         var vScrollBar = ScrollBars.CreateVertical();
         var hScrollBar = ScrollBars.CreateHorizontal();
@@ -67,9 +77,13 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
     {
         vm.RenderState.Subscribe(_content.SetRenderState);
         vm.LfsStatus.Subscribe(s => _lfsState.Value = s);
+        vm.CurrentSide.Subscribe(s => _side.Value = s);
         _content.OnStageHunk = vm.StageHunk;
         _content.OnUnstageHunk = vm.UnstageHunk;
         _content.OnDiscardHunk = vm.RequestDiscardHunk;
+        _onOpenInWindow = vm.RequestOpenInWindow;
+        _onStageFile = vm.StageFile;
+        _onUnstageFile = vm.UnstageFile;
     }
 
     private View BuildHeaderBar()
@@ -104,11 +118,13 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
             {
                 new FlexRowView
                 {
-                    Gap = 4f,
+                    Gap = 6f,
                     CrossAxisAlignment = CrossAxisAlignment.Center,
                     Children =
                     {
                         new FlexItem { Grow = 1, Child = title },
+                        BuildStageFileButton(),
+                        BuildOpenInWindowButton(),
                         BuildLfsBadge(),
                         chevron,
                     },
@@ -123,11 +139,69 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
             Bottom = s.DiffView.HeaderBorderBottom,
         });
 
+        // Bubble phase only: the bar wraps interactive child buttons (stage / open-in-window).
+        // Registering on capture (the default) would let the bar consume their clicks before
+        // they reach the buttons — bubble lets a button consume first, and clicks on the bar's
+        // empty area still bubble up here to toggle collapse.
         bar.UseController(_ => new HoverableButtonController(
             () => _isCollapsed.Value = !_isCollapsed.Value,
-            h => hovered.Value = h));
+            h => hovered.Value = h), EventPhaseFilter.Bubble);
 
         return bar;
+    }
+
+    // File-level Stage/Unstage action shown in the diff header — the review-workflow shortcut
+    // ("looks good → stage the file"). It tracks the loaded diff's side: "Stage" for unstaged
+    // changes, "Unstage" for staged, and hides entirely for commit-side (history) diffs, which
+    // aren't stageable.
+    private View BuildStageFileButton()
+    {
+        var hovered = new State<bool>(false);
+
+        var label = new TextView
+        {
+            FontSize = 11f,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+        };
+        label.BindText(_side, s => s == DiffSide.Staged ? "Unstage" : "Stage");
+        label.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+
+        var btn = new RectView { Children = { label } };
+        btn.BindIsVisible(_side, s => s is DiffSide.Unstaged or DiffSide.Staged);
+        btn.UseController(_ => new HoverableButtonController(
+            () =>
+            {
+                if (_side.Value == DiffSide.Staged) _onUnstageFile?.Invoke();
+                else _onStageFile?.Invoke();
+            },
+            h => hovered.Value = h));
+        return btn;
+    }
+
+    // Pops the current diff into its own top-level window. Hidden on the DiffView instance that
+    // already lives inside such a window (re-popping is pointless).
+    private View BuildOpenInWindowButton()
+    {
+        var hovered = new State<bool>(false);
+
+        var icon = new TextView
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 12f,
+            Text = LucideIcons.ExternalLink,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+            Width = 16f,
+        };
+        icon.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+
+        var btn = new RectView { Children = { icon } };
+        btn.IsVisible = _showOpenInWindow;
+        btn.UseController(_ => new HoverableButtonController(
+            () => _onOpenInWindow?.Invoke(),
+            h => hovered.Value = h));
+        return btn;
     }
 
     // Small pill in the header that reports a binary file's storage. It only surfaces for

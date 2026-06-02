@@ -4,6 +4,8 @@ internal static class LucideIcons
 {
     public const string FontFamily = "lucide";
 
+    public const string ExternalLink = ""; // external-link
+
     public const string Fetch = "";        // cloud-download
     public const string Pull = "";         // arrow-down-to-line
     public const string Push = "";         // arrow-up-from-line
