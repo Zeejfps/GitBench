@@ -18,6 +18,12 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
     private DiffWindowsViewModel? _vm;
     private IDisposable? _listSubscription;
 
+    // Native title-bar theming (Windows/macOS). Resolved on bind; null on platforms without a
+    // window-chrome implementation (e.g. Linux), in which case title-bar theming is skipped.
+    private IWindowChrome? _windowChrome;
+    private State<ThemeMode>? _themeMode;
+    private IDisposable? _themeSubscription;
+
     public DiffWindowsView()
     {
         // Logic-only view: it never paints or takes input, so pin it to zero size.
@@ -30,11 +36,29 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
     {
         // Re-bind safety: drop any previous wiring before adopting the new VM.
         _listSubscription?.Dispose();
+        _themeSubscription?.Dispose();
         foreach (var win in _windows.Values) win.Close();
         _windows.Clear();
 
         _vm = vm;
         _listSubscription = vm.Windows.Subscribe(OnWindowsChanged);
+
+        // Match every open window's native title bar to the active theme, like the main window
+        // (see Program.cs). Subscribe fires immediately, then on each toggle, re-theming all
+        // open windows.
+        _windowChrome = Context?.Get<IWindowChrome>();
+        _themeMode = Context?.Get<State<ThemeMode>>();
+        if (_windowChrome != null && _themeMode != null)
+            _themeSubscription = _themeMode.Subscribe(_ =>
+            {
+                foreach (var win in _windows.Values) ApplyTitleBarTheme(win);
+            });
+    }
+
+    private void ApplyTitleBarTheme(ISecondaryWindow win)
+    {
+        if (_windowChrome == null || _themeMode == null) return;
+        _windowChrome.SetTitleBarTheme(win.Window.WindowHandle, _themeMode.Value == ThemeMode.Dark);
     }
 
     private void OnWindowsChanged(ListChange<DiffWindowViewModel> change)
@@ -72,6 +96,7 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
         // that removal calls CloseOsWindow below (idempotent if the window is already gone).
         win.Closed += () => _vm?.Close(windowVm);
         _windows[windowVm] = win;
+        ApplyTitleBarTheme(win);
     }
 
     private void CloseOsWindow(DiffWindowViewModel windowVm)
