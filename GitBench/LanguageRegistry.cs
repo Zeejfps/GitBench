@@ -15,6 +15,12 @@ internal static class LanguageRegistry
         [".cs"] = "csharp",
         [".ts"] = "typescript",
         [".tsx"] = "typescriptreact",
+        [".json"] = "json",
+        // MSBuild project files are XML; the bundled xml grammar already claims these extensions.
+        [".csproj"] = "xml",
+        [".props"] = "xml",
+        [".targets"] = "xml",
+        [".xml"] = "xml",
     };
 
     public static string? DetectLanguageId(string path)

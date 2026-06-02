@@ -31,6 +31,8 @@ internal static class ScopeColorMap
         new("entity.name.function", TokenColorSlot.Function),
         new("entity.name.type", TokenColorSlot.Type),
         new("entity.name.namespace", TokenColorSlot.Type),
+        new("entity.name.tag", TokenColorSlot.Keyword),            // XML/HTML element names: <PropertyGroup>
+        new("entity.other.attribute-name", TokenColorSlot.Variable), // XML/HTML attributes: Condition="..."
         new("support.function", TokenColorSlot.Function),
         new("support.type", TokenColorSlot.Type),
         new("support.class", TokenColorSlot.Type),
