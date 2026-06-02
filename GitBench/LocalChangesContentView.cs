@@ -36,7 +36,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
     
     private readonly State<Selection> _selection = new(Selection.Empty);
     private LocalChangesViewModel? _vm;
-    private readonly LocalChangesArrowKbmController _arrowController;
+    private readonly ListArrowKbmController _arrowController;
 
     public LocalChangesContentView()
     {
@@ -126,7 +126,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
 
         AddChildToSelf(_centerContainer);
 
-        _arrowController = new LocalChangesArrowKbmController(
+        _arrowController = new ListArrowKbmController(
             this,
             (delta, extend) => _vm?.MoveSelection(delta, extend),
             expand => _vm?.SetCursorFolderExpanded(expand),

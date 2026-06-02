@@ -5,13 +5,18 @@ using ZGF.KeyboardModule;
 namespace GitGui;
 
 /// <summary>
-/// Arrow-key navigation for the local-changes file lists. Lives on
-/// <see cref="LocalChangesContentView"/> and takes focus when a row is clicked so Up
-/// and Down move the selection within the active side. Shift extends the range from
-/// the anchor. Releases focus on a click outside the content view so text inputs and
-/// other controllers can claim it.
+/// Arrow-key navigation for a vertical row list. Lives on the owning view and takes
+/// focus when a row is clicked so Up and Down move the selection. Left/Right expand or
+/// collapse (tree lists), Enter activates, Delete removes; Shift is forwarded to the
+/// move callback for range extension where the list supports it. Consumers that don't
+/// need an action pass a no-op. Releases focus on a click outside the view so text
+/// inputs and other controllers can claim it.
+///
+/// Shared by the local-changes file lists (<see cref="LocalChangesContentView"/>), the
+/// commit-details file list (<see cref="CommitDetailsView"/>), and the commit history
+/// list (<see cref="CommitsView"/>).
 /// </summary>
-internal sealed class LocalChangesArrowKbmController : KeyboardMouseController
+internal sealed class ListArrowKbmController : KeyboardMouseController
 {
     private readonly View _view;
     private readonly Action<int, bool> _onMove;
@@ -19,12 +24,12 @@ internal sealed class LocalChangesArrowKbmController : KeyboardMouseController
     private readonly Action _onActivate;
     private readonly Action _onDelete;
 
-    // Focus-traversal hooks; wired into the local-changes focus ring so Tab leaves the
-    // file list for the commit fields.
+    // Focus-traversal hooks; wired into a focus ring (e.g. local changes) so Tab leaves
+    // the list for the next stop.
     public Action? OnTab { get; set; }
     public Action? OnShiftTab { get; set; }
 
-    public LocalChangesArrowKbmController(
+    public ListArrowKbmController(
         View view,
         Action<int, bool> onMove,
         Action<bool> onExpand,

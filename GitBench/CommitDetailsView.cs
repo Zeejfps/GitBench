@@ -40,7 +40,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
     private readonly State<string?> _selectedPath = new(null);
-    private readonly LocalChangesArrowKbmController _arrowController;
+    private readonly ListArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
 
     public CommitDetailsView()
@@ -120,7 +120,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         // Up/Down arrow navigation over the Changes list, mirroring the local-changes panels.
         // The list is a flat single-select list, so there are no folders to expand and no
         // stage/discard actions — only row movement is wired.
-        _arrowController = new LocalChangesArrowKbmController(
+        _arrowController = new ListArrowKbmController(
             this,
             (delta, _) => _vm?.MoveSelection(delta),
             _ => { },

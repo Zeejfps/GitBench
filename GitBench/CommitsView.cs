@@ -36,6 +36,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private CommitsViewModel? _vm;
 
     private readonly VirtualRowListView _list;
+    private readonly ListArrowKbmController _arrowController;
 
     private float _lastNormalizedScroll;
     private float _lastScale = 1f;
@@ -102,6 +103,19 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         });
 
         this.UseController(ctx => new CommitsViewController(this, ctx));
+
+        // Up/Down arrow navigation over the commit list, mirroring the commit-details and
+        // local-changes file lists. The history is single-select, so Shift is ignored and
+        // there are no folder/activate/delete actions — only row movement is wired. Takes
+        // focus when a row is clicked (see OnRowClicked).
+        _arrowController = new ListArrowKbmController(
+            this,
+            (delta, _) => _vm?.MoveSelection(delta),
+            _ => { },
+            () => { },
+            () => { });
+        this.UseController(_ => _arrowController);
+
         this.UseViewModel(this);
     }
 
@@ -628,6 +642,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         var snap = _snapshot;
         if (snap == null || rowIndex < 0 || rowIndex >= snap.Commits.Count) return;
         _vm?.SelectCommit(snap.Commits[rowIndex].Sha);
+        _arrowController.TakeFocus();
     }
 
     private void OnRowContextRequested(int rowIndex, PointF point)

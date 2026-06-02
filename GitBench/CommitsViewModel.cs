@@ -81,6 +81,31 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         _bus.Broadcast(new CommitSelectedMessage(_snapshot.RepoId, sha));
     }
 
+    // Up/Down arrow navigation through the loaded commit list. Moves the single selection
+    // by <paramref name="delta"/> rows, clamped to the snapshot bounds. With nothing
+    // selected yet, a Down lands on the first commit and an Up on the last so the cursor
+    // has a visible start. Mirrors CommitDetailsViewModel.MoveSelection; the view scrolls
+    // the new selection into view via its SelectedSha subscription.
+    public void MoveSelection(int delta)
+    {
+        var snap = _snapshot;
+        if (snap == null || snap.Commits.Count == 0) return;
+
+        var current = State.Value.SelectedSha;
+        var index = current == null ? -1 : IndexOfSha(snap, current);
+        var next = ListNavigation.NextIndex(snap.Commits.Count, index, delta);
+        SelectCommit(snap.Commits[next].Sha);
+    }
+
+    private static int IndexOfSha(CommitSnapshot snap, string sha)
+    {
+        for (var i = 0; i < snap.Commits.Count; i++)
+        {
+            if (snap.Commits[i].Sha == sha) return i;
+        }
+        return -1;
+    }
+
     // External selection requests (e.g. BranchesView tip clicks). Self-broadcasts come
     // back through here too; we dedupe against the current selection so the round trip is
     // harmless.

@@ -76,9 +76,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
         var current = State.Value.SelectedPath;
         var index = current == null ? -1 : IndexOfPath(files, current);
-        var next = index < 0
-            ? (delta > 0 ? 0 : files.Count - 1)
-            : Math.Clamp(index + delta, 0, files.Count - 1);
+        var next = ListNavigation.NextIndex(files.Count, index, delta);
         SelectFile(files[next].Path);
     }
 
