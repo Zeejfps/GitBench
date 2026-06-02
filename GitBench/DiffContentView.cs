@@ -93,6 +93,9 @@ internal sealed class DiffContentView : View, IScrollableContent
     private int[] _rowToHunk = Array.Empty<int>();
     private DiffSide _diffSide;
     private bool _hunksPatchable;
+    // Full-file mode draws a single (new-side) line-number gutter and no hunk chrome. Diff mode
+    // leaves this false and renders the old|new two-gutter layout pixel-identically to before.
+    private bool _singleGutter;
     private int _hoveredHunkIndex = -1;
     private HunkAction _hoveredButton = HunkAction.None;
     private float _stageBtnTextWidth;
@@ -162,6 +165,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         _hoveredHunkIndex = -1;
         _hoveredButton = HunkAction.None;
         _hunksPatchable = false;
+        _singleGutter = false;
         _diffSide = DiffSide.Unstaged;
         // Metrics depend only on font, not content, but content width depends on metrics;
         // a fresh model forces a recompute on next draw.
@@ -172,6 +176,12 @@ internal sealed class DiffContentView : View, IScrollableContent
             _diffSide = loaded.Result.Side;
             _hunksPatchable = HunkPatchBuilder.CanPatchHunk(loaded.Result);
             FlattenRows(loaded.Result, loaded.Highlight);
+        }
+        else if (state is DiffRenderState.FullFile fullFile)
+        {
+            // No hunk ranges/patchability: with _hunkRanges empty and _hunksPatchable false,
+            // separators, outlines, and Stage/Discard buttons all suppress themselves.
+            FlattenFullFile(fullFile);
         }
 
         _list.ItemCount = _rows.Count;
@@ -243,6 +253,35 @@ internal sealed class DiffContentView : View, IScrollableContent
                 _rowToHunk[i] = range.HunkIndex;
     }
 
+    // Flattens the whole after-side file into one Line row per source line: lines in
+    // AddedLineNumbers render as additions (tinted), the rest as context. Mirrors FlattenRows'
+    // per-line formatting (tab expansion + new-side spans) so highlighting aligns identically,
+    // but emits a single new-side gutter and no hunk separators.
+    private void FlattenFullFile(DiffRenderState.FullFile ff)
+    {
+        _diffSide = ff.Side;
+        _singleGutter = true;
+
+        var digits = Math.Max(1, DigitCount(ff.Lines.Count));
+        _gutterWidth = digits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
+
+        for (var i = 0; i < ff.Lines.Count; i++)
+        {
+            var lineNumber = i + 1;
+            var kind = ff.AddedLineNumbers.Contains(lineNumber) ? DiffLineKind.Added : DiffLineKind.Context;
+            var text = DiffText.ExpandTabs(ff.Lines[i]);
+            // Context kind drives ForLine to the new-side spans for every row (added or not),
+            // which is exactly what the full after-side file needs.
+            var spans = ff.Highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
+            if (spans != null && spans.Count == 0) spans = null;
+            _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, text.Length, spans));
+            if (text.Length > _maxRowChars) _maxRowChars = text.Length;
+        }
+
+        if (ff.Truncated)
+            AddBanner($"File truncated — only the first {ff.Lines.Count} lines are shown.");
+    }
+
     private void AddBanner(string text)
     {
         _rows.Add(new DiffRow.Banner(text));
@@ -264,6 +303,51 @@ internal sealed class DiffContentView : View, IScrollableContent
         SetDirty();
     }
 
+    // The new-file line number of the topmost visible row, used to preserve the reading position
+    // across a Diff↔FullFile toggle. Skips banners/separators and removed rows (no new number).
+    // Returns false before metrics resolve or when no row carries a new-side number.
+    public bool TryGetTopVisibleNewLine(out int lineNumber)
+    {
+        lineNumber = 0;
+        if (_lineHeight <= 0 || _rows.Count == 0) return false;
+        var topIndex = Math.Clamp((int)(_list.ScrollY / _lineHeight), 0, _rows.Count - 1);
+        for (var i = topIndex; i < _rows.Count; i++)
+        {
+            if (_rows[i] is DiffRow.Line l && l.NewNumber.Length > 0 && int.TryParse(l.NewNumber, out var n))
+            {
+                lineNumber = n;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Scrolls so the row for the given new-file line sits leadIn rows below the top. No-op if the
+    // line isn't present (e.g. a removed line that never had a new-side number).
+    public void ScrollToNewLine(int lineNumber, int leadIn)
+    {
+        if (_lineHeight <= 0 || _rows.Count == 0) return;
+        var rowIndex = FindRowForNewLine(lineNumber);
+        if (rowIndex < 0) return;
+        _list.SetScrollY(Math.Max(0, rowIndex - leadIn) * _lineHeight);
+    }
+
+    // First row whose new-side line number equals lineNumber; falls back to the closest preceding
+    // numbered row so a target with no exact row still lands sensibly. New numbers are monotonic
+    // in row order in both modes, so a single forward scan suffices.
+    private int FindRowForNewLine(int lineNumber)
+    {
+        var best = -1;
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            if (_rows[i] is not DiffRow.Line l || l.NewNumber.Length == 0) continue;
+            if (!int.TryParse(l.NewNumber, out var n)) continue;
+            if (n == lineNumber) return i;
+            if (n < lineNumber) best = i;
+        }
+        return best;
+    }
+
     private float ContentHeight()
     {
         if (_lineHeight <= 0) return 0f;
@@ -281,9 +365,10 @@ internal sealed class DiffContentView : View, IScrollableContent
     private float ComputeNaturalContentWidth()
     {
         if (_monoAdvance <= 0) return 0f;
-        // Worst case across row kinds: line rows go gutter|gutter|glyph|text; banner rows
-        // are flush-left with horizontal padding. Take the max of both formulas.
-        var lineWidth = _gutterWidth + _gutterWidth + GlyphColumnWidth + _maxRowChars * _monoAdvance + BannerPaddingX;
+        // Worst case across row kinds: line rows go gutter|gutter|glyph|text (one gutter in
+        // full-file mode); banner rows are flush-left with horizontal padding. Take the max.
+        var gutters = _singleGutter ? _gutterWidth : _gutterWidth + _gutterWidth;
+        var lineWidth = gutters + GlyphColumnWidth + _maxRowChars * _monoAdvance + BannerPaddingX;
         var bannerWidth = BannerPaddingX * 2 + _maxRowChars * _monoAdvance;
         return Math.Max(lineWidth, bannerWidth);
     }
@@ -603,9 +688,13 @@ internal sealed class DiffContentView : View, IScrollableContent
         });
 
         var x = left;
-        DrawMonoText(c, l.OldNumber, x, bottom, _gutterWidth,
-            _styles.LineNumberText, TextAlignment.End, z + 1);
-        x += _gutterWidth + 4f;
+        // Full-file mode shows only the new-side gutter; diff mode shows old|new.
+        if (!_singleGutter)
+        {
+            DrawMonoText(c, l.OldNumber, x, bottom, _gutterWidth,
+                _styles.LineNumberText, TextAlignment.End, z + 1);
+            x += _gutterWidth + 4f;
+        }
         DrawMonoText(c, l.NewNumber, x, bottom, _gutterWidth,
             _styles.LineNumberText, TextAlignment.End, z + 1);
         x += _gutterWidth + 4f;
