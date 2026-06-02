@@ -34,6 +34,8 @@ public interface IRepoRegistry
     bool IsWorktreeExpanded(Guid primaryId);
     void SetWorktreeExpanded(Guid primaryId, bool expanded);
     void ReplaceWorktreesFor(Guid primaryId, IReadOnlyList<WorktreeDescriptor> desired);
-    void ReplaceSubmodulesFor(Guid primaryId, IReadOnlyList<SubmoduleDescriptor> desired);
+    // Reconciles the whole submodule tree under a primary in one pass: each node carries its
+    // own nested children, so submodules-of-submodules are added/updated/removed recursively.
+    void ReplaceSubmoduleForest(Guid primaryId, IReadOnlyList<SubmoduleNode> roots);
     void SetPrimaryBranch(Guid primaryId, string? branch);
 }

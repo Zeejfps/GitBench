@@ -8,7 +8,7 @@ namespace GitGui;
 // not a sibling checkout of the parent.
 public sealed class SubmoduleRow : NestedRepoRow
 {
-    public SubmoduleRow(Repo submodule, IRepoRegistry registry)
+    public SubmoduleRow(Repo submodule, IRepoRegistry registry, int depth)
         : base(
             submodule,
             registry,
@@ -19,6 +19,7 @@ public sealed class SubmoduleRow : NestedRepoRow
             // rows in CommitDetails so the visual language stays consistent across the app.
             s => s.IconAccentSubmodule,
             ctx => BuildMenuItems(submodule, registry, ctx),
+            depth,
             // A submodule that's been added but not initialized has no .git directory of its
             // own and would render an empty BranchesView/HistoryView. Better to do nothing —
             // the user can right-click → Update… to initialize it.

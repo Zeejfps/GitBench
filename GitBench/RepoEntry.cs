@@ -27,19 +27,8 @@ public sealed class RepoEntry : MultiChildView
                 _ = registry.WorktreesChanged.Value;
                 if (!registry.IsWorktreeExpanded(primary.Id))
                     return System.Linq.Enumerable.Empty<View>();
-
-                var views = new List<View>();
-                foreach (var r in registry.Repos)
-                {
-                    if (r.ParentRepoId == primary.Id && r.IsWorktree)
-                        views.Add(new WorktreeRow(r, registry));
-                }
-                foreach (var r in registry.Repos)
-                {
-                    if (r.ParentRepoId == primary.Id && r.IsSubmodule)
-                        views.Add(new SubmoduleRow(r, registry));
-                }
-                return views;
+                // Direct children sit at depth 1; SubmoduleEntry recurses for deeper nesting.
+                return RepoTreeChildren.Build(primary.Id, registry, depth: 1);
             },
             v => v);
 

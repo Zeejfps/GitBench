@@ -6,7 +6,7 @@ namespace GitGui;
 // distinguished from primary rows by deeper indent and the Branch icon.
 public sealed class WorktreeRow : NestedRepoRow
 {
-    public WorktreeRow(Repo worktree, IRepoRegistry registry)
+    public WorktreeRow(Repo worktree, IRepoRegistry registry, int depth)
         : base(
             worktree,
             registry,
@@ -14,7 +14,8 @@ public sealed class WorktreeRow : NestedRepoRow
             // Tinted by kind so the sidebar tells worktree apart from primary / submodule
             // without leaning on a header row. Missing rows mute the accent to match the label.
             s => s.IconAccentWorktree,
-            ctx => BuildMenuItems(worktree, registry, ctx))
+            ctx => BuildMenuItems(worktree, registry, ctx),
+            depth)
     {
     }
 

@@ -76,6 +76,10 @@ internal sealed class SubmoduleSyncService : IDisposable
         ScheduleSync(primaryId);
     }
 
+    // Submodules can themselves contain submodules; we walk the whole tree but cap the depth
+    // as a backstop against pathological/cyclic nesting (the visited-path set is the real guard).
+    private const int MaxSubmoduleDepth = 8;
+
     private void ScheduleSync(Guid primaryId)
     {
         Task.Run(() =>
@@ -87,21 +91,50 @@ internal sealed class SubmoduleSyncService : IDisposable
             }
             if (primary is null || !primary.IsPrimary) return;
 
-            var infos = _git.ListSubmodules(primary, out _);
-            var descriptors = new List<SubmoduleDescriptor>(infos.Count);
-            foreach (var info in infos)
-            {
-                // Display label: prefer the last path segment (matches `git status`'s
-                // identifier). Submodules don't have a single canonical "branch" the way
-                // a worktree does, so Branch is left at its tracked-branch hint (or null).
-                var rel = info.Path.TrimEnd('/');
-                var display = System.IO.Path.GetFileName(rel);
-                if (string.IsNullOrEmpty(display)) display = rel;
-                descriptors.Add(new SubmoduleDescriptor(info.AbsolutePath, display, info.Branch));
-            }
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { NormalizeForVisit(primary.Path) };
+            var roots = EnumerateSubmoduleTree(primary.Path, 0, visited);
 
-            _dispatcher.Post(() => _registry.ReplaceSubmodulesFor(primaryId, descriptors));
+            _dispatcher.Post(() => _registry.ReplaceSubmoduleForest(primaryId, roots));
         });
+    }
+
+    // Recursively reads `git submodule` for repoPath, building a descriptor tree. Descends into
+    // each initialized submodule's working tree (a submodule's path is itself a git repo), which
+    // is what surfaces submodules-of-submodules. ListSubmodules returns empty for a non-repo path,
+    // so this terminates naturally at the leaves.
+    private List<SubmoduleNode> EnumerateSubmoduleTree(string repoPath, int depth, HashSet<string> visited)
+    {
+        if (depth >= MaxSubmoduleDepth) return new List<SubmoduleNode>();
+
+        // ListSubmodules only reads repo.Path, so a throwaway Repo standing in for this level is fine.
+        var probe = new Repo(Guid.NewGuid(), repoPath, System.IO.Path.GetFileName(repoPath.TrimEnd('/', '\\')));
+        var infos = _git.ListSubmodules(probe, out _);
+
+        var nodes = new List<SubmoduleNode>(infos.Count);
+        foreach (var info in infos)
+        {
+            // Display label: prefer the last path segment (matches `git status`'s identifier).
+            // Submodules don't have a single canonical "branch" the way a worktree does, so
+            // Branch is left at its tracked-branch hint (or null).
+            var rel = info.Path.TrimEnd('/');
+            var display = System.IO.Path.GetFileName(rel);
+            if (string.IsNullOrEmpty(display)) display = rel;
+
+            // Only descend into a checked-out submodule — an uninitialized one has no working
+            // tree to read .gitmodules from. visited.Add breaks symlink/path cycles.
+            var children = new List<SubmoduleNode>();
+            if (info.Status != SubmoduleStatus.NotInitialized && visited.Add(NormalizeForVisit(info.AbsolutePath)))
+                children = EnumerateSubmoduleTree(info.AbsolutePath, depth + 1, visited);
+
+            nodes.Add(new SubmoduleNode(new SubmoduleDescriptor(info.AbsolutePath, display, info.Branch), children));
+        }
+        return nodes;
+    }
+
+    private static string NormalizeForVisit(string path)
+    {
+        try { return System.IO.Path.GetFullPath(path); }
+        catch { return path; }
     }
 
     public void Dispose()

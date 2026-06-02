@@ -50,10 +50,24 @@ public static class RepoStateStore
                 })
                 .ToList();
 
-            // Drop child records whose parent primary is gone — they can't be reattached
-            // and a dangling ParentRepoId would corrupt nested rendering.
-            var primaryIds = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
-            repos = repos.Where(r => r.ParentRepoId is null || primaryIds.Contains(r.ParentRepoId.Value)).ToList();
+            // Keep only records reachable from a top-level repo through the parent chain — a
+            // child whose parent (or any ancestor) is gone can't be reattached and a dangling
+            // ParentRepoId would corrupt nested rendering. Nested submodules have a submodule
+            // parent, so a single "parent is top-level" check isn't enough: grow the kept set
+            // transitively from the roots outward.
+            var kept = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
+            bool grew;
+            do
+            {
+                grew = false;
+                foreach (var r in repos)
+                {
+                    if (kept.Contains(r.Id)) continue;
+                    if (r.ParentRepoId is { } pid && kept.Contains(pid))
+                        grew = kept.Add(r.Id) || grew;
+                }
+            } while (grew);
+            repos = repos.Where(r => kept.Contains(r.Id)).ToList();
 
             var groups = file.Groups;
             if (groups is null || groups.Count == 0)
