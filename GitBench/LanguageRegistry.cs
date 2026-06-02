@@ -21,6 +21,11 @@ internal static class LanguageRegistry
         [".props"] = "xml",
         [".targets"] = "xml",
         [".xml"] = "xml",
+        [".html"] = "html",
+        [".htm"] = "html",
+        [".css"] = "css",
+        [".scss"] = "scss",
+        [".less"] = "less",
     };
 
     public static string? DetectLanguageId(string path)
