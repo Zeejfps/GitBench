@@ -61,10 +61,10 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
                     CrossAxisAlignment = CrossAxisAlignment.Center,
                     Children =
                     {
-                        new FlexItem { Grow = 1, Child = title },
-                        BuildOpenInWindowButton(),
-                        _lfsBadge,
                         chevron,
+                        new FlexItem { Grow = 1, Child = title },
+                        _lfsBadge,
+                        BuildOpenInWindowButton(),
                     },
                 },
             },
