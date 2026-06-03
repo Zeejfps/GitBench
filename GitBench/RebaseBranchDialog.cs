@@ -8,12 +8,10 @@ namespace GitGui;
 internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _rebaseButton;
-    private readonly DialogButton _cancelButton;
+    private readonly DialogShell _shell;
     private readonly CheckboxView _autostashCheckbox;
     private readonly TextView _previewIcon;
     private readonly TextView _previewText;
-    private readonly TextView _errorView;
     private RebasePreviewState _previewState = RebasePreviewState.Unknown;
     private BranchPreviewStyles _previewStyles = ThemeStyles.Dark.BranchPreview;
 
@@ -62,40 +60,16 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
             Children = { _previewIcon, _previewText },
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
-        _rebaseButton = new DialogButton("Rebase", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
-
-        var buttonsRow = new FlexRowView
+        _shell = new DialogShell("Rebase", onClose)
         {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = previewChip },
-                _cancelButton,
-                _rebaseButton,
-            },
+            Width = DialogFrame.WidthWide,
+            Action = ("Rebase", DialogButtonRole.Primary),
+            FooterLead = previewChip,
+            Body = { subtitle, rebaseRow, ontoRow, autostashRow },
         };
+        AddChildToSelf(_shell.View);
 
-        AddChildToSelf(DialogFrame.Build("Rebase", onClose, new FlexColumnView
-        {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                rebaseRow,
-                ontoRow,
-                autostashRow,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                buttonsRow,
-            },
-        }, DialogFrame.WidthWide));
-
-        this.UseController(_ => new DialogKbmController(_rebaseButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         this.UseViewModel(
             ctx => new RebaseBranchDialogViewModel(
@@ -110,9 +84,7 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
     {
         vm.CloseRequested += _onClose;
         _autostashCheckbox.IsChecked.BindTwoWay(vm.Autostash);
-        _rebaseButton.BindBusyCommand(vm.Rebase);
-        _cancelButton.DisableWhile(vm.Rebase.IsRunning);
-        _errorView.BindText(vm.Rebase.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Rebase);
         vm.PreviewState.Subscribe(s =>
         {
             _previewState = s;

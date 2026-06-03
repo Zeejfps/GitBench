@@ -18,9 +18,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
     private readonly string _path;
     private readonly Action _onClose;
     private readonly CheckboxView _forceCheckbox;
-    private readonly DialogButton _removeButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly TextView _pathTextView;
     private readonly TextStyle _pathTextStyle;
 
@@ -80,26 +78,13 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
             Height = 22,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _removeButton = new DialogButton("Remove", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        var dialogBody = DialogFrame.Build("Remove worktree", onClose, new FlexColumnView
+        _shell = new DialogShell("Remove worktree", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                pathBox,
-                _forceCheckbox,
-                hint,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _removeButton),
-            },
-        });
+            Action = ("Remove", DialogButtonRole.Destructive),
+            Body = { prompt, pathBox, _forceCheckbox, hint },
+        };
+
+        var dialogBody = _shell.View;
 
         // ClippingView wraps the dialog so a child that measures too wide (e.g. a path that
         // can't be word-broken because it has no spaces) still can't draw past the dialog's
@@ -108,7 +93,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
         clip.Children.Add(dialogBody);
         AddChildToSelf(clip);
 
-        this.UseController(_ => new DialogKbmController(_removeButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new RemoveWorktreeRequest(primary, worktree);
         this.UseViewModel(
@@ -124,9 +109,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
     {
         vm.CloseRequested += _onClose;
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _removeButton.BindBusyCommand(vm.Remove);
-        _cancelButton.DisableWhile(vm.Remove.IsRunning);
-        _errorView.BindText(vm.Remove.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Remove);
     }
 
     protected override void OnAttachedToContext(Context context)

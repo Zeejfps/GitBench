@@ -14,10 +14,8 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
-    private readonly CheckoutDialogKbmController _nameController;
     private readonly CheckboxView _trackCheckbox;
-    private readonly DialogButton _cancelButton;
-    private readonly DialogButton _checkoutButton;
+    private readonly DialogShell _shell;
 
     public CheckoutBranchDialog(
         Repo repo,
@@ -42,29 +40,13 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
             Height = 22,
         };
 
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _checkoutButton = new DialogButton("Checkout", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Checkout branch", onClose, new FlexColumnView
+        _shell = new DialogShell("Checkout branch", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                _nameField,
-                _trackCheckbox,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _checkoutButton),
-            },
-        }));
-
-        // Controller goes on the INPUT's Behaviors, not the outer dialog's:
-        // BaseTextInputKbmController.OnMouseButtonStateChanged consumes left-press events
-        // anywhere inside the view it's attached to, so putting it on the dialog would
-        // swallow clicks meant for the Cancel/Checkout buttons.
-        _nameController = new CheckoutDialogKbmController(_nameField.Input, _checkoutButton.Command, onClose);
-        _nameField.Input.UseController(_ => _nameController);
+            Action = ("Checkout", DialogButtonRole.Primary),
+            Body = { subtitle, _nameField, _trackCheckbox },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_nameField.Input);
 
         var request = new CheckoutRequest(repo, remoteName, remoteBranchName, suggestedLocalName);
         this.UseViewModel(
@@ -83,13 +65,12 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         _nameField.Input.BindTwoWay(vm.Name);
         _nameField.BindStatus(vm.NameStatus);
         _trackCheckbox.IsChecked.BindTwoWay(vm.Track);
-        _checkoutButton.BindBusyCommand(vm.Checkout);
-        _cancelButton.DisableWhile(vm.Checkout.IsRunning);
+        _shell.BindCommand(vm.Checkout);
 
         // Bind runs after the input is attached to a context — doing focus earlier (e.g.
         // in the dialog ctor) produced an empty-looking field, since StartEditing/StealFocus
         // hadn't run yet and caret/selection visuals were stale.
         _nameField.Input.SelectAll();
-        _nameController.BeginEditing();
+        _shell.BeginEditing();
     }
 }

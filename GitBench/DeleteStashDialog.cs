@@ -13,8 +13,7 @@ namespace GitGui;
 public sealed class DeleteStashDialog : MultiChildView
 {
     private readonly Action _onClose;
-    private readonly DialogButton _deleteButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     private bool _isRunning;
 
@@ -29,22 +28,13 @@ public sealed class DeleteStashDialog : MultiChildView
         };
         prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _errorView = DialogFrame.ErrorView();
-
-        var cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete", () => TryDelete(repo, index), DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Delete stash?", onClose, new FlexColumnView
+        _shell = new DialogShell("Delete stash?", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                _errorView,
-                DialogFrame.ButtonsRow(cancelButton, _deleteButton),
-            },
-        }, DialogFrame.WidthCompact));
+            Width = DialogFrame.WidthCompact,
+            Action = ("Delete", DialogButtonRole.Destructive, () => TryDelete(repo, index)),
+            Body = { prompt },
+        };
+        AddChildToSelf(_shell.View);
 
         this.UsePresenter(ctx => new DeleteStashPresenter(
             this,
@@ -57,8 +47,8 @@ public sealed class DeleteStashDialog : MultiChildView
     {
         if (_isRunning) return;
         _isRunning = true;
-        _deleteButton.IsEnabled.Value = false;
-        _errorView.Text = string.Empty;
+        _shell.ActionButton.IsEnabled.Value = false;
+        _shell.Error.Text = string.Empty;
         DeleteRequested?.Invoke(repo, index);
     }
 
@@ -69,8 +59,8 @@ public sealed class DeleteStashDialog : MultiChildView
         if (!outcome.Success)
         {
             _isRunning = false;
-            _deleteButton.IsEnabled.Value = true;
-            _errorView.Text = outcome.ErrorMessage ?? "Stash drop failed.";
+            _shell.ActionButton.IsEnabled.Value = true;
+            _shell.Error.Text = outcome.ErrorMessage ?? "Stash drop failed.";
             return;
         }
         _onClose();

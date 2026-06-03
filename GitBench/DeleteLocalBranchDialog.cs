@@ -10,9 +10,7 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
     private readonly Action _onClose;
     private readonly CheckboxView _forceCheckbox;
     private readonly CheckboxView? _deleteRemoteCheckbox;
-    private readonly DialogButton _cancelButton;
-    private readonly DialogButton _deleteButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public DeleteLocalBranchDialog(Repo repo, string branchName, Action onClose)
         : this(repo, branchName, upstreamRemote: null, upstreamBranch: null, onClose) { }
@@ -51,31 +49,16 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
             };
         }
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        var content = new FlexColumnView
+        _shell = new DialogShell("Delete branch", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                _forceCheckbox,
-                hint,
-            },
+            Action = ("Delete", DialogButtonRole.Destructive),
+            Body = { prompt, _forceCheckbox, hint },
         };
         if (_deleteRemoteCheckbox != null)
-            content.Children.Add(_deleteRemoteCheckbox);
-        content.Children.Add(_errorView);
-        content.Children.Add(new MultiChildView { Height = 4 });
-        content.Children.Add(DialogFrame.ButtonsRow(_cancelButton, _deleteButton));
+            _shell.Body.Add(_deleteRemoteCheckbox);
+        AddChildToSelf(_shell.View);
 
-        AddChildToSelf(DialogFrame.Build("Delete branch", onClose, content));
-
-        this.UseController(_ => new DialogKbmController(_deleteButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DeleteLocalBranchRequest(repo, branchName, upstreamRemote, upstreamBranch);
         this.UseViewModel(
@@ -95,8 +78,6 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
         if (_deleteRemoteCheckbox != null)
             _deleteRemoteCheckbox.IsChecked.BindTwoWay(vm.DeleteRemote);
 
-        _deleteButton.BindBusyCommand(vm.Delete);
-        _cancelButton.DisableWhile(vm.Delete.IsRunning);
-        _errorView.BindText(vm.Delete.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Delete);
     }
 }

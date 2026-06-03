@@ -14,11 +14,8 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _messageField;
-    private readonly CheckoutDialogKbmController _messageController;
+    private readonly DialogShell _shell;
     private readonly CheckboxView _keepStagedCheckbox;
-    private readonly DialogButton _stashButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
     private readonly ColumnView _fileListColumn;
     private readonly TextView _fileListHeader;
     private readonly TextView _fileListEmpty;
@@ -74,31 +71,22 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
         fileScrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
         fileScrollHost.UsePresenter(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _stashButton = new DialogButton("Stash", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Stash changes", onClose, new FlexColumnView
+        _shell = new DialogShell("Stash changes", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
+            Width = DialogFrame.WidthWide,
+            BodyGap = 10,
+            Action = ("Stash", DialogButtonRole.Primary),
+            Body =
             {
                 _messageField,
                 _fileListHeader,
                 new FlexItem { Grow = 1, Child = fileScrollHost },
                 _keepStagedCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _stashButton),
             },
-        }, DialogFrame.WidthWide));
+        };
+        AddChildToSelf(_shell.View);
 
-        // Same reason as CreateBranchDialog: text-input controllers consume clicks across
-        // the view they're on, so attach to the input itself, not the outer dialog.
-        _messageController = new CheckoutDialogKbmController(_messageField.Input, _stashButton.Command, onClose);
-        _messageField.Input.UseController(_ => _messageController);
+        _shell.SubmitFrom(_messageField.Input);
 
         var request = new StashRequest(repo);
         this.UseViewModel(
@@ -115,16 +103,14 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
     {
         _vm = vm;
         vm.CloseRequested += _onClose;
-        vm.FocusMessageRequested += () => _messageController.BeginEditing();
+        vm.FocusMessageRequested += () => _shell.BeginEditing();
 
         _messageField.Input.BindTwoWay(vm.Message, vm.SetMessage);
 
         vm.KeepStaged.Subscribe(b => _keepStagedCheckbox.IsChecked.Value = b);
         _keepStagedCheckbox.IsChecked.Changed += b => vm.SetKeepStaged(b);
 
-        _stashButton.BindBusyCommand(vm.Stash);
-        _cancelButton.DisableWhile(vm.Stash.IsRunning);
-        _errorView.BindText(vm.Stash.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Stash);
         _fileListHeader.BindText(vm.FilesHeader);
 
         vm.Files.Subscribe(RenderFiles);

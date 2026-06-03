@@ -16,9 +16,7 @@ namespace GitGui;
 internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChangesViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _discardButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly ColumnView _fileListColumn;
     private readonly TextView _fileListHeader;
     private readonly TextView _fileListEmpty;
@@ -73,26 +71,21 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
         fileScrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
         fileScrollHost.UsePresenter(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _discardButton = new DialogButton("Discard", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Discard changes", onClose, new FlexColumnView
+        _shell = new DialogShell("Discard changes", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
+            Width = DialogFrame.WidthWide,
+            BodyGap = 10,
+            Action = ("Discard", DialogButtonRole.Destructive),
+            Body =
             {
                 prompt,
                 _fileListHeader,
                 new FlexItem { Grow = 1, Child = fileScrollHost },
-                _errorView,
-                DialogFrame.ButtonsRow(_cancelButton, _discardButton),
             },
-        }, DialogFrame.WidthWide));
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_discardButton.Command, _onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DiscardChangesRequest(repo, paths);
         this.UseViewModel(
@@ -109,9 +102,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
         _vm = vm;
         vm.CloseRequested += _onClose;
 
-        _discardButton.BindBusyCommand(vm.Discard);
-        _cancelButton.DisableWhile(vm.Discard.IsRunning);
-        _errorView.BindText(vm.Discard.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Discard);
         _fileListHeader.BindText(vm.FilesHeader);
 
         vm.Files.Subscribe(RenderFiles);

@@ -12,9 +12,7 @@ namespace GitGui;
 /// </summary>
 internal sealed class DeleteRemoteBranchDialog : MultiChildView, IBind<DeleteRemoteBranchDialogViewModel>
 {
-    private readonly DialogButton _deleteButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly Action _onClose;
 
     public DeleteRemoteBranchDialog(Repo repo, string remoteName, string branchName, Action onClose)
@@ -32,26 +30,14 @@ internal sealed class DeleteRemoteBranchDialog : MultiChildView, IBind<DeleteRem
             "This is a network operation. Your local branches are not affected.",
             TextWrap.Wrap);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Delete remote branch", onClose, new FlexColumnView
+        _shell = new DialogShell("Delete remote branch", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                hint,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _deleteButton),
-            },
-        }));
+            Action = ("Delete", DialogButtonRole.Destructive),
+            Body = { prompt, hint },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_deleteButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DeleteRemoteBranchRequest(repo, remoteName, branchName);
         this.UseViewModel(
@@ -65,9 +51,7 @@ internal sealed class DeleteRemoteBranchDialog : MultiChildView, IBind<DeleteRem
 
     public void Bind(DeleteRemoteBranchDialogViewModel vm)
     {
-        _deleteButton.BindBusyCommand(vm.Delete);
-        _cancelButton.DisableWhile(vm.Delete.IsRunning);
-        _errorView.BindText(vm.Delete.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Delete);
         vm.CloseRequested += _onClose;
     }
 }

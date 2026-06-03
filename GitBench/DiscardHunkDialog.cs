@@ -7,9 +7,7 @@ namespace GitGui;
 
 internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewModel>
 {
-    private readonly DialogButton _discardButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly Action _onClose;
 
     public DiscardHunkDialog(Repo repo, string path, string patch, Action onClose)
@@ -25,24 +23,15 @@ internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewM
         };
         prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _discardButton = new DialogButton("Discard", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Discard hunk", onClose, new FlexColumnView
+        _shell = new DialogShell("Discard hunk", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = prompt },
-                _errorView,
-                DialogFrame.ButtonsRow(_cancelButton, _discardButton),
-            },
-        }, DialogFrame.WidthCompact));
+            Width = DialogFrame.WidthCompact,
+            Action = ("Discard", DialogButtonRole.Destructive),
+            Body = { new FlexItem { Grow = 1, Child = prompt } },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_discardButton.Command, _onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DiscardHunkRequest(repo, patch);
         this.UseViewModel(
@@ -56,9 +45,7 @@ internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewM
 
     public void Bind(DiscardHunkViewModel vm)
     {
-        _discardButton.BindBusyCommand(vm.Discard);
-        _cancelButton.DisableWhile(vm.Discard.IsRunning);
-        _errorView.BindText(vm.Discard.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Discard);
         vm.CloseRequested += _onClose;
     }
 }

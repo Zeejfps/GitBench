@@ -18,9 +18,7 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
     private readonly CheckboxView _checkoutMode;
     private readonly CheckboxView _mergeMode;
     private readonly CheckboxView _rebaseMode;
-    private readonly DialogButton _cancelButton;
-    private readonly DialogButton _updateButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public UpdateSubmodulesDialog(Repo primary, Repo? target, Action onClose)
     {
@@ -51,16 +49,11 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
             "the Operation banner will offer Abort.",
             TextWrap.Wrap);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _updateButton = new DialogButton("Update", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build(titleText, onClose, new FlexColumnView
+        _shell = new DialogShell(titleText, onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
+            BodyGap = 10,
+            Action = ("Update", DialogButtonRole.Primary),
+            Body =
             {
                 prompt,
                 _initCheckbox,
@@ -70,13 +63,11 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
                 _mergeMode,
                 _rebaseMode,
                 conflictsHint,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _updateButton),
             },
-        }));
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_updateButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new UpdateSubmodulesViewRequest(primary, target);
         this.UseViewModel(
@@ -94,9 +85,9 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
 
         _initCheckbox.IsChecked.BindTwoWay(vm.Init);
         _recursiveCheckbox.IsChecked.BindTwoWay(vm.Recursive);
-        _updateButton.BindBusyCommand(vm.Update);
-        _cancelButton.DisableWhile(vm.Update.IsRunning);
-        _errorView.BindText(vm.Error, s => s ?? string.Empty);
+        _shell.ActionButton.BindBusyCommand(vm.Update);
+        _shell.CancelButton.DisableWhile(vm.Update.IsRunning);
+        _shell.Error.BindText(vm.Error, s => s ?? string.Empty);
 
         vm.Mode.Subscribe(m =>
         {

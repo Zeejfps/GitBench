@@ -8,12 +8,10 @@ namespace GitGui;
 internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _mergeButton;
-    private readonly DialogButton _cancelButton;
+    private readonly DialogShell _shell;
     private readonly MergeOptionDropdown _optionDropdown;
     private readonly TextView _previewIcon;
     private readonly TextView _previewText;
-    private readonly TextView _errorView;
     private MergePreviewState _previewState = MergePreviewState.Unknown;
     private BranchPreviewStyles _previewStyles = ThemeStyles.Dark.BranchPreview;
 
@@ -51,39 +49,16 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
             Children = { _previewIcon, _previewText },
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
-        _mergeButton = new DialogButton("Merge", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
-
-        var buttonsRow = new FlexRowView
+        _shell = new DialogShell("Merge branch", onClose)
         {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = previewChip },
-                _cancelButton,
-                _mergeButton,
-            },
+            Width = DialogFrame.WidthWide,
+            Action = ("Merge", DialogButtonRole.Primary),
+            FooterLead = previewChip,
+            Body = { mergeRow, intoRow, optionRow },
         };
+        AddChildToSelf(_shell.View);
 
-        AddChildToSelf(DialogFrame.Build("Merge branch", onClose, new FlexColumnView
-        {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                mergeRow,
-                intoRow,
-                optionRow,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                buttonsRow,
-            },
-        }, DialogFrame.WidthWide));
-
-        this.UseController(_ => new DialogKbmController(_mergeButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         this.UseViewModel(
             ctx => new MergeBranchDialogViewModel(
@@ -98,9 +73,7 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
     {
         vm.CloseRequested += _onClose;
         _optionDropdown.SelectedState.BindTwoWay(vm.Strategy);
-        _mergeButton.BindBusyCommand(vm.Merge);
-        _cancelButton.DisableWhile(vm.Merge.IsRunning);
-        _errorView.BindText(vm.Merge.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Merge);
         vm.PreviewState.Subscribe(s =>
         {
             _previewState = s;

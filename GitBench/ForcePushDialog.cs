@@ -8,9 +8,7 @@ namespace GitGui;
 internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _forcePushButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public ForcePushDialog(Repo repo, string branchName, int ahead, int behind, Action onClose)
     {
@@ -27,24 +25,14 @@ internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogVie
         };
         prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _forcePushButton = new DialogButton("Force push", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Force push?", onClose, new FlexColumnView
+        _shell = new DialogShell("Force push?", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = prompt },
-                _errorView,
-                DialogFrame.ButtonsRow(_cancelButton, _forcePushButton),
-            },
-        }));
+            Action = ("Force push", DialogButtonRole.Destructive),
+            Body = { new FlexItem { Grow = 1, Child = prompt } },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_forcePushButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         this.UseViewModel(
             ctx => new ForcePushDialogViewModel(
@@ -58,8 +46,6 @@ internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogVie
     public void Bind(ForcePushDialogViewModel vm)
     {
         vm.CloseRequested += _onClose;
-        _forcePushButton.BindBusyCommand(vm.ForcePush);
-        _cancelButton.DisableWhile(vm.ForcePush.IsRunning);
-        _errorView.BindText(vm.ForcePush.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.ForcePush);
     }
 }

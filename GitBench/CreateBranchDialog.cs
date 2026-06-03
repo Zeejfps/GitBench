@@ -15,55 +15,28 @@ internal sealed class CreateBranchDialog : MultiChildView, IBind<CreateBranchDia
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
-    private readonly CheckoutDialogKbmController _nameController;
     private readonly LabeledInputField _startPointField;
     private readonly CheckboxView _checkoutCheckbox;
-    private readonly DialogButton _createButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public CreateBranchDialog(Repo repo, string suggestedStartPoint, Action onClose)
     {
         _onClose = onClose;
 
         _nameField = new LabeledInputField("Branch name");
-
         _startPointField = new LabeledInputField("Starting point")
         {
             Hint = "Branch, tag, or commit SHA. Leave blank for HEAD.",
         };
+        _checkoutCheckbox = new CheckboxView("Check out after create") { Height = 22 };
 
-        _checkoutCheckbox = new CheckboxView("Check out after create")
+        _shell = new DialogShell("Create branch", onClose)
         {
-            Height = 22,
+            Action = ("Create", DialogButtonRole.Primary),
+            Body = { _nameField, _startPointField, _checkoutCheckbox },
         };
-
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _createButton = new DialogButton("Create", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Create branch", onClose, new FlexColumnView
-        {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                _nameField,
-                _startPointField,
-                _checkoutCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _createButton),
-            },
-        }));
-
-        // Controllers go on the inputs (not the dialog) — see CheckoutBranchDialog for why:
-        // BaseTextInputKbmController consumes left-press anywhere inside the view it's on,
-        // so attaching to the outer dialog would swallow clicks meant for Cancel/Create.
-        _nameController = new CheckoutDialogKbmController(_nameField.Input, _createButton.Command, onClose);
-        _nameField.Input.UseController(_ => _nameController);
-        _startPointField.Input.UseController(_ => new CheckoutDialogKbmController(_startPointField.Input, _createButton.Command, onClose));
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_nameField.Input, _startPointField.Input);
 
         var request = new CreateBranchRequest(repo, suggestedStartPoint);
         this.UseViewModel(
@@ -79,14 +52,12 @@ internal sealed class CreateBranchDialog : MultiChildView, IBind<CreateBranchDia
     {
         vm.CloseRequested += _onClose;
 
+        _shell.BindCommand(vm.Create);
         _nameField.Input.BindTwoWay(vm.Name);
         _nameField.BindStatus(vm.NameStatus);
         _startPointField.Input.BindTwoWay(vm.StartPoint);
         _checkoutCheckbox.IsChecked.BindTwoWay(vm.Checkout);
-        _createButton.BindBusyCommand(vm.Create);
-        _cancelButton.DisableWhile(vm.Create.IsRunning);
-        _errorView.BindText(vm.Create.Error, s => s ?? string.Empty);
 
-        _nameController.BeginEditing();
+        _shell.BeginEditing();
     }
 }

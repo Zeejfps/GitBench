@@ -8,9 +8,7 @@ namespace GitGui;
 internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _publishButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly CheckboxView _trackCheckbox;
     private readonly RemoteDropdown _remoteDropdown;
 
@@ -37,30 +35,15 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
         };
         var trackRow = BuildLabeledRow("", _trackCheckbox);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _publishButton = new DialogButton("Publish", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        var buttonsRow = DialogFrame.ButtonsRow(_cancelButton, _publishButton);
-
-        AddChildToSelf(DialogFrame.Build("Publish branch", onClose, new FlexColumnView
+        _shell = new DialogShell("Publish branch", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                branchRow,
-                remoteRow,
-                trackRow,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                buttonsRow,
-            },
-        }, DialogFrame.WidthWide));
+            Width = DialogFrame.WidthWide,
+            Action = ("Publish", DialogButtonRole.Primary),
+            Body = { subtitle, branchRow, remoteRow, trackRow },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_publishButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         this.UseViewModel(
             ctx => new PublishBranchDialogViewModel(
@@ -77,9 +60,7 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
 
         _remoteDropdown.SelectedState.BindTwoWay(vm.SelectedRemote);
         _trackCheckbox.IsChecked.BindTwoWay(vm.SetUpstream);
-        _publishButton.BindBusyCommand(vm.Publish);
-        _cancelButton.DisableWhile(vm.Publish.IsRunning);
-        _errorView.BindText(vm.ErrorMessage, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Publish, vm.ErrorMessage);
 
         vm.Remotes.Subscribe(remotes => _remoteDropdown.SetOptions(remotes));
     }

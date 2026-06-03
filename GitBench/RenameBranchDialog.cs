@@ -15,11 +15,8 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
-    private readonly CheckoutDialogKbmController _nameController;
     private readonly CheckboxView _forceCheckbox;
-    private readonly DialogButton _renameButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public RenameBranchDialog(Repo repo, string currentName, Action onClose)
     {
@@ -39,28 +36,13 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
             Height = 22,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _renameButton = new DialogButton("Rename", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Rename branch", onClose, new FlexColumnView
+        _shell = new DialogShell("Rename branch", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                _nameField,
-                _forceCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _renameButton),
-            },
-        }));
-
-        _nameController = new CheckoutDialogKbmController(_nameField.Input, _renameButton.Command, onClose);
-        _nameField.Input.UseController(_ => _nameController);
+            Action = ("Rename", DialogButtonRole.Primary),
+            Body = { subtitle, _nameField, _forceCheckbox },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_nameField.Input);
 
         var request = new RenameBranchRequest(repo, currentName);
         this.UseViewModel(
@@ -79,11 +61,9 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
         _nameField.Input.BindTwoWay(vm.Name);
         _nameField.BindStatus(vm.NameStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _renameButton.BindBusyCommand(vm.Rename);
-        _cancelButton.DisableWhile(vm.Rename.IsRunning);
-        _errorView.BindText(vm.Rename.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Rename);
 
         _nameField.Input.SelectAll();
-        _nameController.BeginEditing();
+        _shell.BeginEditing();
     }
 }

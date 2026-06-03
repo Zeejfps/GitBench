@@ -15,11 +15,8 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
 {
     private readonly LabeledInputField _nameField;
     private readonly LabeledInputField _urlField;
-    private readonly CheckoutDialogKbmController _nameController;
     private readonly SchemeDropdown _schemeDropdown;
-    private readonly DialogButton _saveButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private readonly Action _onClose;
 
     public EditRemoteDialog(Repo repo, string remoteName, Action onClose)
@@ -51,32 +48,14 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
             Accessory = _schemeDropdown,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _saveButton = new DialogButton(confirmLabel, role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build(title, onClose, new FlexColumnView
+        _shell = new DialogShell(title, onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                _nameField,
-                _urlField,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _saveButton),
-            },
-        }, DialogFrame.WidthWide));
-
-        // Controllers go on the inputs (not the dialog) for the same reason as
-        // CreateBranchDialog: an input controller consumes left-press inside its view, so
-        // attaching to the outer dialog would swallow clicks meant for the buttons.
-        _nameController = new CheckoutDialogKbmController(_nameField.Input, Confirm, onClose);
-        _nameField.Input.UseController(_ => _nameController);
-        _urlField.Input.UseController(_ => new CheckoutDialogKbmController(_urlField.Input, Confirm, onClose));
+            Width = DialogFrame.WidthWide,
+            Action = (confirmLabel, DialogButtonRole.Primary),
+            Body = { subtitle, _nameField, _urlField },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_nameField.Input, _urlField.Input);
 
         this.UseViewModel(
             ctx => new EditRemoteDialogViewModel(
@@ -95,15 +74,11 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         vm.Scheme.Subscribe(_schemeDropdown.SetScheme);
         _schemeDropdown.SchemeSelected += vm.SetScheme;
 
-        _saveButton.BindBusyCommand(vm.Save);
-        _cancelButton.DisableWhile(vm.Save.IsRunning);
-        _errorView.BindText(vm.Save.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Save);
         vm.CloseRequested += _onClose;
 
-        _nameController.BeginEditing();
+        _shell.BeginEditing();
     }
-
-    private void Confirm() => _saveButton.Command.Value?.Execute();
 }
 
 /// <summary>

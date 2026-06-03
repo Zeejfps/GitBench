@@ -14,13 +14,10 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _urlField;
-    private readonly CheckoutDialogKbmController _urlController;
     private readonly LabeledInputField _pathField;
     private readonly LabeledInputField _branchField;
     private readonly CheckboxView _forceCheckbox;
-    private readonly DialogButton _addButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public AddSubmoduleDialog(Repo primary, Action onClose)
     {
@@ -43,31 +40,13 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
             Height = 22,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _addButton = new DialogButton("Add", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Add submodule", onClose, new FlexColumnView
+        _shell = new DialogShell("Add submodule", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                _urlField,
-                _pathField,
-                _branchField,
-                _forceCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _addButton),
-            },
-        }));
-
-        _urlController = new CheckoutDialogKbmController(_urlField.Input, _addButton.Command, onClose);
-        _urlField.Input.UseController(_ => _urlController);
-        _pathField.Input.UseController(_ => new CheckoutDialogKbmController(_pathField.Input, _addButton.Command, onClose));
-        _branchField.Input.UseController(_ => new CheckoutDialogKbmController(_branchField.Input, _addButton.Command, onClose));
+            Action = ("Add", DialogButtonRole.Primary),
+            Body = { _urlField, _pathField, _branchField, _forceCheckbox },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_urlField.Input, _pathField.Input, _branchField.Input);
 
         var request = new AddSubmoduleViewRequest(primary);
         this.UseViewModel(
@@ -88,10 +67,8 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
         _branchField.Input.BindTwoWay(vm.Branch);
         _branchField.BindStatus(vm.BranchStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _addButton.BindBusyCommand(vm.Add);
-        _cancelButton.DisableWhile(vm.Add.IsRunning);
-        _errorView.BindText(vm.Add.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Add);
 
-        _urlController.BeginEditing();
+        _shell.BeginEditing();
     }
 }

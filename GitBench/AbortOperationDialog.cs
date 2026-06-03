@@ -14,9 +14,7 @@ namespace GitGui;
 internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperationDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _abortButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public AbortOperationDialog(Repo repo, RepoOperationState state, Action onClose)
     {
@@ -31,24 +29,14 @@ internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperatio
         };
         prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _abortButton = new DialogButton(confirmLabel, role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build(titleText, onClose, new FlexColumnView
+        _shell = new DialogShell(titleText, onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = prompt },
-                _errorView,
-                DialogFrame.ButtonsRow(_cancelButton, _abortButton),
-            },
-        }));
+            Action = (confirmLabel, DialogButtonRole.Destructive),
+            Body = { new FlexItem { Grow = 1, Child = prompt } },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_abortButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new AbortOperationRequest(repo, state);
         this.UseViewModel(
@@ -64,11 +52,11 @@ internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperatio
     {
         vm.CloseRequested += _onClose;
 
-        _abortButton.BindBusyCommand(vm.Abort);
-        _cancelButton.DisableWhile(vm.Abort.IsRunning);
-        _errorView.BindText(vm.Error, s => s ?? string.Empty);
+        _shell.ActionButton.BindBusyCommand(vm.Abort);
+        _shell.CancelButton.DisableWhile(vm.Abort.IsRunning);
+        _shell.Error.BindText(vm.Error, s => s ?? string.Empty);
 
-        vm.ConfirmButtonLabel.Subscribe(label => _abortButton.Label = label);
+        vm.ConfirmButtonLabel.Subscribe(label => _shell.ActionButton.Label = label);
     }
 
     private static (string Title, string Body, string Confirm) CopyFor(RepoOperationState state) => state switch

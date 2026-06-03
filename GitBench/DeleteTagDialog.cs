@@ -13,10 +13,8 @@ namespace GitGui;
 /// </summary>
 internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogViewModel>
 {
-    private readonly DialogButton _deleteButton;
-    private readonly DialogButton _cancelButton;
+    private readonly DialogShell _shell;
     private readonly CheckboxView _remoteCheckbox;
-    private readonly TextView _errorView;
     private readonly Action _onClose;
 
     public DeleteTagDialog(Repo repo, string tagName, Action onClose)
@@ -30,27 +28,14 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
 
         _remoteCheckbox = new CheckboxView("Delete tag from remote repositories") { Height = 22 };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete Tag", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Delete tag", onClose, new FlexColumnView
+        _shell = new DialogShell("Delete tag", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                tagRow,
-                _remoteCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _deleteButton),
-            },
-        }));
+            Action = ("Delete Tag", DialogButtonRole.Destructive),
+            Body = { subtitle, tagRow, _remoteCheckbox },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_deleteButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DeleteTagRequest(repo, tagName);
         this.UseViewModel(
@@ -67,9 +52,7 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
         vm.CloseRequested += _onClose;
 
         _remoteCheckbox.IsChecked.BindTwoWay(vm.DeleteFromRemotes);
-        _deleteButton.BindBusyCommand(vm.Delete);
-        _cancelButton.DisableWhile(vm.Delete.IsRunning);
-        _errorView.BindText(vm.Delete.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Delete);
     }
 
     private static FlexRowView BuildLabeledRow(string label, MultiChildView value)

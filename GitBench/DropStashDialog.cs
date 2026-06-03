@@ -14,8 +14,7 @@ namespace GitGui;
 public sealed class DropStashDialog : MultiChildView
 {
     private readonly Action _onClose;
-    private readonly DialogButton _dropButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     private bool _isRunning;
 
@@ -30,22 +29,14 @@ public sealed class DropStashDialog : MultiChildView
         };
         prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _errorView = DialogFrame.ErrorView();
-
-        var keepButton = new DialogButton("Keep", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _dropButton = new DialogButton("Drop", () => TryDrop(repo, index), DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build($"Drop {label}?", onClose, new FlexColumnView
+        _shell = new DialogShell($"Drop {label}?", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                _errorView,
-                DialogFrame.ButtonsRow(keepButton, _dropButton),
-            },
-        }, DialogFrame.WidthCompact));
+            Width = DialogFrame.WidthCompact,
+            CancelLabel = "Keep",
+            Action = ("Drop", DialogButtonRole.Destructive, () => TryDrop(repo, index)),
+            Body = { prompt },
+        };
+        AddChildToSelf(_shell.View);
 
         // The drop call is small enough to inline here; no presenter needed. We grab
         // services from the context the dialog is attached to.
@@ -60,8 +51,8 @@ public sealed class DropStashDialog : MultiChildView
     {
         if (_isRunning) return;
         _isRunning = true;
-        _dropButton.IsEnabled.Value = false;
-        _errorView.Text = string.Empty;
+        _shell.ActionButton.IsEnabled.Value = false;
+        _shell.Error.Text = string.Empty;
         DropRequested?.Invoke(repo, index);
     }
 
@@ -72,8 +63,8 @@ public sealed class DropStashDialog : MultiChildView
         if (!outcome.Success)
         {
             _isRunning = false;
-            _dropButton.IsEnabled.Value = true;
-            _errorView.Text = outcome.ErrorMessage ?? "Stash drop failed.";
+            _shell.ActionButton.IsEnabled.Value = true;
+            _shell.Error.Text = outcome.ErrorMessage ?? "Stash drop failed.";
             return;
         }
         _onClose();

@@ -14,13 +14,10 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _pathField;
-    private readonly CheckoutDialogKbmController _pathController;
     private readonly LabeledInputField _startPointField;
     private readonly LabeledInputField _branchField;
     private readonly CheckboxView _forceCheckbox;
-    private readonly DialogButton _createButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
     private CreateWorktreeDialogViewModel? _vm;
 
     public CreateWorktreeDialog(Repo primary, Action onClose)
@@ -53,31 +50,13 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
             Height = 22,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _createButton = new DialogButton("Create", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("New worktree", onClose, new FlexColumnView
+        _shell = new DialogShell("New worktree", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                _pathField,
-                _startPointField,
-                _branchField,
-                _forceCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _createButton),
-            },
-        }));
-
-        _pathController = new CheckoutDialogKbmController(_pathField.Input, _createButton.Command, onClose);
-        _pathField.Input.UseController(_ => _pathController);
-        _startPointField.Input.UseController(_ => new CheckoutDialogKbmController(_startPointField.Input, _createButton.Command, onClose));
-        _branchField.Input.UseController(_ => new CheckoutDialogKbmController(_branchField.Input, _createButton.Command, onClose));
+            Action = ("Create", DialogButtonRole.Primary),
+            Body = { _pathField, _startPointField, _branchField, _forceCheckbox },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_pathField.Input, _startPointField.Input, _branchField.Input);
 
         var request = new CreateWorktreeRequest(primary);
         this.UseViewModel(
@@ -99,11 +78,9 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
         _branchField.Input.BindTwoWay(vm.NewBranchName);
         _branchField.BindStatus(vm.NewBranchStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _createButton.BindBusyCommand(vm.Create);
-        _cancelButton.DisableWhile(vm.Create.IsRunning);
-        _errorView.BindText(vm.Create.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Create);
 
-        _pathController.BeginEditing();
+        _shell.BeginEditing();
     }
 
     private void PickPath()

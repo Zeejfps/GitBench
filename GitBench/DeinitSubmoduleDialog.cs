@@ -13,9 +13,7 @@ internal sealed class DeinitSubmoduleDialog : MultiChildView, IBind<DeinitSubmod
 {
     private readonly Action _onClose;
     private readonly CheckboxView _forceCheckbox;
-    private readonly DialogButton _deinitButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public DeinitSubmoduleDialog(Repo primary, Repo submodule, Action onClose)
     {
@@ -39,27 +37,14 @@ internal sealed class DeinitSubmoduleDialog : MultiChildView, IBind<DeinitSubmod
             Height = 22,
         };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deinitButton = new DialogButton("Deinit", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Deinit submodule", onClose, new FlexColumnView
+        _shell = new DialogShell("Deinit submodule", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                prompt,
-                detail,
-                _forceCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _deinitButton),
-            },
-        }));
+            Action = ("Deinit", DialogButtonRole.Destructive),
+            Body = { prompt, detail, _forceCheckbox },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_deinitButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new DeinitSubmoduleViewRequest(primary, submodule);
         this.UseViewModel(
@@ -75,8 +60,6 @@ internal sealed class DeinitSubmoduleDialog : MultiChildView, IBind<DeinitSubmod
     {
         vm.CloseRequested += _onClose;
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _deinitButton.BindBusyCommand(vm.Deinit);
-        _cancelButton.DisableWhile(vm.Deinit.IsRunning);
-        _errorView.BindText(vm.Deinit.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Deinit);
     }
 }

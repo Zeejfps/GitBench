@@ -61,6 +61,13 @@ public abstract class HoverableButton : MultiChildView
         else _onClick?.Invoke();
     }
 
+    // Programmatically triggers the button as if clicked, honoring IsEnabled. Lets a keyboard
+    // controller route Enter to whichever action (command or onClick) the button carries.
+    public void PerformClick()
+    {
+        if (IsEnabled) OnClicked();
+    }
+
     public void BindCommand(ICommand command)
     {
         Command.Value = command;

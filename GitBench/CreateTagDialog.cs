@@ -15,12 +15,9 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
-    private readonly CheckoutDialogKbmController _nameController;
     private readonly GrowingDescriptionField _messageField;
     private readonly CheckboxView _pushCheckbox;
-    private readonly DialogButton _createButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public CreateTagDialog(Repo repo, string sha, string shortSha, string summary, Action onClose)
     {
@@ -38,16 +35,11 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
 
         _pushCheckbox = new CheckboxView("Push to all remotes") { Height = 22 };
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _createButton = new DialogButton("Create", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Create tag", onClose, new FlexColumnView
+        _shell = new DialogShell("Create tag", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
+            Width = DialogFrame.WidthWide,
+            Action = ("Create", DialogButtonRole.Primary),
+            Body =
             {
                 subtitle,
                 targetRow,
@@ -57,18 +49,15 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
                 _nameField,
                 LabeledField(messageLabel, _messageField),
                 _pushCheckbox,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _createButton),
             },
-        }, DialogFrame.WidthWide));
+        };
+        AddChildToSelf(_shell.View);
 
         // Submit-on-enter / cancel-on-esc lives on the name input, not the dialog — see
         // CreateBranchDialog: the input controller consumes left-press inside its own view,
         // so attaching to the outer dialog would swallow clicks meant for the buttons. The
         // message field keeps its own multi-line controller so Enter inserts a newline there.
-        _nameController = new CheckoutDialogKbmController(_nameField.Input, _createButton.Command, onClose);
-        _nameField.Input.UseController(_ => _nameController);
+        _shell.SubmitFrom(_nameField.Input);
 
         var request = new CreateTagRequest(repo, sha);
         this.UseViewModel(
@@ -88,14 +77,12 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         _nameField.BindStatus(vm.NameStatus);
         _messageField.BindTwoWay(vm.Message, vm.SetMessage);
         _pushCheckbox.IsChecked.BindTwoWay(vm.PushToAllRemotes);
-        _createButton.BindBusyCommand(vm.Create);
-        _cancelButton.DisableWhile(vm.Create.IsRunning);
-        _errorView.BindText(vm.Create.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Create);
 
         // Reflect the toggle in the primary button's label, like Fork ("Create and Push").
-        vm.PushToAllRemotes.Subscribe(push => _createButton.Label = push ? "Create and Push" : "Create");
+        vm.PushToAllRemotes.Subscribe(push => _shell.ActionButton.Label = push ? "Create and Push" : "Create");
 
-        _nameController.BeginEditing();
+        _shell.BeginEditing();
     }
 
     // Label stacked tightly above its input. The 4px intra-group gap keeps the label visually

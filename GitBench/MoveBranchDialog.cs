@@ -14,9 +14,7 @@ namespace GitGui;
 internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly DialogButton _resetButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public MoveBranchDialog(Repo repo, string branchName, string sha, string shortSha, string summary, Action onClose)
     {
@@ -41,29 +39,15 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
             $"'{branchName}' has commits that aren't in {shortSha}. Resetting it here will leave those commits unreachable from any branch.",
             TextWrap.Wrap);
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _resetButton = new DialogButton("Reset branch", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
-
-        var buttonsRow = DialogFrame.ButtonsRow(_cancelButton, _resetButton);
-
-        AddChildToSelf(DialogFrame.Build("Reset branch to revision", onClose, new FlexColumnView
+        _shell = new DialogShell("Reset branch to revision", onClose)
         {
-            Gap = 12,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                commitClip,
-                warning,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                buttonsRow,
-            },
-        }, DialogFrame.WidthWide));
+            Width = DialogFrame.WidthWide,
+            Action = ("Reset branch", DialogButtonRole.Destructive),
+            Body = { subtitle, commitClip, warning },
+        };
+        AddChildToSelf(_shell.View);
 
-        this.UseController(_ => new DialogKbmController(_resetButton.Command, onClose));
+        _shell.AttachConfirmKeys(this);
 
         var request = new MoveBranchRequest(repo, branchName, sha);
         this.UseViewModel(
@@ -78,8 +62,6 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
     public void Bind(MoveBranchDialogViewModel vm)
     {
         vm.CloseRequested += _onClose;
-        _resetButton.BindBusyCommand(vm.Move);
-        _cancelButton.DisableWhile(vm.Move.IsRunning);
-        _errorView.BindText(vm.Move.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Move);
     }
 }

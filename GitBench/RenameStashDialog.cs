@@ -15,10 +15,7 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _messageField;
-    private readonly CheckoutDialogKbmController _messageController;
-    private readonly DialogButton _renameButton;
-    private readonly DialogButton _cancelButton;
-    private readonly TextView _errorView;
+    private readonly DialogShell _shell;
 
     public RenameStashDialog(Repo repo, int index, string currentMessage, Action onClose)
     {
@@ -33,27 +30,13 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
 
         _messageField = new LabeledInputField("Description");
 
-        _errorView = DialogFrame.ErrorView();
-
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _renameButton = new DialogButton("Rename", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
-
-        AddChildToSelf(DialogFrame.Build("Rename stash", onClose, new FlexColumnView
+        _shell = new DialogShell("Rename stash", onClose)
         {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                subtitle,
-                _messageField,
-                _errorView,
-                new MultiChildView { Height = 4 },
-                DialogFrame.ButtonsRow(_cancelButton, _renameButton),
-            },
-        }));
-
-        _messageController = new CheckoutDialogKbmController(_messageField.Input, _renameButton.Command, onClose);
-        _messageField.Input.UseController(_ => _messageController);
+            Action = ("Rename", DialogButtonRole.Primary),
+            Body = { subtitle, _messageField },
+        };
+        AddChildToSelf(_shell.View);
+        _shell.SubmitFrom(_messageField.Input);
 
         var request = new RenameStashRequest(repo, index, currentMessage);
         this.UseViewModel(
@@ -70,11 +53,9 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
         vm.CloseRequested += _onClose;
 
         _messageField.Input.BindTwoWay(vm.Message);
-        _renameButton.BindBusyCommand(vm.Rename);
-        _cancelButton.DisableWhile(vm.Rename.IsRunning);
-        _errorView.BindText(vm.Rename.Error, s => s ?? string.Empty);
+        _shell.BindCommand(vm.Rename);
 
         _messageField.Input.SelectAll();
-        _messageController.BeginEditing();
+        _shell.BeginEditing();
     }
 }

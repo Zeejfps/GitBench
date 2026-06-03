@@ -63,6 +63,11 @@ internal static class DialogFrame
     // at least DefaultButtonMinWidth wide but free to grow for longer labels. A grow-1 spacer
     // pushes them right. This is the single footer layout for every dialog.
     public static FlexRowView ButtonsRow(MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap)
+        => ButtonsRow(new MultiChildView(), cancel, primary, gap);
+
+    // Footer variant with leading content (e.g. a merge/rebase preview chip) in place of the
+    // empty spacer. The lead grows to fill, keeping the buttons pinned bottom-right.
+    public static FlexRowView ButtonsRow(MultiChildView lead, MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap)
     {
         cancel.MinWidthConstraint = DefaultButtonMinWidth;
         primary.MinWidthConstraint = DefaultButtonMinWidth;
@@ -72,7 +77,7 @@ internal static class DialogFrame
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
+                new FlexItem { Grow = 1, Child = lead },
                 cancel,
                 primary,
             },
