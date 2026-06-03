@@ -13,10 +13,10 @@ namespace GitGui;
 internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktreeDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _pathInput;
+    private readonly LabeledInputField _pathField;
     private readonly CheckoutDialogKbmController _pathController;
-    private readonly TextInputView _startPointInput;
-    private readonly TextInputView _branchInput;
+    private readonly LabeledInputField _startPointField;
+    private readonly LabeledInputField _branchField;
     private readonly CheckboxView _forceCheckbox;
     private readonly DialogButton _createButton;
     private readonly DialogButton _cancelButton;
@@ -27,40 +27,26 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
     {
         _onClose = onClose;
 
-        var pathLabel = DialogFrame.Label("Worktree path");
-
-        _pathInput = DialogFrame.TextInput();
-
         var browseButton = new DialogButton("Browse…", PickPath)
         {
             Height = 28,
             Width = 80,
         };
 
-        var pathRow = new FlexRowView
+        _pathField = new LabeledInputField("Worktree path")
         {
-            Gap = 6,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = DialogFrame.WrapInput(_pathInput) },
-                browseButton,
-            },
+            Accessory = browseButton,
         };
 
-        var startPointLabel = DialogFrame.Label("Start point");
+        _startPointField = new LabeledInputField("Start point")
+        {
+            Hint = "Branch, tag, or commit SHA.",
+        };
 
-        _startPointInput = DialogFrame.TextInput();
-        var startPointBox = DialogFrame.WrapInput(_startPointInput);
-
-        var startPointHint = DialogFrame.Hint("Branch, tag, or commit SHA.");
-
-        var branchLabel = DialogFrame.Label("New branch (optional)");
-
-        _branchInput = DialogFrame.TextInput();
-        var branchBox = DialogFrame.WrapInput(_branchInput);
-
-        var branchHint = DialogFrame.Hint("Leave blank to check out the start point as-is.");
+        _branchField = new LabeledInputField("New branch (optional)")
+        {
+            Hint = "Leave blank to check out the start point as-is.",
+        };
 
         _forceCheckbox = new CheckboxView("Force (allow non-empty path or re-used branch)")
         {
@@ -78,14 +64,9 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                pathLabel,
-                pathRow,
-                startPointLabel,
-                startPointBox,
-                startPointHint,
-                branchLabel,
-                branchBox,
-                branchHint,
+                _pathField,
+                _startPointField,
+                _branchField,
                 _forceCheckbox,
                 _errorView,
                 new MultiChildView { Height = 4 },
@@ -93,10 +74,10 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
             },
         }));
 
-        _pathController = new CheckoutDialogKbmController(_pathInput, _createButton.Command, onClose);
-        _pathInput.UseController(_ => _pathController);
-        _startPointInput.UseController(_ => new CheckoutDialogKbmController(_startPointInput, _createButton.Command, onClose));
-        _branchInput.UseController(_ => new CheckoutDialogKbmController(_branchInput, _createButton.Command, onClose));
+        _pathController = new CheckoutDialogKbmController(_pathField.Input, _createButton.Command, onClose);
+        _pathField.Input.UseController(_ => _pathController);
+        _startPointField.Input.UseController(_ => new CheckoutDialogKbmController(_startPointField.Input, _createButton.Command, onClose));
+        _branchField.Input.UseController(_ => new CheckoutDialogKbmController(_branchField.Input, _createButton.Command, onClose));
 
         var request = new CreateWorktreeRequest(primary);
         this.UseViewModel(
@@ -113,9 +94,9 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
         _vm = vm;
         vm.CloseRequested += _onClose;
 
-        _pathInput.BindTwoWay(vm.Path);
-        _startPointInput.BindTwoWay(vm.StartPoint);
-        _branchInput.BindTwoWay(vm.NewBranchName);
+        _pathField.Input.BindTwoWay(vm.Path);
+        _startPointField.Input.BindTwoWay(vm.StartPoint);
+        _branchField.Input.BindTwoWay(vm.NewBranchName);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _createButton.BindBusyCommand(vm.Create);
         _cancelButton.DisableWhile(vm.Create.IsRunning);
