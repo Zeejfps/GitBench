@@ -63,6 +63,12 @@ context.AddService(new LocalChangesSelectionStore());
 var updateService = new UpdateService();
 context.AddService(updateService);
 
+// Single source of truth for the active repo's loaded git data. Registered before the GUI is
+// built so view models can resolve it during startup; its loading is wired in Start() below,
+// once GuiApp has created the UI dispatcher.
+using var snapshotStore = new RepoSnapshotStore(registry, context.Require<IGitService>(), messageBus);
+context.AddService<IRepoSnapshotStore>(snapshotStore);
+
 var appView = new AppView(preferences, updateService);
 var appHost = GuiApp.CreateDefault(new StartupConfig
 {
@@ -106,6 +112,10 @@ using var submoduleSync = new SubmoduleSyncService(
     context.Require<IGitService>(),
     context.Require<IUiDispatcher>(),
     messageBus);
+
+// Now that GuiApp has registered the UI dispatcher, wire the snapshot store's loading. Subscribes
+// to the active repo and seeds the first load.
+snapshotStore.Start(context.Require<IUiDispatcher>());
 
 // Check GitHub Releases for an update off the UI thread. The per-OS/arch channel must match
 // the --channel vpk packs with in CI (see .github/workflows/release.yml). Velopack only finds

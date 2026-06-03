@@ -23,8 +23,6 @@ public abstract record CommitsRenderState
 /// </summary>
 internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 {
-    private const int MaxCommits = 3000;
-
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
@@ -34,14 +32,10 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     // Holds the most recent *successfully* loaded snapshot for the active repo, or null if we
     // have no good data for it (no repo, in-flight first load, or last load errored).
-    // Soft-refresh and SHA-existence checks both rely on this invariant — never assign
-    // an error snapshot here.
+    // SHA-existence checks rely on this invariant — never assign an error snapshot here.
     private CommitSnapshot? _snapshot;
-    private Guid _loadingRepoId;
-
-    // Per-repo snapshot cache. On switch-back to a recently-viewed repo we render its cached
-    // history immediately (no "Loading…" flash) while a fresh load runs in the background.
-    private readonly RepoSnapshotCache<CommitSnapshot> _cache = new();
+    // Repo whose history is currently reflected in state; used to clear selection on switch.
+    private Guid? _renderedRepoId;
     private bool _isCheckingOutCommit;
     private bool _isMovingBranch;
 
@@ -56,7 +50,8 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IRepoSnapshotStore store)
         : base(dispatcher, CommitsState.Initial)
     {
         _registry = registry;
@@ -69,10 +64,9 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
 
-        Subscriptions.Add(_registry.Active.Subscribe(_ => StartLoadForActiveRepo()));
-        Subscriptions.Add(_bus.SubscribeScoped<CommitCreatedMessage>(m => ReloadIfActiveRepo(m.RepoId)));
+        // History is projected from the store (which owns loading + caching + the soft refresh).
+        Subscriptions.Add(store.Commits.Subscribe(OnStoreCommits));
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
-        Subscriptions.Add(_bus.SubscribeScoped<RefsChangedMessage>(m => ReloadIfActiveRepo(m.RepoId)));
     }
 
     // ---- selection ----
@@ -319,82 +313,32 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     // ---- loading ----
 
-    private void ReloadIfActiveRepo(Guid repoId)
+    // Projection of the store's commit slice. snap == null means "no data for the active repo
+    // yet" (switching / cache miss) or no repo at all; a non-null snap is always for the active
+    // repo (the store guards that). Renders Loading/NoRepo/Error/Loaded and keeps selection in
+    // sync — cleared on a repo switch, pruned when the selected commit vanishes from a reload.
+    private void OnStoreCommits(CommitSnapshot? snap)
     {
-        var active = _registry.Active.Value;
-        if (active == null || active.Id != repoId) return;
-        StartLoadForActiveRepo();
-    }
+        var activeId = _registry.Active.Value?.Id;
 
-    private void StartLoadForActiveRepo()
-    {
-        var active = _registry.Active.Value;
-
-        if (active == null)
+        if (snap == null)
         {
-            Gen.Bump();
+            if (_renderedRepoId != activeId) ClearSelectionAndBroadcast(_renderedRepoId);
+            _renderedRepoId = activeId;
             _snapshot = null;
-            ClearSelectionAndBroadcast();
-            Update(s => s with { Render = new CommitsRenderState.NoRepo() });
+            Update(s => s with
+            {
+                Render = activeId == null ? new CommitsRenderState.NoRepo() : new CommitsRenderState.Loading(),
+            });
             return;
         }
 
-        // Soft refresh: when we're already showing this repo (e.g. after a commit/push, or a
-        // watcher tick), keep the live snapshot visible while a fresh one loads in the
-        // background. Avoids a "Loading…" flash and preserves scroll/selection.
-        var isSoftRefresh = _snapshot != null && _snapshot.RepoId == active.Id;
-        if (!isSoftRefresh)
-        {
-            // Switching to a different repo. The current selection belongs to the previous
-            // repo, so drop it regardless. If we have a cached snapshot for the target, show
-            // it instantly; otherwise fall back to the "Loading…" placeholder. Either way the
-            // background load below refreshes it, so a stale cache entry self-corrects.
-            ClearSelectionAndBroadcast();
-            if (_cache.TryGet(active.Id, out var cached) && cached != null)
-            {
-                _snapshot = cached;
-                Update(s => s with { Render = new CommitsRenderState.Loaded(cached) });
-            }
-            else
-            {
-                _snapshot = null;
-                Update(s => s with { Render = new CommitsRenderState.Loading() });
-            }
-        }
-        _loadingRepoId = active.Id;
-
-        var repo = active;
-        var service = _gitService;
-        RunBackground<CommitSnapshot>(
-            work: () => (service.Load(repo, MaxCommits), null),
-            onResult: (snap, error) =>
-            {
-                // RunBackground reports a thrown exception via the separate `error`
-                // channel; ApplyLoadedSnapshot's error path keys off the snapshot's own
-                // ErrorMessage, so wrap it back into a synthetic snapshot.
-                var applied = snap ?? new CommitSnapshot(
-                    repo.Id, repo.Path, Array.Empty<CommitNode>(), 0, false,
-                    error ?? "Failed to load history.");
-                ApplyLoadedSnapshot(applied);
-            });
-    }
-
-    private void ApplyLoadedSnapshot(CommitSnapshot snap)
-    {
-        // Cache (or invalidate) keyed on the snapshot's own repo, before the active-repo guard:
-        // a load that finishes after a switch still warms the cache for switch-back, and a
-        // failed load drops any stale entry so the next visit shows "Loading…" not bad data.
-        if (snap.ErrorMessage == null)
-            _cache.Set(snap.RepoId, snap);
-        else
-            _cache.Remove(snap.RepoId);
-
-        if (snap.RepoId != _loadingRepoId) return;
+        if (_renderedRepoId != snap.RepoId) ClearSelectionAndBroadcast(_renderedRepoId);
+        _renderedRepoId = snap.RepoId;
 
         if (snap.ErrorMessage != null)
         {
-            // Drop any prior successful snapshot so the next reload shows "Loading…"
-            // rather than silently soft-refreshing on top of an Error placeholder.
+            // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
             _snapshot = null;
             Update(s => s with { Render = new CommitsRenderState.Error(snap.ErrorMessage) });
         }
@@ -406,19 +350,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             // (e.g. it may have been pruned by a rebase or reset).
             var selected = State.Value.SelectedSha;
             if (selected != null && !SnapshotContainsSha(snap, selected))
-                ClearSelectionAndBroadcast();
+                ClearSelectionAndBroadcast(snap.RepoId);
         }
 
         _bus.Broadcast(new CommitsLoadedMessage(snap.RepoId));
     }
 
-    // Broadcasts against _loadingRepoId — that's the *previous* repo at the moment we
-    // clear, which is what subscribers expect ("the prev repo's selection is now gone").
-    private void ClearSelectionAndBroadcast()
+    // Broadcasts against the given repo (the one the cleared selection belonged to), which is
+    // what subscribers expect ("that repo's selection is now gone").
+    private void ClearSelectionAndBroadcast(Guid? repoId)
     {
         if (State.Value.SelectedSha == null) return;
         Update(s => s with { SelectedSha = null });
-        _bus.Broadcast(new CommitSelectedMessage(_loadingRepoId, null));
+        _bus.Broadcast(new CommitSelectedMessage(repoId ?? Guid.Empty, null));
     }
 
     private static bool SnapshotContainsSha(CommitSnapshot snap, string sha)

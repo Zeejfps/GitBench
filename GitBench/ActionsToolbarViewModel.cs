@@ -9,17 +9,11 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     private readonly IPlatformShell _shell;
     private readonly IMessageBus _bus;
 
-    private readonly GenerationGuard _statusGen;
-    private readonly GenerationGuard _localChangesGen;
+    // Only the mutation lanes live here now; push status + local-changes loading is owned by the
+    // snapshot store, and this VM projects from it.
     private readonly GenerationGuard _pushGen;
     private readonly GenerationGuard _pullGen;
     private readonly GenerationGuard _fetchGen;
-
-    // Per-repo cache of the two values that drive button state (push status + whether there
-    // are local changes), so a switch updates the buttons/badges immediately instead of
-    // leaving the previous repo's state up until both background queries return.
-    private readonly RepoSnapshotCache<ToolbarSnapshot> _cache = new();
-    private Guid? _lastRepoId;
 
     private readonly SpinnerAnimation _pushSpinner;
     private readonly SpinnerAnimation _pullSpinner;
@@ -49,7 +43,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IGitService gitService,
         IPlatformShell shell,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IRepoSnapshotStore store)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
         _registry = registry;
@@ -57,8 +52,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         _shell = shell;
         _bus = bus;
 
-        _statusGen = CreateLane();
-        _localChangesGen = CreateLane();
         _pushGen = CreateLane();
         _pullGen = CreateLane();
         _fetchGen = CreateLane();
@@ -83,10 +76,17 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IsFetching = Slice(s => s.IsFetching);
         Error = Slice(s => s.Error);
 
-        Subscriptions.Add(_registry.Active.Subscribe(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(_bus.SubscribeScoped<CommitCreatedMessage>(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(_bus.SubscribeScoped<RefsChangedMessage>(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(_ => ReloadLocalChanges()));
+        // HasActiveRepo gates the command-enabled slices; the registry drives it directly.
+        // Push status and has-local-changes are projected from the store (no own loads/caches).
+        Subscriptions.Add(_registry.Active.Subscribe(repo =>
+            Update(s => s with { HasActiveRepo = repo != null, Error = null })));
+        Subscriptions.Add(store.PushStatus.Subscribe(status =>
+            Update(s => s with { PushStatus = status })));
+        Subscriptions.Add(store.LocalChanges.Subscribe(data =>
+        {
+            var hasChanges = data != null && data.Snapshot.Staged.Count + data.Snapshot.Unstaged.Count > 0;
+            Update(s => s.HasLocalChanges == hasChanges ? s : s with { HasLocalChanges = hasChanges });
+        }));
     }
 
     private static bool ComputePushEnabled(ActionsToolbarState s)
@@ -115,85 +115,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         if (s.IsPulling) return null;
         var hasBranchUpstream = !s.PushStatus.IsDetached && s.PushStatus.HasUpstream;
         return hasBranchUpstream ? s.PushStatus.Behind : 0;
-    }
-
-    private void OnRepoOrRefsChanged()
-    {
-        var repo = _registry.Active.Value;
-        if (repo == null)
-        {
-            _statusGen.Bump();
-            _localChangesGen.Bump();
-            _lastRepoId = null;
-            Update(_ => ActionsToolbarState.Initial);
-            return;
-        }
-        // On a switch to a different repo, apply the cached button state immediately so the
-        // badges/enabled-state don't lag behind on the previous repo's values. Same-repo
-        // reloads keep the live state and just refresh below; a cache miss leaves it as-is.
-        if (repo.Id != _lastRepoId && _cache.TryGet(repo.Id, out var cached) && cached != null)
-            Update(s => s with { HasActiveRepo = true, Error = null, PushStatus = cached.PushStatus, HasLocalChanges = cached.HasLocalChanges });
-        else
-            Update(s => s with { HasActiveRepo = true, Error = null });
-        _lastRepoId = repo.Id;
-        ReloadPushStatus(repo);
-        ReloadLocalChanges();
-    }
-
-    private void ReloadPushStatus(Repo repo)
-    {
-        RunBackground<PushStatus>(
-            work: () => (_gitService.GetPushStatus(repo), null),
-            onResult: (status, _) =>
-            {
-                CachePushStatus(repo.Id, status!);
-                if (_registry.Active.Value?.Id != repo.Id) return;
-                Update(s => s with { PushStatus = status! });
-            },
-            lane: _statusGen);
-    }
-
-    private void ReloadLocalChanges()
-    {
-        var repo = _registry.Active.Value;
-        if (repo == null)
-        {
-            _localChangesGen.Bump();
-            Update(s => s.HasLocalChanges ? s with { HasLocalChanges = false } : s);
-            return;
-        }
-
-        RunBackground<LocalChangesSnapshot>(
-            work: () => (_gitService.GetLocalChanges(repo), null),
-            onResult: (snap, _) =>
-            {
-                var hasChanges = snap!.Staged.Count + snap.Unstaged.Count > 0;
-                CacheLocalChanges(repo.Id, hasChanges);
-                if (_registry.Active.Value?.Id != repo.Id) return;
-                Update(s => s.HasLocalChanges == hasChanges ? s : s with { HasLocalChanges = hasChanges });
-            },
-            lane: _localChangesGen);
-    }
-
-    // The push-status and local-changes queries land independently on separate lanes, so each
-    // updates only its own field of the cached snapshot, preserving the other's last-known value.
-    private void CachePushStatus(Guid repoId, PushStatus status)
-    {
-        var prev = _cache.TryGet(repoId, out var c) && c != null ? c : ToolbarSnapshot.Default;
-        _cache.Set(repoId, prev with { PushStatus = status });
-    }
-
-    private void CacheLocalChanges(Guid repoId, bool hasLocalChanges)
-    {
-        var prev = _cache.TryGet(repoId, out var c) && c != null ? c : ToolbarSnapshot.Default;
-        _cache.Set(repoId, prev with { HasLocalChanges = hasLocalChanges });
-    }
-
-    private sealed record ToolbarSnapshot(PushStatus PushStatus, bool HasLocalChanges)
-    {
-        public static ToolbarSnapshot Default { get; } = new(
-            new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false),
-            HasLocalChanges: false);
     }
 
     private void DoOpenFolder()

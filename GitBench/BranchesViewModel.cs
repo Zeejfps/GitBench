@@ -37,11 +37,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private Guid _activeRepoId;
 
-    // Per-repo listing cache. On switch-back to a recently-viewed repo we show its cached
-    // branches/remotes/stashes immediately while a fresh load runs in the background, instead
-    // of blanking the sidebar to a "Loading…" state and re-running `git for-each-ref`.
-    private readonly RepoSnapshotCache<BranchListing> _cache = new();
-
     // Stash apply uses its own flag — it's a distinct concept from branch ops, and the
     // existing presenter treated it that way. Don't fold it into IsBranchOpInFlight.
     private bool _isStashApplying;
@@ -58,7 +53,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        State<MainViewMode> mode)
+        State<MainViewMode> mode,
+        IRepoSnapshotStore store)
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
@@ -77,10 +73,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
 
+        // The listing is projected from the store (which owns loading + caching). OnActiveRepoChanged
+        // handles only the per-repo UI bits (fold state, worktree set, selection reset).
         Subscriptions.Add(_registry.Active.Subscribe(_ => OnActiveRepoChanged()));
-        Subscriptions.Add(_bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated));
+        Subscriptions.Add(store.Branches.Subscribe(OnStoreBranches));
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
-        Subscriptions.Add(_bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged));
         Subscriptions.Add(_bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged));
         Subscriptions.Add(_registry.WorktreesChanged.Subscribe(_ => RefreshWorktreeBranches()));
     }
@@ -136,26 +133,24 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
 
         var ui = _registry.GetBranchesUi(active.Id);
-        // Seed from cache so a switch-back shows the last-known listing instead of blanking;
-        // null on a miss keeps the existing "Loading…" behavior. StartLoad refreshes either way.
-        _cache.TryGet(active.Id, out var cached);
-        Update(_ => new BranchesState(Listing: cached, Ui: ui, Selection: null, BusyBranch: null, IsLoading: true, LoadError: null, WorktreeBranches: EmptyStringSet));
+        // Listing/IsLoading/LoadError are driven by the store subscription (OnStoreBranches);
+        // here we only refresh the per-repo UI fold state, drop the previous repo's selection,
+        // and recompute the worktree-branch set. Listing is deliberately left untouched.
+        Update(s => s with { Ui = ui, Selection = null });
         RefreshWorktreeBranches();
-        StartLoad(active);
     }
 
-    private void OnCommitCreated(CommitCreatedMessage msg)
+    // Projection of the store's branch slice. null means no data for the active repo yet
+    // (switching / cache miss) → show "Loading…"; a non-null listing is applied as before.
+    private void OnStoreBranches(BranchListing? listing)
     {
-        var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
-        StartLoad(active);
-    }
-
-    private void OnRefsChanged(RefsChangedMessage msg)
-    {
-        var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
-        StartLoad(active);
+        if (listing == null)
+        {
+            if (_registry.Active.Value == null) return; // no repo → OnActiveRepoChanged sets Initial
+            Update(s => s with { Listing = null, IsLoading = true, LoadError = null });
+            return;
+        }
+        ApplyListing(listing);
     }
 
     private void OnCommitSelected(CommitSelectedMessage msg)
@@ -165,28 +160,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (current == null) return;
         if (msg.Sha == current.Value.TipSha) return;
         Update(s => s with { Selection = null });
-    }
-
-    private void StartLoad(Repo repo)
-    {
-        Update(s => s.LoadError != null ? s with { LoadError = null } : s);
-
-        RunBackground<BranchListing>(
-            work: () => (_gitService.GetBranches(repo), null),
-            onResult: (listing, error) =>
-            {
-                // ApplyListing's error path keys off BranchListing.ErrorMessage, so wrap
-                // RunBackground's separate `error` channel back into a synthetic listing.
-                var applied = error != null
-                    ? new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), error)
-                    : listing!;
-                // Cache (or invalidate) before the active-repo guard so a load that finishes
-                // after a switch still warms the cache for switch-back.
-                if (applied.ErrorMessage == null) _cache.Set(applied.RepoId, applied);
-                else _cache.Remove(applied.RepoId);
-                if (repo.Id != _activeRepoId) return;
-                ApplyListing(applied);
-            });
     }
 
     private void ApplyListing(BranchListing listing)
@@ -210,7 +183,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         });
 
         if (State.Value.Selection == null)
-            _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, null));
+            _bus.Broadcast(new CommitSelectedMessage(listing.RepoId, null));
     }
 
     private static bool RefStillExists(BranchSelection sel, BranchListing listing)

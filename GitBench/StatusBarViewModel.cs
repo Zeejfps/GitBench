@@ -4,16 +4,14 @@ namespace GitGui;
 
 /// <summary>
 /// Backs the bottom <see cref="StatusBarView"/>: the active repo name, current branch, and
-/// ahead/behind counts (loaded off-thread via <see cref="IGitService.GetPushStatus"/>, the same
-/// source the actions toolbar uses), plus the theme toggle. Refreshes on repo switch and on the
-/// same ref/commit/working-tree messages the rest of the app reacts to.
+/// ahead/behind counts, plus the theme toggle. The repo name comes straight from the registry;
+/// the branch and ahead/behind are projected from <see cref="IRepoSnapshotStore.PushStatus"/>
+/// (derived from the branch listing), so there's no separate git query here.
 /// </summary>
 internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
     private readonly State<ThemeMode> _themeMode;
-    private readonly GenerationGuard _statusGen;
 
     public IReadable<bool> HasActiveRepo { get; }
     public IReadable<string?> RepoName { get; }
@@ -29,16 +27,13 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
     public StatusBarViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus,
+        IRepoSnapshotStore store,
         State<ThemeMode> themeMode)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
         _themeMode = themeMode;
-        _statusGen = CreateLane();
 
         HasActiveRepo = Slice(s => s.HasActiveRepo);
         RepoName = Slice(s => s.RepoName);
@@ -51,12 +46,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
         ToggleTheme = new Command(DoToggleTheme);
 
-        Subscriptions.Add(_registry.Active.Subscribe(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(bus.SubscribeScoped<RefsChangedMessage>(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(bus.SubscribeScoped<CommitCreatedMessage>(_ => OnRepoOrRefsChanged()));
-        Subscriptions.Add(bus.SubscribeScoped<WorkingTreeChangedMessage>(_ => OnRepoOrRefsChanged()));
-
-        OnRepoOrRefsChanged();
+        // Repo name / has-repo come from the registry (instant, non-git); branch + ahead/behind
+        // are refined from the store's push status. Both subscriptions fire immediately.
+        Subscriptions.Add(_registry.Active.Subscribe(OnActiveChanged));
+        Subscriptions.Add(store.PushStatus.Subscribe(OnPushStatus));
     }
 
     private static bool HasTracking(StatusBarState s) => s.HasUpstream && !s.IsDetached;
@@ -64,38 +57,29 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private void DoToggleTheme() =>
         _themeMode.Value = _themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
 
-    private void OnRepoOrRefsChanged()
+    private void OnActiveChanged(Repo? repo)
     {
-        var repo = _registry.Active.Value;
         if (repo == null)
         {
-            _statusGen.Bump();
             Update(_ => StatusBarState.Initial);
             return;
         }
+        // RepoName is the registry's; Branch + ahead/behind are owned by OnPushStatus (whose
+        // derivation already falls back to Repo.Branch). Don't seed Branch here — on a switch the
+        // store's push status fires before this handler, and re-seeding would clobber it.
+        Update(s => s with { HasActiveRepo = true, RepoName = repo.DisplayName });
+    }
 
-        // Show what we already know immediately; refine ahead/behind from the background read.
+    private void OnPushStatus(PushStatus status)
+    {
+        if (!State.Value.HasActiveRepo) return;
         Update(s => s with
         {
-            HasActiveRepo = true,
-            RepoName = repo.DisplayName,
-            Branch = repo.Branch,
+            Branch = status.CurrentBranchName ?? s.Branch,
+            HasUpstream = status.HasUpstream,
+            IsDetached = status.IsDetached,
+            Ahead = status.Ahead,
+            Behind = status.Behind,
         });
-
-        RunBackground<PushStatus>(
-            work: () => (_gitService.GetPushStatus(repo), null),
-            onResult: (status, _) =>
-            {
-                if (status == null || _registry.Active.Value?.Id != repo.Id) return;
-                Update(s => s with
-                {
-                    Branch = status.CurrentBranchName ?? s.Branch,
-                    HasUpstream = status.HasUpstream,
-                    IsDetached = status.IsDetached,
-                    Ahead = status.Ahead,
-                    Behind = status.Behind,
-                });
-            },
-            lane: _statusGen);
     }
 }

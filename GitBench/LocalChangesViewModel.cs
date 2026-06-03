@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.IO;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
@@ -59,16 +58,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     private IReadOnlyList<FileChange> _stagedFromIndex = Empty;
     private AmendSession? _amend;
-    private Guid? _lastLoadedRepoId;
+    // Repo whose working-tree data is currently reflected in state; distinguishes a cross-repo
+    // switch (blank the panels) from a same-repo refresh (keep them visible).
+    private Guid? _renderedRepoId;
 
-    // Per-repo cache of the last loaded working-tree snapshot (file lists + submodule drift).
-    // On a cross-repo switch-back we show these immediately instead of blanking the panels,
-    // while a fresh load runs in the background and corrects any staleness.
-    private readonly RepoSnapshotCache<CachedLocalChanges> _cache = new();
-
-    // Loads run on the base Gen lane (repo switches / watcher reloads invalidate each other).
-    // Mutations and commit get their own lanes so staging a file never drops an in-flight
-    // reload, and a reload never drops the commit continuation (which must reset CommitBusy).
+    // Mutations and commit get their own lanes so staging a file never drops an in-flight reload,
+    // and a reload never drops the commit continuation. The base Gen lane is used for the amend
+    // head-files refresh. The working-tree snapshot itself is loaded by the snapshot store.
     private readonly GenerationGuard _opGen;
     private readonly GenerationGuard _commitGen;
 
@@ -80,7 +76,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         LocalChangesSelectionStore selectionStore,
         IPlatformShell shell,
         IClipboard clipboard,
-        PreferencesService preferences)
+        PreferencesService preferences,
+        IRepoSnapshotStore store)
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
@@ -124,9 +121,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         Update(s => s with { ViewMode = preferences.Current.FileViewMode });
 
-        Subscriptions.Add(_registry.Active.Subscribe(_ => StartLoadForActiveRepo()));
-        Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
-        Subscriptions.Add(_bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged));
+        // Working-tree file lists + submodule drift are projected from the store (which owns
+        // loading, caching, and the soft refresh). The store reloads on working-tree / submodule /
+        // commit changes, so this VM no longer subscribes to those messages directly.
+        Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
         Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
         Subscriptions.Add(Selection.Subscribe(sel =>
             _selectionStore.UnstagedPaths.Value = sel.PathsOn(DiffSide.Unstaged)));
@@ -196,15 +194,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         next.Add(entry);
         next.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
         return next;
-    }
-
-    private void OnSubmodulesChanged(SubmodulesChangedMessage msg)
-    {
-        var active = _registry.Active.Value;
-        if (active is null) return;
-        var primaryId = active.IsPrimary ? active.Id : (active.ParentRepoId ?? active.Id);
-        if (primaryId != msg.PrimaryRepoId) return;
-        StartLoadForActiveRepo();
     }
 
     public override void Dispose()
@@ -659,20 +648,16 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         _commitSpinner.Start();
 
         // Commit runs on its own lane so the continuation always runs (resetting CommitBusy)
-        // even if a watcher-driven reload advances the load lane mid-commit — that race used
-        // to leave the button permanently stuck. The post-commit snapshot is still gated on
-        // the load lane (bumped here to invalidate any in-flight reload), so a reload that
-        // superseded us isn't clobbered.
-        var loadToken = Gen.Bump();
-        RunBackground<LocalChangesSnapshot>(
+        // even if a store reload lands mid-commit. The editor is cleared immediately; the
+        // post-commit file lists arrive via CommitCreatedMessage → the store reloads and pushes
+        // the fresh snapshot through OnStoreLocalChanges.
+        RunBackground<bool>(
             work: () =>
             {
                 var err = _gitService.Commit(repo, message, amend);
-                if (err != null) return (null, err);
-                var got = _gitService.GetLocalChanges(repo);
-                return got.ErrorMessage != null ? (null, got.ErrorMessage) : (got, null);
+                return err == null ? (true, null) : (false, err);
             },
-            onResult: (snap, err) =>
+            onResult: (_, err) =>
             {
                 _commitSpinner.Stop();
                 Update(s => s with { CommitBusy = false, OpError = err });
@@ -690,36 +675,22 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 {
                     Update(s => s with { Title = string.Empty, Description = string.Empty });
                 }
-                if (snap != null && !Gen.IsStale(loadToken))
-                {
-                    ApplySnapshot(snap);
-                    // Refresh the cache so a switch-away-and-back right after committing shows
-                    // the post-commit lists, not the pre-commit staged files. Drift is unchanged
-                    // by a commit, so carry the current value through.
-                    _cache.Set(repo.Id, new CachedLocalChanges(snap, State.Value.DriftedSubmodules));
-                }
                 _bus.Broadcast(new CommitCreatedMessage(repo.Id));
             },
             lane: _commitGen);
     }
 
-    private void OnWorkingTreeChanged(WorkingTreeChangedMessage msg)
+    // Projection of the store's local-changes slice (file lists + submodule drift). data == null
+    // means no data yet for the active repo (switching / cache miss) → blank or loading; a cross-
+    // repo switch blanks the panels, a same-repo refresh keeps them visible. While amending we
+    // refresh HEAD's file list off-thread first (HEAD may have moved), then apply.
+    private void OnStoreLocalChanges(LocalChangesData? data)
     {
         var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
-        StartLoadForActiveRepo();
-    }
-
-    private void StartLoadForActiveRepo()
-    {
-        var active = _registry.Active.Value;
-
         if (active == null)
         {
-            // Bump to invalidate any in-flight load from the previous repo.
-            Gen.Bump();
             _stagedFromIndex = Empty;
-            _lastLoadedRepoId = null;
+            _renderedRepoId = null;
             Update(s => s with
             {
                 HasRepo = false,
@@ -729,26 +700,18 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Staged = Empty,
                 Unstaged = Empty,
                 Selection = GitGui.Selection.Empty,
+                DriftedSubmodules = [],
             });
             return;
         }
 
-        // Cross-repo switches normally blank the panels so the "Loading…" placeholder shows
-        // rather than the previous repo's snapshot. Same-repo reloads (WorkingTreeChangedMessage)
-        // keep the lists visible so the panels don't tear down for an incremental refresh.
-        var isCrossRepoSwitch = _lastLoadedRepoId != active.Id;
-        _lastLoadedRepoId = active.Id;
+        var isCrossRepoSwitch = _renderedRepoId != active.Id;
+        _renderedRepoId = active.Id;
 
-        if (isCrossRepoSwitch && _cache.TryGet(active.Id, out var cached) && cached != null)
+        if (data == null)
         {
-            // Switch-back to a cached repo: show its last-known lists immediately (no blank
-            // "Loading…" panels), then let the background load below refresh them. ApplySnapshot
-            // sets IsLoading=false — that's intended, the soft refresh runs without a spinner.
-            Update(s => s with { HasRepo = true, LoadError = null, OpError = null });
-            ApplySnapshot(cached.Snap, cached.Drift);
-        }
-        else
-        {
+            // No data for the active repo yet. Cross-repo switch blanks the panels; a same-repo
+            // gap just shows the loading flag while keeping the current lists.
             Update(s => s with
             {
                 HasRepo = true,
@@ -759,83 +722,53 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
                 Selection = isCrossRepoSwitch ? GitGui.Selection.Empty : s.Selection,
             });
+            return;
         }
 
-        var repo = active;
-        // HEAD can move while amending (refs-changed reload, branch op elsewhere), so
-        // refresh HEAD's file list alongside the index snapshot — otherwise the staged
-        // panel keeps showing HEAD-only rows from a HEAD that no longer exists.
-        var amending = _amend != null;
-        // Drift state is fetched from the same place — submodules can drift independently
-        // of file changes (a sibling terminal can move a submodule's HEAD without touching
-        // the parent's working tree), so we always re-query alongside the snapshot.
-        // Submodules themselves don't have nested submodules in our model (one level deep),
-        // so skip the query when the active row is itself a submodule.
-        var canQuerySubmodules = !repo.IsSubmodule;
-        var loadTag = $"[LocalChanges load {repo.Path}]";
-        Console.WriteLine($"{loadTag} starting (amending={amending}, querySubmodules={canQuerySubmodules})");
-        var loadSw = Stopwatch.StartNew();
-        RunBackground<LoadResult>(
-            work: () =>
+        var snap = data.Snapshot;
+        if (snap.ErrorMessage != null)
+        {
+            _stagedFromIndex = Empty;
+            Update(s => s with
             {
-                var snap = _gitService.GetLocalChanges(repo);
-                if (snap.ErrorMessage != null) return (null, snap.ErrorMessage);
-                var headFiles = amending ? _gitService.GetHeadCommitFiles(repo) : null;
-                IReadOnlyList<SubmoduleInfo> drift = Array.Empty<SubmoduleInfo>();
-                if (canQuerySubmodules)
-                {
-                    var subs = _gitService.ListSubmodules(repo, out _);
-                    if (subs.Count > 0)
-                    {
-                        var driftList = new List<SubmoduleInfo>();
-                        foreach (var s in subs)
-                        {
-                            if (s.Status == SubmoduleStatus.UpToDate) continue;
-                            if (s.Status == SubmoduleStatus.Modified) continue;
-                            driftList.Add(s);
-                        }
-                        drift = driftList;
-                    }
-                }
-                return (new LoadResult(snap, headFiles, drift), null);
-            },
-            onResult: (result, errorMsg) =>
-            {
-                loadSw.Stop();
-                Console.WriteLine($"{loadTag} finished in {loadSw.ElapsedMilliseconds}ms (error={errorMsg ?? "none"})");
-                if (errorMsg != null)
-                {
-                    _cache.Remove(repo.Id);
-                    _stagedFromIndex = Empty;
-                    Update(s => s with
-                    {
-                        IsLoading = false,
-                        LoadError = errorMsg,
-                        Staged = Empty,
-                        Unstaged = Empty,
-                        Selection = GitGui.Selection.Empty,
-                        DriftedSubmodules = [],
-                    });
-                    return;
-                }
-                if (result == null) return;
-                _cache.Set(repo.Id, new CachedLocalChanges(result.Snap, result.Drift));
-                if (_amend != null && result.HeadFiles != null)
-                    _amend.UpdateHeadFiles(result.HeadFiles);
-                ApplySnapshot(result.Snap, result.Drift);
+                HasRepo = true,
+                IsLoading = false,
+                LoadError = snap.ErrorMessage,
+                Staged = Empty,
+                Unstaged = Empty,
+                Selection = GitGui.Selection.Empty,
+                DriftedSubmodules = [],
             });
+            return;
+        }
+
+        // On a cross-repo switch the selection belongs to the previous repo — drop it before
+        // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
+        if (isCrossRepoSwitch && State.Value.Selection.Count > 0)
+            Update(s => s with { Selection = GitGui.Selection.Empty });
+
+        Update(s => s.HasRepo ? s : s with { HasRepo = true });
+
+        if (_amend != null)
+        {
+            // HEAD may have moved (e.g. an external commit) while amending — refresh HEAD's file
+            // list off-thread before applying so the staged panel's HEAD-only rows stay valid.
+            // Uses the base Gen lane: a newer push supersedes an older in-flight refresh.
+            var repo = active;
+            var drift = data.Drift;
+            RunBackground<IReadOnlyList<FileChange>>(
+                work: () => (_gitService.GetHeadCommitFiles(repo), null),
+                onResult: (headFiles, _) =>
+                {
+                    if (_amend != null && headFiles != null && _registry.Active.Value?.Id == repo.Id)
+                        _amend.UpdateHeadFiles(headFiles);
+                    ApplySnapshot(snap, drift);
+                });
+            return;
+        }
+
+        ApplySnapshot(snap, data.Drift);
     }
-
-    private sealed record LoadResult(
-        LocalChangesSnapshot Snap,
-        IReadOnlyList<FileChange>? HeadFiles,
-        IReadOnlyList<SubmoduleInfo> Drift);
-
-    // What we keep per repo: the index/working-tree snapshot plus the submodule drift list.
-    // HeadFiles is deliberately excluded — it's amend-session scratch, not repo display state.
-    private sealed record CachedLocalChanges(
-        LocalChangesSnapshot Snap,
-        IReadOnlyList<SubmoduleInfo> Drift);
 
     // Writes a fresh snapshot — new lists plus whatever selection the caller computes
     // from them — through a single atomic Update. The selection callback receives the
