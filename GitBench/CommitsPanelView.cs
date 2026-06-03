@@ -11,6 +11,7 @@ public sealed class CommitsPanelView : MultiChildView
     private const float WarningBarHeight = 24f;
 
     private readonly CommitsView _commits;
+    private readonly CommitSearchBarView _searchBar;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly RectView _warningBar;
     private readonly TextView _warningText;
@@ -19,6 +20,7 @@ public sealed class CommitsPanelView : MultiChildView
     public CommitsPanelView()
     {
         _commits = new CommitsView();
+        _searchBar = new CommitSearchBarView();
         _scrollBar = ScrollBars.CreateVertical();
 
         _warningText = new TextView
@@ -47,12 +49,13 @@ public sealed class CommitsPanelView : MultiChildView
 
         AddChildToSelf(new BorderLayoutView
         {
+            North = _searchBar,
             Center = _commits,
             East = _scrollBar,
             South = _warningBar,
         });
 
-        this.UseController(_ => new CommitsPanelController(_commits, _scrollBar, _truncated));
+        this.UseController(_ => new CommitsPanelController(_commits, _searchBar, _scrollBar, _truncated));
     }
 
     protected override void OnLayoutChildren()
@@ -67,18 +70,23 @@ public sealed class CommitsPanelView : MultiChildView
 internal sealed class CommitsPanelController : KeyboardMouseController, IDisposable
 {
     private readonly CommitsView _commits;
+    private readonly CommitSearchBarView _searchBar;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly State<bool> _truncated;
 
-    public CommitsPanelController(CommitsView commits, VerticalScrollBarView scrollBar, State<bool> truncated)
+    public CommitsPanelController(
+        CommitsView commits, CommitSearchBarView searchBar, VerticalScrollBarView scrollBar, State<bool> truncated)
     {
         _commits = commits;
+        _searchBar = searchBar;
         _scrollBar = scrollBar;
         _truncated = truncated;
 
         _commits.ScrollPositionChanged += OnCommitsScrollChanged;
         _commits.ScaleChanged += OnCommitsScaleChanged;
         _commits.TruncatedChanged += OnTruncatedChanged;
+        // Bridge the bar (in the panel layout) to the list's VM, which the list owns.
+        _searchBar.QueryChanged += OnSearchQueryChanged;
         _scrollBar.ScrollPositionChanged += OnScrollBarScrollChanged;
         OnTruncatedChanged(_commits.Truncated);
     }
@@ -88,8 +96,11 @@ internal sealed class CommitsPanelController : KeyboardMouseController, IDisposa
         _commits.ScrollPositionChanged -= OnCommitsScrollChanged;
         _commits.ScaleChanged -= OnCommitsScaleChanged;
         _commits.TruncatedChanged -= OnTruncatedChanged;
+        _searchBar.QueryChanged -= OnSearchQueryChanged;
         _scrollBar.ScrollPositionChanged -= OnScrollBarScrollChanged;
     }
+
+    private void OnSearchQueryChanged(string query) => _commits.SetSearchQuery(query);
 
     private void OnCommitsScrollChanged(float normalized)
     {

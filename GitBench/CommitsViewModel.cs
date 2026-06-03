@@ -29,11 +29,18 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     public IReadable<CommitsRenderState> Render { get; }
     public IReadable<string?> SelectedSha { get; }
+    // True while a non-empty search query is filtering the list; drives the view to drop the
+    // graph column (lanes are meaningless across a subset).
+    public IReadable<bool> IsFiltering { get; }
 
     // Holds the most recent *successfully* loaded snapshot for the active repo, or null if we
     // have no good data for it (no repo, in-flight first load, or last load errored).
     // SHA-existence checks rely on this invariant — never assign an error snapshot here.
     private CommitSnapshot? _snapshot;
+    // The snapshot currently shown — the filtered subset when a query is active, else the full
+    // snapshot. List navigation indexes into this; _snapshot stays the full set for selection
+    // pruning and per-commit lookups.
+    private CommitSnapshot? _rendered;
     // Repo whose history is currently reflected in state; used to clear selection on switch.
     private Guid? _renderedRepoId;
     private bool _isCheckingOutCommit;
@@ -69,6 +76,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
+        IsFiltering = Slice(s => s.IsFiltering);
 
         // History is projected from the store (which owns loading + caching + the soft refresh).
         Subscriptions.Add(store.Commits.Subscribe(OnStoreCommits));
@@ -92,7 +100,8 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // the new selection into view via its SelectedSha subscription.
     public void MoveSelection(int delta)
     {
-        var snap = _snapshot;
+        // Navigate the rendered list so arrows step through visible (filtered) rows only.
+        var snap = _rendered ?? _snapshot;
         if (snap == null || snap.Commits.Count == 0) return;
 
         var current = State.Value.SelectedSha;
@@ -381,6 +390,68 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         public sealed record NeedsDialog(int Staged, int Unstaged) : ResetProbe;
     }
 
+    // ---- search / filter ----
+
+    // Live filter over the currently-loaded history. Matching is case-insensitive against the
+    // commit summary, author, or SHA prefix. Filtering is purely a projection of the loaded
+    // snapshot (no new git load) — so it's scoped to the capped window the store already holds;
+    // the existing "History truncated" banner signals when that window is partial.
+    public void SetSearchQuery(string? query)
+    {
+        var q = query ?? string.Empty;
+        if (State.Value.Query == q) return;
+
+        if (_snapshot == null)
+        {
+            // No history loaded yet — just remember the query so the next load applies it.
+            _rendered = null;
+            Update(s => s with { Query = q, IsFiltering = !string.IsNullOrWhiteSpace(q) });
+            return;
+        }
+
+        ApplyProjection(_snapshot, q);
+    }
+
+    // Builds the Loaded render for snap under the given query, updates _rendered, and writes
+    // Render/Query/IsFiltering in one state update. An empty/whitespace query is the unfiltered
+    // fast path (full snapshot, graph intact).
+    private void ApplyProjection(CommitSnapshot snap, string query)
+    {
+        var trimmed = query.Trim();
+        if (trimmed.Length == 0)
+        {
+            _rendered = snap;
+            Update(s => s with
+            {
+                Render = new CommitsRenderState.Loaded(snap),
+                Query = query,
+                IsFiltering = false,
+            });
+            return;
+        }
+
+        var matched = new List<CommitNode>();
+        foreach (var node in snap.Commits)
+            if (MatchesQuery(node, trimmed)) matched.Add(node);
+
+        // Lanes are meaningless across a filtered subset, so the view renders a flat list;
+        // LaneCount = 0 collapses the graph column.
+        var filtered = snap with { Commits = matched, LaneCount = 0 };
+        _rendered = filtered;
+
+        Update(s => s with
+        {
+            Render = new CommitsRenderState.Loaded(filtered),
+            Query = query,
+            IsFiltering = true,
+        });
+    }
+
+    private static bool MatchesQuery(CommitNode node, string q) =>
+        node.Summary.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || node.Author.Contains(q, StringComparison.OrdinalIgnoreCase)
+        || node.Sha.StartsWith(q, StringComparison.OrdinalIgnoreCase);
+
     // ---- loading ----
 
     // Projection of the store's commit slice. snap == null means "no data for the active repo
@@ -396,6 +467,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             if (_renderedRepoId != activeId) ClearSelectionAndBroadcast(_renderedRepoId);
             _renderedRepoId = activeId;
             _snapshot = null;
+            _rendered = null;
             Update(s => s with
             {
                 Render = activeId == null ? new CommitsRenderState.NoRepo() : new CommitsRenderState.Loading(),
@@ -410,12 +482,14 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         {
             // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
             _snapshot = null;
+            _rendered = null;
             Update(s => s with { Render = new CommitsRenderState.Error(snap.ErrorMessage) });
         }
         else
         {
             _snapshot = snap;
-            Update(s => s with { Render = new CommitsRenderState.Loaded(snap) });
+            // Re-apply the active filter so a soft refresh / reload keeps the user's query.
+            ApplyProjection(snap, State.Value.Query);
             // Selection survives only if the commit still exists in the new snapshot
             // (e.g. it may have been pruned by a rebase or reset).
             var selected = State.Value.SelectedSha;
@@ -456,7 +530,9 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
 internal sealed record CommitsState(
     CommitsRenderState Render,
-    string? SelectedSha)
+    string? SelectedSha,
+    string Query,
+    bool IsFiltering)
 {
-    public static CommitsState Initial { get; } = new(new CommitsRenderState.NoRepo(), null);
+    public static CommitsState Initial { get; } = new(new CommitsRenderState.NoRepo(), null, "", false);
 }

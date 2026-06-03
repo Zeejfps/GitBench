@@ -42,6 +42,8 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private float _lastScale = 1f;
     private string? _selectedSha;
     private bool _truncated;
+    // When a search filter is active the graph column is dropped (lanes don't apply to a subset).
+    private bool _filtering;
 
     public event Action<float>? ScrollPositionChanged;
     public event Action<float>? ScaleChanged;
@@ -124,7 +126,16 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         _vm = vm;
         vm.Render.Subscribe(SetRenderState);
         vm.SelectedSha.Subscribe(SetSelectedSha);
+        vm.IsFiltering.Subscribe(f =>
+        {
+            if (_filtering == f) return;
+            _filtering = f;
+            SetDirty();
+        });
     }
+
+    // Pass-through for the panel's search bar; the VM is owned by this view via UseViewModel.
+    public void SetSearchQuery(string? query) => _vm?.SetSearchQuery(query);
 
     protected override void OnLayoutChild(in RectF position, View child)
     {
@@ -455,10 +466,12 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             });
         }
 
-        CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, z + 1);
+        // Filtered list is flat: skip the graph cell and start the summary at the graph origin.
+        if (!_filtering)
+            CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, z + 1);
 
         var textTop = rowBottom;
-        var summaryStartX = CommitGraphRenderer.SummaryStartX(graphStartX, node);
+        var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node);
         var refsEndX = DrawBadges(c, node, summaryStartX, textTop, z + 2);
         var summaryDraw = Math.Max(0, body.Right - refsEndX);
         DrawText(c, node.Summary, refsEndX, textTop, summaryDraw, isHighlighted, z + 2);
