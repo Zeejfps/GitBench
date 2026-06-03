@@ -4,13 +4,12 @@ namespace GitGui;
 
 /// <summary>
 /// View model for <see cref="EditRemoteDialog"/>. Owns the editable remote name + URL as
-/// observable state; the dialog binds inputs to them and pushes user edits back through
-/// <see cref="SetName"/> / <see cref="SetUrl"/>. The current URL is loaded in the
-/// background on construction (a quick <c>git remote get-url</c>) and surfaced via
-/// <see cref="UrlReplaced"/> so the view can fill the input without a typed-edit feedback
-/// loop. <see cref="SetScheme"/> rewrites the URL between SSH/HTTPS and raises the same
-/// event. <see cref="Save"/> runs <c>git remote rename</c> (only when the name changed)
-/// followed by <c>git remote set-url</c>.
+/// two-way <see cref="State{T}"/>; the dialog binds inputs straight to them with
+/// <c>BindTwoWay</c>, so user edits flow back automatically and wholesale replacements
+/// (the background <c>git remote get-url</c> load, or a <see cref="SetScheme"/> SSH/HTTPS
+/// rewrite) are just assignments to <see cref="Url"/> that the binding reflects without a
+/// typed-edit feedback loop. <see cref="Save"/> runs <c>git remote rename</c> (only when
+/// the name changed) followed by <c>git remote set-url</c>.
 /// </summary>
 internal sealed class EditRemoteDialogViewModel : IDisposable
 {
@@ -18,17 +17,12 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
     private readonly State<string> _url;
     private string _originalUrl = string.Empty;
 
-    public IReadable<string> Name => _name;
-    public IReadable<string> Url => _url;
+    public State<string> Name => _name;
+    public State<string> Url => _url;
     public IReadable<RemoteUrlScheme> Scheme { get; }
     public AsyncCommand Save { get; }
 
     public event Action? CloseRequested;
-
-    // Raised when the URL is replaced wholesale (initial load or a scheme switch) rather
-    // than by the user typing — the view replaces the input text only in response to this,
-    // so typing never fights the caret with a re-render.
-    public event Action<string>? UrlReplaced;
 
     public EditRemoteDialogViewModel(
         EditRemoteRequest request,
@@ -74,22 +68,16 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
                 {
                     _originalUrl = url;
                     _url.Value = url;
-                    UrlReplaced?.Invoke(url);
                 });
             });
         }
     }
 
-    public void SetName(string value) => _name.Value = value;
-
-    public void SetUrl(string value) => _url.Value = value;
-
     public void SetScheme(RemoteUrlScheme scheme)
     {
-        var converted = RemoteUrl.Convert(_url.Value, scheme);
-        if (converted == _url.Value) return;
-        _url.Value = converted;
-        UrlReplaced?.Invoke(converted);
+        // A plain assignment — BindTwoWay reflects the rewrite into the input without the
+        // edit being mistaken for user typing.
+        _url.Value = RemoteUrl.Convert(_url.Value, scheme);
     }
 
     public void Dispose() { }

@@ -13,16 +13,14 @@ namespace GitGui;
 /// </summary>
 internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogViewModel>
 {
-    private readonly TextInputView _nameInput;
-    private readonly TextInputView _urlInput;
+    private readonly LabeledInputField _nameField;
+    private readonly LabeledInputField _urlField;
     private readonly CheckoutDialogKbmController _nameController;
     private readonly SchemeDropdown _schemeDropdown;
     private readonly DialogButton _saveButton;
     private readonly DialogButton _cancelButton;
     private readonly TextView _errorView;
     private readonly Action _onClose;
-
-    private bool _suppressUrlChanged;
 
     public EditRemoteDialog(Repo repo, string remoteName, Action onClose)
         : this(new EditRemoteRequest(repo, remoteName),
@@ -46,24 +44,12 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         var subtitle = new TextView { Text = subtitleText };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var nameLabel = DialogFrame.Label("Remote");
-        _nameInput = DialogFrame.TextInput();
-        _nameInput.Enter(request.RemoteName);
-        var nameBox = DialogFrame.WrapInput(_nameInput);
+        _nameField = new LabeledInputField("Remote");
 
-        var urlLabel = DialogFrame.Label("Repository URL");
-        _urlInput = DialogFrame.TextInput();
         _schemeDropdown = new SchemeDropdown();
-        var urlRow = new FlexRowView
+        _urlField = new LabeledInputField("Repository URL")
         {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Height = 28,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = DialogFrame.WrapInput(_urlInput) },
-                _schemeDropdown,
-            },
+            Accessory = _schemeDropdown,
         };
 
         _errorView = DialogFrame.ErrorView();
@@ -78,10 +64,8 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
             Children =
             {
                 subtitle,
-                nameLabel,
-                nameBox,
-                urlLabel,
-                urlRow,
+                _nameField,
+                _urlField,
                 _errorView,
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _saveButton),
@@ -91,9 +75,9 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         // Controllers go on the inputs (not the dialog) for the same reason as
         // CreateBranchDialog: an input controller consumes left-press inside its view, so
         // attaching to the outer dialog would swallow clicks meant for the buttons.
-        _nameController = new CheckoutDialogKbmController(_nameInput, Confirm, onClose);
-        _nameInput.UseController(_ => _nameController);
-        _urlInput.UseController(_ => new CheckoutDialogKbmController(_urlInput, Confirm, onClose));
+        _nameController = new CheckoutDialogKbmController(_nameField.Input, Confirm, onClose);
+        _nameField.Input.UseController(_ => _nameController);
+        _urlField.Input.UseController(_ => new CheckoutDialogKbmController(_urlField.Input, Confirm, onClose));
 
         this.UseViewModel(
             ctx => new EditRemoteDialogViewModel(
@@ -106,14 +90,9 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
 
     public void Bind(EditRemoteDialogViewModel vm)
     {
-        _nameInput.TextChanged += () => vm.SetName(new string(_nameInput.Text));
-        _urlInput.TextChanged += () =>
-        {
-            if (_suppressUrlChanged) return;
-            vm.SetUrl(new string(_urlInput.Text));
-        };
+        _nameField.Input.BindTwoWay(vm.Name);
+        _urlField.Input.BindTwoWay(vm.Url);
 
-        vm.UrlReplaced += ReplaceUrlText;
         vm.Scheme.Subscribe(_schemeDropdown.SetScheme);
         _schemeDropdown.SchemeSelected += vm.SetScheme;
 
@@ -123,15 +102,6 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         vm.CloseRequested += _onClose;
 
         _nameController.BeginEditing();
-    }
-
-    private void ReplaceUrlText(string url)
-    {
-        if (new string(_urlInput.Text) == url) return;
-        _suppressUrlChanged = true;
-        _urlInput.Clear();
-        _urlInput.Enter(url);
-        _suppressUrlChanged = false;
     }
 
     private void Confirm() => _saveButton.Command.Value?.Execute();
