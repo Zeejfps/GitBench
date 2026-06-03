@@ -8,6 +8,9 @@ internal sealed class CreateTagDialogViewModel : IDisposable
     public State<string> Message { get; } = new(string.Empty);
     public State<bool> PushToAllRemotes { get; } = new(true);
 
+    /// <summary>Live refname validation surfaced under the tag-name field. See <see cref="RefNameRules"/>.</summary>
+    public IReadable<FieldStatus?> NameStatus { get; }
+
     public AsyncCommand Create { get; }
 
     public event Action? CloseRequested;
@@ -19,7 +22,11 @@ internal sealed class CreateTagDialogViewModel : IDisposable
         IMessageBus bus)
     {
         var repoId = request.Repo.Id;
-        var gate = new Derived<bool>(() => Name.Value.Trim().Length > 0);
+        // Validate the trimmed value: Create trims before handing the name to git, so a
+        // surrounding space shouldn't read as an error the user can't see the cause of.
+        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value.Trim(), "Tag"));
+        var gate = new Derived<bool>(() =>
+            Name.Value.Trim().Length > 0 && RefNameRules.Validate(Name.Value.Trim(), "Tag") is null);
 
         Create = new AsyncCommand(
             dispatcher,

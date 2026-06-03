@@ -97,6 +97,7 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
         _pathField.Input.BindTwoWay(vm.Path);
         _startPointField.Input.BindTwoWay(vm.StartPoint);
         _branchField.Input.BindTwoWay(vm.NewBranchName);
+        _branchField.BindStatus(vm.NewBranchStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _createButton.BindBusyCommand(vm.Create);
         _cancelButton.DisableWhile(vm.Create.IsRunning);

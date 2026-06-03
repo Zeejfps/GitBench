@@ -7,7 +7,7 @@ internal sealed class CheckoutBranchDialogViewModel : IDisposable
     public State<string> Name { get; }
     public State<bool> Track { get; } = new(true);
 
-    /// <summary>Live refname validation surfaced under the name field. See <see cref="BranchNameRules"/>.</summary>
+    /// <summary>Live refname validation surfaced under the name field. See <see cref="RefNameRules"/>.</summary>
     public IReadable<FieldStatus?> NameStatus { get; }
 
     public AsyncCommand Checkout { get; }
@@ -23,8 +23,8 @@ internal sealed class CheckoutBranchDialogViewModel : IDisposable
         Name = new State<string>(request.SuggestedLocalName);
 
         var repoId = request.Repo.Id;
-        NameStatus = new Derived<FieldStatus?>(() => BranchNameRules.Validate(Name.Value));
-        var gate = new Derived<bool>(() => Name.Value.Length > 0 && BranchNameRules.Validate(Name.Value) is null);
+        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
+        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
 
         Checkout = new AsyncCommand(
             dispatcher,

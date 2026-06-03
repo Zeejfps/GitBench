@@ -28,8 +28,8 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
         StartPoint = new State<string>(request.SuggestedStartPoint);
 
         var repoId = request.Repo.Id;
-        var gate = new Derived<bool>(() => Name.Value.Length > 0 && BranchNameRules.Validate(Name.Value) is null);
-        NameStatus = new Derived<FieldStatus?>(() => BranchNameRules.Validate(Name.Value));
+        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
+        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
 
         Create = new AsyncCommand(
             dispatcher,

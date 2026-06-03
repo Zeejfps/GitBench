@@ -86,6 +86,7 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
         _urlField.Input.BindTwoWay(vm.Url);
         _pathField.Input.BindTwoWay(vm.Path);
         _branchField.Input.BindTwoWay(vm.Branch);
+        _branchField.BindStatus(vm.BranchStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _addButton.BindBusyCommand(vm.Add);
         _cancelButton.DisableWhile(vm.Add.IsRunning);

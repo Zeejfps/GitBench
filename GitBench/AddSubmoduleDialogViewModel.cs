@@ -9,6 +9,10 @@ internal sealed class AddSubmoduleDialogViewModel : IDisposable
     public State<string> Branch { get; } = new(string.Empty);
     public State<bool> Force { get; } = new(false);
 
+    /// <summary>Live refname validation for the optional track-branch field. Blank stays neutral
+    /// (the field is optional); a typed-but-invalid name reports an error. See <see cref="RefNameRules"/>.</summary>
+    public IReadable<FieldStatus?> BranchStatus { get; }
+
     public AsyncCommand Add { get; }
 
     public event Action? CloseRequested;
@@ -21,8 +25,11 @@ internal sealed class AddSubmoduleDialogViewModel : IDisposable
     {
         var primaryId = request.Primary.Id;
 
+        // Track branch is optional, so blank is valid; a non-blank name must be a legal refname.
+        BranchStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Branch.Value.Trim(), "Branch"));
         var gate = new Derived<bool>(() =>
-            Url.Value.Trim().Length > 0 && Path.Value.Trim().Length > 0);
+            Url.Value.Trim().Length > 0 && Path.Value.Trim().Length > 0
+            && RefNameRules.Validate(Branch.Value.Trim(), "Branch") is null);
 
         Add = new AsyncCommand(
             dispatcher,

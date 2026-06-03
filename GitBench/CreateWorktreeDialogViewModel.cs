@@ -9,6 +9,10 @@ internal sealed class CreateWorktreeDialogViewModel : IDisposable
     public State<string> NewBranchName { get; } = new(string.Empty);
     public State<bool> Force { get; } = new(false);
 
+    /// <summary>Live refname validation for the optional new-branch field. Blank stays neutral
+    /// (the field is optional); a typed-but-invalid name reports an error. See <see cref="RefNameRules"/>.</summary>
+    public IReadable<FieldStatus?> NewBranchStatus { get; }
+
     public AsyncCommand Create { get; }
 
     public event Action? CloseRequested;
@@ -21,8 +25,12 @@ internal sealed class CreateWorktreeDialogViewModel : IDisposable
     {
         var primaryId = request.Primary.Id;
 
+        // New branch is optional, so blank is valid (RefNameRules treats empty as neutral);
+        // a non-blank name must still be a legal refname before Create enables.
+        NewBranchStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(NewBranchName.Value.Trim(), "Branch"));
         var gate = new Derived<bool>(() =>
-            Path.Value.Trim().Length > 0 && StartPoint.Value.Trim().Length > 0);
+            Path.Value.Trim().Length > 0 && StartPoint.Value.Trim().Length > 0
+            && RefNameRules.Validate(NewBranchName.Value.Trim(), "Branch") is null);
 
         Create = new AsyncCommand(
             dispatcher,

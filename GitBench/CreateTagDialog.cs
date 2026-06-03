@@ -86,6 +86,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         vm.CloseRequested += _onClose;
 
         _nameField.Input.BindTwoWay(vm.Name);
+        _nameField.BindStatus(vm.NameStatus);
         _messageField.BindTwoWay(vm.Message, vm.SetMessage);
         _pushCheckbox.IsChecked.BindTwoWay(vm.PushToAllRemotes);
         _createButton.BindBusyCommand(vm.Create);

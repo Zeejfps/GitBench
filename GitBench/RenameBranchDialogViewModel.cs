@@ -7,7 +7,7 @@ internal sealed class RenameBranchDialogViewModel : IDisposable
     public State<string> Name { get; }
     public State<bool> Force { get; } = new(false);
 
-    /// <summary>Live refname validation surfaced under the name field. See <see cref="BranchNameRules"/>.</summary>
+    /// <summary>Live refname validation surfaced under the name field. See <see cref="RefNameRules"/>.</summary>
     public IReadable<FieldStatus?> NameStatus { get; }
 
     public AsyncCommand Rename { get; }
@@ -25,9 +25,9 @@ internal sealed class RenameBranchDialogViewModel : IDisposable
         var repoId = request.Repo.Id;
         var oldName = request.CurrentName;
 
-        NameStatus = new Derived<FieldStatus?>(() => BranchNameRules.Validate(Name.Value));
+        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
         var gate = new Derived<bool>(() =>
-            Name.Value.Length > 0 && Name.Value != oldName && BranchNameRules.Validate(Name.Value) is null);
+            Name.Value.Length > 0 && Name.Value != oldName && RefNameRules.Validate(Name.Value, "Branch") is null);
 
         Rename = new AsyncCommand(
             dispatcher,
