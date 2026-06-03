@@ -1,3 +1,4 @@
+using System.Linq;
 using ZGF.Observable;
 
 namespace GitGui;
@@ -53,6 +54,12 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private readonly GenerationGuard _commitsLane = new();
     private readonly GenerationGuard _branchesLane = new();
     private readonly GenerationGuard _localLane = new();
+
+    // The N most-recently-active repos form the "warm set": their caches are refreshed in the
+    // background when their files change, so switching among them is instant *and* current.
+    // Most-recently-active first; index 0 is the active repo (refreshed via the active path).
+    private const int WarmRepoCount = 4;
+    private readonly List<Guid> _recent = new();
 
     private IDisposable? _activeSub;
     private IDisposable? _refsSub;
@@ -114,6 +121,8 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
             return;
         }
 
+        TouchRecent(repo.Id);
+
         // Soft refresh: show cached data instantly (or null → "Loading…" downstream), then reload.
         _commits.Value = _commitsCache.TryGet(repo.Id, out var c) ? c : null;
         _branches.Value = _branchesCache.TryGet(repo.Id, out var b) ? b : null;
@@ -126,36 +135,92 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
 
     private void OnRefsChanged(RefsChangedMessage msg)
     {
-        var repo = _registry.Active.Value;
-        if (repo == null || repo.Id != msg.RepoId) return;
-        ReloadCommits(repo);
-        ReloadBranches(repo);
+        var active = _registry.Active.Value;
+        if (active != null && active.Id == msg.RepoId)
+        {
+            ReloadCommits(active);
+            ReloadBranches(active);
+        }
+        else if (WarmRepo(msg.RepoId) is { } warm)
+        {
+            WarmCommits(warm);
+            WarmBranches(warm);
+        }
     }
 
     private void OnCommitCreated(CommitCreatedMessage msg)
     {
-        var repo = _registry.Active.Value;
-        if (repo == null || repo.Id != msg.RepoId) return;
-        ReloadCommits(repo);
-        ReloadBranches(repo);
-        ReloadLocal(repo);
+        var active = _registry.Active.Value;
+        if (active != null && active.Id == msg.RepoId)
+        {
+            ReloadCommits(active);
+            ReloadBranches(active);
+            ReloadLocal(active);
+        }
+        else if (WarmRepo(msg.RepoId) is { } warm)
+        {
+            WarmCommits(warm);
+            WarmBranches(warm);
+            WarmLocal(warm);
+        }
     }
 
     private void OnWorkingTreeChanged(WorkingTreeChangedMessage msg)
     {
-        var repo = _registry.Active.Value;
-        if (repo == null || repo.Id != msg.RepoId) return;
-        ReloadLocal(repo);
+        var active = _registry.Active.Value;
+        if (active != null && active.Id == msg.RepoId)
+            ReloadLocal(active);
+        else if (WarmRepo(msg.RepoId) is { } warm)
+            WarmLocal(warm);
     }
 
     private void OnSubmodulesChanged(SubmodulesChangedMessage msg)
     {
-        var repo = _registry.Active.Value;
-        if (repo == null) return;
-        var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
-        if (primaryId != msg.PrimaryRepoId) return;
-        ReloadLocal(repo);
+        var active = _registry.Active.Value;
+        if (active != null && PrimaryId(active) == msg.PrimaryRepoId)
+        {
+            ReloadLocal(active);
+            return;
+        }
+        // Warm any non-active warm repo whose primary matches the changed submodule set.
+        foreach (var id in _recent.Take(WarmRepoCount))
+        {
+            if (active != null && id == active.Id) continue;
+            var r = FindRepo(id);
+            if (r != null && PrimaryId(r) == msg.PrimaryRepoId)
+                WarmLocal(r);
+        }
     }
+
+    // ---- warm set ----
+
+    private void TouchRecent(Guid id)
+    {
+        _recent.Remove(id);
+        _recent.Insert(0, id);
+        // Bound the list; the warm set is only the first WarmRepoCount, but keep a little history
+        // so a repo that briefly drops out doesn't lose its place immediately.
+        const int maxTracked = 32;
+        if (_recent.Count > maxTracked) _recent.RemoveRange(maxTracked, _recent.Count - maxTracked);
+    }
+
+    // Returns the repo for msg.RepoId iff it's a non-active member of the warm set; else null.
+    private Repo? WarmRepo(Guid id)
+    {
+        if (_registry.Active.Value?.Id == id) return null;
+        var idx = _recent.IndexOf(id);
+        if (idx < 0 || idx >= WarmRepoCount) return null;
+        return FindRepo(id);
+    }
+
+    private Repo? FindRepo(Guid id)
+    {
+        foreach (var r in _registry.Repos)
+            if (r.Id == id) return r;
+        return null;
+    }
+
+    private static Guid PrimaryId(Repo repo) => repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
 
     // ---- loads ----
 
@@ -204,6 +269,39 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
             }
         }
         return new LocalChangesData(snap, drift);
+    }
+
+    // ---- warm loads (non-active repos: refresh the cache only, never the exposed state) ----
+
+    private void WarmCommits(Repo repo) =>
+        WarmSlice(repo, _commitsCache, LoadCommits, s => s.ErrorMessage != null);
+
+    private void WarmBranches(Repo repo) =>
+        WarmSlice(repo, _branchesCache, r => _git.GetBranches(r), b => b.ErrorMessage != null);
+
+    private void WarmLocal(Repo repo) =>
+        WarmSlice(repo, _localCache, LoadLocalChanges, d => d.Snapshot.ErrorMessage != null);
+
+    // Background-refresh a warm (non-active) repo's cached slice so a later switch-back is instant
+    // and current. Unlike LoadSlice it never touches the exposed active State — it only updates the
+    // cache, and it skips error results so a transient failure can't poison the cache. Best-effort:
+    // no generation guard (a switch-back always reloads anyway), so concurrent warms are last-write.
+    private void WarmSlice<T>(Repo repo, RepoSnapshotCache<T> cache, Func<Repo, T> work, Func<T, bool> hasError)
+        where T : class
+    {
+        var dispatcher = _dispatcher;
+        if (dispatcher == null) return;
+        Task.Run(() =>
+        {
+            T? result = null;
+            try { result = work(repo); }
+            catch { result = null; }
+            if (result == null) return;
+            dispatcher.Post(() =>
+            {
+                if (!hasError(result)) cache.Set(repo.Id, result);
+            });
+        });
     }
 
     // Runs the git read off-thread and posts back. Caches every successful result (keyed by repo,
