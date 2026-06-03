@@ -77,6 +77,7 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
         vm.CloseRequested += _onClose;
 
         _nameField.Input.BindTwoWay(vm.Name);
+        _nameField.BindStatus(vm.NameStatus);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _renameButton.BindBusyCommand(vm.Rename);
         _cancelButton.DisableWhile(vm.Rename.IsRunning);

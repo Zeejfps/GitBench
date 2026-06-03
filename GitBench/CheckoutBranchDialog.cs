@@ -83,6 +83,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         vm.CloseRequested += _onClose;
 
         _nameField.Input.BindTwoWay(vm.Name);
+        _nameField.BindStatus(vm.NameStatus);
         _trackCheckbox.IsChecked.BindTwoWay(vm.Track);
         _checkoutButton.BindBusyCommand(vm.Checkout);
         _cancelButton.DisableWhile(vm.Checkout.IsRunning);

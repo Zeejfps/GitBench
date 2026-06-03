@@ -28,8 +28,8 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
         StartPoint = new State<string>(request.SuggestedStartPoint);
 
         var repoId = request.Repo.Id;
-        var gate = new Derived<bool>(() => Name.Value.Length > 0 && ValidateName(Name.Value) is null);
-        NameStatus = new Derived<FieldStatus?>(() => ValidateName(Name.Value));
+        var gate = new Derived<bool>(() => Name.Value.Length > 0 && BranchNameRules.Validate(Name.Value) is null);
+        NameStatus = new Derived<FieldStatus?>(() => BranchNameRules.Validate(Name.Value));
 
         Create = new AsyncCommand(
             dispatcher,
@@ -48,29 +48,6 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
                 CloseRequested?.Invoke();
             },
             gate: gate);
-    }
-
-    // A lightweight subset of git's refname rules — enough to catch the obvious typos live
-    // while the dialog is open. The git invocation on Create is still the source of truth for
-    // the full rule set; this just gives early, field-local feedback.
-    private static FieldStatus? ValidateName(string name)
-    {
-        if (name.Length == 0) return null;
-
-        foreach (var c in name)
-        {
-            if (char.IsWhiteSpace(c))
-                return new FieldStatus(FieldSeverity.Error, "Branch names can’t contain spaces.");
-        }
-
-        if (name[0] == '-')
-            return new FieldStatus(FieldSeverity.Error, "Branch names can’t start with “-”.");
-        if (name.Contains(".."))
-            return new FieldStatus(FieldSeverity.Error, "Branch names can’t contain “..”.");
-        if (name[^1] == '/')
-            return new FieldStatus(FieldSeverity.Error, "Branch names can’t end with “/”.");
-
-        return null;
     }
 
     public void Dispose() { }
