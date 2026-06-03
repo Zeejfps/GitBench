@@ -110,6 +110,13 @@ internal sealed class DiffContentView : View, IScrollableContent
     private readonly VirtualRowListView _list;
 
     private float _scrollX;
+    // A programmatic vertical scroll target that must be re-asserted across frames. Setting a
+    // non-zero scroll right as content changes can be clobbered: when taller content makes the
+    // vertical scrollbar transition hidden→visible, the bar's layout echoes a stale position
+    // (0) back through the sync controller. We re-apply the target for a few frames until the
+    // bar settles and the value sticks, then release control so the user can scroll freely.
+    private float? _pendingScrollY;
+    private int _pendingScrollFrames;
     private float _lastNormalizedY;
     private float _lastNormalizedX;
     // Sentinel start so the very first NotifyScrollChanged fires the event even when the
@@ -156,6 +163,13 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     public void SetRenderState(DiffRenderState state)
     {
+        // Capture the outgoing view's identity and position before rebuilding rows, so we can
+        // preserve the reading position across a mode toggle and hold it across the async
+        // highlight re-emit that follows. _renderState still holds the previous state here.
+        var (prevPath, prevWasFullFile) = DescribeState(_renderState);
+        var hadTopLine = TryGetTopVisibleNewLine(out var prevTopLine);
+        var prevScrollY = _list.ScrollY;
+
         _renderState = state;
         _rows.Clear();
         _hunkRanges.Clear();
@@ -185,10 +199,55 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
 
         _list.ItemCount = _rows.Count;
-        _list.SetScrollY(0f);
         _list.NotifyItemsChanged();
+        ApplyScrollForTransition(state, prevPath, prevWasFullFile, hadTopLine, prevTopLine, prevScrollY);
         SetDirty();
     }
+
+    // Lead-in rows kept above a "scroll to line" target so the line isn't flush against the top.
+    private const int ScrollLeadIn = 3;
+
+    // Chooses the scroll position for a freshly-built render: preserve the read line across a
+    // toggle, hold the offset across same-state re-emits (highlight), or land on the first change
+    // for a fresh full-file load. Falls back to the top — the prior behavior for plain diffs.
+    private void ApplyScrollForTransition(
+        DiffRenderState state, string? prevPath, bool prevWasFullFile,
+        bool hadTopLine, int prevTopLine, float prevScrollY)
+    {
+        var (newPath, newIsFullFile) = DescribeState(state);
+
+        if (newPath != null && newPath == prevPath)
+        {
+            // Same file. A flipped mode is a toggle → remap the top line into the new layout;
+            // an unchanged mode is a re-emit (highlight attach, working-tree reload) → keep the
+            // exact offset so neither the highlight nor a toggle's follow-up snaps to the top.
+            if (newIsFullFile != prevWasFullFile && hadTopLine)
+                ScrollToNewLine(prevTopLine, ScrollLeadIn);
+            else
+                SetScrollTarget(prevScrollY);
+            return;
+        }
+
+        // Fresh full-file load for a different file: land on the first changed line with a little
+        // context above it; fall back to the top when the file has no additions.
+        if (newIsFullFile && state is DiffRenderState.FullFile ff && ff.AddedLineNumbers.Count > 0)
+        {
+            var first = int.MaxValue;
+            foreach (var n in ff.AddedLineNumbers)
+                if (n < first) first = n;
+            ScrollToNewLine(first, ScrollLeadIn);
+            return;
+        }
+
+        SetScrollTarget(0f);
+    }
+
+    private static (string? Path, bool IsFullFile) DescribeState(DiffRenderState state) => state switch
+    {
+        DiffRenderState.Loaded l => (l.Result.Path, false),
+        DiffRenderState.FullFile ff => (ff.Path, true),
+        _ => (null, false),
+    };
 
     private void FlattenRows(DiffResult r, DiffHighlight? highlight)
     {
@@ -329,7 +388,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (_lineHeight <= 0 || _rows.Count == 0) return;
         var rowIndex = FindRowForNewLine(lineNumber);
         if (rowIndex < 0) return;
-        _list.SetScrollY(Math.Max(0, rowIndex - leadIn) * _lineHeight);
+        SetScrollTarget(Math.Max(0, rowIndex - leadIn) * _lineHeight);
     }
 
     // First row whose new-side line number equals lineNumber; falls back to the closest preceding
@@ -465,7 +524,37 @@ internal sealed class DiffContentView : View, IScrollableContent
 
         EnsureMetrics(c);
         ClampHorizontalScroll();
+        ReassertPendingScroll();
         NotifyScrollChanged(viewportFits: false);
+    }
+
+    // Re-applies a pending programmatic scroll until it takes (the scrollbar's hidden→visible
+    // transition can echo a stale 0 back over it) or a short frame budget expires. Clearing on
+    // arrival hands scrolling back to the user.
+    private void ReassertPendingScroll()
+    {
+        if (_pendingScrollY is not float want) return;
+        var clamped = ClampScrollTarget(want);
+        if (Math.Abs(_list.ScrollY - clamped) <= 0.5f || --_pendingScrollFrames < 0)
+        {
+            _pendingScrollY = null;
+            return;
+        }
+        _list.SetScrollY(clamped);
+    }
+
+    private float ClampScrollTarget(float y)
+    {
+        var max = Math.Max(0f, _rows.Count * _lineHeight - _list.Position.Height);
+        return Math.Clamp(y, 0f, max);
+    }
+
+    // Sets a vertical scroll offset that should survive the next few frames' scrollbar churn.
+    private void SetScrollTarget(float y)
+    {
+        _pendingScrollY = y;
+        _pendingScrollFrames = 8;
+        _list.SetScrollY(y);
     }
 
     private void DrawDiffRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)

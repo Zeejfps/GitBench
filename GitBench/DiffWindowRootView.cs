@@ -28,6 +28,10 @@ internal sealed class DiffWindowRootView : MultiChildView, IBind<DiffWindowViewM
         panel.BindThemedBackgroundColor(s => s.DiffView.PanelBackground);
         AddChildToSelf(panel);
 
+        // The pop-out has no file list to host the "F" full-file toggle, so wire it at the
+        // window root instead (the toolbar button is the other entry point).
+        this.UseController(_ => new DiffWindowKeyController(this, vm.Diff.ToggleFullFile));
+
         Bind(vm);
     }
 
