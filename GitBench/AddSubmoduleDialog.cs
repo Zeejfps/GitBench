@@ -13,10 +13,10 @@ namespace GitGui;
 internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _urlInput;
+    private readonly LabeledInputField _urlField;
     private readonly CheckoutDialogKbmController _urlController;
-    private readonly TextInputView _pathInput;
-    private readonly TextInputView _branchInput;
+    private readonly LabeledInputField _pathField;
+    private readonly LabeledInputField _branchField;
     private readonly CheckboxView _forceCheckbox;
     private readonly DialogButton _addButton;
     private readonly DialogButton _cancelButton;
@@ -26,9 +26,17 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
     {
         _onClose = onClose;
 
-        _urlInput = DialogFrame.TextInput();
-        _pathInput = DialogFrame.TextInput();
-        _branchInput = DialogFrame.TextInput();
+        _urlField = new LabeledInputField("Repository URL");
+
+        _pathField = new LabeledInputField("Path inside parent")
+        {
+            Hint = "Where to clone the submodule, relative to the parent root.",
+        };
+
+        _branchField = new LabeledInputField("Track branch (optional)")
+        {
+            Hint = "Leave blank to pin to the upstream HEAD at clone time.",
+        };
 
         _forceCheckbox = new CheckboxView("Force (allow paths previously used)")
         {
@@ -46,14 +54,9 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                DialogFrame.Label("Repository URL"),
-                DialogFrame.WrapInput(_urlInput),
-                DialogFrame.Label("Path inside parent"),
-                DialogFrame.WrapInput(_pathInput),
-                DialogFrame.Hint("Where to clone the submodule, relative to the parent root."),
-                DialogFrame.Label("Track branch (optional)"),
-                DialogFrame.WrapInput(_branchInput),
-                DialogFrame.Hint("Leave blank to pin to the upstream HEAD at clone time."),
+                _urlField,
+                _pathField,
+                _branchField,
                 _forceCheckbox,
                 _errorView,
                 new MultiChildView { Height = 4 },
@@ -61,10 +64,10 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
             },
         }));
 
-        _urlController = new CheckoutDialogKbmController(_urlInput, _addButton.Command, onClose);
-        _urlInput.UseController(_ => _urlController);
-        _pathInput.UseController(_ => new CheckoutDialogKbmController(_pathInput, _addButton.Command, onClose));
-        _branchInput.UseController(_ => new CheckoutDialogKbmController(_branchInput, _addButton.Command, onClose));
+        _urlController = new CheckoutDialogKbmController(_urlField.Input, _addButton.Command, onClose);
+        _urlField.Input.UseController(_ => _urlController);
+        _pathField.Input.UseController(_ => new CheckoutDialogKbmController(_pathField.Input, _addButton.Command, onClose));
+        _branchField.Input.UseController(_ => new CheckoutDialogKbmController(_branchField.Input, _addButton.Command, onClose));
 
         var request = new AddSubmoduleViewRequest(primary);
         this.UseViewModel(
@@ -80,9 +83,9 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
     {
         vm.CloseRequested += _onClose;
 
-        _urlInput.BindTwoWay(vm.Url);
-        _pathInput.BindTwoWay(vm.Path);
-        _branchInput.BindTwoWay(vm.Branch);
+        _urlField.Input.BindTwoWay(vm.Url);
+        _pathField.Input.BindTwoWay(vm.Path);
+        _branchField.Input.BindTwoWay(vm.Branch);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _addButton.BindBusyCommand(vm.Add);
         _cancelButton.DisableWhile(vm.Add.IsRunning);
