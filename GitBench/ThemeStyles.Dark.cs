@@ -70,6 +70,7 @@ public partial record ThemeStyles
             DangerLineGlyph: 0xFFED4245u,
             Other: 0xFF9B59B6u,
             DialogError: 0xFFE06C75u,
+            DialogWarning: 0xFFE9C77Au,
             DiffError: 0xFFE9C77Au);
 
         var banner = new BannerStyles(
