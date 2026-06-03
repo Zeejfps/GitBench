@@ -63,7 +63,12 @@ internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewMode
 
         _commitButton = new DialogButton("Commit", OnCommitClicked)
         {
-            Width = CommitButtonWidth,
+            // MinWidthConstraint, not a fixed Width: a set Width is a hard override in
+            // View.MeasureWidth, pinning the button at 120px while the centered content row
+            // overflows. The busy state ("Committing" + loader icon) is wider than "Commit",
+            // so a fixed width spills text past the button bounds. MinWidth keeps the resting
+            // size but lets it grow to contain the busy label.
+            MinWidthConstraint = CommitButtonWidth,
             Height = 28,
         };
 
