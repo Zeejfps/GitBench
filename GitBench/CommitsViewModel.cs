@@ -32,12 +32,16 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     public IReadable<CommitsRenderState> Render { get; }
     public IReadable<string?> SelectedSha { get; }
 
-    // Holds the most recent *successfully* loaded snapshot, or null if we have no good
-    // data for the active repo (no repo, in-flight first load, or last load errored).
+    // Holds the most recent *successfully* loaded snapshot for the active repo, or null if we
+    // have no good data for it (no repo, in-flight first load, or last load errored).
     // Soft-refresh and SHA-existence checks both rely on this invariant — never assign
     // an error snapshot here.
     private CommitSnapshot? _snapshot;
     private Guid _loadingRepoId;
+
+    // Per-repo snapshot cache. On switch-back to a recently-viewed repo we render its cached
+    // history immediately (no "Loading…" flash) while a fresh load runs in the background.
+    private readonly RepoSnapshotCache<CommitSnapshot> _cache = new();
     private bool _isCheckingOutCommit;
     private bool _isMovingBranch;
 
@@ -335,15 +339,27 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             return;
         }
 
-        // Soft refresh: when we already have a snapshot for this repo (e.g. after a tab
-        // round-trip, or after a commit/push), keep it visible while a fresh one loads in
-        // the background. Avoids a "Loading…" flash and preserves scroll/selection.
+        // Soft refresh: when we're already showing this repo (e.g. after a commit/push, or a
+        // watcher tick), keep the live snapshot visible while a fresh one loads in the
+        // background. Avoids a "Loading…" flash and preserves scroll/selection.
         var isSoftRefresh = _snapshot != null && _snapshot.RepoId == active.Id;
         if (!isSoftRefresh)
         {
-            _snapshot = null;
+            // Switching to a different repo. The current selection belongs to the previous
+            // repo, so drop it regardless. If we have a cached snapshot for the target, show
+            // it instantly; otherwise fall back to the "Loading…" placeholder. Either way the
+            // background load below refreshes it, so a stale cache entry self-corrects.
             ClearSelectionAndBroadcast();
-            Update(s => s with { Render = new CommitsRenderState.Loading() });
+            if (_cache.TryGet(active.Id, out var cached) && cached != null)
+            {
+                _snapshot = cached;
+                Update(s => s with { Render = new CommitsRenderState.Loaded(cached) });
+            }
+            else
+            {
+                _snapshot = null;
+                Update(s => s with { Render = new CommitsRenderState.Loading() });
+            }
         }
         _loadingRepoId = active.Id;
 
@@ -365,6 +381,14 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     private void ApplyLoadedSnapshot(CommitSnapshot snap)
     {
+        // Cache (or invalidate) keyed on the snapshot's own repo, before the active-repo guard:
+        // a load that finishes after a switch still warms the cache for switch-back, and a
+        // failed load drops any stale entry so the next visit shows "Loading…" not bad data.
+        if (snap.ErrorMessage == null)
+            _cache.Set(snap.RepoId, snap);
+        else
+            _cache.Remove(snap.RepoId);
+
         if (snap.RepoId != _loadingRepoId) return;
 
         if (snap.ErrorMessage != null)

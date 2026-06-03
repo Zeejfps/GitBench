@@ -37,6 +37,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private Guid _activeRepoId;
 
+    // Per-repo listing cache. On switch-back to a recently-viewed repo we show its cached
+    // branches/remotes/stashes immediately while a fresh load runs in the background, instead
+    // of blanking the sidebar to a "Loading…" state and re-running `git for-each-ref`.
+    private readonly RepoSnapshotCache<BranchListing> _cache = new();
+
     // Stash apply uses its own flag — it's a distinct concept from branch ops, and the
     // existing presenter treated it that way. Don't fold it into IsBranchOpInFlight.
     private bool _isStashApplying;
@@ -131,7 +136,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
 
         var ui = _registry.GetBranchesUi(active.Id);
-        Update(_ => new BranchesState(Listing: null, Ui: ui, Selection: null, BusyBranch: null, IsLoading: true, LoadError: null, WorktreeBranches: EmptyStringSet));
+        // Seed from cache so a switch-back shows the last-known listing instead of blanking;
+        // null on a miss keeps the existing "Loading…" behavior. StartLoad refreshes either way.
+        _cache.TryGet(active.Id, out var cached);
+        Update(_ => new BranchesState(Listing: cached, Ui: ui, Selection: null, BusyBranch: null, IsLoading: true, LoadError: null, WorktreeBranches: EmptyStringSet));
         RefreshWorktreeBranches();
         StartLoad(active);
     }
@@ -167,12 +175,16 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             work: () => (_gitService.GetBranches(repo), null),
             onResult: (listing, error) =>
             {
-                if (repo.Id != _activeRepoId) return;
                 // ApplyListing's error path keys off BranchListing.ErrorMessage, so wrap
                 // RunBackground's separate `error` channel back into a synthetic listing.
                 var applied = error != null
                     ? new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), error)
                     : listing!;
+                // Cache (or invalidate) before the active-repo guard so a load that finishes
+                // after a switch still warms the cache for switch-back.
+                if (applied.ErrorMessage == null) _cache.Set(applied.RepoId, applied);
+                else _cache.Remove(applied.RepoId);
+                if (repo.Id != _activeRepoId) return;
                 ApplyListing(applied);
             });
     }

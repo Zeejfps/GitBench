@@ -15,6 +15,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     private readonly GenerationGuard _pullGen;
     private readonly GenerationGuard _fetchGen;
 
+    // Per-repo cache of the two values that drive button state (push status + whether there
+    // are local changes), so a switch updates the buttons/badges immediately instead of
+    // leaving the previous repo's state up until both background queries return.
+    private readonly RepoSnapshotCache<ToolbarSnapshot> _cache = new();
+    private Guid? _lastRepoId;
+
     private readonly SpinnerAnimation _pushSpinner;
     private readonly SpinnerAnimation _pullSpinner;
     private readonly SpinnerAnimation _fetchSpinner;
@@ -118,10 +124,18 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         {
             _statusGen.Bump();
             _localChangesGen.Bump();
+            _lastRepoId = null;
             Update(_ => ActionsToolbarState.Initial);
             return;
         }
-        Update(s => s with { HasActiveRepo = true, Error = null });
+        // On a switch to a different repo, apply the cached button state immediately so the
+        // badges/enabled-state don't lag behind on the previous repo's values. Same-repo
+        // reloads keep the live state and just refresh below; a cache miss leaves it as-is.
+        if (repo.Id != _lastRepoId && _cache.TryGet(repo.Id, out var cached) && cached != null)
+            Update(s => s with { HasActiveRepo = true, Error = null, PushStatus = cached.PushStatus, HasLocalChanges = cached.HasLocalChanges });
+        else
+            Update(s => s with { HasActiveRepo = true, Error = null });
+        _lastRepoId = repo.Id;
         ReloadPushStatus(repo);
         ReloadLocalChanges();
     }
@@ -132,6 +146,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             work: () => (_gitService.GetPushStatus(repo), null),
             onResult: (status, _) =>
             {
+                CachePushStatus(repo.Id, status!);
                 if (_registry.Active.Value?.Id != repo.Id) return;
                 Update(s => s with { PushStatus = status! });
             },
@@ -152,11 +167,33 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             work: () => (_gitService.GetLocalChanges(repo), null),
             onResult: (snap, _) =>
             {
-                if (_registry.Active.Value?.Id != repo.Id) return;
                 var hasChanges = snap!.Staged.Count + snap.Unstaged.Count > 0;
+                CacheLocalChanges(repo.Id, hasChanges);
+                if (_registry.Active.Value?.Id != repo.Id) return;
                 Update(s => s.HasLocalChanges == hasChanges ? s : s with { HasLocalChanges = hasChanges });
             },
             lane: _localChangesGen);
+    }
+
+    // The push-status and local-changes queries land independently on separate lanes, so each
+    // updates only its own field of the cached snapshot, preserving the other's last-known value.
+    private void CachePushStatus(Guid repoId, PushStatus status)
+    {
+        var prev = _cache.TryGet(repoId, out var c) && c != null ? c : ToolbarSnapshot.Default;
+        _cache.Set(repoId, prev with { PushStatus = status });
+    }
+
+    private void CacheLocalChanges(Guid repoId, bool hasLocalChanges)
+    {
+        var prev = _cache.TryGet(repoId, out var c) && c != null ? c : ToolbarSnapshot.Default;
+        _cache.Set(repoId, prev with { HasLocalChanges = hasLocalChanges });
+    }
+
+    private sealed record ToolbarSnapshot(PushStatus PushStatus, bool HasLocalChanges)
+    {
+        public static ToolbarSnapshot Default { get; } = new(
+            new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false),
+            HasLocalChanges: false);
     }
 
     private void DoOpenFolder()
