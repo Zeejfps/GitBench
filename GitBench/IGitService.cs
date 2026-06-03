@@ -62,6 +62,8 @@ public interface IGitService
     MergeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy);
     RebasePreviewResult PreviewRebase(Repo repo, string targetRef);
     RebaseOutcome Rebase(Repo repo, string targetRef, bool autostash);
+    CherryPickOutcome CherryPick(Repo repo, string commitSha);
+    RevertCommitOutcome RevertCommit(Repo repo, string commitSha);
 }
 
 public enum MergeStrategy
@@ -93,6 +95,14 @@ public enum RebasePreviewState
 public sealed record RebasePreviewResult(RebasePreviewState State, string? ErrorMessage);
 
 public sealed record RebaseOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
+
+// HasConflicts mirrors the merge/rebase pattern: a cherry-pick that conflicts exits
+// non-zero but leaves CHERRY_PICK_HEAD behind, which the operation banner picks up — so
+// it's reported as a successful start that produced conflicts, not an error.
+public sealed record CherryPickOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
+
+// Same as CherryPickOutcome but for `git revert`, whose conflict sentinel is REVERT_HEAD.
+public sealed record RevertCommitOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
 // ForceQuitAvailable is set when the regular --abort failed but the in-progress state is
 // recoverable via `git X --quit` or direct sentinel removal — i.e. the user can choose to

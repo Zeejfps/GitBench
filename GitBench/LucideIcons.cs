@@ -31,6 +31,7 @@ internal static class LucideIcons
     public const string FolderInput = "";  // folder-input
     public const string X = "";             // x
     public const string Copy = "";          // copy
+    public const string Undo = "";    // undo-2 (revert commit)
     public const string CloudCheck = "";     // cloud-check (branch tracking a live upstream)
     public const string CloudOff = "";      // cloud-off (upstream configured but remote ref is gone)
     public const string ChevronUp = "";    // chevron-up

@@ -1610,6 +1610,69 @@ public sealed class GitService : IGitService
         }
     }
 
+    // `git cherry-pick <sha>` replays the named commit's changes onto HEAD as a new commit.
+    // Conflicts produce a non-zero exit but leave CHERRY_PICK_HEAD in the per-worktree gitdir,
+    // which the operation banner detects via GetOperationState — surface that as "success with
+    // conflicts" so the caller refreshes and the banner guides resolve/continue/abort. Mirrors
+    // the Merge/Rebase conflict handling.
+    public CherryPickOutcome CherryPick(Repo repo, string commitSha)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new CherryPickOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+            var result = _runner.Run(repo.Path, new[] { "cherry-pick", commitSha });
+            if (result.Ok) return new CherryPickOutcome(true, null);
+
+            try
+            {
+                var gitDir = GetGitDir(repo.Path);
+                if (gitDir != null && File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
+                    return new CherryPickOutcome(true, null, HasConflicts: true);
+            }
+            catch { /* fall through to error */ }
+
+            return new CherryPickOutcome(false, result.BlockError("git cherry-pick"));
+        }
+        catch (Exception ex)
+        {
+            return new CherryPickOutcome(false, ex.Message);
+        }
+    }
+
+    // `git revert --no-edit <sha>` creates a new commit that undoes the named commit. --no-edit
+    // keeps it non-interactive (git would otherwise open an editor for the generated message).
+    // Conflicts leave REVERT_HEAD behind — same success-with-conflicts handling as cherry-pick
+    // so the operation banner takes over.
+    public RevertCommitOutcome RevertCommit(Repo repo, string commitSha)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new RevertCommitOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+            var result = _runner.Run(repo.Path, new[] { "revert", "--no-edit", commitSha });
+            if (result.Ok) return new RevertCommitOutcome(true, null);
+
+            try
+            {
+                var gitDir = GetGitDir(repo.Path);
+                if (gitDir != null && File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
+                    return new RevertCommitOutcome(true, null, HasConflicts: true);
+            }
+            catch { /* fall through to error */ }
+
+            return new RevertCommitOutcome(false, result.BlockError("git revert"));
+        }
+        catch (Exception ex)
+        {
+            return new RevertCommitOutcome(false, ex.Message);
+        }
+    }
+
     // `git branch -d` refuses to delete a branch not fully merged into its upstream/HEAD;
     // `-D` force-deletes regardless. Also refuses to delete the currently-checked-out branch
     // — callers should gate that in the UI rather than relying on the error.

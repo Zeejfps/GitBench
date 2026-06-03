@@ -38,6 +38,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private Guid? _renderedRepoId;
     private bool _isCheckingOutCommit;
     private bool _isMovingBranch;
+    private bool _isApplyingCommit;
 
     // Lane for the reset probe/apply op. Serialized by _isCheckingOutCommit; kept off the
     // default Gen lane so a repo-switch reload never drops an in-flight reset's result.
@@ -45,6 +46,10 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     // Same idea for the detached-HEAD "reset branch to here" probe/move, on its own lane.
     private readonly GenerationGuard _moveGen;
+
+    // Lane for cherry-pick / revert applies. Serialized by _isApplyingCommit; kept off the
+    // default Gen lane so a repo-switch reload never drops an in-flight apply's result.
+    private readonly GenerationGuard _applyGen;
 
     public CommitsViewModel(
         IRepoRegistry registry,
@@ -60,6 +65,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         _resetGen = CreateLane();
         _moveGen = CreateLane();
+        _applyGen = CreateLane();
 
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
@@ -302,6 +308,70 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteTagDialog(
             capturedRepo, capturedTag, onClose)));
     }
+
+    // ---- cherry-pick / revert ----
+
+    // Replays the named commit onto the current branch as a new commit. No confirm dialog —
+    // cherry-pick is non-destructive and a conflict is fully recoverable via the operation
+    // banner's Abort. A clean apply refreshes refs + working tree; a conflicting apply does the
+    // same and lets the banner (which detects CHERRY_PICK_HEAD) drive resolve/continue/abort; a
+    // hard failure (dirty tree, bad ref, …) surfaces an error.
+    public void RequestCherryPick(string sha) =>
+        RunCommitApply(sha, "Cherry-pick failed", (repo, s) =>
+        {
+            var outcome = _gitService.CherryPick(repo, s);
+            return new CommitApplyResult(outcome.Success, outcome.ErrorMessage);
+        });
+
+    // Creates a new commit that undoes the named commit. Same off-thread flow as cherry-pick;
+    // its conflict sentinel is REVERT_HEAD, also handled by the operation banner.
+    public void RequestRevert(string sha) =>
+        RunCommitApply(sha, "Revert failed", (repo, s) =>
+        {
+            var outcome = _gitService.RevertCommit(repo, s);
+            return new CommitApplyResult(outcome.Success, outcome.ErrorMessage);
+        });
+
+    // Shared driver for the cherry-pick / revert one-shot ops: gate re-entry, run the git op
+    // off-thread on the apply lane, then either refresh (success, incl. success-with-conflicts)
+    // or show an error.
+    private void RunCommitApply(string sha, string failureTitle, Func<Repo, string, CommitApplyResult> op)
+    {
+        if (_isApplyingCommit) return;
+        var snap = _snapshot;
+        if (snap == null) return;
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != snap.RepoId) return;
+
+        _isApplyingCommit = true;
+        var capturedRepo = repo;
+        var capturedSha = sha;
+
+        RunBackground<CommitApplyResult>(
+            work: () => (op(capturedRepo, capturedSha), null),
+            onResult: (result, error) =>
+            {
+                _isApplyingCommit = false;
+                if (error != null)
+                {
+                    _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error));
+                    return;
+                }
+                if (result.Success)
+                {
+                    _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
+                    _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
+                }
+                else
+                {
+                    _bus.Broadcast(new ShowOperationErrorMessage(
+                        failureTitle, result.Error ?? $"{failureTitle}."));
+                }
+            },
+            lane: _applyGen);
+    }
+
+    private sealed record CommitApplyResult(bool Success, string? Error);
 
     // Outcome of the off-thread reset probe, handed from work to onResult above.
     private abstract record ResetProbe

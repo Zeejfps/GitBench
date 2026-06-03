@@ -743,6 +743,18 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             () => _vm?.RequestCreateTag(capturedSha),
             LucideIcons.Tag));
 
+        // Apply-this-commit actions. Both run immediately (no dialog): they're non-destructive
+        // and any conflict is recoverable via the operation banner, so no "…" suffix.
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            "Cherry-pick",
+            () => _vm?.RequestCherryPick(capturedSha),
+            LucideIcons.Copy));
+        items.Add(new RepoBarContextMenu.Item(
+            "Revert",
+            () => _vm?.RequestRevert(capturedSha),
+            LucideIcons.Undo));
+
         return items;
     }
 
