@@ -13,7 +13,7 @@ namespace GitGui;
 internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _nameInput;
+    private readonly LabeledInputField _nameField;
     private readonly CheckoutDialogKbmController _nameController;
     private readonly CheckboxView _trackCheckbox;
     private readonly DialogButton _cancelButton;
@@ -37,10 +37,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var nameLabel = DialogFrame.Label("Local branch name");
-
-        _nameInput = DialogFrame.TextInput();
-        var nameBox = DialogFrame.WrapInput(_nameInput);
+        _nameField = new LabeledInputField("Local branch name");
 
         _trackCheckbox = new CheckboxView("Track this remote branch")
         {
@@ -57,8 +54,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
             Children =
             {
                 subtitle,
-                nameLabel,
-                nameBox,
+                _nameField,
                 _trackCheckbox,
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _checkoutButton),
@@ -69,8 +65,8 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         // BaseTextInputKbmController.OnMouseButtonStateChanged consumes left-press events
         // anywhere inside the view it's attached to, so putting it on the dialog would
         // swallow clicks meant for the Cancel/Checkout buttons.
-        _nameController = new CheckoutDialogKbmController(_nameInput, _checkoutButton.Command, onClose);
-        _nameInput.UseController(_ => _nameController);
+        _nameController = new CheckoutDialogKbmController(_nameField.Input, _checkoutButton.Command, onClose);
+        _nameField.Input.UseController(_ => _nameController);
 
         var request = new CheckoutRequest(repo, remoteName, remoteBranchName, suggestedLocalName);
         this.UseViewModel(
@@ -86,7 +82,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
     {
         vm.CloseRequested += _onClose;
 
-        _nameInput.BindTwoWay(vm.Name);
+        _nameField.Input.BindTwoWay(vm.Name);
         _trackCheckbox.IsChecked.BindTwoWay(vm.Track);
         _checkoutButton.BindBusyCommand(vm.Checkout);
         _cancelButton.DisableWhile(vm.Checkout.IsRunning);
@@ -94,7 +90,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         // Bind runs after the input is attached to a context — doing focus earlier (e.g.
         // in the dialog ctor) produced an empty-looking field, since StartEditing/StealFocus
         // hadn't run yet and caret/selection visuals were stale.
-        _nameInput.SelectAll();
+        _nameField.Input.SelectAll();
         _nameController.BeginEditing();
     }
 }

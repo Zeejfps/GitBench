@@ -14,7 +14,7 @@ namespace GitGui;
 internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _nameInput;
+    private readonly LabeledInputField _nameField;
     private readonly CheckoutDialogKbmController _nameController;
     private readonly CheckboxView _forceCheckbox;
     private readonly DialogButton _renameButton;
@@ -32,10 +32,7 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
         };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var nameLabel = DialogFrame.Label("New name");
-
-        _nameInput = DialogFrame.TextInput();
-        var nameBox = DialogFrame.WrapInput(_nameInput);
+        _nameField = new LabeledInputField("New name");
 
         _forceCheckbox = new CheckboxView("Force rename even if target exists")
         {
@@ -54,8 +51,7 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
             Children =
             {
                 subtitle,
-                nameLabel,
-                nameBox,
+                _nameField,
                 _forceCheckbox,
                 _errorView,
                 new MultiChildView { Height = 4 },
@@ -63,8 +59,8 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
             },
         }));
 
-        _nameController = new CheckoutDialogKbmController(_nameInput, _renameButton.Command, onClose);
-        _nameInput.UseController(_ => _nameController);
+        _nameController = new CheckoutDialogKbmController(_nameField.Input, _renameButton.Command, onClose);
+        _nameField.Input.UseController(_ => _nameController);
 
         var request = new RenameBranchRequest(repo, currentName);
         this.UseViewModel(
@@ -80,13 +76,13 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
     {
         vm.CloseRequested += _onClose;
 
-        _nameInput.BindTwoWay(vm.Name);
+        _nameField.Input.BindTwoWay(vm.Name);
         _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
         _renameButton.BindBusyCommand(vm.Rename);
         _cancelButton.DisableWhile(vm.Rename.IsRunning);
         _errorView.BindText(vm.Rename.Error, s => s ?? string.Empty);
 
-        _nameInput.SelectAll();
+        _nameField.Input.SelectAll();
         _nameController.BeginEditing();
     }
 }

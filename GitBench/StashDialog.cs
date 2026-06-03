@@ -13,7 +13,7 @@ namespace GitGui;
 internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _messageInput;
+    private readonly LabeledInputField _messageField;
     private readonly CheckoutDialogKbmController _messageController;
     private readonly CheckboxView _keepStagedCheckbox;
     private readonly DialogButton _stashButton;
@@ -32,10 +32,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 
         _onClose = onClose;
 
-        var messageLabel = DialogFrame.Label("Message");
-
-        _messageInput = DialogFrame.TextInput();
-        var messageBox = DialogFrame.WrapInput(_messageInput);
+        _messageField = new LabeledInputField("Message");
 
         _keepStagedCheckbox = new CheckboxView("Keep staged changes in index")
         {
@@ -89,8 +86,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                messageLabel,
-                messageBox,
+                _messageField,
                 _fileListHeader,
                 new FlexItem { Grow = 1, Child = fileScrollHost },
                 _keepStagedCheckbox,
@@ -102,8 +98,8 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 
         // Same reason as CreateBranchDialog: text-input controllers consume clicks across
         // the view they're on, so attach to the input itself, not the outer dialog.
-        _messageController = new CheckoutDialogKbmController(_messageInput, _stashButton.Command, onClose);
-        _messageInput.UseController(_ => _messageController);
+        _messageController = new CheckoutDialogKbmController(_messageField.Input, _stashButton.Command, onClose);
+        _messageField.Input.UseController(_ => _messageController);
 
         var request = new StashRequest(repo);
         this.UseViewModel(
@@ -122,7 +118,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
         vm.CloseRequested += _onClose;
         vm.FocusMessageRequested += () => _messageController.BeginEditing();
 
-        _messageInput.BindTwoWay(vm.Message, vm.SetMessage);
+        _messageField.Input.BindTwoWay(vm.Message, vm.SetMessage);
 
         vm.KeepStaged.Subscribe(b => _keepStagedCheckbox.IsChecked.Value = b);
         _keepStagedCheckbox.IsChecked.Changed += b => vm.SetKeepStaged(b);

@@ -14,7 +14,7 @@ namespace GitGui;
 internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _messageInput;
+    private readonly LabeledInputField _messageField;
     private readonly CheckoutDialogKbmController _messageController;
     private readonly DialogButton _renameButton;
     private readonly DialogButton _cancelButton;
@@ -32,10 +32,7 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
         };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var messageLabel = DialogFrame.Label("Description");
-
-        _messageInput = DialogFrame.TextInput();
-        var messageBox = DialogFrame.WrapInput(_messageInput);
+        _messageField = new LabeledInputField("Description");
 
         _errorView = DialogFrame.ErrorView();
 
@@ -49,16 +46,15 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
             Children =
             {
                 subtitle,
-                messageLabel,
-                messageBox,
+                _messageField,
                 _errorView,
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _renameButton),
             },
         }));
 
-        _messageController = new CheckoutDialogKbmController(_messageInput, _renameButton.Command, onClose);
-        _messageInput.UseController(_ => _messageController);
+        _messageController = new CheckoutDialogKbmController(_messageField.Input, _renameButton.Command, onClose);
+        _messageField.Input.UseController(_ => _messageController);
 
         var request = new RenameStashRequest(repo, index, currentMessage);
         this.UseViewModel(
@@ -74,12 +70,12 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
     {
         vm.CloseRequested += _onClose;
 
-        _messageInput.BindTwoWay(vm.Message);
+        _messageField.Input.BindTwoWay(vm.Message);
         _renameButton.BindBusyCommand(vm.Rename);
         _cancelButton.DisableWhile(vm.Rename.IsRunning);
         _errorView.BindText(vm.Rename.Error, s => s ?? string.Empty);
 
-        _messageInput.SelectAll();
+        _messageField.Input.SelectAll();
         _messageController.BeginEditing();
     }
 }

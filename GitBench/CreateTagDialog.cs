@@ -14,7 +14,7 @@ namespace GitGui;
 internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogViewModel>
 {
     private readonly Action _onClose;
-    private readonly TextInputView _nameInput;
+    private readonly LabeledInputField _nameField;
     private readonly CheckoutDialogKbmController _nameController;
     private readonly GrowingDescriptionField _messageField;
     private readonly CheckboxView _pushCheckbox;
@@ -32,10 +32,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
 
         var targetRow = BuildLabeledRow("Create tag at:", BuildCommitValue(shortSha, summary));
 
-        var nameLabel = DialogFrame.Label("Tag name");
-        _nameInput = DialogFrame.TextInput();
-        _nameInput.PlaceholderText = "Enter Tag Name";
-        var nameBox = DialogFrame.WrapInput(_nameInput);
+        _nameField = new LabeledInputField("Tag name") { Placeholder = "Enter Tag Name" };
 
         var messageLabel = DialogFrame.Label("Message");
         _messageField = new GrowingDescriptionField(72f, 200f) { PlaceholderText = "optional" };
@@ -58,7 +55,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
                 // Each label sits tight against its field (small intra-group gap); the column's
                 // larger Gap separates one section from the next so labels read as attached to
                 // their inputs rather than floating midway between them.
-                LabeledField(nameLabel, nameBox),
+                _nameField,
                 LabeledField(messageLabel, _messageField),
                 _pushCheckbox,
                 _errorView,
@@ -71,8 +68,8 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         // CreateBranchDialog: the input controller consumes left-press inside its own view,
         // so attaching to the outer dialog would swallow clicks meant for the buttons. The
         // message field keeps its own multi-line controller so Enter inserts a newline there.
-        _nameController = new CheckoutDialogKbmController(_nameInput, _createButton.Command, onClose);
-        _nameInput.UseController(_ => _nameController);
+        _nameController = new CheckoutDialogKbmController(_nameField.Input, _createButton.Command, onClose);
+        _nameField.Input.UseController(_ => _nameController);
 
         var request = new CreateTagRequest(repo, sha);
         this.UseViewModel(
@@ -88,7 +85,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
     {
         vm.CloseRequested += _onClose;
 
-        _nameInput.BindTwoWay(vm.Name);
+        _nameField.Input.BindTwoWay(vm.Name);
         _messageField.BindTwoWay(vm.Message, vm.SetMessage);
         _pushCheckbox.IsChecked.BindTwoWay(vm.PushToAllRemotes);
         _createButton.BindBusyCommand(vm.Create);
