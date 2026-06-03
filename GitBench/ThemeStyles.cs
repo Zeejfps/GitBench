@@ -14,6 +14,7 @@ public sealed partial record ThemeStyles
     public required BorderedButtonStyles BorderedButton { get; init; }
     public required DialogIconButtonStyles DialogIconButton { get; init; }
     public required ActionButtonStyles ActionButton { get; init; }
+    public required DialogActionButtonStyles DialogActionButton { get; init; }
     public required CheckboxStyles Checkbox { get; init; }
     public required CommitBarStyles CommitBar { get; init; }
     public required ModeSwitcherStyles ModeSwitcher { get; init; }
@@ -45,4 +46,15 @@ public sealed partial record ThemeStyles
 
     private static uint WithAlpha(uint color, byte alpha) =>
         (color & 0x00FFFFFFu) | ((uint)alpha << 24);
+
+    // Brightens each RGB channel by delta (clamped), preserving alpha. Used to derive a
+    // hover shade from a base fill without adding a second color to the palette.
+    private static uint Lighten(uint argb, uint delta)
+    {
+        var a = (argb >> 24) & 0xFF;
+        var r = Math.Min(0xFFu, ((argb >> 16) & 0xFF) + delta);
+        var g = Math.Min(0xFFu, ((argb >> 8) & 0xFF) + delta);
+        var b = Math.Min(0xFFu, (argb & 0xFF) + delta);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
 }

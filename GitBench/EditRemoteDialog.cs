@@ -38,7 +38,6 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
 
     private EditRemoteDialog(EditRemoteRequest request, string title, string subtitleText, string confirmLabel, Action onClose)
     {
-        Width = 540f;
         _onClose = onClose;
 
         var subtitle = new TextView { Text = subtitleText };
@@ -55,7 +54,7 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _saveButton = new DialogButton(confirmLabel) { Height = DialogFrame.DefaultButtonHeight };
+        _saveButton = new DialogButton(confirmLabel, role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build(title, onClose, new FlexColumnView
         {
@@ -70,7 +69,7 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _saveButton),
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         // Controllers go on the inputs (not the dialog) for the same reason as
         // CreateBranchDialog: an input controller consumes left-press inside its view, so

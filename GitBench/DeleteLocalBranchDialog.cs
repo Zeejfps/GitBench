@@ -24,8 +24,6 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
         string? upstreamBranch,
         Action onClose)
     {
-        Width = 460f;
-
         _onClose = onClose;
 
         var prompt = new TextView
@@ -56,7 +54,7 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete") { Height = DialogFrame.DefaultButtonHeight };
+        _deleteButton = new DialogButton("Delete", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         var content = new FlexColumnView
         {

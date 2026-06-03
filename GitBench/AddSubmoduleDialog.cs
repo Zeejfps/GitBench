@@ -46,7 +46,7 @@ internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDia
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _addButton = new DialogButton("Add") { Height = DialogFrame.DefaultButtonHeight };
+        _addButton = new DialogButton("Add", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Add submodule", onClose, new FlexColumnView
         {

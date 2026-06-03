@@ -26,7 +26,6 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
 
     public DiscardChangesDialog(Repo repo, IReadOnlyList<string> paths, Action onClose)
     {
-        Width = 520f;
         Height = 480f;
 
         _onClose = onClose;
@@ -77,7 +76,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _discardButton = new DialogButton("Discard") { Height = DialogFrame.DefaultButtonHeight };
+        _discardButton = new DialogButton("Discard", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Discard changes", onClose, new FlexColumnView
         {
@@ -91,7 +90,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
                 _errorView,
                 DialogFrame.ButtonsRow(_cancelButton, _discardButton),
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         this.UseController(_ => new DialogKbmController(_discardButton.Command, _onClose));
 

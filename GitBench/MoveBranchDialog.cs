@@ -20,7 +20,6 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
 
     public MoveBranchDialog(Repo repo, string branchName, string sha, string shortSha, string summary, Action onClose)
     {
-        Width = 560f;
         _onClose = onClose;
 
         var subtitle = new TextView
@@ -44,20 +43,10 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
 
         _errorView = DialogFrame.ErrorView();
 
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
-        _resetButton = new DialogButton("Reset branch") { Height = DialogFrame.DefaultButtonHeight, Width = 120 };
+        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
+        _resetButton = new DialogButton("Reset branch", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
-        var buttonsRow = new FlexRowView
-        {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
-                _cancelButton,
-                _resetButton,
-            },
-        };
+        var buttonsRow = DialogFrame.ButtonsRow(_cancelButton, _resetButton);
 
         AddChildToSelf(DialogFrame.Build("Reset branch to revision", onClose, new FlexColumnView
         {
@@ -72,7 +61,7 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
                 new MultiChildView { Height = 4 },
                 buttonsRow,
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         this.UseController(_ => new DialogKbmController(_resetButton.Command, onClose));
 

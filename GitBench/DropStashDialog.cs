@@ -21,8 +21,6 @@ public sealed class DropStashDialog : MultiChildView
 
     public DropStashDialog(Repo repo, int index, string label, string subject, Action onClose)
     {
-        Width = 460f;
-
         _onClose = onClose;
 
         var prompt = new TextView
@@ -35,7 +33,7 @@ public sealed class DropStashDialog : MultiChildView
         _errorView = DialogFrame.ErrorView();
 
         var keepButton = new DialogButton("Keep", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _dropButton = new DialogButton("Drop", () => TryDrop(repo, index)) { Height = DialogFrame.DefaultButtonHeight };
+        _dropButton = new DialogButton("Drop", () => TryDrop(repo, index), DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build($"Drop {label}?", onClose, new FlexColumnView
         {
@@ -47,7 +45,7 @@ public sealed class DropStashDialog : MultiChildView
                 _errorView,
                 DialogFrame.ButtonsRow(keepButton, _dropButton),
             },
-        }));
+        }, DialogFrame.WidthCompact));
 
         // The drop call is small enough to inline here; no presenter needed. We grab
         // services from the context the dialog is attached to.

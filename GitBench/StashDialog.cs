@@ -27,7 +27,6 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 
     public StashDialog(Repo repo, Action onClose)
     {
-        Width = 520f;
         Height = 520f;
 
         _onClose = onClose;
@@ -78,7 +77,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _stashButton = new DialogButton("Stash") { Height = DialogFrame.DefaultButtonHeight };
+        _stashButton = new DialogButton("Stash", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Stash changes", onClose, new FlexColumnView
         {
@@ -94,7 +93,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _stashButton),
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         // Same reason as CreateBranchDialog: text-input controllers consume clicks across
         // the view they're on, so attach to the input itself, not the outer dialog.

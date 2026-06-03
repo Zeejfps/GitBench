@@ -14,8 +14,6 @@ internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogVie
 
     public ForcePushDialog(Repo repo, string branchName, int ahead, int behind, Action onClose)
     {
-        Width = 520f;
-
         _onClose = onClose;
 
         var displayBranch = string.IsNullOrEmpty(branchName) ? "this branch" : $"'{branchName}'";
@@ -32,7 +30,7 @@ internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogVie
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _forcePushButton = new DialogButton("Force push") { Height = DialogFrame.DefaultButtonHeight };
+        _forcePushButton = new DialogButton("Force push", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Force push?", onClose, new FlexColumnView
         {

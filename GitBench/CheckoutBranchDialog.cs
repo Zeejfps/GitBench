@@ -26,8 +26,6 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         string suggestedLocalName,
         Action onClose)
     {
-        Width = 420f;
-
         _onClose = onClose;
 
         var subtitle = new TextView
@@ -45,7 +43,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
         };
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _checkoutButton = new DialogButton("Checkout") { Height = DialogFrame.DefaultButtonHeight };
+        _checkoutButton = new DialogButton("Checkout", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Checkout branch", onClose, new FlexColumnView
         {

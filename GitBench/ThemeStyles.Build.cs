@@ -24,6 +24,7 @@ public partial record ThemeStyles
             BorderedButton = BuildBorderedButton(p),
             DialogIconButton = BuildDialogIconButton(p),
             ActionButton = BuildActionButton(p),
+            DialogActionButton = BuildDialogActionButton(p, status),
             Checkbox = BuildCheckbox(p),
             CommitBar = BuildCommitBar(p),
             ModeSwitcher = BuildModeSwitcher(p),

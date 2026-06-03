@@ -39,20 +39,10 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
 
         _errorView = DialogFrame.ErrorView();
 
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
-        _publishButton = new DialogButton("Publish") { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
+        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
+        _publishButton = new DialogButton("Publish", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
-        var buttonsRow = new FlexRowView
-        {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
-                _cancelButton,
-                _publishButton,
-            },
-        };
+        var buttonsRow = DialogFrame.ButtonsRow(_cancelButton, _publishButton);
 
         AddChildToSelf(DialogFrame.Build("Publish branch", onClose, new FlexColumnView
         {
@@ -68,7 +58,7 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
                 new MultiChildView { Height = 4 },
                 buttonsRow,
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         this.UseController(_ => new DialogKbmController(_publishButton.Command, onClose));
 

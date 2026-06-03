@@ -64,8 +64,8 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
 
         _errorView = DialogFrame.ErrorView();
 
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
-        _rebaseButton = new DialogButton("Rebase") { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
+        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
+        _rebaseButton = new DialogButton("Rebase", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
 
         var buttonsRow = new FlexRowView
         {
@@ -93,7 +93,7 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
                 new MultiChildView { Height = 4 },
                 buttonsRow,
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         this.UseController(_ => new DialogKbmController(_rebaseButton.Command, onClose));
 

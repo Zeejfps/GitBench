@@ -53,8 +53,8 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
 
         _errorView = DialogFrame.ErrorView();
 
-        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
-        _mergeButton = new DialogButton("Merge") { Height = DialogFrame.DefaultButtonHeight, Width = 96 };
+        _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
+        _mergeButton = new DialogButton("Merge", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight, MinWidthConstraint = DialogFrame.DefaultButtonMinWidth };
 
         var buttonsRow = new FlexRowView
         {
@@ -81,7 +81,7 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
                 new MultiChildView { Height = 4 },
                 buttonsRow,
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         this.UseController(_ => new DialogKbmController(_mergeButton.Command, onClose));
 

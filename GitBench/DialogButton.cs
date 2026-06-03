@@ -3,6 +3,18 @@ using ZGF.Gui.Views;
 
 namespace GitGui;
 
+/// <summary>
+/// Visual role of a dialog button. <see cref="Default"/> is the outline chrome used for
+/// Cancel/secondary buttons; <see cref="Primary"/> and <see cref="Destructive"/> are filled
+/// (accent / danger-red) so the dialog's commit action stands apart from Cancel.
+/// </summary>
+public enum DialogButtonRole
+{
+    Default,
+    Primary,
+    Destructive,
+}
+
 public sealed class DialogButton : HoverableButton
 {
     private readonly TextView _iconView;
@@ -40,7 +52,7 @@ public sealed class DialogButton : HoverableButton
         set => _iconView.Rotation = value;
     }
 
-    public DialogButton(string label, Action? onClick = null) : base(onClick)
+    public DialogButton(string label, Action? onClick = null, DialogButtonRole role = DialogButtonRole.Default) : base(onClick)
     {
         _iconView = new TextView
         {
@@ -50,7 +62,7 @@ public sealed class DialogButton : HoverableButton
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        _iconView.BindThemedTextColor(s => IsEnabled.Value ? s.BorderedButton.Text : s.BorderedButton.TextDisabled);
+        _iconView.BindThemedTextColor(s => SelectText(s, role));
 
         _labelView = new TextView
         {
@@ -58,7 +70,7 @@ public sealed class DialogButton : HoverableButton
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _labelView.BindThemedTextColor(s => IsEnabled.Value ? s.BorderedButton.Text : s.BorderedButton.TextDisabled);
+        _labelView.BindThemedTextColor(s => SelectText(s, role));
 
         _row = new FlexRowView
         {
@@ -72,13 +84,45 @@ public sealed class DialogButton : HoverableButton
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(6),
+            // Horizontal padding gives short labels breathing room and lets the button size
+            // to its text (clamped up by MinWidthConstraint in DialogFrame.ButtonsRow) instead
+            // of being pinned to a hand-tuned Width per dialog.
+            Padding = new PaddingStyle { Left = 16, Right = 16 },
             Children = { _row },
         };
-        // Hover styling only when enabled — a disabled button shouldn't react to the pointer.
-        // Focus-ring highlighting reuses the same chrome so a tabbed-to button looks hovered.
-        BorderedButtonChrome.Bind(background,
-            () => IsEnabled.Value && (IsHovered.Value || IsFocusHighlighted.Value));
+        if (role == DialogButtonRole.Default)
+        {
+            // Hover styling only when enabled — a disabled button shouldn't react to the pointer.
+            // Focus-ring highlighting reuses the same chrome so a tabbed-to button looks hovered.
+            BorderedButtonChrome.Bind(background,
+                () => IsEnabled.Value && (IsHovered.Value || IsFocusHighlighted.Value));
+        }
+        else
+        {
+            background.BindThemedBackgroundColor(s => SelectFill(s, role));
+            background.BindThemedBorderColor(s => BorderColorStyle.All(SelectFill(s, role)));
+        }
         SetBackground(background);
+    }
+
+    private uint SelectFill(ThemeStyles s, DialogButtonRole role)
+    {
+        var a = s.DialogActionButton;
+        if (!IsEnabled.Value) return a.DisabledFill;
+        var hovered = IsHovered.Value || IsFocusHighlighted.Value;
+        return role == DialogButtonRole.Destructive
+            ? (hovered ? a.DestructiveFillHover : a.DestructiveFill)
+            : (hovered ? a.PrimaryFillHover : a.PrimaryFill);
+    }
+
+    private uint SelectText(ThemeStyles s, DialogButtonRole role)
+    {
+        if (role == DialogButtonRole.Default)
+            return IsEnabled.Value ? s.BorderedButton.Text : s.BorderedButton.TextDisabled;
+        if (!IsEnabled.Value) return s.DialogActionButton.DisabledText;
+        return role == DialogButtonRole.Destructive
+            ? s.DialogActionButton.DestructiveText
+            : s.DialogActionButton.PrimaryText;
     }
 
     /// <summary>

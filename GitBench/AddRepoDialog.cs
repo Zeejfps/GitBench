@@ -7,7 +7,6 @@ public sealed class AddRepoDialog : MultiChildView
 {
     public AddRepoDialog(Action onClose)
     {
-        Width = 360;
         Height = 230;
 
         AddChildToSelf(DialogFrame.Build("Add Repository", onClose, new FlexColumnView
@@ -35,6 +34,6 @@ public sealed class AddRepoDialog : MultiChildView
                     }
                 },
             }
-        }));
+        }, DialogFrame.WidthCompact));
     }
 }

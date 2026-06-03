@@ -11,12 +11,22 @@ internal static class DialogFrame
     public const float DefaultBorderRadius = 10f;
     public const float DefaultButtonHeight = 32f;
     public const float DefaultButtonsGap = 8f;
+    public const float DefaultButtonMinWidth = 96f;
 
-    public static View Build(string title, Action onClose, FlexColumnView body)
+    // The only three dialog widths. Height stays dynamic (content-driven); width is a fixed
+    // token so dialogs feel like one family instead of each picking its own number.
+    //   Compact  — terse confirmations with a line or two of body.
+    //   Standard — the default: single-column forms and most confirmations.
+    //   Wide     — labeled-row / commit-preview / file-list / error-output layouts.
+    public const float WidthCompact = 440f;
+    public const float WidthStandard = 480f;
+    public const float WidthWide = 600f;
+
+    public static View Build(string title, Action onClose, FlexColumnView body, float width = WidthStandard)
     {
         body.Children.Insert(0, Separator());
         body.Children.Insert(0, Header(title, onClose));
-        return Wrap(body);
+        return Wrap(body, width);
     }
 
     public static FlexRowView Header(string title, Action onClose)
@@ -49,16 +59,25 @@ internal static class DialogFrame
         return view;
     }
 
-    public static FlexRowView ButtonsRow(MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap) => new()
+    // Standard dialog footer: buttons sit at the bottom-right (Cancel then the action), each
+    // at least DefaultButtonMinWidth wide but free to grow for longer labels. A grow-1 spacer
+    // pushes them right. This is the single footer layout for every dialog.
+    public static FlexRowView ButtonsRow(MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap)
     {
-        Gap = gap,
-        CrossAxisAlignment = CrossAxisAlignment.Stretch,
-        Children =
+        cancel.MinWidthConstraint = DefaultButtonMinWidth;
+        primary.MinWidthConstraint = DefaultButtonMinWidth;
+        return new FlexRowView
         {
-            new FlexItem { Grow = 1, Child = cancel },
-            new FlexItem { Grow = 1, Child = primary },
-        },
-    };
+            Gap = gap,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Children =
+            {
+                new FlexItem { Grow = 1, Child = new MultiChildView() },
+                cancel,
+                primary,
+            },
+        };
+    }
 
     public static TextView ErrorView()
     {
@@ -114,10 +133,11 @@ internal static class DialogFrame
         return view;
     }
 
-    private static RectView Wrap(View child)
+    private static RectView Wrap(View child, float width)
     {
         var view = new RectView
         {
+            Width = width,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(DefaultBorderRadius),
             Padding = PaddingStyle.All(DefaultPadding),

@@ -24,7 +24,6 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
 
     public CreateTagDialog(Repo repo, string sha, string shortSha, string summary, Action onClose)
     {
-        Width = 560f;
         _onClose = onClose;
 
         var subtitle = new TextView { Text = "Create annotated tag", TextWrap = TextWrap.Wrap };
@@ -42,7 +41,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _createButton = new DialogButton("Create") { Height = DialogFrame.DefaultButtonHeight };
+        _createButton = new DialogButton("Create", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Create tag", onClose, new FlexColumnView
         {
@@ -62,7 +61,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
                 new MultiChildView { Height = 4 },
                 DialogFrame.ButtonsRow(_cancelButton, _createButton),
             },
-        }));
+        }, DialogFrame.WidthWide));
 
         // Submit-on-enter / cancel-on-esc lives on the name input, not the dialog — see
         // CreateBranchDialog: the input controller consumes left-press inside its own view,

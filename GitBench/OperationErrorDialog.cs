@@ -23,7 +23,7 @@ public sealed class OperationErrorDialog : MultiChildView
 
     public OperationErrorDialog(string title, string message, Action onClose)
     {
-        Width = 560;
+        Width = DialogFrame.WidthWide;
         Height = 360;
 
         var titleView = new TextView
@@ -96,18 +96,19 @@ public sealed class OperationErrorDialog : MultiChildView
         scrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
         scrollHost.UsePresenter(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        var okButton = new DialogButton("OK", onClose)
+        var okButton = new DialogButton("OK", onClose, DialogButtonRole.Primary)
         {
-            Height = 32,
+            Height = DialogFrame.DefaultButtonHeight,
+            MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
         };
 
         var buttonsRow = new FlexRowView
         {
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
                 new FlexItem { Grow = 1, Child = new MultiChildView() },
-                new FlexItem { Grow = 1, Child = okButton },
+                okButton,
             },
         };
 

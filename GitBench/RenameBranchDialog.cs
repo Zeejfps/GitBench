@@ -42,7 +42,7 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _renameButton = new DialogButton("Rename") { Height = DialogFrame.DefaultButtonHeight };
+        _renameButton = new DialogButton("Rename", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Rename branch", onClose, new FlexColumnView
         {

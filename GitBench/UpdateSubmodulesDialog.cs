@@ -12,8 +12,6 @@ namespace GitGui;
 /// </summary>
 internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmodulesDialogViewModel>
 {
-    private const float DialogWidth = 480f;
-
     private readonly Action _onClose;
     private readonly CheckboxView _initCheckbox;
     private readonly CheckboxView _recursiveCheckbox;
@@ -26,7 +24,6 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
 
     public UpdateSubmodulesDialog(Repo primary, Repo? target, Action onClose)
     {
-        Width = DialogWidth;
         _onClose = onClose;
 
         var titleText = target is null ? "Update all submodules" : "Update submodule";
@@ -57,7 +54,7 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _updateButton = new DialogButton("Update") { Height = DialogFrame.DefaultButtonHeight };
+        _updateButton = new DialogButton("Update", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build(titleText, onClose, new FlexColumnView
         {

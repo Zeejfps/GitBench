@@ -38,6 +38,20 @@ public sealed record ActionButtonStyles(
     uint TextHover,
     uint TextDisabled);
 
+// Filled footer buttons (the "action" button next to Cancel). Primary uses the theme
+// accent; Destructive uses the danger red for delete/discard/force/abort/reset actions.
+// Cancel keeps the outline BorderedButton chrome, so the filled button always reads as
+// the dialog's commit action.
+public sealed record DialogActionButtonStyles(
+    uint PrimaryFill,
+    uint PrimaryFillHover,
+    uint PrimaryText,
+    uint DestructiveFill,
+    uint DestructiveFillHover,
+    uint DestructiveText,
+    uint DisabledFill,
+    uint DisabledText);
+
 public sealed record CheckboxStyles(
     uint TextIdle,
     uint TextHover,
@@ -85,6 +99,17 @@ public partial record ThemeStyles
             BorderHover: p.Accent,
             Text: p.TextStrong,
             TextDisabled: p.TextDisabled);
+
+    private static DialogActionButtonStyles BuildDialogActionButton(ThemePalette p, StatusPalette status) =>
+        new(
+            PrimaryFill: p.Accent,
+            PrimaryFillHover: p.AccentHover,
+            PrimaryText: p.TextOnAccent,
+            DestructiveFill: status.Danger,
+            DestructiveFillHover: Lighten(status.Danger, 0x18),
+            DestructiveText: 0xFFFFFFFFu,
+            DisabledFill: p.InputSurface,
+            DisabledText: p.TextDisabled);
 
     private static DialogIconButtonStyles BuildDialogIconButton(ThemePalette p) =>
         new(

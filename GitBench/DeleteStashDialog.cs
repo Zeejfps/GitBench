@@ -20,8 +20,6 @@ public sealed class DeleteStashDialog : MultiChildView
 
     public DeleteStashDialog(Repo repo, int index, string subject, Action onClose)
     {
-        Width = 460f;
-
         _onClose = onClose;
 
         var prompt = new TextView
@@ -34,7 +32,7 @@ public sealed class DeleteStashDialog : MultiChildView
         _errorView = DialogFrame.ErrorView();
 
         var cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete", () => TryDelete(repo, index)) { Height = DialogFrame.DefaultButtonHeight };
+        _deleteButton = new DialogButton("Delete", () => TryDelete(repo, index), DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Delete stash?", onClose, new FlexColumnView
         {
@@ -46,7 +44,7 @@ public sealed class DeleteStashDialog : MultiChildView
                 _errorView,
                 DialogFrame.ButtonsRow(cancelButton, _deleteButton),
             },
-        }));
+        }, DialogFrame.WidthCompact));
 
         this.UsePresenter(ctx => new DeleteStashPresenter(
             this,

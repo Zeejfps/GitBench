@@ -56,7 +56,7 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _createButton = new DialogButton("Create") { Height = DialogFrame.DefaultButtonHeight };
+        _createButton = new DialogButton("Create", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("New worktree", onClose, new FlexColumnView
         {

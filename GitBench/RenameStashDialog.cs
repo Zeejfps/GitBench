@@ -23,7 +23,6 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
     public RenameStashDialog(Repo repo, int index, string currentMessage, Action onClose)
     {
         _onClose = onClose;
-        MinWidthConstraint = 420f;
 
         var subtitle = new TextView
         {
@@ -37,7 +36,7 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _renameButton = new DialogButton("Rename") { Height = DialogFrame.DefaultButtonHeight };
+        _renameButton = new DialogButton("Rename", role: DialogButtonRole.Primary) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Rename stash", onClose, new FlexColumnView
         {

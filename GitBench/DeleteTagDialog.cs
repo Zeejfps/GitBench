@@ -21,7 +21,6 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
 
     public DeleteTagDialog(Repo repo, string tagName, Action onClose)
     {
-        Width = 480f;
         _onClose = onClose;
 
         var subtitle = new TextView { Text = "Delete tag from your repository", TextWrap = TextWrap.Wrap };
@@ -34,7 +33,7 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _deleteButton = new DialogButton("Delete Tag") { Height = DialogFrame.DefaultButtonHeight };
+        _deleteButton = new DialogButton("Delete Tag", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         AddChildToSelf(DialogFrame.Build("Delete tag", onClose, new FlexColumnView
         {

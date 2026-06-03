@@ -11,7 +11,8 @@ namespace GitGui;
 /// </summary>
 internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktreeDialogViewModel>
 {
-    private const float DialogWidth = 460f;
+    // Mirrors the frame width Build() applies, so the path pre-wrap math below stays in sync.
+    private const float DialogWidth = DialogFrame.WidthStandard;
     private const float CodeBlockInnerPadding = 8f;
 
     private readonly string _path;
@@ -25,7 +26,6 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
 
     public RemoveWorktreeDialog(Repo primary, Repo worktree, Action onClose)
     {
-        Width = DialogWidth;
         _onClose = onClose;
         _path = worktree.Path;
 
@@ -83,7 +83,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
         _errorView = DialogFrame.ErrorView();
 
         _cancelButton = new DialogButton("Cancel", onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _removeButton = new DialogButton("Remove") { Height = DialogFrame.DefaultButtonHeight };
+        _removeButton = new DialogButton("Remove", role: DialogButtonRole.Destructive) { Height = DialogFrame.DefaultButtonHeight };
 
         var dialogBody = DialogFrame.Build("Remove worktree", onClose, new FlexColumnView
         {
