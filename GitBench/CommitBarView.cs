@@ -132,23 +132,8 @@ internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewMode
     {
         _vm = vm;
 
-        // Title: VM → input (with feedback guard) and input → VM. The state's record
-        // equality stops the feedback loop on its own — writing the same string back is a
-        // no-op — but checking the span first skips the input Clear+Enter churn.
-        vm.Title.Subscribe(s =>
-        {
-            if (_titleInput.Text.SequenceEqual(s.AsSpan())) return;
-            _titleInput.Clear();
-            if (s.Length > 0) _titleInput.Enter(s.AsSpan());
-        });
-        _titleInput.TextChanged += () => vm.SetTitle(_titleInput.Text.ToString());
-
-        vm.Description.Subscribe(s =>
-        {
-            if (_descriptionField.Text.SequenceEqual(s.AsSpan())) return;
-            _descriptionField.SetText(s.AsSpan());
-        });
-        _descriptionField.TextChanged += () => vm.SetDescription(_descriptionField.Text.ToString());
+        _titleInput.BindTwoWay(vm.Title, vm.SetTitle);
+        _descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
         // Amend checkbox is two-way against vm.Amend; record equality stops the loop.
         vm.Amend.Subscribe(b => _amendCheckbox.IsChecked.Value = b);

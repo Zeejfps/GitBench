@@ -122,13 +122,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
         vm.CloseRequested += _onClose;
         vm.FocusMessageRequested += () => _messageController.BeginEditing();
 
-        vm.Message.Subscribe(s =>
-        {
-            if (_messageInput.Text.SequenceEqual(s.AsSpan())) return;
-            _messageInput.Clear();
-            if (s.Length > 0) _messageInput.Enter(s.AsSpan());
-        });
-        _messageInput.TextChanged += () => vm.SetMessage(_messageInput.Text.ToString());
+        _messageInput.BindTwoWay(vm.Message, vm.SetMessage);
 
         vm.KeepStaged.Subscribe(b => _keepStagedCheckbox.IsChecked.Value = b);
         _keepStagedCheckbox.IsChecked.Changed += b => vm.SetKeepStaged(b);

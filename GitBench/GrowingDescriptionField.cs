@@ -2,6 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
+using ZGF.Observable;
 
 namespace GitGui;
 
@@ -36,11 +37,13 @@ internal sealed class GrowingDescriptionField : MultiChildView
 
     public ReadOnlySpan<char> Text => _input.Text;
 
-    public event Action? TextChanged
-    {
-        add => _input.TextChanged += value;
-        remove => _input.TextChanged -= value;
-    }
+    /// <summary>The multi-line text as an observable. See <see cref="TextInputView.TextValue"/>.</summary>
+    public IReadable<string> TextValue => _input.TextValue;
+
+    /// <summary>Two-way binds the field to a view model's read-only text + setter. Delegates
+    /// to the inner input's <c>BindTwoWay</c>.</summary>
+    public void BindTwoWay(IReadable<string> source, Action<string> sink)
+        => _input.BindTwoWay(source, sink);
 
     public void BeginEditing() => _inputController.BeginEditing();
     public void EndEditing() => _inputController.EndEditing();
@@ -59,11 +62,7 @@ internal sealed class GrowingDescriptionField : MultiChildView
 
     public void Clear() => _input.Clear();
 
-    public void SetText(ReadOnlySpan<char> text)
-    {
-        _input.Clear();
-        if (text.Length > 0) _input.Enter(text);
-    }
+    public void SetText(ReadOnlySpan<char> text) => _input.SetText(text);
 
     public GrowingDescriptionField(float minHeight, float maxHeight)
     {
