@@ -31,7 +31,9 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
 
         State = Slice(s => s.State);
         Abort = new Command(DoAbort);
-        Continue = new Command(DoContinue);
+        // Continue stays disabled while unmerged paths remain — git would refuse anyway.
+        var canContinue = Slice(s => s.State != RepoOperationState.None && !s.HasConflicts);
+        Continue = new Command(DoContinue, canContinue);
 
         Subscriptions.Add(_registry.Active.Subscribe(_ => Reload()));
         Subscriptions.Add(_bus.SubscribeScoped<RefsChangedMessage>(_ => Reload()));
@@ -93,16 +95,21 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
 
         var repoId = repo.Id;
         var service = _gitService;
-        RunBackground<RepoOperationState>(
+        RunBackground<(RepoOperationState State, bool HasConflicts)>(
             () =>
             {
-                try { return (service.GetOperationState(repo), null); }
-                catch { return (RepoOperationState.None, null); }
+                try
+                {
+                    var state = service.GetOperationState(repo);
+                    var hasConflicts = state != RepoOperationState.None && service.HasUnmergedPaths(repo);
+                    return ((state, hasConflicts), null);
+                }
+                catch { return ((RepoOperationState.None, false), null); }
             },
-            (state, _) =>
+            (result, _) =>
             {
                 if (_registry.Active.Value?.Id != repoId) return;
-                Update(_ => new OperationBannerState(state));
+                Update(_ => new OperationBannerState(result.State, result.HasConflicts));
             });
     }
 
@@ -113,7 +120,7 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
     }
 }
 
-internal sealed record OperationBannerState(RepoOperationState State)
+internal sealed record OperationBannerState(RepoOperationState State, bool HasConflicts = false)
 {
     public static OperationBannerState Initial { get; } = new(RepoOperationState.None);
 }

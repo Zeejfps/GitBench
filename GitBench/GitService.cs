@@ -1217,6 +1217,12 @@ public sealed class GitService : IGitService
         return !string.IsNullOrWhiteSpace(output);
     }
 
+    public bool HasUnmergedPaths(Repo repo)
+    {
+        try { return IsGitRepo(repo.Path) && HasUnmergedPaths(repo.Path); }
+        catch { return false; }
+    }
+
     public PushStatus GetPushStatus(Repo repo)
     {
         try

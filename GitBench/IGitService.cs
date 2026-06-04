@@ -47,6 +47,7 @@ public interface IGitService
     // delete) or on any failure — the caller then renders that side plain.
     string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null);
     RepoOperationState GetOperationState(Repo repo);
+    bool HasUnmergedPaths(Repo repo);
     AbortOperationOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOperationOutcome ContinueOperation(Repo repo, RepoOperationState state);
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage);
