@@ -2882,7 +2882,15 @@ public sealed class GitService : IGitService
 
             if (!inHunk || curLines == null) continue;
             if (raw.Length == 0) continue;
-            if (raw[0] == '\\') continue;
+            if (raw[0] == '\\')
+            {
+                // "\ No newline at end of file" applies to the line just emitted. Flag it so
+                // the patch builder can reproduce the marker rather than silently appending a
+                // trailing newline when the hunk is staged/discarded.
+                if (curLines.Count > 0)
+                    curLines[^1] = curLines[^1] with { NoNewlineAtEof = true };
+                continue;
+            }
 
             DiffLine? line = null;
             switch (raw[0])

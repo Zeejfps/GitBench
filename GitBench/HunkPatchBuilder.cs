@@ -58,6 +58,8 @@ internal static class HunkPatchBuilder
                 _ => ' ',
             };
             sb.Append(prefix).Append(line.Text).Append('\n');
+            if (line.NoNewlineAtEof)
+                sb.Append("\\ No newline at end of file\n");
         }
 
         return sb.ToString();

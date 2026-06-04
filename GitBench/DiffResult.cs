@@ -8,7 +8,14 @@ public sealed record DiffLine(
     DiffLineKind Kind,
     int? OldLineNumber,
     int? NewLineNumber,
-    string Text);
+    string Text)
+{
+    // Set when the unified diff emitted "\ No newline at end of file" for this line — i.e.
+    // this line is the last on its side and that side has no trailing newline. Preserved so
+    // HunkPatchBuilder can round-trip it; dropping it makes a staged/discarded hunk silently
+    // gain a trailing newline, which git apply then writes into the working tree.
+    public bool NoNewlineAtEof { get; init; }
+}
 
 public sealed record DiffHunk(
     int OldStart,
