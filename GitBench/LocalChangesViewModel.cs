@@ -665,21 +665,34 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             onResult: (_, err) =>
             {
                 _commitSpinner.Stop();
-                Update(s => s with { CommitBusy = false, OpError = err });
-                if (err != null) return;
+                if (err != null)
+                {
+                    Update(s => s with { CommitBusy = false, OpError = err });
+                    return;
+                }
+
+                // A successful commit folds every staged file into the new commit, so clear
+                // the staged side optimistically rather than waiting for the store's post-commit
+                // reload (CommitCreatedMessage → ReloadLocal) to round-trip — that lag is why the
+                // panel used to linger for ~a second. The reload reconciles to the same empty
+                // staged list, so there's no flicker.
+                _stagedFromIndex = Empty;
 
                 // After a successful commit the editor is cleared regardless of mode.
                 // When amending we also drop the session — bypassing SetAmend(false)'s
                 // restore-from-backup, which would put the pre-amend text back.
-                if (_amend != null)
+                _amend = null;
+                Update(s => s with
                 {
-                    _amend = null;
-                    Update(s => s with { Amend = false, Title = string.Empty, Description = string.Empty });
-                }
-                else
-                {
-                    Update(s => s with { Title = string.Empty, Description = string.Empty });
-                }
+                    CommitBusy = false,
+                    OpError = null,
+                    Amend = false,
+                    Title = string.Empty,
+                    Description = string.Empty,
+                    Staged = Empty,
+                    Selection = GitGui.Selection.Create(
+                        s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, Empty),
+                });
                 _bus.Broadcast(new CommitCreatedMessage(repo.Id));
             },
             lane: _commitGen);
