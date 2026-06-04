@@ -26,6 +26,9 @@ internal abstract record DiffRenderState
         DiffSide Side,
         bool Truncated,
         DiffHighlight? Highlight = null) : DiffRenderState;
+    // A conflicted (unmerged) working-tree file. Drives the Fork-style resolution header
+    // (two side cards + take ours/theirs/both + open-in-editor) instead of a normal diff.
+    public sealed record Conflict(string Path, ConflictContext Context) : DiffRenderState;
 }
 
 // Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is
@@ -43,6 +46,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    // Used only for "Open in editor" on a conflict. Null in panes that never show conflicts
+    // (commit details, and pop-out windows pinned to a commit diff).
+    private readonly IPlatformShell? _shell;
     private bool _deferReloadToWorkingTreeChange;
 
     // Syntax highlighting runs on its own lane so an in-flight highlight for a file we've
@@ -67,13 +73,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IPlatformShell? shell = null)
         : base(dispatcher, new DiffState(new DiffRenderState.Placeholder(EmptyPlaceholder), null, DiffViewMode.Diff))
     {
         _target = target;
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _shell = shell;
         _highlightLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
@@ -169,6 +177,56 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 bus.Broadcast(new WorkingTreeChangedMessage(repoId));
             });
         });
+    }
+
+    // Conflict resolution from the resolution header. Each writes the chosen content + stages
+    // (git add marks the path resolved), then broadcasts a working-tree change so the file
+    // lists, the operation banner, and this diff all re-sync. The reload drops the conflict
+    // (now staged), so the pane swaps back to a normal/empty diff automatically.
+    public void ResolveTakeOurs() => RunResolve((svc, repo, path) => svc.TakeOurs(repo, path));
+
+    public void ResolveTakeTheirs() => RunResolve((svc, repo, path) => svc.TakeTheirs(repo, path));
+
+    public void ResolveTakeBoth() => RunResolve((svc, repo, path) => svc.TakeBoth(repo, path));
+
+    private void RunResolve(Func<IGitService, Repo, string, ResolveOutcome> op)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
+
+        var path = conflict.Path;
+        var service = _gitService;
+        var bus = _bus;
+        var dispatcher = Dispatcher;
+        var repoId = repo.Id;
+        Task.Run(() =>
+        {
+            ResolveOutcome outcome;
+            try { outcome = op(service, repo, path); }
+            catch (Exception ex) { outcome = new ResolveOutcome(false, ex.Message); }
+
+            dispatcher.Post(() =>
+            {
+                if (!outcome.Success)
+                {
+                    Update(s => s with { OpError = outcome.ErrorMessage });
+                    return;
+                }
+                Update(s => s with { OpError = null });
+                bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+            });
+        });
+    }
+
+    // Opens the conflicted file in the OS default editor so the user can resolve markers by
+    // hand; they then stage it normally to mark it resolved.
+    public void OpenConflictInEditor()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null || _shell == null) return;
+        if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
+        _shell.OpenFile(System.IO.Path.Combine(repo.Path, conflict.Path));
     }
 
     public void RequestDiscardHunk(int hunkIndex)
@@ -294,6 +352,16 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         RunBackground<LoadResult>(
             work: () =>
             {
+                // A conflicted working-tree file gets the resolution header, not a normal diff.
+                // GetConflictContext is cheap (one `ls-files -u`) and returns null for the
+                // overwhelmingly common non-conflict case before doing any heavier work.
+                if (side == DiffSide.Unstaged)
+                {
+                    var conflict = git.GetConflictContext(repo, path);
+                    if (conflict != null)
+                        return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
+                }
+
                 var diff = git.GetDiff(repo, path, side, commitSha);
                 if (mode == DiffViewMode.Diff)
                     return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);

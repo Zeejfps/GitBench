@@ -117,7 +117,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         CommitBusy = Slice(s => s.CommitBusy);
 
         _commitSpinner = new SpinnerAnimation(dispatcher);
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus);
+        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, shell);
 
         Update(s => s with { ViewMode = preferences.Current.FileViewMode });
 

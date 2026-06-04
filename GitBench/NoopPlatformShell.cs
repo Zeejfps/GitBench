@@ -17,4 +17,9 @@ public sealed class NoopPlatformShell : IPlatformShell
     {
         Console.WriteLine($"[PlatformShell] No native OpenTerminal for this OS. Path: {path}");
     }
+
+    public void OpenFile(string path)
+    {
+        Console.WriteLine($"[PlatformShell] No native OpenFile for this OS. Path: {path}");
+    }
 }

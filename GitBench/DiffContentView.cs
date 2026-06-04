@@ -508,6 +508,12 @@ internal sealed class DiffContentView : View, IScrollableContent
                 DrawPlaceholder(c, pos, p.Text, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
+            case DiffRenderState.Conflict:
+                // The embedded pane swaps in the rich resolution view; this fallback is only
+                // hit by the pop-out window, which has no resolution UI.
+                DrawPlaceholder(c, pos, "Resolve this conflict in the main window.", _styles.PlaceholderText, z + 1);
+                NotifyScrollChanged(viewportFits: true);
+                return;
             case DiffRenderState.Loaded loaded when loaded.Result.ErrorMessage != null:
                 DrawPlaceholder(c, pos, loaded.Result.ErrorMessage, _styles.ErrorText, z + 1);
                 NotifyScrollChanged(viewportFits: true);

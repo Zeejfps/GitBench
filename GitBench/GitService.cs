@@ -704,6 +704,276 @@ public sealed class GitService : IGitService
         RunGitMutationOrThrow(repo.Path, args);
     }
 
+    public ResolveOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
+
+    public ResolveOutcome TakeTheirs(Repo repo, string path) => TakeSide(repo, path, ours: false);
+
+    // Resolves a conflict to one side: check out that side's blob, then stage it. Stage 2 is
+    // "ours", stage 3 is "theirs". A delete/modify conflict is missing one of those stages —
+    // choosing the side that deleted the file means removing it (`git rm`), not checking it out.
+    private ResolveOutcome TakeSide(Repo repo, string path, bool ours)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new ResolveOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+
+            var stages = GetUnmergedStages(repo.Path, path);
+            var wantStage = ours ? 2 : 3;
+            // The chosen side deleted the file (its stage is absent but the path is unmerged):
+            // resolve by removing it from index + working tree.
+            if (stages.Count > 0 && !stages.Contains(wantStage))
+            {
+                var (rmOk, rmErr) = RunMutation(repo.Path, new[] { "rm", "-f", "--", path });
+                return rmOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, rmErr);
+            }
+
+            var (coOk, coErr) = RunMutation(repo.Path, new[] { "checkout", ours ? "--ours" : "--theirs", "--", path });
+            if (!coOk) return new ResolveOutcome(false, coErr);
+
+            var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
+            return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
+        }
+        catch (Exception ex)
+        {
+            return new ResolveOutcome(false, ex.Message);
+        }
+    }
+
+    // Marks a manually-edited file resolved by staging it — `git add` is exactly how git
+    // records a resolution. If the file is gone (the user resolved by deleting it), `git add`
+    // fails, so fall back to `git rm` to clear the unmerged index entry.
+    public ResolveOutcome MarkResolved(Repo repo, string path)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new ResolveOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+
+            if (File.Exists(Path.Combine(repo.Path, path)))
+            {
+                var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
+                return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
+            }
+
+            var (rmOk, rmErr) = RunMutation(repo.Path, new[] { "rm", "-f", "--", path });
+            return rmOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, rmErr);
+        }
+        catch (Exception ex)
+        {
+            return new ResolveOutcome(false, ex.Message);
+        }
+    }
+
+    // Resolves a conflict by keeping both sides: writes ours' blob followed by theirs' blob
+    // (a newline boundary inserted if ours doesn't end in one), then stages. Missing sides
+    // (delete/modify) degrade to whichever side has content.
+    public ResolveOutcome TakeBoth(Repo repo, string path)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new ResolveOutcome(false, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+
+            var ours = ShowStage(repo.Path, 2, path);
+            var theirs = ShowStage(repo.Path, 3, path);
+            if (ours == null && theirs == null)
+                return new ResolveOutcome(false, "Neither side has content to combine.");
+
+            var combined = CombineSides(ours, theirs);
+            var full = Path.Combine(repo.Path, path);
+            var dir = Path.GetDirectoryName(full);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            File.WriteAllText(full, combined);
+
+            var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
+            return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
+        }
+        catch (Exception ex)
+        {
+            return new ResolveOutcome(false, ex.Message);
+        }
+    }
+
+    private static string CombineSides(string? ours, string? theirs)
+    {
+        if (string.IsNullOrEmpty(ours)) return theirs ?? string.Empty;
+        if (string.IsNullOrEmpty(theirs)) return ours;
+        return ours.EndsWith('\n') ? ours + theirs : ours + "\n" + theirs;
+    }
+
+    public ConflictSides GetConflictSides(Repo repo, string path)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new ConflictSides(null, null, null, "Not a git repository.");
+
+            using var _ = LockRepo(repo.Path);
+            return new ConflictSides(
+                Base: ShowStage(repo.Path, 1, path),
+                Ours: ShowStage(repo.Path, 2, path),
+                Theirs: ShowStage(repo.Path, 3, path),
+                ErrorMessage: null);
+        }
+        catch (Exception ex)
+        {
+            return new ConflictSides(null, null, null, ex.Message);
+        }
+    }
+
+    public ConflictContext? GetConflictContext(Repo repo, string path)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return null;
+
+            var stages = GetUnmergedStages(repo.Path, path);
+            if (stages.Count == 0) return null;   // not a conflict — caller shows the normal diff
+
+            var hasBase = stages.Contains(1);
+            var oursPresent = stages.Contains(2);
+            var theirsPresent = stages.Contains(3);
+
+            var operation = GetOperationState(repo);
+
+            var oursSha = TrimOrNull(RunGit(repo.Path, out _, "rev-parse", "HEAD"));
+            var oursMeta = GetCommitMeta(repo.Path, oursSha);
+            var oursLabel = GetCurrentBranchLabel(repo.Path);
+
+            var theirsSha = GetIncomingSha(repo.Path, operation);
+            var theirsMeta = GetCommitMeta(repo.Path, theirsSha);
+            var theirsLabel = GetRefLabelForSha(repo.Path, theirsSha) ?? DescribeIncoming(operation, theirsSha);
+
+            return new ConflictContext(
+                operation,
+                new ConflictSideInfo(oursLabel, ShortSha(oursSha), oursMeta.Subject, oursMeta.When,
+                    ChangeKind(hasBase, present: oursPresent)),
+                new ConflictSideInfo(theirsLabel, ShortSha(theirsSha), theirsMeta.Subject, theirsMeta.When,
+                    ChangeKind(hasBase, present: theirsPresent)),
+                hasBase);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static ConflictChangeKind ChangeKind(bool hasBase, bool present)
+    {
+        if (!present) return ConflictChangeKind.Deleted;
+        return hasBase ? ConflictChangeKind.Modified : ConflictChangeKind.Added;
+    }
+
+    // The current branch name, or a short SHA when detached (e.g. mid-rebase).
+    private string GetCurrentBranchLabel(string repoPath)
+    {
+        var name = RunGit(repoPath, out _, "symbolic-ref", "--short", "-q", "HEAD");
+        if (!string.IsNullOrWhiteSpace(name)) return name.Trim();
+        var sha = RunGit(repoPath, out _, "rev-parse", "--short", "HEAD");
+        return string.IsNullOrWhiteSpace(sha) ? "HEAD" : sha.Trim();
+    }
+
+    // SHA of the incoming side, read from the operation's sentinel file in the gitdir.
+    private string? GetIncomingSha(string repoPath, RepoOperationState op)
+    {
+        var gitDir = GetGitDir(repoPath);
+        if (gitDir == null) return null;
+
+        string? Read(params string[] rel)
+        {
+            var p = gitDir;
+            foreach (var r in rel) p = Path.Combine(p, r);
+            if (!File.Exists(p)) return null;
+            var text = File.ReadAllText(p).Trim();
+            // MERGE_HEAD can list several parents (octopus) — the first is enough to label.
+            var nl = text.IndexOf('\n');
+            return nl < 0 ? text : text[..nl];
+        }
+
+        return op switch
+        {
+            RepoOperationState.Merge => Read("MERGE_HEAD"),
+            RepoOperationState.CherryPick => Read("CHERRY_PICK_HEAD"),
+            RepoOperationState.Revert => Read("REVERT_HEAD"),
+            RepoOperationState.Rebase => Read("rebase-merge", "stopped-sha") ?? Read("rebase-apply", "original-commit"),
+            _ => Read("MERGE_HEAD") ?? Read("CHERRY_PICK_HEAD") ?? Read("REVERT_HEAD"),
+        };
+    }
+
+    // A branch/remote ref name pointing exactly at the incoming commit, else null.
+    private string? GetRefLabelForSha(string repoPath, string? sha)
+    {
+        if (string.IsNullOrEmpty(sha)) return null;
+        var pointed = RunGit(repoPath, out _, "for-each-ref", "--points-at", sha,
+            "--format=%(refname:short)", "refs/heads", "refs/remotes");
+        if (string.IsNullOrWhiteSpace(pointed)) return null;
+        var first = pointed.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        return first.Length > 0 ? first[0].Trim() : null;
+    }
+
+    private static string DescribeIncoming(RepoOperationState op, string? sha)
+    {
+        var shortSha = ShortSha(sha);
+        return op switch
+        {
+            RepoOperationState.CherryPick => string.IsNullOrEmpty(shortSha) ? "cherry-pick" : shortSha,
+            RepoOperationState.Revert => string.IsNullOrEmpty(shortSha) ? "revert" : shortSha,
+            RepoOperationState.Rebase => string.IsNullOrEmpty(shortSha) ? "rebase" : shortSha,
+            _ => string.IsNullOrEmpty(shortSha) ? "incoming" : shortSha,
+        };
+    }
+
+    // Commit subject + committer date for a SHA. Uses a unit-separator between fields so the
+    // subject can contain anything. Empty/min on any failure.
+    private (string Subject, DateTimeOffset When) GetCommitMeta(string repoPath, string? sha)
+    {
+        if (string.IsNullOrEmpty(sha)) return (string.Empty, DateTimeOffset.MinValue);
+        var output = RunGit(repoPath, out _, "show", "-s", "--format=%s%x1f%cI", sha);
+        if (string.IsNullOrWhiteSpace(output)) return (string.Empty, DateTimeOffset.MinValue);
+        var parts = output.Trim().Split('\x1f');
+        var subject = parts.Length > 0 ? parts[0] : string.Empty;
+        var when = parts.Length > 1 && DateTimeOffset.TryParse(parts[1], out var d) ? d : DateTimeOffset.MinValue;
+        return (subject, when);
+    }
+
+    private static string? TrimOrNull(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
+
+    private static string ShortSha(string? sha)
+        => string.IsNullOrEmpty(sha) ? string.Empty : (sha.Length >= 7 ? sha[..7] : sha);
+
+    // Blob text for one merge stage (1=base, 2=ours, 3=theirs). Null when the stage is absent
+    // — `git show :n:path` exits non-zero, which we treat as "this side doesn't exist".
+    private string? ShowStage(string repoPath, int stage, string path)
+    {
+        var result = _runner.Run(repoPath, new[] { "show", $":{stage}:{path}" }, GitProcessRunner.GitLaunch.Direct);
+        return result.Ok ? result.Stdout : null;
+    }
+
+    // Which conflict stages (1/2/3) exist for an unmerged path. `git ls-files -u` lists one
+    // line per present stage: "<mode> <sha> <stage>\t<path>". Empty when the path isn't unmerged.
+    private HashSet<int> GetUnmergedStages(string repoPath, string path)
+    {
+        var stages = new HashSet<int>();
+        var output = RunGit(repoPath, out _, "ls-files", "-u", "--", path);
+        if (string.IsNullOrEmpty(output)) return stages;
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var tab = line.IndexOf('\t');
+            if (tab < 0) continue;
+            var meta = line[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (meta.Length >= 3 && int.TryParse(meta[2], out var stage))
+                stages.Add(stage);
+        }
+        return stages;
+    }
+
     public string? ApplyPatch(Repo repo, string patch, bool cached, bool reverse)
     {
         if (string.IsNullOrEmpty(patch)) return null;

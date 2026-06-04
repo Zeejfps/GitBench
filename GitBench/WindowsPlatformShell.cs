@@ -103,6 +103,13 @@ public sealed class WindowsPlatformShell : IPlatformShell
         using var _ = Process.Start(psi);
     }
 
+    public void OpenFile(string path)
+    {
+        // UseShellExecute routes through the shell so the file opens in its default app.
+        var psi = new ProcessStartInfo(path) { UseShellExecute = true };
+        using var _ = Process.Start(psi);
+    }
+
     public void OpenTerminal(string path)
     {
         // Windows Terminal first; fall back to cmd.exe if wt isn't installed.

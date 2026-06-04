@@ -64,6 +64,20 @@ public interface IGitService
     RebaseOutcome Rebase(Repo repo, string targetRef, bool autostash);
     CherryPickOutcome CherryPick(Repo repo, string commitSha);
     RevertCommitOutcome RevertCommit(Repo repo, string commitSha);
+    // Per-file conflict resolution. TakeOurs/TakeTheirs check out the chosen side and stage
+    // it; MarkResolved stages the working-tree file as-is (manual-edit path). Each returns a
+    // ResolveOutcome and broadcasting is left to the caller.
+    ResolveOutcome TakeOurs(Repo repo, string path);
+    ResolveOutcome TakeTheirs(Repo repo, string path);
+    // Resolves by keeping both sides: writes ours' content followed by theirs' content and stages.
+    ResolveOutcome TakeBoth(Repo repo, string path);
+    ResolveOutcome MarkResolved(Repo repo, string path);
+    // Ours/theirs/base blob text for a conflicted path (stages 2/3/1). Any side may be null
+    // when that stage is absent (add/add has no base, delete/modify is missing a side).
+    ConflictSides GetConflictSides(Repo repo, string path);
+    // Context for the conflict-resolution UI: the in-progress operation plus the ours/theirs
+    // commit metadata and per-side change kind. Returns null when the path isn't conflicted.
+    ConflictContext? GetConflictContext(Repo repo, string path);
 }
 
 public enum MergeStrategy
@@ -176,3 +190,30 @@ public sealed record DeleteRemoteBranchOutcome(bool Success, string? ErrorMessag
 public sealed record EditRemoteOutcome(bool Success, string? ErrorMessage);
 
 public sealed record StashOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
+
+public sealed record ResolveOutcome(bool Success, string? ErrorMessage);
+
+// Text of each conflict side for a path; null when that stage doesn't exist. ErrorMessage
+// is set only on an outright failure (not a git repo, etc.), not for a merely-absent side.
+public sealed record ConflictSides(string? Base, string? Ours, string? Theirs, string? ErrorMessage);
+
+public enum ConflictChangeKind { Modified, Added, Deleted }
+
+// One side of a conflict for the resolution header: a human label (branch name or short
+// sha), the short sha, the commit subject + date, and what that side did to the file.
+public sealed record ConflictSideInfo(
+    string Label,
+    string ShortSha,
+    string Subject,
+    DateTimeOffset When,
+    ConflictChangeKind Change);
+
+// Everything the conflict-resolution header needs: the in-progress operation and both
+// sides. Ours is the current branch/HEAD; Theirs is the incoming commit (MERGE_HEAD,
+// CHERRY_PICK_HEAD, REVERT_HEAD, or the rebase commit being replayed). HasBase is whether a
+// common ancestor blob exists (false for add/add).
+public sealed record ConflictContext(
+    RepoOperationState Operation,
+    ConflictSideInfo Ours,
+    ConflictSideInfo Theirs,
+    bool HasBase);
