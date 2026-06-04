@@ -252,15 +252,24 @@ internal sealed class GitProcessRunner
         if (string.IsNullOrWhiteSpace(text)) return false;
         foreach (var line in text.Split('\n'))
         {
-            var t = line.TrimStart();
-            if (t.StartsWith("error:", StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith("fatal:", StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith("hint:", StringComparison.OrdinalIgnoreCase)
-                || t.StartsWith("warning:", StringComparison.OrdinalIgnoreCase))
-                return true;
+            if (IsErrorBlockStart(line.TrimStart())) return true;
         }
         return false;
     }
+
+    // Lines that mark the start of the meaningful error block. Besides git's own
+    // "error:"/"fatal:"/"hint:"/"warning:" prefixes, push failures carry the actual reason on
+    // lines that come *before* the generic "error: failed to push some refs": the "! [rejected]"
+    // / "! [remote rejected]" status summary and "remote:" messages relayed from the server
+    // (permission denied, pre-receive hook output). Anchoring on those keeps the real cause in
+    // the block instead of trimming it away above the first "error:" line.
+    private static bool IsErrorBlockStart(string trimmed)
+        => trimmed.StartsWith("error:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("fatal:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("hint:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("warning:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("remote:", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("!");
 
     // Pulls the most relevant single line out of a git error blob — typically the
     // "fatal: …" / "error: …" line near the end. Used by callers that show the error in a
@@ -296,11 +305,7 @@ internal sealed class GitProcessRunner
         var startIdx = -1;
         for (var i = 0; i < lines.Length; i++)
         {
-            var trimmed = lines[i].TrimStart();
-            if (trimmed.StartsWith("error:", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("fatal:", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("hint:", StringComparison.OrdinalIgnoreCase)
-                || trimmed.StartsWith("warning:", StringComparison.OrdinalIgnoreCase))
+            if (IsErrorBlockStart(lines[i].TrimStart()))
             {
                 startIdx = i;
                 break;
