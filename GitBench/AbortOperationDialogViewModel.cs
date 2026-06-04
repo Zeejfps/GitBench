@@ -5,7 +5,11 @@ namespace GitGui;
 internal sealed class AbortOperationDialogViewModel : IDisposable
 {
     private readonly State<bool> _forceQuitMode = new(false);
-    private readonly State<bool> _forceQuitAvailable = new(false);
+    // Plain field, not a State<T>: written in the background work lambda and read back in the
+    // UI-thread onError callback (which runs after work completes). It drives no binding — only
+    // _forceQuitMode does — so it needs no notifications, and a plain assignment avoids firing
+    // them off the worker thread.
+    private bool _forceQuitAvailable;
 
     public IReadable<string> ConfirmButtonLabel { get; }
     public IReadable<string?> Error => Abort.Error;
@@ -31,7 +35,7 @@ internal sealed class AbortOperationDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.AbortOperation(request.Repo, request.State, _forceQuitMode.Value);
-                _forceQuitAvailable.Value = outcome.ForceQuitAvailable;
+                _forceQuitAvailable = outcome.ForceQuitAvailable;
                 return outcome.Success ? null : (outcome.ErrorMessage ?? "Abort failed.");
             },
             onSuccess: () =>
@@ -45,7 +49,7 @@ internal sealed class AbortOperationDialogViewModel : IDisposable
             {
                 // A first failure that reports force-quit availability flips the button into
                 // "Force clear" mode so a second press can hard-clear the operation state.
-                if (_forceQuitAvailable.Value && !_forceQuitMode.Value)
+                if (_forceQuitAvailable && !_forceQuitMode.Value)
                     _forceQuitMode.Value = true;
             });
     }

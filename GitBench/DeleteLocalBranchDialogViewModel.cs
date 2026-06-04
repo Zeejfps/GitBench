@@ -8,7 +8,11 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
     private readonly DeleteLocalBranchRequest _request;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
-    private readonly State<DeleteRemoteBranchOutcome?> _partialFailure = new(null);
+    // Plain field, not a State<T>: it carries the remote-delete outcome out of the background
+    // work lambda into the UI-thread OnDeleteSucceeded callback. The work runs on a worker
+    // thread and completes before AsyncCommand posts the callback, so the read sees the write —
+    // and a plain assignment fires no observable notifications on the wrong thread.
+    private DeleteRemoteBranchOutcome? _partialFailure;
 
     public State<bool> Force { get; } = new(false);
     public State<bool> DeleteRemote { get; } = new(false);
@@ -51,7 +55,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
             try { remote = _gitService.DeleteRemoteBranch(_request.Repo, remoteName!, remoteBranch!); }
             catch (Exception ex) { remote = new DeleteRemoteBranchOutcome(false, ex.Message); }
             if (!remote.Success)
-                _partialFailure.Value = remote;
+                _partialFailure = remote;
         }
         return null;
     }
@@ -61,7 +65,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
         _bus.Broadcast(new RefsChangedMessage(_request.Repo.Id));
         CloseRequested?.Invoke();
 
-        if (_partialFailure.Value is { } failed)
+        if (_partialFailure is { } failed)
         {
             var remoteName = _request.UpstreamRemote;
             var remoteBranch = _request.UpstreamBranch;
