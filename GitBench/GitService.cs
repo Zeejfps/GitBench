@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using LibGit2Sharp;
 
 namespace GitGui;
@@ -533,17 +532,12 @@ public sealed class GitService : IGitService
     // contains, the same reason GetBranches and GetDiff already shell out.
     public LocalChangesSnapshot GetLocalChanges(Repo repo)
     {
-        var tag = $"[Git status {repo.Path}]";
-        var sw = Stopwatch.StartNew();
         try
         {
             if (!IsGitRepo(repo.Path))
                 return LocalChangesError(repo, "Not a git repository.");
 
-            var statusSw = Stopwatch.StartNew();
             var output = RunGitStatusPorcelain(repo.Path, out var error);
-            statusSw.Stop();
-            Console.WriteLine($"{tag} git status returned in {statusSw.ElapsedMilliseconds}ms ({output?.Length ?? 0} bytes)");
             if (output == null)
                 return LocalChangesError(repo, error ?? "git status failed.");
 
@@ -621,14 +615,10 @@ public sealed class GitService : IGitService
             staged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             unstaged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 
-            sw.Stop();
-            Console.WriteLine($"{tag} done in {sw.ElapsedMilliseconds}ms (staged={staged.Count}, unstaged={unstaged.Count})");
             return new LocalChangesSnapshot(repo.Id, staged, unstaged, null);
         }
         catch (Exception ex)
         {
-            sw.Stop();
-            Console.WriteLine($"{tag} threw in {sw.ElapsedMilliseconds}ms: {ex.Message}");
             return LocalChangesError(repo, ex.Message);
         }
     }
@@ -1135,8 +1125,6 @@ public sealed class GitService : IGitService
 
     public IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo)
     {
-        var tag = $"[Git head-files {repo.Path}]";
-        var sw = Stopwatch.StartNew();
         try
         {
             if (!IsGitRepo(repo.Path)) return Array.Empty<FileChange>();
@@ -1145,14 +1133,10 @@ public sealed class GitService : IGitService
             if (output == null) return Array.Empty<FileChange>();
             var files = ParseDiffTreeNameStatusZ(output);
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
-            sw.Stop();
-            Console.WriteLine($"{tag} done in {sw.ElapsedMilliseconds}ms ({files.Count} files)");
             return files;
         }
-        catch (Exception ex)
+        catch
         {
-            sw.Stop();
-            Console.WriteLine($"{tag} threw in {sw.ElapsedMilliseconds}ms: {ex.Message}");
             return Array.Empty<FileChange>();
         }
     }
@@ -1477,7 +1461,6 @@ public sealed class GitService : IGitService
 
     public FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
     {
-        var tag = $"[Git ff {localBranch} <- {remoteName}/{remoteBranch}]";
         try
         {
             if (!IsGitRepo(repo.Path))
@@ -1486,33 +1469,21 @@ public sealed class GitService : IGitService
             var refspec = $"{remoteBranch}:{localBranch}";
             var args = new List<string> { "fetch", "--progress", remoteName, refspec };
             using var _ = LockRepo(repo.Path);
-            var sw = Stopwatch.StartNew();
-            Console.WriteLine($"{tag} starting");
 
-            var (exitCode, captureText, started) = _runner.RunStreaming(repo.Path, args, line =>
-            {
-                Console.WriteLine($"{tag}   {line}");
-                onLine?.Invoke(line);
-            });
-            sw.Stop();
+            var (exitCode, captureText, started) = _runner.RunStreaming(repo.Path, args, onLine);
 
             if (!started) return new FastForwardOutcome(false, "Failed to start git.");
 
             if (exitCode == 0)
-            {
-                Console.WriteLine($"{tag} done in {sw.ElapsedMilliseconds}ms");
                 return new FastForwardOutcome(true, null);
-            }
 
             var msg = GitProcessRunner.FirstMeaningfulLine(captureText);
             if (string.IsNullOrEmpty(msg)) msg = $"git fetch exited with code {exitCode}.";
             msg = GitProcessRunner.AugmentCredentialError(msg, captureText);
-            Console.WriteLine($"{tag} failed in {sw.ElapsedMilliseconds}ms: {msg}");
             return new FastForwardOutcome(false, msg);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"{tag} threw: {ex.Message}");
             return new FastForwardOutcome(false, ex.Message);
         }
     }
@@ -2288,8 +2259,6 @@ public sealed class GitService : IGitService
     public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary, out string? errorMessage)
     {
         errorMessage = null;
-        var tag = $"[Git submodules {primary.Path}]";
-        var sw = Stopwatch.StartNew();
         try
         {
             if (!IsGitRepo(primary.Path))
@@ -2300,17 +2269,11 @@ public sealed class GitService : IGitService
 
             var gitmodulesPath = System.IO.Path.Combine(primary.Path, ".gitmodules");
             if (!File.Exists(gitmodulesPath))
-            {
-                Console.WriteLine($"{tag} no .gitmodules ({sw.ElapsedMilliseconds}ms)");
                 return Array.Empty<SubmoduleInfo>();
-            }
 
             // Step 1: enumerate logical entries from .gitmodules. Each `submodule.<name>.path`
             // row gives us one submodule; .url and .branch hang off the same <name>.
-            var stepSw = Stopwatch.StartNew();
             var configOut = RunGit(primary.Path, out var cfgErr, "config", "--file", ".gitmodules", "--list");
-            stepSw.Stop();
-            Console.WriteLine($"{tag} config --list returned in {stepSw.ElapsedMilliseconds}ms ({configOut?.Length ?? 0} bytes)");
             if (cfgErr != null)
             {
                 errorMessage = cfgErr;
@@ -2347,10 +2310,7 @@ public sealed class GitService : IGitService
             // Step 2: per-path status + describe + current SHA from `git submodule status`.
             // Per line: '<flag><sha> <path> (<describe>)'
             //   flag ' ' = up-to-date, '+' = modified, '-' = not initialized, 'U' = conflict.
-            stepSw.Restart();
             var statusOut = RunGit(primary.Path, out _, "submodule", "status");
-            stepSw.Stop();
-            Console.WriteLine($"{tag} submodule status returned in {stepSw.ElapsedMilliseconds}ms ({statusOut?.Length ?? 0} bytes)");
             var statusByPath = new Dictionary<string, (char Flag, string? Sha, string? Describe)>(StringComparer.Ordinal);
             foreach (var raw in (statusOut ?? string.Empty).Split('\n'))
             {
@@ -2379,10 +2339,7 @@ public sealed class GitService : IGitService
             // Step 3: authoritative recorded SHA via `git ls-tree HEAD` — submodule status's
             // SHA reports the CURRENT checkout (or a leading + when modified), not what the
             // parent's HEAD tree actually records. ls-tree gives the recorded pointer directly.
-            stepSw.Restart();
             var lsTreeOut = RunGit(primary.Path, out _, "ls-tree", "-r", "HEAD");
-            stepSw.Stop();
-            Console.WriteLine($"{tag} ls-tree -r HEAD returned in {stepSw.ElapsedMilliseconds}ms ({lsTreeOut?.Length ?? 0} bytes)");
             var recordedByPath = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var raw in (lsTreeOut ?? string.Empty).Split('\n'))
             {
@@ -2424,14 +2381,10 @@ public sealed class GitService : IGitService
             }
 
             results.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
-            sw.Stop();
-            Console.WriteLine($"{tag} done in {sw.ElapsedMilliseconds}ms ({results.Count} submodules)");
             return results;
         }
         catch (Exception ex)
         {
-            sw.Stop();
-            Console.WriteLine($"{tag} threw in {sw.ElapsedMilliseconds}ms: {ex.Message}");
             errorMessage = ex.Message;
             return Array.Empty<SubmoduleInfo>();
         }
