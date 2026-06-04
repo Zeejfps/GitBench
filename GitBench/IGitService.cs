@@ -48,6 +48,9 @@ public interface IGitService
     string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null);
     RepoOperationState GetOperationState(Repo repo);
     bool HasUnmergedPaths(Repo repo);
+    // The default merge commit message (MERGE_MSG) when a merge is in progress, else null.
+    // Used to pre-fill the commit box so committing finishes the merge.
+    string? GetMergeMessage(Repo repo);
     AbortOperationOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOperationOutcome ContinueOperation(Repo repo, RepoOperationState state);
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage);

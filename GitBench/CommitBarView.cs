@@ -147,13 +147,21 @@ internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewMode
         vm.CommitEnabled.Subscribe(b => _commitButton.IsEnabled.Value = b);
         _errorBar.Message.BindTo(vm.OpError);
 
-        vm.CommitBusy.Subscribe(b =>
-        {
-            _commitButton.Icon = b ? LucideIcons.Loader : string.Empty;
-            _commitButton.Label = b ? "Committing" : "Commit";
-            if (!b) _commitButton.IconRotation = 0f;
-        });
+        vm.CommitBusy.Subscribe(_ => UpdateCommitButton());
+        vm.IsMerging.Subscribe(_ => UpdateCommitButton());
         vm.CommitRotation.Subscribe(r => _commitButton.IconRotation = r);
+    }
+
+    private void UpdateCommitButton()
+    {
+        if (_vm == null) return;
+        var busy = _vm.CommitBusy.Value;
+        var merging = _vm.IsMerging.Value;
+        _commitButton.Icon = busy ? LucideIcons.Loader : string.Empty;
+        _commitButton.Label = busy
+            ? (merging ? "Committing merge" : "Committing")
+            : (merging ? "Commit merge" : "Commit");
+        if (!busy) _commitButton.IconRotation = 0f;
     }
 
     private void OnCommitClicked() => _vm?.Commit();

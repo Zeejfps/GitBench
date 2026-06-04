@@ -129,7 +129,8 @@ internal sealed class OperationBannerView : MultiChildView, IBind<OperationState
 
     private static bool SupportsContinue(RepoOperationState state) => state switch
     {
-        RepoOperationState.Merge => true,
+        // Merge finishes through the commit box (commit creates the merge commit), so no
+        // Continue button — unlike rebase/cherry-pick/revert, which advance via --continue.
         RepoOperationState.Rebase => true,
         RepoOperationState.CherryPick => true,
         RepoOperationState.Revert => true,
@@ -150,7 +151,7 @@ internal sealed class OperationBannerView : MultiChildView, IBind<OperationState
     private static string MessageFor(RepoOperationState state) => state switch
     {
         RepoOperationState.Merge =>
-            "Merge in progress — working directory contains unmerged files. Resolve conflicts and commit, or abort.",
+            "Merge in progress — resolve conflicts, then commit to finish the merge, or abort.",
         RepoOperationState.Rebase =>
             "Rebase in progress — working directory contains unmerged files. Resolve conflicts and continue, or abort.",
         RepoOperationState.CherryPick =>

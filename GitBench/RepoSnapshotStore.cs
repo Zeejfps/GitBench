@@ -8,7 +8,10 @@ namespace GitGui;
 // HeadFiles, which stays view-model-local.
 public sealed record LocalChangesData(
     LocalChangesSnapshot Snapshot,
-    IReadOnlyList<SubmoduleInfo> Drift);
+    IReadOnlyList<SubmoduleInfo> Drift,
+    // Default merge message when a merge is in progress, else null. Lets the commit box
+    // double as the "finish merge" UI.
+    string? MergeMessage = null);
 
 // Single source of truth for the active repo's loaded git data. View models project from these
 // observables instead of each running their own load + cache. PushStatus is *derived* from the
@@ -268,7 +271,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
                 drift = driftList;
             }
         }
-        return new LocalChangesData(snap, drift);
+        return new LocalChangesData(snap, drift, _git.GetMergeMessage(repo));
     }
 
     // ---- warm loads (non-active repos: refresh the cache only, never the exposed state) ----

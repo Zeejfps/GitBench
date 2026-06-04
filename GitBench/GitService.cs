@@ -1223,6 +1223,22 @@ public sealed class GitService : IGitService
         catch { return false; }
     }
 
+    public string? GetMergeMessage(Repo repo)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return null;
+            var gitDir = GetGitDir(repo.Path);
+            if (gitDir == null) return null;
+            // MERGE_HEAD is the merge sentinel; gate on it so cherry-pick/revert (which use
+            // their own heads) don't trip this.
+            if (!File.Exists(Path.Combine(gitDir, "MERGE_HEAD"))) return null;
+            var msgPath = Path.Combine(gitDir, "MERGE_MSG");
+            return File.Exists(msgPath) ? File.ReadAllText(msgPath) : "Merge";
+        }
+        catch { return null; }
+    }
+
     public PushStatus GetPushStatus(Repo repo)
     {
         try

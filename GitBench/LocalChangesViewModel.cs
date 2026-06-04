@@ -36,6 +36,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public IReadable<IReadOnlyList<FileChange>> Unstaged { get; }
     public IReadable<IReadOnlyList<FileChange>> Staged { get; }
     public IReadable<IReadOnlyList<SubmoduleInfo>> DriftedSubmodules { get; }
+    public IReadable<bool> IsMerging { get; }
     public IReadable<Selection> Selection { get; }
     public IReadable<DiffTarget?> SelectedTarget { get; }
     public IReadable<FileViewMode> ViewMode { get; }
@@ -58,6 +59,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     private IReadOnlyList<FileChange> _stagedFromIndex = Empty;
     private AmendSession? _amend;
+    // True once we've populated the commit box for an in-progress merge; tracks the
+    // not-merging↔merging transition so resolving conflicts doesn't re-clobber edits.
+    private bool _mergeActive;
     // Repo whose working-tree data is currently reflected in state; distinguishes a cross-repo
     // switch (blank the panels) from a same-repo refresh (keep them visible).
     private Guid? _renderedRepoId;
@@ -97,6 +101,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
+        IsMerging = Slice(s => s.IsMerging);
         Selection = Slice(s => s.Selection);
         SelectedTarget = Slice(s => s.Selection.Single);
         ViewMode = Slice(s => s.ViewMode);
@@ -691,6 +696,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         {
             _stagedFromIndex = Empty;
             _renderedRepoId = null;
+            _mergeActive = false;
             Update(s => s with
             {
                 HasRepo = false,
@@ -701,6 +707,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Unstaged = Empty,
                 Selection = GitGui.Selection.Empty,
                 DriftedSubmodules = [],
+                IsMerging = false,
             });
             return;
         }
@@ -749,6 +756,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
+        HandleMergeState(data.MergeMessage);
+
         if (_amend != null)
         {
             // HEAD may have moved (e.g. an external commit) while amending — refresh HEAD's file
@@ -768,6 +777,52 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         }
 
         ApplySnapshot(snap, data.Drift);
+    }
+
+    // Drives the merge-aware commit box from the store's merge message. On entering a merge,
+    // pre-fills the box with the default merge message (so committing finishes the merge); on
+    // leaving (committed or aborted), clears it. Only the entry/exit transitions touch the
+    // editor — staging a conflict mid-merge reloads but must not overwrite the user's edits.
+    private void HandleMergeState(string? mergeMessage)
+    {
+        var isMerging = mergeMessage != null;
+        if (isMerging && !_mergeActive)
+        {
+            _mergeActive = true;
+            if (_amend == null)
+            {
+                var (title, description) = SplitMergeMessage(mergeMessage!);
+                Update(s => s with { IsMerging = true, Title = title, Description = description });
+            }
+            else
+            {
+                Update(s => s with { IsMerging = true });
+            }
+        }
+        else if (!isMerging && _mergeActive)
+        {
+            _mergeActive = false;
+            Update(s => s with { IsMerging = false, Title = string.Empty, Description = string.Empty });
+        }
+        else if (State.Value.IsMerging != isMerging)
+        {
+            Update(s => s with { IsMerging = isMerging });
+        }
+    }
+
+    // Splits the raw MERGE_MSG into editor title/description: drop git's '#'-prefixed comment
+    // lines (the "Conflicts:" hint), then take the first line as the subject and the rest as body.
+    private static (string Title, string Description) SplitMergeMessage(string message)
+    {
+        var kept = new List<string>();
+        foreach (var line in message.Replace("\r\n", "\n").Split('\n'))
+            if (!line.StartsWith("#", StringComparison.Ordinal)) kept.Add(line);
+        while (kept.Count > 0 && kept[0].Trim().Length == 0) kept.RemoveAt(0);
+        while (kept.Count > 0 && kept[^1].Trim().Length == 0) kept.RemoveAt(kept.Count - 1);
+        if (kept.Count == 0) return (string.Empty, string.Empty);
+        var title = kept[0].Trim();
+        var body = kept.Count > 1 ? string.Join("\n", kept.Skip(1)).Trim() : string.Empty;
+        return (title, body);
     }
 
     // Writes a fresh snapshot — new lists plus whatever selection the caller computes
