@@ -50,6 +50,10 @@ internal sealed class RepoWatcher : IDisposable
     private readonly string _gitDirPrefix;
     private readonly string _gitmodulesPath;
 
+    // Guards every Timer.Change against concurrent disposal. FSW events fire on threadpool
+    // threads, so a Schedule* call can race Dispose(); without this, Change() can land on an
+    // already-disposed Timer and throw ObjectDisposedException on a pool thread (process crash).
+    private readonly object _timerLock = new();
     private int _disposed;
 
     public RepoWatcher(Repo repo, IUiDispatcher dispatcher, IMessageBus bus, IRepoActivityTracker activity)
@@ -259,28 +263,40 @@ internal sealed class RepoWatcher : IDisposable
     {
         if (Volatile.Read(ref _disposed) != 0) return;
         if (IsOurOwnWrite()) return;
-        _workingTreeDebounce.Change(DebounceMs, Timeout.Infinite);
+        ArmDebounce(_workingTreeDebounce);
     }
 
     private void ScheduleRefs()
     {
         if (Volatile.Read(ref _disposed) != 0) return;
         if (IsOurOwnWrite()) return;
-        _refsDebounce.Change(DebounceMs, Timeout.Infinite);
+        ArmDebounce(_refsDebounce);
     }
 
     private void ScheduleWorktrees()
     {
         if (Volatile.Read(ref _disposed) != 0) return;
         if (IsOurOwnWrite()) return;
-        _worktreesDebounce.Change(DebounceMs, Timeout.Infinite);
+        ArmDebounce(_worktreesDebounce);
     }
 
     private void ScheduleSubmodules()
     {
         if (Volatile.Read(ref _disposed) != 0) return;
         if (IsOurOwnWrite()) return;
-        _submodulesDebounce.Change(DebounceMs, Timeout.Infinite);
+        ArmDebounce(_submodulesDebounce);
+    }
+
+    // Arms a debounce timer under _timerLock with an authoritative _disposed re-check, so the
+    // Change() can't race Dispose()'s timer teardown. The Volatile.Read pre-checks above are
+    // just a cheap fast-path; this is the one that actually closes the window.
+    private void ArmDebounce(Timer debounce)
+    {
+        lock (_timerLock)
+        {
+            if (_disposed != 0) return;
+            debounce.Change(DebounceMs, Timeout.Infinite);
+        }
     }
 
     private void OnWorkingTreeDebounce()
@@ -362,9 +378,15 @@ internal sealed class RepoWatcher : IDisposable
             _gitWatcher.Error -= OnError;
             _gitWatcher.Dispose();
         }
-        _workingTreeDebounce.Dispose();
-        _refsDebounce.Dispose();
-        _worktreesDebounce.Dispose();
-        _submodulesDebounce.Dispose();
+        // Dispose the timers under the lock the schedulers use. _disposed is already set above,
+        // so any Schedule* that takes the lock after this skips its Change(); any that's holding
+        // the lock mid-Change() finishes first, blocking this teardown until it's safe.
+        lock (_timerLock)
+        {
+            _workingTreeDebounce.Dispose();
+            _refsDebounce.Dispose();
+            _worktreesDebounce.Dispose();
+            _submodulesDebounce.Dispose();
+        }
     }
 }
