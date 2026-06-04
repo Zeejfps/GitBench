@@ -122,12 +122,12 @@ internal sealed class ConflictResolveView : MultiChildView
     {
         var icon = new TextView
         {
-            Text = LucideIcons.FileX,
+            Text = LucideIcons.File,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 15f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        icon.BindThemedTextColor(s => s.FileChangeRow.StatusConflicted);
+        icon.BindThemedTextColor(s => s.Palette.TextMedium);
 
         var name = new TextView { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
         name.BindThemedTextColor(s => s.Palette.TextStrong);
@@ -151,7 +151,7 @@ internal sealed class ConflictResolveView : MultiChildView
     {
         var icon = new TextView
         {
-            Text = LucideIcons.Merge,
+            Text = LucideIcons.TriangleAlert,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 18f,
             VerticalTextAlignment = TextAlignment.Center,

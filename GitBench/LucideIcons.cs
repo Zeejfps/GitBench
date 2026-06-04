@@ -51,4 +51,5 @@ internal static class LucideIcons
     public const string FileSymlink = ""; // file-symlink (renamed)
     public const string Files = "";         // files (copied)
     public const string FileX = "";         // file-x (conflicted)
+    public const string TriangleAlert = ""; // alert-triangle (merge conflict warning)
 }

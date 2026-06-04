@@ -22,7 +22,7 @@ internal static class FileChangeFormatting
         FileChangeStatus.Deleted => LucideIcons.FileMinus,
         FileChangeStatus.Renamed => LucideIcons.FileSymlink,
         FileChangeStatus.Copied => LucideIcons.Files,
-        FileChangeStatus.Conflicted => LucideIcons.FileX,
+        FileChangeStatus.Conflicted => LucideIcons.TriangleAlert,
         FileChangeStatus.Submodule => LucideIcons.Package,
         _ => LucideIcons.File,
     };

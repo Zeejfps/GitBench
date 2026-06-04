@@ -78,7 +78,7 @@ public partial record ThemeStyles
             StatusModified: status.Warning,
             StatusDeleted: status.Danger,
             StatusRenamed: status.Info,
-            StatusConflicted: status.Danger,
+            StatusConflicted: status.Warning,
             StatusSubmodule: status.Purple,
             StatusOther: status.Other);
 }
