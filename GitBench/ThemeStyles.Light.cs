@@ -50,7 +50,6 @@ public partial record ThemeStyles
             SegmentActiveBg: 0xFF4F46E5u,
             ScrollBarTrackBg: 0xFFF3F4F6u,
             ScrollBarThumbBorder: 0xFFE5E7EBu,
-            OperationRowHoverBg: 0xFFE5E7EBu,
             CommitRowSelectedBg: 0xFFE0E7FFu,
             CommitRowSelectedText: 0xFF111827u);
 

@@ -493,35 +493,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         Update(s => s with { BusyBranch = branchName });
 
-        var dispatcher = Dispatcher;
         var bus = _bus;
 
-        var opId = Guid.NewGuid();
-        bus.Broadcast(new OperationStartedMessage(
-            opId,
-            $"Fast-forward {branchName} ← {remoteName}/{remoteBranch}",
-            LucideIcons.Pull));
-
-        // Progress streams on a side-channel: the worker posts each git line straight to the
-        // operations presenter. It is intentionally unguarded — RunBackground's lane only
-        // gates the single terminal result below.
-        void OnLineFromWorker(string line)
-        {
-            dispatcher.Post(() =>
-            {
-                var (phase, percent) = GitProgressParser.Parse(line);
-                bus.Broadcast(new OperationProgressMessage(opId, phase, percent, line));
-            });
-        }
-
         RunBackground<FastForwardOutcome>(
-            work: () => (_gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch, OnLineFromWorker), null),
+            work: () => (_gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch), null),
             onResult: (outcome, error) =>
             {
                 Update(s => s with { BusyBranch = null });
                 var success = error == null && outcome!.Success;
                 var errorMessage = error ?? outcome?.ErrorMessage;
-                bus.Broadcast(new OperationFinishedMessage(opId, success, errorMessage));
                 if (success)
                     bus.Broadcast(new RefsChangedMessage(repo.Id));
                 else

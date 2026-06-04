@@ -44,7 +44,6 @@ public sealed record ThemePalette(
     uint SegmentActiveBg,
     uint ScrollBarTrackBg,
     uint ScrollBarThumbBorder,
-    uint OperationRowHoverBg,
     uint CommitRowSelectedBg,
     uint CommitRowSelectedText);
 

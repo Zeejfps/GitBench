@@ -43,12 +43,10 @@ public partial record ThemeStyles
             HistorySplitter = BuildHistorySplitter(p),
             ScrollBar = BuildScrollBar(p),
             Tooltip = BuildTooltip(p, tooltip),
-            OperationRow = BuildOperationRow(p, status),
             CommitDetailsView = BuildCommitDetailsView(p),
             DialogBody = BuildDialogBody(p),
             BranchPreview = BuildBranchPreview(status),
             ContextMenu = BuildContextMenu(p),
-            OperationsStatusBar = BuildOperationsStatusBar(p),
             CommitsView = BuildCommitsView(p, commitBadge),
         };
 }

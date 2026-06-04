@@ -33,12 +33,10 @@ public sealed partial record ThemeStyles
     public required HistorySplitterStyles HistorySplitter { get; init; }
     public required ScrollBarStyles ScrollBar { get; init; }
     public required TooltipStyles Tooltip { get; init; }
-    public required OperationRowStyles OperationRow { get; init; }
     public required CommitDetailsViewStyles CommitDetailsView { get; init; }
     public required DialogBodyStyles DialogBody { get; init; }
     public required BranchPreviewStyles BranchPreview { get; init; }
     public required ContextMenuStyles ContextMenu { get; init; }
-    public required OperationsStatusBarStyles OperationsStatusBar { get; init; }
     public required CommitsViewStyles CommitsView { get; init; }
 
     public static readonly ThemeStyles Dark = BuildDark();
