@@ -307,6 +307,27 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private DiffHighlight? CurrentHighlight()
         => State.Value.Render is DiffRenderState.Loaded l ? l.Highlight : null;
 
+    // Carries the still-current render's highlight onto a freshly-loaded render for the same file,
+    // so the diff keeps its syntax colors instead of dropping to plain until the async highlight
+    // pass re-runs. Read inside StartLoad's onResult before the render is swapped, so State still
+    // holds the previous render. Only seeds when the incoming render has no highlight of its own.
+    private DiffRenderState CarryHighlightForward(DiffRenderState next)
+    {
+        (string Path, DiffHighlight Highlight)? prev = State.Value.Render switch
+        {
+            DiffRenderState.Loaded { Highlight: { } h } l => (l.Result.Path, h),
+            DiffRenderState.FullFile { Highlight: { } h } ff => (ff.Path, h),
+            _ => null,
+        };
+        if (prev is not { } p) return next;
+        return next switch
+        {
+            DiffRenderState.Loaded { Highlight: null } l when l.Result.Path == p.Path => l with { Highlight = p.Highlight },
+            DiffRenderState.FullFile { Highlight: null } ff when ff.Path == p.Path => ff with { Highlight = p.Highlight },
+            _ => next,
+        };
+    }
+
     private bool TryGetPatchContext(int hunkIndex, out Repo repo, out DiffResult diff)
     {
         repo = null!;
@@ -371,6 +392,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             onResult: (result, error) =>
             {
                 var render = error != null ? new DiffRenderState.Placeholder(error) : result!.Render;
+                // Seed the new render with the prior highlight when it's for the same file, so the
+                // diff doesn't blink to plain between this load landing and the async highlight pass
+                // finishing. Staging a file is the common case: the file moves to the other side but
+                // its new-side text — hence the spans — is unchanged, so the body doesn't flash but
+                // the highlight would. StartHighlight below refreshes the spans either way.
+                render = CarryHighlightForward(render);
                 Update(s => s with { Render = render });
                 // Highlight applies to either render carrying the new-side file; result.Diff is null
                 // for full-file placeholders (binary/deleted), which need no highlighting.
