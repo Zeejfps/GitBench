@@ -36,7 +36,7 @@ public sealed class DeleteStashDialog : MultiChildView
         };
         AddChildToSelf(_shell.View);
 
-        this.UsePresenter(ctx => new DeleteStashPresenter(
+        this.Use(ctx => new DeleteStashPresenter(
             this,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),

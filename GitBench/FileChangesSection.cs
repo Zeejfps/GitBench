@@ -114,7 +114,7 @@ public sealed class FileChangesSection : MultiChildView, IScrollableContent
             SetDirty();
         });
 
-        this.UseBehavior(_ => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+        this.Use(_ => new ScrollSyncController(this, _scrollBar, _hScrollBar));
     }
 
     public void SetFiles(IReadOnlyList<FileChange> files)

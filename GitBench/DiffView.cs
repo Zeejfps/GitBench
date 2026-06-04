@@ -46,7 +46,7 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
         _panel.BindThemedBackgroundColor(s => s.DiffView.PanelBackground);
         AddChildToSelf(_panel);
 
-        this.UseBehavior(_ => new ScrollSyncController(_content, vScrollBar, hScrollBar));
+        this.Use(_ => new ScrollSyncController(_content, vScrollBar, hScrollBar));
     }
 
     public void Bind(DiffViewModel vm)

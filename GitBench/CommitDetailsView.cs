@@ -115,7 +115,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         panel.BindThemedBorderColor(s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
         AddChildToSelf(panel);
 
-        this.UseBehavior(_ => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
+        this.Use(_ => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
 
         // Up/Down arrow navigation over the Changes list, mirroring the local-changes panels.
         // The list is a flat single-select list, so there are no folders to expand and no

@@ -41,7 +41,7 @@ public abstract class HoverableButton : MultiChildView
 
         if (!string.IsNullOrEmpty(tooltip))
         {
-            this.UsePresenter(ctx => new Tooltip(this, ctx, tooltip, IsHovered, IsEnabled));
+            this.Use(ctx => new Tooltip(this, ctx, tooltip, IsHovered, IsEnabled));
         }
     }
 

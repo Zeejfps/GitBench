@@ -125,7 +125,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
         btn.UseController(_ => new HoverableButtonController(
             () => _onToggleFullFile?.Invoke(),
             h => hovered.Value = h));
-        btn.UsePresenter(ctx => new Tooltip(btn, ctx, "Toggle full file", hovered, AlwaysEnabled));
+        btn.Use(ctx => new Tooltip(btn, ctx, "Toggle full file", hovered, AlwaysEnabled));
         return btn;
     }
 
@@ -148,7 +148,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
         btn.UseController(_ => new HoverableButtonController(
             () => _onOpenInWindow?.Invoke(),
             h => hovered.Value = h));
-        btn.UsePresenter(ctx => new Tooltip(btn, ctx, "Open in new window", hovered, AlwaysEnabled));
+        btn.Use(ctx => new Tooltip(btn, ctx, "Open in new window", hovered, AlwaysEnabled));
         return btn;
     }
 

@@ -144,7 +144,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
             SetDirty();
         });
 
-        this.UseBehavior(_ => new ScrollSyncController(this, _scrollBar));
+        this.Use(_ => new ScrollSyncController(this, _scrollBar));
         this.UseViewModel(this);
     }
 

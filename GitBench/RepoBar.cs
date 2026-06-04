@@ -73,7 +73,7 @@ internal sealed class RepoBar : MultiChildView, IBind<RepoBarViewModel>
         AddChildToSelf(bar);
 
         this.UseController(ctx => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems()));
-        this.UseBehavior(_ => new ScrollSyncController(scrollPane, vScrollBar));
+        this.Use(_ => new ScrollSyncController(scrollPane, vScrollBar));
         this.UseViewModel(this);
     }
 

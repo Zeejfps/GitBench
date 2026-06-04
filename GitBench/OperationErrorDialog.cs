@@ -94,7 +94,7 @@ public sealed class OperationErrorDialog : MultiChildView
         };
         scrollHost.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
         scrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        scrollHost.UsePresenter(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
+        scrollHost.Use(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         var okButton = new DialogButton("OK", onClose, DialogButtonRole.Primary)
         {

@@ -69,7 +69,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
         };
         fileScrollHost.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
         fileScrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        fileScrollHost.UsePresenter(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
+        fileScrollHost.Use(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         _shell = new DialogShell("Discard changes", onClose)
         {

@@ -40,7 +40,7 @@ public sealed class DropStashDialog : MultiChildView
 
         // The drop call is small enough to inline here; no presenter needed. We grab
         // services from the context the dialog is attached to.
-        this.UsePresenter(ctx => new DropStashPresenter(
+        this.Use(ctx => new DropStashPresenter(
             this,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
