@@ -19,7 +19,7 @@ internal sealed class MoveBranchDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.MoveBranch(request.Repo, request.BranchName, request.Sha, checkout: true);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Reset branch failed.");
+                return outcome.Success ? null : (outcome.ErrorMessage ?? "Move branch failed.");
             },
             onSuccess: () =>
             {

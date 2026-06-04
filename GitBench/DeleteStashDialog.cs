@@ -10,7 +10,7 @@ namespace GitGui;
 /// `git stash drop` is destructive — the stash cannot be recovered from the UI
 /// afterwards, so the action is gated behind this prompt.
 /// </summary>
-internal sealed class DeleteStashDialog : MultiChildView, IBind<DeleteStashViewModel>
+internal sealed class DeleteStashDialog : MultiChildView, IBind<DropStashViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -35,7 +35,7 @@ internal sealed class DeleteStashDialog : MultiChildView, IBind<DeleteStashViewM
         AddChildToSelf(_shell.View);
 
         this.UseViewModel(
-            ctx => new DeleteStashViewModel(
+            ctx => new DropStashViewModel(
                 repo,
                 index,
                 ctx.Require<IGitService>(),
@@ -44,9 +44,9 @@ internal sealed class DeleteStashDialog : MultiChildView, IBind<DeleteStashViewM
             Bind);
     }
 
-    public void Bind(DeleteStashViewModel vm)
+    public void Bind(DropStashViewModel vm)
     {
         vm.CloseRequested += _onClose;
-        _shell.BindCommand(vm.Delete);
+        _shell.BindCommand(vm.Drop);
     }
 }

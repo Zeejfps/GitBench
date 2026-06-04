@@ -52,7 +52,9 @@ internal sealed class AbortOperationDialogViewModel : IDisposable
 
     public void Dispose() { }
 
-    private static string DefaultConfirmLabel(RepoOperationState state) => state switch
+    // Single source of truth for the confirm-button label. The dialog seeds its button from
+    // this too, so the label map isn't duplicated across the view and view model.
+    internal static string DefaultConfirmLabel(RepoOperationState state) => state switch
     {
         RepoOperationState.Merge => "Abort merge",
         RepoOperationState.Rebase => "Abort rebase",

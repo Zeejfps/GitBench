@@ -20,7 +20,8 @@ internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperatio
     {
         _onClose = onClose;
 
-        var (titleText, bodyText, confirmLabel) = CopyFor(state);
+        var (titleText, bodyText) = CopyFor(state);
+        var confirmLabel = AbortOperationDialogViewModel.DefaultConfirmLabel(state);
 
         var prompt = new TextView
         {
@@ -59,36 +60,29 @@ internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperatio
         vm.ConfirmButtonLabel.Subscribe(label => _shell.ActionButton.Label = label);
     }
 
-    private static (string Title, string Body, string Confirm) CopyFor(RepoOperationState state) => state switch
+    private static (string Title, string Body) CopyFor(RepoOperationState state) => state switch
     {
         RepoOperationState.Merge => (
             "Abort merge?",
-            "Aborts the in-progress merge and restores the working tree to the pre-merge state. Any conflict resolutions you've made will be lost.",
-            "Abort merge"),
+            "Aborts the in-progress merge and restores the working tree to the pre-merge state. Any conflict resolutions you've made will be lost."),
         RepoOperationState.Rebase => (
             "Abort rebase?",
-            "Aborts the in-progress rebase and returns HEAD to the branch's original tip. Any conflict resolutions you've made will be lost.",
-            "Abort rebase"),
+            "Aborts the in-progress rebase and returns HEAD to the branch's original tip. Any conflict resolutions you've made will be lost."),
         RepoOperationState.CherryPick => (
             "Abort cherry-pick?",
-            "Aborts the in-progress cherry-pick and restores the working tree to the pre-cherry-pick state.",
-            "Abort cherry-pick"),
+            "Aborts the in-progress cherry-pick and restores the working tree to the pre-cherry-pick state."),
         RepoOperationState.Revert => (
             "Abort revert?",
-            "Aborts the in-progress revert and restores the working tree to the pre-revert state.",
-            "Abort revert"),
+            "Aborts the in-progress revert and restores the working tree to the pre-revert state."),
         RepoOperationState.ApplyMailbox => (
             "Abort patch apply?",
-            "Aborts the in-progress `git am` and restores the working tree to the pre-apply state. The mailbox queue is discarded.",
-            "Abort apply"),
+            "Aborts the in-progress `git am` and restores the working tree to the pre-apply state. The mailbox queue is discarded."),
         RepoOperationState.Bisect => (
             "Reset bisect?",
-            "Ends the bisect session and returns HEAD to where it was when bisect started.",
-            "Reset bisect"),
+            "Ends the bisect session and returns HEAD to where it was when bisect started."),
         RepoOperationState.UnmergedPaths => (
             "Reset unmerged paths?",
-            "Discards conflicting worktree changes and clears the unmerged index entries, returning the conflicted files to HEAD. Clean local changes are kept; in-progress conflict resolutions are lost.",
-            "Reset"),
-        _ => ("Abort?", "Cancel the in-progress operation.", "Abort"),
+            "Discards conflicting worktree changes and clears the unmerged index entries, returning the conflicted files to HEAD. Clean local changes are kept; in-progress conflict resolutions are lost."),
+        _ => ("Abort?", "Cancel the in-progress operation."),
     };
 }
