@@ -125,6 +125,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
         btn.UseController(_ => new HoverableButtonController(
             () => _onToggleFullFile?.Invoke(),
             h => hovered.Value = h));
+        btn.UsePresenter(ctx => new Tooltip(btn, ctx, "Toggle full file", hovered, AlwaysEnabled));
         return btn;
     }
 
@@ -147,6 +148,11 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
         btn.UseController(_ => new HoverableButtonController(
             () => _onOpenInWindow?.Invoke(),
             h => hovered.Value = h));
+        btn.UsePresenter(ctx => new Tooltip(btn, ctx, "Open in new window", hovered, AlwaysEnabled));
         return btn;
     }
+
+    // These header buttons are always actionable, so their tooltips never need to gate on an
+    // enabled state — Tooltip still requires an IReadable<bool>, so hand it a constant.
+    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
 }

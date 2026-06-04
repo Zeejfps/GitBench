@@ -373,10 +373,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         RunBackground<LoadResult>(
             work: () =>
             {
-                // A conflicted working-tree file gets the resolution header, not a normal diff.
-                // GetConflictContext is cheap (one `ls-files -u`) and returns null for the
-                // overwhelmingly common non-conflict case before doing any heavier work.
-                if (side == DiffSide.Unstaged)
+                // A conflicted working-tree file gets the resolution header, not a normal diff —
+                // but only in Diff mode. Toggling to FullFile escapes the header to show the raw
+                // working-tree file (conflict markers and all). GetConflictContext is cheap (one
+                // `ls-files -u`) and returns null for the common non-conflict case.
+                if (side == DiffSide.Unstaged && mode == DiffViewMode.Diff)
                 {
                     var conflict = git.GetConflictContext(repo, path);
                     if (conflict != null)
