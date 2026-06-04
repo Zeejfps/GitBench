@@ -67,6 +67,23 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Svelte_MarkupAndEmbeddedScript_AreColored()
+    {
+        // Svelte isn't a TextMateSharp-bundled grammar — this proves the embedded grammar loads
+        // and that its <script lang="ts"> block tokenizes via the bundled TypeScript grammar.
+        var src = string.Join("\n",
+            "<script lang=\"ts\">",
+            "  const greeting: string = \"hello\";",
+            "</script>",
+            "<h1 class=\"title\">{greeting}</h1>");
+        var lines = HighlightOrFail(src, "svelte");
+
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.String));   // "hello" inside the TS block
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Keyword));  // const
+        Assert.True(LineHasSlot(lines[3], TokenColorSlot.Keyword));  // <h1> tag name
+    }
+
+    [Fact]
     public void SpansAreOrderedAndNonOverlapping()
     {
         var lines = HighlightOrFail("int count = 42; // note", "csharp");

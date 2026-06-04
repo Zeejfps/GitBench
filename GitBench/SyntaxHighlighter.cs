@@ -41,7 +41,9 @@ internal sealed class SyntaxHighlighter
         // The theme only drives TextMateSharp's own color resolution, which we don't use — we
         // map scopes to the GitBench palette ourselves. Any valid theme works here.
         _options = new RegistryOptions(ThemeName.DarkPlus);
-        _registry = new Registry(_options);
+        // The wrapper adds grammars TextMateSharp doesn't bundle (Svelte); the inner options still
+        // serve every standard scope, including the languages a Svelte block embeds.
+        _registry = new Registry(new BundledGrammarRegistryOptions(_options));
     }
 
     /// <summary>
@@ -125,7 +127,10 @@ internal sealed class SyntaxHighlighter
             IGrammar? grammar = null;
             try
             {
-                var scope = _options.GetScopeByLanguageId(languageId);
+                // Custom bundled grammars (Svelte) aren't in RegistryOptions' language table, so
+                // resolve their scope from the wrapper first, then fall back to the bundled set.
+                var scope = BundledGrammarRegistryOptions.ScopeForLanguageId(languageId)
+                            ?? _options.GetScopeByLanguageId(languageId);
                 if (!string.IsNullOrEmpty(scope))
                     grammar = _registry.LoadGrammar(scope);
             }

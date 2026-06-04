@@ -42,6 +42,15 @@
         </EmbeddedResource>
     </ItemGroup>
 
+    <!-- TextMate grammars for languages TextMateSharp.Grammars doesn't bundle (Svelte). Embedded
+         and loaded by BundledGrammarRegistryOptions; the LogicalName is the lookup key. -->
+    <ItemGroup>
+        <None Remove="Assets\Grammars\**\*.json" />
+        <EmbeddedResource Include="Assets\Grammars\**\*.json">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />

@@ -10,6 +10,8 @@ public class LanguageRegistryTests
     [InlineData("src/app/Main.cs", "csharp")]
     [InlineData("component.ts", "typescript")]
     [InlineData("component.tsx", "typescriptreact")]
+    [InlineData("styles.css", "css")]
+    [InlineData("App.svelte", "svelte")]
     public void DetectsSupportedExtensions(string path, string expected)
         => Assert.Equal(expected, LanguageRegistry.DetectLanguageId(path));
 
@@ -22,7 +24,6 @@ public class LanguageRegistryTests
 
     [Theory]
     [InlineData("notes.txt")]
-    [InlineData("styles.css")]
     [InlineData("README.md")]
     [InlineData("Makefile")]      // no extension
     [InlineData("archive.cs.bak")] // extension is .bak, not .cs
