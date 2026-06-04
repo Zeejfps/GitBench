@@ -180,7 +180,7 @@ internal sealed class ConflictResolveView : MultiChildView
         };
     }
 
-    private static TextView BuildChangeBadge(ConflictChangeKind kind)
+    private static View BuildChangeBadge(ConflictChangeKind kind)
     {
         var status = kind switch
         {
@@ -195,6 +195,18 @@ internal sealed class ConflictResolveView : MultiChildView
             _ => "modified",
         };
 
+        // Use the same tinted Lucide status glyph the unstaged/history file rows draw
+        // (FileChangeFormatting.StatusIcon), paired with the spelled-out label in the matching
+        // status color.
+        var icon = new TextView
+        {
+            Text = FileChangeFormatting.StatusIcon(status),
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 14f,
+            VerticalTextAlignment = TextAlignment.Center,
+        };
+        icon.BindThemedTextColor(s => s.FileChangeRow.StatusColor(status));
+
         var label = new TextView
         {
             Text = text,
@@ -202,7 +214,13 @@ internal sealed class ConflictResolveView : MultiChildView
             VerticalTextAlignment = TextAlignment.Center,
         };
         label.BindThemedTextColor(s => s.FileChangeRow.StatusColor(status));
-        return label;
+
+        return new FlexRowView
+        {
+            Gap = 6f,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Children = { icon, label },
+        };
     }
 
     private static string FormatDate(DateTimeOffset when)
