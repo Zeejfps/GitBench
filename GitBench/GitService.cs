@@ -1308,7 +1308,7 @@ public sealed class GitService : IGitService
             var args = new List<string> { "push" };
             if (force) args.Add("--force-with-lease");
             var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.FirstLineError("git push"));
+            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.BlockError("git push"));
         }
         catch (Exception ex)
         {
@@ -1336,7 +1336,7 @@ public sealed class GitService : IGitService
 
             using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.FirstLineError("git push"));
+            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.BlockError("git push"));
         }
         catch (Exception ex)
         {
@@ -1448,7 +1448,7 @@ public sealed class GitService : IGitService
             // parent now records — so the user doesn't end up with the gitlink pointer moved
             // but the submodule still sitting on its old commit (which shows up as "modified").
             var result = _runner.Run(repo.Path, new[] { "pull", "--recurse-submodules" });
-            return result.Ok ? new PullOutcome(true, null) : new PullOutcome(false, result.FirstLineError("git pull"));
+            return result.Ok ? new PullOutcome(true, null) : new PullOutcome(false, result.BlockError("git pull"));
         }
         catch (Exception ex)
         {
@@ -1467,7 +1467,7 @@ public sealed class GitService : IGitService
             // --recurse-submodules downloads the commits each submodule is pinned to so they're
             // present locally; it does NOT touch submodule working trees (that's pull's job).
             var result = _runner.Run(repo.Path, new[] { "fetch", "--all", "--prune", "--recurse-submodules" });
-            return result.Ok ? new FetchOutcome(true, null) : new FetchOutcome(false, result.FirstLineError("git fetch"));
+            return result.Ok ? new FetchOutcome(true, null) : new FetchOutcome(false, result.BlockError("git fetch"));
         }
         catch (Exception ex)
         {

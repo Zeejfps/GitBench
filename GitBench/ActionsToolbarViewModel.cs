@@ -198,7 +198,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
                 _pushSpinner.Stop();
                 if (error != null)
                 {
-                    Update(s => s with { IsPushing = false, Error = error });
+                    Update(s => s with { IsPushing = false });
+                    _bus.Broadcast(new ShowOperationErrorMessage("Push failed", error));
                     return;
                 }
                 Update(s => s with { IsPushing = false, PushStatus = s.PushStatus with { Ahead = 0 } });
@@ -228,7 +229,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
                 _pullSpinner.Stop();
                 if (error != null)
                 {
-                    Update(s => s with { IsPulling = false, Error = error });
+                    Update(s => s with { IsPulling = false });
+                    _bus.Broadcast(new ShowOperationErrorMessage("Pull failed", error));
                     return;
                 }
                 Update(s => s with { IsPulling = false, PushStatus = s.PushStatus with { Behind = 0 } });
@@ -258,7 +260,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
                 _fetchSpinner.Stop();
                 if (error != null)
                 {
-                    Update(s => s with { IsFetching = false, Error = error });
+                    Update(s => s with { IsFetching = false });
+                    _bus.Broadcast(new ShowOperationErrorMessage("Fetch failed", error));
                     return;
                 }
                 Update(s => s with { IsFetching = false });
