@@ -68,7 +68,12 @@ public static class PreferencesStore
             FileViewMode = preferences.FileViewMode,
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
-        File.WriteAllText(path, json);
+        // Write to a sibling temp file then atomically replace, so a crash mid-write can't leave a
+        // truncated preferences.json that fails to parse on next launch (silently resetting every
+        // preference). File.Move with overwrite is an atomic rename on the same volume.
+        var tmp = path + ".tmp";
+        File.WriteAllText(tmp, json);
+        File.Move(tmp, path, overwrite: true);
     }
 }
 

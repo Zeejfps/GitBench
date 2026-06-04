@@ -11,11 +11,11 @@ internal sealed class GenerationGuard
     private int _current;
 
     /// <summary>Bumps the generation and returns the new token to capture.</summary>
-    public int Bump() => ++_current;
+    public int Bump() => Interlocked.Increment(ref _current);
 
     /// <summary>The current token, captured without bumping — for cross-lane guards.</summary>
-    public int Current => _current;
+    public int Current => Volatile.Read(ref _current);
 
     /// <summary>True when <paramref name="token"/> is no longer the current generation.</summary>
-    public bool IsStale(int token) => token != _current;
+    public bool IsStale(int token) => token != Volatile.Read(ref _current);
 }

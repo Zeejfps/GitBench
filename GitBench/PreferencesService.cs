@@ -7,6 +7,10 @@ public sealed class PreferencesService : IDisposable
     private readonly string _path;
     private readonly System.Threading.Timer _saveTimer;
     private readonly object _gate = new();
+    // Serializes the actual file write. A timer-fired Flush can overlap the synchronous Flush in
+    // Dispose (Timer.Dispose doesn't wait for an in-flight callback), and both would otherwise
+    // write the file concurrently.
+    private readonly object _writeLock = new();
 
     private Preferences _current;
     private bool _disposed;
@@ -53,10 +57,16 @@ public sealed class PreferencesService : IDisposable
 
     private void Flush()
     {
-        Preferences snapshot;
-        lock (_gate) snapshot = _current;
-        try { PreferencesStore.Save(_path, snapshot); }
-        catch (Exception ex) { Console.WriteLine($"Failed to save preferences: {ex.Message}"); }
+        // Hold _writeLock across the whole read-and-write so concurrent flushes serialize; reading
+        // the snapshot inside the lock means the last writer persists the freshest state rather
+        // than a stale snapshot captured before it blocked.
+        lock (_writeLock)
+        {
+            Preferences snapshot;
+            lock (_gate) snapshot = _current;
+            try { PreferencesStore.Save(_path, snapshot); }
+            catch (Exception ex) { Console.WriteLine($"Failed to save preferences: {ex.Message}"); }
+        }
     }
 
     public void Dispose()
