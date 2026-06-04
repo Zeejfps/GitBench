@@ -20,14 +20,15 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
     public event Action? CloseRequested;
 
     public CreateBranchDialogViewModel(
-        CreateBranchRequest request,
+        Repo repo,
+        string suggestedStartPoint,
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        StartPoint = new State<string>(request.SuggestedStartPoint);
+        StartPoint = new State<string>(suggestedStartPoint);
 
-        var repoId = request.Repo.Id;
+        var repoId = repo.Id;
         var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
         NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
 
@@ -39,7 +40,7 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
                 var startPoint = StartPoint.Value;
                 if (startPoint.Length == 0) startPoint = "HEAD";
                 var checkout = Checkout.Value;
-                var outcome = gitService.CreateBranch(request.Repo, name, startPoint, checkout);
+                var outcome = gitService.CreateBranch(repo, name, startPoint, checkout);
                 return outcome.Success ? null : (outcome.ErrorMessage ?? "Create branch failed.");
             },
             onSuccess: () =>
@@ -52,5 +53,3 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
 
     public void Dispose() { }
 }
-
-internal readonly record struct CreateBranchRequest(Repo Repo, string SuggestedStartPoint);

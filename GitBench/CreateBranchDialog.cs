@@ -38,10 +38,10 @@ internal sealed class CreateBranchDialog : MultiChildView, IBind<CreateBranchDia
         AddChildToSelf(_shell.View);
         _shell.SubmitFrom(_nameField.Input, _startPointField.Input);
 
-        var request = new CreateBranchRequest(repo, suggestedStartPoint);
         this.UseViewModel(
             ctx => new CreateBranchDialogViewModel(
-                request,
+                repo,
+                suggestedStartPoint,
                 ctx.Require<IGitService>(),
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>()),
