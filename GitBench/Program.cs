@@ -48,6 +48,8 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     context.AddService<IWindowChrome>(new WindowsWindowChrome());
 else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
     context.AddService<IWindowChrome>(new MacOsWindowChrome());
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+    context.AddService<IWindowChrome>(new LinuxWindowChrome());
 
 var statePath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
