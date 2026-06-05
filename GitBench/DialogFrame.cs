@@ -22,11 +22,26 @@ internal static class DialogFrame
     public const float WidthStandard = 480f;
     public const float WidthWide = 600f;
 
-    public static View Build(string title, Action onClose, FlexColumnView body, float width = WidthStandard)
+    // Assembles the standard dialog: a pinned header and separator, the body in a scroll region
+    // that absorbs any height the frame is short on, and an optional pinned footer below it. The
+    // header and footer stay put while the body scrolls, so a dialog capped to the window by
+    // CenterView keeps its title and buttons visible no matter how tall its content is.
+    public static View Build(string title, Action onClose, View body, View? footer = null, float width = WidthStandard)
     {
-        body.Children.Insert(0, Separator());
-        body.Children.Insert(0, Header(title, onClose));
-        return Wrap(body, width);
+        var column = new FlexColumnView
+        {
+            Gap = 12,
+            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            Children =
+            {
+                Header(title, onClose),
+                Separator(),
+                new FlexItem { Grow = 1, Child = new DialogScrollRegion(body) },
+            },
+        };
+        if (footer != null)
+            column.Children.Add(footer);
+        return Wrap(column, width);
     }
 
     public static FlexRowView Header(string title, Action onClose)

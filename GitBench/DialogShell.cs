@@ -104,17 +104,15 @@ internal sealed class DialogShell
             ? DialogFrame.ButtonsRow(_cancelButton, _actionButton)
             : DialogFrame.ButtonsRow(FooterLead, _cancelButton, _actionButton);
 
-        var column = new FlexColumnView
+        var content = new FlexColumnView
         {
             Gap = BodyGap,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
-        foreach (var child in Body) column.Children.Add(child);
-        column.Children.Add(_errorView);
-        column.Children.Add(new MultiChildView { Height = 4 });
-        column.Children.Add(footer);
+        foreach (var child in Body) content.Children.Add(child);
+        content.Children.Add(_errorView);
 
-        _view = DialogFrame.Build(_title, _onClose, column, Width);
+        _view = DialogFrame.Build(_title, _onClose, content, footer, Width);
     }
 
     /// <summary>
