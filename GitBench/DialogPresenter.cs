@@ -17,7 +17,6 @@ public sealed class DialogPresenter : IViewBehavior
         if (bus is null) return;
 
         bus.Subscribe<ShowDialogMessage>(m => ShowDialog(m.CreateDialog(OnDialogClosed)));
-        bus.Subscribe<AddRepoMessage>(_ => ShowDialog(new AddRepoDialog(OnDialogClosed)));
         bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
     }
 

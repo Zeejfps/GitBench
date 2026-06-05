@@ -21,7 +21,7 @@ public static class RepoBarContextMenu
 
     public static readonly Item Separator = new(string.Empty, static () => { }, IsSeparator: true);
 
-    public static IOpenedContextMenu? Show(Context context, PointF anchor, IReadOnlyList<Item> items)
+    public static IOpenedContextMenu? Show(Context context, PointF anchor, IReadOnlyList<Item> items, MenuPlacement placement = MenuPlacement.Below)
     {
         if (items.Count == 0) return null;
         var manager = context.Get<ContextMenuManager>();
@@ -33,7 +33,7 @@ public static class RepoBarContextMenu
 
         var coords = context.Get<IWindowCoordinates>();
         var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
-        var opened = manager.ShowContextMenu(menu, screen);
+        var opened = manager.ShowContextMenu(menu, screen, placement: placement);
         if (opened == null) return null;
 
         menu.UseController(_ => new ContextMenuKbmController(opened));
