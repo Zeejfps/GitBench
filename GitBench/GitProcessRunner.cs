@@ -129,13 +129,12 @@ internal sealed class GitProcessRunner
     }
 
     // On macOS, GUI apps launched outside a terminal (Finder, IDE, Launch Services) don't
-    // inherit the user's interactive-shell environment. Anything set up in .zshrc / .bashrc —
-    // 1Password's SSH_AUTH_SOCK, manually-started ssh-agent, the Homebrew PATH,
-    // GIT_SSH_COMMAND overrides — is invisible to the child process, and `git push` over SSH
-    // dies with "Could not read from remote repository". Running git through the user's shell
-    // with `-i -c` sources their rc files first so ssh and git see the same environment they
-    // do in Terminal. Each user-typed arg is shell-quoted so spaces or metacharacters can't
-    // break the command or inject extra ones.
+    // inherit the user's shell environment. Anything set up in .zprofile / .zshrc — the
+    // Homebrew/path_helper PATH (so post-checkout hooks find git-lfs), 1Password's
+    // SSH_AUTH_SOCK, ssh-agent, GIT_SSH_COMMAND — is invisible to the child process. We run
+    // git through the user's shell with `-l -i` so BOTH login files (.zprofile, where PATH /
+    // path_helper live) and interactive files (.zshrc, where ssh-agent usually lives) are
+    // sourced. Each user-typed arg is shell-quoted so metacharacters can't break or inject.
     private static ProcessStartInfo BuildShellPsi(IReadOnlyList<string> gitArgs, string workingDir)
     {
         var psi = new ProcessStartInfo
@@ -153,6 +152,7 @@ internal sealed class GitProcessRunner
             var shell = Environment.GetEnvironmentVariable("SHELL");
             if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
             psi.FileName = shell;
+            psi.ArgumentList.Add("-l");
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add("-c");
             var sb = new StringBuilder("GIT_TERMINAL_PROMPT=0 git");
