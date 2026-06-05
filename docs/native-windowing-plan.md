@@ -65,30 +65,39 @@ decorators, coordinates, popup/secondary factories, and `ContextMenuManager` all
 sealed surface. Verified: zero `GLFW`/`Glfw.` references remain in `ZGF.Gui` or the `GitBench`
 app; GitBench, GitBench.Tests, and ZGF.Gui.Tests all build clean.
 
-- Move input/char/mouse/scroll/cursor-enter events onto `IWindow`; current
-  `OpenGlWindow`/`MetalWindow` raise them from their existing GLFW callbacks.
-- Rewrite `GlfwInputSystem` → `DesktopInputSystem`, constructed from `IWindow`
-  (subscribes to events; uses `IWindow.GetCursorPosition()`/size instead of
-  `Glfw.GetCursorPosition`/`Glfw.GetWindowSize`).
-- Remove GLFW leak points: `OpenGlApp.MainGlfwWindow`, the `_app is OpenGlApp`
-  check + `glViewport` in `GuiApp`, the `GLFW.Window` casts in
-  `PopupWindowFactory`/`SecondaryWindowFactory`, and the native-handle pokes in
-  `MacOsPopupDecorator`/`WindowsPopupDecorator` (route via `WindowHandle` +
-  `NativeWindowKind`).
-- **Acceptance:** `using GLFW` appears only in `ZGF.Core` backend files
-  (`OpenGl*`, `Metal*`) and the keyboard adapter. Everything builds and behaves
-  identically. GLFW still ships.
+**What Phase 0 established (read before starting any native backend):**
+
+- The seal boundary is `ZGF.Core`. `using GLFW` / `Glfw.` now appears **only** in
+  `ZGF.Core` (`OpenGlApp`, `OpenGlWindow`, `MetalApp`, `MetalWindow`, `GlfwMonitors`,
+  `Native*`) and the keyboard adapter. A native backend is a new pair of
+  `IApp`/`IWindow` implementations in `ZGF.Core` selected by `PlatformBackend.Resolve`;
+  nothing above `ZGF.Core` changes.
+- **Correction to the original plan:** `GuiApp`'s `if (_app is OpenGlApp) glViewport(...)`
+  is **not** a GLFW leak (it uses `ZGF.Core` + `OpenGL.NET` types) and was left in place.
+  It's *render-backend* coupling, not windowing — see the seam below.
+- **Render-frame wiring is the remaining backend coupling** the native phases touch.
+  `PopupWindowFactory`/`SecondaryWindowFactory` branch on `_window is OpenGlWindow` /
+  `is MetalWindow` to install the per-window `RenderFrame` closure (GL clear+swap, or
+  Metal `CAMetalLayer` + command buffer), and `GuiApp` branches on `_app is OpenGlApp`
+  for `glViewport`. These key off the *window/app concrete type*, which the windowing
+  swap changes — a native `CocoaWindow` must still expose `.Layer`/`RenderFrame` so the
+  Metal closure binds, or that wiring moves behind an interface. Decide per phase.
+- Confirmed **no IME/char path** (no GLFW char callback was ever set), so native backends
+  reach parity without text-composition work.
 
 ## Phase 1 — Native macOS (Cocoa) backend
 
 Smallest gap, biggest payoff (kills the mac dylib, cleans the Metal loop).
 
-- New `CocoaApp : IPlatformBackend` + `CocoaWindow : IPlatformWindow`:
+- New `CocoaApp : IApp` + `CocoaWindow : IWindow` implementing the contract above:
   `NSApplication` run loop, `NSWindow` create (borderless/floating variants for
-  popups), `NSEvent` → window events, `backingScaleFactor` → `DpiScale`,
-  monitor center for initial placement. Reuse `Objc.cs`/`MetalApi.cs` and the
-  existing `CAMetalLayer` attach from `MetalWindow`.
-- `PlatformBackend.ResolveMetal` builds on `CocoaApp` instead of `MetalApp(GLFW)`.
+  popups), `NSEvent` → the neutral `OnKey`/`OnMouseButton`/`OnScroll`/`OnPointerEnter`
+  events, `backingScaleFactor` → `DpiScale`, `NativeHandle` → the NSWindow,
+  `Monitors` via `NSScreen`. Reuse `Objc.cs`/`MetalApi.cs` and the existing
+  `CAMetalLayer` attach from `MetalWindow` (keep `.Layer`/`RenderFrame` so the
+  factories' Metal render closures bind unchanged).
+- Point `PlatformBackend.ResolveMetal` at `CocoaApp` instead of `MetalApp(GLFW)`;
+  update the `is MetalWindow` checks to the new window type (or a shared interface).
 - **Risks:** event-loop integration with the existing tick/redraw loop;
   reentrancy during the pump (we already guard this); multi-window (share one
   `MTLDevice` — trivial vs GL share lists).
@@ -96,26 +105,32 @@ Smallest gap, biggest payoff (kills the mac dylib, cleans the Metal loop).
 
 ## Phase 2 — Native Windows (Win32) backend
 
-- `Win32App`/`Win32Window`: `RegisterClassEx` + `CreateWindowEx`, `WndProc`
-  message pump, WGL context via `wglCreateContextAttribsARB` (GL 4.1 core), GL
-  **context share lists** for the shared font atlas, Per-Monitor-V2 DPI
-  (`WM_DPICHANGED`), `WM_ENTERSIZEMOVE` timer pump (keep rendering during drags),
-  `WM_KEYDOWN`/mouse/focus/close → window events.
-- Fold `WindowsWindowChrome` + `WindowsPopupDecorator` into the backend.
+- `Win32App`/`Win32Window` implementing the contract: `RegisterClassEx` +
+  `CreateWindowEx`, `WndProc` message pump, WGL context via
+  `wglCreateContextAttribsARB` (GL 4.1 core), GL **context share lists** for the
+  shared font atlas, Per-Monitor-V2 DPI (`WM_DPICHANGED`), `WM_ENTERSIZEMOVE` timer
+  pump (keep rendering during drags), `WM_KEYDOWN`/mouse/focus/close → the neutral
+  events, `NativeHandle` → the HWND, `Monitors` via `EnumDisplayMonitors`. Keep
+  `RenderFrame` so the factories' GL render closures bind (update the
+  `is OpenGlWindow` checks to the new window type, or a shared `IGlWindow` interface).
+- `WindowsWindowChrome`/`WindowsPopupDecorator` already take `NativeHandle` (HWND)
+  directly post-Phase 0 — no change needed beyond pointing the backend at them.
 - **Acceptance:** win runs with zero GLFW; drop `glfw3.dll`.
 
 ## Phase 3 — Native Linux/X11 backend (Ubuntu)
 
 Largest lift; target **X11 only** (Wayland apps run via XWayland).
 
-- `X11App`/`X11Window`: Xlib/xcb + GLX (or EGL) context, XKB keyboard mapping,
-  EWMH/`_NET_WM` hints for borderless + floating + positioning, RandR for
-  monitors/DPI, XInput2 for scroll, X selections for clipboard (we already touch
-  `GetX11SelectionString`).
+- `X11App`/`X11Window` implementing the contract: Xlib/xcb + GLX (or EGL) context,
+  XKB keyboard mapping → `KeyboardKey`, EWMH/`_NET_WM` hints for borderless +
+  floating + positioning, RandR for `Monitors`/DPI, XInput2 for scroll, X selections
+  for clipboard (we already touch `GetX11SelectionString`). `NativeHandle` → the X11
+  Window. Keep `RenderFrame`/`is OpenGlWindow` wiring as in Phase 2.
 - **Defer native Wayland** as a separate decision (no global positioning,
   mandatory client-side decorations — conflicts with our absolute-positioned
   popups).
-- **Acceptance:** Ubuntu runs with zero GLFW; delete vendored `Glfw.NET`.
+- **Acceptance:** Ubuntu runs with zero GLFW; delete vendored `Glfw.NET` (and the
+  `Native/linux-x64` README/binary, and `NativeLibraryResolver`).
 
 ## Phase 4 — Retire GLFW
 
@@ -125,6 +140,8 @@ Largest lift; target **X11 only** (Wayland apps run via XWayland).
   `QuadTreeRendererProgram`, `OpenGlWrapper.Tests`, `ZGF.Gui.Tests`) are **not
   GitBench** — either migrate them to the new backends or keep a minimal GLFW
   shim project just for them. Decide per-app; they don't block GitBench shipping.
+  Note Phase 0 added a `ZGF.Core` → `ZGF.KeyboardModule.GlfwAdapter` reference (for
+  GLFW key mapping); remove it here once no backend uses GLFW.
 
 ---
 
@@ -141,11 +158,11 @@ Largest lift; target **X11 only** (Wayland apps run via XWayland).
 
 ## Sequencing & effort (rough)
 
-1. Phase 0 — small, do now, independently valuable.
-2. Phase 1 (macOS) — small/medium.
+1. Phase 0 — ✅ **done**. Small, independently valuable; the waist is sealed.
+2. Phase 1 (macOS) — small/medium. **Recommended next** (GLFW is already vestigial there).
 3. Phase 2 (Win32) — medium.
 4. Phase 3 (X11) — largest.
 5. Phase 4 — cleanup.
 
-A **hybrid is viable indefinitely** (e.g. native macOS + GLFW on win/linux): once
-Phase 0 seals the waist, backends mix per-platform without touching shared code.
+A **hybrid is viable indefinitely** (e.g. native macOS + GLFW on win/linux): now that
+Phase 0 has sealed the waist, backends mix per-platform without touching shared code.
