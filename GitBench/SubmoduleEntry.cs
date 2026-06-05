@@ -42,9 +42,9 @@ public sealed class SubmoduleEntry : MultiChildView
     }
 }
 
-// Shared factory for the child rows under any RepoBar parent (a primary or a submodule).
-// Worktrees come first as leaves, then submodules as recursive SubmoduleEntry composites —
-// same order/indent rules at every level so the tree reads consistently.
+// Shared factory for the child rows under any RepoBar parent (primary, worktree, or
+// submodule). Worktrees first, then submodules — both recursive composites that carry their
+// own nested children, same order/indent at every level.
 internal static class RepoTreeChildren
 {
     public static IReadOnlyList<View> Build(System.Guid parentId, IRepoRegistry registry, int depth)
@@ -53,7 +53,7 @@ internal static class RepoTreeChildren
         foreach (var r in registry.Repos)
         {
             if (r.ParentRepoId == parentId && r.IsWorktree)
-                views.Add(new WorktreeRow(r, registry, depth));
+                views.Add(new WorktreeEntry(r, registry, depth));
         }
         foreach (var r in registry.Repos)
         {

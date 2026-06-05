@@ -7,12 +7,15 @@ namespace GitGui;
 // only place that turns filesystem state (.gitmodules entries + per-submodule .git
 // status) into Repo records.
 //
+// A submodule host is any top-level checkout — a primary or a worktree (worktrees share the
+// primary's .gitmodules). The host id flows through every trigger below.
+//
 // Triggers:
-//   * A primary repo is added (or appears on startup).
-//   * SubmodulesChangedMessage(primaryId) — from RepoWatcher detecting `.gitmodules`
+//   * A primary or worktree is added (or appears on startup).
+//   * SubmodulesChangedMessage(hostId) — from RepoWatcher detecting `.gitmodules`
 //     or `.git/modules/<name>/` changes, or from a dialog presenter after an add /
 //     update / deinit.
-//   * RefsChangedMessage(primaryId) — HEAD moves can swap in a different .gitmodules,
+//   * RefsChangedMessage(hostId) — HEAD moves can swap in a different .gitmodules,
 //     which changes the submodule set even though the working tree didn't change.
 internal sealed class SubmoduleSyncService : IDisposable
 {
@@ -47,11 +50,11 @@ internal sealed class SubmoduleSyncService : IDisposable
             case ListChangeKind.Reset:
                 foreach (var repo in _registry.Repos)
                 {
-                    if (repo.IsPrimary) ScheduleSync(repo.Id);
+                    if (repo.IsPrimary || repo.IsWorktree) ScheduleSync(repo.Id);
                 }
                 break;
             case ListChangeKind.Added:
-                if (change.Item is { } added && added.IsPrimary)
+                if (change.Item is { } added && (added.IsPrimary || added.IsWorktree))
                     ScheduleSync(added.Id);
                 break;
         }
@@ -68,33 +71,31 @@ internal sealed class SubmoduleSyncService : IDisposable
         }
         if (source is null) return;
 
-        // Only primaries (and their worktrees, which share refs) carry submodules; a
-        // submodule's own RefsChangedMessage doesn't affect the parent's submodule set.
-        if (source.IsSubmodule) return;
+        // Only top-level checkouts host submodules; a worktree's own HEAD re-syncs itself.
+        if (!source.IsPrimary && !source.IsWorktree) return;
 
-        var primaryId = source.ParentRepoId ?? source.Id;
-        ScheduleSync(primaryId);
+        ScheduleSync(source.Id);
     }
 
     // Submodules can themselves contain submodules; we walk the whole tree but cap the depth
     // as a backstop against pathological/cyclic nesting (the visited-path set is the real guard).
     private const int MaxSubmoduleDepth = 8;
 
-    private void ScheduleSync(Guid primaryId)
+    private void ScheduleSync(Guid hostId)
     {
         Task.Run(() =>
         {
-            Repo? primary = null;
+            Repo? host = null;
             foreach (var r in _registry.Repos)
             {
-                if (r.Id == primaryId) { primary = r; break; }
+                if (r.Id == hostId) { host = r; break; }
             }
-            if (primary is null || !primary.IsPrimary) return;
+            if (host is null || (!host.IsPrimary && !host.IsWorktree)) return;
 
-            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { NormalizeForVisit(primary.Path) };
-            var roots = EnumerateSubmoduleTree(primary.Path, 0, visited);
+            var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { NormalizeForVisit(host.Path) };
+            var roots = EnumerateSubmoduleTree(host.Path, 0, visited);
 
-            _dispatcher.Post(() => _registry.ReplaceSubmoduleForest(primaryId, roots));
+            _dispatcher.Post(() => _registry.ReplaceSubmoduleForest(hostId, roots));
         });
     }
 
