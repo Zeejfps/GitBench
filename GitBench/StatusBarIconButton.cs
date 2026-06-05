@@ -14,6 +14,10 @@ internal sealed class StatusBarIconButton : HoverableButton
 {
     public State<string> Icon { get; } = new(string.Empty);
 
+    /// <summary>Angle (radians) of the glyph; drive it from a <see cref="SpinnerAnimation"/>
+    /// to spin a <see cref="LucideIcons.Loader"/> while a background op runs.</summary>
+    public State<float> IconRotation { get; } = new(0f);
+
     public StatusBarIconButton(string? tooltip = null) : base(tooltip: tooltip)
     {
         Width = 22;
@@ -27,6 +31,7 @@ internal sealed class StatusBarIconButton : HoverableButton
             VerticalTextAlignment = TextAlignment.Center,
         };
         label.BindText(Icon);
+        label.BindRotation(IconRotation);
         label.BindThemedTextColor(s => IsHovered.Value ? s.StatusBar.IconHover : s.StatusBar.Icon);
 
         var background = new RectView

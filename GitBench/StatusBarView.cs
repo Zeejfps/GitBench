@@ -24,6 +24,8 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
     private readonly FlexRowView _behindCluster;
     private readonly TextView _behindText;
     private readonly StatusBarIconButton _themeButton;
+    private readonly StatusBarIconButton _updateButton;
+    private readonly TextView _updateFeedback;
 
     public StatusBarView()
     {
@@ -46,6 +48,16 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
         };
 
         _themeButton = new StatusBarIconButton("Toggle theme");
+        _updateButton = new StatusBarIconButton("Check for updates");
+
+        // Brief inline result of a manual check ("up to date" / "failed"); hidden when empty.
+        _updateFeedback = new TextView
+        {
+            FontSize = 11f,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.End,
+        };
+        _updateFeedback.BindThemedTextColor(s => s.StatusBar.Text);
 
         var version = new TextView
         {
@@ -70,6 +82,8 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
                     {
                         _themeButton,
                         new FlexItem { Grow = 1, Child = left },
+                        _updateFeedback,
+                        _updateButton,
                         version,
                     },
                 },
@@ -98,6 +112,13 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
 
         _themeButton.BindCommand(vm.ToggleTheme);
         _themeButton.Icon.BindTo(vm.Theme, m => m == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon);
+
+        _updateButton.BindCommand(vm.CheckForUpdates);
+        _updateButton.Icon.BindTo(vm.IsCheckingUpdates, busy => busy ? LucideIcons.Loader : LucideIcons.Fetch);
+        _updateButton.IconRotation.BindTo(vm.UpdateIconRotation);
+
+        _updateFeedback.BindText(vm.UpdateCheckFeedback, m => m ?? string.Empty);
+        _updateFeedback.BindIsVisible(vm.UpdateCheckFeedback, m => !string.IsNullOrEmpty(m));
     }
 
     // An icon glyph + label pair. Returns the row (for visibility binding) and the label

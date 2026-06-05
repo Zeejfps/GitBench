@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using GitGui;
 using Velopack;
-using Velopack.Sources;
 using ZGF.AppUtils;
 using ZGF.Core;
 using ZGF.Gui;
@@ -117,32 +116,9 @@ using var submoduleSync = new SubmoduleSyncService(
 // to the active repo and seeds the first load.
 snapshotStore.Start(context.Require<IUiDispatcher>());
 
-// Check GitHub Releases for an update off the UI thread. The per-OS/arch channel must match
-// the --channel vpk packs with in CI (see .github/workflows/release.yml). Velopack only finds
-// updates from an installed build, so a plain `dotnet run` quietly no-ops via the catch.
-static string RuntimeChannel() =>
-    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win-x64"
-    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-        ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64")
-        : "linux-x64";
-
-Func<Task> checkForUpdatesAsync = async () =>
-{
-    try
-    {
-        var source = new GithubSource("https://github.com/Zeejfps/GitBench", null, false);
-        var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = RuntimeChannel() });
-        var update = await manager.CheckForUpdatesAsync();
-        if (update is null) return;
-        await manager.DownloadUpdatesAsync(update);
-        // Marshal back to the UI thread — State<T>/views are single-threaded.
-        context.Require<IUiDispatcher>().Post(() => updateService.OfferUpdate(manager, update));
-    }
-    catch
-    {
-        // Offline, no published release for this channel yet, or a non-installed dev build.
-    }
-};
-_ = Task.Run(checkForUpdatesAsync);
+// Silently check GitHub Releases for an update at startup. The network I/O runs off the UI
+// thread (the first await yields) and results marshal back through the dispatcher; the same
+// entry point backs the manual "check for updates" button in the status bar.
+_ = updateService.CheckForUpdatesAsync(context.Require<IUiDispatcher>(), userInitiated: false);
 
 appHost.Run();

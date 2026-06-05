@@ -10,8 +10,14 @@ namespace GitGui;
 /// </summary>
 internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 {
+    // How long a manual check's "up to date" / "failed" result lingers before clearing itself.
+    private const int FeedbackLingerMs = 4000;
+
     private readonly IRepoRegistry _registry;
     private readonly State<ThemeMode> _themeMode;
+    private readonly UpdateService _updateService;
+    private readonly SpinnerAnimation _updateSpinner;
+    private CancellationTokenSource? _feedbackCts;
 
     public IReadable<bool> HasActiveRepo { get; }
     public IReadable<string?> RepoName { get; }
@@ -25,15 +31,23 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     public Command ToggleTheme { get; }
     public IReadable<ThemeMode> Theme => _themeMode;
 
+    public Command CheckForUpdates { get; }
+    public IReadable<bool> IsCheckingUpdates => _updateService.IsChecking;
+    public IReadable<float> UpdateIconRotation => _updateSpinner.Rotation;
+    public IReadable<string?> UpdateCheckFeedback => _updateService.CheckFeedback;
+
     public StatusBarViewModel(
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IRepoSnapshotStore store,
-        State<ThemeMode> themeMode)
+        State<ThemeMode> themeMode,
+        UpdateService updateService)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
         _themeMode = themeMode;
+        _updateService = updateService;
+        _updateSpinner = new SpinnerAnimation(dispatcher);
 
         HasActiveRepo = Slice(s => s.HasActiveRepo);
         RepoName = Slice(s => s.RepoName);
@@ -45,6 +59,13 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         BehindText = Slice(s => s.Behind.ToString());
 
         ToggleTheme = new Command(DoToggleTheme);
+        CheckForUpdates = new Command(DoCheckForUpdates);
+
+        // Spin the check button's icon for the duration of a check; fires immediately with the
+        // current (idle) value, leaving the spinner stopped until a check starts.
+        Subscriptions.Add(_updateService.IsChecking.Subscribe(OnCheckingChanged));
+        // A finished manual check's result clears itself after a short linger.
+        Subscriptions.Add(_updateService.CheckFeedback.Subscribe(OnFeedbackChanged));
 
         // Repo name / has-repo come from the registry (instant, non-git); branch + ahead/behind
         // are refined from the store's push status. Both subscriptions fire immediately.
@@ -56,6 +77,44 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
     private void DoToggleTheme() =>
         _themeMode.Value = _themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
+
+    private void DoCheckForUpdates() =>
+        _ = _updateService.CheckForUpdatesAsync(Dispatcher, userInitiated: true);
+
+    private void OnCheckingChanged(bool checking)
+    {
+        if (checking) _updateSpinner.Start();
+        else _updateSpinner.Stop();
+    }
+
+    // Auto-clears a manual check's inline result after a linger. Mirrors the Tooltip's
+    // cancel-on-supersede pattern: a fresh message (or another check, which nulls feedback
+    // first) cancels the pending clear so it never wipes a newer message.
+    private void OnFeedbackChanged(string? message)
+    {
+        _feedbackCts?.Cancel();
+        _feedbackCts?.Dispose();
+        _feedbackCts = null;
+        if (string.IsNullOrEmpty(message)) return;
+
+        var cts = new CancellationTokenSource();
+        _feedbackCts = cts;
+        var token = cts.Token;
+        var dispatcher = Dispatcher;
+        Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(FeedbackLingerMs, token).ConfigureAwait(false);
+                dispatcher.Post(() =>
+                {
+                    if (token.IsCancellationRequested) return;
+                    _updateService.CheckFeedback.Value = null;
+                });
+            }
+            catch (OperationCanceledException) { /* superseded before the linger elapsed */ }
+        }, token);
+    }
 
     private void OnActiveChanged(Repo? repo)
     {
@@ -81,5 +140,14 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             Ahead = status.Ahead,
             Behind = status.Behind,
         });
+    }
+
+    public override void Dispose()
+    {
+        _feedbackCts?.Cancel();
+        _feedbackCts?.Dispose();
+        _feedbackCts = null;
+        _updateSpinner.Dispose();
+        base.Dispose();
     }
 }
