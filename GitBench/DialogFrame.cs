@@ -111,7 +111,7 @@ internal static class DialogFrame
 
     public static TextInputView TextInput()
     {
-        var view = new TextInputView { TextWrap = TextWrap.NoWrap };
+        var view = new TextInputView();
         view.BindThemed(s =>
         {
             view.BackgroundColor = s.TextInput.Background;

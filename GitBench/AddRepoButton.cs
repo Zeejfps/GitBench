@@ -30,8 +30,28 @@ public sealed class AddRepoButton : HoverableButton
 
     protected override void OnClicked()
     {
+        var ctx = Context;
+        if (ctx == null) return;
+
+        var items = new List<RepoBarContextMenu.Item>
+        {
+            new("Open from Folder…", OpenFromFolder, Icon: LucideIcons.FolderOpen),
+            new("Clone Repository…", ShowCloneDialog, Icon: LucideIcons.FolderGit2),
+        };
+        // Anchor at the button's top edge and grow upward — the button lives at the very
+        // bottom of the sidebar, so a downward menu would spill off-screen and get clamped
+        // back over the button.
+        RepoBarContextMenu.Show(ctx, Position.TopLeft, items, MenuPlacement.Above);
+    }
+
+    private void OpenFromFolder()
+    {
         var path = Context?.Get<IPlatformShell>()?.PickFolder("Open Repository");
         if (string.IsNullOrEmpty(path)) return;
         Context?.Get<IRepoRegistry>()?.Open(path);
     }
+
+    private void ShowCloneDialog()
+        => Context?.Get<IMessageBus>()?.Broadcast(
+            new ShowDialogMessage(onClose => new CloneRepoDialog(onClose)));
 }

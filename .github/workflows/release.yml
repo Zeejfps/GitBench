@@ -28,15 +28,13 @@ jobs:
             channel: osx-arm64
             exe: GitBench
             icon: GitBench/Assets/commit_bench_icon_mac.icns
-            extra: "--bundleId com.gitbench.app"
-          # Intel macOS runners (macos-13) are queue-constrained and were stalling. Re-enable
-          # this row (and add osx-x64 back to the publish loop below) to ship Intel builds.
-          # - os: macos-13               # Intel runner
-          #   rid: osx-x64
-          #   channel: osx-x64
-          #   exe: GitBench
-          #   icon: GitBench/Assets/commit_bench_icon_mac.icns
-          #   extra: "--bundleId com.gitbench.app"
+            extra: "--bundleId com.builtbyzee.gitbench"
+          - os: macos-15-intel         # Intel runner (macos-13 was retired Dec 2025)
+            rid: osx-x64
+            channel: osx-x64
+            exe: GitBench
+            icon: GitBench/Assets/commit_bench_icon_mac.icns
+            extra: "--bundleId com.builtbyzee.gitbench"
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux-x64

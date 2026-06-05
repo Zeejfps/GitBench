@@ -11,10 +11,7 @@ public sealed class GroupRenameField : MultiChildView
     {
         Height = 22;
 
-        var input = new TextInputView
-        {
-            TextVerticalAlignment = TextAlignment.Center,
-        };
+        var input = new TextInputView();
         input.BindThemed(s =>
         {
             input.BackgroundColor = s.GroupRenameField.Background;

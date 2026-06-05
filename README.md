@@ -2,6 +2,8 @@
 
 A fast, cross-platform desktop Git client.
 
+🌐 **Website: [gitbench.builtbyzee.com](https://gitbench.builtbyzee.com)**
+
 [![Latest release](https://img.shields.io/github/v/release/Zeejfps/GitBench?sort=semver)](https://github.com/Zeejfps/GitBench/releases/latest)
 [![Release build](https://img.shields.io/github/actions/workflow/status/Zeejfps/GitBench/release.yml?label=release%20build)](https://github.com/Zeejfps/GitBench/actions/workflows/release.yml)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
@@ -27,10 +29,11 @@ compiled to a native executable (Native AOT) — no runtime to install, quick to
 
 ## Installation
 
-Grab the build for your platform from the [**latest release**](https://github.com/Zeejfps/GitBench/releases/latest):
+Head to [**gitbench.builtbyzee.com**](https://gitbench.builtbyzee.com) or grab the build for your
+platform directly from the [**latest release**](https://github.com/Zeejfps/GitBench/releases/latest):
 
 - **Windows** — run the `Setup.exe` installer (or use the portable build).
-- **macOS** (Apple Silicon) — open the `.pkg` / app bundle.
+- **macOS** (Apple Silicon & Intel) — open the `.pkg` / app bundle.
 - **Linux** — run the `.AppImage`.
 
 Once installed, GitBench keeps itself up to date automatically — when an update is ready it

@@ -363,20 +363,16 @@ public sealed class RepoRegistry : IRepoRegistry
             }
         }
 
-        // Remove worktree rows that no longer appear in `git worktree list`.
-        for (var i = Repos.Count - 1; i >= 0; i--)
+        var worktreesToRemove = new List<Guid>();
+        for (var i = 0; i < Repos.Count; i++)
         {
             var r = Repos[i];
             if (r.ParentRepoId != primaryId || !r.IsWorktree) continue;
-            var normalized = Path.GetFullPath(r.Path);
-            if (!desiredByPath.ContainsKey(normalized))
-            {
-                Repos.RemoveAt(i);
-                _worktreesExpanded.Remove(r.Id);
-                if (Active.Value?.Id == r.Id) Active.Value = primary;
-                changed = true;
-            }
+            if (!desiredByPath.ContainsKey(Path.GetFullPath(r.Path)))
+                worktreesToRemove.Add(r.Id);
         }
+        foreach (var id in worktreesToRemove)
+            changed |= RemoveRepoSubtree(id, primary);
 
         // Add newly discovered worktrees.
         foreach (var d in desired)
@@ -397,19 +393,17 @@ public sealed class RepoRegistry : IRepoRegistry
 
     // Discovery side-effect entry point for submodules — same diff/reconcile shape as
     // ReplaceWorktreesFor but recursive: each node carries its own nested submodules, so the
-    // whole tree under the primary is reconciled in one pass. Submodule rows survive path-stable
-    // syncs so their Repo.Id stays put and Active doesn't get invalidated when a watcher re-runs
-    // discovery. The recursion is what makes submodules-of-submodules show up in the RepoBar.
-    public void ReplaceSubmoduleForest(Guid primaryId, IReadOnlyList<SubmoduleNode> roots)
+    // whole tree under the host is reconciled in one pass. The host is a primary or a worktree.
+    public void ReplaceSubmoduleForest(Guid hostId, IReadOnlyList<SubmoduleNode> roots)
     {
-        var primary = Repos.FirstOrDefault(r => r.Id == primaryId);
-        if (primary is null || !primary.IsPrimary) return;
+        var host = Repos.FirstOrDefault(r => r.Id == hostId);
+        if (host is null || (!host.IsPrimary && !host.IsWorktree)) return;
 
         var pathComparer = PathComparison == StringComparison.OrdinalIgnoreCase
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
 
-        if (ReconcileSubmoduleLevel(primaryId, roots, pathComparer))
+        if (ReconcileSubmoduleLevel(hostId, roots, pathComparer))
         {
             WorktreesChanged.Value++;
             Save();
@@ -456,7 +450,7 @@ public sealed class RepoRegistry : IRepoRegistry
             if (r.ParentRepoId != parentId || !r.IsSubmodule) continue;
             var normalized = Path.GetFullPath(r.Path);
             if (!desiredByPath.ContainsKey(normalized))
-                changed |= RemoveSubmoduleSubtree(r.Id, fallbackActive);
+                changed |= RemoveRepoSubtree(r.Id, fallbackActive);
         }
 
         foreach (var node in nodes)
@@ -495,18 +489,14 @@ public sealed class RepoRegistry : IRepoRegistry
         return changed;
     }
 
-    // Removes a submodule row and its whole subtree (nested submodules) from the flat list,
-    // clearing per-id expand state and migrating Active up to `fallbackActive` if it pointed
-    // into the removed subtree.
-    private bool RemoveSubmoduleSubtree(Guid repoId, Repo? fallbackActive)
+    private bool RemoveRepoSubtree(Guid repoId, Repo? fallbackActive)
     {
         var removedAny = false;
 
-        // Depth-first: drop descendants before the node itself so nothing is orphaned.
         for (var i = Repos.Count - 1; i >= 0; i--)
         {
             if (Repos[i].ParentRepoId == repoId)
-                removedAny |= RemoveSubmoduleSubtree(Repos[i].Id, fallbackActive);
+                removedAny |= RemoveRepoSubtree(Repos[i].Id, fallbackActive);
         }
 
         for (var i = 0; i < Repos.Count; i++)

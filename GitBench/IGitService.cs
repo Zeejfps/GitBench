@@ -24,6 +24,9 @@ public interface IGitService
     EditRemoteOutcome AddRemote(Repo repo, string name, string url);
     PullOutcome Pull(Repo repo);
     FetchOutcome Fetch(Repo repo);
+    // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's
+    // progress output. On success RepoPath carries the absolute path of the new working tree.
+    CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null);
     FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null);
     CheckoutOutcome CheckoutLocalBranch(Repo repo, string branchName);
     CheckoutOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
@@ -163,6 +166,8 @@ public sealed record PushOutcome(bool Success, string? ErrorMessage);
 public sealed record PullOutcome(bool Success, string? ErrorMessage);
 
 public sealed record FetchOutcome(bool Success, string? ErrorMessage);
+
+public sealed record CloneOutcome(bool Success, string? ErrorMessage, string? RepoPath);
 
 public sealed record FastForwardOutcome(bool Success, string? ErrorMessage);
 

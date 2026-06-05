@@ -1459,6 +1459,53 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Clone has no existing Repo to lock or validate — it creates one. We run from the target's
+    // parent dir (created if missing) with an absolute destination so git places the working tree
+    // exactly where the dialog asked. Streaming surfaces "Receiving objects" progress and lets us
+    // augment auth failures the same way fetch/push do.
+    public CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null)
+    {
+        try
+        {
+            var trimmedUrl = url?.Trim() ?? string.Empty;
+            if (trimmedUrl.Length == 0)
+                return new CloneOutcome(false, "Repository URL is required.", null);
+            if (string.IsNullOrWhiteSpace(targetPath))
+                return new CloneOutcome(false, "Destination path is required.", null);
+
+            string fullTarget;
+            try { fullTarget = Path.GetFullPath(targetPath); }
+            catch (Exception ex) { return new CloneOutcome(false, $"Invalid destination path: {ex.Message}", null); }
+
+            if (Directory.Exists(fullTarget) && Directory.EnumerateFileSystemEntries(fullTarget).Any())
+                return new CloneOutcome(false, $"Destination already exists and is not empty:\n{fullTarget}", null);
+
+            var parent = Path.GetDirectoryName(fullTarget);
+            if (string.IsNullOrEmpty(parent))
+                return new CloneOutcome(false, "Destination path has no parent directory.", null);
+
+            try { Directory.CreateDirectory(parent); }
+            catch (Exception ex) { return new CloneOutcome(false, $"Could not create destination folder: {ex.Message}", null); }
+
+            var args = new List<string> { "clone", "--progress", trimmedUrl, fullTarget };
+            var (exitCode, captureText, started) = _runner.RunStreaming(parent, args, onLine);
+
+            if (!started) return new CloneOutcome(false, "Failed to start git.", null);
+
+            if (exitCode == 0)
+                return new CloneOutcome(true, null, fullTarget);
+
+            var msg = GitProcessRunner.FirstMeaningfulLine(captureText);
+            if (string.IsNullOrEmpty(msg)) msg = $"git clone exited with code {exitCode}.";
+            msg = GitProcessRunner.AugmentCredentialError(msg, captureText);
+            return new CloneOutcome(false, msg, null);
+        }
+        catch (Exception ex)
+        {
+            return new CloneOutcome(false, ex.Message, null);
+        }
+    }
+
     public FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
     {
         try

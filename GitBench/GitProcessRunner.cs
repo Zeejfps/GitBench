@@ -129,13 +129,12 @@ internal sealed class GitProcessRunner
     }
 
     // On macOS, GUI apps launched outside a terminal (Finder, IDE, Launch Services) don't
-    // inherit the user's interactive-shell environment. Anything set up in .zshrc / .bashrc —
-    // 1Password's SSH_AUTH_SOCK, manually-started ssh-agent, the Homebrew PATH,
-    // GIT_SSH_COMMAND overrides — is invisible to the child process, and `git push` over SSH
-    // dies with "Could not read from remote repository". Running git through the user's shell
-    // with `-i -c` sources their rc files first so ssh and git see the same environment they
-    // do in Terminal. Each user-typed arg is shell-quoted so spaces or metacharacters can't
-    // break the command or inject extra ones.
+    // inherit the user's shell environment. Anything set up in .zprofile / .zshrc — the
+    // Homebrew/path_helper PATH (so post-checkout hooks find git-lfs), 1Password's
+    // SSH_AUTH_SOCK, ssh-agent, GIT_SSH_COMMAND — is invisible to the child process. We run
+    // git through the user's shell with `-l -i` so BOTH login files (.zprofile, where PATH /
+    // path_helper live) and interactive files (.zshrc, where ssh-agent usually lives) are
+    // sourced. Each user-typed arg is shell-quoted so metacharacters can't break or inject.
     private static ProcessStartInfo BuildShellPsi(IReadOnlyList<string> gitArgs, string workingDir)
     {
         var psi = new ProcessStartInfo
@@ -153,6 +152,7 @@ internal sealed class GitProcessRunner
             var shell = Environment.GetEnvironmentVariable("SHELL");
             if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
             psi.FileName = shell;
+            psi.ArgumentList.Add("-l");
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add("-c");
             var sb = new StringBuilder("GIT_TERMINAL_PROMPT=0 git");
@@ -229,22 +229,35 @@ internal sealed class GitProcessRunner
 
     // ────────── error-text extraction ──────────
 
-    // Picks the meaningful block out of git's two streams. Rules, in priority order:
-    //   1. If either stream carries an `error:` / `fatal:` / `hint:` prefix, that stream is
-    //      authoritative — use just its extracted block. Don't dilute it with the other
-    //      stream's content, which is typically the noisy `git status` recap a stash/merge
-    //      op runs after the failure ("On branch …", "Changes not staged for commit", etc.).
-    //   2. Otherwise prefer stdout — operations like `git stash apply` with conflicts emit
-    //      the actual signal (CONFLICT lines, "Auto-merging X") on stdout while stderr is
-    //      empty or a stray `\n`.
-    //   3. Fall back to stderr if stdout is whitespace-only.
+    // Full error text for the scrollable dialog: keep BOTH streams (cause and headline are
+    // often split across them), prefixed stream first. One-line banner uses FirstLineError.
     public static string CombineGitOutput(string stderr, string stdout)
     {
-        if (HasGitPrefix(stderr)) return ExtractGitErrorBlock(stderr);
-        if (HasGitPrefix(stdout)) return ExtractGitErrorBlock(stdout);
-        if (!string.IsNullOrWhiteSpace(stdout)) return ExtractGitErrorBlock(stdout);
-        if (!string.IsNullOrWhiteSpace(stderr)) return ExtractGitErrorBlock(stderr);
-        return string.Empty;
+        var errBlock = CleanStream(stderr);
+        var outBlock = CleanStream(stdout);
+        if (string.IsNullOrEmpty(errBlock)) return outBlock;
+        if (string.IsNullOrEmpty(outBlock)) return errBlock;
+        if (errBlock == outBlock) return errBlock;
+
+        return HasGitPrefix(stderr) || !HasGitPrefix(stdout)
+            ? errBlock + "\n\n" + outBlock
+            : outBlock + "\n\n" + errBlock;
+    }
+
+    // Every non-blank line of a stream, collapsing \r progress to its final state.
+    private static string CleanStream(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+        var kept = new List<string>();
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw;
+            var cr = line.LastIndexOf('\r');
+            if (cr >= 0) line = line[(cr + 1)..];
+            line = line.TrimEnd();
+            if (line.Length > 0) kept.Add(line);
+        }
+        return string.Join("\n", kept);
     }
 
     private static bool HasGitPrefix(string text)

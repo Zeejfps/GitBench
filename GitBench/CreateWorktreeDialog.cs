@@ -27,7 +27,6 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
         var browseButton = new DialogButton("Browse…", PickPath)
         {
             Height = 28,
-            Width = 80,
         };
 
         _pathField = new LabeledInputField("Worktree path")
