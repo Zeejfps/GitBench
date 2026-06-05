@@ -1,5 +1,4 @@
 using System.Runtime.Versioning;
-using GLFW;
 using ZGF.Core.MacOs;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -61,11 +60,8 @@ internal sealed class MacOsPopupDecorator : IPopupNativeDecorator
         _activeCallback = onOutsideClick;
     }
 
-    private static IntPtr NsWindowFromGlfw(IntPtr glfwHandle)
-    {
-        if (glfwHandle == IntPtr.Zero) return IntPtr.Zero;
-        return Native.GetCocoaWindow((Window)glfwHandle);
-    }
+    // The native NSWindow is supplied directly by IWindow.NativeHandle; no conversion needed.
+    private static IntPtr NsWindowFromGlfw(IntPtr nativeHandle) => nativeHandle;
 
     [System.Runtime.InteropServices.DllImport("/usr/lib/libobjc.A.dylib", EntryPoint = "objc_msgSend")]
     private static extern void SetLevel(IntPtr receiver, IntPtr selector, long level);

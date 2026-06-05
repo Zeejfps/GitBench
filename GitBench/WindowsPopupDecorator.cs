@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using GLFW;
 using ZGF.Geometry;
 using ZGF.Gui;
 
@@ -179,12 +178,8 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
         return ok;
     }
 
-    private static IntPtr GetHwnd(IntPtr glfwHandle)
-    {
-        if (glfwHandle == IntPtr.Zero) return IntPtr.Zero;
-        var window = (Window)glfwHandle;
-        return Native.GetWin32Window(window);
-    }
+    // The native HWND is supplied directly by IWindow.NativeHandle; no conversion needed.
+    private static IntPtr GetHwnd(IntPtr nativeHandle) => nativeHandle;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X, Y; }
