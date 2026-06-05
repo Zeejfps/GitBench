@@ -29,7 +29,7 @@ jobs:
             exe: GitBench
             icon: GitBench/Assets/commit_bench_icon_mac.icns
             extra: "--bundleId com.builtbyzee.gitbench"
-          - os: macos-13               # Intel runner
+          - os: macos-15-intel         # Intel runner (macos-13 was retired Dec 2025)
             rid: osx-x64
             channel: osx-x64
             exe: GitBench
