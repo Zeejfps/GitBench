@@ -123,9 +123,14 @@ Largest lift; target **X11 only** (Wayland apps run via XWayland).
 
 - `X11App`/`X11Window` implementing the contract: Xlib/xcb + GLX (or EGL) context,
   XKB keyboard mapping → `KeyboardKey`, EWMH/`_NET_WM` hints for borderless +
-  floating + positioning, RandR for `Monitors`/DPI, XInput2 for scroll, X selections
-  for clipboard (we already touch `GetX11SelectionString`). `NativeHandle` → the X11
-  Window. Keep `RenderFrame`/`is OpenGlWindow` wiring as in Phase 2.
+  floating + positioning, RandR for `Monitors`/DPI, XInput2 for scroll.
+  `NativeHandle` → the X11 Window. Keep `RenderFrame`/`is OpenGlWindow` wiring as in
+  Phase 2.
+- **Clipboard is no longer a backend concern.** `LinuxClipboard` (`ZGF.Gui`) handles
+  copy/paste at the app layer via `wl-copy`/`wl-paste`, `xclip`, or `xsel` (resolved
+  once at startup from session type + `PATH`), so the X11 backend does **not** need to
+  implement X selections. This also removes the last `GetX11SelectionString` GLFW
+  touchpoint, so nothing blocks deleting `Glfw.NET` here.
 - **Defer native Wayland** as a separate decision (no global positioning,
   mandatory client-side decorations — conflicts with our absolute-positioned
   popups).
