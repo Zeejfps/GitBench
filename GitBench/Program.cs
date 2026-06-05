@@ -30,10 +30,12 @@ context.AddService<IThemeService<ThemeStyles>>(new ThemeService(themeMode));
 context.AddService<IPlatformShell>(
     RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? new WindowsPlatformShell()
     : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? new MacOSPlatformShell()
+    : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? new LinuxPlatformShell()
     : new NoopPlatformShell());
 context.AddService<IClipboard>(
     RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? new Win32Clipboard()
     : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? new OsxClipboard()
+    : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? new LinuxClipboard()
     : new AppClipboard());
 
 context.AddService<IPopupNativeDecorator>(
