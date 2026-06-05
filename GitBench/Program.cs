@@ -32,11 +32,12 @@ context.AddService<IPlatformShell>(
     : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? new MacOSPlatformShell()
     : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? new LinuxPlatformShell()
     : new NoopPlatformShell());
-context.AddService<IClipboard>(
-    RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? new Win32Clipboard()
-    : RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ? new OsxClipboard()
-    : RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? new LinuxClipboard()
-    : new AppClipboard());
+// Windows/macOS use their native clipboard APIs. Linux (and anything else) falls through to
+// GuiApp's default, which routes through the GLFW window's connection to the display server.
+if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+    context.AddService<IClipboard>(new Win32Clipboard());
+else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+    context.AddService<IClipboard>(new OsxClipboard());
 
 context.AddService<IPopupNativeDecorator>(
     RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? new WindowsPopupDecorator()
