@@ -33,7 +33,7 @@ Head to [**gitbench.builtbyzee.com**](https://gitbench.builtbyzee.com) or grab t
 platform directly from the [**latest release**](https://github.com/Zeejfps/GitBench/releases/latest):
 
 - **Windows** — run the `Setup.exe` installer (or use the portable build).
-- **macOS** (Apple Silicon) — open the `.pkg` / app bundle.
+- **macOS** (Apple Silicon & Intel) — open the `.pkg` / app bundle.
 - **Linux** — run the `.AppImage`.
 
 Once installed, GitBench keeps itself up to date automatically — when an update is ready it
