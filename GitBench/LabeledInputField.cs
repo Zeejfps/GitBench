@@ -22,7 +22,9 @@ namespace GitGui;
 /// </summary>
 internal sealed class LabeledInputField : MultiChildView
 {
-    private const float BoxHeight = 28f;
+    // Tall enough that the input's content area (BoxHeight - border - padding) is at least the
+    // font's full line height; otherwise descenders (g, j, p, y) get scissored by the box clip.
+    private const float BoxHeight = 32f;
 
     private readonly TextInputView _input;
     private readonly RectView _box;
