@@ -1,4 +1,5 @@
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 
 namespace GitBench;
 

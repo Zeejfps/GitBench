@@ -1,4 +1,5 @@
-using ZGF.Gui.HorizontalScrollBar;
+using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
+using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.VerticalScrollBar;
 
 namespace GitBench;

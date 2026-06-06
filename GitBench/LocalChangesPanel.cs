@@ -1,7 +1,11 @@
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
-using ZGF.Gui.HorizontalScrollBar;
+using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
+using ZGF.Gui.Desktop.Components.VerticalScrollBar;
+using ZGF.Gui.Desktop.Components.VirtualRowList;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;

@@ -4,6 +4,10 @@ using Velopack;
 using ZGF.AppUtils;
 using ZGF.Desktop;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
+using ZGF.Gui.Desktop.Platforms.Linux;
+using ZGF.Gui.Desktop.Platforms.Osx;
+using ZGF.Gui.Desktop.Platforms.Windows;
 using ZGF.Observable;
 
 // Must be the very first thing that runs: Velopack's install/update hooks are driven by

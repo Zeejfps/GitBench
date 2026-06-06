@@ -1,4 +1,5 @@
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 
 namespace GitBench;

@@ -1,5 +1,8 @@
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
+using ZGF.Gui.Desktop.Components.ContextMenu;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 
 namespace GitBench;

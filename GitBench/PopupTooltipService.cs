@@ -1,5 +1,6 @@
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 
 namespace GitBench;
 

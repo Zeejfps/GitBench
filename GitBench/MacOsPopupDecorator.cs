@@ -1,6 +1,7 @@
 using System.Runtime.Versioning;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using static ZGF.Rendering.Metal.Objc;
 
 namespace GitBench;

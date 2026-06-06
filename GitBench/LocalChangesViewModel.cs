@@ -1,5 +1,6 @@
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
 namespace GitBench;
