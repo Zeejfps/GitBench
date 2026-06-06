@@ -1,5 +1,6 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
