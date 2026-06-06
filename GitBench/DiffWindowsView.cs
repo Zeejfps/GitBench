@@ -58,7 +58,7 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
     private void ApplyTitleBarTheme(ISecondaryWindow win)
     {
         if (_windowChrome == null || _themeMode == null) return;
-        _windowChrome.SetTitleBarTheme(win.Window.WindowHandle, _themeMode.Value == ThemeMode.Dark);
+        _windowChrome.SetTitleBarTheme(win.Window, _themeMode.Value == ThemeMode.Dark);
     }
 
     private void OnWindowsChanged(ListChange<DiffWindowViewModel> change)
