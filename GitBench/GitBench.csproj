@@ -53,7 +53,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
-        <ProjectReference Include="..\framework\ZGF.Core.Desktop\ZGF.Core.Desktop.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui.Desktop\ZGF.Gui.Desktop.csproj" />
         <ProjectReference Include="..\framework\ZGF.Observable\ZGF.Observable.csproj" />

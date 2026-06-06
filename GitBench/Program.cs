@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using GitBench;
 using Velopack;
 using ZGF.AppUtils;
-using ZGF.Core;
+using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Observable;
 
