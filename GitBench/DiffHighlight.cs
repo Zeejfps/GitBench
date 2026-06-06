@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Per-diff syntax-highlight result: the token spans for the old and new file, each as a flat

@@ -3,7 +3,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Modal shown when the user picks "Create Tag" on a commit in the history. Mirrors Fork's

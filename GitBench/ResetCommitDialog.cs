@@ -1,9 +1,8 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Confirmation modal shown when the user picks "Reset … to here" on a commit and the

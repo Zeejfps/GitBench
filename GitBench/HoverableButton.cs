@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public abstract class HoverableButton : MultiChildView
 {

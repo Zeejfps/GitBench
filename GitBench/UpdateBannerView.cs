@@ -3,7 +3,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Banner shown above the main content when a downloaded update has been staged. Clicking

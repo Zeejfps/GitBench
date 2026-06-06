@@ -2,7 +2,7 @@ using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public enum DragKind { Repo, Group }
 

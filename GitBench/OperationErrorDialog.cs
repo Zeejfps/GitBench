@@ -1,11 +1,9 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
-using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Modal shown when a git operation fails. Surfaces git's stderr block verbatim (so it

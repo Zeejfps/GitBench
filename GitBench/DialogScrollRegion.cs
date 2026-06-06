@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Wraps dialog body content in a vertical scroll viewport whose scrollbar appears only when the

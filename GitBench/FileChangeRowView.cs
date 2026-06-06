@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 internal static class FileChangeFormatting
 {

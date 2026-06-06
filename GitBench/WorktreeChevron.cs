@@ -1,9 +1,8 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
-using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Slot that sits before the icon on every RepoBar row. When the repo has child rows
 // (worktrees and/or nested submodules), it renders a clickable chevron that toggles their

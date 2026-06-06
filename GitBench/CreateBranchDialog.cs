@@ -1,9 +1,8 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Modal shown when the user clicks Branch in the actions toolbar. Mirrors Fork's

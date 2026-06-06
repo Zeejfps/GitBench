@@ -3,7 +3,7 @@ using System.Runtime.Versioning;
 using ZGF.Geometry;
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 [SupportedOSPlatform("windows")]
 internal sealed class WindowsPopupDecorator : IPopupNativeDecorator

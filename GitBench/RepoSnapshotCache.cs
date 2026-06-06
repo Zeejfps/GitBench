@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Small bounded most-recently-used cache of per-repo snapshots, keyed by <see cref="Repo.Id"/>.

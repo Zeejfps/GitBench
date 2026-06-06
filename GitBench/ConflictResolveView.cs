@@ -4,7 +4,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Fork-style merge-conflict resolution header shown in the diff pane when a conflicted

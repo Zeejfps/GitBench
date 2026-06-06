@@ -1,9 +1,8 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 public readonly record struct MenuLabelSegment(string Text, uint? Color = null, bool Bold = false);
 

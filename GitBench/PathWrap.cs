@@ -1,7 +1,7 @@
 using System.Text;
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 // Pre-wraps a filesystem path so it fits inside <maxWidth>. The framework's TextWrapper
 // only breaks on spaces, and paths have none — so a long path renders as one over-wide

@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal sealed record DiscardFileRow(string Path, FileChange Display);
 

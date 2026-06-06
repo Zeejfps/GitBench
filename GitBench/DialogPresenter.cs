@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class DialogPresenter : IViewBehavior
 {

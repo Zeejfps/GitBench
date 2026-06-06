@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Captures the extra state that exists only while the user is amending the previous

@@ -1,18 +1,17 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.HorizontalScrollBar;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// One side of the Local Changes split (Unstaged or Staged). Renders a header bar with
 /// action buttons, a virtualized list of file rows, and an empty-state placeholder.
-/// Selection lives on the view model (one <see cref="GitGui.Selection"/> for both
+/// Selection lives on the view model (one <see cref="Selection"/> for both
 /// sides); the panel just renders rows reactively against the shared selection and
 /// forwards clicks (with modifiers) to a callback that routes into the VM.
 ///

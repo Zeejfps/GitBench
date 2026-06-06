@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 internal static class TextMeasure
 {

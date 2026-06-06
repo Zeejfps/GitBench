@@ -3,7 +3,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Toolbar for the pop-out diff window: the file path on the left, an LFS badge, and a

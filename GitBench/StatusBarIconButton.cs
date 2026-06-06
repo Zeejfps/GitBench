@@ -3,7 +3,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Small icon-only button sized to fit inside the <see cref="StatusBarView"/>. The icon glyph

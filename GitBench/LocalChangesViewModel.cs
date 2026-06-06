@@ -1,9 +1,8 @@
-using System.IO;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// View model for the Local Changes feature. State lives in a single immutable
@@ -171,9 +170,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             // full-file stage/unstage flow in RunIndexOp.
             Selection selection;
             if (msg.IsLastHunk && msg.ToSide is DiffSide moved)
-                selection = GitGui.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
+                selection = GitBench.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
             else
-                selection = GitGui.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
+                selection = GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
 
             return s with { Unstaged = unstaged, Staged = staged, Selection = selection };
         });
@@ -243,7 +242,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Title = title,
                 Description = description,
                 Staged = staged,
-                Selection = GitGui.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
+                Selection = GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
             };
         });
     }
@@ -277,7 +276,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     var range = CollectRange(rows, lo, hi);
                     return s with
                     {
-                        Selection = GitGui.Selection.Create(range, anchor, clicked, s.Unstaged, s.Staged),
+                        Selection = GitBench.Selection.Create(range, anchor, clicked, s.Unstaged, s.Staged),
                     };
                 }
             }
@@ -289,13 +288,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 if (!wasPresent) next.Add(clicked);
                 return s with
                 {
-                    Selection = GitGui.Selection.Create(next, clicked, clicked, s.Unstaged, s.Staged),
+                    Selection = GitBench.Selection.Create(next, clicked, clicked, s.Unstaged, s.Staged),
                 };
             }
 
             return s with
             {
-                Selection = GitGui.Selection.Create([clicked], clicked, clicked, s.Unstaged, s.Staged),
+                Selection = GitBench.Selection.Create([clicked], clicked, clicked, s.Unstaged, s.Staged),
             };
         });
     }
@@ -389,7 +388,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 .Select(t => new FileRowRef(t.Side, t.Path, IsFolder: false))
                 .ToList();
             FileRowRef? anchor = fileRows.Count > 0 ? fileRows[0] : null;
-            var sel = GitGui.Selection.Create(fileRows, anchor, anchor, s.Unstaged, s.Staged);
+            var sel = GitBench.Selection.Create(fileRows, anchor, anchor, s.Unstaged, s.Staged);
             return s with { ViewMode = next, Selection = sel };
         });
     }
@@ -465,14 +464,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     var range = CollectRange(rows, lo, hi);
                     return s with
                     {
-                        Selection = GitGui.Selection.Create(range, anchor, target, s.Unstaged, s.Staged),
+                        Selection = GitBench.Selection.Create(range, anchor, target, s.Unstaged, s.Staged),
                     };
                 }
             }
 
             return s with
             {
-                Selection = GitGui.Selection.Create([target], target, target, s.Unstaged, s.Staged),
+                Selection = GitBench.Selection.Create([target], target, target, s.Unstaged, s.Staged),
             };
         });
     }
@@ -480,7 +479,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public void ClearSelection()
     {
         if (State.Value.Selection.Count == 0 && State.Value.Selection.Anchor == null) return;
-        Update(s => s with { Selection = GitGui.Selection.Empty });
+        Update(s => s with { Selection = GitBench.Selection.Empty });
     }
     
     private void DoDiscardSelected()
@@ -690,7 +689,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     Title = string.Empty,
                     Description = string.Empty,
                     Staged = Empty,
-                    Selection = GitGui.Selection.Create(
+                    Selection = GitBench.Selection.Create(
                         s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, Empty),
                 });
                 _bus.Broadcast(new CommitCreatedMessage(repo.Id));
@@ -718,7 +717,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 OpError = null,
                 Staged = Empty,
                 Unstaged = Empty,
-                Selection = GitGui.Selection.Empty,
+                Selection = GitBench.Selection.Empty,
                 DriftedSubmodules = [],
                 IsMerging = false,
             });
@@ -740,7 +739,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 OpError = null,
                 Staged = isCrossRepoSwitch ? Empty : s.Staged,
                 Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
-                Selection = isCrossRepoSwitch ? GitGui.Selection.Empty : s.Selection,
+                Selection = isCrossRepoSwitch ? GitBench.Selection.Empty : s.Selection,
             });
             return;
         }
@@ -756,7 +755,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 LoadError = snap.ErrorMessage,
                 Staged = Empty,
                 Unstaged = Empty,
-                Selection = GitGui.Selection.Empty,
+                Selection = GitBench.Selection.Empty,
                 DriftedSubmodules = [],
             });
             return;
@@ -765,7 +764,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // On a cross-repo switch the selection belongs to the previous repo — drop it before
         // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
         if (isCrossRepoSwitch && State.Value.Selection.Count > 0)
-            Update(s => s with { Selection = GitGui.Selection.Empty });
+            Update(s => s with { Selection = GitBench.Selection.Empty });
 
         Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
@@ -872,7 +871,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // selection isn't being explicitly steered to a new place.
     private void ApplySnapshot(LocalChangesSnapshot snap, IReadOnlyList<SubmoduleInfo>? drift = null)
         => ApplySnapshot(snap, (s, staged) =>
-            GitGui.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, snap.Unstaged, staged), drift);
+            GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, snap.Unstaged, staged), drift);
 
     private void RunIndexOp(IReadOnlyList<string> paths, bool isStage)
     {
@@ -931,7 +930,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             {
                 Unstaged = unstaged,
                 Staged = staged,
-                Selection = GitGui.Selection.FromPaths(paths, toSide, unstaged, staged),
+                Selection = GitBench.Selection.FromPaths(paths, toSide, unstaged, staged),
             };
         });
     }

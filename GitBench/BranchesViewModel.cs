@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// View model for the Branches sidebar. Mirrors the LocalChangesViewModel pattern:

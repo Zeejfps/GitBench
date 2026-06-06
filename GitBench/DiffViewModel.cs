@@ -1,7 +1,6 @@
-using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null);
 

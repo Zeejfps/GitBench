@@ -1,3 +1,3 @@
-namespace GitGui;
+namespace GitBench;
 
 public readonly record struct CommitsLoadedMessage(Guid RepoId);

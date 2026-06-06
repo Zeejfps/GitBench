@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 
-namespace GitGui;
+namespace GitBench;
 
 internal static class FocusExtensions
 {

@@ -2,7 +2,7 @@ using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 
-namespace GitGui;
+namespace GitBench;
 
 internal enum DragAxis { X, Y }
 

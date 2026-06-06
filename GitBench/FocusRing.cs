@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// A simple ordered focus cycle. Each stop supplies how to focus itself (and optionally how

@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Backs <see cref="CloneRepoDialog"/>. Collects a remote URL, a parent directory to clone

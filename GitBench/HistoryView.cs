@@ -1,9 +1,8 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Lays out the commits panel on the left and a resizable commit details panel on the right,

@@ -1,9 +1,7 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
-using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// The diff body itself: a virtualized, scrollable view of a <see cref="DiffResult"/> with

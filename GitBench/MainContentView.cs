@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Shell for the main content area. Mounts both mode-specific views (history and local

@@ -3,7 +3,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class ActionButton : HoverableButton
 {

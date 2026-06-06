@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Window-level keyboard for the pop-out diff window, which has no file list (and therefore no

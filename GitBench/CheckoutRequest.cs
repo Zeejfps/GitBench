@@ -1,4 +1,4 @@
-﻿namespace GitGui;
+﻿namespace GitBench;
 
 internal readonly record struct CheckoutRequest(
     Repo Repo,

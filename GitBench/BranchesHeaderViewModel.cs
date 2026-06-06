@@ -1,7 +1,6 @@
-using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal sealed class BranchesHeaderViewModel : ViewModelBase<BranchesHeaderState>
 {

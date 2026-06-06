@@ -1,13 +1,12 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.HorizontalScrollBar;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// A titled, virtualized list of file changes used by the commit details panel. The header

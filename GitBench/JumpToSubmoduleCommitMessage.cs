@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Fired when the user clicks a submodule pointer-change row in CommitDetails. The
 // receiver should activate the submodule's Repo and (if possible) scroll the history

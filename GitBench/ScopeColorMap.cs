@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Pure mapping from a single TextMate scope string (e.g. <c>"keyword.control.cs"</c>) to a

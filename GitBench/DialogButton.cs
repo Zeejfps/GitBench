@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Visual role of a dialog button. <see cref="Default"/> is the outline chrome used for

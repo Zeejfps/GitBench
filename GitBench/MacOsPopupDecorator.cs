@@ -3,7 +3,7 @@ using ZGF.Geometry;
 using ZGF.Gui;
 using static ZGF.Rendering.Metal.Objc;
 
-namespace GitGui;
+namespace GitBench;
 
 [SupportedOSPlatform("macos")]
 internal sealed class MacOsPopupDecorator : IPopupNativeDecorator

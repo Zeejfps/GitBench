@@ -1,9 +1,8 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class GroupRenameField : MultiChildView
 {

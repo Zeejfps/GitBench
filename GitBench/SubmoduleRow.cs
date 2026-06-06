@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 // Renders a single submodule row nested under its parent in the RepoBar. Same shape
 // as WorktreeRow (deep indent + small icon) but uses the Package icon + purple tint

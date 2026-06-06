@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Shared indentation metrics for the three tree views — the RepoBar (groups → repos →

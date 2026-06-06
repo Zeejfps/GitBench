@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Flat row stream the virtualized content view walks. Banners (rename/mode/truncated),

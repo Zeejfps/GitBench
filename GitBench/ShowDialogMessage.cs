@@ -1,5 +1,5 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 public readonly record struct ShowDialogMessage(Func<Action, View> CreateDialog);

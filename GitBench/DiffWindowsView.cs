@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Headless host view that reflects <see cref="DiffWindowsViewModel.Windows"/> into real,

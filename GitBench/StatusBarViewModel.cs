@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Backs the bottom <see cref="StatusBarView"/>: the active repo name, current branch, and

@@ -1,7 +1,6 @@
-using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Drives the repo-level "detached HEAD with commits on no branch" banner. Mirrors
 // OperationStateBannerViewModel: self-contained, always subscribed (independent of which

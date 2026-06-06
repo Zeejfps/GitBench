@@ -1,4 +1,3 @@
-using GitGui;
 using Xunit;
 
 namespace GitBench.Tests;

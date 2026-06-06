@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Factory helpers for the recurring TextStyle shapes used by the row-rendering views.

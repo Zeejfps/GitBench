@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal readonly record struct StashRequest(Repo Repo);
 

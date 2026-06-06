@@ -1,9 +1,8 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Modal shown from the "Add Repository" menu's Clone entry. Collects a remote URL, a parent

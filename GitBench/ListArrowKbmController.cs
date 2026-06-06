@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Arrow-key navigation for a vertical row list. Lives on the owning view and takes

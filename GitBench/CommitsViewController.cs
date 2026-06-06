@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Handles only the column-divider hover/drag. Row wheel/click/right-click are owned

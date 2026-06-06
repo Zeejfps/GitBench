@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Shared helpers for keyboard arrow navigation over flat, single-select row lists

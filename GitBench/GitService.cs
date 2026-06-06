@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using LibGit2Sharp;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class GitService : IGitService
 {

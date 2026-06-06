@@ -1,7 +1,6 @@
-using System.Linq;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // The active repo's working-tree snapshot plus its submodule drift list, bundled so the two
 // always move together. Mirrors LocalChangesViewModel's private LoadResult minus the amend-only

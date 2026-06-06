@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace GitGui;
+namespace GitBench;
 
 [SupportedOSPlatform("windows")]
 public sealed class WindowsPlatformShell : IPlatformShell

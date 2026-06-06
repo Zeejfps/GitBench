@@ -1,10 +1,9 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Virtualized diff body. Vertical scroll, hit-test boilerplate, and visible-row culling

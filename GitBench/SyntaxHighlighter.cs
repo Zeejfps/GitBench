@@ -1,7 +1,7 @@
 using TextMateSharp.Grammars;
 using TextMateSharp.Registry;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// The only module that touches TextMateSharp. Tokenizes a whole file top-to-bottom, threading

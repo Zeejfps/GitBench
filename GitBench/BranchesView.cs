@@ -1,11 +1,10 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Sidebar listing local branches and remote branches (grouped per remote) as a tree —

@@ -1,9 +1,8 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Confirmation modal for "Reset &lt;branch&gt; to here" when the move is NOT a fast-forward —

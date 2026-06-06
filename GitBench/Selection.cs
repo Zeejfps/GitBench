@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Local-changes selection state, owned by <see cref="LocalChangesViewModel"/> and

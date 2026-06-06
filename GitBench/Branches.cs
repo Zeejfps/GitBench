@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Tracks whether a local branch has an upstream and whether that upstream still exists.
 // Remote-branch entries always carry Tracked (the field is meaningless for them).

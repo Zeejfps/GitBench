@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Fired when the set of worktrees attached to a primary repo may have changed —
 // either through an in-app dialog or by the user running `git worktree add/remove/prune`

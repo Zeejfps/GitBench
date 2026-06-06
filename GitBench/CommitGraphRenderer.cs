@@ -1,7 +1,7 @@
 using ZGF.Geometry;
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Stateless renderer for the lane/edge/dot commit graph that occupies the left column of

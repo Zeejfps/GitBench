@@ -4,7 +4,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Modal shown when the user clicks Stash in the actions toolbar. Lets the user name the
 // stash, pick the files to stash, and optionally keep the index (--keep-index) so staged

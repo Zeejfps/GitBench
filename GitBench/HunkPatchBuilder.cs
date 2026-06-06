@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace GitGui;
+namespace GitBench;
 
 internal static class HunkPatchBuilder
 {

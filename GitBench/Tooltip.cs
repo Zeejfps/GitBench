@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class Tooltip : IDisposable
 {

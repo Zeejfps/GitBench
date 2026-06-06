@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 internal readonly record struct LocalChangesState(
     string Title,

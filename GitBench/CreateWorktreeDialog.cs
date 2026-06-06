@@ -1,9 +1,8 @@
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Modal shown from a primary RepoRow's "New worktree…" menu. Collects the three

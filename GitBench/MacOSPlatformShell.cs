@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 
-namespace GitGui;
+namespace GitBench;
 
 [SupportedOSPlatform("macos")]
 public sealed class MacOSPlatformShell : IPlatformShell

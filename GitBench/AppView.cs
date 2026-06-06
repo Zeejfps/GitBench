@@ -3,7 +3,7 @@ using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class AppView : MultiChildView
 {

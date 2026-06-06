@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Three-column row for the local-changes layout: left panel | fixed-width center |

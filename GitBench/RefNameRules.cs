@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// A lightweight subset of git's refname rules (see <c>git check-ref-format</c>), shared by the

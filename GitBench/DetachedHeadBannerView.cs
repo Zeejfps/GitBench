@@ -1,8 +1,7 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Repo-level banner shown whenever the active repo is on a detached HEAD whose commits sit

@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 // Composite that renders a single primary repo with its (collapsible) child rows
 // (worktrees + submodules) stacked below. Used as the row factory of GroupSection so

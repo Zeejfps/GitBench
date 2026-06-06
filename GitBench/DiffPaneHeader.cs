@@ -4,7 +4,7 @@ using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Header strip for the embedded diff panes (Local Changes, Commit Details). Owns the

@@ -3,7 +3,7 @@ using ZGF.Gui.Desktop;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal sealed class CheckoutDialogKbmController : BaseTextInputKbmController
 {

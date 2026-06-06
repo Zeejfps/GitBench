@@ -2,7 +2,7 @@ using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class RepoBarContextMenuController : KeyboardMouseController
 {

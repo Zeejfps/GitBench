@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Maps a file path to the TextMate language id GitBench highlights it as, or null when the

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace GitGui;
+namespace GitBench;
 
 public static class PreferencesStore
 {
@@ -16,7 +16,7 @@ public static class PreferencesStore
         public float? RepoBarWidth { get; set; } = 220f;
         public float? BranchesWidth { get; set; } = 220f;
         public float? CommitDetailsWidth { get; set; } = 380f;
-        public FileViewMode? FileViewMode { get; set; } = GitGui.FileViewMode.Flat;
+        public FileViewMode? FileViewMode { get; set; } = GitBench.FileViewMode.Flat;
     }
 
     public static Preferences Load(string path)

@@ -1,10 +1,9 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Slim filter bar shown above the commit list: a single rounded search box containing a leading

@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Generation token guard for invalidating outstanding async work. The view bumps the

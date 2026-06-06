@@ -1,7 +1,6 @@
-using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Drives the repo-level "submodules out of date" banner — the safety net for the case where
 // the parent's recorded submodule pointer has moved but the submodule's working tree hasn't

@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace GitGui;
+namespace GitBench;
 
 public static class RepoStateStore
 {
@@ -37,8 +37,8 @@ public static class RepoStateStore
             if (file is null)
                 return EmptyState();
 
-            var repos = file.Repos
-                .Select(r =>
+            var repos = Enumerable
+                .Select<Repo, Repo>(file.Repos, r =>
                 {
                     // Backward compat: pre-submodule state files have no Kind field, so the
                     // deserializer defaults Kind = Primary. Migrate by inferring Kind from

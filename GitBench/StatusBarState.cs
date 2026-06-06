@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 internal sealed record StatusBarState(
     bool HasActiveRepo,

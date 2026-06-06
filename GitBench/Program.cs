@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using GitGui;
+using GitBench;
 using Velopack;
 using ZGF.AppUtils;
 using ZGF.Core;

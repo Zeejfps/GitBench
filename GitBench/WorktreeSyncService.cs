@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Owns the discovery-side-effect for worktrees: shells out to `git worktree list`
 // and reconciles the result into IRepoRegistry. The registry stays pure data; this

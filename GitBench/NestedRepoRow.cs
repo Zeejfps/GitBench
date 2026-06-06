@@ -1,9 +1,8 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Shared layout for nested rows in the RepoBar (worktrees and submodules). Renders a
 // deep-indented row with a small accent-tinted icon and the repo's DisplayName. The

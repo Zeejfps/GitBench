@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Repo-level banner shown whenever the active repo has submodules whose working tree no

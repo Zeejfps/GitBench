@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Per-repo "git is currently running" gate consulted by RepoWatcher before it
 // schedules any debounce.

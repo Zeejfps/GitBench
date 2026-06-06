@@ -1,7 +1,6 @@
-using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Drives a continuous rotation for a loading-spinner icon. <see cref="Start"/> kicks

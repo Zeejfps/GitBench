@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// View model for <see cref="EditRemoteDialog"/>. Owns the editable remote name + URL as

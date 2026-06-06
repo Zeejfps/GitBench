@@ -1,17 +1,16 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// The body of the Local Changes view: two file-list panels (unstaged / staged) above a
 /// diff pane, with a draggable splitter between them. <see cref="Bind"/> wires the
 /// panels to a <see cref="LocalChangesViewModel"/>'s observable state and forwards stage
 /// / unstage clicks and row selection back to the VM. Selection is owned by the VM
-/// (one <see cref="GitGui.Selection"/> for both sides), so the panels are stateless
+/// (one <see cref="Selection"/> for both sides), so the panels are stateless
 /// w.r.t. selection — rows highlight reactively against the shared selection, and the
 /// diff view's target tracks <c>SelectedTarget</c> directly.
 /// </summary>

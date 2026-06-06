@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Orchestrates syntax highlighting for one diff: detect the language, fetch the needed file

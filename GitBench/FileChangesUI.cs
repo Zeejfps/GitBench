@@ -1,9 +1,8 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Shared building blocks for the two file-change list flavors — <see cref="FileChangesSection"/>

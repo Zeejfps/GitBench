@@ -4,7 +4,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// A multi-line text input that auto-grows with its content between <c>min</c> and <c>max</c>.

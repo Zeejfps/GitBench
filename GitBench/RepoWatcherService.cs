@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Owns one RepoWatcher per known repo. Subscribes to the repo registry's list and
 // creates/disposes watchers as repos are added or removed. Registered as a service

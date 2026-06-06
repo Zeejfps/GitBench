@@ -4,7 +4,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Confirmation modal for discarding unstaged changes. Lists every unstaged path with a

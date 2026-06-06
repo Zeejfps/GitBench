@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal sealed class PublishBranchDialogViewModel : IDisposable
 {

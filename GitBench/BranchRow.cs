@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 public enum BranchRowKind { LocalHeader, RemotesHeader, RemoteHeader, Folder, LocalBranch, RemoteBranch, StashesHeader, Stash }
 

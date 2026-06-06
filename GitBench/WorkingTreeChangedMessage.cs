@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Broadcast when the working tree or index has changed in a way that affects
 // `git status` output — either a user edit picked up by the filesystem watcher

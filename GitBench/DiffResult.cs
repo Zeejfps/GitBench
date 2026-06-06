@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 public enum DiffSide { Unstaged, Staged, Commit }
 

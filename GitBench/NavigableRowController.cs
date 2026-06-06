@@ -1,9 +1,8 @@
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
-using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 // Click → activate; right-click → context menu. Used for rows that don't participate in
 // drag-to-reorder (worktrees, submodules — they follow their parent). The optional

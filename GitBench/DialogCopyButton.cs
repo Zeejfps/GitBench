@@ -1,8 +1,7 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Icon-only "copy to clipboard" button styled to match <see cref="DialogCloseButton"/>.

@@ -2,7 +2,7 @@
 using ZGF.Gui.Desktop;
 using ZGF.KeyboardModule;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class HoverableButtonController(
     Action onClick,

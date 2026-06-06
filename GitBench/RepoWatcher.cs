@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Watches a single repository's filesystem for changes the user makes outside the
 // app (editor saves, terminal `git` commands, builds, IDE checkouts, …) and turns

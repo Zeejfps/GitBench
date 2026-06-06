@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class RepoRegistry : IRepoRegistry
 {

@@ -1,8 +1,7 @@
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Root view hosted inside a pop-out diff window: a <see cref="DiffWindowToolbar"/> (file

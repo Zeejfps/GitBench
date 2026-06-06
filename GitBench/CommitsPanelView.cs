@@ -4,7 +4,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class CommitsPanelView : MultiChildView
 {

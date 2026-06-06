@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Owns the set of open pop-out diff windows as observable state. Subscribes to
 // OpenDiffWindowMessage and, for each request, spins up an independent DiffViewModel pinned

@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 internal sealed class ThemeService : IThemeService<ThemeStyles>, IDisposable
 {

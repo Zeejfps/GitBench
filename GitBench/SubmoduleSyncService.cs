@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Mirrors WorktreeSyncService for submodules: shells out to git, builds descriptors,
 // and reconciles into IRepoRegistry. The registry stays pure data; this service is the

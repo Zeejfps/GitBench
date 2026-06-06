@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 // Worktree analogue of RepoEntry / SubmoduleEntry: a worktree row plus its collapsible
 // submodule children (a worktree shares the primary's .gitmodules).

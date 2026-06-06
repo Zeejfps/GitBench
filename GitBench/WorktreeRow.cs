@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitGui;
+namespace GitBench;
 
 // Renders a single worktree row, nested under its primary in the RepoBar. Visually
 // distinguished from primary rows by deeper indent and the Branch icon.

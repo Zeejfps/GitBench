@@ -1,9 +1,7 @@
-using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitGui;
+namespace GitBench;
 
 // Visual bindings shared by RepoRow, WorktreeRow, and SubmoduleRow: the
 // hover/active background fade and the missing/active/normal label colour selector.

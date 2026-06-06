@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Views;
 
-namespace GitGui;
+namespace GitBench;
 
 public sealed class OverlayView : MultiChildView
 {

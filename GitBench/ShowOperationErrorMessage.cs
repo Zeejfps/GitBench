@@ -1,4 +1,4 @@
-namespace GitGui;
+namespace GitBench;
 
 // Broadcast when a git operation (checkout, stash apply, etc.) fails. DialogPresenter
 // shows OperationErrorDialog with the operation-specific title and git's stderr block.

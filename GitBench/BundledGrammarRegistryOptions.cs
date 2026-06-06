@@ -4,7 +4,7 @@ using TextMateSharp.Internal.Types;
 using TextMateSharp.Registry;
 using TextMateSharp.Themes;
 
-namespace GitGui;
+namespace GitBench;
 
 /// <summary>
 /// Wraps TextMateSharp's default <see cref="RegistryOptions"/> and serves a few grammars VS Code

@@ -1,6 +1,6 @@
 using ZGF.Geometry;
 
-namespace GitGui;
+namespace GitBench;
 
 public interface ITooltipService
 {

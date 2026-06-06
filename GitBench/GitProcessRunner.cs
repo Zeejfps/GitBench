@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace GitGui;
+namespace GitBench;
 
 // Owns every git subprocess invocation: builds the start info, opens the activity scope so
 // RepoWatcher drops the FSW events our own writes cause, spawns, drains both pipes
