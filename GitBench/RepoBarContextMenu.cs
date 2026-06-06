@@ -23,7 +23,7 @@ public static class RepoBarContextMenu
     public static IOpenedContextMenu? Show(Context context, PointF anchor, IReadOnlyList<Item> items, MenuPlacement placement = MenuPlacement.Below)
     {
         if (items.Count == 0) return null;
-        var manager = context.Get<ContextMenuManager>();
+        var manager = context.Get<IContextMenuHost>();
         if (manager == null) return null;
 
         manager.CloseAllImmediately();
@@ -41,7 +41,7 @@ public static class RepoBarContextMenu
 
     // Builds a themed menu from the item list. Recursed (via a per-item factory) for
     // submenus so nested menus share the same styling and click-to-close behavior.
-    private static ContextMenu BuildMenu(ContextMenuManager manager, IReadOnlyList<Item> items)
+    private static ContextMenu BuildMenu(IContextMenuHost manager, IReadOnlyList<Item> items)
     {
         var menu = new ContextMenu
         {
