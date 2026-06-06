@@ -1,8 +1,7 @@
 using System.Runtime.Versioning;
-using ZGF.Core.MacOs;
 using ZGF.Geometry;
 using ZGF.Gui;
-using static ZGF.Core.MacOs.Objc;
+using static ZGF.Rendering.Metal.Objc;
 
 namespace GitGui;
 
