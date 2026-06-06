@@ -1409,7 +1409,7 @@ public sealed class GitService : IGitService
         }
     }
 
-    public PullOutcome Pull(Repo repo)
+    public PullOutcome Pull(Repo repo, PullStrategy? strategy = null)
     {
         try
         {
@@ -1431,8 +1431,25 @@ public sealed class GitService : IGitService
             // superproject tree AND checks each submodule's working tree out to the SHA the
             // parent now records — so the user doesn't end up with the gitlink pointer moved
             // but the submodule still sitting on its old commit (which shows up as "modified").
-            var result = _runner.Run(repo.Path, new[] { "pull", "--recurse-submodules" });
-            return result.Ok ? new PullOutcome(true, null) : new PullOutcome(false, result.BlockError("git pull"));
+            var args = new List<string> { "pull" };
+            // With no strategy git refuses a diverged branch ("Need to specify how to reconcile");
+            // an explicit flag is what the reconcile dialog passes on the rerun.
+            switch (strategy)
+            {
+                case PullStrategy.Merge: args.Add("--no-rebase"); break;
+                case PullStrategy.Rebase: args.Add("--rebase"); break;
+                case PullStrategy.FastForwardOnly: args.Add("--ff-only"); break;
+            }
+            args.Add("--recurse-submodules");
+
+            var result = _runner.Run(repo.Path, args);
+            if (result.Ok) return new PullOutcome(true, null);
+
+            var error = result.BlockError("git pull");
+            // Only meaningful on the first (strategy-less) attempt; once a strategy is supplied
+            // git won't emit this hint again, so the flag self-clears on the rerun.
+            var diverged = strategy is null && result.PreferredStream.Contains("divergent branches", StringComparison.OrdinalIgnoreCase);
+            return new PullOutcome(false, error, diverged);
         }
         catch (Exception ex)
         {

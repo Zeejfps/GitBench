@@ -224,13 +224,18 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
                 var outcome = _gitService.Pull(repo);
                 return (outcome, outcome.Success ? null : outcome.ErrorMessage ?? "Pull failed.");
             },
-            onResult: (_, error) =>
+            onResult: (outcome, error) =>
             {
                 _pullSpinner.Stop();
                 if (error != null)
                 {
                     Update(s => s with { IsPulling = false });
-                    _bus.Broadcast(new ShowOperationErrorMessage("Pull failed", error));
+                    // Diverged branches aren't a dead end — let the user pick a reconcile
+                    // strategy in a dialog that reruns the pull, instead of dumping git's hint.
+                    if (outcome is { HasDivergedBranches: true })
+                        _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog(repo, onClose)));
+                    else
+                        _bus.Broadcast(new ShowOperationErrorMessage("Pull failed", error));
                     return;
                 }
                 Update(s => s with { IsPulling = false, PushStatus = s.PushStatus with { Behind = 0 } });

@@ -22,7 +22,7 @@ public interface IGitService
     string? GetRemoteUrl(Repo repo, string remoteName);
     EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url);
     EditRemoteOutcome AddRemote(Repo repo, string name, string url);
-    PullOutcome Pull(Repo repo);
+    PullOutcome Pull(Repo repo, PullStrategy? strategy = null);
     FetchOutcome Fetch(Repo repo);
     // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's
     // progress output. On success RepoPath carries the absolute path of the new working tree.
@@ -163,7 +163,18 @@ public sealed record PushStatus(
 
 public sealed record PushOutcome(bool Success, string? ErrorMessage);
 
-public sealed record PullOutcome(bool Success, string? ErrorMessage);
+// HasDivergedBranches flags the one failure the caller can recover from in-app: local and
+// upstream both moved and git refuses to pick merge-vs-rebase on its own. The Pull button
+// catches it and reruns with an explicit PullStrategy instead of dead-ending on the raw hint.
+public sealed record PullOutcome(bool Success, string? ErrorMessage, bool HasDivergedBranches = false);
+
+// How `git pull` reconciles a diverged branch when the default (no strategy) is rejected.
+public enum PullStrategy
+{
+    Merge,
+    Rebase,
+    FastForwardOnly,
+}
 
 public sealed record FetchOutcome(bool Success, string? ErrorMessage);
 
