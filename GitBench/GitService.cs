@@ -75,6 +75,9 @@ public sealed class GitService : IGitService
             var currentBranchName = isDetached ? null : lg.Head?.FriendlyName;
 
             var refTips = new List<Commit>();
+            // Tips reachable purely from local refs (branches, HEAD, tags, stashes). A
+            // displayed commit not reachable from any of these is remote-only.
+            var localTips = new List<Commit>();
             var refsBySha = new Dictionary<string, List<RefBadge>>();
 
             // Split branches by kind so the local pass can absorb matching remotes. Drop the
@@ -94,6 +97,7 @@ public sealed class GitService : IGitService
                 else
                 {
                     localBranches.Add(branch);
+                    localTips.Add(tip);
                 }
                 refTips.Add(tip);
             }
@@ -161,6 +165,7 @@ public sealed class GitService : IGitService
                 var tip = stash.WorkTree;
                 if (tip == null) { stashIndex++; continue; }
                 refTips.Add(tip);
+                localTips.Add(tip);
                 var label = StripStashPrefix(stash.Message ?? string.Empty);
                 if (string.IsNullOrEmpty(label)) label = $"stash@{{{stashIndex}}}";
                 AddBadge(refsBySha, tip.Sha, new RefBadge(label, RefKind.Stash));
@@ -174,6 +179,7 @@ public sealed class GitService : IGitService
             {
                 if (tag.PeeledTarget is not Commit tagged) continue;
                 refTips.Add(tagged);
+                localTips.Add(tagged);
                 AddBadge(refsBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
             }
 
@@ -182,7 +188,10 @@ public sealed class GitService : IGitService
             // may be reachable from no other ref (ahead of every branch) — without this they'd
             // be silently excluded from the graph, making committed work look lost.
             if (headTip != null)
+            {
                 refTips.Add(headTip);
+                localTips.Add(headTip);
+            }
 
             var filter = new CommitFilter
             {
@@ -200,6 +209,26 @@ public sealed class GitService : IGitService
                     break;
                 }
                 commitsRaw.Add(c);
+            }
+
+            // Remote-only = displayed but not reachable from any local tip. Seed the local
+            // tips that landed in the walk, then propagate reachability down to parents.
+            // The walk is topologically sorted (a commit precedes its parents), so a single
+            // forward pass marks every local-reachable ancestor.
+            var indexBySha = new Dictionary<string, int>(commitsRaw.Count);
+            for (var i = 0; i < commitsRaw.Count; i++)
+                indexBySha[commitsRaw[i].Sha] = i;
+
+            var localReachable = new bool[commitsRaw.Count];
+            foreach (var t in localTips)
+                if (indexBySha.TryGetValue(t.Sha, out var li))
+                    localReachable[li] = true;
+            for (var i = 0; i < commitsRaw.Count; i++)
+            {
+                if (!localReachable[i]) continue;
+                foreach (var p in commitsRaw[i].Parents)
+                    if (indexBySha.TryGetValue(p.Sha, out var pi))
+                        localReachable[pi] = true;
             }
 
             var inputs = new LaneAssigner.Input[commitsRaw.Count];
@@ -238,7 +267,8 @@ public sealed class GitService : IGitService
                     InWalkParentLanes: inWalkParents,
                     IncomingLanes: a.IncomingLanes,
                     PassThroughLanes: a.PassThroughLanes,
-                    Refs: badges ?? (IReadOnlyList<RefBadge>)Array.Empty<RefBadge>());
+                    Refs: badges ?? (IReadOnlyList<RefBadge>)Array.Empty<RefBadge>(),
+                    RemoteOnly: !localReachable[i]);
             }
 
             var headBranchName = lg.Info.IsHeadDetached ? null : lg.Head?.FriendlyName;

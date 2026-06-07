@@ -38,7 +38,9 @@ public sealed record CommitNode(
     IReadOnlyList<ParentLink> InWalkParentLanes,
     IReadOnlyList<int> IncomingLanes,
     IReadOnlyList<int> PassThroughLanes,
-    IReadOnlyList<RefBadge> Refs);
+    IReadOnlyList<RefBadge> Refs,
+    // Reachable from a remote-tracking branch but from no local branch, HEAD, tag or stash.
+    bool RemoteOnly = false);
 
 public sealed record CommitSnapshot(
     Guid RepoId,
