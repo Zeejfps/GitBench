@@ -33,6 +33,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public IReadable<string> Description { get; }
     public IReadable<bool> Amend { get; }
     public IReadable<string?> Placeholder { get; }
+    public IReadable<string?> LoadErrorDetail { get; }
     public IReadable<IReadOnlyList<FileChange>> Unstaged { get; }
     public IReadable<IReadOnlyList<FileChange>> Staged { get; }
     public IReadable<IReadOnlyList<SubmoduleInfo>> DriftedSubmodules { get; }
@@ -98,6 +99,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Description = Slice(s => s.Description);
         Amend = Slice(s => s.Amend);
         Placeholder = Slice(s => s.Placeholder);
+        LoadErrorDetail = Slice(s => s.LoadErrorDetail);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
@@ -206,6 +208,16 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         DiffVm.Dispose();
         _commitSpinner.Dispose();
         base.Dispose();
+    }
+
+    // Opens the full git error block (status/submodule failure) in the scrollable
+    // OperationErrorDialog. Status polls on every working-tree change, so the panel only ever
+    // shows the one-line headline inline — this is the on-demand path to the whole block.
+    public void ShowLoadError()
+    {
+        var detail = State.Value.LoadErrorDetail;
+        if (string.IsNullOrEmpty(detail)) return;
+        _bus.Broadcast(new ShowOperationErrorMessage("Status failed", detail));
     }
 
     public void SetTitle(string value)
@@ -715,6 +727,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 HasRepo = false,
                 IsLoading = false,
                 LoadError = null,
+                LoadErrorDetail = null,
                 OpError = null,
                 Staged = Empty,
                 Unstaged = Empty,
@@ -737,6 +750,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 HasRepo = true,
                 IsLoading = true,
                 LoadError = null,
+                LoadErrorDetail = null,
                 OpError = null,
                 Staged = isCrossRepoSwitch ? Empty : s.Staged,
                 Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
@@ -754,6 +768,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 HasRepo = true,
                 IsLoading = false,
                 LoadError = snap.ErrorMessage,
+                LoadErrorDetail = snap.ErrorDetail ?? snap.ErrorMessage,
                 Staged = Empty,
                 Unstaged = Empty,
                 Selection = GitBench.Selection.Empty,
@@ -858,6 +873,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             {
                 IsLoading = false,
                 LoadError = null,
+                LoadErrorDetail = null,
                 Unstaged = snap.Unstaged,
                 Staged = staged,
                 Selection = selectionFor(s, staged),

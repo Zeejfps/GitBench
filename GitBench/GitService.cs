@@ -582,9 +582,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!IsGitRepo(repo.Path))
                 return LocalChangesError(repo, "Not a git repository.");
 
-            var output = RunGitStatusPorcelain(repo.Path, out var error);
+            var output = RunGitStatusPorcelain(repo.Path, out var error, out var detail);
             if (output == null)
-                return LocalChangesError(repo, error ?? "git status failed.");
+                return LocalChangesError(repo, error ?? "git status failed.", detail);
 
             var staged = new List<FileChange>();
             var unstaged = new List<FileChange>();
@@ -706,20 +706,26 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // no PATH-dependent helpers). -z is required: it switches records to NUL termination and
     // disables the C-style quoting that wraps paths with spaces or unicode in the default
     // porcelain output.
-    private string? RunGitStatusPorcelain(string workingDir, out string? error)
+    private string? RunGitStatusPorcelain(string workingDir, out string? error, out string? detail)
     {
         error = null;
+        detail = null;
         var result = _runner.Run(
             workingDir,
             new[] { "status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored=no" },
             GitProcessRunner.GitLaunch.Direct);
         if (result.Ok) return result.Stdout;
+        // One-line headline for the inline placeholder; full block for the on-demand dialog.
+        // Status recurses into submodules, so a transient submodule hiccup (a dropped fetch,
+        // an in-progress op) surfaces here as "failed in submodule X" — the detail block keeps
+        // the recursed child's own fatal lines that FirstLineError would drop.
         error = result.FirstLineError("git status");
+        detail = result.BlockError("git status");
         return null;
     }
 
-    private static LocalChangesSnapshot LocalChangesError(Repo repo, string message)
-        => new(repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>(), message);
+    private static LocalChangesSnapshot LocalChangesError(Repo repo, string message, string? detail = null)
+        => new(repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>(), message, detail);
 
     public void Stage(Repo repo, IReadOnlyList<string> paths)
     {

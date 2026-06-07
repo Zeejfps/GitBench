@@ -7,6 +7,10 @@ internal readonly record struct LocalChangesState(
     bool HasRepo,
     bool IsLoading,
     string? LoadError,
+    // Full git error block behind LoadError, surfaced in the scrollable OperationErrorDialog
+    // when the user clicks "Show full error" on the placeholder. Null when LoadError is null
+    // or carries no extra detail.
+    string? LoadErrorDetail,
     IReadOnlyList<FileChange> Unstaged,
     IReadOnlyList<FileChange> Staged,
     Selection Selection,
@@ -37,6 +41,7 @@ internal readonly record struct LocalChangesState(
         HasRepo: false,
         IsLoading: false,
         LoadError: null,
+        LoadErrorDetail: null,
         Unstaged: [],
         Staged: [],
         Selection: Selection.Empty,

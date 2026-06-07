@@ -21,6 +21,8 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
     private readonly LocalChangesPanel _unstagedPanel;
     private readonly LocalChangesPanel _stagedPanel;
     private readonly TextView _placeholder;
+    private readonly ActionButton _showErrorButton;
+    private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
     private readonly DiffView _diffView;
     private readonly DiffPaneHeader _diffHeader;
@@ -83,8 +85,25 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
         {
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
+            TextWrap = TextWrap.Wrap,
         };
         _placeholder.BindThemedTextColor(s => s.LocalChangesContent.PlaceholderText);
+
+        // Shown only when the placeholder is a status/submodule failure carrying a full error
+        // block — opens it in the scrollable OperationErrorDialog. Status re-reads on every
+        // working-tree change, so the failure surfaces inline (one line) and the full block is
+        // pulled up on demand rather than auto-popping a modal each poll.
+        _showErrorButton = new ActionButton(
+            LucideIcons.TriangleAlert, "Show full error", tooltip: "Open the full git error");
+        _showErrorButton.Command.Value = new Command(() => _vm?.ShowLoadError());
+
+        _placeholderHost = new FlexColumnView
+        {
+            MainAxisAlignment = MainAxisAlignment.Center,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Gap = 12,
+            Children = { _placeholder },
+        };
 
         _submoduleSection = new LocalChangesSubmoduleSection(
             onStage: path => _vm?.StageSubmodulePointer(path),
@@ -202,8 +221,17 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
     private void ShowPlaceholder(string text)
     {
         _placeholder.Text = text;
+
+        // Read the detail straight off the VM rather than a cached field: LoadError and
+        // LoadErrorDetail land in the same atomic Update, so the value is always current here
+        // regardless of subscription order.
+        var hasDetail = !string.IsNullOrEmpty(_vm?.LoadErrorDetail.Value);
+        var buttonAttached = _placeholderHost.Children.Contains(_showErrorButton);
+        if (hasDetail && !buttonAttached) _placeholderHost.Children.Add(_showErrorButton);
+        else if (!hasDetail && buttonAttached) _placeholderHost.Children.Remove(_showErrorButton);
+
         _centerContainer.Children.Clear();
-        _centerContainer.Children.Add(_placeholder);
+        _centerContainer.Children.Add(_placeholderHost);
     }
 
     private void AttachSnapshot()
