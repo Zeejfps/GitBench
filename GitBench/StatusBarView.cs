@@ -23,6 +23,7 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
     private readonly TextView _aheadText;
     private readonly FlexRowView _behindCluster;
     private readonly TextView _behindText;
+    private readonly IdentityChipButton _identityChip;
     private readonly StatusBarIconButton _themeButton;
     private readonly StatusBarIconButton _updateButton;
     private readonly TextView _updateFeedback;
@@ -39,12 +40,13 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
         (_branchCluster, _branchName) = Segment(LucideIcons.Branch);
         (_aheadCluster, _aheadText) = Segment(LucideIcons.ChevronUp);
         (_behindCluster, _behindText) = Segment(LucideIcons.ChevronDown);
+        _identityChip = new IdentityChipButton();
 
         var left = new FlexRowView
         {
             Gap = 10,
             CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { _repoCluster, _branchCluster, _aheadCluster, _behindCluster },
+            Children = { _repoCluster, _branchCluster, _aheadCluster, _behindCluster, _identityChip },
         };
 
         _themeButton = new StatusBarIconButton("Toggle theme");
@@ -109,6 +111,11 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
 
         _behindCluster.BindIsVisible(vm.ShowBehind, b => b);
         _behindText.BindText(vm.BehindText);
+
+        _identityChip.BindIsVisible(vm.ShowIdentity, b => b);
+        _identityChip.Label.BindTo(vm.IdentityText);
+        _identityChip.Icon.BindTo(vm.IdentityGlyph);
+        _identityChip.MenuProvider = vm.BuildIdentityMenu;
 
         _themeButton.BindCommand(vm.ToggleTheme);
         _themeButton.Icon.BindTo(vm.Theme, m => m == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon);

@@ -5,7 +5,7 @@ namespace GitBench;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 3;
+    private const int CurrentSchemaVersion = 4;
     private const string DefaultGroupName = "Repositories";
 
     public sealed record State(
@@ -13,7 +13,8 @@ public static class RepoStateStore
         List<Group> Groups,
         Guid? ActiveRepoId,
         Dictionary<Guid, BranchesUiState> BranchesUi,
-        Dictionary<Guid, bool> WorktreesExpanded);
+        Dictionary<Guid, bool> WorktreesExpanded,
+        Dictionary<Guid, Guid> RepoIdentityOverride);
 
     internal sealed class FileShape
     {
@@ -23,6 +24,8 @@ public static class RepoStateStore
         public Guid? ActiveRepoId { get; set; }
         public Dictionary<Guid, BranchesUiState>? BranchesUi { get; set; }
         public Dictionary<Guid, bool>? WorktreesExpanded { get; set; }
+        // repoId → identity profile id (manual override of auto-matching). Absent in pre-v4 files.
+        public Dictionary<Guid, Guid>? RepoIdentityOverride { get; set; }
     }
 
     public static State Load(string path)
@@ -89,7 +92,8 @@ public static class RepoStateStore
                 groups,
                 file.ActiveRepoId,
                 file.BranchesUi ?? new Dictionary<Guid, BranchesUiState>(),
-                file.WorktreesExpanded ?? new Dictionary<Guid, bool>());
+                file.WorktreesExpanded ?? new Dictionary<Guid, bool>(),
+                file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>());
         }
         catch (Exception ex)
         {
@@ -104,7 +108,8 @@ public static class RepoStateStore
         IReadOnlyList<Group> groups,
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
-        IReadOnlyDictionary<Guid, bool> worktreesExpanded)
+        IReadOnlyDictionary<Guid, bool> worktreesExpanded,
+        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
     {
         var dir = Path.GetDirectoryName(path);
         if (!string.IsNullOrEmpty(dir))
@@ -118,6 +123,7 @@ public static class RepoStateStore
             ActiveRepoId = activeId,
             BranchesUi = branchesUi.ToDictionary(kv => kv.Key, kv => kv.Value),
             WorktreesExpanded = worktreesExpanded.ToDictionary(kv => kv.Key, kv => kv.Value),
+            RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         var json = JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
         File.WriteAllText(path, json);
@@ -135,7 +141,8 @@ public static class RepoStateStore
             new List<Group> { defaultGroup },
             null,
             new Dictionary<Guid, BranchesUiState>(),
-            new Dictionary<Guid, bool>());
+            new Dictionary<Guid, bool>(),
+            new Dictionary<Guid, Guid>());
     }
 
     // Worktrees are children of a primary repo and never appear directly in a Group —

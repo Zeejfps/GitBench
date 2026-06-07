@@ -3,7 +3,17 @@ using LibGit2Sharp;
 
 namespace GitBench;
 
-public sealed class GitService : IGitService
+// Non-injecting config reads the identity resolver needs. Separate from IGitService so the
+// resolver depends only on these (and so GitService can hand itself to GitIdentityService
+// without a public surface change).
+public interface IGitRawConfigReader
+{
+    IReadOnlyList<string> GetRemoteNamesRaw(string repoPath);
+    string? GetRemoteUrlRaw(string repoPath, string remoteName);
+    (string? Name, string? Email) GetLocalIdentityRaw(string repoPath);
+}
+
+public sealed class GitService : IGitService, IGitRawConfigReader
 {
     // Every git write touches .git/index.lock; two writes against the same repo at the same
     // time (e.g. a checkout from the sidebar racing a stage from the local-changes panel, or
@@ -2659,6 +2669,34 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Writes an identity into the repo's --local config ("pin to repo"). After this the resolver
+    // sees an explicit local user.email and backs off injection, so GUI and terminal commits use
+    // the same author. core.sshCommand is written too when the pinned profile carries a key.
+    public SetLocalIdentityOutcome PinLocalIdentity(Repo repo, string name, string email, string? sshCommand)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return new SetLocalIdentityOutcome(false, "Not a git repository.");
+            using var _ = LockRepo(repo.Path);
+
+            var (n, nErr) = RunMutation(repo.Path, new[] { "config", "--local", "user.name", name });
+            if (!n) return new SetLocalIdentityOutcome(false, nErr);
+            var (e, eErr) = RunMutation(repo.Path, new[] { "config", "--local", "user.email", email });
+            if (!e) return new SetLocalIdentityOutcome(false, eErr);
+
+            if (!string.IsNullOrEmpty(sshCommand))
+            {
+                var (s, sErr) = RunMutation(repo.Path, new[] { "config", "--local", "core.sshCommand", sshCommand });
+                if (!s) return new SetLocalIdentityOutcome(false, sErr);
+            }
+            return new SetLocalIdentityOutcome(true, null);
+        }
+        catch (Exception ex)
+        {
+            return new SetLocalIdentityOutcome(false, ex.Message);
+        }
+    }
+
     // Small shared helper for "spawn git, return (ok, errorOrNull)". Used where multiple
     // successive mutations need to be sequenced inside a single repo lock.
     private (bool Ok, string? Error) RunMutation(string repoPath, IReadOnlyList<string> args)
@@ -2806,14 +2844,68 @@ public sealed class GitService : IGitService
     private string? RunGitDiff(string workingDir, out string? error, params string[] args)
         => RunGitInternal(workingDir, allowExitCode1: true, out error, args);
 
-    private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args)
+    private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args, bool inject = true)
     {
         error = null;
-        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct);
+        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct, inject: inject);
         if (result.Ok || (allowExitCode1 && result.ExitCode == 1)) return result.Stdout;
         error = result.FirstLineError("git");
         return null;
     }
+
+    // ────────── raw (non-injecting) config reads for GitIdentityService ──────────
+    // These MUST pass inject:false: the identity resolver calls them, and the runner would
+    // otherwise re-enter the resolver (infinite recursion) on every config read.
+
+    IReadOnlyList<string> IGitRawConfigReader.GetRemoteNamesRaw(string repoPath)
+    {
+        try
+        {
+            if (!IsGitRepo(repoPath)) return Array.Empty<string>();
+            var output = RunGitInternal(repoPath, allowExitCode1: false, out var error, new[] { "remote" }, inject: false);
+            if (error != null || string.IsNullOrEmpty(output)) return Array.Empty<string>();
+            var list = new List<string>();
+            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var name = line.Trim();
+                if (name.Length > 0) list.Add(name);
+            }
+            return list;
+        }
+        catch { return Array.Empty<string>(); }
+    }
+
+    string? IGitRawConfigReader.GetRemoteUrlRaw(string repoPath, string remoteName)
+    {
+        try
+        {
+            if (!IsGitRepo(repoPath)) return null;
+            var output = RunGitInternal(repoPath, allowExitCode1: false, out var error, new[] { "remote", "get-url", remoteName }, inject: false);
+            if (error != null || output == null) return null;
+            var url = output.Trim();
+            return url.Length == 0 ? null : url;
+        }
+        catch { return null; }
+    }
+
+    (string? Name, string? Email) IGitRawConfigReader.GetLocalIdentityRaw(string repoPath)
+    {
+        try
+        {
+            if (!IsGitRepo(repoPath)) return (null, null);
+            // --local --get exits 1 when the key is unset; treat that as "not configured".
+            var name = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.name" }, inject: false)?.Trim();
+            var email = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.email" }, inject: false)?.Trim();
+            return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
+        }
+        catch { return (null, null); }
+    }
+
+    // Sets the resolver that injects per-repo identity into every git invocation. Called once at
+    // startup after GitIdentityService is built (which itself needs this GitService for raw reads,
+    // hence the post-construction wiring rather than a constructor arg).
+    public void AttachIdentityResolver(GitIdentityService identity)
+        => _runner.IdentityPrefixResolver = identity.ResolvePrefixArgs;
 
     private bool IsTracked(string workingDir, string path)
     {

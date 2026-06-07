@@ -14,6 +14,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private const int FeedbackLingerMs = 4000;
 
     private readonly IRepoRegistry _registry;
+    private readonly GitIdentityService _identity;
+    private readonly IdentityProfileService _profiles;
+    private readonly IGitService _git;
+    private readonly IMessageBus _bus;
     private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
     private readonly SpinnerAnimation _updateSpinner;
@@ -27,6 +31,9 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     public IReadable<bool> ShowBehind { get; }
     public IReadable<string> AheadText { get; }
     public IReadable<string> BehindText { get; }
+    public IReadable<bool> ShowIdentity { get; }
+    public IReadable<string> IdentityText { get; }
+    public IReadable<string> IdentityGlyph { get; }
 
     public Command ToggleTheme { get; }
     public IReadable<ThemeMode> Theme => _themeMode;
@@ -40,11 +47,19 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IRepoSnapshotStore store,
+        GitIdentityService identity,
+        IdentityProfileService profiles,
+        IGitService git,
+        IMessageBus bus,
         State<ThemeMode> themeMode,
         UpdateService updateService)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
+        _identity = identity;
+        _profiles = profiles;
+        _git = git;
+        _bus = bus;
         _themeMode = themeMode;
         _updateService = updateService;
         _updateSpinner = new SpinnerAnimation(dispatcher);
@@ -57,9 +72,17 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         ShowBehind = Slice(s => HasTracking(s) && s.Behind > 0);
         AheadText = Slice(s => s.Ahead.ToString());
         BehindText = Slice(s => s.Behind.ToString());
+        ShowIdentity = Slice(s => s.HasActiveRepo && !string.IsNullOrEmpty(s.IdentityText));
+        IdentityText = Slice(s => s.IdentityText ?? string.Empty);
+        IdentityGlyph = Slice(s => s.IdentityIsWarning ? LucideIcons.TriangleAlert : LucideIcons.PencilLine);
 
         ToggleTheme = new Command(DoToggleTheme);
         CheckForUpdates = new Command(DoCheckForUpdates);
+
+        // Re-resolve the active repo's identity whenever profiles or refs change (the resolver
+        // flushes its memo on those, then raises Changed).
+        _identity.Changed += OnIdentityChanged;
+        Subscriptions.Add(() => _identity.Changed -= OnIdentityChanged);
 
         // Spin the check button's icon for the duration of a check; fires immediately with the
         // current (idle) value, leaving the spinner stopped until a check starts.
@@ -127,6 +150,110 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         // derivation already falls back to Repo.Branch). Don't seed Branch here — on a switch the
         // store's push status fires before this handler, and re-seeding would clobber it.
         Update(s => s with { HasActiveRepo = true, RepoName = repo.DisplayName });
+        ResolveIdentity(repo.Path);
+    }
+
+    private void OnIdentityChanged()
+    {
+        var repo = _registry.Active.Value;
+        if (repo != null) ResolveIdentity(repo.Path);
+    }
+
+    // First resolution for a repo runs a couple of git reads, so resolve off the UI thread and
+    // post the label back. Guard against a stale result by confirming the repo is still active.
+    private void ResolveIdentity(string repoPath)
+    {
+        var dispatcher = Dispatcher;
+        Task.Run(() =>
+        {
+            var resolved = _identity.Resolve(repoPath);
+            var (text, warn) = LabelFor(resolved);
+            dispatcher.Post(() =>
+            {
+                if (_registry.Active.Value?.Path != repoPath) return;
+                Update(s => s with { IdentityText = text, IdentityIsWarning = warn });
+            });
+        });
+    }
+
+    private static (string? Text, bool Warning) LabelFor(ResolvedIdentity r) => r.Source switch
+    {
+        IdentitySource.Profile => (r.DisplayName, false),
+        IdentitySource.RepoConfig => (r.DisplayName, false),
+        IdentitySource.NoMatch => ("No identity", true),
+        _ => (null, false), // NoRemotes: nothing to show
+    };
+
+    // Built fresh on each chip click so it reflects the current profiles + resolution.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildIdentityMenu()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
+
+        var resolved = _identity.Resolve(repo.Path);
+        var items = new List<RepoBarContextMenu.Item>();
+
+        foreach (var p in _profiles.Profiles)
+        {
+            var profile = p;
+            var active = resolved.ProfileId == profile.Id;
+            items.Add(new RepoBarContextMenu.Item(
+                profile.DisplayName,
+                () => { _registry.SetIdentityOverride(repo.Id, profile.Id); _identity.FlushAll(); },
+                Icon: active ? LucideIcons.CheckSquare : null));
+        }
+
+        if (_profiles.Profiles.Count > 0) items.Add(RepoBarContextMenu.Separator);
+
+        items.Add(new RepoBarContextMenu.Item(
+            "Auto-detect by remote",
+            () => { _registry.SetIdentityOverride(repo.Id, null); _identity.FlushAll(); },
+            Enabled: _registry.GetIdentityOverride(repo.Id) != null));
+
+        if (resolved.Source == IdentitySource.Profile && resolved.ProfileId is { } pinId)
+            items.Add(new RepoBarContextMenu.Item("Pin to repo (write git config)", () => Pin(repo, pinId)));
+
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            "Add profile…",
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(null, onClose)))));
+
+        if (resolved.ProfileId is { } editId && FindProfile(editId) is { } editable)
+        {
+            items.Add(new RepoBarContextMenu.Item(
+                $"Edit “{editable.DisplayName}”…",
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(editable, onClose)))));
+            items.Add(new RepoBarContextMenu.Item(
+                $"Delete “{editable.DisplayName}”",
+                () => _profiles.Remove(editable.Id)));
+        }
+
+        return items;
+    }
+
+    private IdentityProfile? FindProfile(Guid id)
+    {
+        foreach (var p in _profiles.Profiles)
+            if (p.Id == id) return p;
+        return null;
+    }
+
+    private void Pin(Repo repo, Guid profileId)
+    {
+        var profile = FindProfile(profileId);
+        if (profile == null) return;
+        var ssh = GitIdentityService.BuildSshCommandValue(profile);
+        var dispatcher = Dispatcher;
+        Task.Run(() =>
+        {
+            var outcome = _git.PinLocalIdentity(repo, profile.UserName, profile.UserEmail, ssh);
+            dispatcher.Post(() =>
+            {
+                _identity.FlushAll();
+                if (!outcome.Success && !string.IsNullOrEmpty(outcome.ErrorMessage))
+                    _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", outcome.ErrorMessage));
+            });
+        });
     }
 
     private void OnPushStatus(PushStatus status)

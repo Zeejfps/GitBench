@@ -7,7 +7,9 @@ internal sealed record StatusBarState(
     bool HasUpstream,
     bool IsDetached,
     int Ahead,
-    int Behind)
+    int Behind,
+    string? IdentityText = null,
+    bool IdentityIsWarning = false)
 {
     public static StatusBarState Initial { get; } = new(
         HasActiveRepo: false,
@@ -16,5 +18,7 @@ internal sealed record StatusBarState(
         HasUpstream: false,
         IsDetached: false,
         Ahead: 0,
-        Behind: 0);
+        Behind: 0,
+        IdentityText: null,
+        IdentityIsWarning: false);
 }

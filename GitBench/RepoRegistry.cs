@@ -12,12 +12,14 @@ public sealed class RepoRegistry : IRepoRegistry
     private readonly string _statePath;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
     private readonly Dictionary<Guid, bool> _worktreesExpanded;
+    private readonly Dictionary<Guid, Guid> _identityOverride;
 
     public RepoRegistry(RepoStateStore.State initial, string statePath)
     {
         _statePath = statePath;
         _branchesUi = new Dictionary<Guid, BranchesUiState>(initial.BranchesUi);
         _worktreesExpanded = new Dictionary<Guid, bool>(initial.WorktreesExpanded);
+        _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
 
         Repos = new ObservableList<Repo>();
         foreach (var r in initial.Repos) Repos.Add(r);
@@ -313,6 +315,24 @@ public sealed class RepoRegistry : IRepoRegistry
         Save();
     }
 
+    public Guid? GetIdentityOverride(Guid repoId)
+        => _identityOverride.TryGetValue(repoId, out var id) ? id : null;
+
+    public void SetIdentityOverride(Guid repoId, Guid? profileId)
+    {
+        if (profileId is { } id) _identityOverride[repoId] = id;
+        else _identityOverride.Remove(repoId);
+        Save();
+    }
+
+    // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so map the path
+    // back to a repo and return its manual override (if any).
+    public Guid? GetIdentityOverrideByPath(string path)
+    {
+        var repo = Repos.FirstOrDefault(r => string.Equals(r.Path, path, PathComparison));
+        return repo != null ? GetIdentityOverride(repo.Id) : null;
+    }
+
     // Records the primary's HEAD branch (from `git worktree list`) so the BranchesView
     // can mark it as "taken" when active is a sibling worktree.
     public void SetPrimaryBranch(Guid primaryId, string? branch)
@@ -513,7 +533,7 @@ public sealed class RepoRegistry : IRepoRegistry
     }
 
     private void Save() =>
-        RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded);
+        RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
 }
 
 public sealed record WorktreeDescriptor(string Path, string? DisplayName, string? Branch = null);
