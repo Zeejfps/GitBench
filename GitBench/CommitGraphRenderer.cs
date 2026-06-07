@@ -123,10 +123,10 @@ internal static class CommitGraphRenderer
         }
 
         // The dot — shrinks with the lane spacing so compressed (dense) graphs don't stack dots.
-        // Stash commits draw as a hollow ring to set them apart from real commits.
+        // Stash and remote-only commits draw as a hollow ring to set them apart from local history.
         var dotRadius = Math.Min(DotRadius, Math.Max(MinDotRadius, LaneSpacing(laneCount) * 0.5f - 1f));
         var dotCenter = new PointF(commitCx, rowCenterY);
-        if (stash)
+        if (dashed)
         {
             // Knock out the edge inside the ring with the row background so the hollow
             // center reads cleanly instead of showing the connector through it.
