@@ -70,7 +70,7 @@ internal static class CommitGraphRenderer
         return LaneCenterX(graphStartX, maxLane, laneCount) + DotRadius + PaddingRight;
     }
 
-    public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z)
+    public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z, uint rowBackground)
     {
         var rowTop = rowBottom + rowHeight;
         var rowCenterY = rowBottom + rowHeight * 0.5f;
@@ -125,14 +125,37 @@ internal static class CommitGraphRenderer
         // The dot — shrinks with the lane spacing so compressed (dense) graphs don't stack dots.
         // Stash commits draw as a hollow ring to set them apart from real commits.
         var dotRadius = Math.Min(DotRadius, Math.Max(MinDotRadius, LaneSpacing(laneCount) * 0.5f - 1f));
-        c.DrawCircle(new DrawCircleInputs
+        var dotCenter = new PointF(commitCx, rowCenterY);
+        if (stash)
         {
-            Center = new PointF(commitCx, rowCenterY),
-            Radius = dotRadius,
-            Color = commitColor,
-            ZIndex = z + 1,
-            Thickness = stash ? RingThickness : 0f,
-        });
+            // Knock out the edge inside the ring with the row background so the hollow
+            // center reads cleanly instead of showing the connector through it.
+            c.DrawCircle(new DrawCircleInputs
+            {
+                Center = dotCenter,
+                Radius = dotRadius,
+                Color = rowBackground,
+                ZIndex = z + 1,
+            });
+            c.DrawCircle(new DrawCircleInputs
+            {
+                Center = dotCenter,
+                Radius = dotRadius,
+                Color = commitColor,
+                ZIndex = z + 1,
+                Thickness = RingThickness,
+            });
+        }
+        else
+        {
+            c.DrawCircle(new DrawCircleInputs
+            {
+                Center = dotCenter,
+                Radius = dotRadius,
+                Color = commitColor,
+                ZIndex = z + 1,
+            });
+        }
     }
 
     internal static float LaneCenterX(float graphStartX, int lane, int laneCount)

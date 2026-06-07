@@ -469,7 +469,10 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
         // Filtered list is flat: skip the graph cell and start the summary at the graph origin.
         if (!_filtering)
-            CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1);
+        {
+            var rowBackground = isHighlighted ? _styles.RowSelectedBackground : _styles.Background;
+            CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground);
+        }
 
         var textTop = rowBottom;
         var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
