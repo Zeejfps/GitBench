@@ -49,6 +49,9 @@ public sealed class GitIdentityService
     // it's empty so resolution is purely automatic.
     private Func<string, Guid?>? _overrideLookup;
 
+    // Repo-id → working-dir path, used to flush only the changed repo on a RefsChangedMessage.
+    private Func<Guid, string?>? _repoPathLookup;
+
     // Raised after the memo is flushed (profiles changed / refs changed) so the chip refreshes.
     public event Action? Changed;
 
@@ -57,11 +60,25 @@ public sealed class GitIdentityService
         _git = git;
         _profiles = profiles;
         _profiles.Changed += FlushAll;
-        bus.Subscribe<RefsChangedMessage>(_ => FlushAll());
+        bus.Subscribe<RefsChangedMessage>(OnRefsChanged);
     }
 
     // Lets a later step supply a repo-path → profile-id override map without a constructor cycle.
     public void SetOverrideLookup(Func<string, Guid?> lookup) => _overrideLookup = lookup;
+
+    // Lets startup supply repo-id → path resolution for the targeted RefsChanged flush.
+    public void SetRepoPathLookup(Func<Guid, string?> lookup) => _repoPathLookup = lookup;
+
+    // A ref change (commit/push/fetch/remote edit) only affects the identity of the ONE repo it
+    // names — host/owner and local config are per-repo — so flush just that repo's memo entry
+    // rather than dumping every repo's cache and forcing a workspace-wide re-resolve storm. Falls
+    // back to a full flush only if the id→path lookup isn't wired or the repo is unknown.
+    private void OnRefsChanged(RefsChangedMessage msg)
+    {
+        var path = _repoPathLookup?.Invoke(msg.RepoId);
+        if (path != null) Flush(path);
+        else FlushAll();
+    }
 
     public ResolvedIdentity Resolve(string workingDir)
     {
@@ -84,6 +101,14 @@ public sealed class GitIdentityService
     public void FlushAll()
     {
         _memo.Clear();
+        Changed?.Invoke();
+    }
+
+    // Drops a single repo's memoized resolution so its next op recomputes. Changed still fires so
+    // the status chip re-resolves the active repo (a no-op for the chip if a different repo flushed).
+    public void Flush(string workingDir)
+    {
+        _memo.TryRemove(PathKey.Normalize(workingDir), out _);
         Changed?.Invoke();
     }
 

@@ -11,11 +11,14 @@ public sealed class RepoRegistry : IRepoRegistry
     private readonly Dictionary<Guid, bool> _worktreesExpanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
 
-    // Immutable path→profile-id map the resolver reads lock-free from background git threads.
-    // Rebuilt on the UI thread (in Save) whenever Repos or _identityOverride change, so the
-    // resolver never enumerates the UI-thread-only Repos list. Empty until the first build below.
+    // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
+    // override, and repo-id→path for targeted memo flushing). Rebuilt on the UI thread (in Save)
+    // only when the inputs actually change — _overrideMapDirty gates the rebuild so the ~18 Save()
+    // sites that touch neither Repos nor overrides don't pay an O(repos) rebuild + allocation.
     private volatile IReadOnlyDictionary<string, Guid> _overrideByPath =
         new Dictionary<string, Guid>(PathKey.Comparer);
+    private volatile IReadOnlyDictionary<Guid, string> _pathById = new Dictionary<Guid, string>();
+    private bool _overrideMapDirty;
 
     public RepoRegistry(RepoStateStore.State initial, string statePath)
     {
@@ -27,7 +30,10 @@ public sealed class RepoRegistry : IRepoRegistry
         Repos = new ObservableList<Repo>();
         foreach (var r in initial.Repos) Repos.Add(r);
 
-        RebuildOverrideMap();
+        RebuildLookups();
+        // Any add/remove/replace of a repo row can change a path or parent link the lookups depend
+        // on, so mark them dirty; the next Save rebuilds. (Subscribed after the initial seed above.)
+        Repos.Changed += _ => _overrideMapDirty = true;
 
         Groups = new ObservableList<Group>();
         foreach (var g in initial.Groups) Groups.Add(g);
@@ -327,6 +333,7 @@ public sealed class RepoRegistry : IRepoRegistry
     {
         if (profileId is { } id) _identityOverride[repoId] = id;
         else _identityOverride.Remove(repoId);
+        _overrideMapDirty = true;
         Save();
     }
 
@@ -335,6 +342,10 @@ public sealed class RepoRegistry : IRepoRegistry
     // normalization the resolver applies to its memo key, so the two can't drift.
     public Guid? GetIdentityOverrideByPath(string path)
         => _overrideByPath.TryGetValue(PathKey.Normalize(path), out var id) ? id : null;
+
+    // Repo-id → working-dir path, served lock-free for the resolver's targeted RefsChanged flush.
+    public string? GetRepoPathById(Guid repoId)
+        => _pathById.TryGetValue(repoId, out var path) ? path : null;
 
     // The override that applies to a repo: its own pin, else the nearest pinned ancestor's. Walks
     // the whole parent chain so a submodule-of-a-submodule still inherits a top-level pin; a child
@@ -350,16 +361,21 @@ public sealed class RepoRegistry : IRepoRegistry
         return null;
     }
 
-    private void RebuildOverrideMap()
+    private void RebuildLookups()
     {
         var byId = new Dictionary<Guid, Repo>();
         foreach (var r in Repos) byId[r.Id] = r;
 
-        var map = new Dictionary<string, Guid>(PathKey.Comparer);
+        var overrideMap = new Dictionary<string, Guid>(PathKey.Comparer);
+        var pathById = new Dictionary<Guid, string>();
         foreach (var r in Repos)
+        {
+            pathById[r.Id] = r.Path;
             if (EffectiveOverride(r, byId) is { } id)
-                map[PathKey.Normalize(r.Path)] = id;
-        _overrideByPath = map;
+                overrideMap[PathKey.Normalize(r.Path)] = id;
+        }
+        _overrideByPath = overrideMap;
+        _pathById = pathById;
     }
 
     // Records the primary's HEAD branch (from `git worktree list`) so the BranchesView
@@ -559,8 +575,13 @@ public sealed class RepoRegistry : IRepoRegistry
 
     private void Save()
     {
-        // Repos / overrides may have changed; refresh the resolver's lock-free map before it reads.
-        RebuildOverrideMap();
+        // Only rebuild the resolver's lock-free lookups when a repo row or an override actually
+        // changed — most Save() callers (active repo, group edits, branch UI) don't touch either.
+        if (_overrideMapDirty)
+        {
+            RebuildLookups();
+            _overrideMapDirty = false;
+        }
         RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
     }
 }

@@ -312,6 +312,38 @@ public class GitIdentityServiceTests
         Assert.Equal("ssh", entries["gpg.format"]);
     }
 
+    [Fact]
+    public void RefsChangedFlushesOnlyTheNamedRepo()
+    {
+        // A commit/fetch in one repo must not dump every repo's cached identity (the re-resolution
+        // storm) — only the named repo's memo entry is dropped.
+        var reader = new FakeReader();
+        var profiles = new IdentityProfileService(new[] { Work }, Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
+        var bus = new MessageBus();
+        var svc = new GitIdentityService(reader, profiles, bus);
+
+        var pathA = "/repos/a";
+        var pathB = "/repos/b";
+        foreach (var p in new[] { pathA, pathB })
+        {
+            reader.Remotes[p] = new() { "origin" };
+            reader.Urls[$"{p}|origin"] = "git@github.com:series-ai/app.git";
+        }
+
+        var repoA = Guid.NewGuid();
+        svc.SetRepoPathLookup(id => id == repoA ? pathA : null);
+
+        svc.Resolve(pathA);
+        svc.Resolve(pathB);
+        Assert.True(svc.TryGetCached(pathA, out _));
+        Assert.True(svc.TryGetCached(pathB, out _));
+
+        bus.Broadcast(new RefsChangedMessage(repoA));
+
+        Assert.False(svc.TryGetCached(pathA, out _)); // flushed: its ref changed
+        Assert.True(svc.TryGetCached(pathB, out _));   // untouched: a different repo changed
+    }
+
     private sealed class ThrowingReader : IGitRawConfigReader
     {
         public bool IsRepoAvailable(string repoPath) => true;

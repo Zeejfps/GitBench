@@ -77,6 +77,7 @@ context.AddService<IGitService>(gitService);
 // git invocation gets the right per-repo name/email/SSH key injected without touching repo config.
 var identityService = new GitIdentityService(gitService, identityProfiles, messageBus);
 identityService.SetOverrideLookup(registry.GetIdentityOverrideByPath);
+identityService.SetRepoPathLookup(registry.GetRepoPathById);
 context.AddService(identityService);
 gitService.AttachIdentityResolver(identityService);
 context.AddService<IDragController>(new DragController(registry));
