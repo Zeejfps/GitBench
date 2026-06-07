@@ -706,19 +706,28 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // no PATH-dependent helpers). -z is required: it switches records to NUL termination and
     // disables the C-style quoting that wraps paths with spaces or unicode in the default
     // porcelain output.
+    //
+    // --ignore-submodules=dirty isolates the failure domain: without it, status runs a full
+    // `git status --porcelain=2` *inside* each submodule to detect a dirty work tree, so a
+    // transient submodule hiccup (a dropped --recurse-submodules fetch, an in-progress op)
+    // fails the whole read with "failed in submodule X" — blanking the superproject's own file
+    // list for changes that are perfectly readable. =dirty skips that inner recursion while
+    // still reporting the submodule's committed pointer diff (the `SC`/`S` line) against HEAD
+    // and the index, so both staged and unstaged pointer bumps render exactly as before; the
+    // only thing dropped is a submodule whose internal work tree is dirty — which can't be
+    // committed from the superproject anyway. Submodule pointer drift comes from the dedicated
+    // ListSubmodules read (RepoSnapshotStore), which has its own failure domain.
     private string? RunGitStatusPorcelain(string workingDir, out string? error, out string? detail)
     {
         error = null;
         detail = null;
         var result = _runner.Run(
             workingDir,
-            new[] { "status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored=no" },
+            new[] { "status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
             GitProcessRunner.GitLaunch.Direct);
         if (result.Ok) return result.Stdout;
         // One-line headline for the inline placeholder; full block for the on-demand dialog.
-        // Status recurses into submodules, so a transient submodule hiccup (a dropped fetch,
-        // an in-progress op) surfaces here as "failed in submodule X" — the detail block keeps
-        // the recursed child's own fatal lines that FirstLineError would drop.
+        // The detail block keeps any trailing "fatal:"/"hint:" lines that FirstLineError drops.
         error = result.FirstLineError("git status");
         detail = result.BlockError("git status");
         return null;
