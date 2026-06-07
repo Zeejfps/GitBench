@@ -24,6 +24,8 @@ internal static class CommitGraphRenderer
     private const float DotRadius = 5f;
     private const float MinDotRadius = 1.5f;
     private const float EdgeThickness = 2f;
+    private const float DashLength = 4f;
+    private const float GapLength = 3f;
 
     private static readonly uint[] LanePalette =
     {
@@ -73,8 +75,12 @@ internal static class CommitGraphRenderer
         var rowCenterY = rowBottom + rowHeight * 0.5f;
         var commitColor = LaneColor(node.Lane);
         var commitCx = LaneCenterX(graphStartX, node.Lane, laneCount);
+        // Stash commits are off to the side of real history; draw their edges dashed
+        // (and straight) so they read as auxiliary rather than mainline.
+        var stash = IsStash(node);
 
-        // Pass-through verticals (lanes with no interaction at this row).
+        // Pass-through verticals (lanes with no interaction at this row) stay solid —
+        // they belong to whatever lane is passing, not to this (possibly stash) commit.
         foreach (var ptLane in node.PassThroughLanes)
         {
             var x = LaneCenterX(graphStartX, ptLane, laneCount);
@@ -84,16 +90,17 @@ internal static class CommitGraphRenderer
         // Top half of commit's own lane (only if an edge continues from above).
         if (node.HasIncomingAtCommitLane)
         {
-            DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z);
+            DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z, dashed: stash);
         }
 
-        // Incoming merge edges from other lanes above this commit: a curve that
+        // Incoming merge edges from other lanes above this commit: a connector that
         // leaves the lane vertically at the top boundary (so it lines up with the
-        // vertical above) and bends through the elbow into the dot.
+        // vertical above) and bends through the elbow into the dot, blending the
+        // source lane's color into this commit's.
         foreach (var inLane in node.IncomingLanes)
         {
             var inCx = LaneCenterX(graphStartX, inLane, laneCount);
-            DrawCurve(c, inCx, rowTop, inCx, rowCenterY, commitCx, rowCenterY, LaneColor(inLane), z);
+            DrawConnector(c, inCx, rowTop, inCx, rowCenterY, commitCx, rowCenterY, LaneColor(inLane), commitColor, z, stash);
         }
 
         // Outgoing edges to parents (continuation + branches).
@@ -103,13 +110,13 @@ internal static class CommitGraphRenderer
             var pColor = LaneColor(pl.Lane);
             if (pl.Lane == node.Lane)
             {
-                DrawSegment(c, commitCx, rowBottom, commitCx, rowCenterY, commitColor, z);
+                DrawSegment(c, commitCx, rowBottom, commitCx, rowCenterY, commitColor, z, dashed: stash);
             }
             else
             {
-                // Curve from the dot through the elbow down to where the parent lane
-                // continues below, arriving vertically so it lines up with the vertical.
-                DrawCurve(c, commitCx, rowCenterY, pCx, rowCenterY, pCx, rowBottom, pColor, z);
+                // Connector from the dot down to where the parent lane continues below,
+                // arriving vertically and blending this commit's color into the parent lane's.
+                DrawConnector(c, commitCx, rowCenterY, pCx, rowCenterY, pCx, rowBottom, commitColor, pColor, z, stash);
             }
         }
 
@@ -130,7 +137,27 @@ internal static class CommitGraphRenderer
         return graphStartX + lane * spacing + spacing * 0.5f;
     }
 
-    private static void DrawSegment(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z)
+    private static bool IsStash(CommitNode node)
+    {
+        foreach (var r in node.Refs)
+            if (r.Kind == RefKind.Stash)
+                return true;
+        return false;
+    }
+
+    // A lane-change connector: a gradient curve for normal history, or a dashed
+    // straight line (still color-blended) for stash edges.
+    private static void DrawConnector(ICanvas c, float x0, float y0, float cx, float cy, float x1, float y1,
+        uint color, uint endColor, int z, bool dashed)
+    {
+        if (dashed)
+            DrawSegment(c, x0, y0, x1, y1, color, z, endColor, dashed: true);
+        else
+            DrawCurve(c, x0, y0, cx, cy, x1, y1, color, z, endColor);
+    }
+
+    private static void DrawSegment(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z,
+        uint? gradientEnd = null, bool dashed = false)
     {
         c.DrawLine(new DrawLineInputs
         {
@@ -139,10 +166,14 @@ internal static class CommitGraphRenderer
             Thickness = EdgeThickness,
             Color = color,
             ZIndex = z,
+            GradientEndColor = gradientEnd,
+            DashLength = dashed ? DashLength : 0f,
+            GapLength = dashed ? GapLength : 0f,
         });
     }
 
-    private static void DrawCurve(ICanvas c, float x0, float y0, float cx, float cy, float x1, float y1, uint color, int z)
+    private static void DrawCurve(ICanvas c, float x0, float y0, float cx, float cy, float x1, float y1, uint color, int z,
+        uint? gradientEnd = null)
     {
         c.DrawBezier(new DrawBezierInputs
         {
@@ -152,6 +183,7 @@ internal static class CommitGraphRenderer
             Thickness = EdgeThickness,
             Color = color,
             ZIndex = z,
+            GradientEndColor = gradientEnd,
         });
     }
 }
