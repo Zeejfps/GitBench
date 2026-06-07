@@ -143,13 +143,9 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     {
         if (repo == null)
         {
-            _lastResolved = null;
             Update(_ => StatusBarState.Initial);
             return;
         }
-        // Invalidate the previous repo's cached resolution so a chip click before the new one lands
-        // doesn't show the old repo's identity.
-        _lastResolved = null;
         // RepoName is the registry's; Branch + ahead/behind are owned by OnPushStatus (whose
         // derivation already falls back to Repo.Branch). Don't seed Branch here — on a switch the
         // store's push status fires before this handler, and re-seeding would clobber it.
@@ -175,15 +171,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             dispatcher.Post(() =>
             {
                 if (_registry.Active.Value?.Path != repoPath) return;
-                _lastResolved = resolved;
                 Update(s => s with { IdentityText = text, IdentityIsWarning = warn });
             });
         });
     }
-
-    // The most recent off-thread resolution for the active repo. The chip menu reads this instead
-    // of resolving synchronously, so opening the menu never spawns git on the UI thread.
-    private ResolvedIdentity? _lastResolved;
 
     private static (string? Text, bool Warning) LabelFor(ResolvedIdentity r) => r.Source switch
     {
@@ -199,10 +190,11 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
-        // Use the last off-thread resolution rather than resolving here, which would block the UI
+        // Read the already-resolved identity rather than resolving here, which would block the UI
         // thread on git during the click. Falls back to NoRemotes until the first resolve lands.
-        var resolved = _lastResolved
-            ?? new ResolvedIdentity(IdentitySource.NoRemotes, null, null, null, null, Array.Empty<string>());
+        var resolved = _identity.TryGetCached(repo.Path, out var r)
+            ? r
+            : ResolvedIdentity.Empty(IdentitySource.NoRemotes);
         var items = new List<RepoBarContextMenu.Item>();
 
         foreach (var p in _profiles.Profiles)
@@ -211,11 +203,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             var active = resolved.ProfileId == profile.Id;
             items.Add(new RepoBarContextMenu.Item(
                 profile.DisplayName,
-                () =>
-                {
-                    _registry.SetIdentityOverride(repo.Id, profile.Id);
-                    _identity.FlushAll();
-                },
+                () => ApplyOverride(repo, profile.Id),
                 Icon: active ? LucideIcons.CheckSquare : null));
         }
 
@@ -223,7 +211,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
         items.Add(new RepoBarContextMenu.Item(
             "Auto-detect by remote",
-            () => { _registry.SetIdentityOverride(repo.Id, null); _identity.FlushAll(); },
+            () => ApplyOverride(repo, null),
             Enabled: _registry.GetIdentityOverride(repo.Id) != null));
 
         if (resolved.Source == IdentitySource.Profile && resolved.ProfileId is { } pinId)
@@ -234,7 +222,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             "Add profile…",
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(null, onClose)))));
 
-        if (resolved.ProfileId is { } editId && FindProfile(editId) is { } editable)
+        if (resolved.ProfileId is { } editId && _profiles.Find(editId) is { } editable)
         {
             items.Add(new RepoBarContextMenu.Item(
                 $"Edit “{editable.DisplayName}”…",
@@ -247,16 +235,16 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         return items;
     }
 
-    private IdentityProfile? FindProfile(Guid id)
+    // Pin/clear a manual override and flush the resolver memo so the chip and injected args refresh.
+    private void ApplyOverride(Repo repo, Guid? profileId)
     {
-        foreach (var p in _profiles.Profiles)
-            if (p.Id == id) return p;
-        return null;
+        _registry.SetIdentityOverride(repo.Id, profileId);
+        _identity.FlushAll();
     }
 
     private void Pin(Repo repo, Guid profileId)
     {
-        var profile = FindProfile(profileId);
+        var profile = _profiles.Find(profileId);
         if (profile == null) return;
         var ssh = GitIdentityService.BuildSshCommandValue(profile);
         var dispatcher = Dispatcher;

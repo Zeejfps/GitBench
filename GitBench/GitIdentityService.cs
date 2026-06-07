@@ -25,6 +25,11 @@ public sealed record ResolvedIdentity(
     // next git op retries instead of pinning the repo to the machine's global identity until the
     // next flush.
     public bool IsTransient { get; init; }
+
+    // The no-identity shape (no profile, no injected args). One definition for the resolver's
+    // NoRemotes/NoMatch results, the transient sentinel, and the chip menu's pre-resolve fallback.
+    public static ResolvedIdentity Empty(IdentitySource source, bool transient = false)
+        => new(source, null, null, null, null, Array.Empty<string>()) { IsTransient = transient };
 }
 
 // Resolves which Git identity applies to a repo (by its remote host/owner) and produces the
@@ -70,6 +75,12 @@ public sealed class GitIdentityService
     public IReadOnlyList<string> ResolvePrefixArgs(string workingDir)
         => Resolve(workingDir).PrefixArgs;
 
+    // Cheap lock-free read of an already-resolved identity (no git, no Compute). Used by the chip
+    // menu so opening it never blocks the UI thread; returns false until the first Resolve lands or
+    // after a flush, in which case the caller shows a neutral state.
+    public bool TryGetCached(string workingDir, out ResolvedIdentity resolved)
+        => _memo.TryGetValue(PathKey.Normalize(workingDir), out resolved!);
+
     public void FlushAll()
     {
         _memo.Clear();
@@ -82,7 +93,7 @@ public sealed class GitIdentityService
         //    everything, including a local user.email already in the repo's config. (Auto-matching
         //    still defers to local config in step 2; only a deliberate pick overrides it.)
         var overrideId = _overrideLookup?.Invoke(normalizedPath);
-        if (overrideId is { } oid && FindProfile(oid) is { } chosen)
+        if (overrideId is { } oid && _profiles.Find(oid) is { } chosen)
             return Build(chosen);
 
         // If the repo isn't readable right now (unmounted volume, deleted under us), don't spawn git
@@ -126,44 +137,34 @@ public sealed class GitIdentityService
     }
 
     private static ResolvedIdentity Empty(IdentitySource source)
-        => new(source, null, null, null, null, Array.Empty<string>());
+        => ResolvedIdentity.Empty(source);
 
     // Looks like NoRemotes to the chip (shows nothing), but is never cached.
     private static ResolvedIdentity Transient()
-        => new(IdentitySource.NoRemotes, null, null, null, null, Array.Empty<string>()) { IsTransient = true };
+        => ResolvedIdentity.Empty(IdentitySource.NoRemotes, transient: true);
 
     private static ResolvedIdentity Build(IdentityProfile p)
         => new(IdentitySource.Profile, p.Id, p.DisplayName, p.UserName, p.UserEmail, BuildPrefixArgs(p));
 
-    // Reads the immutable snapshot, never the live ObservableList — Compute runs on background git
-    // threads where touching the UI-thread-only list would race.
-    private IdentityProfile? FindProfile(Guid id)
-    {
-        foreach (var p in _profiles.Snapshot)
-            if (p.Id == id) return p;
-        return null;
-    }
-
     // Owner-specific rules beat host-only rules, so a personal profile pinned to one org wins
-    // over a catch-all "any repo on this host" profile.
+    // over a catch-all "any repo on this host" profile. Single pass: an owner-specific hit returns
+    // immediately; the first host-only hit is held as a fallback used only if no owner rule matches.
     private IdentityProfile? MatchProfile(string host, string? owner)
     {
-        if (owner != null)
-            foreach (var p in _profiles.Snapshot)
-                if (p.Match != null)
-                    foreach (var r in p.Match)
-                        if (r.Owner != null
-                            && string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)
-                            && string.Equals(r.Owner, owner, StringComparison.OrdinalIgnoreCase))
-                            return p;
-
+        IdentityProfile? hostOnly = null;
         foreach (var p in _profiles.Snapshot)
-            if (p.Match != null)
-                foreach (var r in p.Match)
-                    if (r.Owner == null && string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase))
-                        return p;
-
-        return null;
+        {
+            if (p.Match == null) continue;
+            foreach (var r in p.Match)
+            {
+                if (!string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)) continue;
+                if (r.Owner == null)
+                    hostOnly ??= p;
+                else if (owner != null && string.Equals(r.Owner, owner, StringComparison.OrdinalIgnoreCase))
+                    return p;
+            }
+        }
+        return hostOnly;
     }
 
     private static IReadOnlyList<string> BuildPrefixArgs(IdentityProfile p)

@@ -35,6 +35,15 @@ public sealed class IdentityProfileService : IDisposable
         _saveTimer = new System.Threading.Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
+    // Lookup by id over the immutable snapshot, so it's safe from both the UI thread and the
+    // resolver's background git threads.
+    public IdentityProfile? Find(Guid id)
+    {
+        foreach (var p in _snapshot)
+            if (p.Id == id) return p;
+        return null;
+    }
+
     public void Add(IdentityProfile profile)
     {
         Profiles.Add(profile);

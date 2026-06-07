@@ -6,9 +6,6 @@ public sealed class RepoRegistry : IRepoRegistry
 {
     private const string DefaultNewGroupName = "New Group";
 
-    private static readonly StringComparison PathComparison =
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-
     private readonly string _statePath;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
     private readonly Dictionary<Guid, bool> _worktreesExpanded;
@@ -59,7 +56,7 @@ public sealed class RepoRegistry : IRepoRegistry
         if (!RepoStateStore.IsGitRepo(normalized))
             return;
 
-        var existing = Repos.FirstOrDefault(r => string.Equals(r.Path, normalized, PathComparison));
+        var existing = Repos.FirstOrDefault(r => PathKey.Comparer.Equals(r.Path, normalized));
         if (existing is not null)
         {
             SetActive(existing.Id);
@@ -386,10 +383,10 @@ public sealed class RepoRegistry : IRepoRegistry
 
         var desiredByPath = new Dictionary<string, WorktreeDescriptor>(
             desired.ToDictionary(d => Path.GetFullPath(d.Path), d => d),
-            PathComparison == StringComparison.OrdinalIgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            PathKey.Comparer);
 
         var changed = false;
-        var seenPaths = new HashSet<string>(PathComparison == StringComparison.OrdinalIgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var seenPaths = new HashSet<string>(PathKey.Comparer);
 
         // Update or keep existing worktree rows.
         for (var i = 0; i < Repos.Count; i++)
@@ -445,11 +442,7 @@ public sealed class RepoRegistry : IRepoRegistry
         var host = Repos.FirstOrDefault(r => r.Id == hostId);
         if (host is null || (!host.IsPrimary && !host.IsWorktree)) return;
 
-        var pathComparer = PathComparison == StringComparison.OrdinalIgnoreCase
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-
-        if (ReconcileSubmoduleLevel(hostId, roots, pathComparer))
+        if (ReconcileSubmoduleLevel(hostId, roots, PathKey.Comparer))
         {
             WorktreesChanged.Value++;
             Save();

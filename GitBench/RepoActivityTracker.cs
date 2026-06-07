@@ -40,13 +40,12 @@ public sealed class RepoActivityTracker : IRepoActivityTracker
 
     public RepoActivityTracker()
     {
-        var cmp = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        _byPath = new Dictionary<string, State>(cmp);
+        _byPath = new Dictionary<string, State>(PathKey.Comparer);
     }
 
     public IDisposable Begin(string repoPath)
     {
-        var key = Normalize(repoPath);
+        var key = PathKey.Normalize(repoPath);
         lock (_lock)
         {
             if (!_byPath.TryGetValue(key, out var s))
@@ -61,7 +60,7 @@ public sealed class RepoActivityTracker : IRepoActivityTracker
 
     public bool IsActive(string repoPath)
     {
-        var key = Normalize(repoPath);
+        var key = PathKey.Normalize(repoPath);
         lock (_lock)
         {
             if (!_byPath.TryGetValue(key, out var s)) return false;
@@ -79,12 +78,6 @@ public sealed class RepoActivityTracker : IRepoActivityTracker
             if (s.Count == 0)
                 s.QuietAfterTick = Environment.TickCount64 + TailMs;
         }
-    }
-
-    private static string Normalize(string repoPath)
-    {
-        try { return Path.GetFullPath(repoPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { return repoPath; }
     }
 
     private sealed class State
