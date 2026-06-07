@@ -174,13 +174,18 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             },
             _identityLane);
 
-    private static (string? Text, bool Warning) LabelFor(ResolvedIdentity r) => r.Source switch
+    private static (string? Text, bool Warning) LabelFor(Identity id) => id switch
     {
-        IdentitySource.Profile => (r.DisplayName, false),
-        IdentitySource.RepoConfig => (r.DisplayName, false),
-        IdentitySource.NoMatch => ("No identity", true),
-        _ => (null, false), // NoRemotes: nothing to show
+        Identity.FromProfile p => (p.Profile.DisplayName, false),
+        Identity.FromConfig c => (FormatLocal(c), false),
+        Identity.Unmatched => ("No identity", true),
+        _ => (null, false), // NoRemote / Pending: nothing to show
     };
+
+    private static string? FormatLocal(Identity.FromConfig c)
+        => c.UserEmail != null
+            ? (c.UserName != null ? $"{c.UserName} <{c.UserEmail}>" : c.UserEmail)
+            : c.UserName;
 
     // Built fresh on each chip click so it reflects the current profiles + resolution.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildIdentityMenu()
@@ -189,20 +194,18 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         // Read the already-resolved identity rather than resolving here, which would block the UI
-        // thread on git during the click. Falls back to NoRemotes until the first resolve lands.
-        var resolved = _identity.TryGetCached(repo.Path, out var r)
-            ? r
-            : ResolvedIdentity.Empty(IdentitySource.NoRemotes);
+        // thread on git during the click. Null until the first resolve lands.
+        var resolved = _identity.Cached(repo.Path);
+        var activeProfileId = (resolved as Identity.FromProfile)?.Profile.Id;
         var items = new List<RepoBarContextMenu.Item>();
 
         foreach (var p in _profiles.Profiles)
         {
             var profile = p;
-            var active = resolved.ProfileId == profile.Id;
             items.Add(new RepoBarContextMenu.Item(
                 profile.DisplayName,
                 () => ApplyOverride(repo, profile.Id),
-                Icon: active ? LucideIcons.CheckSquare : null));
+                Icon: activeProfileId == profile.Id ? LucideIcons.CheckSquare : null));
         }
 
         if (_profiles.Profiles.Count > 0) items.Add(RepoBarContextMenu.Separator);
@@ -212,15 +215,15 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             () => ApplyOverride(repo, null),
             Enabled: _registry.GetIdentityOverride(repo.Id) != null));
 
-        if (resolved.Source == IdentitySource.Profile && resolved.ProfileId is { } pinId)
-            items.Add(new RepoBarContextMenu.Item("Pin to repo (write git config)", () => Pin(repo, pinId)));
+        if (resolved is Identity.FromProfile pinned)
+            items.Add(new RepoBarContextMenu.Item("Pin to repo (write git config)", () => Pin(repo, pinned.Profile.Id)));
 
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
             "Add profile…",
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(null, onClose)))));
 
-        if (resolved.ProfileId is { } editId && _profiles.Find(editId) is { } editable)
+        if (activeProfileId is { } editId && _profiles.Find(editId) is { } editable)
         {
             items.Add(new RepoBarContextMenu.Item(
                 $"Edit “{editable.DisplayName}”…",
@@ -247,7 +250,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     {
         var profile = _profiles.Find(profileId);
         if (profile == null) return;
-        var config = GitIdentityService.BuildLocalConfig(profile);
+        var config = LocalIdentityConfig.For(profile);
         var dispatcher = Dispatcher;
         Task.Run(() =>
         {

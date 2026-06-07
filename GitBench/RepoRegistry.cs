@@ -2,7 +2,7 @@ using ZGF.Observable;
 
 namespace GitBench;
 
-public sealed class RepoRegistry : IRepoRegistry
+public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 {
     private const string DefaultNewGroupName = "New Group";
 

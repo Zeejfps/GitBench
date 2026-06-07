@@ -66,17 +66,16 @@ public class RepoIdentityOverrideTests
         var profiles = new IdentityProfileService(new[] { work, personal },
             Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
 
-        var identity = new GitIdentityService(new FakeReader(), profiles, new FakeBus());
-        identity.SetOverrideLookup(registry.GetIdentityOverrideByPath);
+        var identity = new GitIdentityService(new FakeReader(), profiles, new FakeBus(), registry);
 
         // Auto-detect picks Work (owner-specific rule).
-        Assert.Equal(work.Id, identity.Resolve(repo.Path).ProfileId);
+        Assert.Equal(work.Id, Assert.IsType<Identity.FromProfile>(identity.Resolve(repo.Path)).Profile.Id);
 
         // Switch to Personal via override, mirroring the context-menu action.
         registry.SetIdentityOverride(repo.Id, personal.Id);
         identity.FlushAll();
 
-        Assert.Equal(personal.Id, identity.Resolve(repo.Path).ProfileId);
+        Assert.Equal(personal.Id, Assert.IsType<Identity.FromProfile>(identity.Resolve(repo.Path)).Profile.Id);
     }
 
     [Fact]

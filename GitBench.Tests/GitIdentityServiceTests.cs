@@ -28,11 +28,21 @@ public class GitIdentityServiceTests
         public void Unsubscribe<T>(Action<T> handler) where T : struct { }
     }
 
+    private sealed class FakeOverrides : IIdentityOverrides
+    {
+        public Func<string, Guid?> ByPath = _ => null;
+        public Func<Guid, string?> PathById = _ => null;
+        public Guid? GetIdentityOverrideByPath(string path) => ByPath(path);
+        public string? GetRepoPathById(Guid repoId) => PathById(repoId);
+    }
+
+    private static string TempPath() => Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json");
+
     private static (GitIdentityService svc, FakeReader reader, IdentityProfileService profiles) Build(
         params IdentityProfile[] seed)
     {
         var reader = new FakeReader();
-        var profiles = new IdentityProfileService(seed, Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
+        var profiles = new IdentityProfileService(seed, TempPath());
         var svc = new GitIdentityService(reader, profiles, new FakeBus());
         return (svc, reader, profiles);
     }
@@ -55,8 +65,8 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(IdentitySource.Profile, r.Source);
-        Assert.Equal("dev@series.ai", r.UserEmail);
+        var fp = Assert.IsType<Identity.FromProfile>(r);
+        Assert.Equal("dev@series.ai", fp.Profile.UserEmail);
         Assert.Contains("user.name=Work Dev", r.PrefixArgs);
         Assert.Contains("user.email=dev@series.ai", r.PrefixArgs);
     }
@@ -73,7 +83,7 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(work.Id, r.ProfileId);
+        Assert.Equal(work.Id, Assert.IsType<Identity.FromProfile>(r).Profile.Id);
     }
 
     [Fact]
@@ -86,8 +96,7 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(IdentitySource.Profile, r.Source);
-        Assert.Equal("me@personal.com", r.UserEmail);
+        Assert.Equal("me@personal.com", Assert.IsType<Identity.FromProfile>(r).Profile.UserEmail);
     }
 
     [Fact]
@@ -101,9 +110,9 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(IdentitySource.RepoConfig, r.Source);
+        var fc = Assert.IsType<Identity.FromConfig>(r);
         Assert.Empty(r.PrefixArgs);
-        Assert.Equal("pinned@x.com", r.UserEmail);
+        Assert.Equal("pinned@x.com", fc.UserEmail);
     }
 
     [Fact]
@@ -112,22 +121,24 @@ public class GitIdentityServiceTests
         // A repo with an explicit local user.email, but the user picked a profile from the chip
         // menu. The deliberate override must win over local config (the venus bug).
         var work = Work;
-        var (svc, reader, _) = Build(work);
+        var reader = new FakeReader();
+        var overrides = new FakeOverrides();
+        var profiles = new IdentityProfileService(new[] { work }, TempPath());
+        var svc = new GitIdentityService(reader, profiles, new FakeBus(), overrides);
         var path = "/repos/venus";
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
         reader.Local[path] = ("Zee", "zvasilyev@series.ai");
 
         // Without an override, local config is honored.
-        Assert.Equal(IdentitySource.RepoConfig, svc.Resolve(path).Source);
+        Assert.IsType<Identity.FromConfig>(svc.Resolve(path));
 
         // Pick the profile via override.
-        svc.SetOverrideLookup(_ => work.Id);
+        overrides.ByPath = _ => work.Id;
         svc.FlushAll();
 
         var r = svc.Resolve(path);
-        Assert.Equal(IdentitySource.Profile, r.Source);
-        Assert.Equal(work.Id, r.ProfileId);
+        Assert.Equal(work.Id, Assert.IsType<Identity.FromProfile>(r).Profile.Id);
         Assert.Contains("user.email=dev@series.ai", r.PrefixArgs);
     }
 
@@ -136,7 +147,7 @@ public class GitIdentityServiceTests
     {
         var (svc, _, _) = Build(Work);
         var r = svc.Resolve("/repos/empty");
-        Assert.Equal(IdentitySource.NoRemotes, r.Source);
+        Assert.IsType<Identity.NoRemote>(r);
         Assert.Empty(r.PrefixArgs);
     }
 
@@ -150,7 +161,7 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(IdentitySource.NoMatch, r.Source);
+        Assert.IsType<Identity.Unmatched>(r);
         Assert.Empty(r.PrefixArgs);
     }
 
@@ -198,7 +209,7 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(work.Id, r.ProfileId);
+        Assert.Equal(work.Id, Assert.IsType<Identity.FromProfile>(r).Profile.Id);
     }
 
     [Fact]
@@ -209,11 +220,11 @@ public class GitIdentityServiceTests
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
-        Assert.Equal(IdentitySource.NoMatch, svc.Resolve(path).Source); // cached: no profiles yet
+        Assert.IsType<Identity.Unmatched>(svc.Resolve(path)); // cached: no profiles yet
 
         profiles.Add(Work); // fires Changed -> FlushAll
 
-        Assert.Equal(IdentitySource.Profile, svc.Resolve(path).Source);
+        Assert.IsType<Identity.FromProfile>(svc.Resolve(path));
     }
 
     [Fact]
@@ -229,9 +240,9 @@ public class GitIdentityServiceTests
 
         var r = svc.Resolve(path);
 
-        Assert.Equal(IdentitySource.RepoConfig, r.Source);
+        var fc = Assert.IsType<Identity.FromConfig>(r);
         Assert.Empty(r.PrefixArgs);
-        Assert.Equal("Bot Name", r.UserName);
+        Assert.Equal("Bot Name", fc.UserName);
     }
 
     [Fact]
@@ -244,23 +255,21 @@ public class GitIdentityServiceTests
 
         // Volume not mounted yet: transient, must not be cached.
         reader.Available = false;
-        var first = svc.Resolve(path);
-        Assert.True(first.IsTransient);
+        Assert.IsType<Identity.Pending>(svc.Resolve(path));
 
         // Once available, the next resolve must succeed (the transient result wasn't pinned).
         reader.Available = true;
-        var second = svc.Resolve(path);
-        Assert.Equal(IdentitySource.Profile, second.Source);
+        Assert.IsType<Identity.FromProfile>(svc.Resolve(path));
     }
 
     [Fact]
     public void GitReadFailureIsTransient()
     {
         var reader = new ThrowingReader();
-        var profiles = new IdentityProfileService(new[] { Work }, Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
+        var profiles = new IdentityProfileService(new[] { Work }, TempPath());
         var svc = new GitIdentityService(reader, profiles, new FakeBus());
 
-        Assert.True(svc.Resolve("/repos/locked").IsTransient);
+        Assert.IsType<Identity.Pending>(svc.Resolve("/repos/locked"));
     }
 
     [Fact]
@@ -288,7 +297,7 @@ public class GitIdentityServiceTests
         // The pin path writes every managed key, unsetting the ones the profile doesn't carry, so
         // re-pinning a keyless profile clears a previous profile's leftover SSH/signing config.
         var keyless = new IdentityProfile(Guid.NewGuid(), "Personal", "Me", "me@home.com");
-        var entries = GitIdentityService.BuildLocalConfig(keyless).Entries().ToDictionary(e => e.Key, e => e.Value);
+        var entries = LocalIdentityConfig.For(keyless).Entries().ToDictionary(e => e.Key, e => e.Value);
 
         Assert.Equal("Me", entries["user.name"]);
         Assert.Equal("me@home.com", entries["user.email"]);
@@ -305,7 +314,7 @@ public class GitIdentityServiceTests
         // must also be the config a pin writes.
         var p = new IdentityProfile(Guid.NewGuid(), "Work", "Work Dev", "dev@series.ai",
             SigningKey: "id_work.pub", SigningKeyFormat: "ssh");
-        var entries = GitIdentityService.BuildLocalConfig(p).Entries().ToDictionary(e => e.Key, e => e.Value);
+        var entries = LocalIdentityConfig.For(p).Entries().ToDictionary(e => e.Key, e => e.Value);
 
         Assert.Equal("id_work.pub", entries["user.signingKey"]);
         Assert.Equal("true", entries["commit.gpgsign"]);
@@ -318,30 +327,29 @@ public class GitIdentityServiceTests
         // A commit/fetch in one repo must not dump every repo's cached identity (the re-resolution
         // storm) — only the named repo's memo entry is dropped.
         var reader = new FakeReader();
-        var profiles = new IdentityProfileService(new[] { Work }, Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
+        var profiles = new IdentityProfileService(new[] { Work }, TempPath());
         var bus = new MessageBus();
-        var svc = new GitIdentityService(reader, profiles, bus);
-
+        var repoA = Guid.NewGuid();
         var pathA = "/repos/a";
         var pathB = "/repos/b";
+        var overrides = new FakeOverrides { PathById = id => id == repoA ? pathA : null };
+        var svc = new GitIdentityService(reader, profiles, bus, overrides);
+
         foreach (var p in new[] { pathA, pathB })
         {
             reader.Remotes[p] = new() { "origin" };
             reader.Urls[$"{p}|origin"] = "git@github.com:series-ai/app.git";
         }
 
-        var repoA = Guid.NewGuid();
-        svc.SetRepoPathLookup(id => id == repoA ? pathA : null);
-
         svc.Resolve(pathA);
         svc.Resolve(pathB);
-        Assert.True(svc.TryGetCached(pathA, out _));
-        Assert.True(svc.TryGetCached(pathB, out _));
+        Assert.NotNull(svc.Cached(pathA));
+        Assert.NotNull(svc.Cached(pathB));
 
         bus.Broadcast(new RefsChangedMessage(repoA));
 
-        Assert.False(svc.TryGetCached(pathA, out _)); // flushed: its ref changed
-        Assert.True(svc.TryGetCached(pathB, out _));   // untouched: a different repo changed
+        Assert.Null(svc.Cached(pathA));    // flushed: its ref changed
+        Assert.NotNull(svc.Cached(pathB)); // untouched: a different repo changed
     }
 
     private sealed class ThrowingReader : IGitRawConfigReader
