@@ -18,6 +18,14 @@ internal sealed class GitProcessRunner
         _activity = activity;
     }
 
+    // Identity injection seam. When set, every invocation with inject:true gets the resolver's
+    // `-c key=value` args (user.name/email, core.sshCommand, signing) PREPENDED before the
+    // subcommand, so the right Git identity is applied per-repo without ever writing the repo's
+    // config. The resolver's OWN git reads (remote URL, local config) must pass inject:false so
+    // it can't recurse back into itself. Resolution is cheap (memoized in GitIdentityService);
+    // the resolver never blocks on git here after the first read per repo.
+    public Func<string, IReadOnlyList<string>>? IdentityPrefixResolver { get; set; }
+
     // Direct = the git executable straight (reads: fast, no shell, no auth needed).
     // Shell  = on macOS, the user's interactive login shell sources their rc files first so
     //          ssh-agent / credential helpers / Homebrew PATH are visible (mutations that may
@@ -55,10 +63,15 @@ internal sealed class GitProcessRunner
         IReadOnlyList<string> args,
         GitLaunch launch = GitLaunch.Shell,
         string? stdin = null,
-        Action<ProcessStartInfo>? configure = null)
+        Action<ProcessStartInfo>? configure = null,
+        bool inject = true)
     {
+        // Resolve identity prefix BEFORE opening the activity scope: the resolver's own git
+        // reads (inject:false) open their own nested scopes, and we want those cleanly separate
+        // from this op's scope.
+        var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
-        var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args) : BuildShellPsi(args, workingDir);
+        var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args, prefix) : BuildShellPsi(args, workingDir, prefix);
         if (stdin != null) psi.RedirectStandardInput = true;
         configure?.Invoke(psi);
 
@@ -84,10 +97,12 @@ internal sealed class GitProcessRunner
     public (int ExitCode, string Captured, bool Started) RunStreaming(
         string workingDir,
         IReadOnlyList<string> args,
-        Action<string>? onLine)
+        Action<string>? onLine,
+        bool inject = true)
     {
+        var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
-        var psi = BuildShellPsi(args, workingDir);
+        var psi = BuildShellPsi(args, workingDir, prefix);
 
         using var proc = Process.Start(psi);
         if (proc == null) return (-1, string.Empty, false);
@@ -112,7 +127,7 @@ internal sealed class GitProcessRunner
 
     // ────────── process start info ──────────
 
-    private static ProcessStartInfo BuildDirectPsi(string workingDir, IReadOnlyList<string> args)
+    private static ProcessStartInfo BuildDirectPsi(string workingDir, IReadOnlyList<string> args, IReadOnlyList<string>? prefix = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -124,6 +139,8 @@ internal sealed class GitProcessRunner
             CreateNoWindow = true,
         };
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        // Identity `-c key=value` overrides must come before the subcommand.
+        if (prefix != null) foreach (var a in prefix) psi.ArgumentList.Add(a);
         foreach (var a in args) psi.ArgumentList.Add(a);
         return psi;
     }
@@ -135,7 +152,7 @@ internal sealed class GitProcessRunner
     // git through the user's shell with `-l -i` so BOTH login files (.zprofile, where PATH /
     // path_helper live) and interactive files (.zshrc, where ssh-agent usually lives) are
     // sourced. Each user-typed arg is shell-quoted so metacharacters can't break or inject.
-    private static ProcessStartInfo BuildShellPsi(IReadOnlyList<string> gitArgs, string workingDir)
+    private static ProcessStartInfo BuildShellPsi(IReadOnlyList<string> gitArgs, string workingDir, IReadOnlyList<string>? prefix = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -156,6 +173,15 @@ internal sealed class GitProcessRunner
             psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add("-c");
             var sb = new StringBuilder("GIT_TERMINAL_PROMPT=0 git");
+            // Identity `-c key=value` overrides must come before the subcommand. Each is a single
+            // arg (e.g. the whole `core.sshCommand=ssh -i ... -o IdentitiesOnly=yes`), so quoting
+            // each independently keeps its embedded spaces inside one shell word.
+            if (prefix != null)
+                foreach (var a in prefix)
+                {
+                    sb.Append(' ');
+                    sb.Append(SingleQuoteShellArg(a));
+                }
             foreach (var a in gitArgs)
             {
                 sb.Append(' ');
@@ -166,6 +192,7 @@ internal sealed class GitProcessRunner
         else
         {
             psi.FileName = "git";
+            if (prefix != null) foreach (var a in prefix) psi.ArgumentList.Add(a);
             foreach (var a in gitArgs) psi.ArgumentList.Add(a);
         }
 

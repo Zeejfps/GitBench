@@ -22,8 +22,15 @@ var prefsPath = Path.Combine(
 using var preferences = new PreferencesService(PreferencesStore.Load(prefsPath), prefsPath);
 var initialPrefs = preferences.Current;
 
+var profilesPath = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+    "GitBench",
+    "identity-profiles.json");
+using var identityProfiles = new IdentityProfileService(IdentityProfileStore.Load(profilesPath), profilesPath);
+
 var context = new Context();
 context.AddService(preferences);
+context.AddService(identityProfiles);
 var messageBus = new MessageBus();
 context.AddService<IMessageBus>(messageBus);
 context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
@@ -64,7 +71,13 @@ var registry = new RepoRegistry(initialState, statePath);
 context.AddService<IRepoRegistry>(registry);
 var repoActivity = new RepoActivityTracker();
 context.AddService<IRepoActivityTracker>(repoActivity);
-context.AddService<IGitService>(new GitService(repoActivity));
+var gitService = new GitService(repoActivity);
+context.AddService<IGitService>(gitService);
+// Build the identity resolver (it reads config through gitService) then attach it back, so every
+// git invocation gets the right per-repo name/email/SSH key injected without touching repo config.
+var identityService = new GitIdentityService(gitService, identityProfiles, messageBus, registry);
+context.AddService(identityService);
+gitService.AttachIdentityResolver(identityService);
 context.AddService<IDragController>(new DragController(registry));
 context.AddService(new LocalChangesSelectionStore());
 

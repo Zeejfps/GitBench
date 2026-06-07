@@ -2,25 +2,38 @@ using ZGF.Observable;
 
 namespace GitBench;
 
-public sealed class RepoRegistry : IRepoRegistry
+public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 {
     private const string DefaultNewGroupName = "New Group";
-
-    private static readonly StringComparison PathComparison =
-        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     private readonly string _statePath;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
     private readonly Dictionary<Guid, bool> _worktreesExpanded;
+    private readonly Dictionary<Guid, Guid> _identityOverride;
+
+    // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
+    // override, and repo-id→path for targeted memo flushing). Rebuilt on the UI thread (in Save)
+    // only when the inputs actually change — _overrideMapDirty gates the rebuild so the ~18 Save()
+    // sites that touch neither Repos nor overrides don't pay an O(repos) rebuild + allocation.
+    private volatile IReadOnlyDictionary<string, Guid> _overrideByPath =
+        new Dictionary<string, Guid>(PathKey.Comparer);
+    private volatile IReadOnlyDictionary<Guid, string> _pathById = new Dictionary<Guid, string>();
+    private bool _overrideMapDirty;
 
     public RepoRegistry(RepoStateStore.State initial, string statePath)
     {
         _statePath = statePath;
         _branchesUi = new Dictionary<Guid, BranchesUiState>(initial.BranchesUi);
         _worktreesExpanded = new Dictionary<Guid, bool>(initial.WorktreesExpanded);
+        _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
 
         Repos = new ObservableList<Repo>();
         foreach (var r in initial.Repos) Repos.Add(r);
+
+        RebuildLookups();
+        // Any add/remove/replace of a repo row can change a path or parent link the lookups depend
+        // on, so mark them dirty; the next Save rebuilds. (Subscribed after the initial seed above.)
+        Repos.Changed += _ => _overrideMapDirty = true;
 
         Groups = new ObservableList<Group>();
         foreach (var g in initial.Groups) Groups.Add(g);
@@ -49,7 +62,7 @@ public sealed class RepoRegistry : IRepoRegistry
         if (!RepoStateStore.IsGitRepo(normalized))
             return;
 
-        var existing = Repos.FirstOrDefault(r => string.Equals(r.Path, normalized, PathComparison));
+        var existing = Repos.FirstOrDefault(r => PathKey.Comparer.Equals(r.Path, normalized));
         if (existing is not null)
         {
             SetActive(existing.Id);
@@ -313,6 +326,58 @@ public sealed class RepoRegistry : IRepoRegistry
         Save();
     }
 
+    public Guid? GetIdentityOverride(Guid repoId)
+        => _identityOverride.TryGetValue(repoId, out var id) ? id : null;
+
+    public void SetIdentityOverride(Guid repoId, Guid? profileId)
+    {
+        if (profileId is { } id) _identityOverride[repoId] = id;
+        else _identityOverride.Remove(repoId);
+        _overrideMapDirty = true;
+        Save();
+    }
+
+    // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so we serve an
+    // O(1) read from the precomputed map (built on the UI thread). Keys use PathKey, the same
+    // normalization the resolver applies to its memo key, so the two can't drift.
+    public Guid? GetIdentityOverrideByPath(string path)
+        => _overrideByPath.TryGetValue(PathKey.Normalize(path), out var id) ? id : null;
+
+    // Repo-id → working-dir path, served lock-free for the resolver's targeted RefsChanged flush.
+    public string? GetRepoPathById(Guid repoId)
+        => _pathById.TryGetValue(repoId, out var path) ? path : null;
+
+    // The override that applies to a repo: its own pin, else the nearest pinned ancestor's. Walks
+    // the whole parent chain so a submodule-of-a-submodule still inherits a top-level pin; a child
+    // can carry its own pin to opt out. The depth guard stops a cyclic ParentRepoId looping forever.
+    private Guid? EffectiveOverride(Repo r, IReadOnlyDictionary<Guid, Repo> byId)
+    {
+        var cur = r;
+        for (var depth = 0; cur != null && depth < 64; depth++)
+        {
+            if (_identityOverride.TryGetValue(cur.Id, out var id)) return id;
+            cur = cur.ParentRepoId is { } pid && byId.TryGetValue(pid, out var parent) ? parent : null;
+        }
+        return null;
+    }
+
+    private void RebuildLookups()
+    {
+        var byId = new Dictionary<Guid, Repo>();
+        foreach (var r in Repos) byId[r.Id] = r;
+
+        var overrideMap = new Dictionary<string, Guid>(PathKey.Comparer);
+        var pathById = new Dictionary<Guid, string>();
+        foreach (var r in Repos)
+        {
+            pathById[r.Id] = r.Path;
+            if (EffectiveOverride(r, byId) is { } id)
+                overrideMap[PathKey.Normalize(r.Path)] = id;
+        }
+        _overrideByPath = overrideMap;
+        _pathById = pathById;
+    }
+
     // Records the primary's HEAD branch (from `git worktree list`) so the BranchesView
     // can mark it as "taken" when active is a sibling worktree.
     public void SetPrimaryBranch(Guid primaryId, string? branch)
@@ -340,10 +405,10 @@ public sealed class RepoRegistry : IRepoRegistry
 
         var desiredByPath = new Dictionary<string, WorktreeDescriptor>(
             desired.ToDictionary(d => Path.GetFullPath(d.Path), d => d),
-            PathComparison == StringComparison.OrdinalIgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+            PathKey.Comparer);
 
         var changed = false;
-        var seenPaths = new HashSet<string>(PathComparison == StringComparison.OrdinalIgnoreCase ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var seenPaths = new HashSet<string>(PathKey.Comparer);
 
         // Update or keep existing worktree rows.
         for (var i = 0; i < Repos.Count; i++)
@@ -399,11 +464,7 @@ public sealed class RepoRegistry : IRepoRegistry
         var host = Repos.FirstOrDefault(r => r.Id == hostId);
         if (host is null || (!host.IsPrimary && !host.IsWorktree)) return;
 
-        var pathComparer = PathComparison == StringComparison.OrdinalIgnoreCase
-            ? StringComparer.OrdinalIgnoreCase
-            : StringComparer.Ordinal;
-
-        if (ReconcileSubmoduleLevel(hostId, roots, pathComparer))
+        if (ReconcileSubmoduleLevel(hostId, roots, PathKey.Comparer))
         {
             WorktreesChanged.Value++;
             Save();
@@ -512,8 +573,17 @@ public sealed class RepoRegistry : IRepoRegistry
         return removedAny;
     }
 
-    private void Save() =>
-        RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded);
+    private void Save()
+    {
+        // Only rebuild the resolver's lock-free lookups when a repo row or an override actually
+        // changed — most Save() callers (active repo, group edits, branch UI) don't touch either.
+        if (_overrideMapDirty)
+        {
+            RebuildLookups();
+            _overrideMapDirty = false;
+        }
+        RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
+    }
 }
 
 public sealed record WorktreeDescriptor(string Path, string? DisplayName, string? Branch = null);

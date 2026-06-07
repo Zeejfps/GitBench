@@ -16,6 +16,19 @@ internal enum RemoteUrlScheme
 /// </summary>
 internal static class RemoteUrl
 {
+    // Host + owner (the first path segment — the org/user) of a remote URL, used to match a
+    // repo to an identity profile. Returns false for URLs we can't parse into host + path.
+    public static bool TryGetHostAndOwner(string url, out string host, out string? owner)
+    {
+        host = string.Empty;
+        owner = null;
+        if (!TryParse(url.Trim(), out var h, out var path, out _)) return false;
+        host = h;
+        var segs = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segs.Length > 0) owner = segs[0];
+        return true;
+    }
+
     public static RemoteUrlScheme Detect(string url)
     {
         var u = url.Trim();

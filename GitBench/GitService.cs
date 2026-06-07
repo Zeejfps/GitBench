@@ -3,7 +3,22 @@ using LibGit2Sharp;
 
 namespace GitBench;
 
-public sealed class GitService : IGitService
+// Non-injecting config reads the identity resolver needs. Separate from IGitService so the
+// resolver depends only on these (and so GitService can hand itself to GitIdentityService
+// without a public surface change).
+public interface IGitRawConfigReader
+{
+    // Whether the path is a readable git repo right now. The resolver checks this before spawning
+    // any git, so an unmounted/deleted repo resolves as transient instead of being cached wrong.
+    bool IsRepoAvailable(string repoPath);
+    // Throws on a genuine git failure (e.g. held index.lock) so the resolver can treat it as
+    // transient; an empty list means the repo simply has no remotes.
+    IReadOnlyList<string> GetRemoteNamesRaw(string repoPath);
+    string? GetRemoteUrlRaw(string repoPath, string remoteName);
+    (string? Name, string? Email) GetLocalIdentityRaw(string repoPath);
+}
+
+public sealed class GitService : IGitService, IGitRawConfigReader
 {
     // Every git write touches .git/index.lock; two writes against the same repo at the same
     // time (e.g. a checkout from the sidebar racing a stage from the local-changes panel, or
@@ -1363,15 +1378,7 @@ public sealed class GitService : IGitService
         try
         {
             if (!IsGitRepo(repo.Path)) return Array.Empty<string>();
-            var output = RunGit(repo.Path, out _, "remote");
-            if (string.IsNullOrEmpty(output)) return Array.Empty<string>();
-            var list = new List<string>();
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var name = line.Trim();
-                if (name.Length > 0) list.Add(name);
-            }
-            return list;
+            return ReadRemoteNames(repo.Path, inject: true, out _);
         }
         catch
         {
@@ -1384,15 +1391,36 @@ public sealed class GitService : IGitService
         try
         {
             if (!IsGitRepo(repo.Path)) return null;
-            var output = RunGit(repo.Path, out var error, "remote", "get-url", remoteName);
-            if (error != null) return null;
-            var url = output.Trim();
-            return url.Length == 0 ? null : url;
+            return ReadRemoteUrl(repo.Path, remoteName, inject: true, out _);
         }
         catch
         {
             return null;
         }
+    }
+
+    // Shared core for both the UI-facing remote reads (inject:true, errors swallowed) and the
+    // resolver's raw reads (inject:false, errors surfaced). `error` reports a git failure distinct
+    // from a successful read that found no remotes.
+    private IReadOnlyList<string> ReadRemoteNames(string repoPath, bool inject, out string? error)
+    {
+        var output = RunGitInternal(repoPath, allowExitCode1: false, out error, new[] { "remote" }, inject: inject);
+        if (error != null || string.IsNullOrEmpty(output)) return Array.Empty<string>();
+        var list = new List<string>();
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = line.Trim();
+            if (name.Length > 0) list.Add(name);
+        }
+        return list;
+    }
+
+    private string? ReadRemoteUrl(string repoPath, string remoteName, bool inject, out string? error)
+    {
+        var output = RunGitInternal(repoPath, allowExitCode1: false, out error, new[] { "remote", "get-url", remoteName }, inject: inject);
+        if (error != null || output == null) return null;
+        var url = output.Trim();
+        return url.Length == 0 ? null : url;
     }
 
     public EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url)
@@ -2659,6 +2687,48 @@ public sealed class GitService : IGitService
         }
     }
 
+    // Writes an identity into the repo's --local config ("pin to repo"). After this the resolver
+    // sees an explicit local user.email and backs off injection, so GUI and terminal commits use
+    // the same author. Writes the SAME set of keys injection would apply (SSH command, signing),
+    // and UNSETS the ones this profile doesn't use — so re-pinning a leaner profile can't leave a
+    // previous profile's SSH key or signing config behind.
+    public SetLocalIdentityOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return new SetLocalIdentityOutcome(false, "Not a git repository.");
+            using var _ = LockRepo(repo.Path);
+
+            foreach (var (key, value) in config.Entries())
+            {
+                if (value != null)
+                {
+                    var (ok, err) = RunMutation(repo.Path, new[] { "config", "--local", key, value });
+                    if (!ok) return new SetLocalIdentityOutcome(false, err);
+                }
+                else
+                {
+                    var (ok, err) = UnsetLocalConfig(repo.Path, key);
+                    if (!ok) return new SetLocalIdentityOutcome(false, err);
+                }
+            }
+            return new SetLocalIdentityOutcome(true, null);
+        }
+        catch (Exception ex)
+        {
+            return new SetLocalIdentityOutcome(false, ex.Message);
+        }
+    }
+
+    // `git config --local --unset` exits 5 when the key was already absent — that's the desired
+    // end state, not a failure, so it's treated as success.
+    private (bool Ok, string? Error) UnsetLocalConfig(string repoPath, string key)
+    {
+        var result = _runner.Run(repoPath, new[] { "config", "--local", "--unset", key });
+        if (result.Ok || result.ExitCode == 5) return (true, null);
+        return (false, result.BlockError($"git config --local --unset {key}"));
+    }
+
     // Small shared helper for "spawn git, return (ok, errorOrNull)". Used where multiple
     // successive mutations need to be sequenced inside a single repo lock.
     private (bool Ok, string? Error) RunMutation(string repoPath, IReadOnlyList<string> args)
@@ -2806,14 +2876,59 @@ public sealed class GitService : IGitService
     private string? RunGitDiff(string workingDir, out string? error, params string[] args)
         => RunGitInternal(workingDir, allowExitCode1: true, out error, args);
 
-    private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args)
+    private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args, bool inject = true)
     {
         error = null;
-        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct);
+        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct, inject: inject);
         if (result.Ok || (allowExitCode1 && result.ExitCode == 1)) return result.Stdout;
         error = result.FirstLineError("git");
         return null;
     }
+
+    // ────────── raw (non-injecting) config reads for GitIdentityService ──────────
+    // These MUST pass inject:false: the identity resolver calls them, and the runner would
+    // otherwise re-enter the resolver (infinite recursion) on every config read.
+
+    bool IGitRawConfigReader.IsRepoAvailable(string repoPath) => IsGitRepo(repoPath);
+
+    IReadOnlyList<string> IGitRawConfigReader.GetRemoteNamesRaw(string repoPath)
+    {
+        // Surface a git failure (e.g. held lock) as an exception so the resolver treats it as
+        // transient rather than memoizing "no remotes". The repo-available check is done once by
+        // the resolver before any of these reads, so it isn't repeated here.
+        var names = ReadRemoteNames(repoPath, inject: false, out var error);
+        if (error != null) throw new IOException($"git remote: {error}");
+        return names;
+    }
+
+    string? IGitRawConfigReader.GetRemoteUrlRaw(string repoPath, string remoteName)
+    {
+        // Surface a git failure as an exception so the resolver treats it as transient instead of
+        // memoizing "no match" — mirroring GetRemoteNamesRaw. A transient `remote get-url` failure
+        // would otherwise pin the repo to the global identity until the next flush.
+        var url = ReadRemoteUrl(repoPath, remoteName, inject: false, out var error);
+        if (error != null) throw new IOException($"git remote get-url: {error}");
+        return url;
+    }
+
+    (string? Name, string? Email) IGitRawConfigReader.GetLocalIdentityRaw(string repoPath)
+    {
+        // --local --get exits 1 when the key is unset; treat that as "not configured". Any OTHER
+        // git failure (held lock, etc.) is surfaced as an exception so the resolver treats it as
+        // transient — otherwise a momentary read failure would look like "no local identity" and
+        // let an auto-matched profile override a deliberately pinned --local identity, then cache it.
+        var name = RunGitInternal(repoPath, allowExitCode1: true, out var nameErr, new[] { "config", "--local", "--get", "user.name" }, inject: false)?.Trim();
+        if (nameErr != null) throw new IOException($"git config user.name: {nameErr}");
+        var email = RunGitInternal(repoPath, allowExitCode1: true, out var emailErr, new[] { "config", "--local", "--get", "user.email" }, inject: false)?.Trim();
+        if (emailErr != null) throw new IOException($"git config user.email: {emailErr}");
+        return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
+    }
+
+    // Sets the resolver that injects per-repo identity into every git invocation. Called once at
+    // startup after GitIdentityService is built (which itself needs this GitService for raw reads,
+    // hence the post-construction wiring rather than a constructor arg).
+    public void AttachIdentityResolver(GitIdentityService identity)
+        => _runner.IdentityPrefixResolver = identity.ResolvePrefixArgs;
 
     private bool IsTracked(string workingDir, string path)
     {

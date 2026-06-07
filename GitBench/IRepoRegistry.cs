@@ -33,6 +33,10 @@ public interface IRepoRegistry
     // worktree and submodule children. Naming kept for backward compatibility.
     bool IsWorktreeExpanded(Guid primaryId);
     void SetWorktreeExpanded(Guid primaryId, bool expanded);
+    // Manual per-repo identity override (a profile id) that takes precedence over auto-matching.
+    Guid? GetIdentityOverride(Guid repoId);
+    void SetIdentityOverride(Guid repoId, Guid? profileId);
+    Guid? GetIdentityOverrideByPath(string path);
     void ReplaceWorktreesFor(Guid primaryId, IReadOnlyList<WorktreeDescriptor> desired);
     // Reconciles the whole submodule tree under a primary in one pass: each node carries its
     // own nested children, so submodules-of-submodules are added/updated/removed recursively.
