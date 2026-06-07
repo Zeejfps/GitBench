@@ -20,7 +20,7 @@ public interface IGitService
     PushOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
     IReadOnlyList<string> GetRemoteNames(Repo repo);
     string? GetRemoteUrl(Repo repo, string remoteName);
-    SetLocalIdentityOutcome PinLocalIdentity(Repo repo, string name, string email, string? sshCommand);
+    SetLocalIdentityOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config);
     EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url);
     EditRemoteOutcome AddRemote(Repo repo, string name, string url);
     PullOutcome Pull(Repo repo, PullStrategy? strategy = null);

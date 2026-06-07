@@ -336,22 +336,28 @@ public sealed class RepoRegistry : IRepoRegistry
     public Guid? GetIdentityOverrideByPath(string path)
         => _overrideByPath.TryGetValue(PathKey.Normalize(path), out var id) ? id : null;
 
-    // The override that applies to a repo: its own pin, else its primary's pin (a worktree inherits
-    // the identity deliberately chosen on its parent — auto-match already gives them the same
-    // profile via the shared remote, so the manual pick should follow too). A worktree can still
-    // carry its own pin to opt out.
-    private Guid? EffectiveOverride(Repo r)
+    // The override that applies to a repo: its own pin, else the nearest pinned ancestor's. Walks
+    // the whole parent chain so a submodule-of-a-submodule still inherits a top-level pin; a child
+    // can carry its own pin to opt out. The depth guard stops a cyclic ParentRepoId looping forever.
+    private Guid? EffectiveOverride(Repo r, IReadOnlyDictionary<Guid, Repo> byId)
     {
-        if (_identityOverride.TryGetValue(r.Id, out var own)) return own;
-        if (r.ParentRepoId is { } pid && _identityOverride.TryGetValue(pid, out var parent)) return parent;
+        var cur = r;
+        for (var depth = 0; cur != null && depth < 64; depth++)
+        {
+            if (_identityOverride.TryGetValue(cur.Id, out var id)) return id;
+            cur = cur.ParentRepoId is { } pid && byId.TryGetValue(pid, out var parent) ? parent : null;
+        }
         return null;
     }
 
     private void RebuildOverrideMap()
     {
+        var byId = new Dictionary<Guid, Repo>();
+        foreach (var r in Repos) byId[r.Id] = r;
+
         var map = new Dictionary<string, Guid>(PathKey.Comparer);
         foreach (var r in Repos)
-            if (EffectiveOverride(r) is { } id)
+            if (EffectiveOverride(r, byId) is { } id)
                 map[PathKey.Normalize(r.Path)] = id;
         _overrideByPath = map;
     }

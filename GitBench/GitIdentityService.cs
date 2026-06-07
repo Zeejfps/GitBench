@@ -167,32 +167,27 @@ public sealed class GitIdentityService
         return hostOnly;
     }
 
+    // Single source of truth for a profile's effective config, shared by injection (BuildPrefixArgs)
+    // and "pin to repo" (GitService.PinLocalIdentity) so the two can't diverge on SSH/signing.
+    public static LocalIdentityConfig BuildLocalConfig(IdentityProfile p)
+    {
+        var signingKey = string.IsNullOrWhiteSpace(p.SigningKey) ? null : p.SigningKey.Trim();
+        string? format = null;
+        if (signingKey != null)
+            // The key string alone can't reveal ssh vs openpgp (a bare filename/fingerprint has no
+            // path/prefix), so prefer the profile's explicit format and only guess as a fallback.
+            format = string.IsNullOrWhiteSpace(p.SigningKeyFormat)
+                ? (LooksLikeSshSigningKey(signingKey) ? "ssh" : null)
+                : p.SigningKeyFormat.Trim();
+
+        return new LocalIdentityConfig(p.UserName, p.UserEmail, BuildSshCommandValue(p), signingKey, format);
+    }
+
     private static IReadOnlyList<string> BuildPrefixArgs(IdentityProfile p)
     {
-        var args = new List<string>(8);
-        void Add(string kv) { args.Add("-c"); args.Add(kv); }
-
-        Add($"user.name={p.UserName}");
-        Add($"user.email={p.UserEmail}");
-
-        if (BuildSshCommandValue(p) is { } ssh)
-            Add($"core.sshCommand={ssh}");
-
-        // Only enable signing when a key is set — turning on gpgsign without a configured signer
-        // would make every commit fail.
-        if (!string.IsNullOrWhiteSpace(p.SigningKey))
-        {
-            var sk = p.SigningKey.Trim();
-            Add($"user.signingKey={sk}");
-            Add("commit.gpgsign=true");
-            // Prefer the profile's explicit format; the key string alone can't be trusted to reveal
-            // ssh vs openpgp (a bare filename or fingerprint has no path/prefix to detect).
-            var fmt = string.IsNullOrWhiteSpace(p.SigningKeyFormat)
-                ? (LooksLikeSshSigningKey(sk) ? "ssh" : null)
-                : p.SigningKeyFormat.Trim();
-            if (!string.IsNullOrEmpty(fmt)) Add($"gpg.format={fmt}");
-        }
-
+        var args = new List<string>(12);
+        foreach (var (key, value) in BuildLocalConfig(p).Entries())
+            if (value != null) { args.Add("-c"); args.Add($"{key}={value}"); }
         return args;
     }
 
@@ -221,5 +216,26 @@ public sealed class GitIdentityService
             return home + path[1..];
         }
         return path;
+    }
+}
+
+// A profile's effective Git identity expressed as the --local config keys this feature owns.
+public sealed record LocalIdentityConfig(
+    string UserName,
+    string UserEmail,
+    string? SshCommand,
+    string? SigningKey,
+    string? SigningKeyFormat)
+{
+    // Every --local key this feature manages, paired with the value to set — or null to UNSET, so
+    // pin can clear a previous profile's leftover SSH/signing config instead of leaving it behind.
+    public IEnumerable<(string Key, string? Value)> Entries()
+    {
+        yield return ("user.name", UserName);
+        yield return ("user.email", UserEmail);
+        yield return ("core.sshCommand", SshCommand);
+        yield return ("user.signingKey", SigningKey);
+        yield return ("commit.gpgsign", SigningKey != null ? "true" : null);
+        yield return ("gpg.format", SigningKey != null ? SigningKeyFormat : null);
     }
 }

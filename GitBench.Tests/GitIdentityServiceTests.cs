@@ -282,6 +282,36 @@ public class GitIdentityServiceTests
         Assert.Contains("gpg.format=ssh", r.PrefixArgs);
     }
 
+    [Fact]
+    public void LocalConfigUnsetsKeysAKeylessProfileDoesNotUse()
+    {
+        // The pin path writes every managed key, unsetting the ones the profile doesn't carry, so
+        // re-pinning a keyless profile clears a previous profile's leftover SSH/signing config.
+        var keyless = new IdentityProfile(Guid.NewGuid(), "Personal", "Me", "me@home.com");
+        var entries = GitIdentityService.BuildLocalConfig(keyless).Entries().ToDictionary(e => e.Key, e => e.Value);
+
+        Assert.Equal("Me", entries["user.name"]);
+        Assert.Equal("me@home.com", entries["user.email"]);
+        Assert.Null(entries["core.sshCommand"]);
+        Assert.Null(entries["user.signingKey"]);
+        Assert.Null(entries["commit.gpgsign"]);
+        Assert.Null(entries["gpg.format"]);
+    }
+
+    [Fact]
+    public void LocalConfigAndInjectionAgreeOnSigning()
+    {
+        // Injection and "pin to repo" must not diverge: the same signing config that gets injected
+        // must also be the config a pin writes.
+        var p = new IdentityProfile(Guid.NewGuid(), "Work", "Work Dev", "dev@series.ai",
+            SigningKey: "id_work.pub", SigningKeyFormat: "ssh");
+        var entries = GitIdentityService.BuildLocalConfig(p).Entries().ToDictionary(e => e.Key, e => e.Value);
+
+        Assert.Equal("id_work.pub", entries["user.signingKey"]);
+        Assert.Equal("true", entries["commit.gpgsign"]);
+        Assert.Equal("ssh", entries["gpg.format"]);
+    }
+
     private sealed class ThrowingReader : IGitRawConfigReader
     {
         public bool IsRepoAvailable(string repoPath) => true;

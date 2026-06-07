@@ -21,6 +21,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
     private readonly SpinnerAnimation _updateSpinner;
+    private readonly GenerationGuard _identityLane;
     private CancellationTokenSource? _feedbackCts;
 
     public IReadable<bool> HasActiveRepo { get; }
@@ -63,6 +64,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _themeMode = themeMode;
         _updateService = updateService;
         _updateSpinner = new SpinnerAnimation(dispatcher);
+        _identityLane = CreateLane();
 
         HasActiveRepo = Slice(s => s.HasActiveRepo);
         RepoName = Slice(s => s.RepoName);
@@ -160,21 +162,17 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     }
 
     // First resolution for a repo runs a couple of git reads, so resolve off the UI thread and
-    // post the label back. Guard against a stale result by confirming the repo is still active.
+    // post the label back. The identity lane drops a stale result when the active repo switches,
+    // a newer resolve starts, or the VM is disposed — so out-of-order completions can't clobber
+    // the current label.
     private void ResolveIdentity(string repoPath)
-    {
-        var dispatcher = Dispatcher;
-        Task.Run(() =>
-        {
-            var resolved = _identity.Resolve(repoPath);
-            var (text, warn) = LabelFor(resolved);
-            dispatcher.Post(() =>
+        => RunBackground<(string? Text, bool Warning)>(
+            () => (LabelFor(_identity.Resolve(repoPath)), (string?)null),
+            (label, _) =>
             {
-                if (_registry.Active.Value?.Path != repoPath) return;
-                Update(s => s with { IdentityText = text, IdentityIsWarning = warn });
-            });
-        });
-    }
+                if (label is { } l) Update(s => s with { IdentityText = l.Text, IdentityIsWarning = l.Warning });
+            },
+            _identityLane);
 
     private static (string? Text, bool Warning) LabelFor(ResolvedIdentity r) => r.Source switch
     {
@@ -242,15 +240,18 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _identity.FlushAll();
     }
 
+    // A pin is a deliberate mutation on a specific repo, so its continuation must always apply
+    // (clearing the override even if the user has since switched repos) — hence a plain post
+    // rather than the lane-guarded ResolveIdentity path, which is meant to drop stale labels.
     private void Pin(Repo repo, Guid profileId)
     {
         var profile = _profiles.Find(profileId);
         if (profile == null) return;
-        var ssh = GitIdentityService.BuildSshCommandValue(profile);
+        var config = GitIdentityService.BuildLocalConfig(profile);
         var dispatcher = Dispatcher;
         Task.Run(() =>
         {
-            var outcome = _git.PinLocalIdentity(repo, profile.UserName, profile.UserEmail, ssh);
+            var outcome = _git.PinLocalIdentity(repo, config);
             dispatcher.Post(() =>
             {
                 // The pin wrote --local config, so clear the manual override and let the resolver

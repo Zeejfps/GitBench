@@ -43,9 +43,15 @@ internal sealed class IdentityProfileEditDialogViewModel : IDisposable
             {
                 var host = MatchHost.Value.Trim();
                 var owner = MatchOwner.Value.Trim();
-                var match = host.Length > 0
-                    ? new List<IdentityMatchRule> { new(host, owner.Length > 0 ? owner : null) }
-                    : new List<IdentityMatchRule>();
+                // The form edits only the first match rule. Preserve any additional rules a power
+                // user added by hand in identity-profiles.json, so saving an unrelated field
+                // (e.g. the email) doesn't silently destroy them.
+                var match = new List<IdentityMatchRule>();
+                if (host.Length > 0)
+                    match.Add(new IdentityMatchRule(host, owner.Length > 0 ? owner : null));
+                if (existing?.Match is { Count: > 1 } existingRules)
+                    for (var i = 1; i < existingRules.Count; i++)
+                        match.Add(existingRules[i]);
 
                 var sshKey = SshKeyPath.Value.Trim();
                 var profile = new IdentityProfile(
