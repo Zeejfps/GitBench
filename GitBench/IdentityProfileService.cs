@@ -17,6 +17,12 @@ public sealed class IdentityProfileService : IDisposable
 
     public ObservableList<IdentityProfile> Profiles { get; } = new();
 
+    // Immutable copy of Profiles, rebuilt on the UI thread after every mutation. The resolver reads
+    // it from background git threads and Flush() serializes it from the timer thread — so the live
+    // ObservableList (not thread-safe) is only ever touched on the UI thread.
+    private volatile IReadOnlyList<IdentityProfile> _snapshot = Array.Empty<IdentityProfile>();
+    public IReadOnlyList<IdentityProfile> Snapshot => _snapshot;
+
     // Raised after any add/update/remove (after the list is mutated). No payload — listeners
     // re-read Profiles. Used to flush GitIdentityService's resolution memo.
     public event Action? Changed;
@@ -25,6 +31,7 @@ public sealed class IdentityProfileService : IDisposable
     {
         _path = path;
         foreach (var p in initial) Profiles.Add(p);
+        _snapshot = Profiles.ToArray();
         _saveTimer = new System.Threading.Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -63,6 +70,7 @@ public sealed class IdentityProfileService : IDisposable
     private void AfterMutate()
     {
         if (_disposed) return;
+        _snapshot = Profiles.ToArray();
         Changed?.Invoke();
         _saveTimer.Change(SaveDebounceMs, Timeout.Infinite);
     }
@@ -71,8 +79,7 @@ public sealed class IdentityProfileService : IDisposable
     {
         lock (_writeLock)
         {
-            var snapshot = Profiles.ToList();
-            try { IdentityProfileStore.Save(_path, snapshot); }
+            try { IdentityProfileStore.Save(_path, _snapshot); }
             catch (Exception ex) { Console.WriteLine($"Failed to save identity profiles: {ex.Message}"); }
         }
     }

@@ -111,10 +111,6 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
     {
-        var dir = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(dir))
-            Directory.CreateDirectory(dir);
-
         var file = new FileShape
         {
             SchemaVersion = CurrentSchemaVersion,
@@ -126,7 +122,7 @@ public static class RepoStateStore
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         var json = JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
-        File.WriteAllText(path, json);
+        AtomicFile.WriteAllText(path, json);
     }
 
     public static bool IsGitRepo(string path) =>

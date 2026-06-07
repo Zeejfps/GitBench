@@ -8,6 +8,11 @@ namespace GitBench;
 // without a public surface change).
 public interface IGitRawConfigReader
 {
+    // Whether the path is a readable git repo right now. The resolver checks this before spawning
+    // any git, so an unmounted/deleted repo resolves as transient instead of being cached wrong.
+    bool IsRepoAvailable(string repoPath);
+    // Throws on a genuine git failure (e.g. held index.lock) so the resolver can treat it as
+    // transient; an empty list means the repo simply has no remotes.
     IReadOnlyList<string> GetRemoteNamesRaw(string repoPath);
     string? GetRemoteUrlRaw(string repoPath, string remoteName);
     (string? Name, string? Email) GetLocalIdentityRaw(string repoPath);
@@ -1373,15 +1378,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         try
         {
             if (!IsGitRepo(repo.Path)) return Array.Empty<string>();
-            var output = RunGit(repo.Path, out _, "remote");
-            if (string.IsNullOrEmpty(output)) return Array.Empty<string>();
-            var list = new List<string>();
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var name = line.Trim();
-                if (name.Length > 0) list.Add(name);
-            }
-            return list;
+            return ReadRemoteNames(repo.Path, inject: true, out _);
         }
         catch
         {
@@ -1394,15 +1391,36 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         try
         {
             if (!IsGitRepo(repo.Path)) return null;
-            var output = RunGit(repo.Path, out var error, "remote", "get-url", remoteName);
-            if (error != null) return null;
-            var url = output.Trim();
-            return url.Length == 0 ? null : url;
+            return ReadRemoteUrl(repo.Path, remoteName, inject: true);
         }
         catch
         {
             return null;
         }
+    }
+
+    // Shared core for both the UI-facing remote reads (inject:true, errors swallowed) and the
+    // resolver's raw reads (inject:false, errors surfaced). `error` reports a git failure distinct
+    // from a successful read that found no remotes.
+    private IReadOnlyList<string> ReadRemoteNames(string repoPath, bool inject, out string? error)
+    {
+        var output = RunGitInternal(repoPath, allowExitCode1: false, out error, new[] { "remote" }, inject: inject);
+        if (error != null || string.IsNullOrEmpty(output)) return Array.Empty<string>();
+        var list = new List<string>();
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = line.Trim();
+            if (name.Length > 0) list.Add(name);
+        }
+        return list;
+    }
+
+    private string? ReadRemoteUrl(string repoPath, string remoteName, bool inject)
+    {
+        var output = RunGitInternal(repoPath, allowExitCode1: false, out var error, new[] { "remote", "get-url", remoteName }, inject: inject);
+        if (error != null || output == null) return null;
+        var url = output.Trim();
+        return url.Length == 0 ? null : url;
     }
 
     public EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url)
@@ -2857,48 +2875,27 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // These MUST pass inject:false: the identity resolver calls them, and the runner would
     // otherwise re-enter the resolver (infinite recursion) on every config read.
 
+    bool IGitRawConfigReader.IsRepoAvailable(string repoPath) => IsGitRepo(repoPath);
+
     IReadOnlyList<string> IGitRawConfigReader.GetRemoteNamesRaw(string repoPath)
     {
-        try
-        {
-            if (!IsGitRepo(repoPath)) return Array.Empty<string>();
-            var output = RunGitInternal(repoPath, allowExitCode1: false, out var error, new[] { "remote" }, inject: false);
-            if (error != null || string.IsNullOrEmpty(output)) return Array.Empty<string>();
-            var list = new List<string>();
-            foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var name = line.Trim();
-                if (name.Length > 0) list.Add(name);
-            }
-            return list;
-        }
-        catch { return Array.Empty<string>(); }
+        // Surface a git failure (e.g. held lock) as an exception so the resolver treats it as
+        // transient rather than memoizing "no remotes". The repo-available check is done once by
+        // the resolver before any of these reads, so it isn't repeated here.
+        var names = ReadRemoteNames(repoPath, inject: false, out var error);
+        if (error != null) throw new IOException($"git remote: {error}");
+        return names;
     }
 
     string? IGitRawConfigReader.GetRemoteUrlRaw(string repoPath, string remoteName)
-    {
-        try
-        {
-            if (!IsGitRepo(repoPath)) return null;
-            var output = RunGitInternal(repoPath, allowExitCode1: false, out var error, new[] { "remote", "get-url", remoteName }, inject: false);
-            if (error != null || output == null) return null;
-            var url = output.Trim();
-            return url.Length == 0 ? null : url;
-        }
-        catch { return null; }
-    }
+        => ReadRemoteUrl(repoPath, remoteName, inject: false);
 
     (string? Name, string? Email) IGitRawConfigReader.GetLocalIdentityRaw(string repoPath)
     {
-        try
-        {
-            if (!IsGitRepo(repoPath)) return (null, null);
-            // --local --get exits 1 when the key is unset; treat that as "not configured".
-            var name = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.name" }, inject: false)?.Trim();
-            var email = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.email" }, inject: false)?.Trim();
-            return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
-        }
-        catch { return (null, null); }
+        // --local --get exits 1 when the key is unset; treat that as "not configured".
+        var name = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.name" }, inject: false)?.Trim();
+        var email = RunGitInternal(repoPath, allowExitCode1: true, out _, new[] { "config", "--local", "--get", "user.email" }, inject: false)?.Trim();
+        return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
     }
 
     // Sets the resolver that injects per-repo identity into every git invocation. Called once at

@@ -38,6 +38,7 @@ public class RepoIdentityOverrideTests
     private sealed class FakeReader : IGitRawConfigReader
     {
         public string Url = "git@github.com:series-ai/app.git";
+        public bool IsRepoAvailable(string repoPath) => true;
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => new[] { "origin" };
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => Url;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
@@ -97,6 +98,57 @@ public class RepoIdentityOverrideTests
 
         var trimmedKey = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         Assert.Equal(profileId, registry.GetIdentityOverrideByPath(trimmedKey));
+    }
+
+    [Fact]
+    public void WorktreeInheritsPrimaryOverride()
+    {
+        // A worktree (its own repo id, ParentRepoId = primary) with no override of its own resolves
+        // to the override pinned on its primary.
+        var primaryDir = NewGitRepo();
+        var worktreeDir = NewGitRepo();
+        var primaryId = Guid.NewGuid();
+        var worktreeId = Guid.NewGuid();
+        var profileId = Guid.NewGuid();
+        var statePath = Path.Combine(Path.GetTempPath(), $"gb-state-{Guid.NewGuid():N}.json");
+        var state = new RepoStateStore.State(
+            new List<Repo>
+            {
+                new(primaryId, primaryDir, "primary"),
+                new(worktreeId, worktreeDir, "wt", primaryId) { Kind = RepoKind.Worktree },
+            },
+            new List<Group> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
+            primaryId,
+            new(), new(),
+            new Dictionary<Guid, Guid> { [primaryId] = profileId });
+        var registry = new RepoRegistry(state, statePath);
+
+        Assert.Equal(profileId, registry.GetIdentityOverrideByPath(worktreeDir));
+    }
+
+    [Fact]
+    public void WorktreeOwnOverrideWinsOverParent()
+    {
+        var primaryDir = NewGitRepo();
+        var worktreeDir = NewGitRepo();
+        var primaryId = Guid.NewGuid();
+        var worktreeId = Guid.NewGuid();
+        var primaryProfile = Guid.NewGuid();
+        var worktreeProfile = Guid.NewGuid();
+        var statePath = Path.Combine(Path.GetTempPath(), $"gb-state-{Guid.NewGuid():N}.json");
+        var state = new RepoStateStore.State(
+            new List<Repo>
+            {
+                new(primaryId, primaryDir, "primary"),
+                new(worktreeId, worktreeDir, "wt", primaryId) { Kind = RepoKind.Worktree },
+            },
+            new List<Group> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
+            primaryId,
+            new(), new(),
+            new Dictionary<Guid, Guid> { [primaryId] = primaryProfile, [worktreeId] = worktreeProfile });
+        var registry = new RepoRegistry(state, statePath);
+
+        Assert.Equal(worktreeProfile, registry.GetIdentityOverrideByPath(worktreeDir));
     }
 
     [Fact]

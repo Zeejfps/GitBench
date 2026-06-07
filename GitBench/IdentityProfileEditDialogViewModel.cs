@@ -55,7 +55,8 @@ internal sealed class IdentityProfileEditDialogViewModel : IDisposable
                     AuthorEmail.Value.Trim(),
                     sshKey.Length > 0 ? sshKey : null,
                     existing?.SigningKey,
-                    match);
+                    existing?.SigningKeyFormat,
+                    Match: match);
 
                 if (existing != null) profiles.Update(profile);
                 else profiles.Add(profile);

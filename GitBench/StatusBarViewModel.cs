@@ -143,9 +143,13 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     {
         if (repo == null)
         {
+            _lastResolved = null;
             Update(_ => StatusBarState.Initial);
             return;
         }
+        // Invalidate the previous repo's cached resolution so a chip click before the new one lands
+        // doesn't show the old repo's identity.
+        _lastResolved = null;
         // RepoName is the registry's; Branch + ahead/behind are owned by OnPushStatus (whose
         // derivation already falls back to Repo.Branch). Don't seed Branch here — on a switch the
         // store's push status fires before this handler, and re-seeding would clobber it.
@@ -171,10 +175,15 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             dispatcher.Post(() =>
             {
                 if (_registry.Active.Value?.Path != repoPath) return;
+                _lastResolved = resolved;
                 Update(s => s with { IdentityText = text, IdentityIsWarning = warn });
             });
         });
     }
+
+    // The most recent off-thread resolution for the active repo. The chip menu reads this instead
+    // of resolving synchronously, so opening the menu never spawns git on the UI thread.
+    private ResolvedIdentity? _lastResolved;
 
     private static (string? Text, bool Warning) LabelFor(ResolvedIdentity r) => r.Source switch
     {
@@ -190,7 +199,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
-        var resolved = _identity.Resolve(repo.Path);
+        // Use the last off-thread resolution rather than resolving here, which would block the UI
+        // thread on git during the click. Falls back to NoRemotes until the first resolve lands.
+        var resolved = _lastResolved
+            ?? new ResolvedIdentity(IdentitySource.NoRemotes, null, null, null, null, Array.Empty<string>());
         var items = new List<RepoBarContextMenu.Item>();
 
         foreach (var p in _profiles.Profiles)
@@ -253,6 +265,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             var outcome = _git.PinLocalIdentity(repo, profile.UserName, profile.UserEmail, ssh);
             dispatcher.Post(() =>
             {
+                // The pin wrote --local config, so clear the manual override and let the resolver
+                // honor that config (inject nothing) — otherwise the override would keep injecting
+                // and GUI/terminal could diverge.
+                if (outcome.Success) _registry.SetIdentityOverride(repo.Id, null);
                 _identity.FlushAll();
                 if (!outcome.Success && !string.IsNullOrEmpty(outcome.ErrorMessage))
                     _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", outcome.ErrorMessage));

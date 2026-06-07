@@ -10,6 +10,9 @@ public class GitIdentityServiceTests
         public Dictionary<string, string> Urls = new();   // "<path>|<remote>" -> url
         public Dictionary<string, (string? Name, string? Email)> Local = new();
 
+        public bool Available = true;
+
+        public bool IsRepoAvailable(string repoPath) => Available;
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath)
             => Remotes.TryGetValue(repoPath, out var r) ? r : new List<string>();
         public string? GetRemoteUrlRaw(string repoPath, string remoteName)
@@ -211,5 +214,79 @@ public class GitIdentityServiceTests
         profiles.Add(Work); // fires Changed -> FlushAll
 
         Assert.Equal(IdentitySource.Profile, svc.Resolve(path).Source);
+    }
+
+    [Fact]
+    public void LocalNameWithoutEmailIsHonoredNotOverridden()
+    {
+        // A repo with a deliberate local user.name but no local user.email must not have its name
+        // overridden by an auto-matched profile.
+        var (svc, reader, _) = Build(Work);
+        var path = "/repos/work";
+        reader.Remotes[path] = new() { "origin" };
+        reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
+        reader.Local[path] = ("Bot Name", null);
+
+        var r = svc.Resolve(path);
+
+        Assert.Equal(IdentitySource.RepoConfig, r.Source);
+        Assert.Empty(r.PrefixArgs);
+        Assert.Equal("Bot Name", r.UserName);
+    }
+
+    [Fact]
+    public void UnavailableRepoIsTransientAndNotMemoized()
+    {
+        var (svc, reader, _) = Build(Work);
+        var path = "/repos/work";
+        reader.Remotes[path] = new() { "origin" };
+        reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
+
+        // Volume not mounted yet: transient, must not be cached.
+        reader.Available = false;
+        var first = svc.Resolve(path);
+        Assert.True(first.IsTransient);
+
+        // Once available, the next resolve must succeed (the transient result wasn't pinned).
+        reader.Available = true;
+        var second = svc.Resolve(path);
+        Assert.Equal(IdentitySource.Profile, second.Source);
+    }
+
+    [Fact]
+    public void GitReadFailureIsTransient()
+    {
+        var reader = new ThrowingReader();
+        var profiles = new IdentityProfileService(new[] { Work }, Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json"));
+        var svc = new GitIdentityService(reader, profiles, new FakeBus());
+
+        Assert.True(svc.Resolve("/repos/locked").IsTransient);
+    }
+
+    [Fact]
+    public void ExplicitSigningKeyFormatIsEmitted()
+    {
+        // A bare-filename ssh signing key the heuristic can't detect — the explicit format wins.
+        var p = new IdentityProfile(
+            Guid.NewGuid(), "Work", "Work Dev", "dev@series.ai",
+            SigningKey: "id_work.pub", SigningKeyFormat: "ssh",
+            Match: new List<IdentityMatchRule> { new("github.com", "series-ai") });
+        var (svc, reader, _) = Build(p);
+        var path = "/repos/work";
+        reader.Remotes[path] = new() { "origin" };
+        reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
+
+        var r = svc.Resolve(path);
+
+        Assert.Contains("user.signingKey=id_work.pub", r.PrefixArgs);
+        Assert.Contains("gpg.format=ssh", r.PrefixArgs);
+    }
+
+    private sealed class ThrowingReader : IGitRawConfigReader
+    {
+        public bool IsRepoAvailable(string repoPath) => true;
+        public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => throw new IOException("git remote: locked");
+        public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
+        public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
     }
 }

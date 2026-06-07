@@ -8,7 +8,7 @@ public enum IdentitySource
 {
     NoRemotes,   // fresh repo / no remote — nothing to match on
     NoMatch,     // has a remote but no profile claims it
-    RepoConfig,  // repo has an explicit --local user.email — honor it, inject nothing
+    RepoConfig,  // repo has an explicit --local user.name/email — honor it, inject nothing
     Profile,     // a profile matched (or was pinned as a manual override)
 }
 
@@ -18,7 +18,14 @@ public sealed record ResolvedIdentity(
     string? DisplayName,
     string? UserName,
     string? UserEmail,
-    IReadOnlyList<string> PrefixArgs);
+    IReadOnlyList<string> PrefixArgs)
+{
+    // A resolution we couldn't complete because the repo wasn't readable right now (unmounted
+    // volume, held index.lock, git momentarily failing). Such results are NOT memoized, so the
+    // next git op retries instead of pinning the repo to the machine's global identity until the
+    // next flush.
+    public bool IsTransient { get; init; }
+}
 
 // Resolves which Git identity applies to a repo (by its remote host/owner) and produces the
 // `-c key=value` args injected into every git invocation for that repo — without ever writing
@@ -31,8 +38,7 @@ public sealed class GitIdentityService
 {
     private readonly IGitRawConfigReader _git;
     private readonly IdentityProfileService _profiles;
-    private readonly ConcurrentDictionary<string, ResolvedIdentity> _memo =
-        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, ResolvedIdentity> _memo = new(PathKey.Comparer);
 
     // Optional per-repo manual override: repo path → profile id. Wired in a later step; for now
     // it's empty so resolution is purely automatic.
@@ -53,7 +59,13 @@ public sealed class GitIdentityService
     public void SetOverrideLookup(Func<string, Guid?> lookup) => _overrideLookup = lookup;
 
     public ResolvedIdentity Resolve(string workingDir)
-        => _memo.GetOrAdd(NormalizeKey(workingDir), Compute);
+    {
+        var key = PathKey.Normalize(workingDir);
+        if (_memo.TryGetValue(key, out var cached)) return cached;
+        var computed = Compute(key);
+        // A transient result is deliberately not stored, so the next op recomputes.
+        return computed.IsTransient ? computed : _memo.GetOrAdd(key, computed);
+    }
 
     public IReadOnlyList<string> ResolvePrefixArgs(string workingDir)
         => Resolve(workingDir).PrefixArgs;
@@ -73,38 +85,61 @@ public sealed class GitIdentityService
         if (overrideId is { } oid && FindProfile(oid) is { } chosen)
             return Build(chosen);
 
-        // 2) No override: honor an explicit --local user.email (set in the repo by the terminal or
-        //    by "pin to repo"), injecting nothing so GUI and terminal commits stay identical.
-        var (localName, localEmail) = _git.GetLocalIdentityRaw(normalizedPath);
-        if (localEmail != null)
+        // If the repo isn't readable right now (unmounted volume, deleted under us), don't spawn git
+        // and don't cache a wrong answer — return transient so the next op retries. This is a
+        // filesystem stat, so a genuine non-repo path costs nothing extra (no subprocess).
+        if (!_git.IsRepoAvailable(normalizedPath))
+            return Transient();
+
+        try
         {
-            var disp = localName != null ? $"{localName} <{localEmail}>" : localEmail;
-            return new ResolvedIdentity(IdentitySource.RepoConfig, null, disp, localName, localEmail, Array.Empty<string>());
+            // 2) No override: honor any explicit --local identity (set by the terminal or by "pin to
+            //    repo"), injecting nothing so GUI and terminal commits stay identical. Either field
+            //    being set means the repo is deliberately configured — never override a local name.
+            var (localName, localEmail) = _git.GetLocalIdentityRaw(normalizedPath);
+            if (localName != null || localEmail != null)
+            {
+                var disp = localEmail != null
+                    ? (localName != null ? $"{localName} <{localEmail}>" : localEmail)
+                    : localName;
+                return new ResolvedIdentity(IdentitySource.RepoConfig, null, disp, localName, localEmail, Array.Empty<string>());
+            }
+
+            // 3) Auto-match on the remote host/owner.
+            var remotes = _git.GetRemoteNamesRaw(normalizedPath);
+            if (remotes.Count == 0)
+                return Empty(IdentitySource.NoRemotes);
+
+            var remoteName = remotes.Contains("origin") ? "origin" : remotes[0];
+            var url = _git.GetRemoteUrlRaw(normalizedPath, remoteName);
+            if (url == null || !RemoteUrl.TryGetHostAndOwner(url, out var host, out var owner))
+                return Empty(IdentitySource.NoMatch);
+
+            var profile = MatchProfile(host, owner);
+            return profile != null ? Build(profile) : Empty(IdentitySource.NoMatch);
         }
-
-        // 3) Auto-match on the remote host/owner.
-        var remotes = _git.GetRemoteNamesRaw(normalizedPath);
-        if (remotes.Count == 0)
-            return Empty(IdentitySource.NoRemotes);
-
-        var remoteName = remotes.Contains("origin") ? "origin" : remotes[0];
-        var url = _git.GetRemoteUrlRaw(normalizedPath, remoteName);
-        if (url == null || !RemoteUrl.TryGetHostAndOwner(url, out var host, out var owner))
-            return Empty(IdentitySource.NoMatch);
-
-        var profile = MatchProfile(host, owner);
-        return profile != null ? Build(profile) : Empty(IdentitySource.NoMatch);
+        catch
+        {
+            // A git read threw (e.g. a held index.lock): transient, don't memoize.
+            return Transient();
+        }
     }
 
     private static ResolvedIdentity Empty(IdentitySource source)
         => new(source, null, null, null, null, Array.Empty<string>());
 
+    // Looks like NoRemotes to the chip (shows nothing), but is never cached.
+    private static ResolvedIdentity Transient()
+        => new(IdentitySource.NoRemotes, null, null, null, null, Array.Empty<string>()) { IsTransient = true };
+
     private static ResolvedIdentity Build(IdentityProfile p)
         => new(IdentitySource.Profile, p.Id, p.DisplayName, p.UserName, p.UserEmail, BuildPrefixArgs(p));
 
+    // Reads the immutable snapshot, never the live ObservableList — Compute runs on background git
+    // threads where touching the UI-thread-only list would race.
     private IdentityProfile? FindProfile(Guid id)
     {
-        foreach (var p in _profiles.Profiles)
+        foreach (var p in _profiles.Snapshot)
             if (p.Id == id) return p;
         return null;
     }
@@ -114,7 +149,7 @@ public sealed class GitIdentityService
     private IdentityProfile? MatchProfile(string host, string? owner)
     {
         if (owner != null)
-            foreach (var p in _profiles.Profiles)
+            foreach (var p in _profiles.Snapshot)
                 if (p.Match != null)
                     foreach (var r in p.Match)
                         if (r.Owner != null
@@ -122,7 +157,7 @@ public sealed class GitIdentityService
                             && string.Equals(r.Owner, owner, StringComparison.OrdinalIgnoreCase))
                             return p;
 
-        foreach (var p in _profiles.Profiles)
+        foreach (var p in _profiles.Snapshot)
             if (p.Match != null)
                 foreach (var r in p.Match)
                     if (r.Owner == null && string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase))
@@ -149,7 +184,12 @@ public sealed class GitIdentityService
             var sk = p.SigningKey.Trim();
             Add($"user.signingKey={sk}");
             Add("commit.gpgsign=true");
-            if (LooksLikeSshSigningKey(sk)) Add("gpg.format=ssh");
+            // Prefer the profile's explicit format; the key string alone can't be trusted to reveal
+            // ssh vs openpgp (a bare filename or fingerprint has no path/prefix to detect).
+            var fmt = string.IsNullOrWhiteSpace(p.SigningKeyFormat)
+                ? (LooksLikeSshSigningKey(sk) ? "ssh" : null)
+                : p.SigningKeyFormat.Trim();
+            if (!string.IsNullOrEmpty(fmt)) Add($"gpg.format={fmt}");
         }
 
         return args;
@@ -180,11 +220,5 @@ public sealed class GitIdentityService
             return home + path[1..];
         }
         return path;
-    }
-
-    private static string NormalizeKey(string repoPath)
-    {
-        try { return Path.GetFullPath(repoPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { return repoPath; }
     }
 }

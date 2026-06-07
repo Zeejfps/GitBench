@@ -33,21 +33,13 @@ public static class IdentityProfileStore
 
     public static void Save(string path, IReadOnlyList<IdentityProfile> profiles)
     {
-        var dir = Path.GetDirectoryName(path);
-        if (!string.IsNullOrEmpty(dir))
-            Directory.CreateDirectory(dir);
-
         var file = new FileShape
         {
             SchemaVersion = CurrentSchemaVersion,
             Profiles = profiles as List<IdentityProfile> ?? profiles.ToList(),
         };
         var json = JsonSerializer.Serialize(file, IdentityProfileJsonContext.Default.FileShape);
-        // Atomic temp-then-rename so a crash mid-write can't leave a truncated file that fails to
-        // parse on next launch (silently dropping every profile). Mirrors PreferencesStore.Save.
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, json);
-        File.Move(tmp, path, overwrite: true);
+        AtomicFile.WriteAllText(path, json);
     }
 }
 

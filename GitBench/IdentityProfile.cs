@@ -7,6 +7,9 @@ namespace GitBench;
 // core.sshCommand selecting that key (so a second account's key in ssh-agent can't be offered
 // first). SigningKey is only injected when set, so profiles without one don't accidentally turn
 // on commit signing (which would make commits fail without a configured signer).
+// SigningKeyFormat ("ssh" / "openpgp") is optional and, when set, is emitted as git's gpg.format
+// instead of being guessed from the key string — a bare-filename or fingerprint SSH key can't be
+// reliably inferred. Null falls back to a best-effort heuristic. JSON-only, like SigningKey.
 public sealed record IdentityProfile(
     Guid Id,
     string DisplayName,
@@ -14,6 +17,7 @@ public sealed record IdentityProfile(
     string UserEmail,
     string? SshKeyPath = null,
     string? SigningKey = null,
+    string? SigningKeyFormat = null,
     List<IdentityMatchRule>? Match = null);
 
 // One auto-match rule: a profile claims a repo when the repo's remote host equals Host and,

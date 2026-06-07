@@ -14,6 +14,12 @@ public sealed class RepoRegistry : IRepoRegistry
     private readonly Dictionary<Guid, bool> _worktreesExpanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
 
+    // Immutable path→profile-id map the resolver reads lock-free from background git threads.
+    // Rebuilt on the UI thread (in Save) whenever Repos or _identityOverride change, so the
+    // resolver never enumerates the UI-thread-only Repos list. Empty until the first build below.
+    private volatile IReadOnlyDictionary<string, Guid> _overrideByPath =
+        new Dictionary<string, Guid>(PathKey.Comparer);
+
     public RepoRegistry(RepoStateStore.State initial, string statePath)
     {
         _statePath = statePath;
@@ -23,6 +29,8 @@ public sealed class RepoRegistry : IRepoRegistry
 
         Repos = new ObservableList<Repo>();
         foreach (var r in initial.Repos) Repos.Add(r);
+
+        RebuildOverrideMap();
 
         Groups = new ObservableList<Group>();
         foreach (var g in initial.Groups) Groups.Add(g);
@@ -325,22 +333,30 @@ public sealed class RepoRegistry : IRepoRegistry
         Save();
     }
 
-    // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so map the path
-    // back to a repo and return its manual override (if any). Both sides are normalized the same
-    // way the resolver normalizes its key (full path, trailing separators trimmed) — a stored
-    // repo path can carry a trailing separator while the resolver key won't, and that mismatch
-    // would otherwise make the override invisible and silently fall back to auto-matching.
+    // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so we serve an
+    // O(1) read from the precomputed map (built on the UI thread). Keys use PathKey, the same
+    // normalization the resolver applies to its memo key, so the two can't drift.
     public Guid? GetIdentityOverrideByPath(string path)
+        => _overrideByPath.TryGetValue(PathKey.Normalize(path), out var id) ? id : null;
+
+    // The override that applies to a repo: its own pin, else its primary's pin (a worktree inherits
+    // the identity deliberately chosen on its parent — auto-match already gives them the same
+    // profile via the shared remote, so the manual pick should follow too). A worktree can still
+    // carry its own pin to opt out.
+    private Guid? EffectiveOverride(Repo r)
     {
-        var key = NormalizePathForMatch(path);
-        var repo = Repos.FirstOrDefault(r => string.Equals(NormalizePathForMatch(r.Path), key, PathComparison));
-        return repo != null ? GetIdentityOverride(repo.Id) : null;
+        if (_identityOverride.TryGetValue(r.Id, out var own)) return own;
+        if (r.ParentRepoId is { } pid && _identityOverride.TryGetValue(pid, out var parent)) return parent;
+        return null;
     }
 
-    private static string NormalizePathForMatch(string p)
+    private void RebuildOverrideMap()
     {
-        try { return Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { return p; }
+        var map = new Dictionary<string, Guid>(PathKey.Comparer);
+        foreach (var r in Repos)
+            if (EffectiveOverride(r) is { } id)
+                map[PathKey.Normalize(r.Path)] = id;
+        _overrideByPath = map;
     }
 
     // Records the primary's HEAD branch (from `git worktree list`) so the BranchesView
@@ -542,8 +558,12 @@ public sealed class RepoRegistry : IRepoRegistry
         return removedAny;
     }
 
-    private void Save() =>
+    private void Save()
+    {
+        // Repos / overrides may have changed; refresh the resolver's lock-free map before it reads.
+        RebuildOverrideMap();
         RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
+    }
 }
 
 public sealed record WorktreeDescriptor(string Path, string? DisplayName, string? Branch = null);
