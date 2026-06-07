@@ -69,6 +69,7 @@ internal static class CommitGraphRenderer
 
     public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z)
     {
+        var rowTop = rowBottom + rowHeight;
         var rowCenterY = rowBottom + rowHeight * 0.5f;
         var commitColor = LaneColor(node.Lane);
         var commitCx = LaneCenterX(graphStartX, node.Lane, laneCount);
@@ -76,23 +77,22 @@ internal static class CommitGraphRenderer
         // Pass-through verticals (lanes with no interaction at this row).
         foreach (var ptLane in node.PassThroughLanes)
         {
-            DrawVertical(c, LaneCenterX(graphStartX, ptLane, laneCount), rowBottom, rowHeight,
-                LaneColor(ptLane), z);
+            var x = LaneCenterX(graphStartX, ptLane, laneCount);
+            DrawSegment(c, x, rowBottom, x, rowTop, LaneColor(ptLane), z);
         }
 
         // Top half of commit's own lane (only if an edge continues from above).
         if (node.HasIncomingAtCommitLane)
         {
-            DrawVertical(c, commitCx, rowCenterY, rowHeight * 0.5f, commitColor, z);
+            DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z);
         }
 
-        // Incoming merge edges from other lanes above this commit.
+        // Incoming merge edges from other lanes above this commit: diagonal from the
+        // lane's entry at the top boundary down into the dot.
         foreach (var inLane in node.IncomingLanes)
         {
             var inCx = LaneCenterX(graphStartX, inLane, laneCount);
-            var inColor = LaneColor(inLane);
-            DrawVertical(c, inCx, rowCenterY, rowHeight * 0.5f, inColor, z);
-            DrawHorizontal(c, Math.Min(inCx, commitCx), Math.Max(inCx, commitCx), rowCenterY, inColor, z);
+            DrawSegment(c, inCx, rowTop, commitCx, rowCenterY, LaneColor(inLane), z);
         }
 
         // Outgoing edges to parents (continuation + branches).
@@ -102,26 +102,22 @@ internal static class CommitGraphRenderer
             var pColor = LaneColor(pl.Lane);
             if (pl.Lane == node.Lane)
             {
-                DrawVertical(c, commitCx, rowBottom, rowHeight * 0.5f, commitColor, z);
+                DrawSegment(c, commitCx, rowBottom, commitCx, rowCenterY, commitColor, z);
             }
             else
             {
-                DrawHorizontal(c, Math.Min(commitCx, pCx), Math.Max(commitCx, pCx), rowCenterY, pColor, z);
-                DrawVertical(c, pCx, rowBottom, rowHeight * 0.5f, pColor, z);
+                // Diagonal from the dot down to where the parent lane continues below.
+                DrawSegment(c, commitCx, rowCenterY, pCx, rowBottom, pColor, z);
             }
         }
 
         // The dot — shrinks with the lane spacing so compressed (dense) graphs don't stack dots.
         var dotRadius = Math.Min(DotRadius, Math.Max(MinDotRadius, LaneSpacing(laneCount) * 0.5f - 1f));
-        var dotRect = new RectF(commitCx - dotRadius, rowCenterY - dotRadius, dotRadius * 2, dotRadius * 2);
-        c.DrawRect(new DrawRectInputs
+        c.DrawCircle(new DrawCircleInputs
         {
-            Position = dotRect,
-            Style = new RectStyle
-            {
-                BackgroundColor = commitColor,
-                BorderRadius = BorderRadiusStyle.All(dotRadius),
-            },
+            Center = new PointF(commitCx, rowCenterY),
+            Radius = dotRadius,
+            Color = commitColor,
             ZIndex = z + 1,
         });
     }
@@ -132,24 +128,14 @@ internal static class CommitGraphRenderer
         return graphStartX + lane * spacing + spacing * 0.5f;
     }
 
-    private static void DrawVertical(ICanvas c, float cx, float bottomY, float height, uint color, int z)
+    private static void DrawSegment(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z)
     {
-        c.DrawRect(new DrawRectInputs
+        c.DrawLine(new DrawLineInputs
         {
-            Position = new RectF(cx - EdgeThickness * 0.5f, bottomY, EdgeThickness, height),
-            Style = new RectStyle { BackgroundColor = color },
-            ZIndex = z,
-        });
-    }
-
-    private static void DrawHorizontal(ICanvas c, float leftX, float rightX, float cy, uint color, int z)
-    {
-        var w = rightX - leftX;
-        if (w <= 0) return;
-        c.DrawRect(new DrawRectInputs
-        {
-            Position = new RectF(leftX, cy - EdgeThickness * 0.5f, w, EdgeThickness),
-            Style = new RectStyle { BackgroundColor = color },
+            Start = new PointF(x0, y0),
+            End = new PointF(x1, y1),
+            Thickness = EdgeThickness,
+            Color = color,
             ZIndex = z,
         });
     }
