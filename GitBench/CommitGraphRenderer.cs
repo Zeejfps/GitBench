@@ -87,12 +87,13 @@ internal static class CommitGraphRenderer
             DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z);
         }
 
-        // Incoming merge edges from other lanes above this commit: diagonal from the
-        // lane's entry at the top boundary down into the dot.
+        // Incoming merge edges from other lanes above this commit: a curve that
+        // leaves the lane vertically at the top boundary (so it lines up with the
+        // vertical above) and bends through the elbow into the dot.
         foreach (var inLane in node.IncomingLanes)
         {
             var inCx = LaneCenterX(graphStartX, inLane, laneCount);
-            DrawSegment(c, inCx, rowTop, commitCx, rowCenterY, LaneColor(inLane), z);
+            DrawCurve(c, inCx, rowTop, inCx, rowCenterY, commitCx, rowCenterY, LaneColor(inLane), z);
         }
 
         // Outgoing edges to parents (continuation + branches).
@@ -106,8 +107,9 @@ internal static class CommitGraphRenderer
             }
             else
             {
-                // Diagonal from the dot down to where the parent lane continues below.
-                DrawSegment(c, commitCx, rowCenterY, pCx, rowBottom, pColor, z);
+                // Curve from the dot through the elbow down to where the parent lane
+                // continues below, arriving vertically so it lines up with the vertical.
+                DrawCurve(c, commitCx, rowCenterY, pCx, rowCenterY, pCx, rowBottom, pColor, z);
             }
         }
 
@@ -133,6 +135,19 @@ internal static class CommitGraphRenderer
         c.DrawLine(new DrawLineInputs
         {
             Start = new PointF(x0, y0),
+            End = new PointF(x1, y1),
+            Thickness = EdgeThickness,
+            Color = color,
+            ZIndex = z,
+        });
+    }
+
+    private static void DrawCurve(ICanvas c, float x0, float y0, float cx, float cy, float x1, float y1, uint color, int z)
+    {
+        c.DrawBezier(new DrawBezierInputs
+        {
+            Start = new PointF(x0, y0),
+            Control = new PointF(cx, cy),
             End = new PointF(x1, y1),
             Thickness = EdgeThickness,
             Color = color,
