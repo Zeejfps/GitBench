@@ -104,6 +104,31 @@ public class GitIdentityServiceTests
     }
 
     [Fact]
+    public void ManualOverrideBeatsLocalConfig()
+    {
+        // A repo with an explicit local user.email, but the user picked a profile from the chip
+        // menu. The deliberate override must win over local config (the venus bug).
+        var work = Work;
+        var (svc, reader, _) = Build(work);
+        var path = "/repos/venus";
+        reader.Remotes[path] = new() { "origin" };
+        reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
+        reader.Local[path] = ("Zee", "zvasilyev@series.ai");
+
+        // Without an override, local config is honored.
+        Assert.Equal(IdentitySource.RepoConfig, svc.Resolve(path).Source);
+
+        // Pick the profile via override.
+        svc.SetOverrideLookup(_ => work.Id);
+        svc.FlushAll();
+
+        var r = svc.Resolve(path);
+        Assert.Equal(IdentitySource.Profile, r.Source);
+        Assert.Equal(work.Id, r.ProfileId);
+        Assert.Contains("user.email=dev@series.ai", r.PrefixArgs);
+    }
+
+    [Fact]
     public void NoRemotesReportsNoRemotes()
     {
         var (svc, _, _) = Build(Work);

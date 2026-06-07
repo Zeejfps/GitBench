@@ -199,7 +199,11 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             var active = resolved.ProfileId == profile.Id;
             items.Add(new RepoBarContextMenu.Item(
                 profile.DisplayName,
-                () => { _registry.SetIdentityOverride(repo.Id, profile.Id); _identity.FlushAll(); },
+                () =>
+                {
+                    _registry.SetIdentityOverride(repo.Id, profile.Id);
+                    _identity.FlushAll();
+                },
                 Icon: active ? LucideIcons.CheckSquare : null));
         }
 

@@ -326,11 +326,21 @@ public sealed class RepoRegistry : IRepoRegistry
     }
 
     // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so map the path
-    // back to a repo and return its manual override (if any).
+    // back to a repo and return its manual override (if any). Both sides are normalized the same
+    // way the resolver normalizes its key (full path, trailing separators trimmed) — a stored
+    // repo path can carry a trailing separator while the resolver key won't, and that mismatch
+    // would otherwise make the override invisible and silently fall back to auto-matching.
     public Guid? GetIdentityOverrideByPath(string path)
     {
-        var repo = Repos.FirstOrDefault(r => string.Equals(r.Path, path, PathComparison));
+        var key = NormalizePathForMatch(path);
+        var repo = Repos.FirstOrDefault(r => string.Equals(NormalizePathForMatch(r.Path), key, PathComparison));
         return repo != null ? GetIdentityOverride(repo.Id) : null;
+    }
+
+    private static string NormalizePathForMatch(string p)
+    {
+        try { return Path.GetFullPath(p).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
+        catch { return p; }
     }
 
     // Records the primary's HEAD branch (from `git worktree list`) so the BranchesView

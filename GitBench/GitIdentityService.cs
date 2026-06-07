@@ -66,19 +66,21 @@ public sealed class GitIdentityService
 
     private ResolvedIdentity Compute(string normalizedPath)
     {
-        // 1) An explicit --local user.email wins outright: honor it, inject nothing. This keeps
-        //    GUI and terminal commits identical and makes "pin to repo" coherent.
+        // 1) A manual override is an explicit user choice from the chip menu — it wins over
+        //    everything, including a local user.email already in the repo's config. (Auto-matching
+        //    still defers to local config in step 2; only a deliberate pick overrides it.)
+        var overrideId = _overrideLookup?.Invoke(normalizedPath);
+        if (overrideId is { } oid && FindProfile(oid) is { } chosen)
+            return Build(chosen);
+
+        // 2) No override: honor an explicit --local user.email (set in the repo by the terminal or
+        //    by "pin to repo"), injecting nothing so GUI and terminal commits stay identical.
         var (localName, localEmail) = _git.GetLocalIdentityRaw(normalizedPath);
         if (localEmail != null)
         {
             var disp = localName != null ? $"{localName} <{localEmail}>" : localEmail;
             return new ResolvedIdentity(IdentitySource.RepoConfig, null, disp, localName, localEmail, Array.Empty<string>());
         }
-
-        // 2) Manual override (pin) takes precedence over auto-match.
-        var overrideId = _overrideLookup?.Invoke(normalizedPath);
-        if (overrideId is { } oid && FindProfile(oid) is { } pinned)
-            return Build(pinned);
 
         // 3) Auto-match on the remote host/owner.
         var remotes = _git.GetRemoteNamesRaw(normalizedPath);
