@@ -134,6 +134,12 @@ using var submoduleSync = new SubmoduleSyncService(
     context.Require<IUiDispatcher>(),
     messageBus);
 
+using var submodulePointerSync = new SubmodulePointerSyncService(
+    registry,
+    context.Require<IGitService>(),
+    context.Require<IUiDispatcher>(),
+    messageBus);
+
 // Now that GuiApp has registered the UI dispatcher, wire the snapshot store's loading. Subscribes
 // to the active repo and seeds the first load.
 snapshotStore.Start(context.Require<IUiDispatcher>());

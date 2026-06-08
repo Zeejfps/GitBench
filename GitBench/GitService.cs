@@ -2631,6 +2631,33 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    public bool StageSubmodulePointer(Repo parent, string relativePath)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(relativePath)) return false;
+            if (!IsGitRepo(parent.Path)) return false;
+
+            var rel = NormalizeRelPath(relativePath);
+            if (rel.Length == 0 || rel == ".") return false;
+
+            using var _ = LockRepo(parent.Path);
+
+            // --ignore-submodules=dirty so only a moved HEAD commit counts, not uncommitted
+            // changes inside the submodule's working tree (which `git add` wouldn't record
+            // anyway). Exit 0 => the gitlink already matches HEAD, nothing to stage.
+            var diff = _runner.Run(parent.Path, new[] { "diff", "--quiet", "--ignore-submodules=dirty", "HEAD", "--", rel });
+            if (diff.Ok) return false;
+
+            var (ok, _err) = RunMutation(parent.Path, new[] { "add", "--", rel });
+            return ok;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha)
     {
         try

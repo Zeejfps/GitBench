@@ -65,6 +65,11 @@ public interface IGitService
     SubmoduleAddOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request);
     SubmoduleUpdateOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request);
     SubmoduleDeinitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force);
+    // Stages the parent's gitlink for a submodule whose HEAD has moved, so the pointer update
+    // becomes a deliberate staged change instead of a lingering unstaged "modified" entry.
+    // relativePath is the submodule's path within parent's working tree. Returns true when the
+    // recorded pointer differed and was staged; false when it was already in sync (a no-op).
+    bool StageSubmodulePointer(Repo parent, string relativePath);
     IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha);
     MergePreviewResult PreviewMerge(Repo repo, string sourceRef);
     MergeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy);
