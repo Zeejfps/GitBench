@@ -28,7 +28,14 @@ var profilesPath = Path.Combine(
     "identity-profiles.json");
 using var identityProfiles = new IdentityProfileService(IdentityProfileStore.Load(profilesPath), profilesPath);
 
-var context = new Context();
+var builder = GuiApp.CreateBuilder(new StartupConfig
+{
+    WindowTitle = "GitBench",
+    WindowWidth = initialPrefs.WindowWidth,
+    WindowHeight = initialPrefs.WindowHeight,
+    IsUndecorated = false
+});
+var context = builder.Services;
 context.AddService(preferences);
 context.AddService(identityProfiles);
 var messageBus = new MessageBus();
@@ -91,13 +98,7 @@ using var snapshotStore = new RepoSnapshotStore(registry, context.Require<IGitSe
 context.AddService<IRepoSnapshotStore>(snapshotStore);
 
 var appView = new AppView(preferences, updateService);
-var appHost = GuiApp.CreateDefault(new StartupConfig
-{
-    WindowTitle = "GitBench",
-    WindowWidth = initialPrefs.WindowWidth,
-    WindowHeight = initialPrefs.WindowHeight,
-    IsUndecorated = false
-}, context, appView);
+using var appHost = builder.UseContent(appView).Build();
 appHost.OnWindowResized += preferences.SetWindowSize;
 
 // Match the native title bar to the active theme, and keep it in sync on toggle.
@@ -140,13 +141,8 @@ using var submodulePointerSync = new SubmodulePointerSyncService(
     context.Require<IUiDispatcher>(),
     messageBus);
 
-// Now that GuiApp has registered the UI dispatcher, wire the snapshot store's loading. Subscribes
-// to the active repo and seeds the first load.
 snapshotStore.Start(context.Require<IUiDispatcher>());
 
-// Silently check GitHub Releases for an update at startup. The network I/O runs off the UI
-// thread (the first await yields) and results marshal back through the dispatcher; the same
-// entry point backs the manual "check for updates" button in the status bar.
 _ = updateService.CheckForUpdatesAsync(context.Require<IUiDispatcher>(), userInitiated: false);
 
 appHost.Run();
