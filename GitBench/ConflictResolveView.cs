@@ -25,6 +25,7 @@ internal sealed class ConflictResolveView : MultiChildView
     private readonly Action _onTakeTheirs;
     private readonly Action _onTakeBoth;
     private readonly Action _onOpenInEditor;
+    private readonly Action _onMarkResolved;
 
     private readonly ColumnView _column;
 
@@ -32,12 +33,14 @@ internal sealed class ConflictResolveView : MultiChildView
         Action onTakeOurs,
         Action onTakeTheirs,
         Action onTakeBoth,
-        Action onOpenInEditor)
+        Action onOpenInEditor,
+        Action onMarkResolved)
     {
         _onTakeOurs = onTakeOurs;
         _onTakeTheirs = onTakeTheirs;
         _onTakeBoth = onTakeBoth;
         _onOpenInEditor = onOpenInEditor;
+        _onMarkResolved = onMarkResolved;
 
         _column = new ColumnView { Gap = 14 };
 
@@ -99,6 +102,11 @@ internal sealed class ConflictResolveView : MultiChildView
         var openButton = new DialogButton("Merge in editor", _onOpenInEditor) { Height = ButtonHeight };
         openButton.Icon = LucideIcons.ExternalLink;
 
+        // For conflicts already resolved outside the app: stages the file as-is so the path
+        // clears the unmerged state, no side-pick needed.
+        var resolvedButton = new DialogButton("Mark as resolved", _onMarkResolved) { Height = ButtonHeight };
+        resolvedButton.Icon = LucideIcons.CheckSquare;
+
         _column.Children.Clear();
         _column.Children.Add(BuildTitleRow());
         _column.Children.Add(Centered(BuildFileNameRow(path)));
@@ -114,7 +122,7 @@ internal sealed class ConflictResolveView : MultiChildView
         {
             Gap = 8,
             Width = ButtonStackWidth,
-            Children = { mergeButton, openButton },
+            Children = { mergeButton, openButton, resolvedButton },
         }));
     }
 

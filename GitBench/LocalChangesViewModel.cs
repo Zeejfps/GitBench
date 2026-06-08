@@ -518,8 +518,53 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         => RequestDiscard(State.Value.Unstaged.Select(f => f.Path).ToList());
 
     public void Stage(IReadOnlyList<string> paths) => RunIndexOp(paths, isStage: true);
-    
+
     public void StageSubmodulePointer(string submodulePath) => RunIndexOp([submodulePath], isStage: true);
+
+    // The subset of the given paths that are still conflicted (unmerged) in the unstaged
+    // panel — drives the "Mark as Resolved" context-menu item, which only applies to those.
+    public IReadOnlyList<string> ConflictedAmong(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return [];
+        var set = new HashSet<string>(paths);
+        var result = new List<string>();
+        foreach (var f in State.Value.Unstaged)
+            if (f.Status == FileChangeStatus.Conflicted && set.Contains(f.Path))
+                result.Add(f.Path);
+        return result;
+    }
+
+    // Marks externally-resolved conflicts as resolved: stages the working-tree file as-is
+    // (git add), or records the deletion (git rm) when the resolution removed the file, so the
+    // path clears the unmerged state and the user can continue the merge/rebase. Mirrors the
+    // stage flow — optimistic move to the staged side, then the index mutation with a
+    // working-tree refresh that reconciles the real post-resolve status.
+    public void MarkResolved(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return;
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+
+        ApplyOptimisticMove(paths, DiffSide.Unstaged);
+
+        RunBackground<bool>(
+            work: () =>
+            {
+                string? firstError = null;
+                foreach (var path in paths)
+                {
+                    var outcome = _gitService.MarkResolved(repo, path);
+                    if (!outcome.Success) firstError ??= outcome.ErrorMessage;
+                }
+                return (true, firstError);
+            },
+            onResult: (_, errorMsg) =>
+            {
+                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                Update(s => s with { OpError = errorMsg });
+            },
+            lane: _opGen);
+    }
 
     // Resets a submodule's working tree back to the SHA the parent has recorded. Runs
     // `git submodule update -- <path>` and broadcasts SubmodulesChangedMessage so the

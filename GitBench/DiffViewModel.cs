@@ -188,6 +188,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public void ResolveTakeBoth() => RunResolve((svc, repo, path) => svc.TakeBoth(repo, path));
 
+    // Manual-resolution path: stages the working-tree file as-is (git add), or records the
+    // deletion (git rm) when the file is gone, marking the conflict resolved without picking a
+    // side. For conflicts resolved outside the app (an external editor / merge tool).
+    public void ResolveMarkResolved() => RunResolve((svc, repo, path) => svc.MarkResolved(repo, path));
+
     private void RunResolve(Func<IGitService, Repo, string, ResolveOutcome> op)
     {
         var repo = _registry.Active.Value;

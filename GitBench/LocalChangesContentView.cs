@@ -298,6 +298,14 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
         {
             var paths = ResolveTargetPaths(target);
             var n = paths.Count;
+            var conflicted = _vm.ConflictedAmong(paths);
+            if (conflicted.Count > 0)
+            {
+                items.Add(new RepoBarContextMenu.Item(
+                    conflicted.Count > 1 ? $"Mark {conflicted.Count} as Resolved" : "Mark as Resolved",
+                    () => _vm.MarkResolved(conflicted),
+                    LucideIcons.CheckSquare));
+            }
             items.Add(new RepoBarContextMenu.Item(
                 n > 1 ? $"Stage {n} Files" : "Stage",
                 () => _vm.Stage(paths),

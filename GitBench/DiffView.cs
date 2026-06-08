@@ -73,7 +73,8 @@ internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
             onTakeOurs: () => _vm?.ResolveTakeOurs(),
             onTakeTheirs: () => _vm?.ResolveTakeTheirs(),
             onTakeBoth: () => _vm?.ResolveTakeBoth(),
-            onOpenInEditor: () => _vm?.OpenConflictInEditor());
+            onOpenInEditor: () => _vm?.OpenConflictInEditor(),
+            onMarkResolved: () => _vm?.ResolveMarkResolved());
         _conflictView.SetContext(conflict.Path, conflict.Context);
         SetPanelChild(_conflictView);
     }
