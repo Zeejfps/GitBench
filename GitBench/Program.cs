@@ -66,7 +66,15 @@ using var submodulePointerSync = new SubmodulePointerSyncService(registry, gitSe
 
 snapshotStore.Start(dispatcher);
 
-// Native macOS menu bar (the call is macOS-guarded internally; a no-op elsewhere).
+// Native macOS menu bar (the call is macOS-guarded internally; a no-op elsewhere). The About
+// dialog it opens shows the app icon, so load it into the canvas first. Scoped to macOS — the
+// only place the dialog is currently reachable — where Metal texture upload needs no current
+// GL context. A load failure (e.g. missing asset) just falls back to a glyph.
+if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+{
+    try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon.png"); }
+    catch (Exception ex) { Console.WriteLine($"[About] icon load failed: {ex.Message}"); }
+}
 context.InstallNativeAppMenu(themeMode, updateService, dispatcher);
 
 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);

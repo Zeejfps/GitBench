@@ -32,6 +32,10 @@
         <None Update="Assets\commit_bench_icon.rgba">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <!-- Shown in the in-app About dialog (loaded via GuiApp.LoadImage). -->
+        <None Update="Assets\commit_bench_icon.png">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <!-- Fonts are embedded into the assembly instead of shipped as loose files. -->

@@ -22,4 +22,9 @@ public sealed class NoopPlatformShell : IPlatformShell
     {
         Console.WriteLine($"[PlatformShell] No native OpenFile for this OS. Path: {path}");
     }
+
+    public void OpenUrl(string url)
+    {
+        Console.WriteLine($"[PlatformShell] No native OpenUrl for this OS. Url: {url}");
+    }
 }

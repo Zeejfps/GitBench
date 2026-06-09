@@ -54,10 +54,14 @@ internal static class PlatformServices
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 
+            var bus = context.Require<IMessageBus>();
+
             void ToggleTheme() =>
                 themeMode.Value = themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
             void CheckForUpdates() =>
                 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: true);
+            void ShowAbout() =>
+                bus.Broadcast(new ShowDialogMessage(onClose => new AboutDialog(onClose)));
 
             context.Require<IAppMenu>().Install(new AppMenuBar
             {
@@ -69,7 +73,7 @@ internal static class PlatformServices
                         Role = AppMenuRole.Application,
                         Items =
                         {
-                            new AppMenuItem { Title = "About GitBench", Standard = AppMenuStandardAction.About },
+                            new AppMenuItem { Title = "About GitBench", OnClick = ShowAbout },
                             AppMenuItem.Separator,
                             new AppMenuItem { Title = "Check for Updates…", OnClick = CheckForUpdates },
                             AppMenuItem.Separator,
