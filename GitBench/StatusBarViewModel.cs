@@ -1,3 +1,4 @@
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench;
@@ -47,6 +48,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     public StatusBarViewModel(
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
+        IFrameTicker ticker,
         IRepoSnapshotStore store,
         GitIdentityService identity,
         IdentityProfileService profiles,
@@ -63,7 +65,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _bus = bus;
         _themeMode = themeMode;
         _updateService = updateService;
-        _updateSpinner = new SpinnerAnimation(dispatcher);
+        _updateSpinner = new SpinnerAnimation(ticker);
         _identityLane = CreateLane();
 
         HasActiveRepo = Slice(s => s.HasActiveRepo);

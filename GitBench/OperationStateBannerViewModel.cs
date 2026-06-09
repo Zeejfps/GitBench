@@ -1,3 +1,4 @@
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench;
@@ -20,13 +21,14 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
+        IFrameTicker ticker,
         IMessageBus bus)
         : base(dispatcher, OperationBannerState.Initial)
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
-        _spinner = new SpinnerAnimation(dispatcher);
+        _spinner = new SpinnerAnimation(ticker);
 
         State = Slice(s => s.State);
         Abort = new Command(DoAbort);

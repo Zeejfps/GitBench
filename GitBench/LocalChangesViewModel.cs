@@ -77,6 +77,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
+        IFrameTicker ticker,
         IMessageBus bus,
         LocalChangesSelectionStore selectionStore,
         IPlatformShell shell,
@@ -123,7 +124,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         CommitEnabled = Slice(s => s.CommitEnabled);
         CommitBusy = Slice(s => s.CommitBusy);
 
-        _commitSpinner = new SpinnerAnimation(dispatcher);
+        _commitSpinner = new SpinnerAnimation(ticker);
         DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, shell);
 
         Update(s => s with { ViewMode = preferences.Current.FileViewMode });

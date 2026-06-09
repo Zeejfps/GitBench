@@ -5,6 +5,7 @@ using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Observable;
 
 namespace GitBench;
 
@@ -45,6 +46,9 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private bool _truncated;
     // When a search filter is active the graph column is dropped (lanes don't apply to a subset).
     private bool _filtering;
+    // Repaints the relative dates ("3m ago"), which go stale with no state change to dirty us.
+    private const int DateRefreshMs = 30_000;
+    private CancellationTokenSource? _dateRefreshCts;
 
     public event Action<float>? ScrollPositionChanged;
     public event Action<float>? ScaleChanged;
@@ -137,6 +141,38 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
     // Pass-through for the panel's search bar; the VM is owned by this view via UseViewModel.
     public void SetSearchQuery(string? query) => _vm?.SetSearchQuery(query);
+
+    protected override void OnAttachedToContext(Context context)
+    {
+        var dispatcher = context.Get<IUiDispatcher>();
+        if (dispatcher == null) return;
+
+        var cts = new CancellationTokenSource();
+        _dateRefreshCts = cts;
+        Task.Run(async () =>
+        {
+            try
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    await Task.Delay(DateRefreshMs, cts.Token).ConfigureAwait(false);
+                    dispatcher.Post(() =>
+                    {
+                        if (cts.Token.IsCancellationRequested) return;
+                        if (_snapshot?.Commits.Count > 0) SetDirty();
+                    });
+                }
+            }
+            catch (OperationCanceledException) { /* expected */ }
+        }, cts.Token);
+    }
+
+    protected override void OnDetachedFromContext(Context context)
+    {
+        _dateRefreshCts?.Cancel();
+        _dateRefreshCts?.Dispose();
+        _dateRefreshCts = null;
+    }
 
     protected override void OnLayoutChild(in RectF position, View child)
     {

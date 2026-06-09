@@ -1,3 +1,4 @@
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench;
@@ -43,6 +44,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IGitService gitService,
         IPlatformShell shell,
         IUiDispatcher dispatcher,
+        IFrameTicker ticker,
         IMessageBus bus,
         IRepoSnapshotStore store)
         : base(dispatcher, ActionsToolbarState.Initial)
@@ -56,9 +58,9 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         _pullGen = CreateLane();
         _fetchGen = CreateLane();
 
-        _pushSpinner = new SpinnerAnimation(dispatcher);
-        _pullSpinner = new SpinnerAnimation(dispatcher);
-        _fetchSpinner = new SpinnerAnimation(dispatcher);
+        _pushSpinner = new SpinnerAnimation(ticker);
+        _pullSpinner = new SpinnerAnimation(ticker);
+        _fetchSpinner = new SpinnerAnimation(ticker);
 
         var repoActionsEnabled = Slice(s => s.HasActiveRepo);
         Push = new Command(DoPush, Slice(ComputePushEnabled));
