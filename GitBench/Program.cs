@@ -66,6 +66,9 @@ using var submodulePointerSync = new SubmodulePointerSyncService(registry, gitSe
 
 snapshotStore.Start(dispatcher);
 
+// Native macOS menu bar (the call is macOS-guarded internally; a no-op elsewhere).
+context.InstallNativeAppMenu(themeMode, updateService, dispatcher);
+
 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
 
 appHost.Run();
