@@ -110,6 +110,13 @@ public sealed class WindowsPlatformShell : IPlatformShell
         using var _ = Process.Start(psi);
     }
 
+    public void OpenUrl(string url)
+    {
+        // UseShellExecute lets the shell hand the URL to the default browser.
+        var psi = new ProcessStartInfo(url) { UseShellExecute = true };
+        using var _ = Process.Start(psi);
+    }
+
     public void OpenTerminal(string path)
     {
         // Windows Terminal first; fall back to cmd.exe if wt isn't installed.

@@ -38,6 +38,9 @@ public sealed class LinuxPlatformShell : IPlatformShell
 
     public void OpenFile(string path) => Open(path);
 
+    // xdg-open dispatches http(s) URLs to the default browser, same as files/folders.
+    public void OpenUrl(string url) => Open(url);
+
     public void OpenTerminal(string path)
     {
         if (_terminal == null)

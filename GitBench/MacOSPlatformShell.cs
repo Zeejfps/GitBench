@@ -65,6 +65,14 @@ public sealed class MacOSPlatformShell : IPlatformShell
         using var _ = Process.Start(psi);
     }
 
+    public void OpenUrl(string url)
+    {
+        // `open` hands http(s) URLs to the default browser.
+        var psi = new ProcessStartInfo("/usr/bin/open");
+        psi.ArgumentList.Add(url);
+        using var _ = Process.Start(psi);
+    }
+
     public void OpenTerminal(string path)
     {
         var psi = new ProcessStartInfo("/usr/bin/open");
