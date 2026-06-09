@@ -385,7 +385,7 @@ internal sealed class ConflictResolveView : MultiChildView
         }
 
         // Junction height doesn't drive the row (the cards do); it's stretched to the row.
-        public override float MeasureHeight(float availableWidth) => LineThickness;
+        protected override float MeasureHeightIntrinsic(float availableWidth) => LineThickness;
 
         protected override void OnDrawSelf(ICanvas c)
         {
