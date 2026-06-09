@@ -36,6 +36,9 @@
         <None Update="Assets\commit_bench_icon.png">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <None Update="Assets\commit_bench_icon_mac.png">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <!-- Fonts are embedded into the assembly instead of shipped as loose files. -->

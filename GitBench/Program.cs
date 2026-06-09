@@ -72,7 +72,7 @@ snapshotStore.Start(dispatcher);
 // GL context. A load failure (e.g. missing asset) just falls back to a glyph.
 if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
 {
-    try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon.png"); }
+    try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon_mac.png"); }
     catch (Exception ex) { Console.WriteLine($"[About] icon load failed: {ex.Message}"); }
 }
 context.InstallNativeAppMenu(themeMode, updateService, dispatcher);
