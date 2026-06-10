@@ -26,7 +26,7 @@ internal sealed class DeleteTagDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.DeleteTag(request.Repo, request.TagName, DeleteFromRemotes.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Delete tag failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

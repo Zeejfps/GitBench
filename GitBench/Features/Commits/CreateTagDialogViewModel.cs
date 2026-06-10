@@ -40,7 +40,7 @@ internal sealed class CreateTagDialogViewModel : IDisposable
                 var message = Message.Value;
                 var push = PushToAllRemotes.Value;
                 var outcome = gitService.CreateTag(request.Repo, name, message, request.Sha, push);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Create tag failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

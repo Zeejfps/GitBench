@@ -67,26 +67,25 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
 
         var service = _gitService;
         var bus = _bus;
-        RunBackground<ContinueOperationOutcome>(
-            () =>
-            {
-                try { return (service.ContinueOperation(repo, state), null); }
-                catch (Exception ex) { return (new ContinueOperationOutcome(false, ex.Message), null); }
-            },
-            (outcome, _) =>
+        RunBackground<ContinueOutcome>(
+            () => (service.ContinueOperation(repo, state), null),
+            (outcome, error) =>
             {
                 _isContinuing = false;
                 _spinner.Stop();
-                if (outcome!.Success)
+                switch (outcome ?? new ContinueOutcome.Failed(error ?? "Continue failed."))
                 {
-                    bus.Broadcast(new RefsChangedMessage(repo.Id));
-                    bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                    return;
+                    case ContinueOutcome.MoreConflicts more:
+                        bus.Broadcast(new ShowOperationErrorMessage("Resolve remaining conflicts", more.Message));
+                        break;
+                    case ContinueOutcome.Failed failed:
+                        bus.Broadcast(new ShowOperationErrorMessage("Continue failed", failed.Message));
+                        break;
+                    default:
+                        bus.Broadcast(new RefsChangedMessage(repo.Id));
+                        bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                        break;
                 }
-                var title = outcome.HasMoreConflicts
-                    ? "Resolve remaining conflicts"
-                    : "Continue failed";
-                bus.Broadcast(new ShowOperationErrorMessage(title, outcome.ErrorMessage ?? "Continue failed."));
             });
     }
 

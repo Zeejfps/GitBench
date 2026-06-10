@@ -51,7 +51,6 @@ public sealed record SubmoduleAddRequest(
     // Force adds when the path already exists or has been used before.
     bool Force);
 
-public sealed record SubmoduleAddOutcome(bool Success, string? ErrorMessage);
 
 public enum SubmoduleUpdateMode
 {
@@ -68,6 +67,4 @@ public sealed record SubmoduleUpdateRequest(
     bool Recursive,
     SubmoduleUpdateMode Mode);
 
-public sealed record SubmoduleUpdateOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
-public sealed record SubmoduleDeinitOutcome(bool Success, string? ErrorMessage);

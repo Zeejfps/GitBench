@@ -453,21 +453,23 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         _isStashApplying = true;
 
-        RunBackground<StashOutcome>(
+        RunBackground<MergeLikeOutcome>(
             work: () => (_gitService.ApplyStash(repo, index), null),
             onResult: (outcome, error) =>
             {
                 _isStashApplying = false;
-                if (error != null || !outcome!.Success)
+                switch (MergeLikeOutcome.Normalize(outcome, error))
                 {
-                    _bus.Broadcast(new ShowOperationErrorMessage(
-                        "Stash apply failed",
-                        (error ?? outcome?.ErrorMessage) ?? "Stash apply failed."));
-                    return;
+                    case MergeLikeOutcome.Failed failed:
+                        _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", failed.Message));
+                        return;
+                    case MergeLikeOutcome.Conflicted:
+                        _bus.Broadcast(new RefsChangedMessage(repo.Id));
+                        _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                        return;
                 }
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                if (outcome.HasConflicts) return;
                 if (offerDrop)
                     _bus.Broadcast(new ShowDialogMessage(onClose => new DropStashDialog(
                         repo, index, label, subject, onClose)));
@@ -492,18 +494,16 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         Update(s => s with { BusyBranch = branchName, PendingHead = branchName });
 
-        RunBackground<CheckoutOutcome>(
+        RunBackground<GitOutcome>(
             work: () => (_gitService.CheckoutLocalBranch(repo, branchName), null),
             onResult: (outcome, error) =>
             {
-                var ok = error == null && outcome!.Success;
-                Update(s => s with { BusyBranch = null, PendingHead = ok ? s.PendingHead : null });
+                var failed = GitOutcome.Normalize(outcome, error) as GitOutcome.Failed;
+                Update(s => s with { BusyBranch = null, PendingHead = failed == null ? s.PendingHead : null });
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                if (!ok)
-                    _bus.Broadcast(new ShowOperationErrorMessage(
-                        "Checkout failed",
-                        (error ?? outcome?.ErrorMessage) ?? "Checkout failed."));
+                if (failed != null)
+                    _bus.Broadcast(new ShowOperationErrorMessage("Checkout failed", failed.Message));
             },
             lane: _branchOpGen);
     }
@@ -518,19 +518,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         var bus = _bus;
 
-        RunBackground<FastForwardOutcome>(
+        RunBackground<GitOutcome>(
             work: () => (_gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch), null),
             onResult: (outcome, error) =>
             {
                 Update(s => s with { BusyBranch = null });
-                var success = error == null && outcome!.Success;
-                var errorMessage = error ?? outcome?.ErrorMessage;
-                if (success)
-                    bus.Broadcast(new RefsChangedMessage(repo.Id));
+                if (GitOutcome.Normalize(outcome, error) is GitOutcome.Failed failed)
+                    bus.Broadcast(new ShowOperationErrorMessage("Fast-forward failed", failed.Message));
                 else
-                    bus.Broadcast(new ShowOperationErrorMessage(
-                        "Fast-forward failed",
-                        errorMessage ?? "Fast-forward failed."));
+                    bus.Broadcast(new RefsChangedMessage(repo.Id));
             },
             lane: _branchOpGen);
     }

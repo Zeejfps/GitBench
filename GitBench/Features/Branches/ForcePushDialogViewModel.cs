@@ -22,7 +22,7 @@ internal sealed class ForcePushDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.Push(repo, force: true);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Force push failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

@@ -47,7 +47,7 @@ internal sealed class PublishBranchDialogViewModel : IDisposable
                 var setUpstream = SetUpstream.Value;
                 var local = _request.LocalBranch;
                 var outcome = _gitService.PublishBranch(_request.Repo, local, remote, local, setUpstream);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Publish failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

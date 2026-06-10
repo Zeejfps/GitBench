@@ -22,7 +22,7 @@ internal sealed class MoveBranchDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.MoveBranch(request.Repo, request.BranchName, request.Sha, checkout: true);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Move branch failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

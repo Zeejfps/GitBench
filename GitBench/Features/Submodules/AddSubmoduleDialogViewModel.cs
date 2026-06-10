@@ -49,7 +49,7 @@ internal sealed class AddSubmoduleDialogViewModel : IDisposable
                     Branch: branch.Length > 0 ? branch : null,
                     Force: force);
                 var outcome = gitService.AddSubmodule(request.Primary, req);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Add submodule failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

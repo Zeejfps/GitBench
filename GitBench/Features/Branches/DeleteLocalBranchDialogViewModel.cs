@@ -14,7 +14,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
     // work lambda into the UI-thread OnDeleteSucceeded callback. The work runs on a worker
     // thread and completes before AsyncCommand posts the callback, so the read sees the write —
     // and a plain assignment fires no observable notifications on the wrong thread.
-    private DeleteRemoteBranchOutcome? _partialFailure;
+    private GitOutcome.Failed? _partialFailure;
 
     public State<bool> Force { get; } = new(false);
     public State<bool> DeleteRemote { get; } = new(false);
@@ -47,17 +47,16 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
         var remoteName = _request.UpstreamRemote;
         var remoteBranch = _request.UpstreamBranch;
 
-        var local = _gitService.DeleteBranch(_request.Repo, _request.BranchName, force);
-        if (!local.Success)
-            return local.ErrorMessage ?? "Delete failed.";
+        if (_gitService.DeleteBranch(_request.Repo, _request.BranchName, force) is GitOutcome.Failed local)
+            return local.Message;
 
         if (deleteRemote)
         {
-            DeleteRemoteBranchOutcome remote;
+            GitOutcome remote;
             try { remote = _gitService.DeleteRemoteBranch(_request.Repo, remoteName!, remoteBranch!); }
-            catch (Exception ex) { remote = new DeleteRemoteBranchOutcome(false, ex.Message); }
-            if (!remote.Success)
-                _partialFailure = remote;
+            catch (Exception ex) { remote = new GitOutcome.Failed(ex.Message); }
+            if (remote is GitOutcome.Failed failed)
+                _partialFailure = failed;
         }
         return null;
     }
@@ -69,12 +68,9 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
 
         if (_partialFailure is { } failed)
         {
-            var remoteName = _request.UpstreamRemote;
-            var remoteBranch = _request.UpstreamBranch;
             _bus.Broadcast(new ShowOperationErrorMessage(
                 "Remote delete failed",
-                failed.ErrorMessage
-                    ?? $"Local branch deleted, but failed to delete '{remoteBranch}' on '{remoteName}'."));
+                failed.Message));
         }
     }
 

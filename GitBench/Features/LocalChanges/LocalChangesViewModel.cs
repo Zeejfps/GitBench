@@ -563,8 +563,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 string? firstError = null;
                 foreach (var path in paths)
                 {
-                    var outcome = _gitService.MarkResolved(repo, path);
-                    if (!outcome.Success) firstError ??= outcome.ErrorMessage;
+                    if (_gitService.MarkResolved(repo, path) is GitOutcome.Failed failed)
+                        firstError ??= failed.Message;
                 }
                 return (true, firstError);
             },
@@ -589,16 +589,15 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
-        RunBackground<SubmoduleUpdateOutcome>(
-            work: () =>
-            {
-                try { return (_gitService.UpdateSubmodules(repo, req), null); }
-                catch (Exception ex) { return (null, ex.Message); }
-            },
+        RunBackground<MergeLikeOutcome>(
+            work: () => (_gitService.UpdateSubmodules(repo, req), null),
             onResult: (outcome, errorMsg) =>
             {
-                if (errorMsg != null) { Update(s => s with { OpError = errorMsg }); return; }
-                if (outcome is { Success: false }) { Update(s => s with { OpError = outcome.ErrorMessage }); return; }
+                if (MergeLikeOutcome.Normalize(outcome, errorMsg) is MergeLikeOutcome.Failed failed)
+                {
+                    Update(s => s with { OpError = failed.Message });
+                    return;
+                }
                 _bus.Broadcast(new SubmodulesChangedMessage(primaryId));
             },
             lane: _opGen);
@@ -648,16 +647,15 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             if (f.Status == FileChangeStatus.Added) untracked.Add(f.Path);
         var includeUntracked = paths.Any(untracked.Contains);
 
-        RunBackground<StashOutcome>(
-            work: () =>
-            {
-                try { return (_gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths), null); }
-                catch (Exception ex) { return (null, ex.Message); }
-            },
+        RunBackground<GitOutcome>(
+            work: () => (_gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths), null),
             onResult: (outcome, errorMsg) =>
             {
-                if (errorMsg != null) { Update(s => s with { OpError = errorMsg }); return; }
-                if (outcome is { Success: false }) { Update(s => s with { OpError = outcome.ErrorMessage }); return; }
+                if (GitOutcome.Normalize(outcome, errorMsg) is GitOutcome.Failed failed)
+                {
+                    Update(s => s with { OpError = failed.Message });
+                    return;
+                }
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
             },

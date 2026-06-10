@@ -165,10 +165,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 var staged = changes.Staged.Count;
                 var unstaged = changes.Unstaged.Count;
                 if (staged == 0 && unstaged == 0)
-                {
-                    var outcome = _gitService.ResetCurrent(capturedRepo, capturedSha, ResetMode.Hard);
-                    return (new ResetProbe.CleanReset(outcome.Success, outcome.ErrorMessage), null);
-                }
+                    return (new ResetProbe.CleanReset(_gitService.ResetCurrent(capturedRepo, capturedSha, ResetMode.Hard)), null);
                 return (new ResetProbe.NeedsDialog(staged, unstaged), null);
             },
             onResult: (probe, error) =>
@@ -184,13 +181,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                     case ResetProbe.Failed f:
                         _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", f.Message));
                         break;
-                    case ResetProbe.CleanReset c when c.Success:
+                    case ResetProbe.CleanReset { Outcome: GitOutcome.Failed failed }:
+                        _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", failed.Message));
+                        break;
+                    case ResetProbe.CleanReset:
                         _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
                         _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-                        break;
-                    case ResetProbe.CleanReset c:
-                        _bus.Broadcast(new ShowOperationErrorMessage(
-                            "Reset failed", c.Error ?? "Reset failed."));
                         break;
                     case ResetProbe.NeedsDialog d:
                         var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
@@ -264,10 +260,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             work: () =>
             {
                 if (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha))
-                {
-                    var outcome = _gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true);
-                    return (new MoveBranchProbe.Moved(outcome.Success, outcome.ErrorMessage), null);
-                }
+                    return (new MoveBranchProbe.Moved(_gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true)), null);
                 return (new MoveBranchProbe.NeedsConfirm(), null);
             },
             onResult: (probe, error) =>
@@ -280,13 +273,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 }
                 switch (probe)
                 {
-                    case MoveBranchProbe.Moved m when m.Success:
+                    case MoveBranchProbe.Moved { Outcome: GitOutcome.Failed failed }:
+                        _bus.Broadcast(new ShowOperationErrorMessage("Reset branch failed", failed.Message));
+                        break;
+                    case MoveBranchProbe.Moved:
                         _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
                         _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-                        break;
-                    case MoveBranchProbe.Moved m:
-                        _bus.Broadcast(new ShowOperationErrorMessage(
-                            "Reset branch failed", m.Error ?? "Reset branch failed."));
                         break;
                     case MoveBranchProbe.NeedsConfirm:
                         var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
@@ -302,7 +294,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // Outcome of the off-thread move probe, handed from work to onResult above.
     private abstract record MoveBranchProbe
     {
-        public sealed record Moved(bool Success, string? Error) : MoveBranchProbe;
+        public sealed record Moved(GitOutcome Outcome) : MoveBranchProbe;
         public sealed record NeedsConfirm : MoveBranchProbe;
     }
 
@@ -331,25 +323,17 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // same and lets the banner (which detects CHERRY_PICK_HEAD) drive resolve/continue/abort; a
     // hard failure (dirty tree, bad ref, …) surfaces an error.
     public void RequestCherryPick(string sha) =>
-        RunCommitApply(sha, "Cherry-pick failed", (repo, s) =>
-        {
-            var outcome = _gitService.CherryPick(repo, s);
-            return new CommitApplyResult(outcome.Success, outcome.ErrorMessage);
-        });
+        RunCommitApply(sha, "Cherry-pick failed", (repo, s) => _gitService.CherryPick(repo, s));
 
     // Creates a new commit that undoes the named commit. Same off-thread flow as cherry-pick;
     // its conflict sentinel is REVERT_HEAD, also handled by the operation banner.
     public void RequestRevert(string sha) =>
-        RunCommitApply(sha, "Revert failed", (repo, s) =>
-        {
-            var outcome = _gitService.RevertCommit(repo, s);
-            return new CommitApplyResult(outcome.Success, outcome.ErrorMessage);
-        });
+        RunCommitApply(sha, "Revert failed", (repo, s) => _gitService.RevertCommit(repo, s));
 
     // Shared driver for the cherry-pick / revert one-shot ops: gate re-entry, run the git op
-    // off-thread on the apply lane, then either refresh (success, incl. success-with-conflicts)
-    // or show an error.
-    private void RunCommitApply(string sha, string failureTitle, Func<Repo, string, CommitApplyResult> op)
+    // off-thread on the apply lane, then either refresh (success, incl. Conflicted — the
+    // operation banner takes over) or show an error.
+    private void RunCommitApply(string sha, string failureTitle, Func<Repo, string, MergeLikeOutcome> op)
     {
         if (_isApplyingCommit) return;
         var snap = _snapshot;
@@ -361,37 +345,27 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var capturedRepo = repo;
         var capturedSha = sha;
 
-        RunBackground<CommitApplyResult>(
+        RunBackground<MergeLikeOutcome>(
             work: () => (op(capturedRepo, capturedSha), null),
             onResult: (result, error) =>
             {
                 _isApplyingCommit = false;
-                if (error != null)
+                if (MergeLikeOutcome.Normalize(result, error) is MergeLikeOutcome.Failed failed)
                 {
-                    _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error));
+                    _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, failed.Message));
                     return;
                 }
-                if (result.Success)
-                {
-                    _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
-                    _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-                }
-                else
-                {
-                    _bus.Broadcast(new ShowOperationErrorMessage(
-                        failureTitle, result.Error ?? $"{failureTitle}."));
-                }
+                _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
+                _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
             },
             lane: _applyGen);
     }
-
-    private sealed record CommitApplyResult(bool Success, string? Error);
 
     // Outcome of the off-thread reset probe, handed from work to onResult above.
     private abstract record ResetProbe
     {
         public sealed record Failed(string Message) : ResetProbe;
-        public sealed record CleanReset(bool Success, string? Error) : ResetProbe;
+        public sealed record CleanReset(GitOutcome Outcome) : ResetProbe;
         public sealed record NeedsDialog(int Staged, int Unstaged) : ResetProbe;
     }
 

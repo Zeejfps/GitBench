@@ -102,7 +102,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         if (s.Value.IsPushing) return;
         s.Value = s.Value with { IsPushing = true, LastError = null, HasUnseenError = false };
         Run(repo,
-            () => { var o = _git.Push(repo, force); return (o.Success, o.Success ? null : o.ErrorMessage ?? "Push failed.", false); },
+            () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsPushing = false });
     }
 
@@ -112,7 +112,12 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         if (s.Value.IsPulling) return;
         s.Value = s.Value with { IsPulling = true, LastError = null, HasUnseenError = false };
         Run(repo,
-            () => { var o = _git.Pull(repo, strategy); return (o.Success, o.Success ? null : o.ErrorMessage ?? "Pull failed.", o.HasDivergedBranches); },
+            () => _git.Pull(repo, strategy) switch
+            {
+                PullOutcome.Failed f => (false, f.Message, false),
+                PullOutcome.Diverged => (false, "Need to specify how to reconcile divergent branches.", true),
+                _ => (true, null, false),
+            },
             st => st with { IsPulling = false });
     }
 
@@ -122,7 +127,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         if (s.Value.IsFetching) return;
         s.Value = s.Value with { IsFetching = true, LastError = null, HasUnseenError = false };
         Run(repo,
-            () => { var o = _git.Fetch(repo); return (o.Success, o.Success ? null : o.ErrorMessage ?? "Fetch failed.", false); },
+            () => _git.Fetch(repo) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsFetching = false });
     }
 

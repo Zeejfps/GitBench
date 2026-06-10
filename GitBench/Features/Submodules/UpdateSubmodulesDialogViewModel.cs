@@ -34,12 +34,12 @@ internal sealed class UpdateSubmodulesDialogViewModel : IDisposable
                     Init: Init.Value,
                     Recursive: Recursive.Value,
                     Mode: Mode.Value);
-                var outcome = gitService.UpdateSubmodules(request.Primary, req);
-                // A conflict outcome reports !Success, but the update did land — the Operation
-                // banner takes over to resolve it, so close and refresh like a clean success
-                // rather than surfacing it as an error.
-                if (outcome.Success || outcome.HasConflicts) return null;
-                return outcome.ErrorMessage ?? "Update submodules failed.";
+                // A Conflicted outcome means the update did land — the Operation banner takes
+                // over to resolve it, so close and refresh like a clean success rather than
+                // surfacing it as an error.
+                return gitService.UpdateSubmodules(request.Primary, req) is MergeLikeOutcome.Failed failed
+                    ? failed.Message
+                    : null;
             },
             onSuccess: () =>
             {

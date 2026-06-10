@@ -28,7 +28,7 @@ internal sealed class DeinitSubmoduleDialogViewModel : IDisposable
             {
                 var force = Force.Value;
                 var outcome = gitService.DeinitSubmodule(request.Primary, submodulePath, force);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Deinit submodule failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

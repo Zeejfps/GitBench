@@ -38,8 +38,13 @@ internal sealed class AbortOperationDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.AbortOperation(request.Repo, request.State, _forceQuitMode.Value);
-                _forceQuitAvailable = outcome.ForceQuitAvailable;
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Abort failed.");
+                if (outcome is AbortOutcome.Failed failed)
+                {
+                    _forceQuitAvailable = failed.ForceQuitAvailable;
+                    return failed.Message;
+                }
+                _forceQuitAvailable = false;
+                return null;
             },
             onSuccess: () =>
             {

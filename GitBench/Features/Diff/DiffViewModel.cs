@@ -199,7 +199,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // side. For conflicts resolved outside the app (an external editor / merge tool).
     public void ResolveMarkResolved() => RunResolve((svc, repo, path) => svc.MarkResolved(repo, path));
 
-    private void RunResolve(Func<IGitService, Repo, string, ResolveOutcome> op)
+    private void RunResolve(Func<IGitService, Repo, string, GitOutcome> op)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
@@ -212,15 +212,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var repoId = repo.Id;
         Task.Run(() =>
         {
-            ResolveOutcome outcome;
+            GitOutcome outcome;
             try { outcome = op(service, repo, path); }
-            catch (Exception ex) { outcome = new ResolveOutcome(false, ex.Message); }
+            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
 
             dispatcher.Post(() =>
             {
-                if (!outcome.Success)
+                if (outcome is GitOutcome.Failed failed)
                 {
-                    Update(s => s with { OpError = outcome.ErrorMessage });
+                    Update(s => s with { OpError = failed.Message });
                     return;
                 }
                 Update(s => s with { OpError = null });

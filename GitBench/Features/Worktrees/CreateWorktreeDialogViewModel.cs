@@ -50,7 +50,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDisposable
                     NewBranchName: newBranch.Length > 0 ? newBranch : null,
                     Force: force);
                 var outcome = gitService.AddWorktree(request.Primary, req);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Create worktree failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

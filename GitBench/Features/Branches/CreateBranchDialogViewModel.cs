@@ -45,7 +45,7 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
                 if (startPoint.Length == 0) startPoint = "HEAD";
                 var checkout = Checkout.Value;
                 var outcome = gitService.CreateBranch(repo, name, startPoint, checkout);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Create branch failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

@@ -24,7 +24,7 @@ internal sealed class ResetCommitDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.ResetCurrent(request.Repo, request.Sha, Mode.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Reset failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

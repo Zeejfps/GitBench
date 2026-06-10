@@ -24,34 +24,34 @@ public interface IGitService
     IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo);
     PushStatus GetPushStatus(Repo repo);
     bool IsHeadDetachedAtRisk(Repo repo);
-    PushOutcome Push(Repo repo, bool force = false);
-    PushOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
+    GitOutcome Push(Repo repo, bool force = false);
+    GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
     IReadOnlyList<string> GetRemoteNames(Repo repo);
     string? GetRemoteUrl(Repo repo, string remoteName);
-    SetLocalIdentityOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config);
-    EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url);
-    EditRemoteOutcome AddRemote(Repo repo, string name, string url);
+    GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config);
+    GitOutcome EditRemote(Repo repo, string oldName, string newName, string url);
+    GitOutcome AddRemote(Repo repo, string name, string url);
     PullOutcome Pull(Repo repo, PullStrategy? strategy = null);
-    FetchOutcome Fetch(Repo repo);
+    GitOutcome Fetch(Repo repo);
     // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's
     // progress output. On success RepoPath carries the absolute path of the new working tree.
     CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null);
-    FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null);
-    CheckoutOutcome CheckoutLocalBranch(Repo repo, string branchName);
-    CheckoutOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
-    ResetOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
-    CreateBranchOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout);
-    MoveBranchOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
+    GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null);
+    GitOutcome CheckoutLocalBranch(Repo repo, string branchName);
+    GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
+    GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
+    GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout);
+    GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
     bool IsAncestor(Repo repo, string maybeAncestor, string descendant);
-    CreateTagOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
-    DeleteTagOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
-    RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
-    DeleteBranchOutcome DeleteBranch(Repo repo, string name, bool force);
-    DeleteRemoteBranchOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName);
-    StashOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths);
-    StashOutcome ApplyStash(Repo repo, int index);
-    StashOutcome DropStash(Repo repo, int index);
-    StashOutcome RenameStash(Repo repo, int index, string newMessage);
+    GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
+    GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
+    GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
+    GitOutcome DeleteBranch(Repo repo, string name, bool force);
+    GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName);
+    GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths);
+    MergeLikeOutcome ApplyStash(Repo repo, int index);
+    GitOutcome DropStash(Repo repo, int index);
+    GitOutcome RenameStash(Repo repo, int index, string newMessage);
     DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null);
     // Full file text for one side of a diff, used by syntax highlighting's whole-file tokenize.
     // oldSide picks the "before" content (removed lines), else the "after" content (added/
@@ -63,16 +63,16 @@ public interface IGitService
     // The default merge commit message (MERGE_MSG) when a merge is in progress, else null.
     // Used to pre-fill the commit box so committing finishes the merge.
     string? GetMergeMessage(Repo repo);
-    AbortOperationOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
-    ContinueOperationOutcome ContinueOperation(Repo repo, RepoOperationState state);
+    AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
+    ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state);
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage);
-    WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
-    WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
-    WorktreePruneOutcome PruneWorktrees(Repo primary);
+    GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
+    GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
+    GitOutcome PruneWorktrees(Repo primary);
     IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary, out string? errorMessage);
-    SubmoduleAddOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request);
-    SubmoduleUpdateOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request);
-    SubmoduleDeinitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force);
+    GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request);
+    MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request);
+    GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force);
     // Stages the parent's gitlink for a submodule whose HEAD has moved, so the pointer update
     // becomes a deliberate staged change instead of a lingering unstaged "modified" entry.
     // relativePath is the submodule's path within parent's working tree. Returns true when the
@@ -80,19 +80,19 @@ public interface IGitService
     bool StageSubmodulePointer(Repo parent, string relativePath);
     IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha);
     MergePreviewResult PreviewMerge(Repo repo, string sourceRef);
-    MergeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy);
+    MergeLikeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy);
     RebasePreviewResult PreviewRebase(Repo repo, string targetRef);
-    RebaseOutcome Rebase(Repo repo, string targetRef, bool autostash);
-    CherryPickOutcome CherryPick(Repo repo, string commitSha);
-    RevertCommitOutcome RevertCommit(Repo repo, string commitSha);
+    MergeLikeOutcome Rebase(Repo repo, string targetRef, bool autostash);
+    MergeLikeOutcome CherryPick(Repo repo, string commitSha);
+    MergeLikeOutcome RevertCommit(Repo repo, string commitSha);
     // Per-file conflict resolution. TakeOurs/TakeTheirs check out the chosen side and stage
     // it; MarkResolved stages the working-tree file as-is (manual-edit path). Each returns a
     // ResolveOutcome and broadcasting is left to the caller.
-    ResolveOutcome TakeOurs(Repo repo, string path);
-    ResolveOutcome TakeTheirs(Repo repo, string path);
+    GitOutcome TakeOurs(Repo repo, string path);
+    GitOutcome TakeTheirs(Repo repo, string path);
     // Resolves by keeping both sides: writes ours' content followed by theirs' content and stages.
-    ResolveOutcome TakeBoth(Repo repo, string path);
-    ResolveOutcome MarkResolved(Repo repo, string path);
+    GitOutcome TakeBoth(Repo repo, string path);
+    GitOutcome MarkResolved(Repo repo, string path);
     // Ours/theirs/base blob text for a conflicted path (stages 2/3/1). Any side may be null
     // when that stage is absent (add/add has no base, delete/modify is missing a side).
     ConflictSides GetConflictSides(Repo repo, string path);
@@ -118,7 +118,6 @@ public enum MergePreviewState
 
 public sealed record MergePreviewResult(MergePreviewState State, string? ErrorMessage);
 
-public sealed record MergeOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
 public enum RebasePreviewState
 {
@@ -129,26 +128,10 @@ public enum RebasePreviewState
 
 public sealed record RebasePreviewResult(RebasePreviewState State, string? ErrorMessage);
 
-public sealed record RebaseOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
-// HasConflicts mirrors the merge/rebase pattern: a cherry-pick that conflicts exits
-// non-zero but leaves CHERRY_PICK_HEAD behind, which the operation banner picks up — so
-// it's reported as a successful start that produced conflicts, not an error.
-public sealed record CherryPickOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
-// Same as CherryPickOutcome but for `git revert`, whose conflict sentinel is REVERT_HEAD.
-public sealed record RevertCommitOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
-// ForceQuitAvailable is set when the regular --abort failed but the in-progress state is
-// recoverable via `git X --quit` or direct sentinel removal — i.e. the user can choose to
-// give up on restoring HEAD and just clear the marker files. Surfaced to the dialog so it
-// can flip its confirm button to a "Force clear" action on the second click.
-public sealed record AbortOperationOutcome(bool Success, string? ErrorMessage, bool ForceQuitAvailable = false);
 
-// HasMoreConflicts is set when `git X --continue` refused because the working tree still
-// has unmerged paths — the operation banner stays up and we surface the message so the
-// user knows they have files left to resolve and stage.
-public sealed record ContinueOperationOutcome(bool Success, string? ErrorMessage, bool HasMoreConflicts = false);
 
 public enum RepoOperationState
 {
@@ -190,12 +173,7 @@ public sealed record GitStatusSummary(
     public static readonly GitStatusSummary Unknown = new(null, false, false, 0, 0, false);
 }
 
-public sealed record PushOutcome(bool Success, string? ErrorMessage);
 
-// HasDivergedBranches flags the one failure the caller can recover from in-app: local and
-// upstream both moved and git refuses to pick merge-vs-rebase on its own. The Pull button
-// catches it and reruns with an explicit PullStrategy instead of dead-ending on the raw hint.
-public sealed record PullOutcome(bool Success, string? ErrorMessage, bool HasDivergedBranches = false);
 
 // How `git pull` reconciles a diverged branch when the default (no strategy) is rejected.
 public enum PullStrategy
@@ -205,13 +183,9 @@ public enum PullStrategy
     FastForwardOnly,
 }
 
-public sealed record FetchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record CloneOutcome(bool Success, string? ErrorMessage, string? RepoPath);
 
-public sealed record FastForwardOutcome(bool Success, string? ErrorMessage);
 
-public sealed record CheckoutOutcome(bool Success, string? ErrorMessage);
 
 public enum ResetMode
 {
@@ -220,29 +194,17 @@ public enum ResetMode
     Hard,
 }
 
-public sealed record ResetOutcome(bool Success, string? ErrorMessage);
 
-public sealed record CreateBranchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record MoveBranchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record CreateTagOutcome(bool Success, string? ErrorMessage);
 
-public sealed record DeleteTagOutcome(bool Success, string? ErrorMessage);
 
-public sealed record RenameBranchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record DeleteBranchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record DeleteRemoteBranchOutcome(bool Success, string? ErrorMessage);
 
-public sealed record EditRemoteOutcome(bool Success, string? ErrorMessage);
 
-public sealed record SetLocalIdentityOutcome(bool Success, string? ErrorMessage);
 
-public sealed record StashOutcome(bool Success, string? ErrorMessage, bool HasConflicts = false);
 
-public sealed record ResolveOutcome(bool Success, string? ErrorMessage);
 
 // Text of each conflict side for a path; null when that stage doesn't exist. ErrorMessage
 // is set only on an outright failure (not a git repo, etc.), not for a merely-absent side.

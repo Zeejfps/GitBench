@@ -21,7 +21,7 @@ internal sealed class DeleteRemoteBranchDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.DeleteRemoteBranch(request.Repo, request.RemoteName, request.BranchName);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Delete failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

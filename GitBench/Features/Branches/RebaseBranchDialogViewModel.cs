@@ -25,7 +25,7 @@ internal sealed class RebaseBranchDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.Rebase(request.Repo, request.TargetRef, Autostash.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Rebase failed.");
+                return outcome is MergeLikeOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

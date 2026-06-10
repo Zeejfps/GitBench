@@ -49,9 +49,14 @@ internal sealed class CloneRepoDialogViewModel : IDisposable
             work: () =>
             {
                 var target = Path.Combine(ParentDir.Value.Trim(), FolderName.Value.Trim());
-                var outcome = gitService.Clone(Url.Value.Trim(), target);
-                if (!outcome.Success) return outcome.ErrorMessage ?? "Clone failed.";
-                _clonedPath = outcome.RepoPath;
+                switch (gitService.Clone(Url.Value.Trim(), target))
+                {
+                    case CloneOutcome.Failed failed:
+                        return failed.Message;
+                    case CloneOutcome.Cloned cloned:
+                        _clonedPath = cloned.RepoPath;
+                        break;
+                }
                 return null;
             },
             onSuccess: () =>

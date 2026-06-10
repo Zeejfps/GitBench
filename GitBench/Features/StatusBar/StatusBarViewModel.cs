@@ -272,10 +272,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
                 // The pin wrote --local config, so clear the manual override and let the resolver
                 // honor that config (inject nothing) — otherwise the override would keep injecting
                 // and GUI/terminal could diverge.
-                if (outcome.Success) _registry.SetIdentityOverride(repo.Id, null);
+                if (outcome is GitOutcome.Success) _registry.SetIdentityOverride(repo.Id, null);
                 _identity.FlushAll();
-                if (!outcome.Success && !string.IsNullOrEmpty(outcome.ErrorMessage))
-                    _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", outcome.ErrorMessage));
+                if (outcome is GitOutcome.Failed failed)
+                    _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", failed.Message));
             });
         });
     }

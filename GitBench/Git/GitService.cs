@@ -834,87 +834,47 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         RunGitMutationOrThrow(repo.Path, args);
     }
 
-    public ResolveOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
+    public GitOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
 
-    public ResolveOutcome TakeTheirs(Repo repo, string path) => TakeSide(repo, path, ours: false);
+    public GitOutcome TakeTheirs(Repo repo, string path) => TakeSide(repo, path, ours: false);
 
     // Resolves a conflict to one side: check out that side's blob, then stage it. Stage 2 is
     // "ours", stage 3 is "theirs". A delete/modify conflict is missing one of those stages —
     // choosing the side that deleted the file means removing it (`git rm`), not checking it out.
-    private ResolveOutcome TakeSide(Repo repo, string path, bool ours)
-    {
-        try
+    private GitOutcome TakeSide(Repo repo, string path, bool ours)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new ResolveOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-
             var stages = GetUnmergedStages(repo.Path, path);
             var wantStage = ours ? 2 : 3;
             // The chosen side deleted the file (its stage is absent but the path is unmerged):
             // resolve by removing it from index + working tree.
             if (stages.Count > 0 && !stages.Contains(wantStage))
-            {
-                var (rmOk, rmErr) = RunMutation(repo.Path, new[] { "rm", "-f", "--", path });
-                return rmOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, rmErr);
-            }
+                return Mutate(repo.Path, "rm", "-f", "--", path);
 
-            var (coOk, coErr) = RunMutation(repo.Path, new[] { "checkout", ours ? "--ours" : "--theirs", "--", path });
-            if (!coOk) return new ResolveOutcome(false, coErr);
+            var checkedOut = Mutate(repo.Path, "checkout", ours ? "--ours" : "--theirs", "--", path);
+            if (checkedOut is GitOutcome.Failed) return checkedOut;
 
-            var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
-            return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
-        }
-        catch (Exception ex)
-        {
-            return new ResolveOutcome(false, ex.Message);
-        }
-    }
+            return Mutate(repo.Path, "add", "--", path);
+        });
 
     // Marks a manually-edited file resolved by staging it — `git add` is exactly how git
     // records a resolution. If the file is gone (the user resolved by deleting it), `git add`
     // fails, so fall back to `git rm` to clear the unmerged index entry.
-    public ResolveOutcome MarkResolved(Repo repo, string path)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new ResolveOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-
-            if (File.Exists(Path.Combine(repo.Path, path)))
-            {
-                var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
-                return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
-            }
-
-            var (rmOk, rmErr) = RunMutation(repo.Path, new[] { "rm", "-f", "--", path });
-            return rmOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, rmErr);
-        }
-        catch (Exception ex)
-        {
-            return new ResolveOutcome(false, ex.Message);
-        }
-    }
+    public GitOutcome MarkResolved(Repo repo, string path)
+        => RunOperation(repo, () => File.Exists(Path.Combine(repo.Path, path))
+            ? Mutate(repo.Path, "add", "--", path)
+            : Mutate(repo.Path, "rm", "-f", "--", path));
 
     // Resolves a conflict by keeping both sides: writes ours' blob followed by theirs' blob
     // (a newline boundary inserted if ours doesn't end in one), then stages. Missing sides
     // (delete/modify) degrade to whichever side has content.
-    public ResolveOutcome TakeBoth(Repo repo, string path)
-    {
-        try
+    public GitOutcome TakeBoth(Repo repo, string path)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new ResolveOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-
             var ours = ShowStage(repo.Path, 2, path);
             var theirs = ShowStage(repo.Path, 3, path);
             if (ours == null && theirs == null)
-                return new ResolveOutcome(false, "Neither side has content to combine.");
+                return new GitOutcome.Failed("Neither side has content to combine.");
 
             var combined = CombineSides(ours, theirs);
             var full = Path.Combine(repo.Path, path);
@@ -922,14 +882,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
             File.WriteAllText(full, combined);
 
-            var (addOk, addErr) = RunMutation(repo.Path, new[] { "add", "--", path });
-            return addOk ? new ResolveOutcome(true, null) : new ResolveOutcome(false, addErr);
-        }
-        catch (Exception ex)
-        {
-            return new ResolveOutcome(false, ex.Message);
-        }
-    }
+            return Mutate(repo.Path, "add", "--", path);
+        });
 
     private static string CombineSides(string? ours, string? theirs)
     {
@@ -1409,64 +1363,42 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // force=true uses --force-with-lease: refuses if the remote moved since our last fetch,
     // so a teammate's concurrent push isn't silently clobbered. Caller is expected to have
     // confirmed with the user before passing force=true.
-    public PushOutcome Push(Repo repo, bool force = false)
-    {
-        try
+    public GitOutcome Push(Repo repo, bool force = false)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new PushOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
             // Pre-flight: refuse to push from detached HEAD or a branch with no upstream,
             // because the resulting `git push` error is less actionable than these messages.
             var info = GetHeadInfo(repo.Path);
             if (info.IsDetached)
-                return new PushOutcome(false, "HEAD is detached. Check out a branch first.");
+                return new GitOutcome.Failed("HEAD is detached. Check out a branch first.");
             if (!info.HasUpstream)
             {
                 var name = info.CurrentBranchName ?? "(unknown)";
-                return new PushOutcome(false,
+                return new GitOutcome.Failed(
                     $"Branch '{name}' has no upstream. Set one with: git push -u <remote> {name}");
             }
 
             var args = new List<string> { "push" };
             if (force) args.Add("--force-with-lease");
-            var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.BlockError("git push"));
-        }
-        catch (Exception ex)
-        {
-            return new PushOutcome(false, ex.Message);
-        }
-    }
+            return ToOutcome(_runner.Run(repo.Path, args), "git push");
+        });
 
-    public PushOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream)
-    {
-        try
+    public GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new PushOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(localBranch))
-                return new PushOutcome(false, "Local branch is required.");
+                return new GitOutcome.Failed("Local branch is required.");
             if (string.IsNullOrWhiteSpace(remoteName))
-                return new PushOutcome(false, "Remote is required.");
+                return new GitOutcome.Failed("Remote is required.");
             if (string.IsNullOrWhiteSpace(remoteBranchName))
-                return new PushOutcome(false, "Remote branch name is required.");
+                return new GitOutcome.Failed("Remote branch name is required.");
 
             var args = new List<string> { "push" };
             if (setUpstream) args.Add("--set-upstream");
             args.Add(remoteName);
             args.Add($"{localBranch}:{remoteBranchName}");
-
-            using var _ = LockRepo(repo.Path);
-            var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new PushOutcome(true, null) : new PushOutcome(false, result.BlockError("git push"));
-        }
-        catch (Exception ex)
-        {
-            return new PushOutcome(false, ex.Message);
-        }
-    }
+            return ToOutcome(_runner.Run(repo.Path, args), "git push");
+        });
 
     public IReadOnlyList<string> GetRemoteNames(Repo repo)
     {
@@ -1518,65 +1450,30 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return url.Length == 0 ? null : url;
     }
 
-    public EditRemoteOutcome EditRemote(Repo repo, string oldName, string newName, string url)
-    {
-        try
+    public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new EditRemoteOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
             if (!string.Equals(oldName, newName, StringComparison.Ordinal))
             {
-                var (renamed, renameError) = RunMutation(repo.Path, new[] { "remote", "rename", oldName, newName });
-                if (!renamed) return new EditRemoteOutcome(false, renameError ?? "Failed to rename remote.");
+                var renamed = Mutate(repo.Path, "remote", "rename", oldName, newName);
+                if (renamed is GitOutcome.Failed) return renamed;
             }
+            return Mutate(repo.Path, "remote", "set-url", newName, url);
+        });
 
-            var (urlSet, urlError) = RunMutation(repo.Path, new[] { "remote", "set-url", newName, url });
-            if (!urlSet) return new EditRemoteOutcome(false, urlError ?? "Failed to set remote URL.");
-
-            return new EditRemoteOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new EditRemoteOutcome(false, ex.Message);
-        }
-    }
-
-    public EditRemoteOutcome AddRemote(Repo repo, string name, string url)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new EditRemoteOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-            var (added, addError) = RunMutation(repo.Path, new[] { "remote", "add", name, url });
-            if (!added) return new EditRemoteOutcome(false, addError ?? "Failed to add remote.");
-
-            return new EditRemoteOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new EditRemoteOutcome(false, ex.Message);
-        }
-    }
+    public GitOutcome AddRemote(Repo repo, string name, string url)
+        => RunOperation(repo, () => Mutate(repo.Path, "remote", "add", name, url));
 
     public PullOutcome Pull(Repo repo, PullStrategy? strategy = null)
-    {
-        try
+        => RunLocked<PullOutcome>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new PullOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
             var info = GetHeadInfo(repo.Path);
             if (info.IsDetached)
-                return new PullOutcome(false, "HEAD is detached. Check out a branch first.");
+                return new PullOutcome.Failed("HEAD is detached. Check out a branch first.");
             if (!info.HasUpstream)
             {
                 var name = info.CurrentBranchName ?? "(unknown)";
-                return new PullOutcome(false,
+                return new PullOutcome.Failed(
                     $"Branch '{name}' has no upstream. Set one with: git branch --set-upstream-to=<remote>/<branch>");
             }
 
@@ -1586,7 +1483,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // but the submodule still sitting on its old commit (which shows up as "modified").
             var args = new List<string> { "pull" };
             // With no strategy git refuses a diverged branch ("Need to specify how to reconcile");
-            // an explicit flag is what the reconcile dialog passes on the rerun.
+            // an explicit flag is what the reconcile dialog passes on the rerun. Once a strategy
+            // is supplied git won't emit the hint again, so Diverged self-clears on the rerun.
             switch (strategy)
             {
                 case PullStrategy.Merge: args.Add("--no-rebase"); break;
@@ -1596,38 +1494,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             args.Add("--recurse-submodules");
 
             var result = _runner.Run(repo.Path, args);
-            if (result.Ok) return new PullOutcome(true, null);
+            if (result.Ok) return PullOutcome.Ok;
 
-            var error = result.BlockError("git pull");
-            // Only meaningful on the first (strategy-less) attempt; once a strategy is supplied
-            // git won't emit this hint again, so the flag self-clears on the rerun.
-            var diverged = strategy is null && result.PreferredStream.Contains("divergent branches", StringComparison.OrdinalIgnoreCase);
-            return new PullOutcome(false, error, diverged);
-        }
-        catch (Exception ex)
-        {
-            return new PullOutcome(false, ex.Message);
-        }
-    }
+            if (strategy is null && result.PreferredStream.Contains("divergent branches", StringComparison.OrdinalIgnoreCase))
+                return new PullOutcome.Diverged();
+            return new PullOutcome.Failed(result.BlockError("git pull"));
+        }, static m => new PullOutcome.Failed(m));
 
-    public FetchOutcome Fetch(Repo repo)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new FetchOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-            // --recurse-submodules downloads the commits each submodule is pinned to so they're
-            // present locally; it does NOT touch submodule working trees (that's pull's job).
-            var result = _runner.Run(repo.Path, new[] { "fetch", "--all", "--prune", "--recurse-submodules" });
-            return result.Ok ? new FetchOutcome(true, null) : new FetchOutcome(false, result.BlockError("git fetch"));
-        }
-        catch (Exception ex)
-        {
-            return new FetchOutcome(false, ex.Message);
-        }
-    }
+    // --recurse-submodules downloads the commits each submodule is pinned to so they're
+    // present locally; it does NOT touch submodule working trees (that's pull's job).
+    public GitOutcome Fetch(Repo repo)
+        => RunSimple(repo, "git fetch", "fetch", "--all", "--prune", "--recurse-submodules");
 
     // Clone has no existing Repo to lock or validate — it creates one. We run from the target's
     // parent dir (created if missing) with an absolute destination so git places the working tree
@@ -1639,97 +1516,65 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             var trimmedUrl = url?.Trim() ?? string.Empty;
             if (trimmedUrl.Length == 0)
-                return new CloneOutcome(false, "Repository URL is required.", null);
+                return new CloneOutcome.Failed("Repository URL is required.");
             if (string.IsNullOrWhiteSpace(targetPath))
-                return new CloneOutcome(false, "Destination path is required.", null);
+                return new CloneOutcome.Failed("Destination path is required.");
 
             string fullTarget;
             try { fullTarget = Path.GetFullPath(targetPath); }
-            catch (Exception ex) { return new CloneOutcome(false, $"Invalid destination path: {ex.Message}", null); }
+            catch (Exception ex) { return new CloneOutcome.Failed($"Invalid destination path: {ex.Message}"); }
 
             if (Directory.Exists(fullTarget) && Directory.EnumerateFileSystemEntries(fullTarget).Any())
-                return new CloneOutcome(false, $"Destination already exists and is not empty:\n{fullTarget}", null);
+                return new CloneOutcome.Failed($"Destination already exists and is not empty:\n{fullTarget}");
 
             var parent = Path.GetDirectoryName(fullTarget);
             if (string.IsNullOrEmpty(parent))
-                return new CloneOutcome(false, "Destination path has no parent directory.", null);
+                return new CloneOutcome.Failed("Destination path has no parent directory.");
 
             try { Directory.CreateDirectory(parent); }
-            catch (Exception ex) { return new CloneOutcome(false, $"Could not create destination folder: {ex.Message}", null); }
+            catch (Exception ex) { return new CloneOutcome.Failed($"Could not create destination folder: {ex.Message}"); }
 
             var args = new List<string> { "clone", "--progress", trimmedUrl, fullTarget };
             var (exitCode, captureText, started) = _runner.RunStreaming(parent, args, onLine);
 
-            if (!started) return new CloneOutcome(false, "Failed to start git.", null);
+            if (!started) return new CloneOutcome.Failed("Failed to start git.");
 
             if (exitCode == 0)
-                return new CloneOutcome(true, null, fullTarget);
+                return new CloneOutcome.Cloned(fullTarget);
 
             var msg = GitProcessRunner.FirstMeaningfulLine(captureText);
             if (string.IsNullOrEmpty(msg)) msg = $"git clone exited with code {exitCode}.";
-            msg = GitProcessRunner.AugmentCredentialError(msg, captureText);
-            return new CloneOutcome(false, msg, null);
+            return new CloneOutcome.Failed(GitProcessRunner.AugmentCredentialError(msg, captureText));
         }
         catch (Exception ex)
         {
-            return new CloneOutcome(false, ex.Message, null);
+            return new CloneOutcome.Failed(ex.Message);
         }
     }
 
-    public FastForwardOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
-    {
-        try
+    public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new FastForwardOutcome(false, "Not a git repository.");
-
             var refspec = $"{remoteBranch}:{localBranch}";
             var args = new List<string> { "fetch", "--progress", remoteName, refspec };
-            using var _ = LockRepo(repo.Path);
-
             var (exitCode, captureText, started) = _runner.RunStreaming(repo.Path, args, onLine);
 
-            if (!started) return new FastForwardOutcome(false, "Failed to start git.");
-
-            if (exitCode == 0)
-                return new FastForwardOutcome(true, null);
+            if (!started) return new GitOutcome.Failed("Failed to start git.");
+            if (exitCode == 0) return GitOutcome.Ok;
 
             var msg = GitProcessRunner.FirstMeaningfulLine(captureText);
             if (string.IsNullOrEmpty(msg)) msg = $"git fetch exited with code {exitCode}.";
-            msg = GitProcessRunner.AugmentCredentialError(msg, captureText);
-            return new FastForwardOutcome(false, msg);
-        }
-        catch (Exception ex)
-        {
-            return new FastForwardOutcome(false, ex.Message);
-        }
-    }
+            return new GitOutcome.Failed(GitProcessRunner.AugmentCredentialError(msg, captureText));
+        });
 
     // Shells out so post-checkout hooks, LFS, and sparse-checkout filters all run; also
     // surfaces the same error wording the user would see in Terminal.
-    public CheckoutOutcome CheckoutLocalBranch(Repo repo, string branchName)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new CheckoutOutcome(false, "Not a git repository.");
+    public GitOutcome CheckoutLocalBranch(Repo repo, string branchName)
+        => RunOperation(repo, () => RunGitCheckout(repo.Path, new[] { "checkout", branchName }));
 
-            using var _ = LockRepo(repo.Path);
-            return RunGitCheckout(repo.Path, new[] { "checkout", branchName });
-        }
-        catch (Exception ex)
+    public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode)
+        => RunOperation(repo, () =>
         {
-            return new CheckoutOutcome(false, ex.Message);
-        }
-    }
-
-    public ResetOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new ResetOutcome(false, "Not a git repository.");
-
             var flag = mode switch
             {
                 ResetMode.Soft => "--soft",
@@ -1737,63 +1582,31 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 ResetMode.Hard => "--hard",
                 _ => "--mixed",
             };
-
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, new[] { "reset", flag, commitSha });
-            return result.Ok ? new ResetOutcome(true, null) : new ResetOutcome(false, result.FirstLineError("git reset"));
-        }
-        catch (Exception ex)
-        {
-            return new ResetOutcome(false, ex.Message);
-        }
-    }
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.FirstLineError("git reset"));
+        });
 
-    public CheckoutOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track)
-    {
-        try
+    public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track)
+        => RunOperation(repo, () => RunGitCheckout(repo.Path, new List<string>
         {
-            if (!IsGitRepo(repo.Path))
-                return new CheckoutOutcome(false, "Not a git repository.");
-
-            var args = new List<string>
-            {
-                "checkout", "-b", localName,
-                track ? "--track" : "--no-track",
-                $"{remoteName}/{remoteBranchName}",
-            };
-            using var _ = LockRepo(repo.Path);
-            return RunGitCheckout(repo.Path, args);
-        }
-        catch (Exception ex)
-        {
-            return new CheckoutOutcome(false, ex.Message);
-        }
-    }
+            "checkout", "-b", localName,
+            track ? "--track" : "--no-track",
+            $"{remoteName}/{remoteBranchName}",
+        }));
 
     // Shells out so post-checkout hooks run when `checkout` is true, and the error wording
     // matches the user's terminal experience (e.g. "fatal: A branch named 'x' already exists.").
-    public CreateBranchOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout)
-    {
-        try
+    public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new CreateBranchOutcome(false, "Not a git repository.");
-
             var args = checkout
-                ? new List<string> { "checkout", "-b", name, startPoint }
-                : new List<string> { "branch", name, startPoint };
-
-            using var _ = LockRepo(repo.Path);
+                ? new[] { "checkout", "-b", name, startPoint }
+                : new[] { "branch", name, startPoint };
             var result = _runner.Run(repo.Path, args);
             return result.Ok
-                ? new CreateBranchOutcome(true, null)
-                : new CreateBranchOutcome(false, result.FirstLineError($"git {(checkout ? "checkout" : "branch")}"));
-        }
-        catch (Exception ex)
-        {
-            return new CreateBranchOutcome(false, ex.Message);
-        }
-    }
+                ? GitOutcome.Ok
+                : new GitOutcome.Failed(result.FirstLineError($"git {(checkout ? "checkout" : "branch")}"));
+        });
 
     // Force-moves an existing branch to point at commitSha. With checkout=true uses
     // `git checkout -B <branch> <sha>` (reset the ref AND switch to it in one step) — the path
@@ -1801,28 +1614,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // not be the currently checked-out one; callers only invoke this while detached, so it
     // never is. Force can orphan the branch's prior unique commits — callers guard via
     // IsAncestor and confirm before calling when it isn't a fast-forward.
-    public MoveBranchOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout)
-    {
-        try
+    public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new MoveBranchOutcome(false, "Not a git repository.");
-
             var args = checkout
                 ? new[] { "checkout", "-B", branchName, commitSha }
                 : new[] { "branch", "-f", branchName, commitSha };
-
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, args);
             return result.Ok
-                ? new MoveBranchOutcome(true, null)
-                : new MoveBranchOutcome(false, result.FirstLineError($"git {(checkout ? "checkout" : "branch")}"));
-        }
-        catch (Exception ex)
-        {
-            return new MoveBranchOutcome(false, ex.Message);
-        }
-    }
+                ? GitOutcome.Ok
+                : new GitOutcome.Failed(result.FirstLineError($"git {(checkout ? "checkout" : "branch")}"));
+        });
 
     // True when maybeAncestor (a ref or SHA) is an ancestor of descendant — i.e. moving
     // maybeAncestor forward to descendant is a fast-forward that orphans nothing. Exit 0 =
@@ -1841,16 +1643,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // otherwise a lightweight tag (`git tag <name> <sha>`). When pushToAllRemotes is set, the new
     // tag ref is pushed to every configured remote; the first push failure aborts and is reported
     // (the local tag has already been created at that point).
-    public CreateTagOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes)
-    {
-        try
+    public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new CreateTagOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(name))
-                return new CreateTagOutcome(false, "Tag name is required.");
-
-            using var _ = LockRepo(repo.Path);
+                return new GitOutcome.Failed("Tag name is required.");
 
             var tagArgs = new List<string> { "tag" };
             if (!string.IsNullOrWhiteSpace(message))
@@ -1867,79 +1664,49 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             tagArgs.Add(commitSha);
 
             var (tagged, tagError) = RunMutation(repo.Path, tagArgs);
-            if (!tagged) return new CreateTagOutcome(false, tagError ?? "Failed to create tag.");
+            if (!tagged) return new GitOutcome.Failed(tagError ?? "Failed to create tag.");
 
             if (pushToAllRemotes)
             {
                 foreach (var remote in GetRemoteNames(repo))
                 {
                     var (pushed, pushError) = RunMutation(repo.Path, new[] { "push", remote, "refs/tags/" + name });
-                    if (!pushed) return new CreateTagOutcome(false, pushError ?? $"Failed to push tag to '{remote}'.");
+                    if (!pushed) return new GitOutcome.Failed(pushError ?? $"Failed to push tag to '{remote}'.");
                 }
             }
 
-            return new CreateTagOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new CreateTagOutcome(false, ex.Message);
-        }
-    }
+            return GitOutcome.Ok;
+        });
 
     // Deletes a tag locally (`git tag -d`). When deleteFromRemotes is set, the tag is also
     // removed from every configured remote (`git push <remote> --delete refs/tags/<name>`) —
     // mirroring CreateTag's push-to-all-remotes loop. Local deletion happens first; a later
     // remote failure is surfaced but the local tag is already gone.
-    public DeleteTagOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes)
-    {
-        try
+    public GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new DeleteTagOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(name))
-                return new DeleteTagOutcome(false, "Tag name is required.");
+                return new GitOutcome.Failed("Tag name is required.");
 
-            using var _ = LockRepo(repo.Path);
-
-            var (deleted, deleteError) = RunMutation(repo.Path, new[] { "tag", "-d", name });
-            if (!deleted) return new DeleteTagOutcome(false, deleteError ?? "Failed to delete tag.");
+            var deleted = Mutate(repo.Path, "tag", "-d", name);
+            if (deleted is GitOutcome.Failed) return deleted;
 
             if (deleteFromRemotes)
             {
                 foreach (var remote in GetRemoteNames(repo))
                 {
-                    var (pushed, pushError) = RunMutation(repo.Path, new[] { "push", remote, "--delete", "refs/tags/" + name });
-                    if (!pushed) return new DeleteTagOutcome(false, pushError ?? $"Failed to delete tag from '{remote}'.");
+                    var pushed = Mutate(repo.Path, "push", remote, "--delete", "refs/tags/" + name);
+                    if (pushed is GitOutcome.Failed) return pushed;
                 }
             }
 
-            return new DeleteTagOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new DeleteTagOutcome(false, ex.Message);
-        }
-    }
+            return GitOutcome.Ok;
+        });
 
     // `git branch -m` (or -M with force) renames a local branch in-place. Allowed on the
     // currently-checked-out branch — git updates HEAD's symbolic ref to point at the new name.
-    public RenameBranchOutcome RenameBranch(Repo repo, string oldName, string newName, bool force)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new RenameBranchOutcome(false, "Not a git repository.");
-
-            var args = new List<string> { "branch", force ? "-M" : "-m", oldName, newName };
-            using var _ = LockRepo(repo.Path);
-            var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new RenameBranchOutcome(true, null) : new RenameBranchOutcome(false, result.BlockError("git branch"));
-        }
-        catch (Exception ex)
-        {
-            return new RenameBranchOutcome(false, ex.Message);
-        }
-    }
+    public GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force)
+        => RunSimple(repo, "git branch", "branch", force ? "-M" : "-m", oldName, newName);
 
     public MergePreviewResult PreviewMerge(Repo repo, string sourceRef)
     {
@@ -1973,13 +1740,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // `git merge <ref>` against HEAD. Conflicts produce a non-zero exit but git still
     // writes MERGE_HEAD and stages the resolvable hunks — surface that as "success with
     // conflicts" so the caller can refresh and let the operation banner take over.
-    public MergeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy)
-    {
-        try
+    public MergeLikeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy)
+        => RunMergeLike(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new MergeOutcome(false, "Not a git repository.");
-
             var args = new List<string> { "merge" };
             switch (strategy)
             {
@@ -1989,9 +1752,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
             args.Add(sourceRef);
 
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, args);
-            if (result.Ok) return new MergeOutcome(true, null);
+            if (result.Ok) return MergeLikeOutcome.Ok;
 
             // Conflict path: MERGE_HEAD exists in the per-worktree gitdir.
             // --squash and --ff-only never create MERGE_HEAD, so failures there are
@@ -2002,18 +1764,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 {
                     var gitDir = GetGitDir(repo.Path);
                     if (gitDir != null && File.Exists(Path.Combine(gitDir, "MERGE_HEAD")))
-                        return new MergeOutcome(true, null, HasConflicts: true);
+                        return new MergeLikeOutcome.Conflicted();
                 }
                 catch { /* fall through to error */ }
             }
 
-            return new MergeOutcome(false, result.BlockError("git merge"));
-        }
-        catch (Exception ex)
-        {
-            return new MergeOutcome(false, ex.Message);
-        }
-    }
+            return new MergeLikeOutcome.Failed(result.BlockError("git merge"));
+        });
 
     // Same merge-tree probe as PreviewMerge — git's three-way merge between HEAD and the
     // target is a reasonable approximation of the conflict landscape a rebase will hit,
@@ -2051,20 +1808,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // a non-zero exit but leave rebase-apply/ or rebase-merge/ behind, which the operation
     // banner detects via GetOperationState — surface that as "success with conflicts" so the
     // caller refreshes and the banner takes over.
-    public RebaseOutcome Rebase(Repo repo, string targetRef, bool autostash)
-    {
-        try
+    public MergeLikeOutcome Rebase(Repo repo, string targetRef, bool autostash)
+        => RunMergeLike(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new RebaseOutcome(false, "Not a git repository.");
-
             var args = new List<string> { "rebase" };
             if (autostash) args.Add("--autostash");
             args.Add(targetRef);
 
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, args);
-            if (result.Ok) return new RebaseOutcome(true, null);
+            if (result.Ok) return MergeLikeOutcome.Ok;
 
             // Conflict path: rebase leaves rebase-apply/ or rebase-merge/ in the
             // per-worktree gitdir. If either exists, treat the failure as a successful
@@ -2077,130 +1829,71 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     && (Directory.Exists(Path.Combine(gitDir, "rebase-apply"))
                         || Directory.Exists(Path.Combine(gitDir, "rebase-merge"))))
                 {
-                    return new RebaseOutcome(true, null, HasConflicts: true);
+                    return new MergeLikeOutcome.Conflicted();
                 }
             }
             catch { /* fall through to error */ }
 
-            return new RebaseOutcome(false, result.BlockError("git rebase"));
-        }
-        catch (Exception ex)
-        {
-            return new RebaseOutcome(false, ex.Message);
-        }
-    }
+            return new MergeLikeOutcome.Failed(result.BlockError("git rebase"));
+        });
 
     // `git cherry-pick <sha>` replays the named commit's changes onto HEAD as a new commit.
     // Conflicts produce a non-zero exit but leave CHERRY_PICK_HEAD in the per-worktree gitdir,
     // which the operation banner detects via GetOperationState — surface that as "success with
     // conflicts" so the caller refreshes and the banner guides resolve/continue/abort. Mirrors
     // the Merge/Rebase conflict handling.
-    public CherryPickOutcome CherryPick(Repo repo, string commitSha)
-    {
-        try
+    public MergeLikeOutcome CherryPick(Repo repo, string commitSha)
+        => RunMergeLike(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new CherryPickOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, new[] { "cherry-pick", commitSha });
-            if (result.Ok) return new CherryPickOutcome(true, null);
+            if (result.Ok) return MergeLikeOutcome.Ok;
 
             try
             {
                 var gitDir = GetGitDir(repo.Path);
                 if (gitDir != null && File.Exists(Path.Combine(gitDir, "CHERRY_PICK_HEAD")))
-                    return new CherryPickOutcome(true, null, HasConflicts: true);
+                    return new MergeLikeOutcome.Conflicted();
             }
             catch { /* fall through to error */ }
 
-            return new CherryPickOutcome(false, result.BlockError("git cherry-pick"));
-        }
-        catch (Exception ex)
-        {
-            return new CherryPickOutcome(false, ex.Message);
-        }
-    }
+            return new MergeLikeOutcome.Failed(result.BlockError("git cherry-pick"));
+        });
 
     // `git revert --no-edit <sha>` creates a new commit that undoes the named commit. --no-edit
     // keeps it non-interactive (git would otherwise open an editor for the generated message).
     // Conflicts leave REVERT_HEAD behind — same success-with-conflicts handling as cherry-pick
     // so the operation banner takes over.
-    public RevertCommitOutcome RevertCommit(Repo repo, string commitSha)
-    {
-        try
+    public MergeLikeOutcome RevertCommit(Repo repo, string commitSha)
+        => RunMergeLike(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new RevertCommitOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, new[] { "revert", "--no-edit", commitSha });
-            if (result.Ok) return new RevertCommitOutcome(true, null);
+            if (result.Ok) return MergeLikeOutcome.Ok;
 
             try
             {
                 var gitDir = GetGitDir(repo.Path);
                 if (gitDir != null && File.Exists(Path.Combine(gitDir, "REVERT_HEAD")))
-                    return new RevertCommitOutcome(true, null, HasConflicts: true);
+                    return new MergeLikeOutcome.Conflicted();
             }
             catch { /* fall through to error */ }
 
-            return new RevertCommitOutcome(false, result.BlockError("git revert"));
-        }
-        catch (Exception ex)
-        {
-            return new RevertCommitOutcome(false, ex.Message);
-        }
-    }
+            return new MergeLikeOutcome.Failed(result.BlockError("git revert"));
+        });
 
     // `git branch -d` refuses to delete a branch not fully merged into its upstream/HEAD;
     // `-D` force-deletes regardless. Also refuses to delete the currently-checked-out branch
     // — callers should gate that in the UI rather than relying on the error.
-    public DeleteBranchOutcome DeleteBranch(Repo repo, string name, bool force)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new DeleteBranchOutcome(false, "Not a git repository.");
-
-            var args = new List<string> { "branch", force ? "-D" : "-d", name };
-            using var _ = LockRepo(repo.Path);
-            var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new DeleteBranchOutcome(true, null) : new DeleteBranchOutcome(false, result.BlockError("git branch"));
-        }
-        catch (Exception ex)
-        {
-            return new DeleteBranchOutcome(false, ex.Message);
-        }
-    }
+    public GitOutcome DeleteBranch(Repo repo, string name, bool force)
+        => RunSimple(repo, "git branch", "branch", force ? "-D" : "-d", name);
 
     // Shells out to `git push <remote> --delete <branch>`. The local copy is unaffected.
     // Server may refuse for protected refs — we surface whatever git reports.
-    public DeleteRemoteBranchOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new DeleteRemoteBranchOutcome(false, "Not a git repository.");
+    public GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName)
+        => RunSimple(repo, "git push", "push", remoteName, "--delete", branchName);
 
-            var args = new List<string> { "push", remoteName, "--delete", branchName };
-            using var _ = LockRepo(repo.Path);
-            var result = _runner.Run(repo.Path, args);
-            return result.Ok ? new DeleteRemoteBranchOutcome(true, null) : new DeleteRemoteBranchOutcome(false, result.BlockError("git push"));
-        }
-        catch (Exception ex)
+    public GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths)
+        => RunOperation(repo, () =>
         {
-            return new DeleteRemoteBranchOutcome(false, ex.Message);
-        }
-    }
-
-    public StashOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new StashOutcome(false, "Not a git repository.");
-
             var args = new List<string> { "stash", "push" };
             if (includeUntracked) args.Add("--include-untracked");
             if (keepIndex) args.Add("--keep-index");
@@ -2214,25 +1907,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 args.Add("--");
                 foreach (var p in paths) args.Add(p);
             }
+            return ToOutcome(_runner.Run(repo.Path, args), "git stash push");
+        });
 
-            using var _ = LockRepo(repo.Path);
-            return RunGitStash(repo.Path, args, "git stash push");
-        }
-        catch (Exception ex)
+    public MergeLikeOutcome ApplyStash(Repo repo, int index)
+        => RunMergeLike(repo, () =>
         {
-            return new StashOutcome(false, ex.Message);
-        }
-    }
-
-    public StashOutcome ApplyStash(Repo repo, int index)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new StashOutcome(false, "Not a git repository.");
-
-            var args = new List<string> { "stash", "apply", $"stash@{{{index}}}" };
-            using var _ = LockRepo(repo.Path);
             // Snapshot the pre-apply index state. The "apply succeeded with conflicts"
             // heuristic below relies on the transition from clean → unmerged to decide
             // whether the non-zero exit is benign — if the index was already unmerged
@@ -2242,68 +1922,38 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // the real failure ("untracked file would be overwritten", etc).
             var wasFullyMerged = !HasUnmergedPaths(repo.Path);
 
-            var outcome = RunGitStash(repo.Path, args, "git stash apply");
-            if (outcome.Success) return outcome;
+            var result = _runner.Run(repo.Path, new[] { "stash", "apply", $"stash@{{{index}}}" });
+            if (result.Ok) return MergeLikeOutcome.Ok;
 
             // `git stash apply` exits 1 when the apply itself worked but produced
             // merge conflicts — the user's stash is on disk, the conflicts are visible
             // in the index, and there's nothing to "fix" about the apply itself. Treat
-            // that as success-with-conflicts so the caller can refresh and show the
-            // banner instead of an error dialog. Gate on wasFullyMerged so a real
-            // failure on a repo that already had conflicts still surfaces its error.
+            // that as Conflicted so the caller can refresh and show the banner instead
+            // of an error dialog. Gate on wasFullyMerged so a real failure on a repo
+            // that already had conflicts still surfaces its error.
             if (wasFullyMerged && HasUnmergedPaths(repo.Path))
-                return new StashOutcome(true, null, HasConflicts: true);
-            return outcome;
-        }
-        catch (Exception ex)
+                return new MergeLikeOutcome.Conflicted();
+            return new MergeLikeOutcome.Failed(result.BlockError("git stash apply"));
+        });
+
+    public GitOutcome DropStash(Repo repo, int index)
+        => RunSimple(repo, "git stash drop", "stash", "drop", $"stash@{{{index}}}");
+
+    public GitOutcome RenameStash(Repo repo, int index, string newMessage)
+        => RunOperation(repo, () =>
         {
-            return new StashOutcome(false, ex.Message);
-        }
-    }
-
-    public StashOutcome DropStash(Repo repo, int index)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new StashOutcome(false, "Not a git repository.");
-
-            var args = new List<string> { "stash", "drop", $"stash@{{{index}}}" };
-            using var _ = LockRepo(repo.Path);
-            return RunGitStash(repo.Path, args, "git stash drop");
-        }
-        catch (Exception ex)
-        {
-            return new StashOutcome(false, ex.Message);
-        }
-    }
-
-    public StashOutcome RenameStash(Repo repo, int index, string newMessage)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new StashOutcome(false, "Not a git repository.");
-
-            using var _lock = LockRepo(repo.Path);
-
             // git has no native stash rename. Resolve the stash commit, drop the entry,
             // then re-store it under the new message. `git stash store` pushes the entry
             // back onto refs/stash, so a renamed stash moves to the top (stash@{0}).
             var sha = RunGit(repo.Path, out _, "rev-parse", $"stash@{{{index}}}")?.Trim();
             if (string.IsNullOrEmpty(sha))
-                return new StashOutcome(false, "Could not resolve stash commit.");
+                return new GitOutcome.Failed("Could not resolve stash commit.");
 
-            var dropOutcome = RunGitStash(repo.Path, new[] { "stash", "drop", $"stash@{{{index}}}" }, "git stash drop");
-            if (!dropOutcome.Success) return dropOutcome;
+            var dropped = ToOutcome(_runner.Run(repo.Path, new[] { "stash", "drop", $"stash@{{{index}}}" }), "git stash drop");
+            if (dropped is GitOutcome.Failed) return dropped;
 
-            return RunGitStash(repo.Path, new[] { "stash", "store", "-m", newMessage, sha }, "git stash store");
-        }
-        catch (Exception ex)
-        {
-            return new StashOutcome(false, ex.Message);
-        }
-    }
+            return ToOutcome(_runner.Run(repo.Path, new[] { "stash", "store", "-m", newMessage, sha }), "git stash store");
+        });
 
     public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage)
     {
@@ -2395,16 +2045,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return results;
     }
 
-    public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request)
-    {
-        try
+    public GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request)
+        => RunOperation(primary, () =>
         {
-            if (!IsGitRepo(primary.Path))
-                return new WorktreeAddOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(request.Path))
-                return new WorktreeAddOutcome(false, "Worktree path is required.");
+                return new GitOutcome.Failed("Worktree path is required.");
             if (string.IsNullOrWhiteSpace(request.StartPoint))
-                return new WorktreeAddOutcome(false, "Start point is required.");
+                return new GitOutcome.Failed("Start point is required.");
 
             var args = new List<string> { "worktree", "add" };
             if (request.Force) args.Add("--force");
@@ -2415,61 +2062,23 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
             args.Add(request.Path);
             args.Add(request.StartPoint);
+            return ToOutcome(_runner.Run(primary.Path, args), "git worktree add");
+        });
 
-            using var _ = LockRepo(primary.Path);
-            return RunWorktreeAdd(primary.Path, args);
-        }
-        catch (Exception ex)
+    public GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force)
+        => RunOperation(primary, () =>
         {
-            return new WorktreeAddOutcome(false, ex.Message);
-        }
-    }
-
-    private WorktreeAddOutcome RunWorktreeAdd(string repoPath, IReadOnlyList<string> args)
-    {
-        var result = _runner.Run(repoPath, args);
-        return result.Ok ? new WorktreeAddOutcome(true, null) : new WorktreeAddOutcome(false, result.BlockError("git worktree add"));
-    }
-
-    public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force)
-    {
-        try
-        {
-            if (!IsGitRepo(primary.Path))
-                return new WorktreeRemoveOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(worktreePath))
-                return new WorktreeRemoveOutcome(false, "Worktree path is required.");
+                return new GitOutcome.Failed("Worktree path is required.");
 
             var args = new List<string> { "worktree", "remove" };
             if (force) args.Add("--force");
             args.Add(worktreePath);
+            return ToOutcome(_runner.Run(primary.Path, args), "git worktree remove");
+        });
 
-            using var _ = LockRepo(primary.Path);
-            var result = _runner.Run(primary.Path, args);
-            return result.Ok ? new WorktreeRemoveOutcome(true, null) : new WorktreeRemoveOutcome(false, result.BlockError("git worktree remove"));
-        }
-        catch (Exception ex)
-        {
-            return new WorktreeRemoveOutcome(false, ex.Message);
-        }
-    }
-
-    public WorktreePruneOutcome PruneWorktrees(Repo primary)
-    {
-        try
-        {
-            if (!IsGitRepo(primary.Path))
-                return new WorktreePruneOutcome(false, "Not a git repository.");
-
-            using var _ = LockRepo(primary.Path);
-            var result = _runner.Run(primary.Path, new[] { "worktree", "prune" });
-            return result.Ok ? new WorktreePruneOutcome(true, null) : new WorktreePruneOutcome(false, result.BlockError("git worktree prune"));
-        }
-        catch (Exception ex)
-        {
-            return new WorktreePruneOutcome(false, ex.Message);
-        }
-    }
+    public GitOutcome PruneWorktrees(Repo primary)
+        => RunSimple(primary, "git worktree prune", "worktree", "prune");
 
     // ────────── submodules ──────────
 
@@ -2607,16 +2216,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    public SubmoduleAddOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request)
-    {
-        try
+    public GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request)
+        => RunOperation(primary, () =>
         {
-            if (!IsGitRepo(primary.Path))
-                return new SubmoduleAddOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(request.Url))
-                return new SubmoduleAddOutcome(false, "Submodule URL is required.");
+                return new GitOutcome.Failed("Submodule URL is required.");
             if (string.IsNullOrWhiteSpace(request.Path))
-                return new SubmoduleAddOutcome(false, "Submodule path is required.");
+                return new GitOutcome.Failed("Submodule path is required.");
 
             var args = new List<string> { "submodule", "add" };
             if (request.Force) args.Add("--force");
@@ -2627,24 +2233,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
             args.Add(request.Url);
             args.Add(request.Path);
+            return ToOutcome(_runner.Run(primary.Path, args), $"git {string.Join(' ', args)}");
+        });
 
-            using var _ = LockRepo(primary.Path);
-            var (ok, err) = RunMutation(primary.Path, args);
-            return new SubmoduleAddOutcome(ok, err);
-        }
-        catch (Exception ex)
+    public MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request)
+        => RunMergeLike(primary, () =>
         {
-            return new SubmoduleAddOutcome(false, ex.Message);
-        }
-    }
-
-    public SubmoduleUpdateOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request)
-    {
-        try
-        {
-            if (!IsGitRepo(primary.Path))
-                return new SubmoduleUpdateOutcome(false, "Not a git repository.");
-
             var args = new List<string> { "submodule", "update" };
             if (request.Init) args.Add("--init");
             if (request.Recursive) args.Add("--recursive");
@@ -2659,33 +2253,25 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 foreach (var p in request.Paths) args.Add(p);
             }
 
-            using var _ = LockRepo(primary.Path);
             var result = _runner.Run(primary.Path, args);
-            if (result.Ok) return new SubmoduleUpdateOutcome(true, null);
+            if (result.Ok) return MergeLikeOutcome.Ok;
             // Merge/rebase strategies surface CONFLICT markers in stdout when they fail —
             // hand that signal up so the dialog can show a "see Operation banner" hint
             // instead of just a raw error.
             var combined = result.Stdout + "\n" + result.Stderr;
             var conflicts = combined.Contains("CONFLICT", StringComparison.Ordinal)
                             || combined.Contains("merge conflict", StringComparison.OrdinalIgnoreCase);
-            return new SubmoduleUpdateOutcome(false, result.BlockError("git submodule update"), conflicts);
-        }
-        catch (Exception ex)
-        {
-            return new SubmoduleUpdateOutcome(false, ex.Message);
-        }
-    }
+            return conflicts
+                ? new MergeLikeOutcome.Conflicted()
+                : new MergeLikeOutcome.Failed(result.BlockError("git submodule update"));
+        });
 
-    public SubmoduleDeinitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force)
-    {
-        try
+    public GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force)
+        => RunOperation(primary, () =>
         {
-            if (!IsGitRepo(primary.Path))
-                return new SubmoduleDeinitOutcome(false, "Not a git repository.");
             if (string.IsNullOrWhiteSpace(submodulePath))
-                return new SubmoduleDeinitOutcome(false, "Submodule path is required.");
+                return new GitOutcome.Failed("Submodule path is required.");
 
-            using var _ = LockRepo(primary.Path);
             // Two-step: deinit frees the working tree + .git/modules entry; rm removes
             // the gitlink and the .gitmodules entry, staging the change as a commit-ready
             // deletion. Both happen under the same lock so the user sees one atomic op.
@@ -2693,23 +2279,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (force) deinitArgs.Add("--force");
             deinitArgs.Add("--");
             deinitArgs.Add(submodulePath);
-            var (ok1, err1) = RunMutation(primary.Path, deinitArgs);
-            if (!ok1) return new SubmoduleDeinitOutcome(false, err1);
+            var deinited = Mutate(primary.Path, deinitArgs.ToArray());
+            if (deinited is GitOutcome.Failed) return deinited;
 
             var rmArgs = new List<string> { "rm" };
             if (force) rmArgs.Add("-f");
             rmArgs.Add("--");
             rmArgs.Add(submodulePath);
-            var (ok2, err2) = RunMutation(primary.Path, rmArgs);
-            if (!ok2) return new SubmoduleDeinitOutcome(false, err2);
-
-            return new SubmoduleDeinitOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new SubmoduleDeinitOutcome(false, ex.Message);
-        }
-    }
+            return Mutate(primary.Path, rmArgs.ToArray());
+        });
 
     public bool StageSubmodulePointer(Repo parent, string relativePath)
     {
@@ -2814,33 +2392,18 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // the same author. Writes the SAME set of keys injection would apply (SSH command, signing),
     // and UNSETS the ones this profile doesn't use — so re-pinning a leaner profile can't leave a
     // previous profile's SSH key or signing config behind.
-    public SetLocalIdentityOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config)
-    {
-        try
+    public GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return new SetLocalIdentityOutcome(false, "Not a git repository.");
-            using var _ = LockRepo(repo.Path);
-
             foreach (var (key, value) in config.Entries())
             {
-                if (value != null)
-                {
-                    var (ok, err) = RunMutation(repo.Path, new[] { "config", "--local", key, value });
-                    if (!ok) return new SetLocalIdentityOutcome(false, err);
-                }
-                else
-                {
-                    var (ok, err) = UnsetLocalConfig(repo.Path, key);
-                    if (!ok) return new SetLocalIdentityOutcome(false, err);
-                }
+                var (ok, err) = value != null
+                    ? RunMutation(repo.Path, new[] { "config", "--local", key, value })
+                    : UnsetLocalConfig(repo.Path, key);
+                if (!ok) return new GitOutcome.Failed(err!);
             }
-            return new SetLocalIdentityOutcome(true, null);
-        }
-        catch (Exception ex)
-        {
-            return new SetLocalIdentityOutcome(false, ex.Message);
-        }
-    }
+            return GitOutcome.Ok;
+        });
 
     // `git config --local --unset` exits 5 when the key was already absent — that's the desired
     // end state, not a failure, so it's treated as success.
@@ -2859,6 +2422,40 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return result.Ok ? (true, null) : (false, result.BlockError($"git {string.Join(' ', args)}"));
     }
 
+    // Owns the not-a-repo guard, the repo lock, and the exception fold shared by every
+    // mutating operation; `fail` builds the hierarchy-specific failure case.
+    private T RunLocked<T>(Repo repo, Func<T> body, Func<string, T> fail)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return fail("Not a git repository.");
+            using var _ = LockRepo(repo.Path);
+            return body();
+        }
+        catch (Exception ex)
+        {
+            return fail(ex.Message);
+        }
+    }
+
+    private GitOutcome RunOperation(Repo repo, Func<GitOutcome> body)
+        => RunLocked(repo, body, static m => new GitOutcome.Failed(m));
+
+    private MergeLikeOutcome RunMergeLike(Repo repo, Func<MergeLikeOutcome> body)
+        => RunLocked(repo, body, static m => new MergeLikeOutcome.Failed(m));
+
+    private GitOutcome RunSimple(Repo repo, string label, params string[] args)
+        => RunOperation(repo, () => ToOutcome(_runner.Run(repo.Path, args), label));
+
+    private static GitOutcome ToOutcome(GitProcessRunner.GitResult result, string label)
+        => result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError(label));
+
+    private GitOutcome Mutate(string repoPath, params string[] args)
+    {
+        var (ok, err) = RunMutation(repoPath, args);
+        return ok ? GitOutcome.Ok : new GitOutcome.Failed(err!);
+    }
+
     private static string NormalizeRelPath(string p) => p.Replace('\\', '/').TrimEnd('/');
 
     private static bool IsAllZeros(string s)
@@ -2868,17 +2465,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return s.Length > 0;
     }
 
-    private StashOutcome RunGitStash(string repoPath, IReadOnlyList<string> gitArgs, string label)
-    {
-        var result = _runner.Run(repoPath, gitArgs);
-        return result.Ok ? new StashOutcome(true, null) : new StashOutcome(false, result.BlockError(label));
-    }
-
-    private CheckoutOutcome RunGitCheckout(string repoPath, IReadOnlyList<string> gitArgs)
-    {
-        var result = _runner.Run(repoPath, gitArgs);
-        return result.Ok ? new CheckoutOutcome(true, null) : new CheckoutOutcome(false, result.BlockError("git checkout"));
-    }
+    private GitOutcome RunGitCheckout(string repoPath, IReadOnlyList<string> gitArgs)
+        => ToOutcome(_runner.Run(repoPath, gitArgs), "git checkout");
 
     // LibGit2Sharp's Patch API drives diff output through native→managed callbacks (per
     // hunk and per line), which the NativeAOT-generated marshalling stubs for GitDiffHunk
@@ -3308,24 +2896,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // cleanly when it can't fully recover, and the user would otherwise see the dialog close
     // but the operation banner reappear immediately. ForceQuitAvailable is set in that case
     // so the dialog can offer the escape-hatch second click.
-    public AbortOperationOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false)
-    {
-        try
+    public AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false)
+        => RunLocked<AbortOutcome>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new AbortOperationOutcome(false, "Not a git repository.");
-
             // Pick the verb. For force-quit we prefer git's own --quit (it removes the
             // sequencer/rebase state without touching the index/workdir) and fall back to
             // direct sentinel removal for ops that don't have one.
             var args = forceQuit ? GetForceQuitArgs(state) : GetAbortArgs(state);
-            using var _ = LockRepo(repo.Path);
             string? cmdMsg = null;
             int? exitCode = null;
             if (args != null)
             {
                 var result = _runner.Run(repo.Path, args);
-                if (!result.Started) return new AbortOperationOutcome(false, "Failed to start git.");
+                if (!result.Started) return new AbortOutcome.Failed("Failed to start git.");
                 exitCode = result.ExitCode;
                 cmdMsg = GitProcessRunner.CombineGitOutput(result.Stderr, result.Stdout);
             }
@@ -3335,11 +2918,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 // delete the sentinels ourselves. The user already confirmed they want
                 // to abandon HEAD recovery, so this is the documented escape hatch.
                 cmdMsg = ForceClearSentinels(repo, state);
-                if (cmdMsg != null) return new AbortOperationOutcome(false, cmdMsg);
+                if (cmdMsg != null) return new AbortOutcome.Failed(cmdMsg);
             }
             else
             {
-                return new AbortOperationOutcome(false, "Nothing to abort.");
+                return new AbortOutcome.Failed("Nothing to abort.");
             }
 
             // Authoritative check: does git still see an in-progress op? An exit-0
@@ -3348,7 +2931,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             var stillStuck = GetOperationState(repo) != RepoOperationState.None;
 
             if (!stillStuck && (exitCode == null || exitCode == 0))
-                return new AbortOperationOutcome(true, null);
+                return AbortOutcome.Ok;
 
             var msg = cmdMsg;
             if (string.IsNullOrEmpty(msg))
@@ -3365,13 +2948,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // can do something useful. Force-quit's own failure shouldn't keep
             // re-offering it.
             var canForceQuit = !forceQuit && stillStuck && SupportsForceQuit(state);
-            return new AbortOperationOutcome(false, msg, ForceQuitAvailable: canForceQuit);
-        }
-        catch (Exception ex)
-        {
-            return new AbortOperationOutcome(false, ex.Message);
-        }
-    }
+            return new AbortOutcome.Failed(msg, ForceQuitAvailable: canForceQuit);
+        }, static m => new AbortOutcome.Failed(m));
 
     private static string[]? GetAbortArgs(RepoOperationState state) => state switch
     {
@@ -3475,13 +3053,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         _ => "operation",
     };
 
-    public ContinueOperationOutcome ContinueOperation(Repo repo, RepoOperationState state)
-    {
-        try
+    public ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state)
+        => RunLocked<ContinueOutcome>(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return new ContinueOperationOutcome(false, "Not a git repository.");
-
             var args = state switch
             {
                 RepoOperationState.Merge => new[] { "merge", "--continue" },
@@ -3492,29 +3066,25 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 _ => null,
             };
             if (args == null)
-                return new ContinueOperationOutcome(false,
+                return new ContinueOutcome.Failed(
                     $"Continue isn't supported for {DescribeState(state)}.");
 
-            using var _ = LockRepo(repo.Path);
             var result = _runner.Run(repo.Path, args, configure: static psi =>
             {
                 psi.EnvironmentVariables["GIT_EDITOR"] = "true";
                 psi.EnvironmentVariables["GIT_SEQUENCE_EDITOR"] = "true";
             });
-            if (result.Ok) return new ContinueOperationOutcome(true, null);
+            if (result.Ok) return ContinueOutcome.Ok;
 
             bool hasMoreConflicts;
             try { hasMoreConflicts = HasUnmergedPaths(repo.Path); }
             catch { hasMoreConflicts = false; }
 
-            return new ContinueOperationOutcome(false,
-                result.BlockError($"git {string.Join(' ', args)}"), HasMoreConflicts: hasMoreConflicts);
-        }
-        catch (Exception ex)
-        {
-            return new ContinueOperationOutcome(false, ex.Message);
-        }
-    }
+            var message = result.BlockError($"git {string.Join(' ', args)}");
+            return hasMoreConflicts
+                ? new ContinueOutcome.MoreConflicts(message)
+                : new ContinueOutcome.Failed(message);
+        }, static m => new ContinueOutcome.Failed(m));
 
     private static CommitDetails DetailsError(Repo repo, string sha, string message)
         => new(

@@ -52,7 +52,7 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
                 var outcome = request.IsAdd
                     ? gitService.AddRemote(request.Repo, _name.Value.Trim(), _url.Value.Trim())
                     : gitService.EditRemote(request.Repo, request.RemoteName, _name.Value.Trim(), _url.Value.Trim());
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Failed to edit remote.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

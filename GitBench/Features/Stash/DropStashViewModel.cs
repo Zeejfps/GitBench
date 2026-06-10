@@ -23,7 +23,7 @@ internal sealed class DropStashViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.DropStash(repo, index);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Stash drop failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

@@ -28,7 +28,7 @@ internal sealed class RemoveWorktreeDialogViewModel : IDisposable
             {
                 var force = Force.Value;
                 var outcome = gitService.RemoveWorktree(request.Primary, worktreePath, force);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Remove worktree failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

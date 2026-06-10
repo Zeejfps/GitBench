@@ -40,7 +40,7 @@ internal sealed class RenameBranchDialogViewModel : IDisposable
                 var newName = Name.Value;
                 var force = Force.Value;
                 var outcome = gitService.RenameBranch(request.Repo, oldName, newName, force);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Rename failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

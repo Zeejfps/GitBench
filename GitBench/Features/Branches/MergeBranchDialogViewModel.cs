@@ -25,7 +25,7 @@ internal sealed class MergeBranchDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.Merge(request.Repo, request.SourceRef, Strategy.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Merge failed.");
+                return outcome is MergeLikeOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

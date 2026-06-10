@@ -90,7 +90,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
         }
 
         var outcome = _gitService.CreateStash(_repo, state.Message, includeUntracked, state.KeepStaged, paths);
-        return outcome.Success ? null : (outcome.ErrorMessage ?? "Stash failed.");
+        return outcome is GitOutcome.Failed failed ? failed.Message : null;
     }
 
     private void OnStashSucceeded()

@@ -32,7 +32,7 @@ internal sealed class RenameStashDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.RenameStash(request.Repo, index, Message.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Rename failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {

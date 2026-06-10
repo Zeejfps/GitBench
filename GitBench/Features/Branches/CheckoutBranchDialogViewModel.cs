@@ -36,7 +36,7 @@ internal sealed class CheckoutBranchDialogViewModel : IDisposable
             {
                 var outcome = gitService.CheckoutRemoteBranch(
                     request.Repo, Name.Value, request.RemoteName, request.RemoteBranchName, Track.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Checkout failed.");
+                return outcome is GitOutcome.Failed failed ? failed.Message : null;
             },
             // Close before broadcasting: an error broadcast triggers OverlayView to swap in the
             // error dialog, and a stale Close() afterwards would dismiss that brand-new dialog

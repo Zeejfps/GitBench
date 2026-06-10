@@ -25,7 +25,7 @@ internal sealed class ReconcilePullDialogViewModel : IDisposable
             work: () =>
             {
                 var outcome = gitService.Pull(repo, Strategy.Value);
-                return outcome.Success ? null : (outcome.ErrorMessage ?? "Pull failed.");
+                return outcome is PullOutcome.Failed failed ? failed.Message : null;
             },
             onSuccess: () =>
             {
