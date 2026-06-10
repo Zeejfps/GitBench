@@ -31,6 +31,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public IReadable<BranchesUiState> Ui { get; }
     public IReadable<BranchSelection?> Selection { get; }
     public IReadable<string?> BusyBranch { get; }
+    public IReadable<string?> PendingHead { get; }
     public IReadable<string?> LoadError { get; }
     public IReadable<bool> IsLoading { get; }
     public IReadable<IReadOnlySet<string>> WorktreeBranches { get; }
@@ -69,6 +70,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Ui = Slice(s => s.Ui);
         Selection = Slice(s => s.Selection);
         BusyBranch = Slice(s => s.BusyBranch);
+        PendingHead = Slice(s => s.PendingHead);
         LoadError = Slice(s => s.LoadError);
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
@@ -136,7 +138,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // Listing/IsLoading/LoadError are driven by the store subscription (OnStoreBranches);
         // here we only refresh the per-repo UI fold state, drop the previous repo's selection,
         // and recompute the worktree-branch set. Listing is deliberately left untouched.
-        Update(s => s with { Ui = ui, Selection = null });
+        Update(s => s with { Ui = ui, Selection = null, PendingHead = null });
         RefreshWorktreeBranches();
     }
 
@@ -173,12 +175,17 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             if (selection.HasValue && !RefStillExists(selection.Value, listing))
                 selection = null;
 
+            var pendingHead = s.PendingHead;
+            if (pendingHead != null && ListingHeadIs(listing, pendingHead))
+                pendingHead = null;
+
             return s with
             {
                 Listing = listing.ErrorMessage == null ? listing : null,
                 LoadError = listing.ErrorMessage,
                 IsLoading = false,
                 Selection = selection,
+                PendingHead = pendingHead,
             };
         });
 
@@ -206,6 +213,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
         foreach (var b in listing.LocalBranches)
             if (b.Name == sel.FullPath) return true;
+        return false;
+    }
+
+    private static bool ListingHeadIs(BranchListing listing, string branchName)
+    {
+        foreach (var b in listing.LocalBranches)
+            if (b.IsHead) return b.Name == branchName;
         return false;
     }
 
@@ -468,16 +482,18 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return;
         if (State.Value.IsBranchOpInFlight) return;
 
-        Update(s => s with { BusyBranch = branchName });
+        Update(s => s with { BusyBranch = branchName, PendingHead = branchName });
+        _bus.Broadcast(new CheckoutStartedMessage(repo.Id));
 
         RunBackground<CheckoutOutcome>(
             work: () => (_gitService.CheckoutLocalBranch(repo, branchName), null),
             onResult: (outcome, error) =>
             {
-                Update(s => s with { BusyBranch = null });
-                if (error == null && outcome!.Success)
-                    _bus.Broadcast(new RefsChangedMessage(repo.Id));
-                else
+                var ok = error == null && outcome!.Success;
+                Update(s => s with { BusyBranch = null, PendingHead = ok ? s.PendingHead : null });
+                _bus.Broadcast(new RefsChangedMessage(repo.Id));
+                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                if (!ok)
                     _bus.Broadcast(new ShowOperationErrorMessage(
                         "Checkout failed",
                         (error ?? outcome?.ErrorMessage) ?? "Checkout failed."));
@@ -811,6 +827,7 @@ internal sealed record BranchesState(
     BranchesUiState Ui,
     BranchSelection? Selection,
     string? BusyBranch,
+    string? PendingHead,
     bool IsLoading,
     string? LoadError,
     IReadOnlySet<string> WorktreeBranches)
@@ -824,6 +841,7 @@ internal sealed record BranchesState(
         Ui: new BranchesUiState(),
         Selection: null,
         BusyBranch: null,
+        PendingHead: null,
         IsLoading: false,
         LoadError: null,
         WorktreeBranches: new HashSet<string>());

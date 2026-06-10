@@ -92,6 +92,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
     private IReadOnlyList<BranchRow> _rows = Array.Empty<BranchRow>();
     private BranchSelection? _selection;
     private string? _busyBranch;
+    private string? _pendingHead;
     private string? _loadError;
     private bool _isLoading;
     private IReadOnlySet<string> _worktreeBranches = new HashSet<string>();
@@ -158,6 +159,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
         vm.Ui.Subscribe(ui => { _ui = ui; RebuildRows(); });
         vm.Selection.Subscribe(SetSelection);
         vm.BusyBranch.Subscribe(SetBusyBranch);
+        vm.PendingHead.Subscribe(SetPendingHead);
         vm.LoadError.Subscribe(SetLoadError);
         vm.IsLoading.Subscribe(SetIsLoading);
         vm.WorktreeBranches.Subscribe(set => _worktreeBranches = set);
@@ -172,6 +174,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
 
     private void SetSelection(BranchSelection? selection) => _selection = selection;
     private void SetBusyBranch(string? fullPath) => _busyBranch = fullPath;
+    private void SetPendingHead(string? fullPath) => _pendingHead = fullPath;
     private void SetLoadError(string? error) => _loadError = error;
     private void SetIsLoading(bool isLoading) => _isLoading = isLoading;
 
@@ -327,9 +330,9 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
         return row.Kind switch
         {
             BranchRowKind.LocalHeader or BranchRowKind.RemotesHeader or BranchRowKind.RemoteHeader or BranchRowKind.StashesHeader => (row.DisplayName, _headerTextStyle),
+            BranchRowKind.LocalBranch when EffectiveIsHead(row) => (row.DisplayName, isSelected ? _headTextSelectedStyle : _headTextStyle),
             BranchRowKind.LocalBranch when isBusy => (row.DisplayName, _branchTextBusyStyle),
             BranchRowKind.LocalBranch when isCheckedOutElsewhere => (row.DisplayName, _branchTextBusyStyle),
-            BranchRowKind.LocalBranch when row.IsHead => (row.DisplayName, isSelected ? _headTextSelectedStyle : _headTextStyle),
             _ => (row.DisplayName, isSelected ? _branchTextSelectedStyle : _branchTextStyle),
         };
     }
@@ -365,7 +368,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
 
     private (string glyph, TextStyle style) SelectBranchIcon(BranchRow row, bool isSelected)
     {
-        if (IsBusyRow(row))
+        if (IsBusyRow(row) && !EffectiveIsHead(row))
             return (LucideIcons.Branch, _branchIconBusyStyle);
 
         if (row.Kind == BranchRowKind.LocalBranch)
@@ -455,6 +458,11 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
         && row.Kind == BranchRowKind.LocalBranch
         && row.FullPath != null
         && row.FullPath == _busyBranch;
+
+    private bool EffectiveIsHead(BranchRow row) =>
+        _pendingHead != null
+            ? row.Kind == BranchRowKind.LocalBranch && row.FullPath == _pendingHead
+            : row.IsHead;
 
     private string TruncateToFit(string text, TextStyle style, float available)
     {
