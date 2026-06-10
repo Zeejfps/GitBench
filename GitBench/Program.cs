@@ -40,6 +40,8 @@ using var snapshotStore = new RepoSnapshotStore(registry, gitService, messageBus
 context.AddService<IRepoSnapshotStore>(snapshotStore);
 using var operationsStore = new RepoOperationsStore(registry, gitService, messageBus);
 context.AddService<IRepoOperationsStore>(operationsStore);
+using var badgeStore = new RepoBadgeStore(operationsStore, registry, gitService, messageBus);
+context.AddService<IRepoBadgeStore>(badgeStore);
 
 var appView = new AppView(preferences, updateService);
 using var appHost = builder.UseContent(appView).Build();
@@ -68,6 +70,7 @@ using var submodulePointerSync = new SubmodulePointerSyncService(registry, gitSe
 
 snapshotStore.Start(dispatcher);
 operationsStore.Start(dispatcher);
+badgeStore.Start(dispatcher);
 
 // Native macOS menu bar (the call is macOS-guarded internally; a no-op elsewhere). The About
 // dialog it opens shows the app icon, so load it into the canvas first. Scoped to macOS — the

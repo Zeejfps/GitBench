@@ -43,5 +43,5 @@ internal sealed class GroupSection : MultiChildView, IBind<GroupSectionViewModel
     }
 
     private View CreateRepoRow(Repo primary) =>
-        new RepoEntry(primary, Context!.Get<IRepoRegistry>()!, Context!.Get<IRepoOperationsStore>()!);
+        new RepoEntry(primary, Context!.Get<IRepoRegistry>()!, Context!.Get<IRepoBadgeStore>()!);
 }

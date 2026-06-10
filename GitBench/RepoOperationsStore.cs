@@ -20,10 +20,6 @@ public sealed record RepoOperations(
     public static readonly RepoOperations Idle = new(false, false, false, null, false);
 }
 
-// Per-repo badge state for a RepoBar row. Today just the error dot; future signals (has-changes,
-// ahead/behind, …) slot in here and the row picks them up without a new plumbing path.
-public readonly record struct RepoBadges(bool HasError);
-
 // Single source of truth for in-flight remote operations (push/pull/fetch), keyed by repo id so an
 // op started on one repo keeps running — and stays correctly tracked — after the user switches
 // away. Mirrors RepoSnapshotStore's shape: per-repo state, an "active" projection that swaps on
@@ -33,9 +29,10 @@ public interface IRepoOperationsStore
     // The active repo's operation state. Swaps instantly on repo switch.
     IReadable<RepoOperations> Active { get; }
 
-    // Per-repo badge state. Call inside a reactive binding (e.g. BindIsVisible) — the underlying
-    // per-repo state read is auto-tracked, so the badge updates live without a manual subscription.
-    RepoBadges Badges(Guid repoId);
+    // True when this repo has a remote-op failure the user hasn't seen yet (it happened while the
+    // repo wasn't active). Feeds the RepoBar error badge via IRepoBadgeStore. Call inside a reactive
+    // binding — the underlying per-repo state read is auto-tracked.
+    bool HasUnseenError(Guid repoId);
 
     void Push(Repo repo, bool force = false);
     void Pull(Repo repo, PullStrategy? strategy = null);
@@ -86,7 +83,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
     }
 
-    public RepoBadges Badges(Guid repoId) => new(HasError: Get(repoId).Value.HasUnseenError);
+    public bool HasUnseenError(Guid repoId) => Get(repoId).Value.HasUnseenError;
 
     public void Push(Repo repo, bool force = false)
     {

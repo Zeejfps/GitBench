@@ -14,6 +14,7 @@ public abstract class NestedRepoRow : MultiChildView
     protected NestedRepoRow(
         Repo repo,
         IRepoRegistry registry,
+        IRepoBadgeStore badges,
         string iconGlyph,
         Func<RepoBarRowStyles, uint> accentSelector,
         Func<Context, IReadOnlyList<RepoBarContextMenu.Item>> buildMenuItems,
@@ -71,6 +72,7 @@ public abstract class NestedRepoRow : MultiChildView
                         chevronSlot,
                         icon,
                         new FlexItem { Grow = 1, Child = label },
+                        RowChrome.CreateBadge(badges, repo.Id),
                     }
                 }
             }

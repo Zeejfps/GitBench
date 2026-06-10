@@ -13,7 +13,7 @@ namespace GitBench;
 // purple for submodule); no separator rows.
 public sealed class RepoEntry : MultiChildView
 {
-    public RepoEntry(Repo primary, IRepoRegistry registry, IRepoOperationsStore ops)
+    public RepoEntry(Repo primary, IRepoRegistry registry, IRepoBadgeStore badges)
     {
         var children = new FlexColumnView
         {
@@ -28,7 +28,7 @@ public sealed class RepoEntry : MultiChildView
                 if (!registry.IsWorktreeExpanded(primary.Id))
                     return System.Linq.Enumerable.Empty<View>();
                 // Direct children sit at depth 1; SubmoduleEntry recurses for deeper nesting.
-                return RepoTreeChildren.Build(primary.Id, registry, depth: 1);
+                return RepoTreeChildren.Build(primary.Id, registry, badges, depth: 1);
             },
             v => v);
 
@@ -38,7 +38,7 @@ public sealed class RepoEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new RepoRow(primary, registry, ops),
+                new RepoRow(primary, registry, badges),
                 children,
             }
         });
