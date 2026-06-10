@@ -61,7 +61,10 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
         _unstagedPanel = new LocalChangesPanel(
             "Unstaged",
             DiffSide.Unstaged,
-            "No unstaged changes.",
+            FileChangesUI.CreateEmptyState(
+                LucideIcons.CircleCheck,
+                "Working tree clean",
+                "Changes you make will appear here."),
             _selection,
             OnRowClick,
             [_viewModeButtonUnstaged, _discardButton, _stageSelectedButton, _stageAllButton],
@@ -72,7 +75,10 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
         _stagedPanel = new LocalChangesPanel(
             "Staged",
             DiffSide.Staged,
-            "No staged changes.",
+            FileChangesUI.CreateEmptyState(
+                LucideIcons.Inbox,
+                "Nothing staged yet",
+                "Stage changes to include them in your commit."),
             _selection,
             OnRowClick,
             [_viewModeButtonStaged, _unstageAllButton, _unstageSelectedButton],

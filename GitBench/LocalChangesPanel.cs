@@ -34,7 +34,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
     private readonly Action<FileRow>? _onFolderToggle;
     private readonly Func<FileRow?, IReadOnlyList<RepoBarContextMenu.Item>>? _buildContextMenu;
     private readonly TextView _headerText;
-    private readonly TextView _emptyPlaceholder;
+    private readonly View _emptyPlaceholder;
     private readonly RectView _bodyContainer;
     private readonly VirtualRowListView _list;
     private readonly VerticalScrollBarView _scrollBar;
@@ -99,7 +99,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
     public LocalChangesPanel(
         string title,
         DiffSide side,
-        string emptyText,
+        View emptyPlaceholder,
         IReadable<Selection> selection,
         Action<FileRow, InputModifiers> onRowClick,
         IReadOnlyList<View>? headerActions = null,
@@ -118,7 +118,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
         _buildContextMenu = buildContextMenu;
 
         _headerText = FileChangesUI.CreateHeaderText(title);
-        _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(emptyText);
+        _emptyPlaceholder = emptyPlaceholder;
 
         View headerContent;
         if (headerActions is { Count: > 0 })

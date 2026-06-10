@@ -44,6 +44,9 @@ internal static class LucideIcons
     public const string List = "";         // list (flat file view)
     public const string ListTree = "";     // list-tree (tree file view)
 
+    public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
+    public const string Inbox = "";        // inbox (empty state: nothing staged)
+
     public const string File = "";           // file (type-changed / unknown)
     public const string FilePlus = "";   // file-plus (added)
     public const string FileMinus = ""; // file-minus (deleted)

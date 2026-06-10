@@ -36,6 +36,50 @@ internal static class FileChangesUI
         return view;
     }
 
+    /// <summary>Centered icon / title / hint stack shown when a panel has no rows.</summary>
+    public static View CreateEmptyState(string icon, string title, string hint)
+    {
+        var iconView = new TextView
+        {
+            Text = icon,
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 28f,
+            HorizontalTextAlignment = TextAlignment.Center,
+        };
+        iconView.BindThemedTextColor(s => s.FileChangesSection.EmptyStateIcon);
+
+        var titleView = new TextView
+        {
+            Text = title,
+            HorizontalTextAlignment = TextAlignment.Center,
+        };
+        titleView.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
+
+        var hintView = new TextView
+        {
+            Text = hint,
+            FontSize = 11f,
+            HorizontalTextAlignment = TextAlignment.Center,
+            TextWrap = TextWrap.Wrap,
+        };
+        hintView.BindThemedTextColor(s => s.FileChangesSection.EmptyStateHint);
+
+        return new PaddingView
+        {
+            Padding = new PaddingStyle { Left = 16, Right = 16 },
+            Children =
+            {
+                new FlexColumnView
+                {
+                    MainAxisAlignment = MainAxisAlignment.Center,
+                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                    Gap = 8f,
+                    Children = { iconView, titleView, hintView },
+                },
+            },
+        };
+    }
+
     public static RectView CreateHeaderBar(View content)
     {
         var view = new RectView

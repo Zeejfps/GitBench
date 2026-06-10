@@ -16,7 +16,9 @@ public sealed record FileChangesSectionStyles(
     uint HeaderBackground,
     uint HeaderBorder,
     uint HeaderText,
-    uint EmptyPlaceholderText);
+    uint EmptyPlaceholderText,
+    uint EmptyStateIcon,
+    uint EmptyStateHint);
 
 public sealed record FileChangeRowStyles(
     uint RowText,
@@ -65,7 +67,9 @@ public partial record ThemeStyles
             HeaderBackground: p.SurfaceRaised,
             HeaderBorder: p.Border,
             HeaderText: p.TextMuted,
-            EmptyPlaceholderText: p.TextMuted);
+            EmptyPlaceholderText: p.TextMuted,
+            EmptyStateIcon: p.TextDim,
+            EmptyStateHint: p.TextDim);
 
     private static FileChangeRowStyles BuildFileChangeRow(ThemePalette p, StatusPalette status) =>
         new(
