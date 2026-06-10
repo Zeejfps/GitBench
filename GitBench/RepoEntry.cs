@@ -13,7 +13,7 @@ namespace GitBench;
 // purple for submodule); no separator rows.
 public sealed class RepoEntry : MultiChildView
 {
-    public RepoEntry(Repo primary, IRepoRegistry registry)
+    public RepoEntry(Repo primary, IRepoRegistry registry, IRepoOperationsStore ops)
     {
         var children = new FlexColumnView
         {
@@ -38,7 +38,7 @@ public sealed class RepoEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new RepoRow(primary, registry),
+                new RepoRow(primary, registry, ops),
                 children,
             }
         });

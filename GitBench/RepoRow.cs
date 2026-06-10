@@ -1,4 +1,5 @@
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
@@ -7,7 +8,7 @@ namespace GitBench;
 
 public sealed class RepoRow : MultiChildView
 {
-    public RepoRow(Repo repo, IRepoRegistry registry)
+    public RepoRow(Repo repo, IRepoRegistry registry, IRepoOperationsStore ops)
     {
         Height = 28;
 
@@ -37,6 +38,18 @@ public sealed class RepoRow : MultiChildView
         };
         RowChrome.BindRowText(label, registry, repo);
 
+        // Trailing error dot: a remote op (push/pull/fetch) on this repo failed while it wasn't the
+        // active repo. The store read is auto-tracked, so the dot appears/clears live; becoming the
+        // active repo marks the error seen and hides it. First of a planned badge family.
+        var errorBadge = new RectView
+        {
+            Width = 8,
+            Height = 8,
+            BorderRadius = BorderRadiusStyle.All(4),
+        };
+        errorBadge.BindThemedBackgroundColor(s => s.RepoBarRow.BadgeError);
+        errorBadge.BindIsVisible(() => ops.Badges(repo.Id).HasError);
+
         var background = new RectView
         {
             BorderRadius = BorderRadiusStyle.All(4),
@@ -52,6 +65,7 @@ public sealed class RepoRow : MultiChildView
                         chevronSlot,
                         icon,
                         new FlexItem { Grow = 1, Child = label },
+                        errorBadge,
                     }
                 }
             }

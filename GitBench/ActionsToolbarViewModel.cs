@@ -6,15 +6,9 @@ namespace GitBench;
 internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
     private readonly IPlatformShell _shell;
     private readonly IMessageBus _bus;
-
-    // Only the mutation lanes live here now; push status + local-changes loading is owned by the
-    // snapshot store, and this VM projects from it.
-    private readonly GenerationGuard _pushGen;
-    private readonly GenerationGuard _pullGen;
-    private readonly GenerationGuard _fetchGen;
+    private readonly IRepoOperationsStore _ops;
 
     private readonly SpinnerAnimation _pushSpinner;
     private readonly SpinnerAnimation _pullSpinner;
@@ -41,22 +35,18 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
 
     public ActionsToolbarViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
         IPlatformShell shell,
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
         IMessageBus bus,
-        IRepoSnapshotStore store)
+        IRepoSnapshotStore store,
+        IRepoOperationsStore ops)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
         _shell = shell;
         _bus = bus;
-
-        _pushGen = CreateLane();
-        _pullGen = CreateLane();
-        _fetchGen = CreateLane();
+        _ops = ops;
 
         _pushSpinner = new SpinnerAnimation(ticker);
         _pullSpinner = new SpinnerAnimation(ticker);
@@ -76,12 +66,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IsPushing = Slice(s => s.IsPushing);
         IsPulling = Slice(s => s.IsPulling);
         IsFetching = Slice(s => s.IsFetching);
-        Error = Slice(s => s.Error);
+        Error = Slice(s => s.ShellError ?? s.OpError);
 
-        // HasActiveRepo gates the command-enabled slices; the registry drives it directly.
-        // Push status and has-local-changes are projected from the store (no own loads/caches).
+        // HasActiveRepo gates the command-enabled slices; the registry drives it directly. Push
+        // status and has-local-changes are projected from the snapshot store (no own loads/caches).
         Subscriptions.Add(_registry.Active.Subscribe(repo =>
-            Update(s => s with { HasActiveRepo = repo != null, Error = null })));
+            Update(s => s with { HasActiveRepo = repo != null, ShellError = null })));
         Subscriptions.Add(store.PushStatus.Subscribe(status =>
             Update(s => s with { PushStatus = status })));
         Subscriptions.Add(store.LocalChanges.Subscribe(data =>
@@ -89,6 +79,38 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             var hasChanges = data != null && data.Snapshot.Staged.Count + data.Snapshot.Unstaged.Count > 0;
             Update(s => s.HasLocalChanges == hasChanges ? s : s with { HasLocalChanges = hasChanges });
         }));
+
+        // Push/pull/fetch in-flight state is owned per-repo by the operations store. Project the
+        // active repo's slice into our flags + spinners + inline error, so switching repos shows the
+        // right state and a background op keeps tracking after the switch.
+        Subscriptions.Add(_ops.Active.Subscribe(OnOps));
+
+        // A diverged pull on the active repo is recoverable — open the reconcile dialog.
+        Subscriptions.Add(_bus.SubscribeScoped<PullDivergedMessage>(m =>
+        {
+            if (_registry.Active.Value?.Id == m.Repo.Id)
+                _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog(m.Repo, onClose)));
+        }));
+    }
+
+    private void OnOps(RepoOperations ops)
+    {
+        Update(s => s with
+        {
+            IsPushing = ops.IsPushing,
+            IsPulling = ops.IsPulling,
+            IsFetching = ops.IsFetching,
+            OpError = ops.LastError,
+        });
+        DriveSpinner(_pushSpinner, ops.IsPushing);
+        DriveSpinner(_pullSpinner, ops.IsPulling);
+        DriveSpinner(_fetchSpinner, ops.IsFetching);
+    }
+
+    private static void DriveSpinner(SpinnerAnimation spinner, bool active)
+    {
+        if (active) spinner.Start();
+        else spinner.Stop();
     }
 
     private static bool ComputePushEnabled(ActionsToolbarState s)
@@ -124,7 +146,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenFolder(repo.Path); }
-        catch (Exception ex) { Update(s => s with { Error = $"Open folder failed: {ex.Message}" }); }
+        catch (Exception ex) { Update(s => s with { ShellError = $"Open folder failed: {ex.Message}" }); }
     }
 
     private void DoOpenTerminal()
@@ -132,7 +154,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenTerminal(repo.Path); }
-        catch (Exception ex) { Update(s => s with { Error = $"Open terminal failed: {ex.Message}" }); }
+        catch (Exception ex) { Update(s => s with { ShellError = $"Open terminal failed: {ex.Message}" }); }
     }
 
     private void DoBranch()
@@ -159,10 +181,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var state = State.Value;
-        if (state.IsPushing) return;
+        var pushStatus = State.Value.PushStatus;
 
-        var pushStatus = state.PushStatus;
         if (!pushStatus.IsDetached
             && !pushStatus.HasUpstream
             && !string.IsNullOrEmpty(pushStatus.CurrentBranchName))
@@ -179,102 +199,26 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             && pushStatus.Behind > 0)
         {
             var branchName = pushStatus.CurrentBranchName ?? string.Empty;
-            var ahead = pushStatus.Ahead;
-            var behind = pushStatus.Behind;
             _bus.Broadcast(new ShowDialogMessage(onClose => new ForcePushDialog(
-                repo, branchName, ahead, behind, onClose)));
+                repo, branchName, pushStatus.Ahead, pushStatus.Behind, onClose)));
             return;
         }
 
-        Update(s => s with { IsPushing = true, Error = null });
-        _pushSpinner.Start();
-
-        RunBackground<PushOutcome>(
-            work: () =>
-            {
-                var outcome = _gitService.Push(repo);
-                return (outcome, outcome.Success ? null : outcome.ErrorMessage ?? "Push failed.");
-            },
-            onResult: (_, error) =>
-            {
-                _pushSpinner.Stop();
-                if (error != null)
-                {
-                    Update(s => s with { IsPushing = false });
-                    _bus.Broadcast(new ShowOperationErrorMessage("Push failed", error));
-                    return;
-                }
-                Update(s => s with { IsPushing = false, PushStatus = s.PushStatus with { Ahead = 0 } });
-                _bus.Broadcast(new RefsChangedMessage(repo.Id));
-            },
-            lane: _pushGen);
+        _ops.Push(repo);
     }
 
     private void DoPull()
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var state = State.Value;
-        if (state.IsPulling) return;
-
-        Update(s => s with { IsPulling = true, Error = null });
-        _pullSpinner.Start();
-
-        RunBackground<PullOutcome>(
-            work: () =>
-            {
-                var outcome = _gitService.Pull(repo);
-                return (outcome, outcome.Success ? null : outcome.ErrorMessage ?? "Pull failed.");
-            },
-            onResult: (outcome, error) =>
-            {
-                _pullSpinner.Stop();
-                if (error != null)
-                {
-                    Update(s => s with { IsPulling = false });
-                    // Diverged branches aren't a dead end — let the user pick a reconcile
-                    // strategy in a dialog that reruns the pull, instead of dumping git's hint.
-                    if (outcome is { HasDivergedBranches: true })
-                        _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog(repo, onClose)));
-                    else
-                        _bus.Broadcast(new ShowOperationErrorMessage("Pull failed", error));
-                    return;
-                }
-                Update(s => s with { IsPulling = false, PushStatus = s.PushStatus with { Behind = 0 } });
-                _bus.Broadcast(new RefsChangedMessage(repo.Id));
-            },
-            lane: _pullGen);
+        _ops.Pull(repo);
     }
 
     private void DoFetch()
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var state = State.Value;
-        if (state.IsFetching) return;
-
-        Update(s => s with { IsFetching = true, Error = null });
-        _fetchSpinner.Start();
-
-        RunBackground<FetchOutcome>(
-            work: () =>
-            {
-                var outcome = _gitService.Fetch(repo);
-                return (outcome, outcome.Success ? null : outcome.ErrorMessage ?? "Fetch failed.");
-            },
-            onResult: (_, error) =>
-            {
-                _fetchSpinner.Stop();
-                if (error != null)
-                {
-                    Update(s => s with { IsFetching = false });
-                    _bus.Broadcast(new ShowOperationErrorMessage("Fetch failed", error));
-                    return;
-                }
-                Update(s => s with { IsFetching = false });
-                _bus.Broadcast(new RefsChangedMessage(repo.Id));
-            },
-            lane: _fetchGen);
+        _ops.Fetch(repo);
     }
 
     public override void Dispose()

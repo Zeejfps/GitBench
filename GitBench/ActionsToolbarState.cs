@@ -7,7 +7,11 @@ internal sealed record ActionsToolbarState(
     bool IsPushing,
     bool IsPulling,
     bool IsFetching,
-    string? Error)
+    // Last push/pull/fetch failure on the active repo, projected from the operations store.
+    string? OpError,
+    // Local open-folder/open-terminal failure; transient and cleared on repo switch. Takes
+    // precedence over OpError when present.
+    string? ShellError)
 {
     public static ActionsToolbarState Initial { get; } = new(
         HasActiveRepo: false,
@@ -16,5 +20,6 @@ internal sealed record ActionsToolbarState(
         IsPushing: false,
         IsPulling: false,
         IsFetching: false,
-        Error: null);
+        OpError: null,
+        ShellError: null);
 }

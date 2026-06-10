@@ -28,7 +28,8 @@ public sealed record RepoBarRowStyles(
     uint TextActive,
     uint TextMissing,
     uint IconAccentWorktree,
-    uint IconAccentSubmodule);
+    uint IconAccentSubmodule,
+    uint BadgeError);
 
 public sealed record BranchesViewStyles(
     uint ViewBackground,
@@ -80,7 +81,8 @@ public partial record ThemeStyles
             TextActive: p.TextOnAccent,
             TextMissing: p.TextDisabled,
             IconAccentWorktree: status.Info,
-            IconAccentSubmodule: status.Purple);
+            IconAccentSubmodule: status.Purple,
+            BadgeError: status.Danger);
 
     private static BranchesViewStyles BuildBranchesView(ThemePalette p, StatusPalette status) =>
         new(
