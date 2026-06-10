@@ -75,6 +75,21 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private readonly TextStyle _hashTextStyle = TextStyles.Row(0u);
     private readonly TextStyle _hashTextActiveStyle = TextStyles.Row(0u);
 
+    // Reused across draws to avoid a fresh RectStyle heap allocation per rect, per row,
+    // every frame. DrawRect copies every field out synchronously, so one mutable instance
+    // is safe to share — set the varying fields (mostly just BackgroundColor) immediately
+    // before each draw. _fillStyle covers the plain solid fills; the header and badge keep
+    // their own because they carry a constant border / corner radius.
+    private readonly RectStyle _fillStyle = new();
+    private readonly RectStyle _headerRectStyle = new()
+    {
+        BorderSize = new BorderSizeStyle { Bottom = 1 },
+    };
+    private readonly RectStyle _badgeRectStyle = new()
+    {
+        BorderRadius = BorderRadiusStyle.All(3),
+    };
+
     private CommitsViewStyles _styles = ThemeStyles.Dark.CommitsView;
 
     public CommitsView()
@@ -106,6 +121,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             _badgeTextBoldStyle.TextColor = _styles.BadgeText;
             _hashTextStyle.TextColor = _styles.RowTextDim;
             _hashTextActiveStyle.TextColor = _styles.RowTextActive;
+            _headerRectStyle.BorderColor = new BorderColorStyle { Bottom = _styles.HeaderBorderBottom };
             SetDirty();
         });
 
@@ -304,10 +320,11 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         var z = GetDrawZIndex();
 
         c.PushClip(pos);
+        _fillStyle.BackgroundColor = _styles.Background;
         c.DrawRect(new DrawRectInputs
         {
             Position = pos,
-            Style = new RectStyle { BackgroundColor = _styles.Background },
+            Style = _fillStyle,
             ZIndex = z,
         });
 
@@ -348,15 +365,11 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private void DrawHeader(ICanvas c, RectF pos, int z)
     {
         var headerRect = new RectF(pos.Left, pos.Top - HeaderHeight, pos.Width, HeaderHeight);
+        _headerRectStyle.BackgroundColor = _styles.HeaderBackground;
         c.DrawRect(new DrawRectInputs
         {
             Position = headerRect,
-            Style = new RectStyle
-            {
-                BackgroundColor = _styles.HeaderBackground,
-                BorderColor = new BorderColorStyle { Bottom = _styles.HeaderBorderBottom },
-                BorderSize = new BorderSizeStyle { Bottom = 1 },
-            },
+            Style = _headerRectStyle,
             ZIndex = z,
         });
 
@@ -372,13 +385,14 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         DrawHeaderText(c, "Date", dateX, pos.Top - HeaderHeight, dateW, z + 1);
     }
 
-    private static void DrawColumnOverlay(ICanvas c, float left, float bottom, float width, uint color, int z)
+    private void DrawColumnOverlay(ICanvas c, float left, float bottom, float width, uint color, int z)
     {
         if (width <= 0) return;
+        _fillStyle.BackgroundColor = color;
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(left, bottom, width, RowHeight),
-            Style = new RectStyle { BackgroundColor = color },
+            Style = _fillStyle,
             ZIndex = z,
         });
     }
@@ -388,17 +402,19 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         var hovered = _hoveredDivider == kind;
         if (hovered)
         {
+            _fillStyle.BackgroundColor = _styles.ColumnDividerHoverFill;
             c.DrawRect(new DrawRectInputs
             {
                 Position = new RectF(centerX - DividerHitWidth * 0.5f, bottom, DividerHitWidth, height),
-                Style = new RectStyle { BackgroundColor = _styles.ColumnDividerHoverFill },
+                Style = _fillStyle,
                 ZIndex = z,
             });
         }
+        _fillStyle.BackgroundColor = hovered ? _styles.ColumnDividerHoverLine : _styles.ColumnDividerIdle;
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(centerX - DividerThickness * 0.5f, bottom, DividerThickness, height),
-            Style = new RectStyle { BackgroundColor = hovered ? _styles.ColumnDividerHoverLine : _styles.ColumnDividerIdle },
+            Style = _fillStyle,
             ZIndex = z + 1,
         });
     }
@@ -495,10 +511,11 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
         if (isHighlighted)
         {
+            _fillStyle.BackgroundColor = _styles.RowSelectedBackground;
             c.DrawRect(new DrawRectInputs
             {
                 Position = rowRect,
-                Style = new RectStyle { BackgroundColor = _styles.RowSelectedBackground },
+                Style = _fillStyle,
                 ZIndex = z,
             });
         }
@@ -570,14 +587,11 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 RefKind.Tag => _styles.BadgeTagBackground,
                 _ => _styles.BadgeLocalBackground,
             };
+            _badgeRectStyle.BackgroundColor = bg;
             c.DrawRect(new DrawRectInputs
             {
                 Position = new RectF(x, badgeY, badgeW, BadgeHeight),
-                Style = new RectStyle
-                {
-                    BackgroundColor = bg,
-                    BorderRadius = BorderRadiusStyle.All(3),
-                },
+                Style = _badgeRectStyle,
                 ZIndex = z,
             });
             var contentX = x + BadgePaddingX;
