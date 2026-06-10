@@ -67,7 +67,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private IDisposable? _workingTreeSub;
     private IDisposable? _commitCreatedSub;
     private IDisposable? _submodulesSub;
-    private IDisposable? _checkoutStartedSub;
 
     public IReadable<CommitSnapshot?> Commits => _commits;
     public IReadable<BranchListing?> Branches => _branches;
@@ -98,7 +97,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged);
         _commitCreatedSub = _bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated);
         _submodulesSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
-        _checkoutStartedSub = _bus.SubscribeScoped<CheckoutStartedMessage>(OnCheckoutStarted);
     }
 
     // ---- triggers ----
@@ -143,16 +141,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
             WarmCommits(warm);
             WarmBranches(warm);
         }
-    }
-
-    private void OnCheckoutStarted(CheckoutStartedMessage msg)
-    {
-        var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
-        _commitsLane.Bump();
-        _localLane.Bump();
-        _commits.Value = null;
-        _local.Value = null;
     }
 
     private void OnCommitCreated(CommitCreatedMessage msg)
@@ -348,7 +336,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _workingTreeSub?.Dispose();
         _commitCreatedSub?.Dispose();
         _submodulesSub?.Dispose();
-        _checkoutStartedSub?.Dispose();
         _commits.Dispose();
         _branches.Dispose();
         _local.Dispose();

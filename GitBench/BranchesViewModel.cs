@@ -483,7 +483,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (State.Value.IsBranchOpInFlight) return;
 
         Update(s => s with { BusyBranch = branchName, PendingHead = branchName });
-        _bus.Broadcast(new CheckoutStartedMessage(repo.Id));
 
         RunBackground<CheckoutOutcome>(
             work: () => (_gitService.CheckoutLocalBranch(repo, branchName), null),
