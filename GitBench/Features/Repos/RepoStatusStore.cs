@@ -1,6 +1,8 @@
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 // The cheap, all-repos per-repo signals, aggregated from the single git-status probe (branch /
 // ahead / behind / dirty) plus the operations store (busy / unseen-error). One type feeds the

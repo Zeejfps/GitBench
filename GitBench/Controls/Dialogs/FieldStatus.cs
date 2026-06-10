@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 /// <summary>
 /// Severity of a <see cref="FieldStatus"/> shown beneath a <see cref="LabeledInputField"/>.

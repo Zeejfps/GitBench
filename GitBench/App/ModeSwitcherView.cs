@@ -1,7 +1,9 @@
+using GitBench.Controls;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.App;
 
 internal sealed class ModeSwitcherView : MultiChildView, IBind<ModeSwitcherViewModel>
 {

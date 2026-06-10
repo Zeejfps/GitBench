@@ -1,6 +1,10 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 internal sealed class CreateWorktreeDialogViewModel : IDisposable
 {

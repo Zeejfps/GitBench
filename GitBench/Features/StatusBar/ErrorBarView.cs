@@ -1,9 +1,10 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 /// <summary>
 /// Inline warning banner — bordered box with red-on-amber text. Self-managing: setting

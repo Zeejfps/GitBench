@@ -1,8 +1,12 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// Confirmation modal for deleting a branch from a remote. Calls

@@ -1,9 +1,12 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 /// <summary>
 /// Small icon-only button sized to fit inside the <see cref="StatusBarView"/>. The icon glyph

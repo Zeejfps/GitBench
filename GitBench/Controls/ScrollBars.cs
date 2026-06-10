@@ -1,10 +1,10 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.VerticalScrollBar;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 internal static class ScrollBars
 {

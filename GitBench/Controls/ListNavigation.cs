@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Shared helpers for keyboard arrow navigation over flat, single-select row lists

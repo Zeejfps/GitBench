@@ -1,8 +1,12 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Platform;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.App;
 
 /// <summary>
 /// "About GitBench" modal: app icon, name, version, a link to the repo, and copyright.

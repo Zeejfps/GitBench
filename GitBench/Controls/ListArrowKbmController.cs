@@ -1,10 +1,11 @@
+using GitBench.Features.Commits;
+using GitBench.Features.LocalChanges;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Arrow-key navigation for a vertical row list. Lives on the owning view and takes

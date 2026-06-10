@@ -1,7 +1,16 @@
 using System.Collections.Concurrent;
+using GitBench.Features.Branches;
+using GitBench.Features.Commits;
+using GitBench.Features.Diff;
+using GitBench.Features.Identity;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Features.Worktrees;
 using LibGit2Sharp;
+using SubmoduleStatus = GitBench.Features.Submodules.SubmoduleStatus;
 
-namespace GitBench;
+namespace GitBench.Git;
 
 // Non-injecting config reads the identity resolver needs. Separate from IGitService so the
 // resolver depends only on these (and so GitService can hand itself to GitIdentityService

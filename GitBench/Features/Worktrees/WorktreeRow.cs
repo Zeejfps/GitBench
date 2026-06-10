@@ -1,6 +1,11 @@
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Gui;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 // Renders a single worktree row, nested under its primary in the RepoBar. Visually
 // distinguished from primary rows by deeper indent and the Branch icon.

@@ -1,6 +1,7 @@
+using GitBench.Features.Repos;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Infrastructure;
 
 /// <summary>
 /// Command that runs its work on a background thread, exposing observable

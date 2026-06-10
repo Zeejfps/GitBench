@@ -1,9 +1,10 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public sealed class CheckboxView : HoverableButton
 {

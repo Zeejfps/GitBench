@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Git;
+
+namespace GitBench.Messages;
 
 // Sent by DiffViewModel right before git apply runs so LocalChangesViewModel can update
 // its file lists without waiting on the eventual `git status` reload. The reload still

@@ -1,6 +1,6 @@
 using ZGF.Gui;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 // Container that clips its descendants to its own bounds. The framework's RectView
 // doesn't clip — only ScrollPane variants do — so any child that measures wider than

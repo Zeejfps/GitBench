@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Stash;
 
 internal sealed record StashDialogState(
     string Message,

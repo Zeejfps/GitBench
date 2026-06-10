@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // A named Git identity the app can apply to a repo automatically. Stored globally (not
 // per-repo) in identity-profiles.json; matched to a repo by its remote host/owner via Match.

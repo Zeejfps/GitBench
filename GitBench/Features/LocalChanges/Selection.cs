@@ -1,4 +1,8 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+using GitBench.Features.Diff;
+using GitBench.Git;
+
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Local-changes selection state, owned by <see cref="LocalChangesViewModel"/> and

@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Maps a file path to the TextMate language id GitBench highlights it as, or null when the

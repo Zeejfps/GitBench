@@ -1,6 +1,9 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 // Owns the set of open pop-out diff windows as observable state. Subscribes to
 // OpenDiffWindowMessage and, for each request, spins up an independent DiffViewModel pinned

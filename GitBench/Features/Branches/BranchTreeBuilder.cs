@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Features.LocalChanges;
+using GitBench.Infrastructure;
+
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// Pure flattening of a <see cref="BranchListing"/> plus collapse/expand state into the

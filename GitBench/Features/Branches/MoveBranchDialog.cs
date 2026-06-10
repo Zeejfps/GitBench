@@ -1,8 +1,14 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Commits;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// Confirmation modal for "Reset &lt;branch&gt; to here" when the move is NOT a fast-forward —

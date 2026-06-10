@@ -1,8 +1,13 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Confirmation modal for deleting a tag. Runs `git tag -d &lt;name&gt;` locally and, when the

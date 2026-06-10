@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Diff;
+
+namespace GitBench.Messages;
 
 // Broadcast by DiffViewModel when the user clicks "open in new window" in the diff header.
 // Carries the pinned target (path/side/sha) — not a frozen result — so the popped-out

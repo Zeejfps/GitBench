@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 public sealed record WorktreeInfo(
     string Path,

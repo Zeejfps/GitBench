@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Controls.Dialogs;
+
+namespace GitBench.Git;
 
 /// <summary>
 /// A lightweight subset of git's refname rules (see <c>git check-ref-format</c>), shared by the

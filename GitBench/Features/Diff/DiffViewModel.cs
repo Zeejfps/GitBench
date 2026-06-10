@@ -1,6 +1,12 @@
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null);
 

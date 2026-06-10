@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Infrastructure;
 
 /// <summary>
 /// Generation token guard for invalidating outstanding async work. The view bumps the

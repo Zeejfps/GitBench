@@ -1,9 +1,13 @@
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 // Slot that sits before the icon on every RepoBar row. When the repo has child rows
 // (worktrees and/or nested submodules), it renders a clickable chevron that toggles their

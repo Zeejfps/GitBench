@@ -1,6 +1,14 @@
+using GitBench.Features.Branches;
+using GitBench.Features.Commits;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Submodules;
+using GitBench.Features.Worktrees;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 // The active repo's working-tree snapshot plus its submodule drift list, bundled so the two
 // always move together. Mirrors LocalChangesViewModel's private LoadResult minus the amend-only

@@ -1,4 +1,7 @@
 using System.Runtime.InteropServices;
+using GitBench.App;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Platforms.Linux;
@@ -6,7 +9,7 @@ using ZGF.Gui.Desktop.Platforms.Osx;
 using ZGF.Gui.Desktop.Platforms.Windows;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Platform;
 
 internal static class PlatformServices
 {

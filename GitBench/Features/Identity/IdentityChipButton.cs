@@ -1,10 +1,13 @@
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // The status-bar identity chip: an author glyph + the active profile name. Clicking opens a menu
 // (built by the view model) to switch profile for this repo, pin it, or manage profiles. Lives in

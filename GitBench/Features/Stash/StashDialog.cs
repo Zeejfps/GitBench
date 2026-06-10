@@ -1,3 +1,10 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Operations;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
@@ -6,7 +13,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Stash;
 
 // Modal shown when the user clicks Stash in the actions toolbar. Lets the user name the
 // stash, pick the files to stash, and optionally keep the index (--keep-index) so staged

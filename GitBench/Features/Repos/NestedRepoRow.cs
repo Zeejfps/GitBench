@@ -1,9 +1,14 @@
+using GitBench.Controls;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Worktrees;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 // Shared layout for nested rows in the RepoBar (worktrees and submodules). Renders a
 // deep-indented row with a small accent-tinted icon and the repo's DisplayName. The

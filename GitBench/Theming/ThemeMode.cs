@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Theming;
 
 public enum ThemeMode
 {

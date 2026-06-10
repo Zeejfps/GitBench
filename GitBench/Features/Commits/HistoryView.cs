@@ -1,10 +1,12 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Lays out the commits panel on the left and a resizable commit details panel on the right,

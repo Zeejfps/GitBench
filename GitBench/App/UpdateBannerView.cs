@@ -1,9 +1,13 @@
+using GitBench.Controls;
+using GitBench.Features.Operations;
+using GitBench.Features.StatusBar;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.App;
 
 /// <summary>
 /// Banner shown above the main content when a downloaded update has been staged. Clicking

@@ -1,3 +1,6 @@
+using GitBench.Features.Diff;
+using GitBench.Git;
+using GitBench.Theming;
 using Xunit;
 
 namespace GitBench.Tests;

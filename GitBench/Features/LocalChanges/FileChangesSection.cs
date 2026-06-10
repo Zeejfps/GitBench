@@ -1,16 +1,20 @@
+using GitBench.Controls;
+using GitBench.Features.Commits;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// A titled, virtualized list of file changes used by the commit details panel. The header

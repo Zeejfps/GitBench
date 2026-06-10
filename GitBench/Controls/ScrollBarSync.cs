@@ -1,8 +1,7 @@
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
-using ZGF.Gui.VerticalScrollBar;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Shared helpers for the scroll-sync controllers that mirror a scrollable source view

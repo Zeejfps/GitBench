@@ -1,7 +1,11 @@
+using GitBench.Controls;
+using GitBench.Features.LocalChanges;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// The diff body itself: a virtualized, scrollable view of a <see cref="DiffResult"/> with

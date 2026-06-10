@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
 
-namespace GitBench;
+namespace GitBench.Platform;
 
 [SupportedOSPlatform("linux")]
 public sealed class LinuxPlatformShell : IPlatformShell

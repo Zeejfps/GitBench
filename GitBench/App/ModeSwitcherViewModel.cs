@@ -1,6 +1,7 @@
+using GitBench.Controls;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.App;
 
 internal sealed class ModeSwitcherViewModel : IDisposable
 {

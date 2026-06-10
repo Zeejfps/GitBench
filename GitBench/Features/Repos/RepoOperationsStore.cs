@@ -1,6 +1,8 @@
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 // The active repo's in-flight remote-operation state plus a sticky last-error. Projected by
 // ActionsToolbarViewModel (spinner + disabled state + inline error) and, per repo, by the RepoBar

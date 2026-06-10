@@ -1,8 +1,9 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Headless host view that reflects <see cref="DiffWindowsViewModel.Windows"/> into real,

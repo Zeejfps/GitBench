@@ -1,11 +1,10 @@
+using GitBench.Controls;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Handles only the column-divider hover/drag. Row wheel/click/right-click are owned

@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Branches;
+
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Shared indentation metrics for the three tree views — the RepoBar (groups → repos →

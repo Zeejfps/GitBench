@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 internal sealed class RepoBarViewModel : IDisposable
 {

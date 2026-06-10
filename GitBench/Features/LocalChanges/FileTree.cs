@@ -1,4 +1,8 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+using GitBench.Git;
+using GitBench.Infrastructure;
+
+namespace GitBench.Features.LocalChanges;
 
 public enum FileViewMode { Flat, Tree }
 

@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Theming;
 
 public sealed record ThemePalette(
     uint Surface,

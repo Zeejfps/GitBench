@@ -1,6 +1,8 @@
+using GitBench.Features.Operations;
+using GitBench.Messages;
 using ZGF.Gui;
 
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 public sealed class DialogPresenter : IViewBehavior
 {

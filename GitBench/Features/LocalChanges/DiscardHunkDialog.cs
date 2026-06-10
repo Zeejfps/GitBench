@@ -1,8 +1,13 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewModel>
 {

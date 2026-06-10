@@ -1,9 +1,13 @@
+using GitBench.Controls;
+using GitBench.Features.Commits;
+using GitBench.Features.LocalChanges;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 internal sealed class RepoBar : MultiChildView, IBind<RepoBarViewModel>
 {

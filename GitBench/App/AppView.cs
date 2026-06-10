@@ -1,11 +1,20 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Branches;
+using GitBench.Features.Diff;
+using GitBench.Features.Operations;
+using GitBench.Features.Repos;
+using GitBench.Features.StatusBar;
+using GitBench.Features.Submodules;
+using GitBench.Features.Toolbar;
+using GitBench.Messages;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
 
-namespace GitBench;
+namespace GitBench.App;
 
 public sealed class AppView : MultiChildView
 {

@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Messages;
 
 internal static class MessageBusExtensions
 {

@@ -1,8 +1,10 @@
+using GitBench.Controls;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 internal sealed class BranchesHeader : MultiChildView, IBind<BranchesHeaderViewModel>
 {

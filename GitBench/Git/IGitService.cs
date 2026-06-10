@@ -1,4 +1,11 @@
-namespace GitBench;
+using GitBench.Features.Branches;
+using GitBench.Features.Commits;
+using GitBench.Features.Identity;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Submodules;
+using GitBench.Features.Worktrees;
+
+namespace GitBench.Git;
 
 public interface IGitService
 {

@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Theming;
 
 /// <summary>
 /// The small, curated set of foreground color slots a TextMate scope can resolve to. These

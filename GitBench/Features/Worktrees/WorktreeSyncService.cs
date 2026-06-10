@@ -1,6 +1,9 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 // Owns the discovery-side-effect for worktrees: shells out to `git worktree list`
 // and reconciles the result into IRepoRegistry. The registry stays pure data; this

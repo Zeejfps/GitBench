@@ -1,6 +1,9 @@
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 internal sealed class ForcePushDialogViewModel : IDisposable
 {

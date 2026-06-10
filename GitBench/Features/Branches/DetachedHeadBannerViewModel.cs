@@ -1,6 +1,10 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 // Drives the repo-level "detached HEAD with commits on no branch" banner. Mirrors
 // OperationStateBannerViewModel: self-contained, always subscribed (independent of which

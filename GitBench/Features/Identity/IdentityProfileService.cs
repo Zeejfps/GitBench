@@ -1,6 +1,6 @@
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // Owns the global list of identity profiles: an ObservableList the manager dialog binds to
 // directly, plus a debounced save mirroring PreferencesService. Mutations (Add/Update/Remove)

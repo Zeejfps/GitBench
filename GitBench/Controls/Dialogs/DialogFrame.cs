@@ -1,8 +1,9 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 internal static class DialogFrame
 {

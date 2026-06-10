@@ -1,6 +1,14 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Operations;
+using GitBench.Features.Repos;
+using GitBench.Features.Stash;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// View model for the Branches sidebar. Mirrors the LocalChangesViewModel pattern:

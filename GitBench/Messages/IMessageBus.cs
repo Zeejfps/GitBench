@@ -1,4 +1,4 @@
-﻿namespace GitBench;
+﻿namespace GitBench.Messages;
 
 public interface IMessageBus
 {

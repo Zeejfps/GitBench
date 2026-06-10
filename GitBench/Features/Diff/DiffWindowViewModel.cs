@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 // One popped-out diff window. Owns a live, pinned DiffViewModel (independent of the main
 // window's file selection, but still refreshing on working-tree changes) plus the window

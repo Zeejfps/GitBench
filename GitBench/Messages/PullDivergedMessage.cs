@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Git;
+
+namespace GitBench.Messages;
 
 // Broadcast when a pull on the *active* repo fails because local and upstream diverged — the one
 // pull failure that's recoverable in-app. ActionsToolbarViewModel turns it into the reconcile

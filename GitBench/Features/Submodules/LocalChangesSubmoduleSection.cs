@@ -1,7 +1,10 @@
+using GitBench.Controls;
+using GitBench.Features.LocalChanges;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Section rendered above the unstaged/staged file panels in LocalChangesContentView,
 // listing submodules whose HEAD has drifted from the parent's recorded pointer. Each

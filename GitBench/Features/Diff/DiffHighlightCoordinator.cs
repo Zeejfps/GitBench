@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Git;
+using GitBench.Theming;
+
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Orchestrates syntax highlighting for one diff: detect the language, fetch the needed file

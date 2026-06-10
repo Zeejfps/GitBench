@@ -1,7 +1,9 @@
+using GitBench.Controls;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// Repo-level banner shown whenever the active repo is on a detached HEAD whose commits sit

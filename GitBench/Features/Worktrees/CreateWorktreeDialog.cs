@@ -1,9 +1,13 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 /// <summary>
 /// Modal shown from a primary RepoRow's "New worktree…" menu. Collects the three

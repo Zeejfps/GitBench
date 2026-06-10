@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Repos;
+
+namespace GitBench.Features.Toolbar;
 
 internal sealed record ActionsToolbarState(
     bool HasActiveRepo,

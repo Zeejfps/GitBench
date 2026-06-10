@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 public enum BranchRowKind { LocalHeader, RemotesHeader, RemoteHeader, Folder, LocalBranch, RemoteBranch, StashesHeader, Stash }
 

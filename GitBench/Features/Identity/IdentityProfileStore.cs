@@ -1,7 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GitBench.Infrastructure;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 public static class IdentityProfileStore
 {

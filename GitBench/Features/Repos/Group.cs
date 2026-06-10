@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed record Group(
     Guid Id,

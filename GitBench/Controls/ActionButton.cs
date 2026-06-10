@@ -1,9 +1,11 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
+using ThemeStyles = GitBench.Theming.ThemeStyles;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public sealed class ActionButton : HoverableButton
 {

@@ -1,11 +1,9 @@
-﻿using ZGF.Gui;
-using ZGF.Gui.Desktop;
-using ZGF.Gui.Desktop.Components.TextInput;
+﻿using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 internal sealed class CheckoutDialogKbmController : BaseTextInputKbmController
 {

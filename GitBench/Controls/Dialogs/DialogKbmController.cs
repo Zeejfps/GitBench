@@ -1,11 +1,9 @@
-using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 internal sealed class DialogKbmController : KeyboardMouseController
 {

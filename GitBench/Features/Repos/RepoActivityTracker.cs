@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Infrastructure;
+
+namespace GitBench.Features.Repos;
 
 // Per-repo "git is currently running" gate consulted by RepoWatcher before it
 // schedules any debounce.

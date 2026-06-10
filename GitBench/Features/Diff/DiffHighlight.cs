@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Git;
+using GitBench.Theming;
+
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Per-diff syntax-highlight result: the token spans for the old and new file, each as a flat

@@ -1,7 +1,9 @@
+using GitBench.Features.Commits;
+using GitBench.Features.LocalChanges;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.App;
 
 /// <summary>
 /// Shell for the main content area. Mounts both mode-specific views (history and local

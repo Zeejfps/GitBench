@@ -1,9 +1,12 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 /// <summary>
 /// Modal shown when the user clicks Branch in the actions toolbar. Mirrors Fork's

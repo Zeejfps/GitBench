@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+
+namespace GitBench.Features.LocalChanges;
 
 public sealed record LocalChangesSnapshot(
     Guid RepoId,

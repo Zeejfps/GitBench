@@ -1,9 +1,11 @@
+using GitBench.Features.Diff;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 /// <summary>
 /// Small pill that reports a binary file's storage: "Git LFS" when the blob is tracked by

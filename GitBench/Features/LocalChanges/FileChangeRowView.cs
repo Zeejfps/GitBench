@@ -1,4 +1,8 @@
-namespace GitBench;
+using GitBench.Controls;
+using GitBench.Features.Commits;
+using GitBench.Features.Submodules;
+
+namespace GitBench.Features.LocalChanges;
 
 internal static class FileChangeFormatting
 {

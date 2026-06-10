@@ -1,8 +1,15 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Diff;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Worktrees;
 
 /// <summary>
 /// Confirmation modal for `git worktree remove`. Refuses if the worktree has uncommitted

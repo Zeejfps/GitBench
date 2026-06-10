@@ -1,7 +1,15 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Identity;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 /// <summary>
 /// Backs the bottom <see cref="StatusBarView"/>: the active repo name, current branch, and
@@ -178,15 +186,15 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             },
             _identityLane);
 
-    private static (string? Text, bool Warning) LabelFor(Identity id) => id switch
+    private static (string? Text, bool Warning) LabelFor(Identity.Identity id) => id switch
     {
-        Identity.FromProfile p => (p.Profile.DisplayName, false),
-        Identity.FromConfig c => (FormatLocal(c), false),
-        Identity.Unmatched => ("No identity", true),
+        Identity.Identity.FromProfile p => (p.Profile.DisplayName, false),
+        Identity.Identity.FromConfig c => (FormatLocal(c), false),
+        Identity.Identity.Unmatched => ("No identity", true),
         _ => (null, false), // NoRemote / Pending: nothing to show
     };
 
-    private static string? FormatLocal(Identity.FromConfig c)
+    private static string? FormatLocal(Identity.Identity.FromConfig c)
         => c.UserEmail != null
             ? (c.UserName != null ? $"{c.UserName} <{c.UserEmail}>" : c.UserEmail)
             : c.UserName;
@@ -200,7 +208,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         // Read the already-resolved identity rather than resolving here, which would block the UI
         // thread on git during the click. Null until the first resolve lands.
         var resolved = _identity.Cached(repo.Path);
-        var activeProfileId = (resolved as Identity.FromProfile)?.Profile.Id;
+        var activeProfileId = (resolved as Identity.Identity.FromProfile)?.Profile.Id;
         var items = new List<RepoBarContextMenu.Item>();
 
         foreach (var p in _profiles.Profiles)
@@ -219,7 +227,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             () => ApplyOverride(repo, null),
             Enabled: _registry.GetIdentityOverride(repo.Id) != null));
 
-        if (resolved is Identity.FromProfile pinned)
+        if (resolved is Identity.Identity.FromProfile pinned)
             items.Add(new RepoBarContextMenu.Item("Pin to repo (write git config)", () => Pin(repo, pinned.Profile.Id)));
 
         items.Add(RepoBarContextMenu.Separator);

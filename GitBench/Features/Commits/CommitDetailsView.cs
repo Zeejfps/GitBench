@@ -1,11 +1,14 @@
+using GitBench.Controls;
+using GitBench.Features.Diff;
+using GitBench.Features.LocalChanges;
+using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsViewModel>
 {

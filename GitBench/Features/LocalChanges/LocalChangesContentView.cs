@@ -1,11 +1,16 @@
+using GitBench.Controls;
+using GitBench.Features.Diff;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// The body of the Local Changes view: two file-list panels (unstaged / staged) above a

@@ -1,3 +1,4 @@
+using GitBench.Features.Identity;
 using Xunit;
 
 namespace GitBench.Tests;

@@ -1,6 +1,7 @@
+using GitBench.Controls;
 using ZGF.Gui;
 
-namespace GitBench;
+namespace GitBench.Theming;
 
 /// <summary>
 /// Factory helpers for the recurring TextStyle shapes used by the row-rendering views.

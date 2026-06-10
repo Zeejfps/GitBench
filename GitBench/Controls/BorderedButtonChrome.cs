@@ -1,8 +1,11 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Bindings for the bordered-button visual pattern (background + border that flip

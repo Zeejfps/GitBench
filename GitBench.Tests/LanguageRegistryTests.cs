@@ -1,3 +1,4 @@
+using GitBench.Features.Diff;
 using Xunit;
 
 namespace GitBench.Tests;

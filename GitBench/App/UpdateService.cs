@@ -3,7 +3,7 @@ using Velopack;
 using Velopack.Sources;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.App;
 
 /// <summary>
 /// Owns the Velopack update check and the result of staging an update so the UI can offer a

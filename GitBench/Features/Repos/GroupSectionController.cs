@@ -1,7 +1,8 @@
+using GitBench.Controls;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class GroupSectionController : KeyboardMouseController, IDisposable
 {

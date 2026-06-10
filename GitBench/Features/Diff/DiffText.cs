@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Shared text shaping for the diff body. Tab expansion lives here (rather than privately in

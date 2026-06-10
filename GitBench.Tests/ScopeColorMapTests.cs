@@ -1,3 +1,4 @@
+using GitBench.Theming;
 using Xunit;
 
 namespace GitBench.Tests;

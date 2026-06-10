@@ -1,11 +1,22 @@
 using System.Runtime.InteropServices;
 using GitBench;
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Diff;
+using GitBench.Features.Identity;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Features.Worktrees;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Platform;
+using GitBench.Theming;
 using Velopack;
 using ZGF.AppUtils;
 using ZGF.Desktop;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
-using static GitBench.AppPaths;
+using static GitBench.App.AppPaths;
 
 // Must be the very first thing that runs: Velopack's install/update hooks are driven by
 // special CLI args the installer/updater passes, and any file I/O or GUI work before this

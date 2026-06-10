@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Diff;
+
+namespace GitBench.Theming;
 
 /// <summary>
 /// Pure mapping from a single TextMate scope string (e.g. <c>"keyword.control.cs"</c>) to a

@@ -1,6 +1,8 @@
+using GitBench.Features.Branches;
+using GitBench.Git;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public interface IRepoRegistry
 {

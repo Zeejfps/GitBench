@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.App;
 
 internal static class AppPaths
 {

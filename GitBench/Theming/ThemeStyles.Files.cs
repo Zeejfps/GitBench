@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+
+namespace GitBench.Theming;
 
 public sealed record LocalChangesContentStyles(
     uint ContentBackground,

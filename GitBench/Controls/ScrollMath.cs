@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Controls;
 
 internal static class ScrollMath
 {

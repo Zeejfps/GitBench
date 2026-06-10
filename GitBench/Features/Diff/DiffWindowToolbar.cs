@@ -1,10 +1,14 @@
+using GitBench.Controls;
+using GitBench.Features.StatusBar;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Toolbar for the pop-out diff window: the file path on the left, an LFS badge, and a

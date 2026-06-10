@@ -1,6 +1,9 @@
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Operations;
 
 /// <summary>
 /// View model for <see cref="EditRemoteDialog"/>. Owns the editable remote name + URL as

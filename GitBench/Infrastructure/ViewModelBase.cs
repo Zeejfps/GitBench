@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Infrastructure;
 
 /// <summary>
 /// Base for view models built around an immutable state record. Centralizes the patterns

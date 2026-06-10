@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // Supplies the manual per-repo override and repo-id→path resolution the identity resolver needs,
 // without it taking a hard dependency on the whole repo registry. RepoRegistry implements this.

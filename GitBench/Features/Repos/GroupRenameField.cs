@@ -1,11 +1,11 @@
+using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class GroupRenameField : MultiChildView
 {

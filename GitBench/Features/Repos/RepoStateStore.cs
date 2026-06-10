@@ -1,7 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GitBench.Features.Branches;
+using GitBench.Git;
+using GitBench.Infrastructure;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {

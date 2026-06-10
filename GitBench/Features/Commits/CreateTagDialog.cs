@@ -1,10 +1,15 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Modal shown when the user picks "Create Tag" on a commit in the history. Mirrors Fork's

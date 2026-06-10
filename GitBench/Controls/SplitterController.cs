@@ -1,10 +1,9 @@
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 internal enum DragAxis { X, Y }
 

@@ -1,12 +1,14 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Slim filter bar shown above the commit list: a single rounded search box containing a leading

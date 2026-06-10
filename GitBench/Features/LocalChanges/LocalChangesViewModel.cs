@@ -1,9 +1,18 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Commits;
+using GitBench.Features.Diff;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// View model for the Local Changes feature. State lives in a single immutable
@@ -174,9 +183,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             // full-file stage/unstage flow in RunIndexOp.
             Selection selection;
             if (msg.IsLastHunk && msg.ToSide is DiffSide moved)
-                selection = GitBench.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
+                selection = LocalChanges.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
             else
-                selection = GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
+                selection = LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
 
             return s with { Unstaged = unstaged, Staged = staged, Selection = selection };
         });
@@ -256,7 +265,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Title = title,
                 Description = description,
                 Staged = staged,
-                Selection = GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
+                Selection = LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
             };
         });
     }
@@ -290,7 +299,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     var range = CollectRange(rows, lo, hi);
                     return s with
                     {
-                        Selection = GitBench.Selection.Create(range, anchor, clicked, s.Unstaged, s.Staged),
+                        Selection = LocalChanges.Selection.Create(range, anchor, clicked, s.Unstaged, s.Staged),
                     };
                 }
             }
@@ -302,13 +311,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 if (!wasPresent) next.Add(clicked);
                 return s with
                 {
-                    Selection = GitBench.Selection.Create(next, clicked, clicked, s.Unstaged, s.Staged),
+                    Selection = LocalChanges.Selection.Create(next, clicked, clicked, s.Unstaged, s.Staged),
                 };
             }
 
             return s with
             {
-                Selection = GitBench.Selection.Create([clicked], clicked, clicked, s.Unstaged, s.Staged),
+                Selection = LocalChanges.Selection.Create([clicked], clicked, clicked, s.Unstaged, s.Staged),
             };
         });
     }
@@ -402,7 +411,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 .Select(t => new FileRowRef(t.Side, t.Path, IsFolder: false))
                 .ToList();
             FileRowRef? anchor = fileRows.Count > 0 ? fileRows[0] : null;
-            var sel = GitBench.Selection.Create(fileRows, anchor, anchor, s.Unstaged, s.Staged);
+            var sel = LocalChanges.Selection.Create(fileRows, anchor, anchor, s.Unstaged, s.Staged);
             return s with { ViewMode = next, Selection = sel };
         });
     }
@@ -478,14 +487,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     var range = CollectRange(rows, lo, hi);
                     return s with
                     {
-                        Selection = GitBench.Selection.Create(range, anchor, target, s.Unstaged, s.Staged),
+                        Selection = LocalChanges.Selection.Create(range, anchor, target, s.Unstaged, s.Staged),
                     };
                 }
             }
 
             return s with
             {
-                Selection = GitBench.Selection.Create([target], target, target, s.Unstaged, s.Staged),
+                Selection = LocalChanges.Selection.Create([target], target, target, s.Unstaged, s.Staged),
             };
         });
     }
@@ -493,7 +502,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public void ClearSelection()
     {
         if (State.Value.Selection.Count == 0 && State.Value.Selection.Anchor == null) return;
-        Update(s => s with { Selection = GitBench.Selection.Empty });
+        Update(s => s with { Selection = LocalChanges.Selection.Empty });
     }
     
     private void DoDiscardSelected()
@@ -748,7 +757,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     Title = string.Empty,
                     Description = string.Empty,
                     Staged = Empty,
-                    Selection = GitBench.Selection.Create(
+                    Selection = LocalChanges.Selection.Create(
                         s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, Empty),
                 });
                 _bus.Broadcast(new CommitCreatedMessage(repo.Id));
@@ -777,7 +786,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 OpError = null,
                 Staged = Empty,
                 Unstaged = Empty,
-                Selection = GitBench.Selection.Empty,
+                Selection = LocalChanges.Selection.Empty,
                 DriftedSubmodules = [],
                 IsMerging = false,
             });
@@ -800,7 +809,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 OpError = null,
                 Staged = isCrossRepoSwitch ? Empty : s.Staged,
                 Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
-                Selection = isCrossRepoSwitch ? GitBench.Selection.Empty : s.Selection,
+                Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
             });
             return;
         }
@@ -817,7 +826,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 LoadErrorDetail = snap.ErrorDetail ?? snap.ErrorMessage,
                 Staged = Empty,
                 Unstaged = Empty,
-                Selection = GitBench.Selection.Empty,
+                Selection = LocalChanges.Selection.Empty,
                 DriftedSubmodules = [],
             });
             return;
@@ -826,7 +835,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // On a cross-repo switch the selection belongs to the previous repo — drop it before
         // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
         if (isCrossRepoSwitch && State.Value.Selection.Count > 0)
-            Update(s => s with { Selection = GitBench.Selection.Empty });
+            Update(s => s with { Selection = LocalChanges.Selection.Empty });
 
         Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
@@ -934,7 +943,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // selection isn't being explicitly steered to a new place.
     private void ApplySnapshot(LocalChangesSnapshot snap, IReadOnlyList<SubmoduleInfo>? drift = null)
         => ApplySnapshot(snap, (s, staged) =>
-            GitBench.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, snap.Unstaged, staged), drift);
+            LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, snap.Unstaged, staged), drift);
 
     private void RunIndexOp(IReadOnlyList<string> paths, bool isStage)
     {
@@ -993,7 +1002,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             {
                 Unstaged = unstaged,
                 Staged = staged,
-                Selection = GitBench.Selection.FromPaths(paths, toSide, unstaged, staged),
+                Selection = LocalChanges.Selection.FromPaths(paths, toSide, unstaged, staged),
             };
         });
     }

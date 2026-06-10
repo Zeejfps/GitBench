@@ -1,7 +1,10 @@
+using GitBench.Controls;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Operations;
 
 /// <summary>
 /// Banner shown above the main content area while the repo is mid-operation

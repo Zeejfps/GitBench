@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Messages;
 
 // Broadcast after a successful push/fetch — views that depend on remote-tracking
 // state (BranchesView's ahead/behind, ActionsToolbar's push availability) refetch.

@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+using GitBench.Features.Submodules;
+
+namespace GitBench.Features.LocalChanges;
 
 internal readonly record struct LocalChangesState(
     string Title,

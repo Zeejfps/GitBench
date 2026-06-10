@@ -1,7 +1,12 @@
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Operations;
 
 internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBannerState>
 {

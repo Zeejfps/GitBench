@@ -1,6 +1,10 @@
+using GitBench.Features.Branches;
+using GitBench.Features.Identity;
+using GitBench.Git;
+using GitBench.Infrastructure;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 {

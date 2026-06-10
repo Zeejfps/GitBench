@@ -1,9 +1,12 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 // Visual bindings shared by RepoRow, WorktreeRow, and SubmoduleRow: the
 // hover/active background fade, the missing/active/normal label colour selector, and the

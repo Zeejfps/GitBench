@@ -1,7 +1,8 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public sealed class DragOverlay : MultiChildView
 {

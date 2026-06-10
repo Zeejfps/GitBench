@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 internal static class IRepoRegistryExtensions
 {

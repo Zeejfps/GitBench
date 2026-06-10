@@ -1,6 +1,11 @@
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Gui;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Renders a single submodule row nested under its parent in the RepoBar. Same shape
 // as WorktreeRow (deep indent + small icon) but uses the Package icon + purple tint

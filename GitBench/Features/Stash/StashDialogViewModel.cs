@@ -1,6 +1,11 @@
+using GitBench.Features.Commits;
+using GitBench.Features.LocalChanges;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Stash;
 
 internal readonly record struct StashRequest(Repo Repo);
 

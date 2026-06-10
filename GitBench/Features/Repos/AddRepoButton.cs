@@ -1,8 +1,12 @@
+using GitBench.Controls;
+using GitBench.Messages;
+using GitBench.Platform;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class AddRepoButton : HoverableButton
 {

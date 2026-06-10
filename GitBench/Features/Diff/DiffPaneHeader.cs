@@ -1,12 +1,14 @@
+using GitBench.Controls;
+using GitBench.Features.StatusBar;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Header strip for the embedded diff panes (Local Changes, Commit Details). Owns the

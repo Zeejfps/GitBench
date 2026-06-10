@@ -1,8 +1,11 @@
+using GitBench.Controls;
+using GitBench.Features.Commits;
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Shared building blocks for the two file-change list flavors — <see cref="FileChangesSection"/>

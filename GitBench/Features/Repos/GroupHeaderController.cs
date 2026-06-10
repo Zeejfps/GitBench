@@ -1,11 +1,11 @@
+using GitBench.Controls;
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class GroupHeaderController : KeyboardMouseController, IDisposable
 {

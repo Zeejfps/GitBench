@@ -1,3 +1,7 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.StatusBar;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
@@ -5,7 +9,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// The bottom strip of the Local Changes view: commit title input, growing description

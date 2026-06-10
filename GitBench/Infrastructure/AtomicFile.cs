@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Infrastructure;
 
 // Crash-safe text write: serialize to a sibling .tmp then atomically rename over the target, so a
 // crash mid-write can't leave a truncated file that fails to parse on next launch (silently

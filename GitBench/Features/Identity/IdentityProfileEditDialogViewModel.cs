@@ -1,6 +1,7 @@
+using GitBench.Infrastructure;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // Backs IdentityProfileEditDialog: add a new identity profile, or edit an existing one. There is
 // no git work, so the action's off-thread step is a no-op and the actual list mutation runs in

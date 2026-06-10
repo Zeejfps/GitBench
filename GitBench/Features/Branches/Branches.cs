@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 // Tracks whether a local branch has an upstream and whether that upstream still exists.
 // Remote-branch entries always carry Tracked (the field is meaningless for them).

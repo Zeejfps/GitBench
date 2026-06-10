@@ -1,12 +1,12 @@
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Virtualized diff body. Vertical scroll, hit-test boilerplate, and visible-row culling

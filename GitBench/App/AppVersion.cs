@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace GitBench;
+namespace GitBench.App;
 
 /// <summary>
 /// The running app's version, for display in the UI. Sourced from the assembly's informational

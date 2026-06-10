@@ -1,9 +1,8 @@
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
-using ZGF.Gui.VerticalScrollBar;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 internal sealed class ScrollSyncController : IDisposable
 {

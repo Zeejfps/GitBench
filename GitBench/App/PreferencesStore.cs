@@ -1,7 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using GitBench.Features.LocalChanges;
+using GitBench.Infrastructure;
+using GitBench.Theming;
 
-namespace GitBench;
+namespace GitBench.App;
 
 public static class PreferencesStore
 {
@@ -16,7 +19,7 @@ public static class PreferencesStore
         public float? RepoBarWidth { get; set; } = 220f;
         public float? BranchesWidth { get; set; } = 220f;
         public float? CommitDetailsWidth { get; set; } = 380f;
-        public FileViewMode? FileViewMode { get; set; } = GitBench.FileViewMode.Flat;
+        public FileViewMode? FileViewMode { get; set; } = Features.LocalChanges.FileViewMode.Flat;
     }
 
     public static Preferences Load(string path)

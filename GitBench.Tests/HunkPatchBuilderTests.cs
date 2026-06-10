@@ -1,3 +1,4 @@
+using GitBench.Git;
 using Xunit;
 
 namespace GitBench.Tests;

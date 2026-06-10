@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Infrastructure;
 
 /// <summary>
 /// One node of a <see cref="PathTree"/>: a folder when <see cref="Leaf"/> is null, otherwise a leaf

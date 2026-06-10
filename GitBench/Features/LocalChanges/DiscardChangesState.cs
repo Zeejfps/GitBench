@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 internal sealed record DiscardChangesState(
     IReadOnlyList<DiscardFileRow> Files,

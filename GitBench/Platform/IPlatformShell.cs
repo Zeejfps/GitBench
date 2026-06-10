@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Platform;
 
 public interface IPlatformShell
 {

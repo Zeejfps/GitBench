@@ -1,3 +1,5 @@
+using GitBench.Features.Branches;
+using GitBench.Infrastructure;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
@@ -5,7 +7,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 /// <summary>
 /// The reusable shell for a Cancel + action dialog. Owns everything that was previously

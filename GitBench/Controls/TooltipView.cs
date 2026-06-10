@@ -1,8 +1,9 @@
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public sealed class TooltipView : MultiChildView
 {

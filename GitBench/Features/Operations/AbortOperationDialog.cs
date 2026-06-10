@@ -1,9 +1,13 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Operations;
 
 /// <summary>
 /// Confirmation modal for aborting an in-progress op (merge / rebase / cherry-pick /

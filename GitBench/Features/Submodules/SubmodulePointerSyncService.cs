@@ -1,6 +1,9 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Keeps the parent's recorded submodule pointer in sync with where the submodule is actually
 // checked out. When a submodule's HEAD moves — the user checks out a branch/commit inside it,

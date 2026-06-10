@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Theming;
 
 public partial record ThemeStyles
 {

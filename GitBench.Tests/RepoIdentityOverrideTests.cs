@@ -1,3 +1,7 @@
+using GitBench.Features.Identity;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
 using Xunit;
 
 namespace GitBench.Tests;

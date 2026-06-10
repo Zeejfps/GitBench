@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 internal sealed record StatusBarState(
     bool HasActiveRepo,

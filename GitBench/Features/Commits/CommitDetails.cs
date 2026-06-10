@@ -1,4 +1,6 @@
-namespace GitBench;
+using GitBench.Features.Submodules;
+
+namespace GitBench.Features.Commits;
 
 public enum FileChangeStatus
 {

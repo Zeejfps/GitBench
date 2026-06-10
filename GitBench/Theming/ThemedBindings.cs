@@ -2,7 +2,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Theming;
 
 internal static class ThemedBindings
 {

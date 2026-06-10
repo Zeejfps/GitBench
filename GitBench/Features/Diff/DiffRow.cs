@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Git;
+using GitBench.Theming;
+
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Flat row stream the virtualized content view walks. Banners (rename/mode/truncated),

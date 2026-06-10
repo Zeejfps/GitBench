@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 internal readonly record struct LaneParent(int ParentIndex, int Lane);
 

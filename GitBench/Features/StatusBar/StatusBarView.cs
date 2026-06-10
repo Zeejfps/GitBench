@@ -1,9 +1,13 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Identity;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.StatusBar;
 
 /// <summary>
 /// Thin status bar spanning the full width of the window bottom (the outer border layout's

@@ -1,8 +1,12 @@
+using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.StatusBar;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Toolbar;
 
 internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewModel>
 {

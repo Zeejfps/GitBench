@@ -1,10 +1,10 @@
+using GitBench.Infrastructure;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public abstract class HoverableButton : MultiChildView
 {

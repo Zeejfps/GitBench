@@ -1,7 +1,8 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Short vertical hairline with breathing room on either side — used to mark zone

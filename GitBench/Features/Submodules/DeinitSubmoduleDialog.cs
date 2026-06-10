@@ -1,8 +1,13 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 /// <summary>
 /// Confirmation modal for `git submodule deinit` + `git rm`. Refuses if the submodule

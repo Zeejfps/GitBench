@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Features.LocalChanges;
+using GitBench.Theming;
+
+namespace GitBench.App;
 
 public sealed record Preferences
 {

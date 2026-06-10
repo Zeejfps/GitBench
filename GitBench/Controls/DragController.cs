@@ -1,8 +1,10 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 public enum DragKind { Repo, Group }
 

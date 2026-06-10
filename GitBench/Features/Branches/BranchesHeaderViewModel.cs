@@ -1,6 +1,8 @@
+using GitBench.Features.Repos;
+using GitBench.Infrastructure;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Branches;
 
 internal sealed class BranchesHeaderViewModel : ViewModelBase<BranchesHeaderState>
 {

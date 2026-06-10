@@ -1,7 +1,7 @@
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Stacks a top view and (optionally) a bottom view separated by a draggable horizontal

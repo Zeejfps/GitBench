@@ -1,6 +1,10 @@
+using GitBench.Features.Commits;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 internal sealed record DiscardFileRow(string Path, FileChange Display);
 

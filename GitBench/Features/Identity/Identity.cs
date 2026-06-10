@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // The Git identity resolved for a repo: a closed set of outcomes, each carrying exactly the data
 // that outcome has. Replaces a flag-bag of (enum + nullable fields + bool) where nonsense such as

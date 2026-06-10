@@ -1,6 +1,8 @@
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 // Watches a single repository's filesystem for changes the user makes outside the
 // app (editor saves, terminal `git` commands, builds, IDE checkouts, …) and turns

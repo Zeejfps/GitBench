@@ -1,8 +1,7 @@
 using ZGF.Geometry;
-using ZGF.Gui;
 using ZGF.Gui.Desktop;
 
-namespace GitBench;
+namespace GitBench.Platform;
 
 internal sealed class NoopPopupDecorator : IPopupNativeDecorator
 {

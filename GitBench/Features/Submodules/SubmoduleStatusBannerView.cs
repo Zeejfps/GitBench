@@ -1,8 +1,11 @@
+using GitBench.Controls;
+using GitBench.Features.Branches;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 /// <summary>
 /// Repo-level banner shown whenever the active repo has submodules whose working tree no

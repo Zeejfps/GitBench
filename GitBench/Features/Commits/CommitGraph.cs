@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 public enum RefKind
 {

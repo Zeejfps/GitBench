@@ -1,7 +1,15 @@
+using GitBench.Controls;
+using GitBench.Features.Identity;
+using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Platform;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.App;
 
 internal static class AppServices
 {

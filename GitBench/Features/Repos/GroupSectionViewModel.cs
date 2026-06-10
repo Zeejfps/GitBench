@@ -1,6 +1,7 @@
+using GitBench.Git;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 internal sealed class GroupSectionViewModel : IDisposable
 {

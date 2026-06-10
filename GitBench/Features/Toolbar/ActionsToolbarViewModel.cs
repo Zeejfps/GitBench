@@ -1,7 +1,15 @@
+using GitBench.Controls;
+using GitBench.Features.Branches;
+using GitBench.Features.Operations;
+using GitBench.Features.Repos;
+using GitBench.Features.Stash;
+using GitBench.Infrastructure;
+using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Toolbar;
 
 internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarState>
 {

@@ -1,10 +1,15 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Commits;
+using GitBench.Git;
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Fork-style merge-conflict resolution header shown in the diff pane when a conflicted

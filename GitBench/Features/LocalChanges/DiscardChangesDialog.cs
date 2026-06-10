@@ -1,3 +1,9 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
+using GitBench.Features.Operations;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
@@ -5,7 +11,7 @@ using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Confirmation modal for discarding unstaged changes. Lists every unstaged path with a

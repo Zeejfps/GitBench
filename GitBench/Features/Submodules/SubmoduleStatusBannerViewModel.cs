@@ -1,6 +1,10 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Drives the repo-level "submodules out of date" banner — the safety net for the case where
 // the parent's recorded submodule pointer has moved but the submodule's working tree hasn't

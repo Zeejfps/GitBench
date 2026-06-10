@@ -1,10 +1,10 @@
+using GitBench.Controls;
+using GitBench.Controls.Dialogs;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
-using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Identity;
 
 // Add/edit form for a single identity profile: a display name, the author name/email injected
 // per commit, an optional SSH key, and a single host/owner match rule. Power users can add

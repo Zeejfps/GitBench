@@ -1,8 +1,9 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Root view hosted inside a pop-out diff window: a <see cref="DiffWindowToolbar"/> (file

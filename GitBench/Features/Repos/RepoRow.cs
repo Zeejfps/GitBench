@@ -1,9 +1,14 @@
+using GitBench.Controls;
+using GitBench.Features.Submodules;
+using GitBench.Features.Worktrees;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 public sealed class RepoRow : MultiChildView
 {

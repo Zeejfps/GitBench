@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Features.Diff;
 
 internal static class DiffOptions
 {

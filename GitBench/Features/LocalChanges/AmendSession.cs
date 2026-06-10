@@ -1,4 +1,7 @@
-namespace GitBench;
+using GitBench.Features.Commits;
+using GitBench.Git;
+
+namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Captures the extra state that exists only while the user is amending the previous

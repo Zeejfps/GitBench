@@ -1,6 +1,9 @@
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Mirrors WorktreeSyncService for submodules: shells out to git, builds descriptors,
 // and reconciles into IRepoRegistry. The registry stays pure data; this service is the

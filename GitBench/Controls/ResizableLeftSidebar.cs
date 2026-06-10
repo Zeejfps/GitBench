@@ -1,9 +1,10 @@
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// Wraps a sidebar content view and lays a draggable splitter strip on its right edge.

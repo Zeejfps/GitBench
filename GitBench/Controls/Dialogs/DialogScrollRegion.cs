@@ -1,10 +1,11 @@
+using GitBench.Features.Operations;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Controls.Dialogs;
 
 /// <summary>
 /// Wraps dialog body content in a vertical scroll viewport whose scrollbar appears only when the

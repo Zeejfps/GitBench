@@ -1,9 +1,11 @@
+using GitBench.Controls.Dialogs;
+using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 /// <summary>
 /// A single-line text input with a label above it, an optional hint line, and an optional

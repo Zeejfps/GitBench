@@ -1,6 +1,7 @@
+using GitBench.App;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Controls;
 
 internal sealed class SegmentViewModel : IDisposable
 {

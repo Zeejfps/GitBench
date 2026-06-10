@@ -1,6 +1,9 @@
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Repos;
 
 /// <summary>
 /// Backs <see cref="CloneRepoDialog"/>. Collects a remote URL, a parent directory to clone

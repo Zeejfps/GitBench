@@ -1,4 +1,4 @@
-namespace GitBench;
+namespace GitBench.Git;
 
 internal enum RemoteUrlScheme
 {

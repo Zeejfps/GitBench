@@ -1,6 +1,13 @@
+using GitBench.Controls;
+using GitBench.Features.Diff;
+using GitBench.Features.Repos;
+using GitBench.Features.Submodules;
+using GitBench.Git;
+using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
-namespace GitBench;
+namespace GitBench.Features.Commits;
 
 public abstract record CommitDetailsRenderState
 {

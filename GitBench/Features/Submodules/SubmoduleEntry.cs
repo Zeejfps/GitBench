@@ -1,8 +1,11 @@
+using GitBench.Features.Repos;
+using GitBench.Features.Worktrees;
+using GitBench.Git;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
-namespace GitBench;
+namespace GitBench.Features.Submodules;
 
 // Composite that renders a single submodule row with its own (collapsible) nested children
 // stacked below — the submodule analogue of RepoEntry. This is what lets the RepoBar show
