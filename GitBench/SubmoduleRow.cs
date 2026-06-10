@@ -8,11 +8,11 @@ namespace GitBench;
 // not a sibling checkout of the parent.
 public sealed class SubmoduleRow : NestedRepoRow
 {
-    public SubmoduleRow(Repo submodule, IRepoRegistry registry, IRepoBadgeStore badges, int depth)
+    public SubmoduleRow(Repo submodule, IRepoRegistry registry, IRepoStatusStore status, int depth)
         : base(
             submodule,
             registry,
-            badges,
+            status,
             LucideIcons.Package,
             // Package icon + purple tint — submodules are mentally "external packages
             // embedded at a pinned commit," visually distinct from the FolderGit2 used for

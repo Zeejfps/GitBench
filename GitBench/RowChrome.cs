@@ -14,7 +14,7 @@ internal static class RowChrome
     // Trailing status dot for any RepoBar row. Hidden when the repo has nothing to flag; red for an
     // unseen remote-op error (takes priority), else amber when the working tree is dirty. The store
     // reads are auto-tracked, so it appears/clears live. First of a planned badge family.
-    public static RectView CreateBadge(IRepoBadgeStore badges, Guid repoId)
+    public static RectView CreateBadge(IRepoStatusStore status, Guid repoId)
     {
         var dot = new RectView
         {
@@ -22,13 +22,13 @@ internal static class RowChrome
             Height = 8,
             BorderRadius = BorderRadiusStyle.All(4),
         };
-        dot.BindThemedBackgroundColor(s => badges.Badges(repoId).HasError
+        dot.BindThemedBackgroundColor(s => status.For(repoId).HasUnseenError
             ? s.RepoBarRow.BadgeError
             : s.RepoBarRow.BadgeDirty);
         dot.BindIsVisible(() =>
         {
-            var b = badges.Badges(repoId);
-            return b.HasError || b.IsDirty;
+            var st = status.For(repoId);
+            return st.HasUnseenError || st.IsDirty;
         });
         return dot;
     }

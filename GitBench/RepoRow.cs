@@ -7,7 +7,7 @@ namespace GitBench;
 
 public sealed class RepoRow : MultiChildView
 {
-    public RepoRow(Repo repo, IRepoRegistry registry, IRepoBadgeStore badges)
+    public RepoRow(Repo repo, IRepoRegistry registry, IRepoStatusStore status)
     {
         Height = 28;
 
@@ -37,7 +37,7 @@ public sealed class RepoRow : MultiChildView
         };
         RowChrome.BindRowText(label, registry, repo);
 
-        var statusBadge = RowChrome.CreateBadge(badges, repo.Id);
+        var statusBadge = RowChrome.CreateBadge(status, repo.Id);
 
         var background = new RectView
         {

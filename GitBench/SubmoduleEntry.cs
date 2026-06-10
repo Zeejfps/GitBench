@@ -11,7 +11,7 @@ namespace GitBench;
 // chevron drives IsWorktreeExpanded for its id).
 public sealed class SubmoduleEntry : MultiChildView
 {
-    public SubmoduleEntry(Repo submodule, IRepoRegistry registry, IRepoBadgeStore badges, int depth)
+    public SubmoduleEntry(Repo submodule, IRepoRegistry registry, IRepoStatusStore status, int depth)
     {
         var children = new FlexColumnView
         {
@@ -25,7 +25,7 @@ public sealed class SubmoduleEntry : MultiChildView
                 _ = registry.WorktreesChanged.Value;
                 if (!registry.IsWorktreeExpanded(submodule.Id))
                     return System.Linq.Enumerable.Empty<View>();
-                return RepoTreeChildren.Build(submodule.Id, registry, badges, depth + 1);
+                return RepoTreeChildren.Build(submodule.Id, registry, status, depth + 1);
             },
             v => v);
 
@@ -35,7 +35,7 @@ public sealed class SubmoduleEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new SubmoduleRow(submodule, registry, badges, depth),
+                new SubmoduleRow(submodule, registry, status, depth),
                 children,
             },
         });
@@ -47,18 +47,18 @@ public sealed class SubmoduleEntry : MultiChildView
 // own nested children, same order/indent at every level.
 internal static class RepoTreeChildren
 {
-    public static IReadOnlyList<View> Build(System.Guid parentId, IRepoRegistry registry, IRepoBadgeStore badges, int depth)
+    public static IReadOnlyList<View> Build(System.Guid parentId, IRepoRegistry registry, IRepoStatusStore status, int depth)
     {
         var views = new List<View>();
         foreach (var r in registry.Repos)
         {
             if (r.ParentRepoId == parentId && r.IsWorktree)
-                views.Add(new WorktreeEntry(r, registry, badges, depth));
+                views.Add(new WorktreeEntry(r, registry, status, depth));
         }
         foreach (var r in registry.Repos)
         {
             if (r.ParentRepoId == parentId && r.IsSubmodule)
-                views.Add(new SubmoduleEntry(r, registry, badges, depth));
+                views.Add(new SubmoduleEntry(r, registry, status, depth));
         }
         return views;
     }

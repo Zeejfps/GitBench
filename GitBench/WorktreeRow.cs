@@ -6,11 +6,11 @@ namespace GitBench;
 // distinguished from primary rows by deeper indent and the Branch icon.
 public sealed class WorktreeRow : NestedRepoRow
 {
-    public WorktreeRow(Repo worktree, IRepoRegistry registry, IRepoBadgeStore badges, int depth)
+    public WorktreeRow(Repo worktree, IRepoRegistry registry, IRepoStatusStore status, int depth)
         : base(
             worktree,
             registry,
-            badges,
+            status,
             LucideIcons.Branch,
             // Tinted by kind so the sidebar tells worktree apart from primary / submodule
             // without leaning on a header row. Missing rows mute the accent to match the label.

@@ -9,18 +9,18 @@ internal sealed class BranchesHeaderViewModel : ViewModelBase<BranchesHeaderStat
 
     public BranchesHeaderViewModel(
         IUiDispatcher dispatcher,
-        IRepoSnapshotStore store)
+        IRepoStatusStore status)
         : base(dispatcher, BranchesHeaderState.Initial)
     {
         BranchName = Slice(s => s.BranchName);
         IsDetached = Slice(s => s.IsDetached);
 
-        // Pure projection of the store's derived push status — no load, no cache. Subscribe fires
+        // Pure projection of the active repo's status — no load, no cache. Subscribe fires
         // immediately with the current value, so the header paints without waiting on a query.
-        Subscriptions.Add(store.PushStatus.Subscribe(Apply));
+        Subscriptions.Add(status.Active.Subscribe(Apply));
     }
 
-    private void Apply(PushStatus status) =>
+    private void Apply(RepoStatus status) =>
         Update(_ => status.IsDetached
             ? new BranchesHeaderState("(detached HEAD)", true)
             : new BranchesHeaderState(status.CurrentBranchName, false));

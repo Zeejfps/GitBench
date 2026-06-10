@@ -30,9 +30,12 @@ public interface IRepoOperationsStore
     IReadable<RepoOperations> Active { get; }
 
     // True when this repo has a remote-op failure the user hasn't seen yet (it happened while the
-    // repo wasn't active). Feeds the RepoBar error badge via IRepoBadgeStore. Call inside a reactive
+    // repo wasn't active). Feeds the RepoBar error badge via IRepoStatusStore. Call inside a reactive
     // binding — the underlying per-repo state read is auto-tracked.
     bool HasUnseenError(Guid repoId);
+
+    // True while a push/pull/fetch is in flight on this repo. Tracked.
+    bool IsBusy(Guid repoId);
 
     void Push(Repo repo, bool force = false);
     void Pull(Repo repo, PullStrategy? strategy = null);
@@ -84,6 +87,12 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     }
 
     public bool HasUnseenError(Guid repoId) => Get(repoId).Value.HasUnseenError;
+
+    public bool IsBusy(Guid repoId)
+    {
+        var v = Get(repoId).Value;
+        return v.IsPushing || v.IsPulling || v.IsFetching;
+    }
 
     public void Push(Repo repo, bool force = false)
     {

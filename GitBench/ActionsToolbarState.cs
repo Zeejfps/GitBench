@@ -2,8 +2,9 @@ namespace GitBench;
 
 internal sealed record ActionsToolbarState(
     bool HasActiveRepo,
-    PushStatus PushStatus,
-    bool HasLocalChanges,
+    // Cheap per-repo signals (branch / ahead / behind / detached / upstream / dirty) projected from
+    // the status store. IsDirty doubles as "has local changes" for the Stash command.
+    RepoStatus Status,
     bool IsPushing,
     bool IsPulling,
     bool IsFetching,
@@ -15,8 +16,7 @@ internal sealed record ActionsToolbarState(
 {
     public static ActionsToolbarState Initial { get; } = new(
         HasActiveRepo: false,
-        PushStatus: new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false),
-        HasLocalChanges: false,
+        Status: RepoStatus.Unknown,
         IsPushing: false,
         IsPulling: false,
         IsFetching: false,

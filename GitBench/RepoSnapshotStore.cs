@@ -12,15 +12,15 @@ public sealed record LocalChangesData(
     // double as the "finish merge" UI.
     string? MergeMessage = null);
 
-// Single source of truth for the active repo's loaded git data. View models project from these
-// observables instead of each running their own load + cache. PushStatus is *derived* from the
-// branch listing (the HEAD entry), not loaded separately.
+// Single source of truth for the active repo's *heavy* loaded git data (commit graph, branch
+// listing, full file lists). View models project from these observables instead of each running
+// their own load + cache. The cheap per-repo signals (branch / ahead / behind / dirty) live in
+// IRepoStatusStore instead, which covers all repos rather than just the active + warm set.
 internal interface IRepoSnapshotStore
 {
     IReadable<CommitSnapshot?> Commits { get; }
     IReadable<BranchListing?> Branches { get; }
     IReadable<LocalChangesData?> LocalChanges { get; }
-    IReadable<PushStatus> PushStatus { get; }
 }
 
 /// <summary>
@@ -47,7 +47,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private readonly State<CommitSnapshot?> _commits = new(null);
     private readonly State<BranchListing?> _branches = new(null);
     private readonly State<LocalChangesData?> _local = new(null);
-    private readonly Derived<PushStatus> _pushStatus;
 
     private readonly RepoSnapshotCache<CommitSnapshot> _commitsCache = new();
     private readonly RepoSnapshotCache<BranchListing> _branchesCache = new();
@@ -72,7 +71,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     public IReadable<CommitSnapshot?> Commits => _commits;
     public IReadable<BranchListing?> Branches => _branches;
     public IReadable<LocalChangesData?> LocalChanges => _local;
-    public IReadable<PushStatus> PushStatus => _pushStatus;
 
     public RepoSnapshotStore(
         IRepoRegistry registry,
@@ -82,11 +80,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _registry = registry;
         _git = git;
         _bus = bus;
-
-        // PushStatus recomputes whenever the branch listing or the active repo changes — the two
-        // states it reads are tracked automatically by Derived. Safe to build before Start: it's
-        // a pure projection of state that needs no dispatcher.
-        _pushStatus = new Derived<PushStatus>(() => DerivePushStatus(_branches.Value, _registry.Active.Value));
     }
 
     /// <summary>
@@ -336,42 +329,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         });
     }
 
-    // ---- push status derivation ----
-
-    // PushStatus is the current branch's slice of the branch listing. With no listing yet (or an
-    // unborn HEAD that has no branch entry) we fall back to Repo.Branch for the name so the header
-    // doesn't blank during the first load / on a fresh repo.
-    private static PushStatus DerivePushStatus(BranchListing? listing, Repo? active)
-    {
-        if (listing == null)
-            return new PushStatus(active?.Branch, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false);
-
-        BranchEntry? head = null;
-        foreach (var b in listing.LocalBranches)
-        {
-            if (b.IsHead) { head = b; break; }
-        }
-
-        if (head == null)
-        {
-            // No HEAD branch: a populated listing means detached HEAD; an empty one means an
-            // unborn HEAD (fresh repo) — keep the name fallback and don't claim detached.
-            if (listing.LocalBranches.Count == 0)
-                return new PushStatus(active?.Branch, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false);
-            return new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: true);
-        }
-
-        // Tracked == upstream set and remote ref exists; Gone/NeverLinked both mean "no upstream to
-        // push/pull against", matching the old GetPushStatus (which keyed off whether @{u} resolved).
-        var hasUpstream = head.UpstreamState == BranchUpstreamState.Tracked;
-        return new PushStatus(
-            head.Name,
-            hasUpstream,
-            head.AheadBy ?? 0,
-            head.BehindBy ?? 0,
-            IsDetached: false);
-    }
-
     public void Dispose()
     {
         _activeSub?.Dispose();
@@ -379,7 +336,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _workingTreeSub?.Dispose();
         _commitCreatedSub?.Dispose();
         _submodulesSub?.Dispose();
-        _pushStatus.Dispose();
         _commits.Dispose();
         _branches.Dispose();
         _local.Dispose();

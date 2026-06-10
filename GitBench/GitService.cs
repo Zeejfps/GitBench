@@ -736,6 +736,77 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     private static LocalChangesSnapshot LocalChangesError(Repo repo, string message, string? detail = null)
         => new(repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>(), message, detail);
 
+    // One `git status --porcelain=v2 --branch` read yielding the cheap per-repo signals the RepoBar
+    // and toolbar need: branch / detached / upstream + ahead/behind (from the `# branch.*` headers)
+    // and whether the working tree is dirty (any non-header record). Same flags as the file-list
+    // read (untracked-all, ignore-submodules=dirty) so "dirty" matches the staged+unstaged count.
+    // Returns Unknown on any failure — callers treat that as "no decorations" rather than an error.
+    public GitStatusSummary GetStatusSummary(Repo repo)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return GitStatusSummary.Unknown;
+            var result = _runner.Run(
+                repo.Path,
+                new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
+                GitProcessRunner.GitLaunch.Direct);
+            return result.Ok ? ParseStatusSummary(result.Stdout) : GitStatusSummary.Unknown;
+        }
+        catch
+        {
+            return GitStatusSummary.Unknown;
+        }
+    }
+
+    // Porcelain v2 emits all `# branch.*` headers first, then one record per changed/untracked path.
+    // So the first non-header line means "dirty" and every header is already parsed by then.
+    private static GitStatusSummary ParseStatusSummary(string stdout)
+    {
+        string? branch = null;
+        var detached = false;
+        var hasUpstream = false;
+        var ahead = 0;
+        var behind = 0;
+
+        foreach (var raw in stdout.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            if (line[0] != '#')
+                return new GitStatusSummary(branch, detached, hasUpstream, ahead, behind, IsDirty: true);
+
+            if (line.StartsWith("# branch.head ", StringComparison.Ordinal))
+            {
+                var v = line["# branch.head ".Length..];
+                if (v == "(detached)") detached = true;
+                else branch = v;
+            }
+            else if (line.StartsWith("# branch.upstream ", StringComparison.Ordinal))
+            {
+                hasUpstream = true;
+            }
+            else if (line.StartsWith("# branch.ab ", StringComparison.Ordinal))
+            {
+                ParseAheadBehind(line["# branch.ab ".Length..], out ahead, out behind);
+            }
+        }
+
+        return new GitStatusSummary(branch, detached, hasUpstream, ahead, behind, IsDirty: false);
+    }
+
+    // "+<ahead> -<behind>", e.g. "+2 -3".
+    private static void ParseAheadBehind(string s, out int ahead, out int behind)
+    {
+        ahead = 0;
+        behind = 0;
+        foreach (var tok in s.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (tok.Length < 2) continue;
+            if (tok[0] == '+') int.TryParse(tok.AsSpan(1), out ahead);
+            else if (tok[0] == '-') int.TryParse(tok.AsSpan(1), out behind);
+        }
+    }
+
     public void Stage(Repo repo, IReadOnlyList<string> paths)
     {
         if (paths.Count == 0) return;

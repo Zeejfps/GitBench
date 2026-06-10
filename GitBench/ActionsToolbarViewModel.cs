@@ -39,7 +39,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
         IMessageBus bus,
-        IRepoSnapshotStore store,
+        IRepoStatusStore status,
         IRepoOperationsStore ops)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
@@ -57,7 +57,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Pull = new Command(DoPull, Slice(ComputePullEnabled));
         Fetch = new Command(DoFetch, Slice(s => !s.IsFetching && s.HasActiveRepo));
         Branch = new Command(DoBranch, repoActionsEnabled);
-        Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.HasLocalChanges));
+        Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);
         OpenTerminal = new Command(DoOpenTerminal, repoActionsEnabled);
 
@@ -68,17 +68,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IsFetching = Slice(s => s.IsFetching);
         Error = Slice(s => s.ShellError ?? s.OpError);
 
-        // HasActiveRepo gates the command-enabled slices; the registry drives it directly. Push
-        // status and has-local-changes are projected from the snapshot store (no own loads/caches).
+        // HasActiveRepo gates the command-enabled slices; the registry drives it directly. The
+        // cheap branch/ahead/behind/dirty signals are projected from the status store.
         Subscriptions.Add(_registry.Active.Subscribe(repo =>
             Update(s => s with { HasActiveRepo = repo != null, ShellError = null })));
-        Subscriptions.Add(store.PushStatus.Subscribe(status =>
-            Update(s => s with { PushStatus = status })));
-        Subscriptions.Add(store.LocalChanges.Subscribe(data =>
-        {
-            var hasChanges = data != null && data.Snapshot.Staged.Count + data.Snapshot.Unstaged.Count > 0;
-            Update(s => s.HasLocalChanges == hasChanges ? s : s with { HasLocalChanges = hasChanges });
-        }));
+        Subscriptions.Add(status.Active.Subscribe(st =>
+            Update(s => s with { Status = st })));
 
         // Push/pull/fetch in-flight state is owned per-repo by the operations store. Project the
         // active repo's slice into our flags + spinners + inline error, so switching repos shows the
@@ -115,30 +110,30 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
 
     private static bool ComputePushEnabled(ActionsToolbarState s)
     {
-        var hasBranchUpstream = !s.PushStatus.IsDetached && s.PushStatus.HasUpstream;
-        var canPublish = !s.PushStatus.IsDetached && !s.PushStatus.HasUpstream
-            && !string.IsNullOrEmpty(s.PushStatus.CurrentBranchName);
-        return !s.IsPushing && ((hasBranchUpstream && s.PushStatus.Ahead > 0) || canPublish);
+        var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
+        var canPublish = !s.Status.IsDetached && !s.Status.HasUpstream
+            && !string.IsNullOrEmpty(s.Status.CurrentBranchName);
+        return !s.IsPushing && ((hasBranchUpstream && s.Status.Ahead > 0) || canPublish);
     }
 
     private static bool ComputePullEnabled(ActionsToolbarState s)
     {
-        var hasBranchUpstream = !s.PushStatus.IsDetached && s.PushStatus.HasUpstream;
-        return !s.IsPulling && hasBranchUpstream && s.PushStatus.Behind > 0;
+        var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
+        return !s.IsPulling && hasBranchUpstream && s.Status.Behind > 0;
     }
 
     private static int? ComputePushBadge(ActionsToolbarState s)
     {
         if (s.IsPushing) return null;
-        var hasBranchUpstream = !s.PushStatus.IsDetached && s.PushStatus.HasUpstream;
-        return hasBranchUpstream ? s.PushStatus.Ahead : 0;
+        var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
+        return hasBranchUpstream ? s.Status.Ahead : 0;
     }
 
     private static int? ComputePullBadge(ActionsToolbarState s)
     {
         if (s.IsPulling) return null;
-        var hasBranchUpstream = !s.PushStatus.IsDetached && s.PushStatus.HasUpstream;
-        return hasBranchUpstream ? s.PushStatus.Behind : 0;
+        var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
+        return hasBranchUpstream ? s.Status.Behind : 0;
     }
 
     private void DoOpenFolder()
@@ -161,12 +156,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var pushStatus = State.Value.PushStatus;
+        var status = State.Value.Status;
         // Detached HEAD has no branch name to seed from; "HEAD" still works as a starting
         // ref for `git branch newname HEAD` and matches Fork's default.
-        var suggested = pushStatus.IsDetached || string.IsNullOrEmpty(pushStatus.CurrentBranchName)
+        var suggested = status.IsDetached || string.IsNullOrEmpty(status.CurrentBranchName)
             ? "HEAD"
-            : pushStatus.CurrentBranchName;
+            : status.CurrentBranchName;
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog(repo, suggested, onClose)));
     }
 
@@ -181,26 +176,26 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var pushStatus = State.Value.PushStatus;
+        var status = State.Value.Status;
 
-        if (!pushStatus.IsDetached
-            && !pushStatus.HasUpstream
-            && !string.IsNullOrEmpty(pushStatus.CurrentBranchName))
+        if (!status.IsDetached
+            && !status.HasUpstream
+            && !string.IsNullOrEmpty(status.CurrentBranchName))
         {
-            var localBranch = pushStatus.CurrentBranchName!;
+            var localBranch = status.CurrentBranchName!;
             _bus.Broadcast(new ShowDialogMessage(onClose => new PublishBranchDialog(
                 new PublishBranchRequest(repo, localBranch), onClose)));
             return;
         }
 
-        if (!pushStatus.IsDetached
-            && pushStatus.HasUpstream
-            && pushStatus.Ahead > 0
-            && pushStatus.Behind > 0)
+        if (!status.IsDetached
+            && status.HasUpstream
+            && status.Ahead > 0
+            && status.Behind > 0)
         {
-            var branchName = pushStatus.CurrentBranchName ?? string.Empty;
+            var branchName = status.CurrentBranchName ?? string.Empty;
             _bus.Broadcast(new ShowDialogMessage(onClose => new ForcePushDialog(
-                repo, branchName, pushStatus.Ahead, pushStatus.Behind, onClose)));
+                repo, branchName, status.Ahead, status.Behind, onClose)));
             return;
         }
 

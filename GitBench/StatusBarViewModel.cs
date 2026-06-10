@@ -6,8 +6,8 @@ namespace GitBench;
 /// <summary>
 /// Backs the bottom <see cref="StatusBarView"/>: the active repo name, current branch, and
 /// ahead/behind counts, plus the theme toggle. The repo name comes straight from the registry;
-/// the branch and ahead/behind are projected from <see cref="IRepoSnapshotStore.PushStatus"/>
-/// (derived from the branch listing), so there's no separate git query here.
+/// the branch and ahead/behind are projected from <see cref="IRepoStatusStore.Active"/>, so there's
+/// no separate git query here.
 /// </summary>
 internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 {
@@ -49,7 +49,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
-        IRepoSnapshotStore store,
+        IRepoStatusStore status,
         GitIdentityService identity,
         IdentityProfileService profiles,
         IGitService git,
@@ -95,9 +95,9 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         Subscriptions.Add(_updateService.CheckFeedback.Subscribe(OnFeedbackChanged));
 
         // Repo name / has-repo come from the registry (instant, non-git); branch + ahead/behind
-        // are refined from the store's push status. Both subscriptions fire immediately.
+        // are refined from the status store. Both subscriptions fire immediately.
         Subscriptions.Add(_registry.Active.Subscribe(OnActiveChanged));
-        Subscriptions.Add(store.PushStatus.Subscribe(OnPushStatus));
+        Subscriptions.Add(status.Active.Subscribe(OnStatus));
     }
 
     private static bool HasTracking(StatusBarState s) => s.HasUpstream && !s.IsDetached;
@@ -150,10 +150,12 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             Update(_ => StatusBarState.Initial);
             return;
         }
-        // RepoName is the registry's; Branch + ahead/behind are owned by OnPushStatus (whose
-        // derivation already falls back to Repo.Branch). Don't seed Branch here — on a switch the
-        // store's push status fires before this handler, and re-seeding would clobber it.
-        Update(s => s with { HasActiveRepo = true, RepoName = repo.DisplayName });
+        // RepoName is the registry's; Branch + ahead/behind are owned by OnStatus. Don't seed Branch
+        // here — on a switch the status store's Active fires alongside this handler, and re-seeding
+        // would clobber it.
+        // Seed Branch from the registry's cached value so the bar paints instantly; OnStatus then
+        // refines it (and ahead/behind) once the async probe lands.
+        Update(s => s with { HasActiveRepo = true, RepoName = repo.DisplayName, Branch = repo.Branch });
         ResolveIdentity(repo.Path);
     }
 
@@ -270,7 +272,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         });
     }
 
-    private void OnPushStatus(PushStatus status)
+    private void OnStatus(RepoStatus status)
     {
         if (!State.Value.HasActiveRepo) return;
         Update(s => s with

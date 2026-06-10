@@ -8,7 +8,7 @@ namespace GitBench;
 // submodule children (a worktree shares the primary's .gitmodules).
 public sealed class WorktreeEntry : MultiChildView
 {
-    public WorktreeEntry(Repo worktree, IRepoRegistry registry, IRepoBadgeStore badges, int depth)
+    public WorktreeEntry(Repo worktree, IRepoRegistry registry, IRepoStatusStore status, int depth)
     {
         var children = new FlexColumnView
         {
@@ -22,7 +22,7 @@ public sealed class WorktreeEntry : MultiChildView
                 _ = registry.WorktreesChanged.Value;
                 if (!registry.IsWorktreeExpanded(worktree.Id))
                     return System.Linq.Enumerable.Empty<View>();
-                return RepoTreeChildren.Build(worktree.Id, registry, badges, depth + 1);
+                return RepoTreeChildren.Build(worktree.Id, registry, status, depth + 1);
             },
             v => v);
 
@@ -32,7 +32,7 @@ public sealed class WorktreeEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new WorktreeRow(worktree, registry, badges, depth),
+                new WorktreeRow(worktree, registry, status, depth),
                 children,
             },
         });

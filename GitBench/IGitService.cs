@@ -5,6 +5,7 @@ public interface IGitService
     CommitSnapshot Load(Repo repo, int cap);
     CommitDetails LoadDetails(Repo repo, string sha);
     LocalChangesSnapshot GetLocalChanges(Repo repo);
+    GitStatusSummary GetStatusSummary(Repo repo);
     BranchListing GetBranches(Repo repo);
     void Stage(Repo repo, IReadOnlyList<string> paths);
     void Unstage(Repo repo, IReadOnlyList<string> paths);
@@ -166,6 +167,21 @@ public sealed record PushStatus(
     int Ahead,
     int Behind,
     bool IsDetached);
+
+// Cheap per-repo signals read from a single `git status --porcelain=v2 --branch`: the current
+// branch / detached / upstream + ahead/behind (the branch header) and whether the working tree has
+// any changes (any non-header record). One probe powers the RepoBar dirty dot, the toolbar's
+// push/pull availability, and the status bar — for every repo, not just the active one.
+public sealed record GitStatusSummary(
+    string? Branch,
+    bool IsDetached,
+    bool HasUpstream,
+    int Ahead,
+    int Behind,
+    bool IsDirty)
+{
+    public static readonly GitStatusSummary Unknown = new(null, false, false, 0, 0, false);
+}
 
 public sealed record PushOutcome(bool Success, string? ErrorMessage);
 
