@@ -1,43 +1,44 @@
+using GitBench.Infrastructure;
+
 namespace GitBench.Git;
 
-public abstract record GitOutcome
+public abstract record GitOutcome : IOutcome<GitOutcome>
 {
     private GitOutcome() { }
 
     public static readonly GitOutcome Ok = new Success();
 
+    public static GitOutcome Fail(string message) => new Failed(message);
+
     public sealed record Success : GitOutcome;
 
     public sealed record Failed(string Message) : GitOutcome;
-
-    // outcome is null only when the background runner itself failed (thread-level error).
-    public static GitOutcome Normalize(GitOutcome? outcome, string? error)
-        => outcome ?? new Failed(error ?? "Operation failed.");
 }
 
 // Operations that can land in a conflicted-but-in-progress state the operation banner
 // takes over from: merge, rebase, cherry-pick, revert, stash apply, submodule update.
-public abstract record MergeLikeOutcome
+public abstract record MergeLikeOutcome : IOutcome<MergeLikeOutcome>
 {
     private MergeLikeOutcome() { }
 
     public static readonly MergeLikeOutcome Ok = new Completed();
+
+    public static MergeLikeOutcome Fail(string message) => new Failed(message);
 
     public sealed record Completed : MergeLikeOutcome;
 
     public sealed record Conflicted : MergeLikeOutcome;
 
     public sealed record Failed(string Message) : MergeLikeOutcome;
-
-    public static MergeLikeOutcome Normalize(MergeLikeOutcome? outcome, string? error)
-        => outcome ?? new Failed(error ?? "Operation failed.");
 }
 
-public abstract record PullOutcome
+public abstract record PullOutcome : IOutcome<PullOutcome>
 {
     private PullOutcome() { }
 
     public static readonly PullOutcome Ok = new Completed();
+
+    public static PullOutcome Fail(string message) => new Failed(message);
 
     public sealed record Completed : PullOutcome;
 
@@ -48,11 +49,13 @@ public abstract record PullOutcome
     public sealed record Failed(string Message) : PullOutcome;
 }
 
-public abstract record AbortOutcome
+public abstract record AbortOutcome : IOutcome<AbortOutcome>
 {
     private AbortOutcome() { }
 
     public static readonly AbortOutcome Ok = new Completed();
+
+    public static AbortOutcome Fail(string message) => new Failed(message);
 
     public sealed record Completed : AbortOutcome;
 
@@ -62,11 +65,13 @@ public abstract record AbortOutcome
     public sealed record Failed(string Message, bool ForceQuitAvailable = false) : AbortOutcome;
 }
 
-public abstract record ContinueOutcome
+public abstract record ContinueOutcome : IOutcome<ContinueOutcome>
 {
     private ContinueOutcome() { }
 
     public static readonly ContinueOutcome Ok = new Completed();
+
+    public static ContinueOutcome Fail(string message) => new Failed(message);
 
     public sealed record Completed : ContinueOutcome;
 
@@ -77,9 +82,11 @@ public abstract record ContinueOutcome
     public sealed record Failed(string Message) : ContinueOutcome;
 }
 
-public abstract record CloneOutcome
+public abstract record CloneOutcome : IOutcome<CloneOutcome>
 {
     private CloneOutcome() { }
+
+    public static CloneOutcome Fail(string message) => new Failed(message);
 
     public sealed record Cloned(string RepoPath) : CloneOutcome;
 

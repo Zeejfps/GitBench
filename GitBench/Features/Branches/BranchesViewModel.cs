@@ -453,12 +453,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         _isStashApplying = true;
 
-        RunBackground<MergeLikeOutcome>(
-            work: () => (_gitService.ApplyStash(repo, index), null),
-            onResult: (outcome, error) =>
+        RunOutcome(
+            work: () => _gitService.ApplyStash(repo, index),
+            onResult: outcome =>
             {
                 _isStashApplying = false;
-                switch (MergeLikeOutcome.Normalize(outcome, error))
+                switch (outcome)
                 {
                     case MergeLikeOutcome.Failed failed:
                         _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", failed.Message));
@@ -494,11 +494,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         Update(s => s with { BusyBranch = branchName, PendingHead = branchName });
 
-        RunBackground<GitOutcome>(
-            work: () => (_gitService.CheckoutLocalBranch(repo, branchName), null),
-            onResult: (outcome, error) =>
+        RunOutcome(
+            work: () => _gitService.CheckoutLocalBranch(repo, branchName),
+            onResult: outcome =>
             {
-                var failed = GitOutcome.Normalize(outcome, error) as GitOutcome.Failed;
+                var failed = outcome as GitOutcome.Failed;
                 Update(s => s with { BusyBranch = null, PendingHead = failed == null ? s.PendingHead : null });
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
@@ -518,12 +518,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         var bus = _bus;
 
-        RunBackground<GitOutcome>(
-            work: () => (_gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch), null),
-            onResult: (outcome, error) =>
+        RunOutcome(
+            work: () => _gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch),
+            onResult: outcome =>
             {
                 Update(s => s with { BusyBranch = null });
-                if (GitOutcome.Normalize(outcome, error) is GitOutcome.Failed failed)
+                if (outcome is GitOutcome.Failed failed)
                     bus.Broadcast(new ShowOperationErrorMessage("Fast-forward failed", failed.Message));
                 else
                     bus.Broadcast(new RefsChangedMessage(repo.Id));

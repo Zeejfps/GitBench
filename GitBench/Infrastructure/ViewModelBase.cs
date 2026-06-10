@@ -106,6 +106,18 @@ internal abstract class ViewModelBase<TState> : IDisposable
         });
     }
 
+    /// <summary>
+    /// Outcome-typed variant of <see cref="RunBackground"/>: a thread-level failure folds
+    /// into the outcome's own Failed case, so <paramref name="onResult"/> always receives
+    /// one non-null outcome to switch on.
+    /// </summary>
+    protected void RunOutcome<T>(Func<T> work, Action<T> onResult, GenerationGuard? lane = null)
+        where T : IOutcome<T>
+        => RunBackground<T>(
+            () => (work(), null),
+            (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")),
+            lane);
+
     public virtual void Dispose()
     {
         // Bump every lane first so any in-flight worker that resolves after Dispose sees a

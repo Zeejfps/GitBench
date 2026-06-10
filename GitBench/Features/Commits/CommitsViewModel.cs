@@ -345,12 +345,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var capturedRepo = repo;
         var capturedSha = sha;
 
-        RunBackground<MergeLikeOutcome>(
-            work: () => (op(capturedRepo, capturedSha), null),
-            onResult: (result, error) =>
+        RunOutcome(
+            work: () => op(capturedRepo, capturedSha),
+            onResult: outcome =>
             {
                 _isApplyingCommit = false;
-                if (MergeLikeOutcome.Normalize(result, error) is MergeLikeOutcome.Failed failed)
+                if (outcome is MergeLikeOutcome.Failed failed)
                 {
                     _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, failed.Message));
                     return;

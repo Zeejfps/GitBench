@@ -589,11 +589,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
-        RunBackground<MergeLikeOutcome>(
-            work: () => (_gitService.UpdateSubmodules(repo, req), null),
-            onResult: (outcome, errorMsg) =>
+        RunOutcome(
+            work: () => _gitService.UpdateSubmodules(repo, req),
+            onResult: outcome =>
             {
-                if (MergeLikeOutcome.Normalize(outcome, errorMsg) is MergeLikeOutcome.Failed failed)
+                if (outcome is MergeLikeOutcome.Failed failed)
                 {
                     Update(s => s with { OpError = failed.Message });
                     return;
@@ -647,11 +647,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             if (f.Status == FileChangeStatus.Added) untracked.Add(f.Path);
         var includeUntracked = paths.Any(untracked.Contains);
 
-        RunBackground<GitOutcome>(
-            work: () => (_gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths), null),
-            onResult: (outcome, errorMsg) =>
+        RunOutcome(
+            work: () => _gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths),
+            onResult: outcome =>
             {
-                if (GitOutcome.Normalize(outcome, errorMsg) is GitOutcome.Failed failed)
+                if (outcome is GitOutcome.Failed failed)
                 {
                     Update(s => s with { OpError = failed.Message });
                     return;

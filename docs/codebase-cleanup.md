@@ -140,28 +140,33 @@ Methods with real logic (e.g. `Merge` at `GitService.cs:1976-2016` with its MERG
 
 ### Caller side
 
-With exceptions already folded into `Failed` inside the service, the `RunBackground` tuple error channel is redundant for these calls. One small normalizer collapses the three-way reconciliation:
+With exceptions already folded into `Failed` inside the service, the `RunBackground` tuple error channel is redundant for these calls. Each hierarchy implements `IOutcome<TSelf>` (a static abstract `Fail(string)`), and `ViewModelBase` gains an outcome-aware runner that folds the thread-level error into the type's own `Failed` case:
 
 ```csharp
-// outcome is null only when RunBackground itself caught (thread-level failure)
-static GitOutcome Normalize(GitOutcome? outcome, string? error)
-    => outcome ?? new GitOutcome.Failed(error ?? "Operation failed.");
+protected void RunOutcome<T>(Func<T> work, Action<T> onResult, GenerationGuard? lane = null)
+    where T : IOutcome<T>
+    => RunBackground<T>(
+        () => (work(), null),
+        (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")),
+        lane);
 ```
 
-Then `BranchesViewModel.cs:456-475` style call sites become a single switch:
+Then `BranchesViewModel.cs:456-475` style call sites receive one non-null outcome and switch on it directly:
 
 ```csharp
-onResult: (outcome, error) =>
-{
-    switch (Normalize(outcome, error))
+RunOutcome(
+    work: () => _gitService.ApplyStash(repo, index),
+    onResult: outcome =>
     {
-        case GitOutcome.Failed f:
-            _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", f.Message));
-            return;
-        case GitOutcome.Success:
+        switch (outcome)
+        {
+            case MergeLikeOutcome.Failed f:
+                _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", f.Message));
+                return;
             ...
-    }
-}
+        }
+    },
+    lane: _stashGen);
 ```
 
 ### Migration plan (incremental, one outcome type at a time)

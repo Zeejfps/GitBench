@@ -67,13 +67,13 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
 
         var service = _gitService;
         var bus = _bus;
-        RunBackground<ContinueOutcome>(
-            () => (service.ContinueOperation(repo, state), null),
-            (outcome, error) =>
+        RunOutcome(
+            () => service.ContinueOperation(repo, state),
+            outcome =>
             {
                 _isContinuing = false;
                 _spinner.Stop();
-                switch (outcome ?? new ContinueOutcome.Failed(error ?? "Continue failed."))
+                switch (outcome)
                 {
                     case ContinueOutcome.MoreConflicts more:
                         bus.Broadcast(new ShowOperationErrorMessage("Resolve remaining conflicts", more.Message));
