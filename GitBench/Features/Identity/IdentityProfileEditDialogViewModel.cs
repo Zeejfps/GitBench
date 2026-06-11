@@ -8,6 +8,9 @@ namespace GitBench.Features.Identity;
 // onSuccess (the UI thread) — ObservableList is not safe to mutate from a background thread.
 internal sealed class IdentityProfileEditDialogViewModel : IDisposable
 {
+    private readonly IdentityProfile? _existing;
+    private readonly IdentityProfileService _profiles;
+
     public State<string> DisplayName { get; }
     public State<string> AuthorName { get; }
     public State<string> AuthorEmail { get; }
@@ -24,6 +27,9 @@ internal sealed class IdentityProfileEditDialogViewModel : IDisposable
         IdentityProfileService profiles,
         IUiDispatcher dispatcher)
     {
+        _existing = existing;
+        _profiles = profiles;
+
         var rule = existing?.Match is { Count: > 0 } m ? m[0] : null;
         DisplayName = new State<string>(existing?.DisplayName ?? string.Empty);
         AuthorName = new State<string>(existing?.UserName ?? string.Empty);
@@ -37,40 +43,41 @@ internal sealed class IdentityProfileEditDialogViewModel : IDisposable
             && AuthorName.Value.Trim().Length > 0
             && AuthorEmail.Value.Trim().Length > 0);
 
-        Save = new AsyncCommand(
-            dispatcher,
-            work: () => null,
-            onSuccess: () =>
-            {
-                var host = MatchHost.Value.Trim();
-                var owner = MatchOwner.Value.Trim();
-                // The form edits only the first match rule. Preserve any additional rules a power
-                // user added by hand in identity-profiles.json, so saving an unrelated field
-                // (e.g. the email) doesn't silently destroy them.
-                var match = new List<IdentityMatchRule>();
-                if (host.Length > 0)
-                    match.Add(new IdentityMatchRule(host, owner.Length > 0 ? owner : null));
-                if (existing?.Match is { Count: > 1 } existingRules)
-                    for (var i = 1; i < existingRules.Count; i++)
-                        match.Add(existingRules[i]);
-
-                var sshKey = SshKeyPath.Value.Trim();
-                var profile = new IdentityProfile(
-                    existing?.Id ?? Guid.NewGuid(),
-                    DisplayName.Value.Trim(),
-                    AuthorName.Value.Trim(),
-                    AuthorEmail.Value.Trim(),
-                    sshKey.Length > 0 ? sshKey : null,
-                    existing?.SigningKey,
-                    existing?.SigningKeyFormat,
-                    Match: match);
-
-                if (existing != null) profiles.Update(profile);
-                else profiles.Add(profile);
-                CloseRequested?.Invoke();
-            },
-            gate: gate);
+        Save = new AsyncCommand(dispatcher, work: () => null, onSuccess: DoSave, gate: gate);
     }
 
-    public void Dispose() { }
+    private void DoSave()
+    {
+        var host = MatchHost.Value.Trim();
+        var owner = MatchOwner.Value.Trim();
+        // The form edits only the first match rule. Preserve any additional rules a power
+        // user added by hand in identity-profiles.json, so saving an unrelated field
+        // (e.g. the email) doesn't silently destroy them.
+        var match = new List<IdentityMatchRule>();
+        if (host.Length > 0)
+            match.Add(new IdentityMatchRule(host, owner.Length > 0 ? owner : null));
+        if (_existing?.Match is { Count: > 1 } existingRules)
+            for (var i = 1; i < existingRules.Count; i++)
+                match.Add(existingRules[i]);
+
+        var sshKey = SshKeyPath.Value.Trim();
+        var profile = new IdentityProfile(
+            _existing?.Id ?? Guid.NewGuid(),
+            DisplayName.Value.Trim(),
+            AuthorName.Value.Trim(),
+            AuthorEmail.Value.Trim(),
+            sshKey.Length > 0 ? sshKey : null,
+            _existing?.SigningKey,
+            _existing?.SigningKeyFormat,
+            Match: match);
+
+        if (_existing != null) _profiles.Update(profile);
+        else _profiles.Add(profile);
+        CloseRequested?.Invoke();
+    }
+
+    public void Dispose()
+    {
+        CloseRequested = null;
+    }
 }
