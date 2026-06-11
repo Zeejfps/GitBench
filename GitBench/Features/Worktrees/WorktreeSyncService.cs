@@ -102,7 +102,7 @@ internal sealed class WorktreeSyncService : IDisposable
             }
             if (primary is null || !primary.IsPrimary) return;
 
-            var infos = _git.ListWorktrees(primary, out _);
+            var infos = _git.ListWorktrees(primary);
             var primaryNormalized = TryFullPath(primary.Path);
 
             string? primaryBranch = null;

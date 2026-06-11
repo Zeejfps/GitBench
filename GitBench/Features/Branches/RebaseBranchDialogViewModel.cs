@@ -20,12 +20,12 @@ internal sealed class RebaseBranchDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Rebase = new AsyncCommand(
+        Rebase = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.Rebase(request.Repo, request.TargetRef, Autostash.Value);
-                return outcome is MergeLikeOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

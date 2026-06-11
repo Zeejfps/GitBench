@@ -17,12 +17,12 @@ internal sealed class ForcePushDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        ForcePush = new AsyncCommand(
+        ForcePush = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.Push(repo, force: true);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

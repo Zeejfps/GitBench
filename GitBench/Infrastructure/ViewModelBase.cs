@@ -118,6 +118,53 @@ internal abstract class ViewModelBase<TState> : IDisposable
             (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")),
             lane);
 
+    /// <summary>
+    /// Exclusive variant of <see cref="RunBackground"/>: returns false without starting when
+    /// a previous op on <paramref name="lane"/> is still in flight — the re-entrancy guard
+    /// VMs used to hand-roll as boolean fields. The in-flight flag always clears when the
+    /// continuation posts, even if a lane bump made the result stale, so a dropped result
+    /// can never wedge the lane shut.
+    /// </summary>
+    protected bool TryRunBackground<T>(
+        GenerationGuard lane,
+        Func<(T? Result, string? Error)> work,
+        Action<T?, string?> onResult)
+    {
+        if (lane.InFlight) return false;
+        lane.InFlight = true;
+        var gen = lane.Bump();
+        var dispatcher = Dispatcher;
+        Task.Run(() =>
+        {
+            T? result = default;
+            string? errorMsg = null;
+            try
+            {
+                (result, errorMsg) = work();
+            }
+            catch (Exception ex)
+            {
+                errorMsg = ex.Message;
+            }
+
+            dispatcher.Post(() =>
+            {
+                lane.InFlight = false;
+                if (lane.IsStale(gen)) return;
+                onResult(result, errorMsg);
+            });
+        });
+        return true;
+    }
+
+    /// <summary>Exclusive, outcome-typed: <see cref="TryRunBackground"/> + <see cref="RunOutcome"/>.</summary>
+    protected bool TryRunOutcome<T>(GenerationGuard lane, Func<T> work, Action<T> onResult)
+        where T : IOutcome<T>
+        => TryRunBackground<T>(
+            lane,
+            () => (work(), null),
+            (outcome, error) => onResult(outcome ?? T.Fail(error ?? "Operation failed.")));
+
     public virtual void Dispose()
     {
         // Bump every lane first so any in-flight worker that resolves after Dispose sees a

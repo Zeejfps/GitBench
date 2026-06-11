@@ -17,12 +17,12 @@ internal sealed class MoveBranchDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Move = new AsyncCommand(
+        Move = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.MoveBranch(request.Repo, request.BranchName, request.Sha, checkout: true);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

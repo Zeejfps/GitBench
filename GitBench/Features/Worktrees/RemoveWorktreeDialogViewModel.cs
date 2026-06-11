@@ -22,13 +22,13 @@ internal sealed class RemoveWorktreeDialogViewModel : IDisposable
         var worktreePath = request.Worktree.Path;
         var primaryId = request.Primary.Id;
 
-        Remove = new AsyncCommand(
+        Remove = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var force = Force.Value;
                 var outcome = gitService.RemoveWorktree(request.Primary, worktreePath, force);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

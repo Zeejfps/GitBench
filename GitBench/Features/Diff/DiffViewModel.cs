@@ -163,19 +163,20 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var repoId = repo.Id;
         Task.Run(() =>
         {
-            string? error = null;
+            GitOutcome outcome;
             try
             {
-                if (stage) service.Stage(repo, new[] { path });
-                else service.Unstage(repo, new[] { path });
+                outcome = stage
+                    ? service.Stage(repo, new[] { path })
+                    : service.Unstage(repo, new[] { path });
             }
-            catch (Exception ex) { error = ex.Message; }
+            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
 
             dispatcher.Post(() =>
             {
-                if (error != null)
+                if (outcome is GitOutcome.Failed failed)
                 {
-                    Update(s => s with { OpError = error });
+                    Update(s => s with { OpError = failed.Message });
                     return;
                 }
                 Update(s => s with { OpError = null });
@@ -291,15 +292,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var original = diff;
         Task.Run(() =>
         {
-            string? error;
-            try { error = service.ApplyPatch(repo, patch, cached, reverse); }
-            catch (Exception ex) { error = ex.Message; }
+            GitOutcome outcome;
+            try { outcome = service.ApplyPatch(repo, patch, cached, reverse); }
+            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
 
             dispatcher.Post(() =>
             {
-                if (error != null)
+                if (outcome is GitOutcome.Failed failed)
                 {
-                    Update(s => s with { OpError = error });
+                    Update(s => s with { OpError = failed.Message });
                     // Roll back the optimistic diff state, and broadcast a working-tree
                     // change so LocalChangesViewModel re-syncs its lists against the truth
                     // (we may have optimistically moved the file in OnHunkAppliedOptimistic).

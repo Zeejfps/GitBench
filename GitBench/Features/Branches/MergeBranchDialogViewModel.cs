@@ -20,12 +20,12 @@ internal sealed class MergeBranchDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Merge = new AsyncCommand(
+        Merge = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.Merge(request.Repo, request.SourceRef, Strategy.Value);
-                return outcome is MergeLikeOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

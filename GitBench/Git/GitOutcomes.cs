@@ -10,6 +10,8 @@ public abstract record GitOutcome : IOutcome<GitOutcome>
 
     public static GitOutcome Fail(string message) => new Failed(message);
 
+    public string? FailureMessage => (this as Failed)?.Message;
+
     public sealed record Success : GitOutcome;
 
     public sealed record Failed(string Message) : GitOutcome;
@@ -25,6 +27,9 @@ public abstract record MergeLikeOutcome : IOutcome<MergeLikeOutcome>
 
     public static MergeLikeOutcome Fail(string message) => new Failed(message);
 
+    // Conflicted is not a failure: the operation landed and the banner takes over.
+    public string? FailureMessage => (this as Failed)?.Message;
+
     public sealed record Completed : MergeLikeOutcome;
 
     public sealed record Conflicted : MergeLikeOutcome;
@@ -39,6 +44,8 @@ public abstract record PullOutcome : IOutcome<PullOutcome>
     public static readonly PullOutcome Ok = new Completed();
 
     public static PullOutcome Fail(string message) => new Failed(message);
+
+    public string? FailureMessage => (this as Failed)?.Message;
 
     public sealed record Completed : PullOutcome;
 
@@ -57,6 +64,8 @@ public abstract record AbortOutcome : IOutcome<AbortOutcome>
 
     public static AbortOutcome Fail(string message) => new Failed(message);
 
+    public string? FailureMessage => (this as Failed)?.Message;
+
     public sealed record Completed : AbortOutcome;
 
     // ForceQuitAvailable: the regular --abort failed but the in-progress state is
@@ -73,6 +82,13 @@ public abstract record ContinueOutcome : IOutcome<ContinueOutcome>
 
     public static ContinueOutcome Fail(string message) => new Failed(message);
 
+    public string? FailureMessage => this switch
+    {
+        Failed failed => failed.Message,
+        MoreConflicts more => more.Message,
+        _ => null,
+    };
+
     public sealed record Completed : ContinueOutcome;
 
     // `git X --continue` refused because the working tree still has unmerged paths —
@@ -87,6 +103,8 @@ public abstract record CloneOutcome : IOutcome<CloneOutcome>
     private CloneOutcome() { }
 
     public static CloneOutcome Fail(string message) => new Failed(message);
+
+    public string? FailureMessage => (this as Failed)?.Message;
 
     public sealed record Cloned(string RepoPath) : CloneOutcome;
 

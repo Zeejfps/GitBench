@@ -19,12 +19,12 @@ internal sealed class ResetCommitDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Reset = new AsyncCommand(
+        Reset = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.ResetCurrent(request.Repo, request.Sha, Mode.Value);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

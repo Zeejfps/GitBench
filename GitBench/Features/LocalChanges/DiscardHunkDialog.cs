@@ -67,7 +67,7 @@ internal sealed class DiscardHunkViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Discard = new AsyncCommand(
+        Discard = AsyncCommand.ForOutcome(
             dispatcher,
             work: () => gitService.ApplyPatch(request.Repo, request.Patch, cached: false, reverse: true),
             onSuccess: () =>

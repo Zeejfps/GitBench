@@ -10,6 +10,13 @@ internal sealed class GenerationGuard
 {
     private int _current;
 
+    /// <summary>
+    /// True while an exclusive op started via <c>TryRunBackground</c>/<c>TryRunOutcome</c>
+    /// is in flight on this lane. UI-thread only — the runner sets it before dispatching
+    /// and clears it in the posted continuation, replacing the per-VM boolean guards.
+    /// </summary>
+    public bool InFlight { get; internal set; }
+
     /// <summary>Bumps the generation and returns the new token to capture.</summary>
     public int Bump() => Interlocked.Increment(ref _current);
 

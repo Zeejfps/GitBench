@@ -70,7 +70,7 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
             {
                 try
                 {
-                    var infos = service.ListSubmodules(repo, out _);
+                    var infos = service.ListSubmodules(repo);
                     var outdated = 0;
                     foreach (var info in infos)
                     {

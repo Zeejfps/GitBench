@@ -29,11 +29,10 @@ public sealed record BranchListing(
     Guid RepoId,
     IReadOnlyList<BranchEntry> LocalBranches,
     IReadOnlyList<RemoteGroup> Remotes,
-    IReadOnlyList<StashEntry> Stashes,
-    string? ErrorMessage)
+    IReadOnlyList<StashEntry> Stashes)
 {
     public static BranchListing Empty(Guid repoId)
-        => new(repoId, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), null);
+        => new(repoId, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>());
 }
 
 /// Persisted per-repo state for the branches sidebar. Missing keys default to all-open.

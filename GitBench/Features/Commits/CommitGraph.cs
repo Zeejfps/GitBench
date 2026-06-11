@@ -48,5 +48,4 @@ public sealed record CommitSnapshot(
     IReadOnlyList<CommitNode> Commits,
     int LaneCount,
     bool Truncated,
-    string? ErrorMessage,
     string? HeadBranchName = null);

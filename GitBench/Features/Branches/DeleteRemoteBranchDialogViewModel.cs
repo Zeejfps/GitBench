@@ -16,12 +16,12 @@ internal sealed class DeleteRemoteBranchDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Delete = new AsyncCommand(
+        Delete = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.DeleteRemoteBranch(request.Repo, request.RemoteName, request.BranchName);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

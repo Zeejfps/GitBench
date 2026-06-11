@@ -39,7 +39,7 @@ internal sealed class PublishBranchDialogViewModel : IDisposable
 
         var gate = new Derived<bool>(() => !string.IsNullOrEmpty(SelectedRemote.Value));
 
-        Publish = new AsyncCommand(
+        Publish = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -47,7 +47,7 @@ internal sealed class PublishBranchDialogViewModel : IDisposable
                 var setUpstream = SetUpstream.Value;
                 var local = _request.LocalBranch;
                 var outcome = _gitService.PublishBranch(_request.Repo, local, remote, local, setUpstream);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

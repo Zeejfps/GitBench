@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -22,9 +23,9 @@ public abstract record CommitsRenderState
 /// slices and calls command methods to drive interactions.
 ///
 /// The load flow is generation-guarded through <see cref="ViewModelBase{TState}.RunBackground"/>
-/// so stale loads (repo switched, newer reload) never clobber fresher state. The reset flow
-/// runs as its own background op gated by <see cref="_isCheckingOutCommit"/> — it must always
-/// apply its result (clearing the flag), so it deliberately bypasses the load generation.
+/// so stale loads (repo switched, newer reload) never clobber fresher state. The reset, move,
+/// and apply flows each run exclusively on their own lane via TryRunBackground/TryRunOutcome,
+/// kept off the load generation so a repo-switch reload never drops their results.
 /// </summary>
 internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 {
@@ -48,19 +49,15 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private CommitSnapshot? _rendered;
     // Repo whose history is currently reflected in state; used to clear selection on switch.
     private Guid? _renderedRepoId;
-    private bool _isCheckingOutCommit;
-    private bool _isMovingBranch;
-    private bool _isApplyingCommit;
 
-    // Lane for the reset probe/apply op. Serialized by _isCheckingOutCommit; kept off the
-    // default Gen lane so a repo-switch reload never drops an in-flight reset's result.
+    // Exclusive lane for the reset probe/apply op; kept off the default Gen lane so a
+    // repo-switch reload never drops an in-flight reset's result.
     private readonly GenerationGuard _resetGen;
 
     // Same idea for the detached-HEAD "reset branch to here" probe/move, on its own lane.
     private readonly GenerationGuard _moveGen;
 
-    // Lane for cherry-pick / revert applies. Serialized by _isApplyingCommit; kept off the
-    // default Gen lane so a repo-switch reload never drops an in-flight apply's result.
+    // Exclusive lane for cherry-pick / revert applies.
     private readonly GenerationGuard _applyGen;
 
     public CommitsViewModel(
@@ -143,25 +140,25 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     //     soft/mixed/hard explicitly (each preserves a different slice of the dirty state).
     public void RequestReset(string sha)
     {
-        if (_isCheckingOutCommit) return;
         var snap = _snapshot;
         if (snap == null) return;
         var repo = _registry.Active.Value;
         if (repo == null || repo.Id != snap.RepoId) return;
 
-        _isCheckingOutCommit = true;
         var capturedRepo = repo;
         var capturedSha = sha;
 
         // All git I/O happens in work; onResult only dispatches UI. The probe decides between
         // an immediate hard reset (clean tree) and prompting for the reset mode (dirty tree).
-        RunBackground<ResetProbe>(
+        TryRunBackground<ResetProbe>(
+            _resetGen,
             work: () =>
             {
-                var changes = _gitService.GetLocalChanges(capturedRepo);
-                if (changes.ErrorMessage != null)
-                    return (new ResetProbe.Failed(changes.ErrorMessage), null);
+                var fetched = _gitService.GetLocalChanges(capturedRepo);
+                if (fetched is Fetched<LocalChangesSnapshot>.Failed failed)
+                    return (new ResetProbe.Failed(failed.Message), null);
 
+                var changes = ((Fetched<LocalChangesSnapshot>.Ok)fetched).Value;
                 var staged = changes.Staged.Count;
                 var unstaged = changes.Unstaged.Count;
                 if (staged == 0 && unstaged == 0)
@@ -170,7 +167,6 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             },
             onResult: (probe, error) =>
             {
-                _isCheckingOutCommit = false;
                 if (error != null)
                 {
                     _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", error));
@@ -196,8 +192,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                             d.Staged, d.Unstaged, onClose)));
                         break;
                 }
-            },
-            lane: _resetGen);
+            });
     }
 
     // ---- create tag ----
@@ -245,18 +240,17 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // commits, so we open MoveBranchDialog to confirm first.
     public void RequestMoveBranch(string branchName, string sha)
     {
-        if (_isMovingBranch) return;
         var snap = _snapshot;
         if (snap == null) return;
         var repo = _registry.Active.Value;
         if (repo == null || repo.Id != snap.RepoId) return;
 
-        _isMovingBranch = true;
         var capturedRepo = repo;
         var capturedBranch = branchName;
         var capturedSha = sha;
 
-        RunBackground<MoveBranchProbe>(
+        TryRunBackground<MoveBranchProbe>(
+            _moveGen,
             work: () =>
             {
                 if (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha))
@@ -265,7 +259,6 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             },
             onResult: (probe, error) =>
             {
-                _isMovingBranch = false;
                 if (error != null)
                 {
                     _bus.Broadcast(new ShowOperationErrorMessage("Reset branch failed", error));
@@ -287,8 +280,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                             capturedRepo, capturedBranch, capturedSha, shortSha, summary, onClose)));
                         break;
                 }
-            },
-            lane: _moveGen);
+            });
     }
 
     // Outcome of the off-thread move probe, handed from work to onResult above.
@@ -335,21 +327,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // operation banner takes over) or show an error.
     private void RunCommitApply(string sha, string failureTitle, Func<Repo, string, MergeLikeOutcome> op)
     {
-        if (_isApplyingCommit) return;
         var snap = _snapshot;
         if (snap == null) return;
         var repo = _registry.Active.Value;
         if (repo == null || repo.Id != snap.RepoId) return;
 
-        _isApplyingCommit = true;
         var capturedRepo = repo;
         var capturedSha = sha;
 
-        RunOutcome(
+        TryRunOutcome(
+            _applyGen,
             work: () => op(capturedRepo, capturedSha),
             onResult: outcome =>
             {
-                _isApplyingCommit = false;
                 if (outcome is MergeLikeOutcome.Failed failed)
                 {
                     _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, failed.Message));
@@ -357,8 +347,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 }
                 _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-            },
-            lane: _applyGen);
+            });
     }
 
     // Outcome of the off-thread reset probe, handed from work to onResult above.
@@ -437,11 +426,11 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // yet" (switching / cache miss) or no repo at all; a non-null snap is always for the active
     // repo (the store guards that). Renders Loading/NoRepo/Error/Loaded and keeps selection in
     // sync — cleared on a repo switch, pruned when the selected commit vanishes from a reload.
-    private void OnStoreCommits(CommitSnapshot? snap)
+    private void OnStoreCommits(Fetched<CommitSnapshot>? fetched)
     {
         var activeId = _registry.Active.Value?.Id;
 
-        if (snap == null)
+        if (fetched == null)
         {
             if (_renderedRepoId != activeId) ClearSelectionAndBroadcast(_renderedRepoId);
             _renderedRepoId = activeId;
@@ -454,18 +443,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             return;
         }
 
-        if (_renderedRepoId != snap.RepoId) ClearSelectionAndBroadcast(_renderedRepoId);
-        _renderedRepoId = snap.RepoId;
+        if (_renderedRepoId != activeId) ClearSelectionAndBroadcast(_renderedRepoId);
+        _renderedRepoId = activeId;
 
-        if (snap.ErrorMessage != null)
+        if (fetched is Fetched<CommitSnapshot>.Failed failed)
         {
             // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
             _snapshot = null;
             _rendered = null;
-            Update(s => s with { Render = new CommitsRenderState.Error(snap.ErrorMessage) });
+            Update(s => s with { Render = new CommitsRenderState.Error(failed.Message) });
         }
         else
         {
+            var snap = ((Fetched<CommitSnapshot>.Ok)fetched).Value;
             _snapshot = snap;
             // Re-apply the active filter so a soft refresh / reload keeps the user's query.
             ApplyProjection(snap, State.Value.Query);
@@ -476,7 +466,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                 ClearSelectionAndBroadcast(snap.RepoId);
         }
 
-        _bus.Broadcast(new CommitsLoadedMessage(snap.RepoId));
+        _bus.Broadcast(new CommitsLoadedMessage(activeId ?? Guid.Empty));
     }
 
     // Broadcasts against the given repo (the one the cleared selection belonged to), which is

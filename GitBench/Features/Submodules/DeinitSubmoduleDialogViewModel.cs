@@ -22,13 +22,13 @@ internal sealed class DeinitSubmoduleDialogViewModel : IDisposable
         var primaryId = request.Primary.Id;
         var submodulePath = ToRelative(request.Primary.Path, request.Submodule.Path);
 
-        Deinit = new AsyncCommand(
+        Deinit = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var force = Force.Value;
                 var outcome = gitService.DeinitSubmodule(request.Primary, submodulePath, force);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

@@ -32,7 +32,7 @@ internal sealed class CreateTagDialogViewModel : IDisposable
         var gate = new Derived<bool>(() =>
             Name.Value.Trim().Length > 0 && RefNameRules.Validate(Name.Value.Trim(), "Tag") is null);
 
-        Create = new AsyncCommand(
+        Create = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -40,7 +40,7 @@ internal sealed class CreateTagDialogViewModel : IDisposable
                 var message = Message.Value;
                 var push = PushToAllRemotes.Value;
                 var outcome = gitService.CreateTag(request.Repo, name, message, request.Sha, push);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

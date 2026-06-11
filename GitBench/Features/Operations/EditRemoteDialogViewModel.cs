@@ -45,14 +45,14 @@ internal sealed class EditRemoteDialogViewModel : IDisposable
             return name != request.RemoteName || url != _originalUrl;
         });
 
-        Save = new AsyncCommand(
+        Save = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = request.IsAdd
                     ? gitService.AddRemote(request.Repo, _name.Value.Trim(), _url.Value.Trim())
                     : gitService.EditRemote(request.Repo, request.RemoteName, _name.Value.Trim(), _url.Value.Trim());
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

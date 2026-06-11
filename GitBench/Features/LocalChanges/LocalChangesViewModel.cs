@@ -721,18 +721,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // even if a store reload lands mid-commit. The editor is cleared immediately; the
         // post-commit file lists arrive via CommitCreatedMessage → the store reloads and pushes
         // the fresh snapshot through OnStoreLocalChanges.
-        RunBackground<bool>(
-            work: () =>
-            {
-                var err = _gitService.Commit(repo, message, amend);
-                return err == null ? (true, null) : (false, err);
-            },
-            onResult: (_, err) =>
+        RunOutcome(
+            work: () => _gitService.Commit(repo, message, amend),
+            onResult: outcome =>
             {
                 _commitSpinner.Stop();
-                if (err != null)
+                if (outcome is GitOutcome.Failed failed)
                 {
-                    Update(s => s with { CommitBusy = false, OpError = err });
+                    Update(s => s with { CommitBusy = false, OpError = failed.Message });
                     return;
                 }
 
@@ -767,7 +763,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // means no data yet for the active repo (switching / cache miss) → blank or loading; a cross-
     // repo switch blanks the panels, a same-repo refresh keeps them visible. While amending we
     // refresh HEAD's file list off-thread first (HEAD may have moved), then apply.
-    private void OnStoreLocalChanges(LocalChangesData? data)
+    private void OnStoreLocalChanges(Fetched<LocalChangesData>? fetched)
     {
         var active = _registry.Active.Value;
         if (active == null)
@@ -794,7 +790,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var isCrossRepoSwitch = _renderedRepoId != active.Id;
         _renderedRepoId = active.Id;
 
-        if (data == null)
+        if (fetched == null)
         {
             // No data for the active repo yet. Cross-repo switch blanks the panels; a same-repo
             // gap just shows the loading flag while keeping the current lists.
@@ -812,16 +808,15 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             return;
         }
 
-        var snap = data.Snapshot;
-        if (snap.ErrorMessage != null)
+        if (fetched is Fetched<LocalChangesData>.Failed failed)
         {
             _stagedFromIndex = Empty;
             Update(s => s with
             {
                 HasRepo = true,
                 IsLoading = false,
-                LoadError = snap.ErrorMessage,
-                LoadErrorDetail = snap.ErrorDetail ?? snap.ErrorMessage,
+                LoadError = failed.Message,
+                LoadErrorDetail = failed.Detail ?? failed.Message,
                 Staged = Empty,
                 Unstaged = Empty,
                 Selection = LocalChanges.Selection.Empty,
@@ -829,6 +824,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             });
             return;
         }
+
+        var data = ((Fetched<LocalChangesData>.Ok)fetched).Value;
+        var snap = data.Snapshot;
 
         // On a cross-repo switch the selection belongs to the previous repo — drop it before
         // applying (ApplySnapshot's reload-style path would otherwise try to carry it forward).
@@ -951,21 +949,19 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         ApplyOptimisticMove(paths, isStage ? DiffSide.Unstaged : DiffSide.Staged);
 
-        RunIndexMutation(repo, () =>
-        {
-            if (isStage) _gitService.Stage(repo, paths);
-            else _gitService.Unstage(repo, paths);
-        });
+        RunIndexMutation(repo, () => isStage
+            ? _gitService.Stage(repo, paths)
+            : _gitService.Unstage(repo, paths));
     }
 
-    private void RunIndexMutation(Repo repo, Action mutate)
+    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate)
     {
-        RunBackground<bool>(
-            work: () => { mutate(); return (true, null); },
-            onResult: (_, errorMsg) =>
+        RunOutcome(
+            work: mutate,
+            onResult: outcome =>
             {
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                Update(s => s with { OpError = errorMsg });
+                Update(s => s with { OpError = (outcome as GitOutcome.Failed)?.Message });
             },
             lane: _opGen);
     }
@@ -1019,8 +1015,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         RunIndexMutation(repo, () =>
         {
-            if (toUnstage.Count > 0) _gitService.Unstage(repo, toUnstage);
-            if (toResetToParent.Count > 0) _gitService.ResetToParent(repo, toResetToParent);
+            if (toUnstage.Count > 0 && _gitService.Unstage(repo, toUnstage) is GitOutcome.Failed failed)
+                return failed;
+            return toResetToParent.Count > 0
+                ? _gitService.ResetToParent(repo, toResetToParent)
+                : GitOutcome.Ok;
         });
     }
 

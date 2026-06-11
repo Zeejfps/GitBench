@@ -84,12 +84,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     }
 
 
-    public CommitSnapshot Load(Repo repo, int cap)
+    public Fetched<CommitSnapshot> Load(Repo repo, int cap)
     {
         try
         {
             if (!IsGitRepo(repo.Path))
-                return Error(repo, "Not a git repository.");
+                return new Fetched<CommitSnapshot>.Failed("Not a git repository.");
 
             using var lg = new Repository(repo.Path);
 
@@ -296,16 +296,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
 
             var headBranchName = lg.Info.IsHeadDetached ? null : lg.Head?.FriendlyName;
-            return new CommitSnapshot(repo.Id, repo.Path, nodes, laneCount, truncated, null, headBranchName);
+            return new CommitSnapshot(repo.Id, repo.Path, nodes, laneCount, truncated, headBranchName);
         }
         catch (Exception ex)
         {
-            return Error(repo, ex.Message);
+            return new Fetched<CommitSnapshot>.Failed(ex.Message);
         }
     }
-
-    private static CommitSnapshot Error(Repo repo, string message)
-        => new(repo.Id, repo.Path, Array.Empty<CommitNode>(), 0, false, message);
 
     // "origin/main" -> "main"; "origin/feature/x" -> "feature/x". Remote names can't contain
     // slashes, so the local-branch name is everything after the first segment.
@@ -326,12 +323,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         list.Add(badge);
     }
 
-    public CommitDetails LoadDetails(Repo repo, string sha)
+    public Fetched<CommitDetails> LoadDetails(Repo repo, string sha)
     {
         try
         {
             if (!IsGitRepo(repo.Path))
-                return DetailsError(repo, sha, "Not a git repository.");
+                return new Fetched<CommitDetails>.Failed("Not a git repository.");
 
             // One log call with NUL-separated fields. %B (raw message) is last so any
             // newlines inside it can't be confused with field boundaries. Split(_, 10)
@@ -340,11 +337,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             const string fmt = "%H%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%P%x00%s%x00%B";
             var logOutput = RunGit(repo.Path, out var logErr, "log", "-1", $"--format={fmt}", sha);
             if (logOutput == null)
-                return DetailsError(repo, sha, logErr ?? "Commit not found.");
+                return new Fetched<CommitDetails>.Failed(logErr ?? "Commit not found.");
 
             var parts = logOutput.Split('\0', 10);
             if (parts.Length < 10)
-                return DetailsError(repo, sha, "Unexpected git log output.");
+                return new Fetched<CommitDetails>.Failed("Unexpected git log output.");
 
             var resolvedSha = parts[0];
             var parentShas = parts[7].Length == 0
@@ -371,12 +368,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 Message: parts[9],
                 MessageShort: parts[8],
                 ParentShas: parentShas,
-                Files: files,
-                ErrorMessage: null);
+                Files: files);
         }
         catch (Exception ex)
         {
-            return DetailsError(repo, sha, ex.Message);
+            return new Fetched<CommitDetails>.Failed(ex.Message);
         }
     }
 
@@ -418,19 +414,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Same AOT-marshalling story as GetDiff: libgit2 callbacks for branch enumeration trip
     // NativeAOT's reverse-pinvoke stubs, so remote branches don't show in published builds.
     // `git for-each-ref` returns the same data in one shot.
-    public BranchListing GetBranches(Repo repo)
+    public Fetched<BranchListing> GetBranches(Repo repo)
     {
         try
         {
             if (!IsGitRepo(repo.Path))
-                return new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), "Not a git repository.");
+                return new Fetched<BranchListing>.Failed("Not a git repository.");
 
             // Seed with all configured remotes so groups still show even when a remote has
             // no branches yet (matches the prior LibGit2Sharp behavior).
             var remotesByName = new Dictionary<string, List<BranchEntry>>(StringComparer.Ordinal);
             var remotesOut = RunGit(repo.Path, out var remErr, "remote");
             if (remotesOut == null)
-                return new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), remErr ?? "git remote failed.");
+                return new Fetched<BranchListing>.Failed(remErr ?? "git remote failed.");
             foreach (var rawLine in remotesOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 var name = rawLine.Trim();
@@ -448,7 +444,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             var branchesOut = RunGit(repo.Path, out var brErr,
                 "for-each-ref", $"--format={fmt}", "refs/heads", "refs/remotes");
             if (branchesOut == null)
-                return new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), brErr ?? "git for-each-ref failed.");
+                return new Fetched<BranchListing>.Failed(brErr ?? "git for-each-ref failed.");
 
             var locals = new List<BranchEntry>();
             foreach (var line in branchesOut.Split('\n'))
@@ -517,11 +513,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
 
             var stashes = LoadStashes(repo.Path);
-            return new BranchListing(repo.Id, locals, remoteGroups, stashes, null);
+            return new BranchListing(repo.Id, locals, remoteGroups, stashes);
         }
         catch (Exception ex)
         {
-            return new BranchListing(repo.Id, Array.Empty<BranchEntry>(), Array.Empty<RemoteGroup>(), Array.Empty<StashEntry>(), ex.Message);
+            return new Fetched<BranchListing>.Failed(ex.Message);
         }
     }
 
@@ -584,16 +580,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // where the smudged workdir was produced from a different pointer than HEAD now has.
     // Using the CLI keeps our view in sync with what git itself thinks the working tree
     // contains, the same reason GetBranches and GetDiff already shell out.
-    public LocalChangesSnapshot GetLocalChanges(Repo repo)
+    public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo)
     {
         try
         {
             if (!IsGitRepo(repo.Path))
-                return LocalChangesError(repo, "Not a git repository.");
+                return new Fetched<LocalChangesSnapshot>.Failed("Not a git repository.");
 
             var output = RunGitStatusPorcelain(repo.Path, out var error, out var detail);
             if (output == null)
-                return LocalChangesError(repo, error ?? "git status failed.", detail);
+                return new Fetched<LocalChangesSnapshot>.Failed(error ?? "git status failed.", detail);
 
             var staged = new List<FileChange>();
             var unstaged = new List<FileChange>();
@@ -669,11 +665,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             staged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             unstaged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 
-            return new LocalChangesSnapshot(repo.Id, staged, unstaged, null);
+            return new LocalChangesSnapshot(repo.Id, staged, unstaged);
         }
         catch (Exception ex)
         {
-            return LocalChangesError(repo, ex.Message);
+            return new Fetched<LocalChangesSnapshot>.Failed(ex.Message);
         }
     }
 
@@ -741,9 +737,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         detail = result.BlockError("git status");
         return null;
     }
-
-    private static LocalChangesSnapshot LocalChangesError(Repo repo, string message, string? detail = null)
-        => new(repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>(), message, detail);
 
     // One `git status --porcelain=v2 --branch` read yielding the cheap per-repo signals the RepoBar
     // and toolbar need: branch / detached / upstream + ahead/behind (from the `# branch.*` headers)
@@ -816,23 +809,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    public void Stage(Repo repo, IReadOnlyList<string> paths)
-    {
-        if (paths.Count == 0) return;
-        using var _ = LockRepo(repo.Path);
-        var args = new List<string>(paths.Count + 2) { "add", "--" };
-        args.AddRange(paths);
-        RunGitMutationOrThrow(repo.Path, args);
-    }
+    public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths)
+        => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
+        {
+            var args = new List<string>(paths.Count + 2) { "add", "--" };
+            args.AddRange(paths);
+            return Mutate(repo.Path, args.ToArray());
+        });
 
-    public void Unstage(Repo repo, IReadOnlyList<string> paths)
-    {
-        if (paths.Count == 0) return;
-        using var _ = LockRepo(repo.Path);
-        var args = new List<string>(paths.Count + 3) { "restore", "--staged", "--" };
-        args.AddRange(paths);
-        RunGitMutationOrThrow(repo.Path, args);
-    }
+    public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths)
+        => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
+        {
+            var args = new List<string>(paths.Count + 3) { "restore", "--staged", "--" };
+            args.AddRange(paths);
+            return Mutate(repo.Path, args.ToArray());
+        });
 
     public GitOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
 
@@ -890,26 +881,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         if (string.IsNullOrEmpty(ours)) return theirs ?? string.Empty;
         if (string.IsNullOrEmpty(theirs)) return ours;
         return ours.EndsWith('\n') ? ours + theirs : ours + "\n" + theirs;
-    }
-
-    public ConflictSides GetConflictSides(Repo repo, string path)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new ConflictSides(null, null, null, "Not a git repository.");
-
-            using var _ = LockRepo(repo.Path);
-            return new ConflictSides(
-                Base: ShowStage(repo.Path, 1, path),
-                Ours: ShowStage(repo.Path, 2, path),
-                Theirs: ShowStage(repo.Path, 3, path),
-                ErrorMessage: null);
-        }
-        catch (Exception ex)
-        {
-            return new ConflictSides(null, null, null, ex.Message);
-        }
     }
 
     public ConflictContext? GetConflictContext(Repo repo, string path)
@@ -1058,70 +1029,41 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return stages;
     }
 
-    public string? ApplyPatch(Repo repo, string patch, bool cached, bool reverse)
-    {
-        if (string.IsNullOrEmpty(patch)) return null;
-        try
+    public GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse)
+        => string.IsNullOrEmpty(patch) ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path)) return "Not a git repository.";
-
-            using var _ = LockRepo(repo.Path);
             var args = new List<string> { "apply", "--whitespace=nowarn" };
             if (cached) args.Add("--cached");
             if (reverse) args.Add("--reverse");
             args.Add("-");
-            return RunGitWithStdin(repo.Path, args, patch);
-        }
-        catch (Exception ex)
+            var result = _runner.Run(repo.Path, args, GitProcessRunner.GitLaunch.Direct, patch);
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git apply"));
+        });
+
+    public GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths)
+        => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            return ex.Message;
-        }
-    }
-
-    private string? RunGitWithStdin(string workingDir, IReadOnlyList<string> args, string stdin)
-    {
-        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct, stdin);
-        return result.Ok ? null : result.BlockError("git apply");
-    }
-
-    private void RunGitMutationOrThrow(string repoPath, IReadOnlyList<string> args)
-    {
-        var (ok, error) = RunMutation(repoPath, args);
-        if (!ok) throw new InvalidOperationException(error ?? "git command failed.");
-    }
-
-    public void ResetToParent(Repo repo, IReadOnlyList<string> paths)
-    {
-        if (paths.Count == 0) return;
-        using var _lock = LockRepo(repo.Path);
-        // No HEAD (unborn branch) → nothing to reset to. Root commit (HEAD with no
-        // parent) → `git reset` has nothing to copy from, so drop the entries from
-        // the index without touching the workdir. Otherwise let `git reset HEAD^`
-        // copy parent blobs back into the index (or remove entries the parent didn't
-        // have). The working tree is untouched in all paths.
-        if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
-            return;
-        var hasParent = RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null;
-        var args = hasParent
-            ? new List<string>(paths.Count + 3) { "reset", "HEAD^", "--" }
-            : new List<string>(paths.Count + 4) { "rm", "--cached", "--force", "--" };
-        args.AddRange(paths);
-        RunGitMutationOrThrow(repo.Path, args);
-    }
+            // No HEAD (unborn branch) → nothing to reset to. Root commit (HEAD with no
+            // parent) → `git reset` has nothing to copy from, so drop the entries from
+            // the index without touching the workdir. Otherwise let `git reset HEAD^`
+            // copy parent blobs back into the index (or remove entries the parent didn't
+            // have). The working tree is untouched in all paths.
+            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
+                return GitOutcome.Ok;
+            var hasParent = RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null;
+            var args = hasParent
+                ? new List<string>(paths.Count + 3) { "reset", "HEAD^", "--" }
+                : new List<string>(paths.Count + 4) { "rm", "--cached", "--force", "--" };
+            args.AddRange(paths);
+            return Mutate(repo.Path, args.ToArray());
+        });
 
     // Throws away unstaged workdir changes for the given paths. Tracked files are restored
     // from the index via `git checkout -- <paths>` (the user's staged hunks are preserved);
-    // untracked files (not in the index) are deleted from disk. Returns null on success or
-    // a human-readable error string on failure.
-    public string? DiscardChanges(Repo repo, IReadOnlyList<string> paths)
-    {
-        if (paths.Count == 0) return null;
-        try
+    // untracked files (not in the index) are deleted from disk.
+    public GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths)
+        => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return "Not a git repository.";
-
-            using var _ = LockRepo(repo.Path);
             // `git ls-files -z -- <paths>` prints only the tracked subset, NUL-separated.
             // Anything not in that subset exists only on disk and gets deleted directly;
             // tracked entries fall through to the `git checkout --` restore below.
@@ -1131,7 +1073,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             lsArgs[2] = "--";
             for (var i = 0; i < paths.Count; i++) lsArgs[i + 3] = paths[i];
             var lsOutput = RunGit(repo.Path, out var lsErr, lsArgs);
-            if (lsOutput == null) return lsErr ?? "git ls-files failed.";
+            if (lsOutput == null) return new GitOutcome.Failed(lsErr ?? "git ls-files failed.");
             var tracked = new HashSet<string>(
                 lsOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries),
                 StringComparer.Ordinal);
@@ -1152,7 +1094,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 }
                 catch (Exception ex)
                 {
-                    return ex.Message;
+                    return new GitOutcome.Failed(ex.Message);
                 }
             }
 
@@ -1161,38 +1103,23 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 var args = new List<string> { "checkout", "--" };
                 args.AddRange(trackedPaths);
                 var result = _runner.Run(repo.Path, args);
-                if (!result.Ok) return result.FirstLineError("git checkout");
+                if (!result.Ok) return new GitOutcome.Failed(result.FirstLineError("git checkout"));
             }
-            return null;
-        }
-        catch (Exception ex)
-        {
-            return ex.Message;
-        }
-    }
+            return GitOutcome.Ok;
+        });
 
-    public string? Commit(Repo repo, string message, bool amend)
-    {
-        try
+    public GitOutcome Commit(Repo repo, string message, bool amend)
+        => RunOperation(repo, () =>
         {
-            if (!IsGitRepo(repo.Path))
-                return "Not a git repository.";
-
             var args = new List<string> { "commit", "-m", message };
             if (amend) args.Add("--amend");
 
-            using var _ = LockRepo(repo.Path);
             // -m supplies the message, but a configured core.editor would still fire for
             // merge/rebase/squash flows that prompt to confirm the commit message.
             var result = _runner.Run(repo.Path, args,
                 configure: static psi => psi.EnvironmentVariables["GIT_EDITOR"] = "true");
-            return result.Ok ? null : result.BlockError("git commit");
-        }
-        catch (Exception ex)
-        {
-            return ex.Message;
-        }
-    }
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git commit"));
+        });
 
     public HeadCommitMessage? GetHeadCommitMessage(Repo repo)
     {
@@ -1955,27 +1882,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return ToOutcome(_runner.Run(repo.Path, new[] { "stash", "store", "-m", newMessage, sha }), "git stash store");
         });
 
-    public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage)
+    public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary)
     {
-        errorMessage = null;
         try
         {
-            if (!IsGitRepo(primary.Path))
-            {
-                errorMessage = "Not a git repository.";
-                return Array.Empty<WorktreeInfo>();
-            }
+            if (!IsGitRepo(primary.Path)) return Array.Empty<WorktreeInfo>();
             var stdout = RunGit(primary.Path, out var err, "worktree", "list", "--porcelain");
-            if (err != null)
-            {
-                errorMessage = err;
-                return Array.Empty<WorktreeInfo>();
-            }
-            return ParseWorktreePorcelain(stdout);
+            return err != null ? Array.Empty<WorktreeInfo>() : ParseWorktreePorcelain(stdout);
         }
-        catch (Exception ex)
+        catch
         {
-            errorMessage = ex.Message;
             return Array.Empty<WorktreeInfo>();
         }
     }
@@ -2082,16 +1998,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     // ────────── submodules ──────────
 
-    public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary, out string? errorMessage)
+    public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary)
     {
-        errorMessage = null;
         try
         {
-            if (!IsGitRepo(primary.Path))
-            {
-                errorMessage = "Not a git repository.";
-                return Array.Empty<SubmoduleInfo>();
-            }
+            if (!IsGitRepo(primary.Path)) return Array.Empty<SubmoduleInfo>();
 
             var gitmodulesPath = System.IO.Path.Combine(primary.Path, ".gitmodules");
             if (!File.Exists(gitmodulesPath))
@@ -2100,11 +2011,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // Step 1: enumerate logical entries from .gitmodules. Each `submodule.<name>.path`
             // row gives us one submodule; .url and .branch hang off the same <name>.
             var configOut = RunGit(primary.Path, out var cfgErr, "config", "--file", ".gitmodules", "--list");
-            if (cfgErr != null)
-            {
-                errorMessage = cfgErr;
-                return Array.Empty<SubmoduleInfo>();
-            }
+            if (cfgErr != null) return Array.Empty<SubmoduleInfo>();
 
             var byName = new Dictionary<string, (string? Path, string? Url, string? Branch)>(StringComparer.Ordinal);
             foreach (var raw in configOut.Split('\n'))
@@ -2209,9 +2116,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             results.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
             return results;
         }
-        catch (Exception ex)
+        catch
         {
-            errorMessage = ex.Message;
             return Array.Empty<SubmoduleInfo>();
         }
     }
@@ -3085,20 +2991,4 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 ? new ContinueOutcome.MoreConflicts(message)
                 : new ContinueOutcome.Failed(message);
         }, static m => new ContinueOutcome.Failed(m));
-
-    private static CommitDetails DetailsError(Repo repo, string sha, string message)
-        => new(
-            RepoId: repo.Id,
-            Sha: sha,
-            AuthorName: string.Empty,
-            AuthorEmail: string.Empty,
-            AuthorWhen: DateTimeOffset.MinValue,
-            CommitterName: string.Empty,
-            CommitterEmail: string.Empty,
-            CommitterWhen: DateTimeOffset.MinValue,
-            Message: string.Empty,
-            MessageShort: string.Empty,
-            ParentShas: Array.Empty<string>(),
-            Files: Array.Empty<FileChange>(),
-            ErrorMessage: message);
 }

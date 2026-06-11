@@ -25,7 +25,7 @@ internal sealed class UpdateSubmodulesDialogViewModel : IDisposable
         var primaryId = request.Primary.Id;
         var target = request.TargetSubmodule;
 
-        Update = new AsyncCommand(
+        Update = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -37,9 +37,7 @@ internal sealed class UpdateSubmodulesDialogViewModel : IDisposable
                 // A Conflicted outcome means the update did land — the Operation banner takes
                 // over to resolve it, so close and refresh like a clean success rather than
                 // surfacing it as an error.
-                return gitService.UpdateSubmodules(request.Primary, req) is MergeLikeOutcome.Failed failed
-                    ? failed.Message
-                    : null;
+                return gitService.UpdateSubmodules(request.Primary, req);
             },
             onSuccess: () =>
             {

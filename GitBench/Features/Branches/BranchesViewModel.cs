@@ -46,14 +46,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private Guid _activeRepoId;
 
-    // Stash apply uses its own flag — it's a distinct concept from branch ops, and the
-    // existing presenter treated it that way. Don't fold it into IsBranchOpInFlight.
-    private bool _isStashApplying;
-
     // Op lanes for the mutating commands. Checkout and fast-forward share one lane because
-    // BusyBranch already serializes them; stash apply has its own (it runs independently of
-    // branch ops). They are deliberately separate from the default Gen lane, which is only
-    // bumped by loads/repo-switch — a mutation must still report its result after a switch.
+    // BusyBranch already serializes them; stash apply runs exclusively on its own lane (it's
+    // a distinct concept from branch ops — don't fold it into IsBranchOpInFlight). They are
+    // deliberately separate from the default Gen lane, which is only bumped by loads/repo-
+    // switch — a mutation must still report its result after a switch.
     private readonly GenerationGuard _branchOpGen;
     private readonly GenerationGuard _stashGen;
 
@@ -152,15 +149,22 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     // Projection of the store's branch slice. null means no data for the active repo yet
     // (switching / cache miss) → show "Loading…"; a non-null listing is applied as before.
-    private void OnStoreBranches(BranchListing? listing)
+    private void OnStoreBranches(Fetched<BranchListing>? fetched)
     {
-        if (listing == null)
+        switch (fetched)
         {
-            if (_registry.Active.Value == null) return; // no repo → OnActiveRepoChanged sets Initial
-            Update(s => s with { Listing = null, IsLoading = true, LoadError = null });
-            return;
+            case null:
+                if (_registry.Active.Value == null) return; // no repo → OnActiveRepoChanged sets Initial
+                Update(s => s with { Listing = null, IsLoading = true, LoadError = null });
+                return;
+            case Fetched<BranchListing>.Failed failed:
+                Update(s => s with { Listing = null, IsLoading = false, LoadError = failed.Message, Selection = null });
+                _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, null));
+                return;
+            case Fetched<BranchListing>.Ok ok:
+                ApplyListing(ok.Value);
+                return;
         }
-        ApplyListing(listing);
     }
 
     private void OnCommitSelected(CommitSelectedMessage msg)
@@ -189,8 +193,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
             return s with
             {
-                Listing = listing.ErrorMessage == null ? listing : null,
-                LoadError = listing.ErrorMessage,
+                Listing = listing,
+                LoadError = null,
                 IsLoading = false,
                 Selection = selection,
                 PendingHead = pendingHead,
@@ -449,15 +453,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        if (_isStashApplying) return;
 
-        _isStashApplying = true;
-
-        RunOutcome(
+        TryRunOutcome(
+            _stashGen,
             work: () => _gitService.ApplyStash(repo, index),
             onResult: outcome =>
             {
-                _isStashApplying = false;
                 switch (outcome)
                 {
                     case MergeLikeOutcome.Failed failed:
@@ -473,8 +474,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 if (offerDrop)
                     _bus.Broadcast(new ShowDialogMessage(onClose => new DropStashDialog(
                         repo, index, label, subject, onClose)));
-            },
-            lane: _stashGen);
+            });
     }
 
     private bool LocalBranchExists(string name)
@@ -767,7 +767,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 "Apply",
                 () => ApplyStash(index, label, subject),
                 LucideIcons.Stash,
-                Enabled: !_isStashApplying),
+                Enabled: !_stashGen.InFlight),
             new RepoBarContextMenu.Item(
                 "Rename…",
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameStashDialog(

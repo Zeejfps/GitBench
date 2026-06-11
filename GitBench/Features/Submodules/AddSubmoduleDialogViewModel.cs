@@ -35,7 +35,7 @@ internal sealed class AddSubmoduleDialogViewModel : IDisposable
             Url.Value.Trim().Length > 0 && Path.Value.Trim().Length > 0
             && RefNameRules.Validate(Branch.Value.Trim(), "Branch") is null);
 
-        Add = new AsyncCommand(
+        Add = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -49,7 +49,7 @@ internal sealed class AddSubmoduleDialogViewModel : IDisposable
                     Branch: branch.Length > 0 ? branch : null,
                     Force: force);
                 var outcome = gitService.AddSubmodule(request.Primary, req);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

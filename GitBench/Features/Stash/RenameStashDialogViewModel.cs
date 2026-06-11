@@ -27,12 +27,12 @@ internal sealed class RenameStashDialogViewModel : IDisposable
 
         var gate = new Derived<bool>(() => Message.Value.Length > 0 && Message.Value != oldMessage);
 
-        Rename = new AsyncCommand(
+        Rename = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.RenameStash(request.Repo, index, Message.Value);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

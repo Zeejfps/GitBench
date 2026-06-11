@@ -54,6 +54,20 @@ internal sealed class AsyncCommand : ICommand
             : new Derived<bool>(() => !_isRunning.Value && gate.Value);
     }
 
+    /// <summary>
+    /// Outcome-typed entry point: <paramref name="work"/> returns a result hierarchy and the
+    /// command folds its failure case (or a thrown exception) into <see cref="Error"/>, so
+    /// call sites pass the service call directly instead of adapting it back to a string.
+    /// </summary>
+    public static AsyncCommand ForOutcome<T>(
+        IUiDispatcher dispatcher,
+        Func<T> work,
+        Action onSuccess,
+        IReadable<bool>? gate = null,
+        Action<string>? onError = null)
+        where T : IOutcome<T>
+        => new(dispatcher, () => work().FailureMessage, onSuccess, gate, onError);
+
     public void Execute()
     {
         if (!CanExecute.Value) return;

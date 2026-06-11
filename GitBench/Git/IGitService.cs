@@ -9,17 +9,17 @@ namespace GitBench.Git;
 
 public interface IGitService
 {
-    CommitSnapshot Load(Repo repo, int cap);
-    CommitDetails LoadDetails(Repo repo, string sha);
-    LocalChangesSnapshot GetLocalChanges(Repo repo);
+    Fetched<CommitSnapshot> Load(Repo repo, int cap);
+    Fetched<CommitDetails> LoadDetails(Repo repo, string sha);
+    Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo);
     GitStatusSummary GetStatusSummary(Repo repo);
-    BranchListing GetBranches(Repo repo);
-    void Stage(Repo repo, IReadOnlyList<string> paths);
-    void Unstage(Repo repo, IReadOnlyList<string> paths);
-    void ResetToParent(Repo repo, IReadOnlyList<string> paths);
-    string? DiscardChanges(Repo repo, IReadOnlyList<string> paths);
-    string? ApplyPatch(Repo repo, string patch, bool cached, bool reverse);
-    string? Commit(Repo repo, string message, bool amend);
+    Fetched<BranchListing> GetBranches(Repo repo);
+    GitOutcome Stage(Repo repo, IReadOnlyList<string> paths);
+    GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths);
+    GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths);
+    GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths);
+    GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse);
+    GitOutcome Commit(Repo repo, string message, bool amend);
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
     IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo);
     PushStatus GetPushStatus(Repo repo);
@@ -65,11 +65,11 @@ public interface IGitService
     string? GetMergeMessage(Repo repo);
     AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state);
-    IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary, out string? errorMessage);
+    IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary);
     GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
     GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
     GitOutcome PruneWorktrees(Repo primary);
-    IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary, out string? errorMessage);
+    IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary);
     GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request);
     MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request);
     GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force);
@@ -93,9 +93,6 @@ public interface IGitService
     // Resolves by keeping both sides: writes ours' content followed by theirs' content and stages.
     GitOutcome TakeBoth(Repo repo, string path);
     GitOutcome MarkResolved(Repo repo, string path);
-    // Ours/theirs/base blob text for a conflicted path (stages 2/3/1). Any side may be null
-    // when that stage is absent (add/add has no base, delete/modify is missing a side).
-    ConflictSides GetConflictSides(Repo repo, string path);
     // Context for the conflict-resolution UI: the in-progress operation plus the ours/theirs
     // commit metadata and per-side change kind. Returns null when the path isn't conflicted.
     ConflictContext? GetConflictContext(Repo repo, string path);
@@ -206,9 +203,6 @@ public enum ResetMode
 
 
 
-// Text of each conflict side for a path; null when that stage doesn't exist. ErrorMessage
-// is set only on an outright failure (not a git repo, etc.), not for a merely-absent side.
-public sealed record ConflictSides(string? Base, string? Ours, string? Theirs, string? ErrorMessage);
 
 public enum ConflictChangeKind { Modified, Added, Deleted }
 

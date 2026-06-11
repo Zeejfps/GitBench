@@ -186,6 +186,20 @@ Each old record type is independent, so this never needs a big-bang change:
 - 40+ `error != null || !outcome.Success` reconciliations become single switches with one fallback site.
 - Every flag-combination bug class (error-on-success, conflict-on-failure, stash-create-with-conflicts) becomes a compile error.
 
+## V2 (implemented)
+
+The follow-up pass extended the outcome design to everything the first pass didn't touch:
+
+1. **All remaining error conventions unified.** `Commit`/`DiscardChanges`/`ApplyPatch` (were null-means-success strings) and `Stage`/`Unstage`/`ResetToParent` (were throwing voids) now return `GitOutcome`. The dead `out string? errorMessage` params on `ListWorktrees`/`ListSubmodules` (every caller passed `out _`) are gone.
+2. **`Fetched<T>` for query reads** (`Git/Fetched.cs`): `Ok(T) | Failed(Message, Detail?)`, with an implicit `T → Ok` conversion and a `Map` combinator. `Load`, `LoadDetails`, `GetBranches`, and `GetLocalChanges` return it; `CommitSnapshot`, `BranchListing`, `LocalChangesSnapshot`, and `CommitDetails` lost their `ErrorMessage` fields (and `DetailsError`'s 13 dummy-field sentinel is deleted). A snapshot can no longer be both loaded and errored. `RepoSnapshotStore` caches `Fetched<T>` slices. The dead `GetConflictSides`/`ConflictSides` API was removed outright.
+3. **`AsyncCommand.ForOutcome`**: `IOutcome<TSelf>` gained a `FailureMessage` projection (null for every non-failure case — `Conflicted`/`Diverged` are deliberately not failures), so the ~24 dialogs pass the service call directly instead of adapting outcomes back to `string?`.
+4. **Lanes own re-entrancy**: `GenerationGuard.InFlight` + `ViewModelBase.TryRunBackground`/`TryRunOutcome` replace the hand-rolled `_isStashApplying`/`_isCheckingOutCommit`/`_isMovingBranch`/`_isApplyingCommit`/`_isContinuing` boolean guards. The in-flight flag clears even when a stale continuation is dropped — which fixed a latent bug where the operation banner's continue spinner could wedge forever (DoContinue shared the default lane with Reload).
+5. **Tests**: `GitBench.Tests/OutcomeTests.cs` pins the hierarchy semantics (FailureMessage projections, `Fetched.Map` detail preservation).
+
+Bugs surfaced by the typing along the way: `DiscardChangesViewModel.DoDiscard` silently ignored discard failures (now surfaced via the command's Error), and the stuck-spinner bug above.
+
+**Deferred:** splitting `GitService` into per-domain partial classes + role interfaces (large mechanical diff — do it as its own commit), `DiffResult.ErrorMessage` (its error case carries Path/Side context the render pipeline uses; needs a render-state redesign, not just a wrapper).
+
 ## Honorable mention
 
 `GitService.cs` at 3,534 lines with 32 ad-hoc `.Split()` parsing sites and 200+ line methods (`Load` at lines 87-305) deserves decomposition too — but item 1 shrinks it substantially as a side effect, so do that first and reassess.

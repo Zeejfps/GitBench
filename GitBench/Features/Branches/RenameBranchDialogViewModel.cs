@@ -33,14 +33,14 @@ internal sealed class RenameBranchDialogViewModel : IDisposable
         var gate = new Derived<bool>(() =>
             Name.Value.Length > 0 && Name.Value != oldName && RefNameRules.Validate(Name.Value, "Branch") is null);
 
-        Rename = new AsyncCommand(
+        Rename = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var newName = Name.Value;
                 var force = Force.Value;
                 var outcome = gitService.RenameBranch(request.Repo, oldName, newName, force);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

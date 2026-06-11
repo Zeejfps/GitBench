@@ -40,5 +40,4 @@ public sealed record CommitDetails(
     string Message,
     string MessageShort,
     IReadOnlyList<string> ParentShas,
-    IReadOnlyList<FileChange> Files,
-    string? ErrorMessage);
+    IReadOnlyList<FileChange> Files);

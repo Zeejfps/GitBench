@@ -20,12 +20,12 @@ internal sealed class ReconcilePullDialogViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Pull = new AsyncCommand(
+        Pull = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.Pull(repo, Strategy.Value);
-                return outcome is PullOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

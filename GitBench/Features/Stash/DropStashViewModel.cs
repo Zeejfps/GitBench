@@ -18,12 +18,12 @@ internal sealed class DropStashViewModel : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
-        Drop = new AsyncCommand(
+        Drop = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.DropStash(repo, index);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

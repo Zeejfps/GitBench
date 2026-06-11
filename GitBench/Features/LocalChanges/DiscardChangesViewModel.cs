@@ -32,8 +32,9 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         _gitService = gitService;
         _bus = bus;
 
-        var snapshot = _gitService.GetLocalChanges(_repo);
-        var rows = BuildRows(snapshot);
+        var rows = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
+            ? BuildRows(ok.Value)
+            : Array.Empty<DiscardFileRow>();
         var preChecked = ComputePreChecked(rows, request.Paths);
         Update(s => s with
         {
@@ -48,7 +49,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
             : $"Files ({s.CheckedPaths.Count}/{s.Files.Count})");
 
         var canDiscard = Slice(s => s.CheckedPaths.Count > 0);
-        Discard = new AsyncCommand(dispatcher, DoDiscard, OnDiscardSucceeded, canDiscard);
+        Discard = AsyncCommand.ForOutcome(dispatcher, DoDiscard, OnDiscardSucceeded, canDiscard);
     }
 
     public void ToggleFile(string path) =>
@@ -59,15 +60,14 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
             return s with { CheckedPaths = next };
         });
 
-    private string? DoDiscard()
+    private GitOutcome DoDiscard()
     {
         var state = State.Value;
         var paths = new List<string>(state.CheckedPaths.Count);
         foreach (var f in state.Files)
             if (state.CheckedPaths.Contains(f.Path)) paths.Add(f.Path);
 
-        _gitService.DiscardChanges(_repo, paths);
-        return null;
+        return _gitService.DiscardChanges(_repo, paths);
     }
 
     private void OnDiscardSucceeded()

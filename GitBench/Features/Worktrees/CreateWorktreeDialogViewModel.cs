@@ -36,7 +36,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDisposable
             Path.Value.Trim().Length > 0 && StartPoint.Value.Trim().Length > 0
             && RefNameRules.Validate(NewBranchName.Value.Trim(), "Branch") is null);
 
-        Create = new AsyncCommand(
+        Create = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -50,7 +50,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDisposable
                     NewBranchName: newBranch.Length > 0 ? newBranch : null,
                     Force: force);
                 var outcome = gitService.AddWorktree(request.Primary, req);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

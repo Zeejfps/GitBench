@@ -40,7 +40,9 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
         _gitService = gitService;
         _bus = bus;
 
-        var snapshot = _gitService.GetLocalChanges(_repo);
+        var snapshot = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
+            ? ok.Value
+            : new LocalChangesSnapshot(_repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>());
         var rows = BuildRows(snapshot, _untrackedPaths);
         var preChecked = ComputePreChecked(rows, selectionStore.UnstagedPaths.Value);
         Update(s => s with
@@ -58,7 +60,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
         KeepStaged = Slice(s => s.KeepStaged);
 
         var canStash = Slice(s => s.Message.Length > 0 && s.CheckedPaths.Count > 0);
-        Stash = new AsyncCommand(dispatcher, DoStash, OnStashSucceeded, canStash);
+        Stash = AsyncCommand.ForOutcome(dispatcher, DoStash, OnStashSucceeded, canStash);
     }
 
     public void SetMessage(string message) =>
@@ -77,7 +79,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
 
     public void RequestFocusMessage() => FocusMessageRequested?.Invoke();
 
-    private string? DoStash()
+    private GitOutcome DoStash()
     {
         var state = State.Value;
         var paths = new List<string>(state.CheckedPaths.Count);
@@ -89,8 +91,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
             if (_untrackedPaths.Contains(f.Path)) includeUntracked = true;
         }
 
-        var outcome = _gitService.CreateStash(_repo, state.Message, includeUntracked, state.KeepStaged, paths);
-        return outcome is GitOutcome.Failed failed ? failed.Message : null;
+        return _gitService.CreateStash(_repo, state.Message, includeUntracked, state.KeepStaged, paths);
     }
 
     private void OnStashSucceeded()

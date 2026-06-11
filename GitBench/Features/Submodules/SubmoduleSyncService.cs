@@ -112,7 +112,7 @@ internal sealed class SubmoduleSyncService : IDisposable
 
         // ListSubmodules only reads repo.Path, so a throwaway Repo standing in for this level is fine.
         var probe = new Repo(Guid.NewGuid(), repoPath, System.IO.Path.GetFileName(repoPath.TrimEnd('/', '\\')));
-        var infos = _git.ListSubmodules(probe, out _);
+        var infos = _git.ListSubmodules(probe);
 
         var nodes = new List<SubmoduleNode>(infos.Count);
         foreach (var info in infos)

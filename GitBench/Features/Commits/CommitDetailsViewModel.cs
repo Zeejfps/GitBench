@@ -126,10 +126,11 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         RunBackground<CommitDetailsRenderState>(
             work: () =>
             {
-                var details = _gitService.LoadDetails(repo, sha);
-                if (details.ErrorMessage != null)
-                    return (new CommitDetailsRenderState.Placeholder(details.ErrorMessage), null);
+                var fetched = _gitService.LoadDetails(repo, sha);
+                if (fetched is Fetched<CommitDetails>.Failed failed)
+                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
 
+                var details = ((Fetched<CommitDetails>.Ok)fetched).Value;
                 var pointerChanges = _gitService.GetSubmodulePointerChanges(repo, sha);
                 if (pointerChanges.Count > 0)
                     details = MergePointerChanges(details, pointerChanges);

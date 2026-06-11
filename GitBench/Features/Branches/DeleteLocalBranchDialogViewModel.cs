@@ -37,10 +37,10 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
         HasUpstream = !string.IsNullOrEmpty(request.UpstreamRemote)
                       && !string.IsNullOrEmpty(request.UpstreamBranch);
 
-        Delete = new AsyncCommand(dispatcher, DoDelete, OnDeleteSucceeded);
+        Delete = AsyncCommand.ForOutcome(dispatcher, DoDelete, OnDeleteSucceeded);
     }
 
-    private string? DoDelete()
+    private GitOutcome DoDelete()
     {
         var force = Force.Value;
         var deleteRemote = DeleteRemote.Value && HasUpstream;
@@ -48,7 +48,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
         var remoteBranch = _request.UpstreamBranch;
 
         if (_gitService.DeleteBranch(_request.Repo, _request.BranchName, force) is GitOutcome.Failed local)
-            return local.Message;
+            return local;
 
         if (deleteRemote)
         {
@@ -58,7 +58,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
             if (remote is GitOutcome.Failed failed)
                 _partialFailure = failed;
         }
-        return null;
+        return GitOutcome.Ok;
     }
 
     private void OnDeleteSucceeded()

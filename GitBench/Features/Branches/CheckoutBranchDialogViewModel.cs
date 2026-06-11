@@ -30,13 +30,18 @@ internal sealed class CheckoutBranchDialogViewModel : IDisposable
         NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
         var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
 
-        Checkout = new AsyncCommand(
+        Checkout = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.CheckoutRemoteBranch(
-                    request.Repo, Name.Value, request.RemoteName, request.RemoteBranchName, Track.Value);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                    request.Repo, 
+                    Name.Value, 
+                    request.RemoteName, 
+                    request.RemoteBranchName, 
+                    Track.Value
+                );
+                return outcome;
             },
             // Close before broadcasting: an error broadcast triggers OverlayView to swap in the
             // error dialog, and a stale Close() afterwards would dismiss that brand-new dialog

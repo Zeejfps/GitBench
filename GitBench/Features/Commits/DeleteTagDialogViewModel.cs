@@ -21,12 +21,12 @@ internal sealed class DeleteTagDialogViewModel : IDisposable
     {
         var repoId = request.Repo.Id;
 
-        Delete = new AsyncCommand(
+        Delete = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
                 var outcome = gitService.DeleteTag(request.Repo, request.TagName, DeleteFromRemotes.Value);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

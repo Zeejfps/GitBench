@@ -26,9 +26,9 @@ public sealed record LocalChangesData(
 // IRepoStatusStore instead, which covers all repos rather than just the active + warm set.
 internal interface IRepoSnapshotStore
 {
-    IReadable<CommitSnapshot?> Commits { get; }
-    IReadable<BranchListing?> Branches { get; }
-    IReadable<LocalChangesData?> LocalChanges { get; }
+    IReadable<Fetched<CommitSnapshot>?> Commits { get; }
+    IReadable<Fetched<BranchListing>?> Branches { get; }
+    IReadable<Fetched<LocalChangesData>?> LocalChanges { get; }
 }
 
 /// <summary>
@@ -52,13 +52,13 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     // Set in Start once the UI dispatcher exists (it's created inside GuiApp). Null until then.
     private IUiDispatcher? _dispatcher;
 
-    private readonly State<CommitSnapshot?> _commits = new(null);
-    private readonly State<BranchListing?> _branches = new(null);
-    private readonly State<LocalChangesData?> _local = new(null);
+    private readonly State<Fetched<CommitSnapshot>?> _commits = new(null);
+    private readonly State<Fetched<BranchListing>?> _branches = new(null);
+    private readonly State<Fetched<LocalChangesData>?> _local = new(null);
 
-    private readonly RepoSnapshotCache<CommitSnapshot> _commitsCache = new();
-    private readonly RepoSnapshotCache<BranchListing> _branchesCache = new();
-    private readonly RepoSnapshotCache<LocalChangesData> _localCache = new();
+    private readonly RepoSnapshotCache<Fetched<CommitSnapshot>> _commitsCache = new();
+    private readonly RepoSnapshotCache<Fetched<BranchListing>> _branchesCache = new();
+    private readonly RepoSnapshotCache<Fetched<LocalChangesData>> _localCache = new();
 
     private readonly GenerationGuard _commitsLane = new();
     private readonly GenerationGuard _branchesLane = new();
@@ -76,9 +76,9 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private IDisposable? _commitCreatedSub;
     private IDisposable? _submodulesSub;
 
-    public IReadable<CommitSnapshot?> Commits => _commits;
-    public IReadable<BranchListing?> Branches => _branches;
-    public IReadable<LocalChangesData?> LocalChanges => _local;
+    public IReadable<Fetched<CommitSnapshot>?> Commits => _commits;
+    public IReadable<Fetched<BranchListing>?> Branches => _branches;
+    public IReadable<Fetched<LocalChangesData>?> LocalChanges => _local;
 
     public RepoSnapshotStore(
         IRepoRegistry registry,
@@ -230,15 +230,15 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private void ReloadCommits(Repo repo) =>
         LoadSlice(repo, _commitsLane, _commitsCache, _commits, LoadCommits);
 
-    // Unlike GetBranches/GetLocalChanges (which return a snapshot carrying ErrorMessage), the
-    // commit Load can throw. Wrap it into an error snapshot so the failure reaches the view model
-    // (which renders it) instead of being swallowed into a perpetual "Loading…".
-    private CommitSnapshot LoadCommits(Repo repo)
+    // Unlike GetBranches/GetLocalChanges, the commit Load can throw. Fold the throw into
+    // Failed so the failure reaches the view model (which renders it) instead of being
+    // swallowed into a perpetual "Loading…".
+    private Fetched<CommitSnapshot> LoadCommits(Repo repo)
     {
         try { return _git.Load(repo, MaxCommits); }
         catch (Exception ex)
         {
-            return new CommitSnapshot(repo.Id, repo.Path, Array.Empty<CommitNode>(), 0, false, ex.Message);
+            return new Fetched<CommitSnapshot>.Failed(ex.Message);
         }
     }
 
@@ -248,14 +248,16 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private void ReloadLocal(Repo repo) =>
         LoadSlice(repo, _localLane, _localCache, _local, LoadLocalChanges);
 
-    private LocalChangesData LoadLocalChanges(Repo repo)
+    private Fetched<LocalChangesData> LoadLocalChanges(Repo repo)
+        => _git.GetLocalChanges(repo).Map(snap => BuildLocalData(repo, snap));
+
+    private LocalChangesData BuildLocalData(Repo repo, LocalChangesSnapshot snap)
     {
-        var snap = _git.GetLocalChanges(repo);
         IReadOnlyList<SubmoduleInfo> drift = Array.Empty<SubmoduleInfo>();
         // Submodules are one level deep in our model, so a submodule row has no nested drift.
         if (!repo.IsSubmodule)
         {
-            var subs = _git.ListSubmodules(repo, out _);
+            var subs = _git.ListSubmodules(repo);
             if (subs.Count > 0)
             {
                 var driftList = new List<SubmoduleInfo>();
@@ -277,13 +279,13 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     // ---- warm loads (non-active repos: refresh the cache only, never the exposed state) ----
 
     private void WarmCommits(Repo repo) =>
-        WarmSlice(repo, _commitsCache, LoadCommits, s => s.ErrorMessage != null);
+        WarmSlice(repo, _commitsCache, LoadCommits, static s => s is Fetched<CommitSnapshot>.Failed);
 
     private void WarmBranches(Repo repo) =>
-        WarmSlice(repo, _branchesCache, r => _git.GetBranches(r), b => b.ErrorMessage != null);
+        WarmSlice(repo, _branchesCache, r => _git.GetBranches(r), static b => b is Fetched<BranchListing>.Failed);
 
     private void WarmLocal(Repo repo) =>
-        WarmSlice(repo, _localCache, LoadLocalChanges, d => d.Snapshot.ErrorMessage != null);
+        WarmSlice(repo, _localCache, LoadLocalChanges, static d => d is Fetched<LocalChangesData>.Failed);
 
     // Background-refresh a warm (non-active) repo's cached slice so a later switch-back is instant
     // and current. Unlike LoadSlice it never touches the exposed active State — it only updates the

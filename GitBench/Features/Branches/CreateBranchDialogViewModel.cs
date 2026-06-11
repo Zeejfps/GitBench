@@ -36,7 +36,7 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
         var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
         NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
 
-        Create = new AsyncCommand(
+        Create = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
@@ -45,7 +45,7 @@ internal sealed class CreateBranchDialogViewModel : IDisposable
                 if (startPoint.Length == 0) startPoint = "HEAD";
                 var checkout = Checkout.Value;
                 var outcome = gitService.CreateBranch(repo, name, startPoint, checkout);
-                return outcome is GitOutcome.Failed failed ? failed.Message : null;
+                return outcome;
             },
             onSuccess: () =>
             {

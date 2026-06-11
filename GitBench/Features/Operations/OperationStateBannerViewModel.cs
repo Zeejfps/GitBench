@@ -14,7 +14,9 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private readonly SpinnerAnimation _spinner;
-    private bool _isContinuing;
+    // Exclusive lane for `git X --continue`. Deliberately off the default Gen lane: Reload()
+    // runs there, and a reload landing mid-continue must not drop the continue's result.
+    private readonly GenerationGuard _continueLane;
 
     public IReadable<RepoOperationState> State { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
@@ -34,6 +36,7 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
         _gitService = gitService;
         _bus = bus;
         _spinner = new SpinnerAnimation(ticker);
+        _continueLane = CreateLane();
 
         State = Slice(s => s.State);
         Abort = new Command(DoAbort);
@@ -57,21 +60,17 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
 
     private void DoContinue()
     {
-        if (_isContinuing) return;
         var repo = _registry.Active.Value;
         var state = State.Value;
         if (repo == null || state == RepoOperationState.None) return;
 
-        _isContinuing = true;
-        _spinner.Start();
-
         var service = _gitService;
         var bus = _bus;
-        RunOutcome(
+        var started = TryRunOutcome(
+            _continueLane,
             () => service.ContinueOperation(repo, state),
             outcome =>
             {
-                _isContinuing = false;
                 _spinner.Stop();
                 switch (outcome)
                 {
@@ -87,6 +86,7 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
                         break;
                 }
             });
+        if (started) _spinner.Start();
     }
 
     private void Reload()
