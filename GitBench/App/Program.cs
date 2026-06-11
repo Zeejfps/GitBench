@@ -1,14 +1,8 @@
 using System.Runtime.InteropServices;
-using GitBench;
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Identity;
-using GitBench.Features.Repos;
-using GitBench.Features.Submodules;
-using GitBench.Features.Worktrees;
-using GitBench.Git;
-using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Theming;
 using Velopack;
@@ -37,27 +31,19 @@ var builder = GuiApp.CreateBuilder(new StartupConfig
     WindowHeight = initialPrefs.WindowHeight,
     IsUndecorated = false
 });
-var services = builder.Services;
+using var services = builder.Services;
 services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
-var registry = services.Require<IRepoRegistry>();
-var gitService = services.Require<IGitService>();
-var repoActivity = services.Require<IRepoActivityTracker>();
-var messageBus = services.Require<IMessageBus>();
-var themeMode = services.Require<State<ThemeMode>>();
 var updateService = services.Require<UpdateService>();
-
-using var snapshotStore = new RepoSnapshotStore(registry, gitService, messageBus);
-services.AddService<IRepoSnapshotStore>(snapshotStore);
-using var operationsStore = new RepoOperationsStore(registry, gitService, messageBus);
-services.AddService<IRepoOperationsStore>(operationsStore);
-using var statusStore = new RepoStatusStore(operationsStore, registry, gitService, messageBus);
-services.AddService<IRepoStatusStore>(statusStore);
-
 var appView = new AppView(preferences, updateService);
 using var appHost = builder.UseContent(appView).Build();
 appHost.OnWindowResized += preferences.SetWindowSize;
 
+// The dispatcher is registered during Build, so background services (watchers, sync, stores)
+// can only spin up now.
+services.CreateEagerSingletons();
+
+var themeMode = services.Require<State<ThemeMode>>();
 appHost.SetTitleBarDark(themeMode.Value == ThemeMode.Dark);
 themeMode.Changed += mode => appHost.SetTitleBarDark(mode == ThemeMode.Dark);
 
@@ -65,23 +51,8 @@ var fontAssembly = typeof(LucideIcons).Assembly;
 appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
 appHost.RegisterFont(DiffOptions.MonoFontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
 
-services.AddService<ITooltipService>(new PopupTooltipService(
-    services.Require<IPopupWindowFactory>(),
-    services.Require<IWindowCoordinates>(),
-    measureContext: services));
-
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     appHost.SetIcon("Assets/commit_bench_icon.rgba");
-
-var dispatcher = services.Require<IUiDispatcher>();
-using var repoWatchers = new RepoWatcherService(registry, dispatcher, messageBus, repoActivity);
-using var worktreeSync = new WorktreeSyncService(registry, gitService, dispatcher, messageBus);
-using var submoduleSync = new SubmoduleSyncService(registry, gitService, dispatcher, messageBus);
-using var submodulePointerSync = new SubmodulePointerSyncService(registry, gitService, dispatcher, messageBus);
-
-snapshotStore.Start(dispatcher);
-operationsStore.Start(dispatcher);
-statusStore.Start(dispatcher);
 
 // Native macOS menu bar (the call is macOS-guarded internally; a no-op elsewhere). The About
 // dialog it opens shows the app icon, so load it into the canvas first. Scoped to macOS — the
@@ -92,6 +63,8 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
     try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon_mac.png"); }
     catch (Exception ex) { Console.WriteLine($"[About] icon load failed: {ex.Message}"); }
 }
+
+var dispatcher = services.Require<IUiDispatcher>();
 services.InstallNativeAppMenu(themeMode, updateService, dispatcher);
 
 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
