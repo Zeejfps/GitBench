@@ -1,6 +1,7 @@
 using ZGF.Gui.Views;
 using GitBench.Theming;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
@@ -15,44 +16,38 @@ namespace GitBench.Features.Diff;
 /// it tears the window down. Native title-bar closes route back through the view model so its
 /// observable list stays the single source of truth.
 /// </summary>
-internal sealed class DiffWindowsView : ContainerView, IBind<DiffWindowsViewModel>
+internal sealed class DiffWindowsView : ContainerView
 {
     private readonly Dictionary<DiffWindowViewModel, ISecondaryWindow> _windows = new();
-    private DiffWindowsViewModel? _vm;
-    private IDisposable? _listSubscription;
+    private readonly DiffWindowsViewModel _vm;
+    private readonly ISecondaryWindowFactory _windowFactory;
 
-    // Native title-bar theming (Windows/macOS). Resolved on bind; null on platforms without a
-    // window-chrome implementation (e.g. Linux), in which case title-bar theming is skipped.
-    private IWindowChrome? _windowChrome;
-    private State<ThemeMode>? _themeMode;
-    private IDisposable? _themeSubscription;
+    // Native title-bar theming (Windows/macOS). Resolved from the build context; null on
+    // platforms without a window-chrome implementation (e.g. Linux), in which case title-bar
+    // theming is skipped.
+    private readonly IWindowChrome? _windowChrome;
+    private readonly State<ThemeMode>? _themeMode;
 
-    public DiffWindowsView()
+    public DiffWindowsView(Context ctx)
     {
         // Logic-only view: it never paints or takes input, so pin it to zero size.
         Width = 0;
         Height = 0;
-        this.UseViewModel<DiffWindowsViewModel>(this);
-    }
 
-    public void Bind(DiffWindowsViewModel vm)
-    {
-        // Re-bind safety: drop any previous wiring before adopting the new VM.
-        _listSubscription?.Dispose();
-        _themeSubscription?.Dispose();
-        foreach (var win in _windows.Values) win.Close();
-        _windows.Clear();
+        _windowFactory = ctx.Require<ISecondaryWindowFactory>();
+        _windowChrome = ctx.Get<IWindowChrome>();
+        _themeMode = ctx.Get<State<ThemeMode>>();
 
+        var vm = ctx.Require<DiffWindowsViewModel>();
         _vm = vm;
-        _listSubscription = vm.Windows.Subscribe(OnWindowsChanged);
+        this.UseViewModel(() => vm, _ => { });
+        this.Use(() => vm.Windows.Subscribe(OnWindowsChanged));
 
         // Match every open window's native title bar to the active theme, like the main window
-        // (see Program.cs). Subscribe fires immediately, then on each toggle, re-theming all
+        // (see Program.cs). The binding fires immediately, then on each toggle, re-theming all
         // open windows.
-        _windowChrome = this.Context?.Get<IWindowChrome>();
-        _themeMode = this.Context?.Get<State<ThemeMode>>();
         if (_windowChrome != null && _themeMode != null)
-            _themeSubscription = _themeMode.Subscribe(_ =>
+            this.Bind(_themeMode, _ =>
             {
                 foreach (var win in _windows.Values) ApplyTitleBarTheme(win);
             });
@@ -86,12 +81,13 @@ internal sealed class DiffWindowsView : ContainerView, IBind<DiffWindowsViewMode
     {
         if (_windows.ContainsKey(windowVm)) return;
 
-        var win = this.Context!.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
+        var win = _windowFactory.Open(new SecondaryWindowRequest
         {
             BuildRoot = ctx =>
             {
                 using (CompatUi.Push(ctx))
-                    return ViewContexts.RegisterRoot(new DiffWindowRootView(windowVm), ctx);
+                    return ViewContexts.RegisterRoot(
+                        new DiffWindowRootView { Model = windowVm }.BuildView(ctx), ctx);
             },
             Title = windowVm.Title,
             Width = 900,
@@ -99,7 +95,7 @@ internal sealed class DiffWindowsView : ContainerView, IBind<DiffWindowsViewMode
         });
         // Native close → drive removal through the view model so its list stays authoritative;
         // that removal calls CloseOsWindow below (idempotent if the window is already gone).
-        win.Closed += () => _vm?.Close(windowVm);
+        win.Closed += () => _vm.Close(windowVm);
         _windows[windowVm] = win;
         ApplyTitleBarTheme(win);
     }

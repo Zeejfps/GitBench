@@ -1,5 +1,5 @@
 using GitBench.Features.Diff;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
@@ -17,9 +17,11 @@ internal sealed class LfsBadgeView : RectView
 {
     private readonly State<LfsBadge> _state = new(LfsBadge.None);
 
-    public LfsBadgeView()
+    public LfsBadgeView(Context ctx)
     {
-        var label = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+
+        var label = new TextView(ctx.Canvas)
         {
             FontSize = 10f,
             VerticalTextAlignment = TextAlignment.Center,
@@ -31,18 +33,18 @@ internal sealed class LfsBadgeView : RectView
             LfsBadge.NotTracked => "Not in LFS",
             _ => string.Empty,
         });
-        label.BindThemedTextColor(s => _state.Value == LfsBadge.Tracked
-            ? s.DiffView.LfsBadgeTrackedText
-            : s.DiffView.LfsBadgeUntrackedText);
+        label.BindTextColor(() => _state.Value == LfsBadge.Tracked
+            ? theme.Styles.Value.DiffView.LfsBadgeTrackedText
+            : theme.Styles.Value.DiffView.LfsBadgeUntrackedText);
 
         Height = 16f;
         BorderRadius = BorderRadiusStyle.All(8);
         Padding = new PaddingStyle { Left = 7, Right = 7 };
         Children.Add(label);
 
-        this.BindThemedBackgroundColor(s => _state.Value == LfsBadge.Tracked
-            ? s.DiffView.LfsBadgeTrackedBackground
-            : s.DiffView.LfsBadgeUntrackedBackground);
+        this.BindBackgroundColor(() => _state.Value == LfsBadge.Tracked
+            ? theme.Styles.Value.DiffView.LfsBadgeTrackedBackground
+            : theme.Styles.Value.DiffView.LfsBadgeUntrackedBackground);
         this.BindIsVisible(_state, s => s != LfsBadge.None);
     }
 

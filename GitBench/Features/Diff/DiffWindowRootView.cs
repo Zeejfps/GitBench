@@ -1,44 +1,47 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// Root view hosted inside a pop-out diff window: a <see cref="DiffWindowToolbar"/> (file
+/// Root widget hosted inside a pop-out diff window: a <see cref="DiffWindowToolbar"/> (file
 /// path + LFS + whole-file Stage/Unstage) above the headerless <see cref="DiffView"/> body.
-/// Bound to a <see cref="DiffWindowViewModel"/> via the standard IBind flow.
+/// Bound to a <see cref="DiffWindowViewModel"/> supplied by the opening
+/// <see cref="DiffWindowsView"/>.
 /// </summary>
-internal sealed class DiffWindowRootView : ContainerView, IBind<DiffWindowViewModel>
+internal sealed record DiffWindowRootView : Widget
 {
-    private readonly DiffView _diff = new();
-    private readonly DiffWindowToolbar _toolbar;
+    public required DiffWindowViewModel Model { get; init; }
 
-    public DiffWindowRootView(DiffWindowViewModel vm)
+    protected override View CreateView(Context ctx)
     {
-        _toolbar = new DiffWindowToolbar(vm.Title);
+        var vm = Model;
+
+        var diff = new DiffView(ctx);
+        var toolbar = new DiffWindowToolbar(ctx) { Title = vm.Title };
 
         var layout = new BorderLayoutView
         {
-            North = _toolbar,
-            Center = _diff,
+            North = toolbar,
+            Center = diff,
         };
 
         var panel = new RectView { Children = { layout } };
-        panel.BindThemedBackgroundColor(s => s.DiffView.PanelBackground);
-        AddChildToSelf(panel);
+        panel.BindThemedBackgroundColor(ctx.Theme(), s => s.DiffView.PanelBackground);
 
         // The pop-out has no file list to host the "F" full-file toggle, so wire it at the
         // window root instead (the toolbar button is the other entry point).
-        this.UseController(_ => new DiffWindowKeyController(this, vm.Diff.ToggleFullFile));
+        panel.UseController(ctx.Require<InputSystem>(),
+            () => new DiffWindowKeyController(panel, vm.Diff.ToggleFullFile));
 
-        Bind(vm);
-    }
+        toolbar.Bind(vm.Diff);
+        diff.Bind(vm.Diff);
 
-    public void Bind(DiffWindowViewModel vm)
-    {
-        _toolbar.Bind(vm.Diff);
-        _diff.Bind(vm.Diff);
+        return panel;
     }
 }

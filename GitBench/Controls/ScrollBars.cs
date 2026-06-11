@@ -85,7 +85,17 @@ internal static class ScrollBars
 
     public static HorizontalScrollBarView CreateHorizontal()
     {
-        var bar = new HorizontalScrollBarView(CompatUi.Input)
+        return CreateHorizontalBar(CompatUi.Input);
+    }
+
+    public static HorizontalScrollBarView CreateHorizontal(Context ctx)
+    {
+        return CreateHorizontalBar(ctx.Require<InputSystem>());
+    }
+
+    private static HorizontalScrollBarView CreateHorizontalBar(InputSystem input)
+    {
+        var bar = new HorizontalScrollBarView(input)
         {
             TrackBorderSize = new BorderSizeStyle { Top = 1 },
         };
@@ -101,7 +111,7 @@ internal static class ScrollBars
             };
         });
         StyleThumb(bar.Thumb);
-        bar.UseController(_ => new HorizontalScrollBarViewController(bar));
+        bar.UseController(input, () => new HorizontalScrollBarViewController(bar));
         return bar;
     }
 

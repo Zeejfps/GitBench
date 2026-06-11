@@ -87,8 +87,8 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
             _innerSplit.AdjustBottomFractionByPixels,
             h => innerSplitterHovered.Value = h));
 
-        _diffView = new DiffView();
-        _diffHeader = new DiffPaneHeader();
+        _diffView = new DiffView(CompatUi.Current);
+        _diffHeader = new DiffPaneHeader(CompatUi.Current);
 
         var diffPane = new BorderLayoutView
         {

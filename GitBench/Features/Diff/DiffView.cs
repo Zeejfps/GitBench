@@ -1,8 +1,9 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Git;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.Diff;
@@ -20,7 +21,7 @@ namespace GitBench.Features.Diff;
 /// Rendering is virtualized — only rows intersecting the viewport are drawn (see
 /// <see cref="DiffContentView"/>).
 /// </remarks>
-internal sealed class DiffView : ContainerView, IBind<DiffViewModel>
+internal sealed class DiffView : ContainerView
 {
     private readonly DiffContentView _content;
     private readonly RectView _panel;
@@ -30,11 +31,11 @@ internal sealed class DiffView : ContainerView, IBind<DiffViewModel>
     private ConflictResolveView? _conflictView;
     private View? _panelChild;
 
-    public DiffView()
+    public DiffView(Context ctx)
     {
-        _content = new DiffContentView();
-        var vScrollBar = ScrollBars.CreateVertical();
-        var hScrollBar = ScrollBars.CreateHorizontal();
+        _content = new DiffContentView(ctx);
+        var vScrollBar = ScrollBars.CreateVertical(ctx);
+        var hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         _diffBody = new BorderLayoutView
         {
@@ -45,19 +46,20 @@ internal sealed class DiffView : ContainerView, IBind<DiffViewModel>
 
         _panel = new RectView { Children = { _diffBody } };
         _panelChild = _diffBody;
-        _panel.BindThemedBackgroundColor(s => s.DiffView.PanelBackground);
+        _panel.BindThemedBackgroundColor(ctx.Theme(), s => s.DiffView.PanelBackground);
         AddChildToSelf(_panel);
 
-        this.Use(_ => new ScrollSyncController(_content, vScrollBar, hScrollBar));
+        this.Use(() => new ScrollSyncController(_content, vScrollBar, hScrollBar));
     }
 
     public void Bind(DiffViewModel vm)
     {
-        _vm = vm;
-        vm.RenderState.Subscribe(OnRenderState);
         _content.OnStageHunk = vm.StageHunk;
         _content.OnUnstageHunk = vm.UnstageHunk;
         _content.OnDiscardHunk = vm.RequestDiscardHunk;
+        if (ReferenceEquals(_vm, vm)) return;
+        _vm = vm;
+        this.Bind(vm.RenderState, OnRenderState);
     }
 
     private void OnRenderState(DiffRenderState state)

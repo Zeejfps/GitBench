@@ -2,9 +2,11 @@ using GitBench.Controls;
 using GitBench.Features.StatusBar;
 using GitBench.Git;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -16,28 +18,32 @@ namespace GitBench.Features.Diff;
 /// Per-hunk staging stays inline in the <see cref="DiffView"/> body. This replaces the
 /// embedded panes' collapse header, which makes no sense in a standalone window.
 /// </summary>
-internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
+internal sealed class DiffWindowToolbar : ContainerView
 {
     public const float ToolbarHeight = 28f;
 
     private readonly State<DiffSide?> _side = new(null);
     private readonly State<bool> _fullFileActive = new(false);
-    private readonly LfsBadgeView _lfsBadge = new();
+    private readonly LfsBadgeView _lfsBadge;
     private readonly TextView _title;
 
+    private DiffViewModel? _vm;
     private Action? _onStageFile;
     private Action? _onUnstageFile;
     private Action? _onToggleFullFile;
 
-    public DiffWindowToolbar(string title)
+    public DiffWindowToolbar(Context ctx)
     {
-        _title = new TextView(CompatUi.Canvas)
+        var input = ctx.Require<InputSystem>();
+        var theme = ctx.Theme();
+        _lfsBadge = new LfsBadgeView(ctx);
+
+        _title = new TextView(ctx.Canvas)
         {
-            Text = title,
             FontSize = 12f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _title.BindThemedTextColor(s => s.DiffView.HeaderTitleIdle);
+        _title.BindThemedTextColor(theme, s => s.DiffView.HeaderTitleIdle);
 
         var bar = new RectView
         {
@@ -54,35 +60,42 @@ internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
                     {
                         new FlexItem { Grow = 1, Child = _title },
                         _lfsBadge,
-                        BuildFullFileToggleButton(),
-                        BuildStageButton(),
+                        BuildFullFileToggleButton(ctx, input, theme),
+                        BuildStageButton(ctx, input, theme),
                     },
                 },
             },
         };
-        bar.BindThemedBackgroundColor(s => s.DiffView.HeaderBackgroundIdle);
-        bar.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.DiffView.HeaderBorderBottom });
+        bar.BindThemedBackgroundColor(theme, s => s.DiffView.HeaderBackgroundIdle);
+        bar.BindThemedBorderColor(theme, s => new BorderColorStyle { Bottom = s.DiffView.HeaderBorderBottom });
 
         AddChildToSelf(bar);
     }
 
+    public string Title
+    {
+        set => _title.Text = value;
+    }
+
     public void Bind(DiffViewModel vm)
     {
-        vm.LfsStatus.Subscribe(_lfsBadge.SetStatus);
-        vm.CurrentSide.Subscribe(s => _side.Value = s);
         _onStageFile = vm.StageFile;
         _onUnstageFile = vm.UnstageFile;
         _onToggleFullFile = vm.ToggleFullFile;
-        vm.Mode.Subscribe(m => _fullFileActive.Value = m == DiffViewMode.FullFile);
+        if (ReferenceEquals(_vm, vm)) return;
+        _vm = vm;
+        this.Bind(vm.LfsStatus, _lfsBadge.SetStatus);
+        this.Bind(vm.CurrentSide, s => _side.Value = s);
+        this.Bind(vm.Mode, m => _fullFileActive.Value = m == DiffViewMode.FullFile);
     }
 
     // Mirrors the embedded header's full-file toggle. The pop-out window opens in Diff mode
     // (fresh VM), so this starts inactive.
-    private View BuildFullFileToggleButton()
+    private View BuildFullFileToggleButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme)
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -91,12 +104,14 @@ internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 16f,
         };
-        icon.BindThemedTextColor(s => _fullFileActive.Value
-            ? s.DiffView.HeaderToggleActive
-            : hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        icon.BindTextColor(() => _fullFileActive.Value
+            ? theme.Styles.Value.DiffView.HeaderToggleActive
+            : hovered.Value
+                ? theme.Styles.Value.DiffView.HeaderTitleHover
+                : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var btn = new RectView { Children = { icon } };
-        btn.UseController(_ => new HoverableButtonController(
+        btn.UseController(input, () => new HoverableButtonController(
             () => _onToggleFullFile?.Invoke(),
             h => hovered.Value = h));
         return btn;
@@ -104,18 +119,20 @@ internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
 
     // Side-aware file-level action: "Stage" for unstaged changes, "Unstage" for staged, hidden
     // for commit-side (history) diffs, which aren't stageable.
-    private View BuildStageButton()
+    private View BuildStageButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme)
     {
         var hovered = new State<bool>(false);
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(ctx.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
         };
         label.BindText(_side, s => s == DiffSide.Staged ? "Unstage" : "Stage");
-        label.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        label.BindTextColor(() => hovered.Value
+            ? theme.Styles.Value.DiffView.HeaderTitleHover
+            : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var btn = new RectView
         {
@@ -124,7 +141,7 @@ internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
             Children = { label },
         };
         btn.BindIsVisible(_side, s => s is DiffSide.Unstaged or DiffSide.Staged);
-        btn.UseController(_ => new HoverableButtonController(
+        btn.UseController(input, () => new HoverableButtonController(
             () =>
             {
                 if (_side.Value == DiffSide.Staged) _onUnstageFile?.Invoke();

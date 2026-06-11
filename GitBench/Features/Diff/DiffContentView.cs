@@ -1,7 +1,9 @@
 using GitBench.Git;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -129,8 +131,11 @@ internal sealed class DiffContentView : View, IScrollableContent
     private float _lastVerticalScale = -1f;
     private float _lastHorizontalScale = -1f;
 
-    public DiffContentView()
+    public DiffContentView(Context ctx)
     {
+        var input = ctx.Require<InputSystem>();
+        var theme = ctx.Theme();
+
         _list = new VirtualRowListView
         {
             RowHeight = AssumedFontSize, // placeholder until canvas-derived metrics resolve
@@ -140,10 +145,10 @@ internal sealed class DiffContentView : View, IScrollableContent
         _list.HorizontalWheelHandler = OnHorizontalWheel;
 
         AddChildToSelf(_list);
-        _list.UseController(_ => new VirtualRowListController(_list));
-        this.UseController(_ => new DiffMouseController(this), EventPhaseFilter.Capture);
+        _list.UseController(input, () => new VirtualRowListController(_list));
+        this.UseController(input, () => new DiffMouseController(this), EventPhaseFilter.Capture);
 
-        this.BindThemed(s =>
+        this.BindThemed(theme, s =>
         {
             _styles = s.DiffContent;
             _buttonStyles = s.DiffHunkButton;

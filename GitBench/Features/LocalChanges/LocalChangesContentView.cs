@@ -124,8 +124,8 @@ internal sealed class LocalChangesContentView : ContainerView, IBind<LocalChange
             onStage: path => _vm?.StageSubmodulePointer(path),
             onReset: path => _vm?.ResetSubmoduleToRecorded(path));
 
-        _diffView = new DiffView();
-        _diffHeader = new DiffPaneHeader();
+        _diffView = new DiffView(CompatUi.Current);
+        _diffHeader = new DiffPaneHeader(CompatUi.Current);
 
         // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
         // only the header strip remains (the split container pins the pane to header height).

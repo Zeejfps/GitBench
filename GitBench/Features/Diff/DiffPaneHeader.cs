@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.StatusBar;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
@@ -18,33 +19,40 @@ namespace GitBench.Features.Diff;
 /// <see cref="DiffView"/>; this bar carries no staging controls (that lives in the file
 /// lists for embedded panes, and in <see cref="DiffWindowToolbar"/> for the pop-out window).
 /// </summary>
-internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
+internal sealed class DiffPaneHeader : ContainerView
 {
     // Height of the always-visible header strip. Exposed so the parent split container can pin
     // the collapsed pane to exactly this height, keeping the chevron clickable.
     public const float HeaderHeight = 24f;
 
     private readonly State<bool> _isCollapsed = new(false);
-    private readonly LfsBadgeView _lfsBadge = new();
+    private readonly LfsBadgeView _lfsBadge;
     // Mirrors the bound VM's Mode so the full-file toggle button can paint its active tint.
     private readonly State<bool> _fullFileActive = new(false);
 
+    private DiffViewModel? _vm;
     private Action? _onOpenInWindow;
     private Action? _onToggleFullFile;
 
-    public DiffPaneHeader()
+    public DiffPaneHeader(Context ctx)
     {
+        var input = ctx.Require<InputSystem>();
+        var theme = ctx.Theme();
+        _lfsBadge = new LfsBadgeView(ctx);
+
         var hovered = new State<bool>(false);
 
-        var title = new TextView(CompatUi.Canvas)
+        var title = new TextView(ctx.Canvas)
         {
             Text = "Diff View",
             FontSize = 12f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        title.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        title.BindTextColor(() => hovered.Value
+            ? theme.Styles.Value.DiffView.HeaderTitleHover
+            : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
-        var chevron = new TextView(CompatUi.Canvas)
+        var chevron = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -53,7 +61,9 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
             Width = 16f,
         };
         chevron.BindText(_isCollapsed, c => c ? LucideIcons.ChevronUp : LucideIcons.ChevronDown);
-        chevron.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        chevron.BindTextColor(() => hovered.Value
+            ? theme.Styles.Value.DiffView.HeaderTitleHover
+            : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var bar = new RectView
         {
@@ -71,15 +81,16 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
                         chevron,
                         new FlexItem { Grow = 1, Child = title },
                         _lfsBadge,
-                        BuildFullFileToggleButton(),
-                        BuildOpenInWindowButton(),
+                        BuildFullFileToggleButton(ctx, input, theme),
+                        BuildOpenInWindowButton(ctx, input, theme),
                     },
                 },
             },
         };
-        bar.BindThemedBackgroundColor(s =>
-            hovered.Value ? s.DiffView.HeaderBackgroundHover : s.DiffView.HeaderBackgroundIdle);
-        bar.BindThemedBorderColor(s => new BorderColorStyle
+        bar.BindBackgroundColor(() => hovered.Value
+            ? theme.Styles.Value.DiffView.HeaderBackgroundHover
+            : theme.Styles.Value.DiffView.HeaderBackgroundIdle);
+        bar.BindThemedBorderColor(theme, s => new BorderColorStyle
         {
             Top = s.DiffView.HeaderBorderTop,
             Bottom = s.DiffView.HeaderBorderBottom,
@@ -89,7 +100,7 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
         // on capture (the default) would let the bar consume that click before it reaches the
         // button — bubble lets the button consume first, and clicks on the bar's empty area
         // still bubble up here to toggle collapse.
-        bar.UseController(_ => new HoverableButtonController(
+        bar.UseController(input, () => new HoverableButtonController(
             () => _isCollapsed.Value = !_isCollapsed.Value,
             h => hovered.Value = h), EventPhaseFilter.Bubble);
 
@@ -100,19 +111,21 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
 
     public void Bind(DiffViewModel vm)
     {
-        vm.LfsStatus.Subscribe(_lfsBadge.SetStatus);
         _onOpenInWindow = vm.RequestOpenInWindow;
         _onToggleFullFile = vm.ToggleFullFile;
-        vm.Mode.Subscribe(m => _fullFileActive.Value = m == DiffViewMode.FullFile);
+        if (ReferenceEquals(_vm, vm)) return;
+        _vm = vm;
+        this.Bind(vm.LfsStatus, _lfsBadge.SetStatus);
+        this.Bind(vm.Mode, m => _fullFileActive.Value = m == DiffViewMode.FullFile);
     }
 
     // Toggles the diff body between the normal diff and the after-side full file. Tinted while
     // active so it reads as an engaged toggle, not a one-shot action.
-    private View BuildFullFileToggleButton()
+    private View BuildFullFileToggleButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme)
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -121,23 +134,25 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 16f,
         };
-        icon.BindThemedTextColor(s => _fullFileActive.Value
-            ? s.DiffView.HeaderToggleActive
-            : hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        icon.BindTextColor(() => _fullFileActive.Value
+            ? theme.Styles.Value.DiffView.HeaderToggleActive
+            : hovered.Value
+                ? theme.Styles.Value.DiffView.HeaderTitleHover
+                : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var btn = new RectView { Children = { icon } };
-        btn.UseController(_ => new HoverableButtonController(
+        btn.UseController(input, () => new HoverableButtonController(
             () => _onToggleFullFile?.Invoke(),
             h => hovered.Value = h));
-        btn.Use(ctx => new Tooltip(btn, ctx, "Toggle full file", hovered, AlwaysEnabled));
+        btn.Use(() => new Tooltip(btn, ctx, "Toggle full file", hovered, AlwaysEnabled));
         return btn;
     }
 
-    private View BuildOpenInWindowButton()
+    private View BuildOpenInWindowButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme)
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -146,13 +161,15 @@ internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 16f,
         };
-        icon.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
+        icon.BindTextColor(() => hovered.Value
+            ? theme.Styles.Value.DiffView.HeaderTitleHover
+            : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var btn = new RectView { Children = { icon } };
-        btn.UseController(_ => new HoverableButtonController(
+        btn.UseController(input, () => new HoverableButtonController(
             () => _onOpenInWindow?.Invoke(),
             h => hovered.Value = h));
-        btn.Use(ctx => new Tooltip(btn, ctx, "Open in new window", hovered, AlwaysEnabled));
+        btn.Use(() => new Tooltip(btn, ctx, "Open in new window", hovered, AlwaysEnabled));
         return btn;
     }
 

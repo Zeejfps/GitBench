@@ -109,7 +109,7 @@ internal sealed record AppView : Widget
         root.Behaviors.Add(new DialogPresenter(dialogSurfaceView));
 
         // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
-        root.Children.Add(new DiffWindowsView());
+        root.Children.Add(new DiffWindowsView(ctx));
 
         root.UseController(ctx.Require<InputSystem>(), () => new AppKeybindController(
             ctx.Require<IRepoRegistry>(),
