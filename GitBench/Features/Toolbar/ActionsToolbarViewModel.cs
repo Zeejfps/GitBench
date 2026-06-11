@@ -35,7 +35,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     public IReadable<bool> IsPushing { get; }
     public IReadable<bool> IsPulling { get; }
     public IReadable<bool> IsFetching { get; }
-    public IReadable<string?> Error { get; }
 
     public IReadable<float> PushRotation => _pushSpinner.Rotation;
     public IReadable<float> PullRotation => _pullSpinner.Rotation;
@@ -74,18 +73,17 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IsPushing = Slice(s => s.IsPushing);
         IsPulling = Slice(s => s.IsPulling);
         IsFetching = Slice(s => s.IsFetching);
-        Error = Slice(s => s.ShellError ?? s.OpError);
 
         // HasActiveRepo gates the command-enabled slices; the registry drives it directly. The
         // cheap branch/ahead/behind/dirty signals are projected from the status store.
         Subscriptions.Add(_registry.Active.Subscribe(repo =>
-            Update(s => s with { HasActiveRepo = repo != null, ShellError = null })));
+            Update(s => s with { HasActiveRepo = repo != null })));
         Subscriptions.Add(status.Active.Subscribe(st =>
             Update(s => s with { Status = st })));
 
         // Push/pull/fetch in-flight state is owned per-repo by the operations store. Project the
-        // active repo's slice into our flags + spinners + inline error, so switching repos shows the
-        // right state and a background op keeps tracking after the switch.
+        // active repo's slice into our flags + spinners, so switching repos shows the right state
+        // and a background op keeps tracking after the switch.
         Subscriptions.Add(_ops.Active.Subscribe(OnOps));
 
         // A diverged pull on the active repo is recoverable — open the reconcile dialog.
@@ -103,7 +101,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             IsPushing = ops.IsPushing,
             IsPulling = ops.IsPulling,
             IsFetching = ops.IsFetching,
-            OpError = ops.LastError,
         });
         DriveSpinner(_pushSpinner, ops.IsPushing);
         DriveSpinner(_pullSpinner, ops.IsPulling);
@@ -149,7 +146,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenFolder(repo.Path); }
-        catch (Exception ex) { Update(s => s with { ShellError = $"Open folder failed: {ex.Message}" }); }
+        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage("Open folder failed", ex.Message)); }
     }
 
     private void DoOpenTerminal()
@@ -157,7 +154,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenTerminal(repo.Path); }
-        catch (Exception ex) { Update(s => s with { ShellError = $"Open terminal failed: {ex.Message}" }); }
+        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage("Open terminal failed", ex.Message)); }
     }
 
     private void DoBranch()

@@ -4,22 +4,21 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-// The active repo's in-flight remote-operation state plus a sticky last-error. Projected by
-// ActionsToolbarViewModel (spinner + disabled state + inline error) and, per repo, by the RepoBar
-// error badge. Distinct from RepoOperationState (a merge/rebase in progress) — this tracks the
-// push/pull/fetch lifecycle.
+// A failure the user hasn't seen yet — it happened while the repo wasn't active. Drives the
+// RepoBar error badge; shown as a dialog and cleared when the repo becomes active.
+public readonly record struct PendingOperationError(string Title, string Message);
+
+// The active repo's in-flight remote-operation state plus any pending unseen error. Projected by
+// ActionsToolbarViewModel (spinner + disabled state) and, per repo, by the RepoBar error badge.
+// Distinct from RepoOperationState (a merge/rebase in progress) — this tracks the push/pull/fetch
+// lifecycle.
 public sealed record RepoOperations(
     bool IsPushing,
     bool IsPulling,
     bool IsFetching,
-    // Last failure on this repo, shown inline in the toolbar while the repo is active. Cleared when
-    // the next op on the repo starts or one succeeds.
-    string? LastError,
-    // A failure the user hasn't seen yet — it happened while the repo wasn't active. Drives the
-    // RepoBar error badge; cleared when the repo becomes active.
-    bool HasUnseenError)
+    PendingOperationError? PendingError)
 {
-    public static readonly RepoOperations Idle = new(false, false, false, null, false);
+    public static readonly RepoOperations Idle = new(false, false, false, null);
 }
 
 // Single source of truth for in-flight remote operations (push/pull/fetch), keyed by repo id so an
@@ -88,7 +87,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
     }
 
-    public bool HasUnseenError(Guid repoId) => Get(repoId).Value.HasUnseenError;
+    public bool HasUnseenError(Guid repoId) => Get(repoId).Value.PendingError != null;
 
     public bool IsBusy(Guid repoId)
     {
@@ -100,8 +99,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     {
         var s = Get(repo.Id);
         if (s.Value.IsPushing) return;
-        s.Value = s.Value with { IsPushing = true, LastError = null, HasUnseenError = false };
-        Run(repo,
+        s.Value = s.Value with { IsPushing = true, PendingError = null };
+        Run(repo, "Push failed",
             () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsPushing = false });
     }
@@ -110,8 +109,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     {
         var s = Get(repo.Id);
         if (s.Value.IsPulling) return;
-        s.Value = s.Value with { IsPulling = true, LastError = null, HasUnseenError = false };
-        Run(repo,
+        s.Value = s.Value with { IsPulling = true, PendingError = null };
+        Run(repo, "Pull failed",
             () => _git.Pull(repo, strategy) switch
             {
                 PullOutcome.Failed f => (false, f.Message, false),
@@ -125,8 +124,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     {
         var s = Get(repo.Id);
         if (s.Value.IsFetching) return;
-        s.Value = s.Value with { IsFetching = true, LastError = null, HasUnseenError = false };
-        Run(repo,
+        s.Value = s.Value with { IsFetching = true, PendingError = null };
+        Run(repo, "Fetch failed",
             () => _git.Fetch(repo) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsFetching = false });
     }
@@ -153,9 +152,12 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         }
 
         var s = Get(repo.Id);
-        // Becoming active counts as "seen": clear the unseen badge but keep LastError so the toolbar
-        // can still show what failed.
-        if (s.Value.HasUnseenError) s.Value = s.Value with { HasUnseenError = false };
+        // Becoming active surfaces the pending failure as the error dialog and clears the badge.
+        if (s.Value.PendingError is { } pending)
+        {
+            s.Value = s.Value with { PendingError = null };
+            _bus.Broadcast(new ShowOperationErrorMessage(pending.Title, pending.Message));
+        }
         _activeInner = s.Subscribe(v => _active.Value = v); // fires immediately with the current value
     }
 
@@ -165,6 +167,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     // never "stale" because it's applied to its own repo, not to whatever happens to be active.
     private void Run(
         Repo repo,
+        string failureTitle,
         Func<(bool Success, string? Error, bool Diverged)> work,
         Func<RepoOperations, RepoOperations> clearInFlight)
     {
@@ -177,12 +180,13 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
             bool diverged = false;
             try { (success, error, diverged) = work(); }
             catch (Exception ex) { error = ex.Message; }
-            dispatcher.Post(() => Complete(repo, clearInFlight, success, error, diverged));
+            dispatcher.Post(() => Complete(repo, failureTitle, clearInFlight, success, error, diverged));
         });
     }
 
     private void Complete(
         Repo repo,
+        string failureTitle,
         Func<RepoOperations, RepoOperations> clearInFlight,
         bool success,
         string? error,
@@ -194,7 +198,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
 
         if (success)
         {
-            s.Value = next with { LastError = null, HasUnseenError = false };
+            s.Value = next with { PendingError = null };
             _bus.Broadcast(new RefsChangedMessage(repo.Id));
             return;
         }
@@ -209,10 +213,17 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
             return;
         }
 
-        // Surface the failure: inline in the toolbar if the repo is active, otherwise as the
+        // Surface the failure: the error dialog if the repo is active, otherwise as the
         // unseen-error badge until the user switches to it.
-        var active = _registry.Active.Value?.Id == repo.Id;
-        s.Value = next with { LastError = error, HasUnseenError = !active };
+        if (_registry.Active.Value?.Id == repo.Id)
+        {
+            s.Value = next;
+            _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error ?? "Unknown error."));
+        }
+        else
+        {
+            s.Value = next with { PendingError = new PendingOperationError(failureTitle, error ?? "Unknown error.") };
+        }
     }
 
     public void Dispose()

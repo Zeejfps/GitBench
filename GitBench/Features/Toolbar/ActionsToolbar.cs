@@ -1,6 +1,5 @@
 using GitBench.App;
 using GitBench.Controls;
-using GitBench.Features.StatusBar;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -21,7 +20,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
     private readonly ActionButton _stashButton;
     private readonly ActionButton _openFolderButton;
     private readonly ActionButton _openTerminalButton;
-    private readonly ErrorBarView _errorBar;
 
     public ActionsToolbar()
     {
@@ -35,7 +33,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
         _openFolderButton = new ActionButton(LucideIcons.FolderOpen, tooltip: "Open in file explorer");
         _openTerminalButton = new ActionButton(LucideIcons.SquareTerminal, tooltip: "Open in terminal");
 
-        _errorBar = new ErrorBarView(verticalPadding: 2);
         var contentRow = new FlexRowView
         {
             Gap = WithinClusterGap,
@@ -53,7 +50,6 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
                 new FlexItem { Grow = 1, Child = new MultiChildView() },
                 _openFolderButton,
                 _openTerminalButton,
-                _errorBar,
             }
         };
 
@@ -98,7 +94,5 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
         _fetchButton.Icon.BindTo(vm.IsFetching, b => b ? LucideIcons.Loader : LucideIcons.Fetch);
         _fetchButton.Label.BindTo(vm.IsFetching, b => b ? "Fetching" : "Fetch");
         _fetchButton.IconRotation.BindTo(vm.FetchRotation);
-
-        _errorBar.Message.BindTo(vm.Error);
     }
 }
