@@ -73,8 +73,8 @@ internal sealed record AppView : Widget
                                                 CrossAxisAlignment = CrossAxisAlignment.Stretch,
                                                 Children =
                                                 {
-                                                    new BranchesHeader(),
-                                                    new FlexItem { Grow = 1, Child = new BranchesView() },
+                                                    new BranchesHeader().BuildView(ctx),
+                                                    new FlexItem { Grow = 1, Child = new BranchesView().BuildView(ctx) },
                                                 },
                                             },
                                             initialWidth: prefs.BranchesWidth,

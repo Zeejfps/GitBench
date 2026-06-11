@@ -1,87 +1,80 @@
 using GitBench.Controls;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class BranchesHeader : ContainerView, IBind<BranchesHeaderViewModel>
+internal sealed record BranchesHeader : Widget
 {
     private const float HeaderHeight = 44f;
     private const int HorizontalPadding = 8;
 
-    private readonly TextView _iconView;
-    private readonly TextView _prefixView;
-    private readonly TextView _nameView;
-    private readonly PaddingView _content;
-
-    public BranchesHeader()
+    protected override View CreateView(Context ctx)
     {
-        Height = HeaderHeight;
-
-        _iconView = new TextView(CompatUi.Canvas)
-        {
-            Text = LucideIcons.Branch,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 15f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-
-        _prefixView = new TextView(CompatUi.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _prefixView.BindThemedTextColor(s => s.BranchesHeader.PrefixText);
-
-        _nameView = new TextView(CompatUi.Canvas)
-        {
-            FontSize = 18f,
-            FontWeight = FontWeight.Bold,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-
-        _content = new PaddingView
-        {
-            Padding = new PaddingStyle { Left = 6, Right = 6 },
-            Children =
-            {
-                new RowView
-                {
-                    Gap = 6,
-                    Children = { _iconView, _prefixView, _nameView },
-                },
-            },
-        };
-
-        var headerBar = new RectView
-        {
-            BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
-            Children =
-            {
-                new FlexRowView
-                {
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
-                    Children = { _content },
-                },
-            },
-        };
-        headerBar.BindThemedBackgroundColor(s => s.BranchesHeader.Background);
-        headerBar.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.BranchesHeader.BorderBottom });
-        AddChildToSelf(headerBar);
-
-        this.UseViewModel(this);
+        var vm = ctx.Require<BranchesHeaderViewModel>();
+        var theme = ctx.Theme();
+        var view = Layout(vm, theme).BuildView(ctx);
+        view.UseViewModel(() => vm, _ => { });
+        return view;
     }
 
-    public void Bind(BranchesHeaderViewModel vm)
+    private static IWidget Layout(BranchesHeaderViewModel vm, IThemeService<ThemeStyles> theme) => new Box
     {
-        _iconView.BindThemedTextColor(s =>
-            vm.IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText);
-        _prefixView.BindText(vm.IsDetached, d => d ? "at" : "on");
-        _nameView.BindText(vm.BranchName);
-        _nameView.BindThemedTextColor(s =>
-            vm.IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText);
-        _content.BindIsVisible(vm.BranchName, n => !string.IsNullOrEmpty(n));
-    }
+        Height = HeaderHeight,
+        BorderSize = new BorderSizeStyle { Bottom = 1 },
+        Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
+        BindBackground = () => theme.Styles.Value.BranchesHeader.Background,
+        BindBorder = () => new BorderColorStyle { Bottom = theme.Styles.Value.BranchesHeader.BorderBottom },
+        Children =
+        [
+            new Row
+            {
+                CrossAxis = CrossAxisAlignment.Center,
+                Children =
+                [
+                    new Box
+                    {
+                        Padding = new PaddingStyle { Left = 6, Right = 6 },
+                        BindVisible = () => !string.IsNullOrEmpty(vm.BranchName.Value),
+                        Children =
+                        [
+                            new Row
+                            {
+                                Gap = 6,
+                                CrossAxis = CrossAxisAlignment.Stretch,
+                                Children =
+                                [
+                                    new ThemedText
+                                    {
+                                        Value = LucideIcons.Branch,
+                                        FontFamily = LucideIcons.FontFamily,
+                                        FontSize = 15f,
+                                        VAlign = TextAlignment.Center,
+                                        Color = s => vm.IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText,
+                                    },
+                                    new ThemedText
+                                    {
+                                        Bind = () => vm.IsDetached.Value ? "at" : "on",
+                                        VAlign = TextAlignment.Center,
+                                        Color = s => s.BranchesHeader.PrefixText,
+                                    },
+                                    new ThemedText
+                                    {
+                                        Bind = () => vm.BranchName.Value,
+                                        FontSize = 18f,
+                                        Weight = FontWeight.Bold,
+                                        VAlign = TextAlignment.Center,
+                                        Color = s => vm.IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText,
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
 }
