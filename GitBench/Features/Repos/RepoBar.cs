@@ -2,14 +2,17 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class RepoBar : ContainerView, IBind<RepoBarViewModel>
+internal sealed record RepoBar : Widget
 {
     private const int HorizontalPadding = 8;
     internal const int RowPaddingLeft = (int)TreeMetrics.BaseIndent;
@@ -20,22 +23,26 @@ internal sealed class RepoBar : ContainerView, IBind<RepoBarViewModel>
     // other tree views' per-level step.
     internal const int WorktreeRowExtraIndent = (int)TreeMetrics.IndentLevel;
 
-    private readonly FlexColumnView _sections;
-    private RepoBarViewModel? _vm;
-
-    public RepoBar()
+    protected override View CreateView(Context ctx)
     {
-        _sections = new FlexColumnView
+        var vm = ctx.Require<RepoBarViewModel>();
+        var theme = ctx.Theme();
+        var input = ctx.Require<InputSystem>();
+
+        var sections = new FlexColumnView
         {
             Gap = 2,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
+        sections.Children.BindChildren(
+            vm.GroupSections,
+            s => new GroupSection { Model = s }.BuildView(ctx));
 
         var scrollPane = new ScrollPane();
-        scrollPane.Children.Add(_sections);
-        scrollPane.UseController(_ => new ScrollPaneWheelController(scrollPane));
+        scrollPane.Children.Add(sections);
+        scrollPane.UseController(input, () => new ScrollPaneWheelController(scrollPane));
 
-        var vScrollBar = ScrollBars.CreateVertical();
+        var vScrollBar = ScrollBars.CreateVertical(ctx);
 
         var scrollArea = new FlexRowView
         {
@@ -67,41 +74,35 @@ internal sealed class RepoBar : ContainerView, IBind<RepoBarViewModel>
                                 Top = HorizontalPadding,
                                 Bottom = HorizontalPadding,
                             },
-                            Children = { new AddRepoButton() },
+                            Children = { new AddRepoButton().BuildView(ctx) },
                         },
                     }
                 }
             }
         };
-        bar.BindThemedBackgroundColor(s => s.RepoBar.Background);
-        bar.BindThemedBorderColor(s => new BorderColorStyle { Right = s.RepoBar.RightBorder });
-        AddChildToSelf(bar);
+        bar.BindBackgroundColor(() => theme.Styles.Value.RepoBar.Background);
+        bar.BindBorderColor(() => new BorderColorStyle { Right = theme.Styles.Value.RepoBar.RightBorder });
 
-        this.UseController(ctx => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems()));
-        this.Use(_ => new ScrollSyncController(scrollPane, vScrollBar));
-        this.UseViewModel(this);
+        var root = new ContainerView();
+        root.Children.Add(bar);
+
+        root.UseController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)));
+        root.Use(() => new ScrollSyncController(scrollPane, vScrollBar));
+        root.UseViewModel(() => vm, _ => { });
+        return root;
     }
 
-    public void Bind(RepoBarViewModel vm)
-    {
-        _vm = vm;
-        _sections.Children.BindChildren(
-            vm.GroupSections,
-            _ => new GroupSection(),
-            onCreated: (section, sectionVm) => section.Bind(sectionVm));
-    }
-
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems()
+    private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(RepoBarViewModel vm)
     {
         var items = new List<RepoBarContextMenu.Item>
         {
-            new RepoBarContextMenu.Item("New group", () => _vm?.NewGroup.Execute(), LucideIcons.FolderPlus),
+            new RepoBarContextMenu.Item("New group", () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
         };
-        if (_vm?.HasMultipleGroups == true)
+        if (vm.HasMultipleGroups)
         {
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(new RepoBarContextMenu.Item("Expand All", () => _vm?.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
-            items.Add(new RepoBarContextMenu.Item("Collapse All", () => _vm?.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
+            items.Add(new RepoBarContextMenu.Item("Expand All", () => vm.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item("Collapse All", () => vm.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
         }
         return items;
     }

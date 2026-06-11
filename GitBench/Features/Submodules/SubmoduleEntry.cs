@@ -4,6 +4,7 @@ using GitBench.Git;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Submodules;
 
@@ -12,10 +13,17 @@ namespace GitBench.Features.Submodules;
 // submodules-of-submodules: each SubmoduleEntry recurses via RepoTreeChildren, so the tree
 // extends as deep as the discovery walk found. Folds independently of its parent (its own
 // chevron drives IsWorktreeExpanded for its id).
-public sealed class SubmoduleEntry : ContainerView
+public sealed record SubmoduleEntry : Widget
 {
-    public SubmoduleEntry(Repo submodule, IRepoRegistry registry, IRepoStatusStore status, int depth)
+    public required Repo Submodule { get; init; }
+    public required int Depth { get; init; }
+
+    protected override View CreateView(Context ctx)
     {
+        var submodule = Submodule;
+        var depth = Depth;
+        var registry = ctx.Require<IRepoRegistry>();
+
         var children = new FlexColumnView
         {
             Gap = 2,
@@ -28,20 +36,22 @@ public sealed class SubmoduleEntry : ContainerView
                 _ = registry.WorktreesChanged.Value;
                 if (!registry.IsWorktreeExpanded(submodule.Id))
                     return System.Linq.Enumerable.Empty<View>();
-                return RepoTreeChildren.Build(submodule.Id, registry, status, depth + 1);
+                return RepoTreeChildren.Build(ctx, submodule.Id, registry, depth + 1);
             },
             v => v);
 
-        AddChildToSelf(new FlexColumnView
+        var root = new ContainerView();
+        root.Children.Add(new FlexColumnView
         {
             Gap = 2,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new SubmoduleRow(submodule, registry, status, depth),
+                new SubmoduleRow { Repo = submodule, Depth = depth }.BuildView(ctx),
                 children,
             },
         });
+        return root;
     }
 }
 
@@ -50,18 +60,18 @@ public sealed class SubmoduleEntry : ContainerView
 // own nested children, same order/indent at every level.
 internal static class RepoTreeChildren
 {
-    public static IReadOnlyList<View> Build(System.Guid parentId, IRepoRegistry registry, IRepoStatusStore status, int depth)
+    public static IReadOnlyList<View> Build(Context ctx, System.Guid parentId, IRepoRegistry registry, int depth)
     {
         var views = new List<View>();
         foreach (var r in registry.Repos)
         {
             if (r.ParentRepoId == parentId && r.IsWorktree)
-                views.Add(new WorktreeEntry(r, registry, status, depth));
+                views.Add(new WorktreeEntry { Worktree = r, Depth = depth }.BuildView(ctx));
         }
         foreach (var r in registry.Repos)
         {
             if (r.ParentRepoId == parentId && r.IsSubmodule)
-                views.Add(new SubmoduleEntry(r, registry, status, depth));
+                views.Add(new SubmoduleEntry { Submodule = r, Depth = depth }.BuildView(ctx));
         }
         return views;
     }

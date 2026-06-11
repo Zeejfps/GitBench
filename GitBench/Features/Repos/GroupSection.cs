@@ -1,48 +1,42 @@
-using GitBench.Git;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class GroupSection : ContainerView, IBind<GroupSectionViewModel>
+internal sealed record GroupSection : Widget
 {
-    private readonly ContainerView _headerSlot;
-    private readonly FlexColumnView _rows;
+    public required GroupSectionViewModel Model { get; init; }
 
-    public GroupSection()
+    protected override View CreateView(Context ctx)
     {
-        _headerSlot = new ContainerView();
-        _rows = new FlexColumnView
+        var vm = Model;
+
+        var rows = new FlexColumnView
         {
             Gap = 2,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
+        rows.Children.BindChildren(
+            vm.VisiblePrimaries,
+            primary => new RepoEntry { Primary = primary }.BuildView(ctx));
 
-        AddChildToSelf(new FlexColumnView
+        var root = new ContainerView();
+        root.Children.Add(new FlexColumnView
         {
             Gap = 2,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                _headerSlot,
-                _rows,
+                new GroupHeaderRow { Model = vm.HeaderVm }.BuildView(ctx),
+                rows,
             }
         });
+
+        root.UseController(ctx.Require<InputSystem>(), () => new GroupSectionController(root, ctx, vm.GroupId));
+        return root;
     }
-
-    public void Bind(GroupSectionViewModel vm)
-    {
-        this.UseController(ctx => new GroupSectionController(this, ctx, vm.GroupId));
-
-        var header = new GroupHeaderRow();
-        header.Bind(vm.HeaderVm);
-        _headerSlot.Children.Add(header);
-
-        _rows.Children.BindChildren(vm.VisiblePrimaries, CreateRepoRow);
-    }
-
-    private View CreateRepoRow(Repo primary) =>
-        new RepoEntry(primary, this.Context!.Get<IRepoRegistry>()!, this.Context!.Get<IRepoStatusStore>()!);
 }

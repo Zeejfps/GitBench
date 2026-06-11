@@ -3,26 +3,34 @@ using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-public sealed class RepoRow : ContainerView
+public sealed record RepoRow : Widget
 {
-    public RepoRow(Repo repo, IRepoRegistry registry, IRepoStatusStore status)
+    public required Repo Repo { get; init; }
+
+    protected override View CreateView(Context ctx)
     {
-        Height = 28;
+        var repo = Repo;
+        var registry = ctx.Require<IRepoRegistry>();
+        var status = ctx.Require<IRepoStatusStore>();
+        var theme = ctx.Theme();
 
         var isHovered = new State<bool>(false);
 
         // Chevron slot is always present so primaries with and without worktrees share
         // alignment. The slot becomes interactive (and visible) only when children exist.
-        var chevronSlot = new WorktreeChevron(repo, registry);
+        var chevronSlot = new WorktreeChevron { Repo = repo }.BuildView(ctx);
 
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             Text = LucideIcons.FolderGit2,
             FontFamily = LucideIcons.FontFamily,
@@ -31,18 +39,18 @@ public sealed class RepoRow : ContainerView
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        RowChrome.BindRowText(icon, registry, repo);
+        RowChrome.BindRowText(theme, icon, registry, repo);
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(ctx.Canvas)
         {
             Text = repo.DisplayName,
             HorizontalTextAlignment = TextAlignment.Start,
             VerticalTextAlignment = TextAlignment.Center,
             TextOverflow = TextOverflow.Ellipsis,
         };
-        RowChrome.BindRowText(label, registry, repo);
+        RowChrome.BindRowText(theme, label, registry, repo);
 
-        var statusBadge = RowChrome.CreateBadge(status, repo.Id);
+        var statusBadge = RowChrome.CreateBadge(theme, status, repo.Id);
 
         var background = new RectView
         {
@@ -64,15 +72,18 @@ public sealed class RepoRow : ContainerView
                 }
             }
         };
-        RowChrome.BindRowBackground(background, isHovered, registry, repo.Id);
-        AddChildToSelf(background);
+        RowChrome.BindRowBackground(theme, background, isHovered, registry, repo.Id);
 
-        this.UseController(ctx => new RepoRowController(
-            this, ctx,
+        var root = new ContainerView { Height = 28 };
+        root.Children.Add(background);
+
+        root.UseController(ctx.Require<InputSystem>(), () => new RepoRowController(
+            root, ctx,
             repo,
             registry,
             h => isHovered.Value = h,
             _ => BuildMenuItems(repo, registry, ctx)));
+        return root;
     }
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Repo repo, IRepoRegistry registry, Context context)

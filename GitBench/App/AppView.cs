@@ -43,7 +43,7 @@ internal sealed record AppView : Widget
                     Child = new ContainerView { Children = { new BorderLayoutView
                     {
                         West = ResizableLeftSidebar.Build(
-                            new RepoBar(),
+                            new RepoBar().BuildView(ctx),
                             initialWidth: prefs.RepoBarWidth,
                             minWidth: 220f,
                             onWidthChanged: preferences.SetRepoBarWidth),

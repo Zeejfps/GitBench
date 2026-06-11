@@ -3,27 +3,23 @@ using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Platform;
+using GitBench.Theming;
 using ZGF.Gui;
 
 namespace GitBench.Features.Worktrees;
 
 // Renders a single worktree row, nested under its primary in the RepoBar. Visually
 // distinguished from primary rows by deeper indent and the Branch icon.
-public sealed class WorktreeRow : NestedRepoRow
+public sealed record WorktreeRow : NestedRepoRow
 {
-    public WorktreeRow(Repo worktree, IRepoRegistry registry, IRepoStatusStore status, int depth)
-        : base(
-            worktree,
-            registry,
-            status,
-            LucideIcons.Branch,
-            // Tinted by kind so the sidebar tells worktree apart from primary / submodule
-            // without leaning on a header row. Missing rows mute the accent to match the label.
-            s => s.IconAccentWorktree,
-            ctx => BuildMenuItems(worktree, registry, ctx),
-            depth)
-    {
-    }
+    protected override string IconGlyph => LucideIcons.Branch;
+
+    // Tinted by kind so the sidebar tells worktree apart from primary / submodule
+    // without leaning on a header row. Missing rows mute the accent to match the label.
+    protected override uint SelectAccent(RepoBarRowStyles s) => s.IconAccentWorktree;
+
+    protected override IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Context ctx)
+        => BuildMenuItems(Repo, ctx.Require<IRepoRegistry>(), ctx);
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(
         Repo worktree, IRepoRegistry registry, Context context)

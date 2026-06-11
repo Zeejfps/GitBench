@@ -1,27 +1,33 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Repos;
 
-public sealed class GroupRenameField : ContainerView
+internal sealed record GroupRenameField : Widget
 {
-    public GroupRenameField(Group group, IRepoRegistry registry)
-    {
-        Height = 22;
+    public required Group Group { get; init; }
 
-        var input = new TextInputView(CompatUi.Canvas);
-        input.BindThemed(s =>
+    protected override View CreateView(Context ctx)
+    {
+        var registry = ctx.Require<IRepoRegistry>();
+        var theme = ctx.Theme();
+        var inputSystem = ctx.Require<InputSystem>();
+
+        var input = new TextInputView(ctx.Canvas);
+        input.BindThemed(theme, s =>
         {
             input.BackgroundColor = s.GroupRenameField.Background;
             input.TextColor = s.GroupRenameField.Text;
             input.CaretColor = s.GroupRenameField.Caret;
             input.SelectionRectColor = s.GroupRenameField.Selection;
         });
-        input.Enter(group.Name);
+        input.Enter(Group.Name);
         input.SelectAll();
 
         var box = new RectView
@@ -31,14 +37,13 @@ public sealed class GroupRenameField : ContainerView
             Padding = new PaddingStyle { Left = 4, Right = 4 },
             Children = { input }
         };
-        box.BindThemedBackgroundColor(s => s.GroupRenameField.Background);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(s.GroupRenameField.Border));
-        AddChildToSelf(box);
+        box.BindBackgroundColor(() => theme.Styles.Value.GroupRenameField.Background);
+        box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.GroupRenameField.Border));
 
-        this.UseController(ctx =>
-        {
-            var inputSystem = ctx.Require<InputSystem>();
-            return new GroupRenameKbmController(input, inputSystem, group.Id, registry);
-        });
+        var root = new ContainerView { Height = 22 };
+        root.Children.Add(box);
+
+        root.UseController(inputSystem, () => new GroupRenameKbmController(input, inputSystem, Group.Id, registry));
+        return root;
     }
 }

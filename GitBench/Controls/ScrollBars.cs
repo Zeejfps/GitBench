@@ -3,6 +3,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 
 namespace GitBench.Controls;
 
@@ -10,7 +11,17 @@ internal static class ScrollBars
 {
     public static VerticalScrollBarView CreateVertical()
     {
-        var bar = new VerticalScrollBarView(CompatUi.Input)
+        return CreateVerticalBar(CompatUi.Input);
+    }
+
+    public static VerticalScrollBarView CreateVertical(Context ctx)
+    {
+        return CreateVerticalBar(ctx.Require<InputSystem>());
+    }
+
+    private static VerticalScrollBarView CreateVerticalBar(InputSystem input)
+    {
+        var bar = new VerticalScrollBarView
         {
             TrackBorderSize = new BorderSizeStyle { Left = 1 },
         };
@@ -26,8 +37,50 @@ internal static class ScrollBars
             };
         });
         StyleThumb(bar.Thumb);
-        bar.UseController(_ => new VerticalScrollBarViewController(bar));
+        WireVertical(bar, input);
         return bar;
+    }
+
+    private static void WireVertical(VerticalScrollBarView bar, InputSystem input)
+    {
+        var thumb = bar.Thumb;
+        var hovered = false;
+        DragRecognizer? drag = null;
+        thumb.UseController(input, () => drag = new DragRecognizer(input)
+        {
+            DragStarted = () => thumb.IsSelected = true,
+            Dragged = delta => thumb.Move(delta.Y),
+            DragEnded = () =>
+            {
+                if (!hovered) thumb.IsSelected = false;
+            },
+        });
+        thumb.UseController(input, new KbmHandlers
+        {
+            OnHoverEnter = () =>
+            {
+                hovered = true;
+                thumb.IsSelected = true;
+            },
+            OnHoverExit = () =>
+            {
+                hovered = false;
+                if (drag is not { IsDragging: true }) thumb.IsSelected = false;
+            },
+        });
+        bar.UseController(input, new KbmHandlers
+        {
+            OnMouseButton = (ref MouseButtonEvent e) =>
+            {
+                if (e.Phase == EventPhase.Bubbling
+                    && e.Button == MouseButton.Left
+                    && e.State == InputState.Pressed)
+                {
+                    bar.ScrollToPoint(e.Mouse.Point);
+                    e.Consume();
+                }
+            },
+        });
     }
 
     public static HorizontalScrollBarView CreateHorizontal()

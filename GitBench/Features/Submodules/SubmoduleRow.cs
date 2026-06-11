@@ -3,6 +3,7 @@ using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Platform;
+using GitBench.Theming;
 using ZGF.Gui;
 
 namespace GitBench.Features.Submodules;
@@ -11,27 +12,23 @@ namespace GitBench.Features.Submodules;
 // as WorktreeRow (deep indent + small icon) but uses the Package icon + purple tint
 // to signal "this is an embedded external repository pinned to a specific commit,"
 // not a sibling checkout of the parent.
-public sealed class SubmoduleRow : NestedRepoRow
+public sealed record SubmoduleRow : NestedRepoRow
 {
-    public SubmoduleRow(Repo submodule, IRepoRegistry registry, IRepoStatusStore status, int depth)
-        : base(
-            submodule,
-            registry,
-            status,
-            LucideIcons.Package,
-            // Package icon + purple tint — submodules are mentally "external packages
-            // embedded at a pinned commit," visually distinct from the FolderGit2 used for
-            // primary repos. Tint matches the StatusSubmodule badge used by pointer-change
-            // rows in CommitDetails so the visual language stays consistent across the app.
-            s => s.IconAccentSubmodule,
-            ctx => BuildMenuItems(submodule, registry, ctx),
-            depth,
-            // A submodule that's been added but not initialized has no .git directory of its
-            // own and would render an empty BranchesView/HistoryView. Better to do nothing —
-            // the user can right-click → Update… to initialize it.
-            canActivate: () => !submodule.IsMissing)
-    {
-    }
+    protected override string IconGlyph => LucideIcons.Package;
+
+    // Package icon + purple tint — submodules are mentally "external packages
+    // embedded at a pinned commit," visually distinct from the FolderGit2 used for
+    // primary repos. Tint matches the StatusSubmodule badge used by pointer-change
+    // rows in CommitDetails so the visual language stays consistent across the app.
+    protected override uint SelectAccent(RepoBarRowStyles s) => s.IconAccentSubmodule;
+
+    // A submodule that's been added but not initialized has no .git directory of its
+    // own and would render an empty BranchesView/HistoryView. Better to do nothing —
+    // the user can right-click → Update… to initialize it.
+    protected override Func<bool>? CanActivate => () => !Repo.IsMissing;
+
+    protected override IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Context ctx)
+        => BuildMenuItems(Repo, ctx.Require<IRepoRegistry>(), ctx);
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(
         Repo submodule, IRepoRegistry registry, Context context)

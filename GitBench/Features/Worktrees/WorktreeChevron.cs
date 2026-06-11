@@ -1,11 +1,13 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Worktrees;
 
@@ -14,13 +16,17 @@ namespace GitBench.Features.Worktrees;
 // visibility without activating the repo. Otherwise it occupies the same horizontal space
 // with nothing in it, so rows stay aligned whether or not children exist. Works for any
 // repo — primaries AND submodules — so submodules-of-submodules get their own fold.
-public sealed class WorktreeChevron : ContainerView
+public sealed record WorktreeChevron : Widget
 {
-    public WorktreeChevron(Repo repo, IRepoRegistry registry)
-    {
-        Width = RepoBar.RowChevronWidth;
+    public required Repo Repo { get; init; }
 
-        var chevron = new TextView(CompatUi.Canvas)
+    protected override View CreateView(Context ctx)
+    {
+        var repo = Repo;
+        var registry = ctx.Require<IRepoRegistry>();
+        var theme = ctx.Theme();
+
+        var chevron = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 11f,
@@ -28,7 +34,7 @@ public sealed class WorktreeChevron : ContainerView
             VerticalTextAlignment = TextAlignment.Center,
             Width = RepoBar.RowChevronWidth,
         };
-        chevron.BindThemedTextColor(s => s.Palette.TextSecondary);
+        chevron.BindTextColor(() => theme.Styles.Value.Palette.TextSecondary);
         // Reads of registry.Repos and the WorktreesChanged version are auto-tracked, so
         // the chevron updates whenever children appear/disappear or expand state flips.
         // No children → empty glyph (the slot still reserves its width for alignment).
@@ -44,15 +50,18 @@ public sealed class WorktreeChevron : ContainerView
             Width = RepoBar.RowChevronWidth,
             Children = { chevron },
         };
-        AddChildToSelf(background);
 
-        this.UseController(_ => new HoverableButtonController(
+        var root = new ContainerView { Width = RepoBar.RowChevronWidth };
+        root.Children.Add(background);
+
+        root.UseController(ctx.Require<InputSystem>(), () => new HoverableButtonController(
             () =>
             {
                 if (!HasChildren(repo.Id, registry)) return;
                 registry.SetWorktreeExpanded(repo.Id, !registry.IsWorktreeExpanded(repo.Id));
             },
             _ => { }));
+        return root;
     }
 
     private static bool HasChildren(Guid primaryId, IRepoRegistry registry)

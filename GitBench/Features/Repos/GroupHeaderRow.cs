@@ -1,34 +1,41 @@
 using GitBench.Controls;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class GroupHeaderRow : ContainerView, IBind<GroupHeaderRowViewModel>
+internal sealed record GroupHeaderRow : Widget
 {
-    private readonly ContainerView _nameSlot;
-    private readonly TextView _chevron;
-    private readonly State<bool> _isHovered = new(false);
+    public required GroupHeaderRowViewModel Model { get; init; }
 
-    public GroupHeaderRow()
+    protected override View CreateView(Context ctx)
     {
-        Height = 22;
+        var vm = Model;
+        var theme = ctx.Theme();
+        var isHovered = new State<bool>(false);
 
-        _chevron = new TextView(CompatUi.Canvas)
+        var chevron = new TextView(ctx.Canvas)
         {
+            Text = ChevronFor(vm.Group.IsCollapsed),
             FontFamily = LucideIcons.FontFamily,
             FontSize = 11f,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
             Width = 16,
         };
-        _chevron.BindThemedTextColor(s => s.GroupHeaderRow.ChevronText);
+        chevron.BindTextColor(() => theme.Styles.Value.GroupHeaderRow.ChevronText);
 
-        _nameSlot = new ContainerView();
+        var nameSlot = new ContainerView();
+        nameSlot.Children.BindChildren(
+            () => new[] { vm.IsRenaming.Value },
+            isRenaming => CreateNameContent(ctx, vm, isRenaming));
 
         var background = new RectView
         {
@@ -42,45 +49,40 @@ internal sealed class GroupHeaderRow : ContainerView, IBind<GroupHeaderRowViewMo
                     Gap = 8,
                     Children =
                     {
-                        _chevron,
-                        new FlexItem { Grow = 1, Child = _nameSlot },
+                        chevron,
+                        new FlexItem { Grow = 1, Child = nameSlot },
                     }
                 }
             }
         };
-        background.BindThemedBackgroundColor(s =>
-            _isHovered.Value ? s.GroupHeaderRow.BackgroundHover : s.GroupHeaderRow.BackgroundIdle);
-        AddChildToSelf(background);
-    }
+        background.BindBackgroundColor(() =>
+            isHovered.Value ? theme.Styles.Value.GroupHeaderRow.BackgroundHover : theme.Styles.Value.GroupHeaderRow.BackgroundIdle);
 
-    public void Bind(GroupHeaderRowViewModel vm)
-    {
-        _chevron.Text = ChevronFor(vm.Group.IsCollapsed);
+        var root = new ContainerView { Height = 22 };
+        root.Children.Add(background);
 
-        _nameSlot.Children.BindChildren(
-            () => new[] { vm.IsRenaming.Value },
-            isRenaming => CreateNameContent(vm, isRenaming));
-
-        this.UseController(ctx => new GroupHeaderController(
-            this, ctx,
+        root.UseController(ctx.Require<InputSystem>(), () => new GroupHeaderController(
+            root, ctx,
             vm.Group,
-            h => _isHovered.Value = h,
+            h => isHovered.Value = h,
             _ => BuildMenuItems(vm),
             () => vm.IsRenaming.Value,
             vm.ToggleCollapsed.Execute));
+        return root;
     }
 
-    private View CreateNameContent(GroupHeaderRowViewModel vm, bool isRenaming)
+    private static View CreateNameContent(Context ctx, GroupHeaderRowViewModel vm, bool isRenaming)
     {
-        if (isRenaming) return new GroupRenameField(vm.Group, this.Context!.Get<IRepoRegistry>()!);
+        if (isRenaming) return new GroupRenameField { Group = vm.Group }.BuildView(ctx);
 
-        var name = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var name = new TextView(ctx.Canvas)
         {
             Text = vm.Group.Name,
             HorizontalTextAlignment = TextAlignment.Start,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        name.BindThemedTextColor(s => s.GroupHeaderRow.NameText);
+        name.BindTextColor(() => theme.Styles.Value.GroupHeaderRow.NameText);
         return name;
     }
 

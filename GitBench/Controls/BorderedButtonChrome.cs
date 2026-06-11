@@ -2,6 +2,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Theming;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -16,6 +17,14 @@ namespace GitBench.Controls;
 /// </summary>
 internal static class BorderedButtonChrome
 {
+    public static void Bind(RectView background, IThemeService<ThemeStyles> theme, IReadable<bool> isHovered)
+    {
+        background.BindBackgroundColor(() =>
+            isHovered.Value ? theme.Styles.Value.BorderedButton.BackgroundHover : theme.Styles.Value.BorderedButton.BackgroundIdle);
+        background.BindBorderColor(() =>
+            BorderColorStyle.All(isHovered.Value ? theme.Styles.Value.BorderedButton.BorderHover : theme.Styles.Value.BorderedButton.BorderIdle));
+    }
+
     public static void Bind(RectView background, IReadable<bool> isHovered)
     {
         background.BindThemedBackgroundColor(s =>

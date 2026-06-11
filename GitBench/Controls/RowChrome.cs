@@ -17,7 +17,7 @@ internal static class RowChrome
     // Trailing status dot for any RepoBar row. Hidden when the repo has nothing to flag; red for an
     // unseen remote-op error (takes priority), else amber when the working tree is dirty. The store
     // reads are auto-tracked, so it appears/clears live. First of a planned badge family.
-    public static RectView CreateBadge(IRepoStatusStore status, Guid repoId)
+    public static RectView CreateBadge(IThemeService<ThemeStyles> theme, IRepoStatusStore status, Guid repoId)
     {
         var dot = new RectView
         {
@@ -25,9 +25,9 @@ internal static class RowChrome
             Height = 8,
             BorderRadius = BorderRadiusStyle.All(4),
         };
-        dot.BindThemedBackgroundColor(s => status.For(repoId).HasUnseenError
-            ? s.RepoBarRow.BadgeError
-            : s.RepoBarRow.BadgeDirty);
+        dot.BindBackgroundColor(() => status.For(repoId).HasUnseenError
+            ? theme.Styles.Value.RepoBarRow.BadgeError
+            : theme.Styles.Value.RepoBarRow.BadgeDirty);
         dot.BindIsVisible(() =>
         {
             var st = status.For(repoId);
@@ -36,10 +36,11 @@ internal static class RowChrome
         return dot;
     }
 
-    public static void BindRowBackground(RectView background, IReadable<bool> isHovered, IRepoRegistry registry, Guid rowId)
+    public static void BindRowBackground(IThemeService<ThemeStyles> theme, RectView background, IReadable<bool> isHovered, IRepoRegistry registry, Guid rowId)
     {
-        background.BindThemedBackgroundColor(s =>
+        background.BindBackgroundColor(() =>
         {
+            var s = theme.Styles.Value;
             var active = registry.Active.Value?.Id == rowId;
             return (isHovered.Value, active) switch
             {
@@ -50,10 +51,11 @@ internal static class RowChrome
         });
     }
 
-    public static void BindRowText(TextView view, IRepoRegistry registry, Repo row)
+    public static void BindRowText(IThemeService<ThemeStyles> theme, TextView view, IRepoRegistry registry, Repo row)
     {
-        view.BindThemedTextColor(s =>
+        view.BindTextColor(() =>
         {
+            var s = theme.Styles.Value;
             if (row.IsMissing) return s.RepoBarRow.TextMissing;
             return registry.Active.Value?.Id == row.Id
                 ? s.RepoBarRow.TextActive
