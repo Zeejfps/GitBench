@@ -1,12 +1,13 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
@@ -15,49 +16,48 @@ namespace GitBench.Features.Worktrees;
 /// Confirmation modal for `git worktree remove`. Refuses if the worktree has uncommitted
 /// changes or untracked files unless Force is checked (delegates the safety check to git).
 /// </summary>
-internal sealed class RemoveWorktreeDialog : ContainerView, IBind<RemoveWorktreeDialogViewModel>
+internal sealed record RemoveWorktreeDialog : Widget
 {
     // Mirrors the frame width Build() applies, so the path pre-wrap math below stays in sync.
     private const float DialogWidth = DialogFrame.WidthStandard;
     private const float CodeBlockInnerPadding = 8f;
 
-    private readonly string _path;
-    private readonly Action _onClose;
-    private readonly CheckboxView _forceCheckbox;
-    private readonly DialogShell _shell;
-    private readonly TextView _pathTextView;
-    private readonly TextStyle _pathTextStyle;
+    public required Repo Primary { get; init; }
+    public required Repo Worktree { get; init; }
+    public required Action OnClose { get; init; }
 
-    public RemoveWorktreeDialog(Repo primary, Repo worktree, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
-        _path = worktree.Path;
+        var vm = new RemoveWorktreeDialogViewModel(
+            new RemoveWorktreeRequest(Primary, Worktree),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var prompt = new TextView(CompatUi.Canvas)
-        {
-            Text = $"Remove worktree '{worktree.DisplayName}'?",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _pathTextStyle = new TextStyle
+        // Path strings have no whitespace, so the framework's word-wrap engine can't break
+        // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
+        // block stays inside the dialog's content width.
+        var pathTextStyle = new TextStyle
         {
             FontFamily = DiffOptions.MonoFontFamily,
             FontSize = 12f,
             TextWrap = TextWrap.Wrap,
         };
-        _pathTextView = new TextView(CompatUi.Canvas)
+        var available = DialogWidth
+                        - 2 * DialogFrame.DefaultPadding
+                        - 2 * CodeBlockInnerPadding
+                        - 2; // account for the 1px border on each side of the code-block
+        var wrappedPath = PathWrap.Wrap(Worktree.Path, pathTextStyle, available, ctx.Canvas);
+
+        var theme = ctx.Theme();
+        var pathTextView = new ThemedText
         {
-            Text = worktree.Path,
+            Value = wrappedPath,
             FontFamily = DiffOptions.MonoFontFamily,
             FontSize = 12f,
-            TextWrap = TextWrap.Wrap,
-        };
-        _pathTextView.BindThemed(s =>
-        {
-            _pathTextView.TextColor = s.DialogBody.BodyText;
-            _pathTextStyle.TextColor = s.DialogBody.BodyText;
-        });
+            Wrap = TextWrap.Wrap,
+            Color = s => s.DialogBody.BodyText,
+        }.BuildView(ctx);
 
         var pathBox = new RectView
         {
@@ -70,65 +70,49 @@ internal sealed class RemoveWorktreeDialog : ContainerView, IBind<RemoveWorktree
                 Top = 6,
                 Bottom = 6,
             },
-            Children = { _pathTextView },
+            Children = { pathTextView },
         };
-        pathBox.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
-        pathBox.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-
-        var hint = DialogFrame.Hint(
-            "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
-            TextWrap.Wrap);
-
-        _forceCheckbox = new CheckboxView("Remove even if dirty")
-        {
-            Height = 22,
-        };
-
-        _shell = new DialogShell("Remove worktree", onClose)
-        {
-            Action = ("Remove", DialogButtonRole.Destructive),
-            Body = { prompt, pathBox, _forceCheckbox, hint },
-        };
-
-        var dialogBody = _shell.View;
+        pathBox.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
+        pathBox.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
 
         // ClippingView wraps the dialog so a child that measures too wide (e.g. a path that
         // can't be word-broken because it has no spaces) still can't draw past the dialog's
-        // rounded edge. The path block also does its own pre-wrap on attach below.
-        var clip = new ClippingView();
-        clip.Children.Add(dialogBody);
-        AddChildToSelf(clip);
-
-        _shell.AttachConfirmKeys(this);
-
-        var request = new RemoveWorktreeRequest(primary, worktree);
-        this.UseViewModel(
-            ctx => new RemoveWorktreeDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-
-        this.Use(ctx =>
+        // rounded edge. The path block also does its own pre-wrap above.
+        var view = new Clipped
         {
-            // Path strings have no whitespace, so the framework's word-wrap engine can't break
-            // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
-            // block stays inside the dialog's content width.
-            var available = DialogWidth
-                            - 2 * DialogFrame.DefaultPadding
-                            - 2 * CodeBlockInnerPadding
-                            - 2; // account for the 1px border on each side of the code-block
-            _pathTextView.Text = PathWrap.Wrap(_path, _pathTextStyle, available, ctx.Canvas);
-            return (IDisposable?)null;
-        });
-    }
+            Child = new Dialog
+            {
+                Title = "Remove worktree",
+                OnClose = OnClose,
+                Action = ("Remove", DialogButtonRole.Destructive),
+                Command = vm.Remove,
+                ConfirmKeys = true,
+                Body =
+                [
+                    new ThemedText
+                    {
+                        Value = $"Remove worktree '{Worktree.DisplayName}'?",
+                        Wrap = TextWrap.Wrap,
+                        Color = s => s.DialogBody.BodyText,
+                    },
+                    new Raw { View = pathBox },
+                    new Checkbox
+                    {
+                        Label = "Remove even if dirty",
+                        Value = vm.Force,
+                        Height = 22,
+                    },
+                    new ThemedText
+                    {
+                        Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
+                        Wrap = TextWrap.Wrap,
+                        Color = s => s.DialogBody.RowTextMissing,
+                    },
+                ],
+            },
+        }.BuildView(ctx);
 
-    public void Bind(RemoveWorktreeDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-        _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _shell.BindCommand(vm.Remove);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
-
 }

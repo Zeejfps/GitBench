@@ -4,13 +4,14 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Operations;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
@@ -19,46 +20,88 @@ namespace GitBench.Features.Stash;
 // stash, pick the files to stash, and optionally keep the index (--keep-index) so staged
 // hunks stay around after stashing. --include-untracked is derived from the row checks:
 // passed iff any selected row is an untracked file.
-internal sealed class StashDialog : ContainerView, IBind<StashDialogViewModel>
+internal sealed record StashDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _messageField;
-    private readonly DialogShell _shell;
-    private readonly CheckboxView _keepStagedCheckbox;
-    private readonly ColumnView _fileListColumn;
-    private readonly TextView _fileListHeader;
-    private readonly TextView _fileListEmpty;
-    private readonly List<FileRow> _rows = new();
-    private StashDialogViewModel? _vm;
+    public required Repo Repo { get; init; }
+    public required Action OnClose { get; init; }
 
-    public StashDialog(Repo repo, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        Height = 520f;
+        var vm = new StashDialogViewModel(
+            new StashRequest(Repo),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<LocalChangesSelectionStore>());
 
-        _onClose = onClose;
+        var message = new State<string>(vm.Message.Value);
+        message.Changed += vm.SetMessage;
 
-        _messageField = new LabeledInputField("Message");
+        var keepStaged = new State<bool>(vm.KeepStaged.Value);
+        keepStaged.Changed += vm.SetKeepStaged;
 
-        _keepStagedCheckbox = new CheckboxView("Keep staged changes in index")
+        var view = new Dialog
         {
-            Height = 22,
-        };
+            Title = "Stash changes",
+            OnClose = OnClose,
+            Width = DialogFrame.WidthWide,
+            Height = 520f,
+            BodyGap = 10,
+            Action = ("Stash", DialogButtonRole.Primary),
+            Command = vm.Stash,
+            Body =
+            [
+                new LabeledInput
+                {
+                    Label = "Message",
+                    Value = message,
+                },
+                new ThemedText
+                {
+                    Bind = () => vm.FilesHeader.Value,
+                    Color = s => s.DialogBody.SectionHeaderText,
+                },
+                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
+                new Checkbox
+                {
+                    Label = "Keep staged changes in index",
+                    Value = keepStaged,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        _fileListHeader = DialogFrame.Label("Files");
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
+    }
 
-        _fileListEmpty = new TextView(CompatUi.Canvas)
+    private static View BuildFileList(Context ctx, StashDialogViewModel vm)
+    {
+        var theme = ctx.Theme();
+        var column = new ColumnView { Gap = 1 };
+
+        var files = vm.Files.Value;
+        if (files.Count == 0)
         {
-            Text = "No local changes.",
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _fileListEmpty.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
-
-        _fileListColumn = new ColumnView { Gap = 1 };
+            var empty = new TextView(ctx.Canvas)
+            {
+                Text = "No local changes.",
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalTextAlignment = TextAlignment.Center,
+            };
+            empty.BindTextColor(() => theme.Styles.Value.FileChangesSection.EmptyPlaceholderText);
+            column.Children.Add(empty);
+        }
+        else
+        {
+            foreach (var file in files)
+                column.Children.Add(BuildRow(ctx, vm, file));
+        }
 
         var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(_fileListColumn);
-        scrollPane.UseController(_ => new VerticalScrollPaneWheelController(scrollPane));
+        scrollPane.Children.Add(column);
+        scrollPane.UseController(ctx.Require<InputSystem>(),
+            () => new VerticalScrollPaneWheelController(scrollPane));
 
         var vScrollBar = ScrollBars.CreateVertical();
 
@@ -76,88 +119,24 @@ internal sealed class StashDialog : ContainerView, IBind<StashDialogViewModel>
                 },
             },
         };
-        fileScrollHost.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
-        fileScrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        fileScrollHost.Use(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
+        fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
+        fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
+        fileScrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        _shell = new DialogShell("Stash changes", onClose)
-        {
-            Width = DialogFrame.WidthWide,
-            BodyGap = 10,
-            Action = ("Stash", DialogButtonRole.Primary),
-            Body =
-            {
-                _messageField,
-                _fileListHeader,
-                new FlexItem { Grow = 1, Child = fileScrollHost },
-                _keepStagedCheckbox,
-            },
-        };
-        AddChildToSelf(_shell.View);
-
-        _shell.SubmitFrom(_messageField.Input);
-
-        var request = new StashRequest(repo);
-        this.UseViewModel(
-            ctx => new StashDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>(),
-                ctx.Require<LocalChangesSelectionStore>()),
-            Bind);
+        return fileScrollHost;
     }
 
-    public void Bind(StashDialogViewModel vm)
+    private static View BuildRow(Context ctx, StashDialogViewModel vm, StashFileRow file)
     {
-        _vm = vm;
-        vm.CloseRequested += _onClose;
-        vm.FocusMessageRequested += () => _shell.BeginEditing();
-
-        _messageField.Input.BindTwoWay(vm.Message, vm.SetMessage);
-
-        vm.KeepStaged.Subscribe(b => _keepStagedCheckbox.IsChecked.Value = b);
-        _keepStagedCheckbox.IsChecked.Changed += b => vm.SetKeepStaged(b);
-
-        _shell.BindCommand(vm.Stash);
-        _fileListHeader.BindText(vm.FilesHeader);
-
-        vm.Files.Subscribe(RenderFiles);
-
-        vm.RequestFocusMessage();
-    }
-
-    private void RenderFiles(IReadOnlyList<StashFileRow> files)
-    {
-        _fileListColumn.Children.Clear();
-        _rows.Clear();
-
-        if (files.Count == 0)
-        {
-            _fileListColumn.Children.Add(_fileListEmpty);
-            return;
-        }
-
-        foreach (var file in files)
-        {
-            var row = BuildRow(file);
-            _rows.Add(row);
-            _fileListColumn.Children.Add(row.View);
-        }
-    }
-
-    private FileRow BuildRow(StashFileRow file)
-    {
-        var vm = _vm!;
-
+        var theme = ctx.Theme();
         var badge = FileChangesUI.CreateStatusBadge(file.Display);
 
-        var pathText = new TextView(CompatUi.Canvas)
+        var pathText = new TextView(ctx.Canvas)
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
         };
-        pathText.BindThemedTextColor(s => s.FileChangeRow.RowText);
+        pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 
         var rowContent = new FlexRowView
         {
@@ -174,13 +153,8 @@ internal sealed class StashDialog : ContainerView, IBind<StashDialogViewModel>
         {
             Height = 22,
         };
-        // Seed from VM state BEFORE wiring Changed, so the initial paint doesn't trigger
-        // a phantom toggle through the handler.
         checkbox.IsChecked.Value = vm.CheckedPaths.Value.Contains(file.Path);
         checkbox.IsChecked.Changed += _ => vm.ToggleFile(file.Path);
-
-        return new FileRow(file, checkbox);
+        return checkbox;
     }
-
-    private sealed record FileRow(StashFileRow Row, CheckboxView View);
 }

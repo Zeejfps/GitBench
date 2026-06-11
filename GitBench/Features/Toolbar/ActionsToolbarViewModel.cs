@@ -174,7 +174,11 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new StashDialog(repo, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new StashDialog
+        {
+            Repo = repo,
+            OnClose = onClose,
+        }));
     }
 
     private void DoPush()

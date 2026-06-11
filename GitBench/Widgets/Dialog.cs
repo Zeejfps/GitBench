@@ -22,6 +22,7 @@ internal sealed record Dialog : Widget
     public required Action OnClose { get; init; }
     public required DialogShell.ActionSpec Action { get; init; }
     public IWidget[] Body { get; init; } = [];
+    public float BodyGap { get; init; } = 12f;
     public string CancelLabel { get; init; } = "Cancel";
     public IWidget? FooterLead { get; init; }
 
@@ -39,12 +40,19 @@ internal sealed record Dialog : Widget
         var shell = new DialogShell(Title, OnClose)
         {
             Action = Action,
+            BodyGap = BodyGap,
             CancelLabel = CancelLabel,
             Width = Width.IsSet ? Width.Value : DialogFrame.WidthStandard,
             FooterLead = FooterLead?.BuildView(ctx),
         };
+
+        // Body widgets build against a child scope carrying the input registry, so input
+        // widgets can opt in to the dialog's submit/focus wiring no matter how deeply nested.
+        var inputs = new DialogInputRegistry();
+        var bodyScope = new Context(ctx);
+        bodyScope.AddService(inputs);
         foreach (var widget in Body)
-            shell.Body.Add(widget.BuildView(ctx));
+            shell.Body.Add(widget.BuildView(bodyScope));
 
         var root = new ContainerView();
         root.Children.Add(shell.View);
@@ -55,6 +63,17 @@ internal sealed record Dialog : Widget
             else shell.BindCommand(Command);
         }
 
+        if (inputs.Entries.Count > 0)
+        {
+            shell.SubmitFrom(inputs.Entries.Select(e => e.Input).ToArray());
+            root.Behaviors.Add(new MountAction(() =>
+            {
+                var first = inputs.Entries[0];
+                if (first.SelectAllOnOpen) first.Input.SelectAll();
+                shell.BeginEditing();
+            }));
+        }
+
         if (ConfirmKeys)
         {
             root.UseController(ctx.Require<InputSystem>(),
@@ -62,5 +81,19 @@ internal sealed record Dialog : Widget
         }
 
         return root;
+    }
+
+    private sealed class MountAction : IViewBehavior
+    {
+        private readonly Action _onMount;
+
+        public MountAction(Action onMount)
+        {
+            _onMount = onMount;
+        }
+
+        public void Attach(View view) => _onMount();
+
+        public void Detach(View view) { }
     }
 }

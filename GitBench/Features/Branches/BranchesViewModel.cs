@@ -472,8 +472,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                 if (offerDrop)
-                    _bus.Broadcast(new ShowDialogMessage(onClose => new DropStashDialog(
-                        repo, index, label, subject, onClose)));
+                    _bus.Broadcast(new ShowDialogMessage(onClose => new DropStashDialog
+                    {
+                        Repo = repo,
+                        Index = index,
+                        Label = label,
+                        Subject = subject,
+                        OnClose = onClose,
+                    }));
             });
     }
 
@@ -770,13 +776,23 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 Enabled: !_stashGen.InFlight),
             new RepoBarContextMenu.Item(
                 "Rename…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameStashDialog(
-                    capturedRepo, index, subject, onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameStashDialog
+                {
+                    Repo = capturedRepo,
+                    Index = index,
+                    CurrentMessage = subject,
+                    OnClose = onClose,
+                })),
                 LucideIcons.PencilLine),
             new RepoBarContextMenu.Item(
                 "Delete…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteStashDialog(
-                    capturedRepo, index, subject, onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteStashDialog
+                {
+                    Repo = capturedRepo,
+                    Index = index,
+                    Subject = subject,
+                    OnClose = onClose,
+                })),
                 LucideIcons.Trash),
         };
     }

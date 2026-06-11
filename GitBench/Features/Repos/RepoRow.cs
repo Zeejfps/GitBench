@@ -85,7 +85,7 @@ public sealed class RepoRow : ContainerView
         {
             items.Add(new RepoBarContextMenu.Item(
                 "New worktree…",
-                () => bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog(repo, onClose))),
+                () => bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog { Primary = repo, OnClose = onClose })),
                 LucideIcons.Branch));
 
             var git = context.Get<IGitService>();
@@ -103,12 +103,12 @@ public sealed class RepoRow : ContainerView
 
             items.Add(new RepoBarContextMenu.Item(
                 "Add submodule…",
-                () => bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog(repo, onClose))),
+                () => bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog { Primary = repo, OnClose = onClose })),
                 LucideIcons.Package));
 
             items.Add(new RepoBarContextMenu.Item(
                 "Update all submodules…",
-                () => bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog(repo, null, onClose))),
+                () => bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose })),
                 LucideIcons.Pull));
         }
 

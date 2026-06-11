@@ -51,7 +51,7 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog(repo, null, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose }));
     }
 
     private void Reload()

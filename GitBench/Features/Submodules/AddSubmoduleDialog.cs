@@ -1,10 +1,9 @@
-using ZGF.Gui.Views;
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.TextInput;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
@@ -14,65 +13,55 @@ namespace GitBench.Features.Submodules;
 /// and optional tracked branch that `git submodule add` needs, plus a force toggle
 /// for re-using a path that's been previously used.
 /// </summary>
-internal sealed class AddSubmoduleDialog : ContainerView, IBind<AddSubmoduleDialogViewModel>
+internal sealed record AddSubmoduleDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _urlField;
-    private readonly LabeledInputField _pathField;
-    private readonly LabeledInputField _branchField;
-    private readonly CheckboxView _forceCheckbox;
-    private readonly DialogShell _shell;
+    public required Repo Primary { get; init; }
+    public required Action OnClose { get; init; }
 
-    public AddSubmoduleDialog(Repo primary, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new AddSubmoduleDialogViewModel(
+            new AddSubmoduleViewRequest(Primary),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        _urlField = new LabeledInputField("Repository URL");
-
-        _pathField = new LabeledInputField("Path inside parent")
+        var view = new Dialog
         {
-            Hint = "Where to clone the submodule, relative to the parent root.",
-        };
-
-        _branchField = new LabeledInputField("Track branch (optional)")
-        {
-            Hint = "Leave blank to pin to the upstream HEAD at clone time.",
-        };
-
-        _forceCheckbox = new CheckboxView("Force (allow paths previously used)")
-        {
-            Height = 22,
-        };
-
-        _shell = new DialogShell("Add submodule", onClose)
-        {
+            Title = "Add submodule",
+            OnClose = OnClose,
             Action = ("Add", DialogButtonRole.Primary),
-            Body = { _urlField, _pathField, _branchField, _forceCheckbox },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_urlField.Input, _pathField.Input, _branchField.Input);
+            Command = vm.Add,
+            Body =
+            [
+                new LabeledInput
+                {
+                    Label = "Repository URL",
+                    Value = vm.Url,
+                },
+                new LabeledInput
+                {
+                    Label = "Path inside parent",
+                    Value = vm.Path,
+                    Hint = "Where to clone the submodule, relative to the parent root.",
+                },
+                new LabeledInput
+                {
+                    Label = "Track branch (optional)",
+                    Value = vm.Branch,
+                    Hint = "Leave blank to pin to the upstream HEAD at clone time.",
+                    Status = vm.BranchStatus,
+                },
+                new Checkbox
+                {
+                    Label = "Force (allow paths previously used)",
+                    Value = vm.Force,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        var request = new AddSubmoduleViewRequest(primary);
-        this.UseViewModel(
-            ctx => new AddSubmoduleDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(AddSubmoduleDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _urlField.Input.BindTwoWay(vm.Url);
-        _pathField.Input.BindTwoWay(vm.Path);
-        _branchField.Input.BindTwoWay(vm.Branch);
-        _branchField.BindStatus(vm.BranchStatus);
-        _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _shell.BindCommand(vm.Add);
-
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

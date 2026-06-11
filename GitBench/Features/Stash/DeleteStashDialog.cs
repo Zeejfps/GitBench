@@ -1,9 +1,10 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
@@ -13,43 +14,42 @@ namespace GitBench.Features.Stash;
 /// `git stash drop` is destructive — the stash cannot be recovered from the UI
 /// afterwards, so the action is gated behind this prompt.
 /// </summary>
-internal sealed class DeleteStashDialog : ContainerView, IBind<DropStashViewModel>
+internal sealed record DeleteStashDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required int Index { get; init; }
+    public required string Subject { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DeleteStashDialog(Repo repo, int index, string subject, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new DropStashViewModel(
+            Repo,
+            Index,
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"{subject}\n\nThis stash will be permanently deleted. This cannot be undone.",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _shell = new DialogShell("Delete stash?", onClose)
-        {
+            Title = "Delete stash?",
+            OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
             Action = ("Delete", DialogButtonRole.Destructive),
-            Body = { prompt },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Drop,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"{Subject}\n\nThis stash will be permanently deleted. This cannot be undone.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+            ],
+        }.BuildView(ctx);
 
-        this.UseViewModel(
-            ctx => new DropStashViewModel(
-                repo,
-                index,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(DropStashViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-        _shell.BindCommand(vm.Drop);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

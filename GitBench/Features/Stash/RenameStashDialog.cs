@@ -1,12 +1,10 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
@@ -17,51 +15,45 @@ namespace GitBench.Features.Stash;
 /// drops the entry and re-stores it under the new message — which moves the renamed
 /// stash to the top of the list (stash@{0}).
 /// </summary>
-internal sealed class RenameStashDialog : ContainerView, IBind<RenameStashDialogViewModel>
+internal sealed record RenameStashDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _messageField;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required int Index { get; init; }
+    public required string CurrentMessage { get; init; }
+    public required Action OnClose { get; init; }
 
-    public RenameStashDialog(Repo repo, int index, string currentMessage, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new RenameStashDialogViewModel(
+            new RenameStashRequest(Repo, Index, CurrentMessage),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var subtitle = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Renaming '{currentMessage}'",
-            TextWrap = TextWrap.Wrap,
-        };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _messageField = new LabeledInputField("Description");
-
-        _shell = new DialogShell("Rename stash", onClose)
-        {
+            Title = "Rename stash",
+            OnClose = OnClose,
             Action = ("Rename", DialogButtonRole.Primary),
-            Body = { subtitle, _messageField },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_messageField.Input);
+            Command = vm.Rename,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Renaming '{CurrentMessage}'",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new LabeledInput
+                {
+                    Label = "Description",
+                    Value = vm.Message,
+                    SelectAllOnOpen = true,
+                },
+            ],
+        }.BuildView(ctx);
 
-        var request = new RenameStashRequest(repo, index, currentMessage);
-        this.UseViewModel(
-            ctx => new RenameStashDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(RenameStashDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _messageField.Input.BindTwoWay(vm.Message);
-        _shell.BindCommand(vm.Rename);
-
-        _messageField.Input.SelectAll();
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

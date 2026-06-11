@@ -1,10 +1,9 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
@@ -13,57 +12,53 @@ namespace GitBench.Features.Submodules;
 /// Confirmation modal for `git submodule deinit` + `git rm`. Refuses if the submodule
 /// has uncommitted changes unless Force is checked (delegates the safety check to git).
 /// </summary>
-internal sealed class DeinitSubmoduleDialog : ContainerView, IBind<DeinitSubmoduleDialogViewModel>
+internal sealed record DeinitSubmoduleDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly CheckboxView _forceCheckbox;
-    private readonly DialogShell _shell;
+    public required Repo Primary { get; init; }
+    public required Repo Submodule { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DeinitSubmoduleDialog(Repo primary, Repo submodule, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new DeinitSubmoduleDialogViewModel(
+            new DeinitSubmoduleViewRequest(Primary, Submodule),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Deinit and remove submodule '{submodule.DisplayName}'?",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var detail = DialogFrame.Hint(
-            "Runs `git submodule deinit` followed by `git rm`. The submodule will " +
-            "be removed from the working tree and the deletion staged in the parent " +
-            "for your next commit.",
-            TextWrap.Wrap);
-
-        _forceCheckbox = new CheckboxView("Deinit even if dirty")
-        {
-            Height = 22,
-        };
-
-        _shell = new DialogShell("Deinit submodule", onClose)
-        {
+            Title = "Deinit submodule",
+            OnClose = OnClose,
             Action = ("Deinit", DialogButtonRole.Destructive),
-            Body = { prompt, detail, _forceCheckbox },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Deinit,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Deinit and remove submodule '{Submodule.DisplayName}'?",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new ThemedText
+                {
+                    Value = "Runs `git submodule deinit` followed by `git rm`. The submodule will " +
+                            "be removed from the working tree and the deletion staged in the parent " +
+                            "for your next commit.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+                new Checkbox
+                {
+                    Label = "Deinit even if dirty",
+                    Value = vm.Force,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new DeinitSubmoduleViewRequest(primary, submodule);
-        this.UseViewModel(
-            ctx => new DeinitSubmoduleDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(DeinitSubmoduleDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-        _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _shell.BindCommand(vm.Deinit);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

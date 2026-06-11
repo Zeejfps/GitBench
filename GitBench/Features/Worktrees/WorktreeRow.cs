@@ -52,7 +52,7 @@ public sealed class WorktreeRow : NestedRepoRow
             {
                 items.Add(new RepoBarContextMenu.Item(
                     "Remove worktree…",
-                    () => bus.Broadcast(new ShowDialogMessage(onClose => new RemoveWorktreeDialog(primary, worktree, onClose))),
+                    () => bus.Broadcast(new ShowDialogMessage(onClose => new RemoveWorktreeDialog { Primary = primary, Worktree = worktree, OnClose = onClose })),
                     LucideIcons.Trash));
             }
         }

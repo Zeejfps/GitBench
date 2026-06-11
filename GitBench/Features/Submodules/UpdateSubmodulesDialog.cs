@@ -2,10 +2,10 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
@@ -15,112 +15,78 @@ namespace GitBench.Features.Submodules;
 /// on an individual submodule row. Lets the user pick init / recursive flags plus an
 /// update strategy (checkout / merge / rebase).
 /// </summary>
-internal sealed class UpdateSubmodulesDialog : ContainerView, IBind<UpdateSubmodulesDialogViewModel>
+internal sealed record UpdateSubmodulesDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly CheckboxView _initCheckbox;
-    private readonly CheckboxView _recursiveCheckbox;
-    private readonly CheckboxView _checkoutMode;
-    private readonly CheckboxView _mergeMode;
-    private readonly CheckboxView _rebaseMode;
-    private readonly DialogShell _shell;
+    public required Repo Primary { get; init; }
+    public required Repo? Target { get; init; }
+    public required Action OnClose { get; init; }
 
-    public UpdateSubmodulesDialog(Repo primary, Repo? target, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new UpdateSubmodulesDialogViewModel(
+            new UpdateSubmodulesViewRequest(Primary, Target),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var titleText = target is null ? "Update all submodules" : "Update submodule";
-
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = target is null
-                ? $"Run `git submodule update` on every submodule under '{primary.DisplayName}'."
-                : $"Run `git submodule update` on '{target.DisplayName}'.",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _initCheckbox = new CheckboxView("Init missing submodules (--init)") { Height = 22 };
-        _recursiveCheckbox = new CheckboxView("Recurse into nested submodules (--recursive)") { Height = 22 };
-
-        var modeLabel = DialogFrame.Label("Strategy");
-
-        _checkoutMode = new CheckboxView("Checkout (default — reset to recorded SHA)") { Height = 22 };
-        _mergeMode = new CheckboxView("Merge (--merge)") { Height = 22 };
-        _rebaseMode = new CheckboxView("Rebase (--rebase)") { Height = 22 };
-
-        var conflictsHint = DialogFrame.Hint(
-            "Merge/rebase strategies may leave the submodule mid-merge on conflict — " +
-            "the Operation banner will offer Abort.",
-            TextWrap.Wrap);
-
-        _shell = new DialogShell(titleText, onClose)
-        {
+            Title = Target is null ? "Update all submodules" : "Update submodule",
+            OnClose = OnClose,
             BodyGap = 10,
             Action = ("Update", DialogButtonRole.Primary),
+            Command = vm.Update,
+            Error = vm.Error,
+            ConfirmKeys = true,
             Body =
+            [
+                new ThemedText
+                {
+                    Value = Target is null
+                        ? $"Run `git submodule update` on every submodule under '{Primary.DisplayName}'."
+                        : $"Run `git submodule update` on '{Target.DisplayName}'.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new Checkbox { Label = "Init missing submodules (--init)", Value = vm.Init, Height = 22 },
+                new Checkbox { Label = "Recurse into nested submodules (--recursive)", Value = vm.Recursive, Height = 22 },
+                new ThemedText
+                {
+                    Value = "Strategy",
+                    Color = s => s.DialogBody.SectionHeaderText,
+                },
+                ModeCheckbox(vm, "Checkout (default — reset to recorded SHA)", SubmoduleUpdateMode.Checkout),
+                ModeCheckbox(vm, "Merge (--merge)", SubmoduleUpdateMode.Merge),
+                ModeCheckbox(vm, "Rebase (--rebase)", SubmoduleUpdateMode.Rebase),
+                new ThemedText
+                {
+                    Value = "Merge/rebase strategies may leave the submodule mid-merge on conflict — " +
+                            "the Operation banner will offer Abort.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+            ],
+        }.BuildView(ctx);
+
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
+    }
+
+    private static IWidget ModeCheckbox(UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)
+    {
+        var view = new CheckboxView(label) { Height = 22 };
+        view.Bind(vm.Mode, m => view.IsChecked.Value = m == mode);
+        view.IsChecked.Changed += isCheckedNow =>
+        {
+            if (!isCheckedNow)
             {
-                prompt,
-                _initCheckbox,
-                _recursiveCheckbox,
-                modeLabel,
-                _checkoutMode,
-                _mergeMode,
-                _rebaseMode,
-                conflictsHint,
-            },
+                if (vm.Mode.Value == mode)
+                    view.IsChecked.Value = true;
+                return;
+            }
+            if (vm.Mode.Value == mode) return;
+            vm.Mode.Value = mode;
         };
-        AddChildToSelf(_shell.View);
-
-        _shell.AttachConfirmKeys(this);
-
-        var request = new UpdateSubmodulesViewRequest(primary, target);
-        this.UseViewModel(
-            ctx => new UpdateSubmodulesDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
+        return new Raw { View = view };
     }
-
-    public void Bind(UpdateSubmodulesDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _initCheckbox.IsChecked.BindTwoWay(vm.Init);
-        _recursiveCheckbox.IsChecked.BindTwoWay(vm.Recursive);
-        _shell.ActionButton.BindBusyCommand(vm.Update);
-        _shell.CancelButton.DisableWhile(vm.Update.IsRunning);
-        _shell.Error.BindText(vm.Error, s => s ?? string.Empty);
-
-        vm.Mode.Subscribe(m =>
-        {
-            _checkoutMode.IsChecked.Value = m == SubmoduleUpdateMode.Checkout;
-            _mergeMode.IsChecked.Value = m == SubmoduleUpdateMode.Merge;
-            _rebaseMode.IsChecked.Value = m == SubmoduleUpdateMode.Rebase;
-        });
-        _checkoutMode.IsChecked.Changed += b => SelectMode(vm, SubmoduleUpdateMode.Checkout, b);
-        _mergeMode.IsChecked.Changed += b => SelectMode(vm, SubmoduleUpdateMode.Merge, b);
-        _rebaseMode.IsChecked.Changed += b => SelectMode(vm, SubmoduleUpdateMode.Rebase, b);
-    }
-
-    private void SelectMode(UpdateSubmodulesDialogViewModel vm, SubmoduleUpdateMode mode, bool isCheckedNow)
-    {
-        if (!isCheckedNow)
-        {
-            if (vm.Mode.Value == mode)
-                CheckboxFor(mode).IsChecked.Value = true;
-            return;
-        }
-        if (vm.Mode.Value == mode) return;
-        vm.Mode.Value = mode;
-    }
-
-    private CheckboxView CheckboxFor(SubmoduleUpdateMode mode) => mode switch
-    {
-        SubmoduleUpdateMode.Merge => _mergeMode,
-        SubmoduleUpdateMode.Rebase => _rebaseMode,
-        _ => _checkoutMode,
-    };
 }

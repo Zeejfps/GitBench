@@ -63,11 +63,11 @@ public sealed class SubmoduleRow : NestedRepoRow
             {
                 items.Add(new RepoBarContextMenu.Item(
                     "Update submodule…",
-                    () => bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog(primary, submodule, onClose))),
+                    () => bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = primary, Target = submodule, OnClose = onClose })),
                     LucideIcons.Pull));
                 items.Add(new RepoBarContextMenu.Item(
                     "Deinit submodule…",
-                    () => bus.Broadcast(new ShowDialogMessage(onClose => new DeinitSubmoduleDialog(primary, submodule, onClose))),
+                    () => bus.Broadcast(new ShowDialogMessage(onClose => new DeinitSubmoduleDialog { Primary = primary, Submodule = submodule, OnClose = onClose })),
                     LucideIcons.Trash));
             }
         }
