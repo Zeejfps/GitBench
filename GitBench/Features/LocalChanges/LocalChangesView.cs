@@ -5,7 +5,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed class LocalChangesView : MultiChildView, IBind<LocalChangesViewModel>
+internal sealed class LocalChangesView : ContainerView, IBind<LocalChangesViewModel>
 {
     private readonly LocalChangesContentView _content;
     private readonly CommitBarView _commitBar;

@@ -19,7 +19,7 @@ namespace GitBench.Controls;
 /// laid-out width to <c>MeasureHeight</c>) and stored as <c>PreferredHeight</c>; the next
 /// layout pass picks it up.
 /// </summary>
-internal sealed class GrowingDescriptionField : MultiChildView
+internal sealed class GrowingDescriptionField : ContainerView
 {
     private const float BoxBorderThickness = 1f;
     private const float BoxPaddingHorizontal = 6f;
@@ -73,7 +73,7 @@ internal sealed class GrowingDescriptionField : MultiChildView
         _minHeight = minHeight;
         _maxHeight = maxHeight;
 
-        _input = new TextInputView
+        _input = new TextInputView(CompatUi.Canvas)
         {
             TextVerticalAlignment = TextAlignment.Start,
             TextWrap = TextWrap.Wrap,
@@ -86,7 +86,7 @@ internal sealed class GrowingDescriptionField : MultiChildView
             _input.SelectionRectColor = s.TextInput.Selection;
             _input.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _inputController = new TextInputViewKbmController(_input) { IsMultiLine = true };
+        _inputController = new TextInputViewKbmController(_input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
         _input.UseController(_ => _inputController);
 
         _scrollPane = new ScrollPane();

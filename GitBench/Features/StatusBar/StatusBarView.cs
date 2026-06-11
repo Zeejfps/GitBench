@@ -14,7 +14,7 @@ namespace GitBench.Features.StatusBar;
 /// South region). Left side shows ambient repo context — active repo, current branch, and
 /// ahead/behind counts; right side holds the theme toggle and the running build version.
 /// </summary>
-internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
+internal sealed class StatusBarView : ContainerView, IBind<StatusBarViewModel>
 {
     private const int BarHeight = 22;
     private const int HorizontalPadding = 8;
@@ -57,7 +57,7 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
         _updateButton = new StatusBarIconButton("Check for updates");
 
         // Brief inline result of a manual check ("up to date" / "failed"); hidden when empty.
-        _updateFeedback = new TextView
+        _updateFeedback = new TextView(CompatUi.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,
@@ -65,7 +65,7 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
         };
         _updateFeedback.BindThemedTextColor(s => s.StatusBar.Text);
 
-        var version = new TextView
+        var version = new TextView(CompatUi.Canvas)
         {
             Text = $"v{AppVersion.Display}",
             FontSize = 11f,
@@ -136,7 +136,7 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
     // TextView (for text binding). Both glyph and label render in the muted status-bar color.
     private static (FlexRowView Row, TextView Label) Segment(string glyph)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = glyph,
             FontFamily = LucideIcons.FontFamily,
@@ -145,7 +145,7 @@ internal sealed class StatusBarView : MultiChildView, IBind<StatusBarViewModel>
         };
         icon.BindThemedTextColor(s => s.StatusBar.Text);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,

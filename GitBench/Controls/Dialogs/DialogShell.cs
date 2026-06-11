@@ -71,7 +71,7 @@ internal sealed class DialogShell
     /// Optional content placed at the left of the footer in place of the empty spacer — used by
     /// the merge/rebase dialogs to show a preview chip beside the buttons.
     /// </summary>
-    public MultiChildView? FooterLead { get; init; }
+    public View? FooterLead { get; init; }
 
     /// <summary>Body rows, top to bottom. Populated via a collection initializer.</summary>
     public List<View> Body { get; } = new();

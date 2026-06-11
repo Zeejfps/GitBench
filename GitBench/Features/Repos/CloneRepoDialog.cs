@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
@@ -14,7 +15,7 @@ namespace GitBench.Features.Repos;
 /// directory (with a Browse button), and the subfolder name, then runs <c>git clone</c> and
 /// opens the result. See <see cref="CloneRepoDialogViewModel"/>.
 /// </summary>
-internal sealed class CloneRepoDialog : MultiChildView, IBind<CloneRepoDialogViewModel>
+internal sealed class CloneRepoDialog : ContainerView, IBind<CloneRepoDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _urlField;
@@ -78,7 +79,7 @@ internal sealed class CloneRepoDialog : MultiChildView, IBind<CloneRepoDialogVie
 
     private void PickLocation()
     {
-        var shell = Context?.Get<IPlatformShell>();
+        var shell = this.Context?.Get<IPlatformShell>();
         var picked = shell?.PickFolder("Choose where to clone");
         if (!string.IsNullOrEmpty(picked) && _vm != null)
             _vm.ParentDir.Value = picked;

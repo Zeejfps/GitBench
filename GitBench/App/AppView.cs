@@ -16,7 +16,7 @@ using ZGF.KeyboardModule;
 
 namespace GitBench.App;
 
-public sealed class AppView : MultiChildView
+public sealed class AppView : ContainerView
 {
     public AppView(PreferencesService preferences, UpdateService updateService)
     {
@@ -33,9 +33,9 @@ public sealed class AppView : MultiChildView
                 new FlexItem
                 {
                     Grow = 1,
-                    // Wrapped in a MultiChildView so it satisfies FlexItem.Child (BorderLayoutView
+                    // Wrapped in a ContainerView so it satisfies FlexItem.Child (BorderLayoutView
                     // is a plain View); the wrapper stretches the layout to fill the grow region.
-                    Child = new MultiChildView { Children = { new BorderLayoutView
+                    Child = new ContainerView { Children = { new BorderLayoutView
                     {
                         West = ResizableLeftSidebar.Build(
                             new RepoBar(),
@@ -58,9 +58,9 @@ public sealed class AppView : MultiChildView
                                 new FlexItem
                                 {
                                     Grow = 1,
-                                    // MultiChildView wrapper stretches the BorderLayout to fill
+                                    // ContainerView wrapper stretches the BorderLayout to fill
                                     // the grow region (BorderLayoutView is a plain View).
-                                    Child = new MultiChildView { Children = { new BorderLayoutView
+                                    Child = new ContainerView { Children = { new BorderLayoutView
                                     {
                                         West = ResizableLeftSidebar.Build(
                                             new FlexColumnView

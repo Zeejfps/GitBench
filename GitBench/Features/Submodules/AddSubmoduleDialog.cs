@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
@@ -13,7 +14,7 @@ namespace GitBench.Features.Submodules;
 /// and optional tracked branch that `git submodule add` needs, plus a force toggle
 /// for re-using a path that's been previously used.
 /// </summary>
-internal sealed class AddSubmoduleDialog : MultiChildView, IBind<AddSubmoduleDialogViewModel>
+internal sealed class AddSubmoduleDialog : ContainerView, IBind<AddSubmoduleDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _urlField;

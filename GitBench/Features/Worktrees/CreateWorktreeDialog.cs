@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
@@ -14,7 +15,7 @@ namespace GitBench.Features.Worktrees;
 /// fields `git worktree add` needs (path, start point, optional new branch name) plus
 /// a force toggle for re-using an existing dirty path.
 /// </summary>
-internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktreeDialogViewModel>
+internal sealed class CreateWorktreeDialog : ContainerView, IBind<CreateWorktreeDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _pathField;
@@ -88,7 +89,7 @@ internal sealed class CreateWorktreeDialog : MultiChildView, IBind<CreateWorktre
 
     private void PickPath()
     {
-        var shell = Context?.Get<IPlatformShell>();
+        var shell = this.Context?.Get<IPlatformShell>();
         var picked = shell?.PickFolder("Select worktree location");
         if (!string.IsNullOrEmpty(picked) && _vm != null)
         {

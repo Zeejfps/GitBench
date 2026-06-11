@@ -15,7 +15,7 @@ namespace GitBench.Controls.Dialogs;
 /// hidden, and the dialog looks exactly as it did before. This is the single place every dialog
 /// gets "never taller than the window" without each one wiring its own scroll machinery.
 /// </summary>
-internal sealed class DialogScrollRegion : MultiChildView
+internal sealed class DialogScrollRegion : ContainerView
 {
     private readonly VerticalScrollPane _pane;
     private readonly VerticalScrollBarView _bar;

@@ -17,7 +17,7 @@ namespace GitBench.Features.Commits;
 /// "push to all remotes" toggle. A non-empty message yields an annotated tag, otherwise a
 /// lightweight one — see <see cref="IGitService.CreateTag"/>.
 /// </summary>
-internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogViewModel>
+internal sealed class CreateTagDialog : ContainerView, IBind<CreateTagDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
@@ -29,7 +29,7 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
     {
         _onClose = onClose;
 
-        var subtitle = new TextView { Text = "Create annotated tag", TextWrap = TextWrap.Wrap };
+        var subtitle = new TextView(CompatUi.Canvas) { Text = "Create annotated tag", TextWrap = TextWrap.Wrap };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
         var targetRow = BuildLabeledRow("Create tag at:", BuildCommitValue(shortSha, summary));
@@ -100,9 +100,9 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         Children = { label, field },
     };
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView { Text = label, VerticalTextAlignment = TextAlignment.Center };
+        var labelText = new TextView(CompatUi.Canvas) { Text = label, VerticalTextAlignment = TextAlignment.Center };
         labelText.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
         var labelColumn = new FlexRowView
         {
@@ -124,9 +124,9 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         };
     }
 
-    private static MultiChildView BuildCommitValue(string shortSha, string summary)
+    private static View BuildCommitValue(string shortSha, string summary)
     {
-        var dot = new TextView
+        var dot = new TextView(CompatUi.Canvas)
         {
             Text = "●",
             FontSize = 10,
@@ -136,13 +136,13 @@ internal sealed class CreateTagDialog : MultiChildView, IBind<CreateTagDialogVie
         };
         dot.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var shaLabel = new TextView { Text = shortSha, VerticalTextAlignment = TextAlignment.Center };
+        var shaLabel = new TextView(CompatUi.Canvas) { Text = shortSha, VerticalTextAlignment = TextAlignment.Center };
         shaLabel.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
         // Ellipsis (…) on overflow rather than NoWrap-in-a-ClippingView: the clip let the
         // single line run past the dialog's right edge instead of truncating it. Ellipsis
         // measures against the laid-out Grow width and cuts the text with a trailing "…".
-        var summaryLabel = new TextView
+        var summaryLabel = new TextView(CompatUi.Canvas)
         {
             Text = summary,
             VerticalTextAlignment = TextAlignment.Center,

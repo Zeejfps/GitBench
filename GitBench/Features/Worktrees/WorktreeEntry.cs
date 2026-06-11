@@ -9,7 +9,7 @@ namespace GitBench.Features.Worktrees;
 
 // Worktree analogue of RepoEntry / SubmoduleEntry: a worktree row plus its collapsible
 // submodule children (a worktree shares the primary's .gitmodules).
-public sealed class WorktreeEntry : MultiChildView
+public sealed class WorktreeEntry : ContainerView
 {
     public WorktreeEntry(Repo worktree, IRepoRegistry registry, IRepoStatusStore status, int depth)
     {
@@ -19,7 +19,7 @@ public sealed class WorktreeEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
 
-        children.BindChildren(
+        children.Children.BindChildren(
             () =>
             {
                 _ = registry.WorktreesChanged.Value;

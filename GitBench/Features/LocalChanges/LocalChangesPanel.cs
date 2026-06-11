@@ -26,7 +26,7 @@ namespace GitBench.Features.LocalChanges;
 /// This view owns the per-row drawing (status badge + path text), the empty-state
 /// swap, and the <see cref="IScrollableContent"/> surface for the external scroll bars.
 /// </summary>
-internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
+internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 {
     private readonly string _title;
     private readonly DiffSide _side;
@@ -315,7 +315,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
 
     private void OnRowContextRequested(int rowIndex, PointF point)
     {
-        if (Context == null || _buildContextMenu == null) return;
+        if (this.Context == null || _buildContextMenu == null) return;
 
         var onRow = rowIndex >= 0 && rowIndex < _rows.Count;
         var target = onRow ? _rows[rowIndex] : null;
@@ -324,7 +324,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
         if (items.Count == 0) return;
 
         if (onRow) _list.SetContextHighlight(rowIndex);
-        var opened = RepoBarContextMenu.Show(Context, point, items);
+        var opened = RepoBarContextMenu.Show(this.Context, point, items);
         if (opened == null)
         {
             _list.SetContextHighlight(null);
@@ -336,7 +336,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
-        if (Context == null) return;
+        if (this.Context == null) return;
 
         var row = _rows[rowIndex];
         var selection = _selection.Value;
@@ -345,7 +345,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
         if (row.Kind == FileRowKind.Folder)
         {
             FileChangesUI.DrawFolderRow(
-                Context.Canvas,
+                this.Context.Canvas,
                 rowRect,
                 row.DisplayName,
                 row.Indent,
@@ -363,7 +363,7 @@ internal sealed class LocalChangesPanel : MultiChildView, IScrollableContent
 
         var file = row.File!;
         FileChangesUI.DrawFileRow(
-            Context.Canvas,
+            this.Context.Canvas,
             rowRect,
             file,
             isSelected,

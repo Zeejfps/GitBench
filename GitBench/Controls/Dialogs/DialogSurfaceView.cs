@@ -5,13 +5,13 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Controls.Dialogs;
 
-public sealed class DialogSurfaceView : MultiChildView
+public sealed class DialogSurfaceView : ContainerView
 {
-    private readonly MultiChildView _overlay;
+    private readonly ContainerView _overlay;
 
     public DialogSurfaceView()
     {
-        _overlay = new MultiChildView
+        _overlay = new ContainerView
         {
             ZIndex = 1000,
         };

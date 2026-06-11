@@ -47,7 +47,7 @@ internal static class DialogFrame
 
     public static FlexRowView Header(string title, Action onClose)
     {
-        var titleText = new TextView
+        var titleText = new TextView(CompatUi.Canvas)
         {
             Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
@@ -61,7 +61,7 @@ internal static class DialogFrame
             Height = 28,
             Children =
             {
-                new MultiChildView { Width = CloseButtonSize },
+                new ContainerView { Width = CloseButtonSize },
                 new FlexItem { Grow = 1, Child = titleText },
                 new DialogCloseButton(onClose),
             },
@@ -78,12 +78,12 @@ internal static class DialogFrame
     // Standard dialog footer: buttons sit at the bottom-right (Cancel then the action), each
     // at least DefaultButtonMinWidth wide but free to grow for longer labels. A grow-1 spacer
     // pushes them right. This is the single footer layout for every dialog.
-    public static FlexRowView ButtonsRow(MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap)
-        => ButtonsRow(new MultiChildView(), cancel, primary, gap);
+    public static FlexRowView ButtonsRow(View cancel, View primary, float gap = DefaultButtonsGap)
+        => ButtonsRow(new ContainerView(), cancel, primary, gap);
 
     // Footer variant with leading content (e.g. a merge/rebase preview chip) in place of the
     // empty spacer. The lead grows to fill, keeping the buttons pinned bottom-right.
-    public static FlexRowView ButtonsRow(MultiChildView lead, MultiChildView cancel, MultiChildView primary, float gap = DefaultButtonsGap)
+    public static FlexRowView ButtonsRow(View lead, View cancel, View primary, float gap = DefaultButtonsGap)
     {
         cancel.MinWidthConstraint = DefaultButtonMinWidth;
         primary.MinWidthConstraint = DefaultButtonMinWidth;
@@ -102,7 +102,7 @@ internal static class DialogFrame
 
     public static TextView ErrorView()
     {
-        var view = new TextView
+        var view = new TextView(CompatUi.Canvas)
         {
             Text = string.Empty,
             TextWrap = TextWrap.Wrap,
@@ -113,21 +113,21 @@ internal static class DialogFrame
 
     public static TextView Label(string text)
     {
-        var view = new TextView { Text = text };
+        var view = new TextView(CompatUi.Canvas) { Text = text };
         view.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
         return view;
     }
 
     public static TextView Hint(string text, TextWrap wrap = TextWrap.NoWrap)
     {
-        var view = new TextView { Text = text, TextWrap = wrap };
+        var view = new TextView(CompatUi.Canvas) { Text = text, TextWrap = wrap };
         view.BindThemedTextColor(s => s.DialogBody.RowTextMissing);
         return view;
     }
 
     public static TextInputView TextInput()
     {
-        var view = new TextInputView();
+        var view = new TextInputView(CompatUi.Canvas);
         view.BindThemed(s =>
         {
             view.BackgroundColor = s.TextInput.Background;

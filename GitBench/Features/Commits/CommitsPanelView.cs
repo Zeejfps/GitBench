@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-public sealed class CommitsPanelView : MultiChildView
+public sealed class CommitsPanelView : ContainerView
 {
     private const float WarningBarHeight = 24f;
 
@@ -26,7 +26,7 @@ public sealed class CommitsPanelView : MultiChildView
         _searchBar = new CommitSearchBarView();
         _scrollBar = ScrollBars.CreateVertical();
 
-        _warningText = new TextView
+        _warningText = new TextView(CompatUi.Canvas)
         {
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,

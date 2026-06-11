@@ -18,7 +18,7 @@ internal sealed class LocalChangesHeaderActionButton : HoverableButton
         Width = ButtonSize;
         Height = ButtonSize;
 
-        var iconView = new TextView
+        var iconView = new TextView(CompatUi.Canvas)
         {
             Text = icon,
             FontFamily = LucideIcons.FontFamily,

@@ -13,7 +13,7 @@ namespace GitBench.Features.Stash;
 /// `git stash drop` is destructive — the stash cannot be recovered from the UI
 /// afterwards, so the action is gated behind this prompt.
 /// </summary>
-internal sealed class DeleteStashDialog : MultiChildView, IBind<DropStashViewModel>
+internal sealed class DeleteStashDialog : ContainerView, IBind<DropStashViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -22,7 +22,7 @@ internal sealed class DeleteStashDialog : MultiChildView, IBind<DropStashViewMod
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"{subject}\n\nThis stash will be permanently deleted. This cannot be undone.",
             TextWrap = TextWrap.Wrap,

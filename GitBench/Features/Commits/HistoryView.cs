@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Theming;
@@ -12,7 +13,7 @@ namespace GitBench.Features.Commits;
 /// Lays out the commits panel on the left and a resizable commit details panel on the right,
 /// with a draggable divider between them.
 /// </summary>
-public sealed class HistoryView : MultiChildView
+public sealed class HistoryView : ContainerView
 {
     private const float MinDetailsWidth = 240f;
     private const float MaxDetailsWidth = 800f;
@@ -42,18 +43,14 @@ public sealed class HistoryView : MultiChildView
             _splitterStyles = s.HistorySplitter;
             SetDirty();
         });
-    }
 
-    protected override void OnAttachedToContext(Context context)
-    {
-        _preferences = context.Get<PreferencesService>();
-        if (_preferences is not null)
-            _detailsWidth = _preferences.Current.CommitDetailsWidth;
-    }
-
-    protected override void OnDetachedFromContext(Context context)
-    {
-        _preferences = null;
+        this.Use(ctx =>
+        {
+            _preferences = ctx.Get<PreferencesService>();
+            if (_preferences is not null)
+                _detailsWidth = _preferences.Current.CommitDetailsWidth;
+            return new ActionDisposable(() => _preferences = null);
+        });
     }
 
     protected override void OnLayoutChildren()

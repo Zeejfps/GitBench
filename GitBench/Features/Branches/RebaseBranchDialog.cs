@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDialogViewModel>
+internal sealed class RebaseBranchDialog : ContainerView, IBind<RebaseBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -23,7 +23,7 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = "Copy commits from one branch to another",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -40,14 +40,14 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
         };
         var autostashRow = BuildLabeledRow("", _autostashCheckbox);
 
-        _previewIcon = new TextView
+        _previewIcon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 14,
             Text = string.Empty,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _previewText = new TextView
+        _previewText = new TextView(CompatUi.Canvas)
         {
             Text = string.Empty,
             VerticalTextAlignment = TextAlignment.Center,
@@ -96,9 +96,9 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
         });
     }
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView
+        var labelText = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
@@ -126,7 +126,7 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
 
     private static FlexRowView BuildBranchChip(string name)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -135,7 +135,7 @@ internal sealed class RebaseBranchDialog : MultiChildView, IBind<RebaseBranchDia
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = name,
             VerticalTextAlignment = TextAlignment.Center,

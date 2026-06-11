@@ -22,7 +22,7 @@ internal sealed class IdentityChipButton : HoverableButton
 
     public IdentityChipButton()
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -31,7 +31,7 @@ internal sealed class IdentityChipButton : HoverableButton
         icon.BindText(Icon);
         icon.BindThemedTextColor(s => s.StatusBar.Text);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,
@@ -60,7 +60,7 @@ internal sealed class IdentityChipButton : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = Context;
+        var ctx = this.Context;
         var items = MenuProvider?.Invoke();
         if (ctx == null || items == null || items.Count == 0) return;
         RepoBarContextMenu.Show(ctx, Position.TopLeft, items, MenuPlacement.Above);

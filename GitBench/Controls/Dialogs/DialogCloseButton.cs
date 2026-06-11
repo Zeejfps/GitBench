@@ -12,7 +12,7 @@ public sealed class DialogCloseButton : HoverableButton
         Width = 28;
         Height = 28;
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.X,
             FontFamily = LucideIcons.FontFamily,

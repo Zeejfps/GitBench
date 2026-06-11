@@ -20,7 +20,7 @@ namespace GitBench.Features.LocalChanges;
 /// destructive action: the worktree changes (and any untracked files in the set) cannot
 /// be recovered from git afterwards.
 /// </summary>
-internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChangesViewModel>
+internal sealed class DiscardChangesDialog : ContainerView, IBind<DiscardChangesViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -35,7 +35,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
 
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = "Discarding cannot be undone. Choose the changes to discard.",
             TextWrap = TextWrap.Wrap,
@@ -44,7 +44,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
 
         _fileListHeader = DialogFrame.Label("Files");
 
-        _fileListEmpty = new TextView
+        _fileListEmpty = new TextView(CompatUi.Canvas)
         {
             Text = "No unstaged changes.",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -135,7 +135,7 @@ internal sealed class DiscardChangesDialog : MultiChildView, IBind<DiscardChange
 
         var badge = FileChangesUI.CreateStatusBadge(file.Display);
 
-        var pathText = new TextView
+        var pathText = new TextView(CompatUi.Canvas)
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,

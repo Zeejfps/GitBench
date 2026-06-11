@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLocalBranchDialogViewModel>
+internal sealed class DeleteLocalBranchDialog : ContainerView, IBind<DeleteLocalBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly CheckboxView _forceCheckbox;
@@ -28,7 +28,7 @@ internal sealed class DeleteLocalBranchDialog : MultiChildView, IBind<DeleteLoca
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Delete local branch '{branchName}'?",
             TextWrap = TextWrap.Wrap,

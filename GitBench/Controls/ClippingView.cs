@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using ZGF.Gui;
 
 namespace GitBench.Controls;
@@ -6,7 +7,7 @@ namespace GitBench.Controls;
 // doesn't clip — only ScrollPane variants do — so any child that measures wider than
 // the parent draws past the edge. Wrap a dialog root in ClippingView to keep an
 // over-wide row from escaping the dialog visually.
-public sealed class ClippingView : MultiChildView
+public sealed class ClippingView : ContainerView
 {
     public override bool ClipsContent => true;
 

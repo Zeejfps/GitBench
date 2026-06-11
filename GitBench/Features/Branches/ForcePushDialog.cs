@@ -8,7 +8,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogViewModel>
+internal sealed class ForcePushDialog : ContainerView, IBind<ForcePushDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -18,7 +18,7 @@ internal sealed class ForcePushDialog : MultiChildView, IBind<ForcePushDialogVie
         _onClose = onClose;
 
         var displayBranch = string.IsNullOrEmpty(branchName) ? "this branch" : $"'{branchName}'";
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"{displayBranch} has diverged from its upstream — {ahead} ahead, {behind} behind. "
                  + "A regular push will be rejected. Force-push (with lease) will overwrite the remote "

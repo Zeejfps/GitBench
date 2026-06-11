@@ -6,14 +6,14 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class GroupSection : MultiChildView, IBind<GroupSectionViewModel>
+internal sealed class GroupSection : ContainerView, IBind<GroupSectionViewModel>
 {
-    private readonly MultiChildView _headerSlot;
+    private readonly ContainerView _headerSlot;
     private readonly FlexColumnView _rows;
 
     public GroupSection()
     {
-        _headerSlot = new MultiChildView();
+        _headerSlot = new ContainerView();
         _rows = new FlexColumnView
         {
             Gap = 2,
@@ -40,9 +40,9 @@ internal sealed class GroupSection : MultiChildView, IBind<GroupSectionViewModel
         header.Bind(vm.HeaderVm);
         _headerSlot.Children.Add(header);
 
-        _rows.BindChildren(vm.VisiblePrimaries, CreateRepoRow);
+        _rows.Children.BindChildren(vm.VisiblePrimaries, CreateRepoRow);
     }
 
     private View CreateRepoRow(Repo primary) =>
-        new RepoEntry(primary, Context!.Get<IRepoRegistry>()!, Context!.Get<IRepoStatusStore>()!);
+        new RepoEntry(primary, this.Context!.Get<IRepoRegistry>()!, this.Context!.Get<IRepoStatusStore>()!);
 }

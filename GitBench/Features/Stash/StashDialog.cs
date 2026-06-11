@@ -19,7 +19,7 @@ namespace GitBench.Features.Stash;
 // stash, pick the files to stash, and optionally keep the index (--keep-index) so staged
 // hunks stay around after stashing. --include-untracked is derived from the row checks:
 // passed iff any selected row is an untracked file.
-internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
+internal sealed class StashDialog : ContainerView, IBind<StashDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _messageField;
@@ -46,7 +46,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 
         _fileListHeader = DialogFrame.Label("Files");
 
-        _fileListEmpty = new TextView
+        _fileListEmpty = new TextView(CompatUi.Canvas)
         {
             Text = "No local changes.",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -152,7 +152,7 @@ internal sealed class StashDialog : MultiChildView, IBind<StashDialogViewModel>
 
         var badge = FileChangesUI.CreateStatusBadge(file.Display);
 
-        var pathText = new TextView
+        var pathText = new TextView(CompatUi.Canvas)
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,

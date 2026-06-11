@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
@@ -14,7 +15,7 @@ namespace GitBench.Features.Branches;
 /// branch name) + a "checkout after create" checkbox. Runs `git branch &lt;name&gt; &lt;start&gt;` or
 /// `git checkout -b &lt;name&gt; &lt;start&gt;` depending on the checkbox.
 /// </summary>
-internal sealed class CreateBranchDialog : MultiChildView, IBind<CreateBranchDialogViewModel>
+internal sealed class CreateBranchDialog : ContainerView, IBind<CreateBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;

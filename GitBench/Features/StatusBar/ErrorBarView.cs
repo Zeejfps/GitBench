@@ -11,7 +11,7 @@ namespace GitBench.Features.StatusBar;
 /// <see cref="Message"/> to null toggles <see cref="View.IsVisible"/> off, so the bar is
 /// skipped by layout (no residual gap in Flex/Column/Row containers).
 /// </summary>
-internal sealed class ErrorBarView : MultiChildView
+internal sealed class ErrorBarView : ContainerView
 {
     public State<string?> Message { get; } = new(null);
 
@@ -19,7 +19,7 @@ internal sealed class ErrorBarView : MultiChildView
     {
         this.BindIsVisible(Message, m => m != null);
 
-        var text = new TextView
+        var text = new TextView(CompatUi.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
         };

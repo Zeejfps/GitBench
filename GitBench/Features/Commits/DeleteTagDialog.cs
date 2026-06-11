@@ -15,7 +15,7 @@ namespace GitBench.Features.Commits;
 /// remote (`git push &lt;remote&gt; --delete refs/tags/&lt;name&gt;`). Mirrors the Branches view's
 /// delete dialogs.
 /// </summary>
-internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogViewModel>
+internal sealed class DeleteTagDialog : ContainerView, IBind<DeleteTagDialogViewModel>
 {
     private readonly DialogShell _shell;
     private readonly CheckboxView _remoteCheckbox;
@@ -25,7 +25,7 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
     {
         _onClose = onClose;
 
-        var subtitle = new TextView { Text = "Delete tag from your repository", TextWrap = TextWrap.Wrap };
+        var subtitle = new TextView(CompatUi.Canvas) { Text = "Delete tag from your repository", TextWrap = TextWrap.Wrap };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
         var tagRow = BuildLabeledRow("Tag:", BuildTagValue(tagName));
@@ -59,9 +59,9 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
         _shell.BindCommand(vm.Delete);
     }
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView { Text = label, VerticalTextAlignment = TextAlignment.Center };
+        var labelText = new TextView(CompatUi.Canvas) { Text = label, VerticalTextAlignment = TextAlignment.Center };
         labelText.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
         return new FlexRowView
         {
@@ -76,9 +76,9 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
         };
     }
 
-    private static MultiChildView BuildTagValue(string tagName)
+    private static View BuildTagValue(string tagName)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Tag,
             FontFamily = LucideIcons.FontFamily,
@@ -89,7 +89,7 @@ internal sealed class DeleteTagDialog : MultiChildView, IBind<DeleteTagDialogVie
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var nameLabel = new TextView
+        var nameLabel = new TextView(CompatUi.Canvas)
         {
             Text = tagName,
             VerticalTextAlignment = TextAlignment.Center,

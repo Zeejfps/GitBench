@@ -12,7 +12,7 @@ namespace GitBench.Controls;
 /// the surrounding <c>BorderLayoutView</c> reads the new width on each layout pass after
 /// a drag. Width is clamped to <see cref="MinWidth"/> / <see cref="MaxWidth"/>.
 /// </summary>
-internal sealed class ResizableLeftSidebar : MultiChildView
+internal sealed class ResizableLeftSidebar : ContainerView
 {
     private const float SplitterThickness = 5f;
 

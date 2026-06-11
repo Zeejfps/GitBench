@@ -19,7 +19,7 @@ internal sealed class LfsBadgeView : RectView
 
     public LfsBadgeView()
     {
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontSize = 10f,
             VerticalTextAlignment = TextAlignment.Center,

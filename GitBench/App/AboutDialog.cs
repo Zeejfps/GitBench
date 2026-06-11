@@ -12,7 +12,7 @@ namespace GitBench.App;
 /// "About GitBench" modal: app icon, name, version, a link to the repo, and copyright.
 /// Opened from the macOS app menu (and reusable from a Help menu on other platforms).
 /// </summary>
-public sealed class AboutDialog : MultiChildView
+public sealed class AboutDialog : ContainerView
 {
     private const string RepoUrl = "https://github.com/Zeejfps/GitBench";
 
@@ -33,12 +33,12 @@ public sealed class AboutDialog : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
+                new FlexItem { Grow = 1, Child = new ContainerView() },
                 new DialogCloseButton(onClose),
             },
         };
 
-        var name = new TextView
+        var name = new TextView(CompatUi.Canvas)
         {
             Text = "GitBench",
             FontSize = 22,
@@ -47,7 +47,7 @@ public sealed class AboutDialog : MultiChildView
         };
         name.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
-        var version = new TextView
+        var version = new TextView(CompatUi.Canvas)
         {
             Text = $"v{AppVersion.Display}",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -57,14 +57,14 @@ public sealed class AboutDialog : MultiChildView
         
         var repoButton = new DialogButton(
             "View on GitHub",
-            () => Context?.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
+            () => this.Context?.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
             DialogButtonRole.Primary)
         {
             Height = DialogFrame.DefaultButtonHeight,
             MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
         };
 
-        var copyright = new TextView
+        var copyright = new TextView(CompatUi.Canvas)
         {
             Text = "© 2026 Zee Vasilyev",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -111,9 +111,9 @@ public sealed class AboutDialog : MultiChildView
     private static View BuildLogo()
     {
         if (IconImageId != null)
-            return new ImageView { ImageId = IconImageId, Width = 84, Height = 84 };
+            return new ImageView(CompatUi.Canvas) { ImageId = IconImageId, Width = 84, Height = 84 };
 
-        var glyph = new TextView
+        var glyph = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.FolderGit2,
             FontFamily = LucideIcons.FontFamily,
@@ -122,6 +122,6 @@ public sealed class AboutDialog : MultiChildView
             VerticalTextAlignment = TextAlignment.Center,
         };
         glyph.BindThemedTextColor(s => s.Palette.Accent);
-        return new MultiChildView { Width = 84, Height = 84, Children = { glyph } };
+        return new ContainerView { Width = 84, Height = 84, Children = { glyph } };
     }
 }

@@ -9,7 +9,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class RepoBar : MultiChildView, IBind<RepoBarViewModel>
+internal sealed class RepoBar : ContainerView, IBind<RepoBarViewModel>
 {
     private const int HorizontalPadding = 8;
     internal const int RowPaddingLeft = (int)TreeMetrics.BaseIndent;
@@ -85,7 +85,7 @@ internal sealed class RepoBar : MultiChildView, IBind<RepoBarViewModel>
     public void Bind(RepoBarViewModel vm)
     {
         _vm = vm;
-        _sections.BindChildren(
+        _sections.Children.BindChildren(
             vm.GroupSections,
             _ => new GroupSection(),
             onCreated: (section, sectionVm) => section.Bind(sectionVm));

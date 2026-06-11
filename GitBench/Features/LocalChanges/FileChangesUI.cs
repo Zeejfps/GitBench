@@ -27,14 +27,14 @@ internal static class FileChangesUI
 
     public static TextView CreateHeaderText(string title)
     {
-        var view = new TextView { Text = FormatHeader(title, 0) };
+        var view = new TextView(CompatUi.Canvas) { Text = FormatHeader(title, 0) };
         view.BindThemedTextColor(s => s.FileChangesSection.HeaderText);
         return view;
     }
 
     public static TextView CreateEmptyPlaceholder(string emptyText)
     {
-        var view = new TextView { Text = emptyText };
+        var view = new TextView(CompatUi.Canvas) { Text = emptyText };
         view.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
         return view;
     }
@@ -42,7 +42,7 @@ internal static class FileChangesUI
     /// <summary>Centered icon / title / hint stack shown when a panel has no rows.</summary>
     public static View CreateEmptyState(string icon, string title, string hint)
     {
-        var iconView = new TextView
+        var iconView = new TextView(CompatUi.Canvas)
         {
             Text = icon,
             FontFamily = LucideIcons.FontFamily,
@@ -51,14 +51,14 @@ internal static class FileChangesUI
         };
         iconView.BindThemedTextColor(s => s.FileChangesSection.EmptyStateIcon);
 
-        var titleView = new TextView
+        var titleView = new TextView(CompatUi.Canvas)
         {
             Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
         };
         titleView.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
 
-        var hintView = new TextView
+        var hintView = new TextView(CompatUi.Canvas)
         {
             Text = hint,
             FontSize = 11f,
@@ -110,7 +110,7 @@ internal static class FileChangesUI
     public static RectView CreateStatusBadge(FileChange file)
     {
         var status = file.Status;
-        var glyph = new TextView
+        var glyph = new TextView(CompatUi.Canvas)
         {
             Text = FileChangeFormatting.StatusGlyph(status),
             FontSize = 11f,

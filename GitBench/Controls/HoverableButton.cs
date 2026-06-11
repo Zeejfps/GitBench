@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Infrastructure;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -6,7 +7,7 @@ using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-public abstract class HoverableButton : MultiChildView
+public abstract class HoverableButton : ContainerView
 {
     private readonly Action? _onClick;
     private readonly HoverableButtonController _controller;
@@ -51,11 +52,11 @@ public abstract class HoverableButton : MultiChildView
     // focus ring. No-op until the button is attached to a context.
     public void FocusSelf()
     {
-        var input = Context?.Get<InputSystem>();
-        Console.WriteLine($"[focusdbg] FocusSelf {GetType().Name} ctx={Context != null} input={input != null} interactable={(input?.IsInteractable(_controller))}");
+        var input = this.Context?.Get<InputSystem>();
+        Console.WriteLine($"[focusdbg] FocusSelf {GetType().Name} ctx={this.Context != null} input={input != null} interactable={(input?.IsInteractable(_controller))}");
         input?.StealFocus(_controller);
     }
-    public void Blur() => Context?.Get<InputSystem>()?.Blur(_controller);
+    public void Blur() => this.Context?.Get<InputSystem>()?.Blur(_controller);
 
     protected virtual void OnClicked()
     {

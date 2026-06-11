@@ -5,7 +5,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.App;
 
-internal sealed class ModeSwitcherView : MultiChildView, IBind<ModeSwitcherViewModel>
+internal sealed class ModeSwitcherView : ContainerView, IBind<ModeSwitcherViewModel>
 {
     private const float PillHeight = 28f;
     private const float PillCornerRadius = 5f;

@@ -15,7 +15,7 @@ namespace GitBench.Features.Submodules;
 /// Self-managing: toggles <see cref="View.IsVisible"/> off (collapsing its layout slot) when no
 /// submodule is out of date. Not dismissible — it clears once the submodules are updated.
 /// </summary>
-internal sealed class SubmoduleStatusBannerView : MultiChildView, IBind<SubmoduleStatusBannerViewModel>
+internal sealed class SubmoduleStatusBannerView : ContainerView, IBind<SubmoduleStatusBannerViewModel>
 {
     private readonly ActionButton _updateButton;
     private readonly TextView _text;
@@ -24,7 +24,7 @@ internal sealed class SubmoduleStatusBannerView : MultiChildView, IBind<Submodul
     {
         IsVisible = false;
 
-        _text = new TextView
+        _text = new TextView(CompatUi.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,

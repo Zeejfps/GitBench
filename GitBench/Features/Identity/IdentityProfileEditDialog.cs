@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using ZGF.Gui;
@@ -9,7 +10,7 @@ namespace GitBench.Features.Identity;
 // Add/edit form for a single identity profile: a display name, the author name/email injected
 // per commit, an optional SSH key, and a single host/owner match rule. Power users can add
 // multiple match rules by editing identity-profiles.json directly; the form keeps to one.
-internal sealed class IdentityProfileEditDialog : MultiChildView, IBind<IdentityProfileEditDialogViewModel>
+internal sealed class IdentityProfileEditDialog : ContainerView, IBind<IdentityProfileEditDialogViewModel>
 {
     private readonly LabeledInputField _displayName;
     private readonly LabeledInputField _authorName;

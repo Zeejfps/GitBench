@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using ZGF.Gui;
 using ZGF.Observable;
 
@@ -9,7 +10,7 @@ namespace GitBench.Controls;
 /// scale both halves; the splitter controller calls <see cref="AdjustBottomFractionByPixels"/>
 /// to nudge the fraction during a drag.
 /// </summary>
-internal sealed class VerticalSplitContainer : MultiChildView
+internal sealed class VerticalSplitContainer : ContainerView
 {
     private const float SplitterThickness = 5f;
     private const float MinFraction = 0.1f;

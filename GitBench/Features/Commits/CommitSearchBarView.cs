@@ -17,7 +17,7 @@ namespace GitBench.Features.Commits;
 /// <see cref="CommitsView.SetSearchQuery"/>. It deliberately holds no view model — the
 /// <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView"/>.
 /// </summary>
-internal sealed class CommitSearchBarView : MultiChildView
+internal sealed class CommitSearchBarView : ContainerView
 {
     private const float BarHeight = 36f;
 
@@ -37,7 +37,7 @@ internal sealed class CommitSearchBarView : MultiChildView
         _controller = new SearchInputKbmController(_input) { OnEscape = Clear };
         _input.UseController(_ => _controller);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 14,
@@ -110,7 +110,7 @@ internal sealed class SearchInputKbmController : BaseTextInputKbmController
 
     public Action? OnEscape { get; set; }
 
-    public SearchInputKbmController(TextInputView input) : base(input)
+    public SearchInputKbmController(TextInputView input) : base(input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>())
     {
         _input = input;
     }
@@ -141,7 +141,7 @@ internal sealed class CommitSearchClearButton : HoverableButton
         Width = 18;
         Height = 18;
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12,

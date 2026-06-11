@@ -15,13 +15,13 @@ namespace GitBench.App;
 /// off while no update is pending, so layout skips it (no residual gap) — same pattern as
 /// <see cref="OperationBannerView"/> / <see cref="ErrorBarView"/>.
 /// </summary>
-internal sealed class UpdateBannerView : MultiChildView
+internal sealed class UpdateBannerView : ContainerView
 {
     public UpdateBannerView(UpdateService updateService)
     {
         this.BindIsVisible(updateService.BannerMessage, m => m != null);
 
-        var text = new TextView
+        var text = new TextView(CompatUi.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,

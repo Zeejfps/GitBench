@@ -14,7 +14,7 @@ namespace GitBench.Features.Repos;
 // deep-indented row with a small accent-tinted icon and the repo's DisplayName. The
 // glyph and accent color are the only visual differences between the two kinds; menu
 // items and the optional activation guard are supplied by the subclass.
-public abstract class NestedRepoRow : MultiChildView
+public abstract class NestedRepoRow : ContainerView
 {
     protected NestedRepoRow(
         Repo repo,
@@ -32,7 +32,7 @@ public abstract class NestedRepoRow : MultiChildView
 
         var isHovered = new State<bool>(false);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = iconGlyph,
             FontFamily = LucideIcons.FontFamily,
@@ -45,7 +45,7 @@ public abstract class NestedRepoRow : MultiChildView
             ? s.RepoBarRow.TextMissing
             : accentSelector(s.RepoBarRow));
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = repo.DisplayName,
             HorizontalTextAlignment = TextAlignment.Start,

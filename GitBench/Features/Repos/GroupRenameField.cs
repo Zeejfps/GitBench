@@ -7,13 +7,13 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Features.Repos;
 
-public sealed class GroupRenameField : MultiChildView
+public sealed class GroupRenameField : ContainerView
 {
     public GroupRenameField(Group group, IRepoRegistry registry)
     {
         Height = 22;
 
-        var input = new TextInputView();
+        var input = new TextInputView(CompatUi.Canvas);
         input.BindThemed(s =>
         {
             input.BackgroundColor = s.GroupRenameField.Background;

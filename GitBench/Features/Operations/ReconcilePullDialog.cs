@@ -16,7 +16,7 @@ namespace GitBench.Features.Operations;
 /// branches"). Lets the user choose merge / rebase / fast-forward-only and reruns the pull with
 /// that flag, so the divergence is resolved in-app rather than dropping the raw git hint.
 /// </summary>
-internal sealed class ReconcilePullDialog : MultiChildView, IBind<ReconcilePullDialogViewModel>
+internal sealed class ReconcilePullDialog : ContainerView, IBind<ReconcilePullDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly CheckboxView _mergeMode;
@@ -28,7 +28,7 @@ internal sealed class ReconcilePullDialog : MultiChildView, IBind<ReconcilePullD
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"'{repo.DisplayName}' and its upstream have both moved on. " +
                    "Choose how to reconcile them, then pull.",

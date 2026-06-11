@@ -26,7 +26,7 @@ internal sealed class StatusBarIconButton : HoverableButton
         Width = 22;
         Height = 18;
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 13,

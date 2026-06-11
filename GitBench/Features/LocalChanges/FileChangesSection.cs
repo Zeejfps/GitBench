@@ -27,7 +27,7 @@ namespace GitBench.Features.LocalChanges;
 /// pointer rows handle their own click (activate the submodule + broadcast
 /// <see cref="JumpToSubmoduleCommitMessage"/>) without going through the callback.
 /// </summary>
-public sealed class FileChangesSection : MultiChildView, IScrollableContent
+public sealed class FileChangesSection : ContainerView, IScrollableContent
 {
     private readonly string _title;
     private readonly TextView _headerText;
@@ -169,12 +169,12 @@ public sealed class FileChangesSection : MultiChildView, IScrollableContent
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
         if (rowIndex < 0 || rowIndex >= _files.Count) return;
-        if (Context == null) return;
+        if (this.Context == null) return;
 
         var file = _files[rowIndex];
         var isSelected = _selectedPath?.Value == file.Path;
         FileChangesUI.DrawFileRow(
-            Context.Canvas,
+            this.Context.Canvas,
             rowRect,
             file,
             isSelected,
@@ -202,9 +202,9 @@ public sealed class FileChangesSection : MultiChildView, IScrollableContent
     // we resolve relative to the active repo's parent and match by GetFullPath.
     private void ActivateSubmoduleAndJump(string submodulePath, SubmodulePointerChange change)
     {
-        if (Context == null) return;
-        var registry = Context.Get<IRepoRegistry>();
-        var bus = Context.Get<IMessageBus>();
+        if (this.Context == null) return;
+        var registry = this.Context.Get<IRepoRegistry>();
+        var bus = this.Context.Get<IMessageBus>();
         if (registry == null) return;
 
         var active = registry.Active.Value;

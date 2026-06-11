@@ -15,7 +15,7 @@ namespace GitBench.Features.Worktrees;
 /// Confirmation modal for `git worktree remove`. Refuses if the worktree has uncommitted
 /// changes or untracked files unless Force is checked (delegates the safety check to git).
 /// </summary>
-internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktreeDialogViewModel>
+internal sealed class RemoveWorktreeDialog : ContainerView, IBind<RemoveWorktreeDialogViewModel>
 {
     // Mirrors the frame width Build() applies, so the path pre-wrap math below stays in sync.
     private const float DialogWidth = DialogFrame.WidthStandard;
@@ -33,7 +33,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
         _onClose = onClose;
         _path = worktree.Path;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Remove worktree '{worktree.DisplayName}'?",
             TextWrap = TextWrap.Wrap,
@@ -46,7 +46,7 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
             FontSize = 12f,
             TextWrap = TextWrap.Wrap,
         };
-        _pathTextView = new TextView
+        _pathTextView = new TextView(CompatUi.Canvas)
         {
             Text = worktree.Path,
             FontFamily = DiffOptions.MonoFontFamily,
@@ -109,6 +109,19 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>()),
             Bind);
+
+        this.Use(ctx =>
+        {
+            // Path strings have no whitespace, so the framework's word-wrap engine can't break
+            // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
+            // block stays inside the dialog's content width.
+            var available = DialogWidth
+                            - 2 * DialogFrame.DefaultPadding
+                            - 2 * CodeBlockInnerPadding
+                            - 2; // account for the 1px border on each side of the code-block
+            _pathTextView.Text = PathWrap.Wrap(_path, _pathTextStyle, available, ctx.Canvas);
+            return (IDisposable?)null;
+        });
     }
 
     public void Bind(RemoveWorktreeDialogViewModel vm)
@@ -118,16 +131,4 @@ internal sealed class RemoveWorktreeDialog : MultiChildView, IBind<RemoveWorktre
         _shell.BindCommand(vm.Remove);
     }
 
-    protected override void OnAttachedToContext(Context context)
-    {
-        base.OnAttachedToContext(context);
-        // Path strings have no whitespace, so the framework's word-wrap engine can't break
-        // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
-        // block stays inside the dialog's content width.
-        var available = DialogWidth
-                        - 2 * DialogFrame.DefaultPadding
-                        - 2 * CodeBlockInnerPadding
-                        - 2; // account for the 1px border on each side of the code-block
-        _pathTextView.Text = PathWrap.Wrap(_path, _pathTextStyle, available, context.Canvas);
-    }
 }

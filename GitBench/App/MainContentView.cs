@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using ZGF.Gui;
@@ -13,29 +14,16 @@ namespace GitBench.App;
 /// continuously up to date — switching modes is then just a visibility flip, with no
 /// reload flash and no "Loading…" placeholder.
 /// </summary>
-public sealed class MainContentView : MultiChildView
+public sealed class MainContentView : ContainerView
 {
     private readonly HistoryView _history = new();
     private readonly LocalChangesView _localChanges = new();
-    private IDisposable? _modeSubscription;
 
     public MainContentView()
     {
         AddChildToSelf(_history);
         AddChildToSelf(_localChanges);
-    }
-
-    protected override void OnAttachedToContext(Context context)
-    {
-        var mode = context.Get<State<MainViewMode>>();
-        if (mode != null)
-            _modeSubscription = mode.Subscribe(SetActive);
-    }
-
-    protected override void OnDetachedFromContext(Context context)
-    {
-        _modeSubscription?.Dispose();
-        _modeSubscription = null;
+        this.Use(ctx => ctx.Get<State<MainViewMode>>()?.Subscribe(SetActive));
     }
 
     private void SetActive(MainViewMode mode)

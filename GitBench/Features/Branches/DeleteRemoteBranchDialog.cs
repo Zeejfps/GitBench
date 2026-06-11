@@ -13,7 +13,7 @@ namespace GitBench.Features.Branches;
 /// `git push &lt;remote&gt; --delete &lt;branch&gt;` — a network operation that doesn't touch
 /// local branches. The server may refuse for protected refs; that error is surfaced.
 /// </summary>
-internal sealed class DeleteRemoteBranchDialog : MultiChildView, IBind<DeleteRemoteBranchDialogViewModel>
+internal sealed class DeleteRemoteBranchDialog : ContainerView, IBind<DeleteRemoteBranchDialogViewModel>
 {
     private readonly DialogShell _shell;
     private readonly Action _onClose;
@@ -22,7 +22,7 @@ internal sealed class DeleteRemoteBranchDialog : MultiChildView, IBind<DeleteRem
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Delete '{branchName}' from remote '{remoteName}'?",
             TextWrap = TextWrap.Wrap,

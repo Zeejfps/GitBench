@@ -13,7 +13,7 @@ namespace GitBench.Features.Branches;
 /// layout slot in the surrounding FlexColumn) when there's nothing at risk. Not dismissible —
 /// it clears automatically once the commits land on a branch.
 /// </summary>
-internal sealed class DetachedHeadBannerView : MultiChildView, IBind<DetachedHeadBannerViewModel>
+internal sealed class DetachedHeadBannerView : ContainerView, IBind<DetachedHeadBannerViewModel>
 {
     private readonly ActionButton _createBranchButton;
 
@@ -21,7 +21,7 @@ internal sealed class DetachedHeadBannerView : MultiChildView, IBind<DetachedHea
     {
         IsVisible = false;
 
-        var text = new TextView
+        var text = new TextView(CompatUi.Canvas)
         {
             Text = "Detached HEAD — your latest commits aren't on any branch.",
             VerticalTextAlignment = TextAlignment.Center,

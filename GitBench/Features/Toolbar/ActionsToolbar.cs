@@ -7,7 +7,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Toolbar;
 
-internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewModel>
+internal sealed class ActionsToolbar : ContainerView, IBind<ActionsToolbarViewModel>
 {
     private const float ToolbarHeight = 44f;
     private const int HorizontalPadding = 8;
@@ -47,7 +47,7 @@ internal sealed class ActionsToolbar : MultiChildView, IBind<ActionsToolbarViewM
                 new SeparatorSpacer(),
                 _stashButton,
                 _branchButton,
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
+                new FlexItem { Grow = 1, Child = new ContainerView() },
                 _openFolderButton,
                 _openTerminalButton,
             }

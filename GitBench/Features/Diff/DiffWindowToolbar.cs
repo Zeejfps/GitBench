@@ -16,7 +16,7 @@ namespace GitBench.Features.Diff;
 /// Per-hunk staging stays inline in the <see cref="DiffView"/> body. This replaces the
 /// embedded panes' collapse header, which makes no sense in a standalone window.
 /// </summary>
-internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
+internal sealed class DiffWindowToolbar : ContainerView, IBind<DiffViewModel>
 {
     public const float ToolbarHeight = 28f;
 
@@ -31,7 +31,7 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
 
     public DiffWindowToolbar(string title)
     {
-        _title = new TextView
+        _title = new TextView(CompatUi.Canvas)
         {
             Text = title,
             FontSize = 12f,
@@ -82,7 +82,7 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -108,7 +108,7 @@ internal sealed class DiffWindowToolbar : MultiChildView, IBind<DiffViewModel>
     {
         var hovered = new State<bool>(false);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,

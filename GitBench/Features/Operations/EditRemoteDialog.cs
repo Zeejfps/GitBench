@@ -19,7 +19,7 @@ namespace GitBench.Features.Operations;
 /// a scheme dropdown that rewrites the URL between SSH and HTTPS. Runs
 /// <c>git remote rename</c> (when the name changed) then <c>git remote set-url</c>.
 /// </summary>
-internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogViewModel>
+internal sealed class EditRemoteDialog : ContainerView, IBind<EditRemoteDialogViewModel>
 {
     private readonly LabeledInputField _nameField;
     private readonly LabeledInputField _urlField;
@@ -45,7 +45,7 @@ internal sealed class EditRemoteDialog : MultiChildView, IBind<EditRemoteDialogV
     {
         _onClose = onClose;
 
-        var subtitle = new TextView { Text = subtitleText };
+        var subtitle = new TextView(CompatUi.Canvas) { Text = subtitleText };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
         _nameField = new LabeledInputField("Remote");
@@ -106,14 +106,14 @@ internal sealed class SchemeDropdown : HoverableButton
         Width = 84;
         Height = 28;
 
-        _labelView = new TextView
+        _labelView = new TextView(CompatUi.Canvas)
         {
             Text = LabelFor(_scheme),
             VerticalTextAlignment = TextAlignment.Center,
         };
         _labelView.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
-        var chevron = new TextView
+        var chevron = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -154,7 +154,7 @@ internal sealed class SchemeDropdown : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = Context;
+        var ctx = this.Context;
         if (ctx == null) return;
         var items = new List<RepoBarContextMenu.Item>
         {

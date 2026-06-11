@@ -5,6 +5,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.Repos;
@@ -33,14 +34,18 @@ public static class RepoBarContextMenu
 
         manager.CloseAllImmediately();
 
-        var menu = BuildMenu(manager, items);
-
         var coords = context.Get<IWindowCoordinates>();
         var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
-        var opened = manager.ShowContextMenu(menu, screen, placement: placement);
+        var opened = manager.ShowContextMenu(popupCtx =>
+        {
+            using (CompatUi.Push(popupCtx))
+                return ViewContexts.RegisterRoot(BuildMenu(manager, items), popupCtx);
+        }, screen, placement: placement);
         if (opened == null) return null;
 
-        menu.UseController(_ => new ContextMenuKbmController(opened));
+        // Keyboard navigation registers against the popup's own input system; the popup's
+        // teardown (close) drops the registration with it.
+        opened.Context.Get<InputSystem>()?.RegisterController(opened.Menu, new ContextMenuKbmController(opened));
         return opened;
     }
 
@@ -69,7 +74,7 @@ public static class RepoBarContextMenu
                 continue;
             }
 
-            var menuItem = new ContextMenuItem
+            var menuItem = new ContextMenuItem(CompatUi.Canvas)
             {
                 Text = item.Label,
                 Icon = item.Icon,
@@ -99,7 +104,11 @@ public static class RepoBarContextMenu
                 menuItem.ArrowFontFamily = LucideIcons.FontFamily;
                 menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(
                     menuItem, ctx,
-                    subMenuFactory: () => BuildMenu(manager, submenu)));
+                    subMenuFactory: subCtx =>
+                    {
+                        using (CompatUi.Push(subCtx))
+                            return ViewContexts.RegisterRoot(BuildMenu(manager, submenu), subCtx);
+                    }));
             }
             else
             {
@@ -118,7 +127,7 @@ public static class RepoBarContextMenu
         return menu;
     }
 
-    private static MultiChildView BuildSegmentsView(IReadOnlyList<MenuLabelSegment> segments, bool enabled)
+    private static View BuildSegmentsView(IReadOnlyList<MenuLabelSegment> segments, bool enabled)
     {
         var row = new FlexRowView
         {
@@ -127,7 +136,7 @@ public static class RepoBarContextMenu
         };
         foreach (var seg in segments)
         {
-            var tv = new TextView
+            var tv = new TextView(CompatUi.Canvas)
             {
                 Text = seg.Text,
                 VerticalTextAlignment = TextAlignment.Center,

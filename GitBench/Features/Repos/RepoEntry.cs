@@ -13,7 +13,7 @@ namespace GitBench.Features.Repos;
 // Worktrees come first, then submodules — same indent for both. Kinds are distinguished
 // by icon shape AND a tinted accent color (Branch + blue for worktree, FolderGit2 +
 // purple for submodule); no separator rows.
-public sealed class RepoEntry : MultiChildView
+public sealed class RepoEntry : ContainerView
 {
     public RepoEntry(Repo primary, IRepoRegistry registry, IRepoStatusStore status)
     {
@@ -23,7 +23,7 @@ public sealed class RepoEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
 
-        children.BindChildren(
+        children.Children.BindChildren(
             () =>
             {
                 _ = registry.WorktreesChanged.Value;

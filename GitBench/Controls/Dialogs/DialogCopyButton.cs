@@ -25,7 +25,7 @@ public sealed class DialogCopyButton : HoverableButton
         Width = 28;
         Height = 28;
 
-        _label = new TextView
+        _label = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Copy,
             FontFamily = LucideIcons.FontFamily,
@@ -59,7 +59,7 @@ public sealed class DialogCopyButton : HoverableButton
         // click's pending Task — only the most recent click controls the final state.
         var gen = ++_feedbackGen;
         _label.Text = LucideIcons.CheckSquare;
-        var dispatcher = Context?.Get<ZGF.Observable.IUiDispatcher>();
+        var dispatcher = this.Context?.Get<ZGF.Observable.IUiDispatcher>();
         Task.Run(async () =>
         {
             await Task.Delay(FeedbackMs);

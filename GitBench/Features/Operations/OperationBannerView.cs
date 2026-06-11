@@ -12,7 +12,7 @@ namespace GitBench.Features.Operations;
 /// stash-apply conflict. Self-managing: toggles <see cref="View.IsVisible"/> based on
 /// state, so the view is skipped by layout (no residual gap) when there's nothing to show.
 /// </summary>
-internal sealed class OperationBannerView : MultiChildView, IBind<OperationStateBannerViewModel>
+internal sealed class OperationBannerView : ContainerView, IBind<OperationStateBannerViewModel>
 {
     private readonly TextView _text;
     private readonly ActionButton _abortButton;
@@ -28,7 +28,7 @@ internal sealed class OperationBannerView : MultiChildView, IBind<OperationState
     {
         IsVisible = false;
 
-        _text = new TextView
+        _text = new TextView(CompatUi.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
@@ -45,7 +45,7 @@ internal sealed class OperationBannerView : MultiChildView, IBind<OperationState
             tooltip: "Abort",
             backgroundColor: 0xFFB3514B);
 
-        _spinnerIcon = new TextView
+        _spinnerIcon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Loader,
             FontFamily = LucideIcons.FontFamily,

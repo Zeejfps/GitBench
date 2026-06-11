@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
@@ -14,7 +15,7 @@ namespace GitBench.Features.Diff;
 /// it tears the window down. Native title-bar closes route back through the view model so its
 /// observable list stays the single source of truth.
 /// </summary>
-internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewModel>
+internal sealed class DiffWindowsView : ContainerView, IBind<DiffWindowsViewModel>
 {
     private readonly Dictionary<DiffWindowViewModel, ISecondaryWindow> _windows = new();
     private DiffWindowsViewModel? _vm;
@@ -48,8 +49,8 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
         // Match every open window's native title bar to the active theme, like the main window
         // (see Program.cs). Subscribe fires immediately, then on each toggle, re-theming all
         // open windows.
-        _windowChrome = Context?.Get<IWindowChrome>();
-        _themeMode = Context?.Get<State<ThemeMode>>();
+        _windowChrome = this.Context?.Get<IWindowChrome>();
+        _themeMode = this.Context?.Get<State<ThemeMode>>();
         if (_windowChrome != null && _themeMode != null)
             _themeSubscription = _themeMode.Subscribe(_ =>
             {
@@ -85,11 +86,13 @@ internal sealed class DiffWindowsView : MultiChildView, IBind<DiffWindowsViewMod
     {
         if (_windows.ContainsKey(windowVm)) return;
 
-        var root = new DiffWindowRootView(windowVm);
-
-        var win = Context!.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
+        var win = this.Context!.Require<ISecondaryWindowFactory>().Open(new SecondaryWindowRequest
         {
-            Root = root,
+            BuildRoot = ctx =>
+            {
+                using (CompatUi.Push(ctx))
+                    return ViewContexts.RegisterRoot(new DiffWindowRootView(windowVm), ctx);
+            },
             Title = windowVm.Title,
             Width = 900,
             Height = 700,

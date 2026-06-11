@@ -15,7 +15,7 @@ namespace GitBench.Features.Submodules;
 /// on an individual submodule row. Lets the user pick init / recursive flags plus an
 /// update strategy (checkout / merge / rebase).
 /// </summary>
-internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmodulesDialogViewModel>
+internal sealed class UpdateSubmodulesDialog : ContainerView, IBind<UpdateSubmodulesDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly CheckboxView _initCheckbox;
@@ -31,7 +31,7 @@ internal sealed class UpdateSubmodulesDialog : MultiChildView, IBind<UpdateSubmo
 
         var titleText = target is null ? "Update all submodules" : "Update submodule";
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = target is null
                 ? $"Run `git submodule update` on every submodule under '{primary.DisplayName}'."

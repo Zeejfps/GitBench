@@ -16,7 +16,7 @@ namespace GitBench.Features.Commits;
 /// "Reset type:" stack, with the reset mode picked via a coloured-dot dropdown (green
 /// soft, amber mixed, red hard) so the destructiveness reads at a glance.
 /// </summary>
-internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialogViewModel>
+internal sealed class ResetCommitDialog : ContainerView, IBind<ResetCommitDialogViewModel>
 {
     internal const uint SoftColor = 0xFF57F287;
     internal const uint MixedColor = 0xFFE6A85C;
@@ -38,7 +38,7 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = branchName != null
                 ? $"Move the '{branchName}' branch HEAD to the selected revision"
@@ -81,9 +81,9 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
         _shell.BindCommand(vm.Reset);
     }
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView
+        var labelText = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
@@ -109,9 +109,9 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
         };
     }
 
-    private static MultiChildView BuildBranchValue(string? branchName)
+    private static View BuildBranchValue(string? branchName)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -121,7 +121,7 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = branchName ?? "(detached HEAD)",
             VerticalTextAlignment = TextAlignment.Center,
@@ -135,9 +135,9 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
         };
     }
 
-    private static MultiChildView BuildCommitValue(string shortSha, string summary)
+    private static View BuildCommitValue(string shortSha, string summary)
     {
-        var dot = new TextView
+        var dot = new TextView(CompatUi.Canvas)
         {
             Text = "●",
             FontSize = 10,
@@ -147,14 +147,14 @@ internal sealed class ResetCommitDialog : MultiChildView, IBind<ResetCommitDialo
         };
         dot.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var shaLabel = new TextView
+        var shaLabel = new TextView(CompatUi.Canvas)
         {
             Text = shortSha,
             VerticalTextAlignment = TextAlignment.Center,
         };
         shaLabel.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
-        var summaryLabel = new TextView
+        var summaryLabel = new TextView(CompatUi.Canvas)
         {
             Text = summary,
             VerticalTextAlignment = TextAlignment.Center,
@@ -210,7 +210,7 @@ internal sealed class ResetModeDropdown : HoverableButton
     {
         Height = 30;
 
-        _dotView = new TextView
+        _dotView = new TextView(CompatUi.Canvas)
         {
             Text = "●",
             FontSize = 12,
@@ -219,14 +219,14 @@ internal sealed class ResetModeDropdown : HoverableButton
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 14,
         };
-        _labelView = new TextView
+        _labelView = new TextView(CompatUi.Canvas)
         {
             Text = LookupLabel(ResetMode.Mixed),
             VerticalTextAlignment = TextAlignment.Center,
         };
         _labelView.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
-        _detailView = new TextView
+        _detailView = new TextView(CompatUi.Canvas)
         {
             Text = LookupDetail(ResetMode.Mixed),
             VerticalTextAlignment = TextAlignment.Center,
@@ -234,7 +234,7 @@ internal sealed class ResetModeDropdown : HoverableButton
         };
         _detailView.BindThemedTextColor(s => s.DialogBody.RowTextMissing);
 
-        var chevron = new TextView
+        var chevron = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -285,7 +285,7 @@ internal sealed class ResetModeDropdown : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = Context;
+        var ctx = this.Context;
         if (ctx == null) return;
         var items = new List<RepoBarContextMenu.Item>(Options.Length);
         foreach (var opt in Options)

@@ -16,7 +16,7 @@ public sealed class CheckboxView : HoverableButton
 
     public CheckboxView(string label)
     {
-        var labelView = new TextView
+        var labelView = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
@@ -25,14 +25,14 @@ public sealed class CheckboxView : HoverableButton
         Initialize(labelView);
     }
 
-    public CheckboxView(MultiChildView content)
+    public CheckboxView(View content)
     {
         Initialize(content);
     }
 
-    private void Initialize(MultiChildView content)
+    private void Initialize(View content)
     {
-        var checkGlyph = new TextView
+        var checkGlyph = new TextView(CompatUi.Canvas)
         {
             FontSize = CheckGlyphSize,
             HorizontalTextAlignment = TextAlignment.Center,

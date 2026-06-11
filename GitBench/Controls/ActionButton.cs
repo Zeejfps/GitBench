@@ -29,7 +29,7 @@ public sealed class ActionButton : HoverableButton
         _badgeColorSelect = badgeColor;
         Height = 28;
 
-        var iconView = new TextView
+        var iconView = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 15,
@@ -43,7 +43,7 @@ public sealed class ActionButton : HoverableButton
 
         if (badgeColor != null)
         {
-            var badgeText = new TextView
+            var badgeText = new TextView(CompatUi.Canvas)
             {
                 VerticalTextAlignment = TextAlignment.Center,
             };
@@ -58,7 +58,7 @@ public sealed class ActionButton : HoverableButton
         TextView? labelView = null;
         if (!string.IsNullOrEmpty(label))
         {
-            labelView = new TextView
+            labelView = new TextView(CompatUi.Canvas)
             {
                 VerticalTextAlignment = TextAlignment.Center,
             };

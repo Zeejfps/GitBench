@@ -17,7 +17,7 @@ namespace GitBench.Features.LocalChanges;
 /// wires the controls two-way to a <see cref="LocalChangesViewModel"/>; there are no
 /// pass-through properties or events.
 /// </summary>
-internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewModel>
+internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel>
 {
     private const int Padding = 10;
     private const float CommitButtonWidth = 120f;
@@ -33,7 +33,7 @@ internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewMode
 
     public CommitBarView()
     {
-        _titleInput = new TextInputView
+        _titleInput = new TextInputView(CompatUi.Canvas)
         {
             TextWrap = TextWrap.NoWrap,
             PlaceholderText = "Commit title",
@@ -46,7 +46,7 @@ internal sealed class CommitBarView : MultiChildView, IBind<LocalChangesViewMode
             _titleInput.SelectionRectColor = s.TextInput.Selection;
             _titleInput.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _titleController = new TextInputViewKbmController(_titleInput);
+        _titleController = new TextInputViewKbmController(_titleInput, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>());
         _titleInput.UseController(_ => _titleController);
 
         // No PreferredHeight — let the box size to one line of text plus padding/border.

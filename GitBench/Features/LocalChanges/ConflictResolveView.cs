@@ -20,7 +20,7 @@ namespace GitBench.Features.LocalChanges;
 /// for manual resolution. Whole-file resolution only (Phase 1 of the in-app conflict UI);
 /// per-hunk selection is a later pass.
 /// </summary>
-internal sealed class ConflictResolveView : MultiChildView
+internal sealed class ConflictResolveView : ContainerView
 {
     private const float CardWidth = 300f;
     private const float ButtonHeight = 34f;
@@ -133,7 +133,7 @@ internal sealed class ConflictResolveView : MultiChildView
 
     private static View BuildFileNameRow(string path)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.File,
             FontFamily = LucideIcons.FontFamily,
@@ -142,7 +142,7 @@ internal sealed class ConflictResolveView : MultiChildView
         };
         icon.BindThemedTextColor(s => s.Palette.TextMedium);
 
-        var name = new TextView { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
+        var name = new TextView(CompatUi.Canvas) { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
         name.BindThemedTextColor(s => s.Palette.TextStrong);
 
         return new FlexRowView
@@ -162,7 +162,7 @@ internal sealed class ConflictResolveView : MultiChildView
 
     private static View BuildTitleRow()
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.TriangleAlert,
             FontFamily = LucideIcons.FontFamily,
@@ -171,10 +171,10 @@ internal sealed class ConflictResolveView : MultiChildView
         };
         icon.BindThemedTextColor(s => s.FileChangeRow.StatusModified);
 
-        var title = new TextView { Text = "Merge conflict", FontSize = 16f, VerticalTextAlignment = TextAlignment.Center };
+        var title = new TextView(CompatUi.Canvas) { Text = "Merge conflict", FontSize = 16f, VerticalTextAlignment = TextAlignment.Center };
         title.BindThemedTextColor(s => s.Palette.TextStrong);
 
-        var subtitle = new TextView { Text = "Select the changes or merge them manually", HorizontalTextAlignment = TextAlignment.Center };
+        var subtitle = new TextView(CompatUi.Canvas) { Text = "Select the changes or merge them manually", HorizontalTextAlignment = TextAlignment.Center };
         subtitle.BindThemedTextColor(s => s.Palette.TextMuted);
 
         return new ColumnView
@@ -211,7 +211,7 @@ internal sealed class ConflictResolveView : MultiChildView
         // Use the same tinted Lucide status glyph the unstaged/history file rows draw
         // (FileChangeFormatting.StatusIcon), paired with the spelled-out label in the matching
         // status color.
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = FileChangeFormatting.StatusIcon(status),
             FontFamily = LucideIcons.FontFamily,
@@ -220,7 +220,7 @@ internal sealed class ConflictResolveView : MultiChildView
         };
         icon.BindThemedTextColor(s => s.FileChangeRow.StatusColor(status));
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = text,
             FontSize = 11f,
@@ -257,7 +257,7 @@ internal sealed class ConflictResolveView : MultiChildView
             _checked = checkedState;
             Width = CardWidth;
 
-            var branchIcon = new TextView
+            var branchIcon = new TextView(CompatUi.Canvas)
             {
                 Text = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
@@ -266,7 +266,7 @@ internal sealed class ConflictResolveView : MultiChildView
             };
             branchIcon.BindThemedTextColor(s => s.Palette.TextMedium);
 
-            var name = new TextView
+            var name = new TextView(CompatUi.Canvas)
             {
                 Text = side.Label,
                 VerticalTextAlignment = TextAlignment.Center,
@@ -290,7 +290,7 @@ internal sealed class ConflictResolveView : MultiChildView
             var divider = new RectView { Height = 1 };
             divider.BindThemedBackgroundColor(s => s.Palette.Border);
 
-            var commitText = new TextView
+            var commitText = new TextView(CompatUi.Canvas)
             {
                 Text = side.ShortSha.Length > 0 ? $"{side.ShortSha}  {side.Subject}" : side.Subject,
                 VerticalTextAlignment = TextAlignment.Center,
@@ -298,7 +298,7 @@ internal sealed class ConflictResolveView : MultiChildView
             };
             commitText.BindThemedTextColor(s => s.Palette.TextSecondary);
 
-            var date = new TextView { Text = FormatDate(side.When), VerticalTextAlignment = TextAlignment.Center };
+            var date = new TextView(CompatUi.Canvas) { Text = FormatDate(side.When), VerticalTextAlignment = TextAlignment.Center };
             date.BindThemedTextColor(s => s.Palette.TextMuted);
 
             var commitRow = new FlexRowView
@@ -341,7 +341,7 @@ internal sealed class ConflictResolveView : MultiChildView
         // it its own button would double-toggle the shared flag when clicked.
         private static View BuildCheckIndicator(State<bool> checkedState)
         {
-            var glyph = new TextView
+            var glyph = new TextView(CompatUi.Canvas)
             {
                 FontSize = 12f,
                 HorizontalTextAlignment = TextAlignment.Center,
@@ -369,7 +369,7 @@ internal sealed class ConflictResolveView : MultiChildView
     // that side is selected, and a vertical line drops from the center toward the Merge button
     // once anything is selected — mirroring Fork's merge junction. The checkboxes themselves
     // live in the card corners.
-    private sealed class MergeJunctionView : MultiChildView
+    private sealed class MergeJunctionView : ContainerView
     {
         private const float Width_ = 80f;
         private const float LineThickness = 1.5f;

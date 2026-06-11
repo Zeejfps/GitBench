@@ -35,8 +35,11 @@ using var services = builder.Services;
 services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
 var updateService = services.Require<UpdateService>();
-var appView = new AppView(preferences, updateService);
-using var appHost = builder.UseContent(appView).Build();
+using var appHost = builder.UseContent(ctx =>
+{
+    CompatUi.SetMain(ctx);
+    return ViewContexts.RegisterRoot(new AppView(preferences, updateService), ctx);
+}).Build();
 appHost.OnWindowResized += preferences.SetWindowSize;
 
 // The dispatcher is registered during Build, so background services (watchers, sync, stores)

@@ -33,7 +33,7 @@ namespace GitBench.Features.Branches;
 /// visuals (icons, ahead/behind badges, busy/head/worktree styling) and the dispatch
 /// from row indices to <see cref="BranchesViewModel"/> calls.
 /// </summary>
-internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, IScrollableContent
+internal sealed class BranchesView : ContainerView, IBind<BranchesViewModel>, IScrollableContent
 {
     private const float RowHeight = 22f;
     private const float BaseIndent = TreeMetrics.BaseIndent;
@@ -233,7 +233,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
         var contentLeft = rowRect.Left + BaseIndent + row.Indent;
         contentLeft = DrawChevronOrReserveColumn(c, row, contentLeft, rowBottom, z + 1);
 
-        if (IsTreeRow(row) && Context != null)
+        if (IsTreeRow(row) && this.Context != null)
             contentLeft = DrawRowIcon(c, row, isSelected, contentLeft, rowBottom, z + 1);
 
         DrawRowNameAndBadge(c, row, isSelected, contentLeft, rightEdge, rowBottom, z + 1);
@@ -295,7 +295,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
     private void DrawRowNameAndBadge(ICanvas c, BranchRow row, bool isSelected, float contentLeft, float rightEdge, float rowBottom, int z)
     {
         const float nameBadgeGap = 8f;
-        var badgeWidth = (row.Kind == BranchRowKind.LocalBranch && Context != null)
+        var badgeWidth = (row.Kind == BranchRowKind.LocalBranch && this.Context != null)
             ? MeasureAheadBehindBadge(c, row)
             : 0f;
 
@@ -317,7 +317,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
 
         if (badgeWidth > 0)
         {
-            var nameWidth = Context!.Canvas.MeasureTextWidth(rendered, style);
+            var nameWidth = this.Context!.Canvas.MeasureTextWidth(rendered, style);
             DrawAheadBehindBadgeAt(c, row, contentLeft + nameWidth + nameBadgeGap, rowBottom, z);
         }
     }
@@ -433,7 +433,7 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
         TextStyle countStyle, TextStyle iconStyle,
         float leftX, float rowBottom, float gap, int z)
     {
-        var canvas = Context!.Canvas;
+        var canvas = this.Context!.Canvas;
         var iconWidth = canvas.MeasureTextWidth(icon, iconStyle);
         var countWidth = canvas.MeasureTextWidth(count, countStyle);
         var countLeft = leftX + iconWidth + gap;
@@ -468,8 +468,8 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
 
     private string TruncateToFit(string text, TextStyle style, float available)
     {
-        if (Context == null) return text;
-        return TextMeasure.TruncateToFit(text, style, available, Context.Canvas);
+        if (this.Context == null) return text;
+        return TextMeasure.TruncateToFit(text, style, available, this.Context.Canvas);
     }
 
     private void OnRowClicked(int rowIndex, InputModifiers _, PointF __)
@@ -494,10 +494,10 @@ internal sealed class BranchesView : MultiChildView, IBind<BranchesViewModel>, I
 
         var items = BuildMenuItemsFor(_vm, row);
         if (items.Count == 0) return;
-        if (Context == null) return;
+        if (this.Context == null) return;
 
         _list.SetContextHighlight(rowIndex);
-        var opened = RepoBarContextMenu.Show(Context, point, items);
+        var opened = RepoBarContextMenu.Show(this.Context, point, items);
         if (opened == null)
         {
             _list.SetContextHighlight(null);

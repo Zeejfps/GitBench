@@ -20,7 +20,7 @@ namespace GitBench.Features.Diff;
 /// Rendering is virtualized — only rows intersecting the viewport are drawn (see
 /// <see cref="DiffContentView"/>).
 /// </remarks>
-internal sealed class DiffView : MultiChildView, IBind<DiffViewModel>
+internal sealed class DiffView : ContainerView, IBind<DiffViewModel>
 {
     private readonly DiffContentView _content;
     private readonly RectView _panel;

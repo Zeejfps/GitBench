@@ -10,7 +10,7 @@ namespace GitBench.Features.Submodules;
 // listing submodules whose HEAD has drifted from the parent's recorded pointer. Each
 // row offers "Stage pointer" (so the pointer update can be committed) and "Reset"
 // (re-checkout the recorded SHA). Hidden when there's no drift.
-internal sealed class LocalChangesSubmoduleSection : MultiChildView
+internal sealed class LocalChangesSubmoduleSection : ContainerView
 {
     private const int ContentPadding = 10;
 
@@ -57,7 +57,7 @@ internal sealed class LocalChangesSubmoduleSection : MultiChildView
 
     private View BuildRow(SubmoduleInfo info)
     {
-        var badgeText = new TextView
+        var badgeText = new TextView(CompatUi.Canvas)
         {
             Text = "S",
             FontSize = 11f,
@@ -75,7 +75,7 @@ internal sealed class LocalChangesSubmoduleSection : MultiChildView
         };
         badge.BindThemedBackgroundColor(s => s.SubmoduleSection.BadgeBackground);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = $"{info.Path}  ·  {DriftLabel(info)}",
         };

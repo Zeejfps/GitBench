@@ -10,7 +10,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-public sealed class RepoRow : MultiChildView
+public sealed class RepoRow : ContainerView
 {
     public RepoRow(Repo repo, IRepoRegistry registry, IRepoStatusStore status)
     {
@@ -22,7 +22,7 @@ public sealed class RepoRow : MultiChildView
         // alignment. The slot becomes interactive (and visible) only when children exist.
         var chevronSlot = new WorktreeChevron(repo, registry);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.FolderGit2,
             FontFamily = LucideIcons.FontFamily,
@@ -33,7 +33,7 @@ public sealed class RepoRow : MultiChildView
         };
         RowChrome.BindRowText(icon, registry, repo);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = repo.DisplayName,
             HorizontalTextAlignment = TextAlignment.Start,

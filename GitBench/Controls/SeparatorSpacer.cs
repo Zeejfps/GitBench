@@ -10,7 +10,7 @@ namespace GitBench.Controls;
 /// this wider separator block is what creates the visual grouping; uniform gaps would
 /// make the toolbar read as one long row regardless of how many separators we drew.
 /// </summary>
-internal sealed class SeparatorSpacer : MultiChildView
+internal sealed class SeparatorSpacer : ContainerView
 {
     private const float SeparatorWidth = 1f;
     private const float SeparatorBreathingRoom = 9f;

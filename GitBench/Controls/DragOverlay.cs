@@ -4,11 +4,10 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Controls;
 
-public sealed class DragOverlay : MultiChildView
+public sealed class DragOverlay : ContainerView
 {
     private readonly RectView _indicator;
     private IDragController? _dragController;
-    private IDisposable? _subscription;
 
     public DragOverlay()
     {
@@ -18,22 +17,17 @@ public sealed class DragOverlay : MultiChildView
             BorderRadius = BorderRadiusStyle.All(1),
         };
         _indicator.BindThemedBackgroundColor(s => s.Palette.Accent);
-    }
 
-    protected override void OnAttachedToContext(Context context)
-    {
-        base.OnAttachedToContext(context);
-        _dragController = context.Get<IDragController>();
-        if (_dragController is null) return;
-        _subscription = _dragController.Target.Subscribe(OnTargetChanged);
-    }
-
-    protected override void OnDetachedFromContext(Context context)
-    {
-        _subscription?.Dispose();
-        _subscription = null;
-        _dragController = null;
-        base.OnDetachedFromContext(context);
+        this.Use(ctx =>
+        {
+            _dragController = ctx.Get<IDragController>();
+            var subscription = _dragController?.Target.Subscribe(OnTargetChanged);
+            return new ActionDisposable(() =>
+            {
+                subscription?.Dispose();
+                _dragController = null;
+            });
+        });
     }
 
     private void OnTargetChanged(DropTarget? target)

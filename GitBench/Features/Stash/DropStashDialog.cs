@@ -14,7 +14,7 @@ namespace GitBench.Features.Stash;
 /// Running `git stash drop` here is destructive — the stash cannot be recovered
 /// from the UI afterwards.
 /// </summary>
-internal sealed class DropStashDialog : MultiChildView, IBind<DropStashViewModel>
+internal sealed class DropStashDialog : ContainerView, IBind<DropStashViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -23,7 +23,7 @@ internal sealed class DropStashDialog : MultiChildView, IBind<DropStashViewModel
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Applied: {subject}\n\nDrop this stash now? This cannot be undone.",
             TextWrap = TextWrap.Wrap,

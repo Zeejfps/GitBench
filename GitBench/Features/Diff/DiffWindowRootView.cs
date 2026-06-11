@@ -10,7 +10,7 @@ namespace GitBench.Features.Diff;
 /// path + LFS + whole-file Stage/Unstage) above the headerless <see cref="DiffView"/> body.
 /// Bound to a <see cref="DiffWindowViewModel"/> via the standard IBind flow.
 /// </summary>
-internal sealed class DiffWindowRootView : MultiChildView, IBind<DiffWindowViewModel>
+internal sealed class DiffWindowRootView : ContainerView, IBind<DiffWindowViewModel>
 {
     private readonly DiffView _diff = new();
     private readonly DiffWindowToolbar _toolbar;

@@ -10,7 +10,7 @@ internal static class ScrollBars
 {
     public static VerticalScrollBarView CreateVertical()
     {
-        var bar = new VerticalScrollBarView
+        var bar = new VerticalScrollBarView(CompatUi.Input)
         {
             TrackBorderSize = new BorderSizeStyle { Left = 1 },
         };
@@ -32,7 +32,7 @@ internal static class ScrollBars
 
     public static HorizontalScrollBarView CreateHorizontal()
     {
-        var bar = new HorizontalScrollBarView
+        var bar = new HorizontalScrollBarView(CompatUi.Input)
         {
             TrackBorderSize = new BorderSizeStyle { Top = 1 },
         };

@@ -7,23 +7,32 @@ namespace GitBench.Controls.Dialogs;
 public sealed class DialogPresenter : IViewBehavior
 {
     private readonly DialogSurfaceView _dialogSurfaceView;
+    private IMessageBus? _bus;
+    private Action<ShowDialogMessage>? _onShowDialog;
 
     public DialogPresenter(DialogSurfaceView dialogSurfaceView)
     {
         _dialogSurfaceView = dialogSurfaceView;
     }
 
-    public void AttachToContext(View view, Context context)
+    public void Attach(View view)
     {
-        var bus = context.Get<IMessageBus>();
+        var bus = ViewContexts.Require(view).Get<IMessageBus>();
         if (bus is null) return;
 
-        bus.Subscribe<ShowDialogMessage>(m => ShowDialog(m.CreateDialog(OnDialogClosed)));
+        _bus = bus;
+        _onShowDialog = m => ShowDialog(m.CreateDialog(OnDialogClosed));
+        bus.Subscribe(_onShowDialog);
         bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
     }
 
-    public void DetachFromContext(View view, Context context)
+    public void Detach(View view)
     {
+        if (_bus is null) return;
+        if (_onShowDialog != null) _bus.Unsubscribe(_onShowDialog);
+        _bus.Unsubscribe<ShowOperationErrorMessage>(OnShowOperationError);
+        _bus = null;
+        _onShowDialog = null;
     }
 
     private void OnShowOperationError(ShowOperationErrorMessage m)

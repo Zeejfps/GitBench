@@ -21,7 +21,7 @@ namespace GitBench.Features.Operations;
 /// The body wraps at the dialog's content width and only scrolls vertically; that keeps
 /// long lines visible without letting wide content stretch the dialog horizontally.
 /// </summary>
-public sealed class OperationErrorDialog : MultiChildView
+public sealed class OperationErrorDialog : ContainerView
 {
     private const float CloseButtonSize = 28f;
 
@@ -30,7 +30,7 @@ public sealed class OperationErrorDialog : MultiChildView
         Width = DialogFrame.WidthWide;
         Height = 360;
 
-        var titleView = new TextView
+        var titleView = new TextView(CompatUi.Canvas)
         {
             Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
@@ -41,7 +41,7 @@ public sealed class OperationErrorDialog : MultiChildView
         // Pull IClipboard lazily off the context — the dialog is constructed before it's
         // attached, so capturing it in a closure that runs on click is the simplest path.
         var copyButton = new DialogCopyButton(
-            () => Context?.Get<IClipboard>()?.SetText(message),
+            () => this.Context?.Get<IClipboard>()?.SetText(message),
             tooltip: "Copy error to clipboard");
 
         // Symmetric left spacer keeps the title centered: matches the combined width of the
@@ -53,14 +53,14 @@ public sealed class OperationErrorDialog : MultiChildView
             Height = 28,
             Children =
             {
-                new MultiChildView { Width = CloseButtonSize * 2 },
+                new ContainerView { Width = CloseButtonSize * 2 },
                 new FlexItem { Grow = 1, Child = titleView },
                 copyButton,
                 new DialogCloseButton(onClose),
             },
         };
 
-        var messageView = new TextView
+        var messageView = new TextView(CompatUi.Canvas)
         {
             Text = message,
             FontFamily = DiffOptions.MonoFontFamily,
@@ -111,7 +111,7 @@ public sealed class OperationErrorDialog : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                new FlexItem { Grow = 1, Child = new MultiChildView() },
+                new FlexItem { Grow = 1, Child = new ContainerView() },
                 okButton,
             },
         };

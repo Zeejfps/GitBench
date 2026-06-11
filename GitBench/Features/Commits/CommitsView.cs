@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Theming;
@@ -10,7 +11,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
+internal sealed class CommitsView : ContainerView, IBind<CommitsViewModel>
 {
     private const float HeaderHeight = 28f;
     private const float RowHeight = 26f;
@@ -49,7 +50,6 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private bool _filtering;
     // Repaints the relative dates ("3m ago"), which go stale with no state change to dirty us.
     private const int DateRefreshMs = 30_000;
-    private CancellationTokenSource? _dateRefreshCts;
 
     public event Action<float>? ScrollPositionChanged;
     public event Action<float>? ScaleChanged;
@@ -141,6 +141,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         this.UseController(_ => _arrowController);
 
         this.UseViewModel(this);
+        this.Use(StartDateRefresh);
     }
 
     public void Bind(CommitsViewModel vm)
@@ -159,13 +160,12 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     // Pass-through for the panel's search bar; the VM is owned by this view via UseViewModel.
     public void SetSearchQuery(string? query) => _vm?.SetSearchQuery(query);
 
-    protected override void OnAttachedToContext(Context context)
+    private IDisposable? StartDateRefresh(Context context)
     {
         var dispatcher = context.Get<IUiDispatcher>();
-        if (dispatcher == null) return;
+        if (dispatcher == null) return null;
 
         var cts = new CancellationTokenSource();
-        _dateRefreshCts = cts;
         Task.Run(async () =>
         {
             try
@@ -182,13 +182,12 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
             }
             catch (OperationCanceledException) { /* expected */ }
         }, cts.Token);
-    }
 
-    protected override void OnDetachedFromContext(Context context)
-    {
-        _dateRefreshCts?.Cancel();
-        _dateRefreshCts?.Dispose();
-        _dateRefreshCts = null;
+        return new ActionDisposable(() =>
+        {
+            cts.Cancel();
+            cts.Dispose();
+        });
     }
 
     protected override void OnLayoutChild(in RectF position, View child)
@@ -546,7 +545,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
     private float DrawBadges(ICanvas c, CommitNode node, float left, float rowBottom, int z)
     {
         if (node.Refs.Count == 0) return left;
-        if (Context == null) return left;
+        if (this.Context == null) return left;
 
         const float IconGap = 4f;
 
@@ -575,8 +574,8 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
                 _ => _badgeIconStyle,
             };
             var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
-            var iconWidth = icon != null ? Context.Canvas.MeasureTextWidth(icon, iconStyle) : 0f;
-            var textWidth = Context.Canvas.MeasureTextWidth(badge.Name, nameStyle);
+            var iconWidth = icon != null ? this.Context.Canvas.MeasureTextWidth(icon, iconStyle) : 0f;
+            var textWidth = this.Context.Canvas.MeasureTextWidth(badge.Name, nameStyle);
 
             var badgeW = BadgePaddingX * 2 + textWidth
                        + (icon != null ? iconWidth + IconGap : 0f);
@@ -715,7 +714,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
 
     private void OnRowContextRequested(int rowIndex, PointF point)
     {
-        if (Context == null) return;
+        if (this.Context == null) return;
         var snap = _snapshot;
         if (snap == null || rowIndex < 0 || rowIndex >= snap.Commits.Count) return;
         var node = snap.Commits[rowIndex];
@@ -724,7 +723,7 @@ internal sealed class CommitsView : MultiChildView, IBind<CommitsViewModel>
         if (items.Count == 0) return;
 
         _list.SetContextHighlight(rowIndex);
-        var opened = RepoBarContextMenu.Show(Context, point, items);
+        var opened = RepoBarContextMenu.Show(this.Context, point, items);
         if (opened == null)
         {
             _list.SetContextHighlight(null);

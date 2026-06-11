@@ -77,8 +77,7 @@ internal static class AppServices
 
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
             ctx.Require<IPopupWindowFactory>(),
-            ctx.Require<IWindowCoordinates>(),
-            measureContext: ctx));
+            ctx.Require<IWindowCoordinates>()));
 
         context.AddSingleton<RepoWatcherService>(eager: true);
         context.AddSingleton<WorktreeSyncService>(eager: true);

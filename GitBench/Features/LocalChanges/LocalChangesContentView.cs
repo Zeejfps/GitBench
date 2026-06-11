@@ -21,7 +21,7 @@ namespace GitBench.Features.LocalChanges;
 /// w.r.t. selection — rows highlight reactively against the shared selection, and the
 /// diff view's target tracks <c>SelectedTarget</c> directly.
 /// </summary>
-internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChangesViewModel>
+internal sealed class LocalChangesContentView : ContainerView, IBind<LocalChangesViewModel>
 {
     private readonly LocalChangesPanel _unstagedPanel;
     private readonly LocalChangesPanel _stagedPanel;
@@ -92,7 +92,7 @@ internal sealed class LocalChangesContentView : MultiChildView, IBind<LocalChang
             onFolderToggle: OnFolderToggle,
             buildContextMenu: BuildStagedMenu);
 
-        _placeholder = new TextView
+        _placeholder = new TextView(CompatUi.Canvas)
         {
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,

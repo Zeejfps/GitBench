@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-internal sealed class SegmentView : MultiChildView, IBind<SegmentViewModel>
+internal sealed class SegmentView : ContainerView, IBind<SegmentViewModel>
 {
     private const float SegmentHeight = 28f;
 
@@ -19,7 +19,7 @@ internal sealed class SegmentView : MultiChildView, IBind<SegmentViewModel>
     {
         Height = SegmentHeight;
 
-        var labelView = new TextView
+        var labelView = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,

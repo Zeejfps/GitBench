@@ -6,7 +6,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Controls;
 
-public sealed class OverlayView : MultiChildView
+public sealed class OverlayView : ContainerView
 {
     private IMessageBus? _messageBus;
 

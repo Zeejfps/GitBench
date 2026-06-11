@@ -1,3 +1,4 @@
+using ZGF.Gui.Views;
 using ZGF.Gui;
 
 namespace GitBench.Features.LocalChanges;
@@ -7,7 +8,7 @@ namespace GitBench.Features.LocalChanges;
 /// right panel. The two side panels are guaranteed equal width — the center's measured
 /// width is subtracted from the row's width and the remainder is split exactly in half.
 /// </summary>
-internal sealed class TransferListRow : MultiChildView
+internal sealed class TransferListRow : ContainerView
 {
     private readonly View _left;
     private readonly View _center;

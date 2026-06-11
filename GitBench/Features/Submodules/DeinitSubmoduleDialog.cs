@@ -13,7 +13,7 @@ namespace GitBench.Features.Submodules;
 /// Confirmation modal for `git submodule deinit` + `git rm`. Refuses if the submodule
 /// has uncommitted changes unless Force is checked (delegates the safety check to git).
 /// </summary>
-internal sealed class DeinitSubmoduleDialog : MultiChildView, IBind<DeinitSubmoduleDialogViewModel>
+internal sealed class DeinitSubmoduleDialog : ContainerView, IBind<DeinitSubmoduleDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly CheckboxView _forceCheckbox;
@@ -23,7 +23,7 @@ internal sealed class DeinitSubmoduleDialog : MultiChildView, IBind<DeinitSubmod
     {
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Deinit and remove submodule '{submodule.DisplayName}'?",
             TextWrap = TextWrap.Wrap,

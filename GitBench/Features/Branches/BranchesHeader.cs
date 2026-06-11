@@ -6,7 +6,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class BranchesHeader : MultiChildView, IBind<BranchesHeaderViewModel>
+internal sealed class BranchesHeader : ContainerView, IBind<BranchesHeaderViewModel>
 {
     private const float HeaderHeight = 44f;
     private const int HorizontalPadding = 8;
@@ -20,7 +20,7 @@ internal sealed class BranchesHeader : MultiChildView, IBind<BranchesHeaderViewM
     {
         Height = HeaderHeight;
 
-        _iconView = new TextView
+        _iconView = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -28,13 +28,13 @@ internal sealed class BranchesHeader : MultiChildView, IBind<BranchesHeaderViewM
             VerticalTextAlignment = TextAlignment.Center,
         };
 
-        _prefixView = new TextView
+        _prefixView = new TextView(CompatUi.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
         };
         _prefixView.BindThemedTextColor(s => s.BranchesHeader.PrefixText);
 
-        _nameView = new TextView
+        _nameView = new TextView(CompatUi.Canvas)
         {
             FontSize = 18f,
             FontWeight = FontWeight.Bold,

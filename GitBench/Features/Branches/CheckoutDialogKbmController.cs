@@ -10,7 +10,7 @@ internal sealed class CheckoutDialogKbmController : BaseTextInputKbmController
     private readonly Action _onSubmit;
     private readonly Action _onCancel;
 
-    public CheckoutDialogKbmController(TextInputView input, Action onSubmit, Action onCancel) : base(input)
+    public CheckoutDialogKbmController(TextInputView input, Action onSubmit, Action onCancel) : base(input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>())
     {
         _onSubmit = onSubmit;
         _onCancel = onCancel;

@@ -22,7 +22,7 @@ namespace GitBench.Controls;
 /// dialog reflows tightly. Border/message colors are recomputed whenever either the theme or
 /// the status changes — the last-seen <see cref="ThemeStyles"/> is cached for that reason.
 /// </summary>
-internal sealed class LabeledInputField : MultiChildView
+internal sealed class LabeledInputField : ContainerView
 {
     // Tall enough that the input's content area (BoxHeight - border - padding) is at least the
     // font's full line height; otherwise descenders (g, j, p, y) get scissored by the box clip.
@@ -105,7 +105,7 @@ internal sealed class LabeledInputField : MultiChildView
         _hint = DialogFrame.Hint(string.Empty, TextWrap.Wrap);
         _hint.IsVisible = false;
 
-        _message = new TextView { Text = string.Empty, TextWrap = TextWrap.Wrap, IsVisible = false };
+        _message = new TextView(CompatUi.Canvas) { Text = string.Empty, TextWrap = TextWrap.Wrap, IsVisible = false };
 
         AddChildToSelf(new FlexColumnView
         {

@@ -14,13 +14,13 @@ namespace GitBench.Features.Worktrees;
 // visibility without activating the repo. Otherwise it occupies the same horizontal space
 // with nothing in it, so rows stay aligned whether or not children exist. Works for any
 // repo — primaries AND submodules — so submodules-of-submodules get their own fold.
-public sealed class WorktreeChevron : MultiChildView
+public sealed class WorktreeChevron : ContainerView
 {
     public WorktreeChevron(Repo repo, IRepoRegistry registry)
     {
         Width = RepoBar.RowChevronWidth;
 
-        var chevron = new TextView
+        var chevron = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 11f,

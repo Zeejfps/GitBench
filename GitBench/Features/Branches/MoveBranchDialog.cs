@@ -16,7 +16,7 @@ namespace GitBench.Features.Branches;
 /// leave those commits unreachable. The fast-forward case skips this dialog (applied directly
 /// by <see cref="CommitsViewModel"/>). Runs `git checkout -B &lt;branch&gt; &lt;sha&gt;` on confirm.
 /// </summary>
-internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogViewModel>
+internal sealed class MoveBranchDialog : ContainerView, IBind<MoveBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -25,14 +25,14 @@ internal sealed class MoveBranchDialog : MultiChildView, IBind<MoveBranchDialogV
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = $"Reset '{branchName}' to the selected revision and check it out",
             TextWrap = TextWrap.Wrap,
         };
         subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var commitLine = new TextView
+        var commitLine = new TextView(CompatUi.Canvas)
         {
             Text = string.IsNullOrEmpty(summary) ? shortSha : $"{shortSha}  {summary}",
             TextWrap = TextWrap.NoWrap,

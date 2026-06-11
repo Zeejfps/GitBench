@@ -10,7 +10,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsViewModel>
+internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsViewModel>
 {
     private const int Padding = 14;
     private const float AvatarSize = 36f;
@@ -167,7 +167,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
     private void ShowPlaceholder(string text)
     {
         _headerInfo.Children.Clear();
-        var placeholder = new TextView
+        var placeholder = new TextView(CompatUi.Canvas)
         {
             Text = text,
             HorizontalTextAlignment = TextAlignment.Center,
@@ -188,7 +188,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
 
         if (!string.IsNullOrEmpty(d.MessageShort))
         {
-            var subject = new TextView { Text = d.MessageShort };
+            var subject = new TextView(CompatUi.Canvas) { Text = d.MessageShort };
             subject.BindThemedTextColor(s => s.CommitDetailsView.PrimaryText);
             topColumn.Children.Add(subject);
         }
@@ -196,16 +196,16 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
         var body = ExtractBody(d.Message, d.MessageShort);
         if (!string.IsNullOrEmpty(body))
         {
-            var bodyText = new TextView { Text = body };
+            var bodyText = new TextView(CompatUi.Canvas) { Text = body };
             bodyText.BindThemedTextColor(s => s.CommitDetailsView.SecondaryText);
             topColumn.Children.Add(bodyText);
         }
 
-        var commitLine = new TextView { Text = $"Commit:  {d.Sha}" };
+        var commitLine = new TextView(CompatUi.Canvas) { Text = $"Commit:  {d.Sha}" };
         commitLine.BindThemedTextColor(s => s.CommitDetailsView.MutedText);
         topColumn.Children.Add(commitLine);
 
-        var parentLine = new TextView
+        var parentLine = new TextView(CompatUi.Canvas)
         {
             Text = d.ParentShas.Count == 0
                 ? "Parents: (none)"
@@ -236,7 +236,7 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
             BorderRadius = BorderRadiusStyle.All(AvatarSize * 0.5f),
             Children =
             {
-                new TextView
+                new TextView(CompatUi.Canvas)
                 {
                     Text = Initials(d.AuthorName, d.AuthorEmail),
                     TextColor = 0xFFFFFFFF,
@@ -247,10 +247,10 @@ internal sealed class CommitDetailsView : MultiChildView, IBind<CommitDetailsVie
             },
         };
 
-        var authorName = new TextView { Text = FormatAuthor(d.AuthorName, d.AuthorEmail) };
+        var authorName = new TextView(CompatUi.Canvas) { Text = FormatAuthor(d.AuthorName, d.AuthorEmail) };
         authorName.BindThemedTextColor(s => s.CommitDetailsView.PrimaryText);
 
-        var date = new TextView { Text = FormatFullDate(d.AuthorWhen) };
+        var date = new TextView(CompatUi.Canvas) { Text = FormatFullDate(d.AuthorWhen) };
         date.BindThemedTextColor(s => s.CommitDetailsView.MutedText);
 
         var info = new ColumnView

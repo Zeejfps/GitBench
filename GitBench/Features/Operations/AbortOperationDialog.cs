@@ -15,7 +15,7 @@ namespace GitBench.Features.Operations;
 /// All variants are destructive — any in-progress conflict resolutions and (for
 /// reset --merge) conflicting worktree edits are thrown away — so the user confirms first.
 /// </summary>
-internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperationDialogViewModel>
+internal sealed class AbortOperationDialog : ContainerView, IBind<AbortOperationDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -27,7 +27,7 @@ internal sealed class AbortOperationDialog : MultiChildView, IBind<AbortOperatio
         var (titleText, bodyText) = CopyFor(state);
         var confirmLabel = AbortOperationDialogViewModel.DefaultConfirmLabel(state);
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = bodyText,
             TextWrap = TextWrap.Wrap,

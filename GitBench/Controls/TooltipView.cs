@@ -5,7 +5,7 @@ using ZGF.Gui.Views;
 
 namespace GitBench.Controls;
 
-public sealed class TooltipView : MultiChildView
+public sealed class TooltipView : ContainerView
 {
     private const int HorizontalPadding = 8;
     private const int VerticalPadding = 4;
@@ -13,7 +13,7 @@ public sealed class TooltipView : MultiChildView
 
     public TooltipView(string text)
     {
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = text,
             FontSize = 12,

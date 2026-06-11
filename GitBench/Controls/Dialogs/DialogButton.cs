@@ -56,7 +56,7 @@ public sealed class DialogButton : HoverableButton
 
     public DialogButton(string label, Action? onClick = null, DialogButtonRole role = DialogButtonRole.Default) : base(onClick)
     {
-        _iconView = new TextView
+        _iconView = new TextView(CompatUi.Canvas)
         {
             Text = string.Empty,
             FontFamily = LucideIcons.FontFamily,
@@ -66,7 +66,7 @@ public sealed class DialogButton : HoverableButton
         };
         _iconView.BindThemedTextColor(s => SelectText(s, role));
 
-        _labelView = new TextView
+        _labelView = new TextView(CompatUi.Canvas)
         {
             Text = label,
             HorizontalTextAlignment = TextAlignment.Center,
@@ -132,13 +132,13 @@ public sealed class DialogButton : HoverableButton
     /// icon while the command runs. The spinner is owned by the button and driven entirely off
     /// <see cref="AsyncCommand.IsRunning"/>, so dialogs need no per-VM busy-state plumbing — the
     /// view model just exposes the command. Call from <c>Bind</c>, after the button is attached
-    /// to a context (its dispatcher is resolved from <see cref="MultiChildView.Context"/>).
+    /// to a context (its dispatcher is resolved from <see cref="ContainerView.Context"/>).
     /// </summary>
     internal void BindBusyCommand(AsyncCommand command)
     {
         BindCommand(command);
 
-        _busySpinner = Context?.Get<SpinnerAnimation>();
+        _busySpinner = this.Context?.Get<SpinnerAnimation>();
         _busySpinner?.Rotation.Subscribe(r => IconRotation = r);
 
         command.IsRunning.Subscribe(running =>

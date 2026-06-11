@@ -12,7 +12,7 @@ namespace GitBench.Features.Submodules;
 // submodules-of-submodules: each SubmoduleEntry recurses via RepoTreeChildren, so the tree
 // extends as deep as the discovery walk found. Folds independently of its parent (its own
 // chevron drives IsWorktreeExpanded for its id).
-public sealed class SubmoduleEntry : MultiChildView
+public sealed class SubmoduleEntry : ContainerView
 {
     public SubmoduleEntry(Repo submodule, IRepoRegistry registry, IRepoStatusStore status, int depth)
     {
@@ -22,7 +22,7 @@ public sealed class SubmoduleEntry : MultiChildView
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
         };
 
-        children.BindChildren(
+        children.Children.BindChildren(
             () =>
             {
                 _ = registry.WorktreesChanged.Value;

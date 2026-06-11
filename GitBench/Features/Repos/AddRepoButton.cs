@@ -14,7 +14,7 @@ public sealed class AddRepoButton : HoverableButton
     {
         Height = 30;
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = "+  Add Repository",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -34,7 +34,7 @@ public sealed class AddRepoButton : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = Context;
+        var ctx = this.Context;
         if (ctx == null) return;
 
         var items = new List<RepoBarContextMenu.Item>
@@ -50,12 +50,12 @@ public sealed class AddRepoButton : HoverableButton
 
     private void OpenFromFolder()
     {
-        var path = Context?.Get<IPlatformShell>()?.PickFolder("Open Repository");
+        var path = this.Context?.Get<IPlatformShell>()?.PickFolder("Open Repository");
         if (string.IsNullOrEmpty(path)) return;
-        Context?.Get<IRepoRegistry>()?.Open(path);
+        this.Context?.Get<IRepoRegistry>()?.Open(path);
     }
 
     private void ShowCloneDialog()
-        => Context?.Get<IMessageBus>()?.Broadcast(
+        => this.Context?.Get<IMessageBus>()?.Broadcast(
             new ShowDialogMessage(onClose => new CloneRepoDialog(onClose)));
 }

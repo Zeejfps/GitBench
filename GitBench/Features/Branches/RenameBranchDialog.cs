@@ -17,7 +17,7 @@ namespace GitBench.Features.Branches;
 /// the same as in `git branch -m`. The force checkbox switches the underlying call to -M,
 /// allowing the rename to overwrite an existing branch of the new name.
 /// </summary>
-internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDialogViewModel>
+internal sealed class RenameBranchDialog : ContainerView, IBind<RenameBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
@@ -28,7 +28,7 @@ internal sealed class RenameBranchDialog : MultiChildView, IBind<RenameBranchDia
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = $"Renaming '{currentName}'",
             TextWrap = TextWrap.Wrap,

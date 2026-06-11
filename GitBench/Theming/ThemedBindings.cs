@@ -1,5 +1,5 @@
+using GitBench.Infrastructure.Compat;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Theming;
@@ -9,21 +9,21 @@ internal static class ThemedBindings
     extension(TextView view)
     {
         public void BindThemedTextColor(Func<ThemeStyles, uint> select) =>
-            view.BindThemedTextColor<ThemeStyles>(select);
+            view.Behaviors.Add(new CompatThemedBehavior<ThemeStyles, uint>(select, c => view.TextColor = c));
     }
 
     extension(RectView view)
     {
         public void BindThemedBackgroundColor(Func<ThemeStyles, uint> select) =>
-            view.BindThemedBackgroundColor<ThemeStyles>(select);
+            view.Behaviors.Add(new CompatThemedBehavior<ThemeStyles, uint>(select, c => view.BackgroundColor = c));
 
         public void BindThemedBorderColor(Func<ThemeStyles, BorderColorStyle> select) =>
-            view.BindThemedBorderColor<ThemeStyles>(select);
+            view.Behaviors.Add(new CompatThemedBehavior<ThemeStyles, BorderColorStyle>(select, c => view.BorderColor = c));
     }
 
     extension(View view)
     {
         public void BindThemed(Action<ThemeStyles> onChange) =>
-            view.BindThemed<ThemeStyles>(onChange);
+            view.Behaviors.Add(new CompatThemedBehavior<ThemeStyles, ThemeStyles>(s => s, onChange));
     }
 }

@@ -9,7 +9,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewModel>
+internal sealed class DiscardHunkDialog : ContainerView, IBind<DiscardHunkViewModel>
 {
     private readonly DialogShell _shell;
     private readonly Action _onClose;
@@ -20,7 +20,7 @@ internal sealed class DiscardHunkDialog : MultiChildView, IBind<DiscardHunkViewM
 
         _onClose = onClose;
 
-        var prompt = new TextView
+        var prompt = new TextView(CompatUi.Canvas)
         {
             Text = $"Discard this hunk in {path}? This cannot be undone.",
             TextWrap = TextWrap.Wrap,

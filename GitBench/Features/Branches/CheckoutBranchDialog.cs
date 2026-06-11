@@ -16,7 +16,7 @@ namespace GitBench.Features.Branches;
 /// branch. Lets them pick the local branch name and whether to set up tracking, then
 /// runs `git checkout -b &lt;local&gt; [--track|--no-track] &lt;remote&gt;/&lt;branch&gt;`.
 /// </summary>
-internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranchDialogViewModel>
+internal sealed class CheckoutBranchDialog : ContainerView, IBind<CheckoutBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _nameField;
@@ -32,7 +32,7 @@ internal sealed class CheckoutBranchDialog : MultiChildView, IBind<CheckoutBranc
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = $"Create a local branch from {remoteName}/{remoteBranchName}",
             TextWrap = TextWrap.Wrap,

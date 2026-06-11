@@ -18,7 +18,7 @@ namespace GitBench.Features.Diff;
 /// <see cref="DiffView"/>; this bar carries no staging controls (that lives in the file
 /// lists for embedded panes, and in <see cref="DiffWindowToolbar"/> for the pop-out window).
 /// </summary>
-internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
+internal sealed class DiffPaneHeader : ContainerView, IBind<DiffViewModel>
 {
     // Height of the always-visible header strip. Exposed so the parent split container can pin
     // the collapsed pane to exactly this height, keeping the chevron clickable.
@@ -36,7 +36,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
     {
         var hovered = new State<bool>(false);
 
-        var title = new TextView
+        var title = new TextView(CompatUi.Canvas)
         {
             Text = "Diff View",
             FontSize = 12f,
@@ -44,7 +44,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
         };
         title.BindThemedTextColor(s => hovered.Value ? s.DiffView.HeaderTitleHover : s.DiffView.HeaderTitleIdle);
 
-        var chevron = new TextView
+        var chevron = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -112,7 +112,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
@@ -137,7 +137,7 @@ internal sealed class DiffPaneHeader : MultiChildView, IBind<DiffViewModel>
     {
         var hovered = new State<bool>(false);
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,

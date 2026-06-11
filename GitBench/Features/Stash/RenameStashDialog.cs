@@ -17,7 +17,7 @@ namespace GitBench.Features.Stash;
 /// drops the entry and re-stores it under the new message — which moves the renamed
 /// stash to the top of the list (stash@{0}).
 /// </summary>
-internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialogViewModel>
+internal sealed class RenameStashDialog : ContainerView, IBind<RenameStashDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly LabeledInputField _messageField;
@@ -27,7 +27,7 @@ internal sealed class RenameStashDialog : MultiChildView, IBind<RenameStashDialo
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = $"Renaming '{currentMessage}'",
             TextWrap = TextWrap.Wrap,

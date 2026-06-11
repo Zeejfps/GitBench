@@ -10,7 +10,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialogViewModel>
+internal sealed class MergeBranchDialog : ContainerView, IBind<MergeBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -30,14 +30,14 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
         _optionDropdown = new MergeOptionDropdown();
         var optionRow = BuildLabeledRow("Merge Option:", _optionDropdown);
 
-        _previewIcon = new TextView
+        _previewIcon = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 14,
             Text = string.Empty,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _previewText = new TextView
+        _previewText = new TextView(CompatUi.Canvas)
         {
             Text = string.Empty,
             VerticalTextAlignment = TextAlignment.Center,
@@ -86,9 +86,9 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
         });
     }
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView
+        var labelText = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
@@ -116,7 +116,7 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
 
     private static FlexRowView BuildBranchChip(string name)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -125,7 +125,7 @@ internal sealed class MergeBranchDialog : MultiChildView, IBind<MergeBranchDialo
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = name,
             VerticalTextAlignment = TextAlignment.Center,
@@ -182,21 +182,21 @@ internal sealed class MergeOptionDropdown : HoverableButton
     public MergeOptionDropdown()
     {
         Height = 30;
-        _labelView = new TextView
+        _labelView = new TextView(CompatUi.Canvas)
         {
             Text = LookupLabel(MergeStrategy.Default),
             VerticalTextAlignment = TextAlignment.Center,
         };
         _labelView.BindThemedTextColor(s => s.DialogFrame.TitleText);
 
-        _detailView = new TextView
+        _detailView = new TextView(CompatUi.Canvas)
         {
             Text = LookupDetail(MergeStrategy.Default),
             VerticalTextAlignment = TextAlignment.Center,
         };
         _detailView.BindThemedTextColor(s => s.DialogBody.RowTextMissing);
 
-        var chevron = new TextView
+        var chevron = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -238,7 +238,7 @@ internal sealed class MergeOptionDropdown : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = Context;
+        var ctx = this.Context;
         if (ctx == null) return;
         var items = new List<RepoBarContextMenu.Item>(Options.Length);
         foreach (var opt in Options)

@@ -8,9 +8,9 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewModel>
+internal sealed class GroupHeaderRow : ContainerView, IBind<GroupHeaderRowViewModel>
 {
-    private readonly MultiChildView _nameSlot;
+    private readonly ContainerView _nameSlot;
     private readonly TextView _chevron;
     private readonly State<bool> _isHovered = new(false);
 
@@ -18,7 +18,7 @@ internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewM
     {
         Height = 22;
 
-        _chevron = new TextView
+        _chevron = new TextView(CompatUi.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 11f,
@@ -28,7 +28,7 @@ internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewM
         };
         _chevron.BindThemedTextColor(s => s.GroupHeaderRow.ChevronText);
 
-        _nameSlot = new MultiChildView();
+        _nameSlot = new ContainerView();
 
         var background = new RectView
         {
@@ -57,7 +57,7 @@ internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewM
     {
         _chevron.Text = ChevronFor(vm.Group.IsCollapsed);
 
-        _nameSlot.BindChildren(
+        _nameSlot.Children.BindChildren(
             () => new[] { vm.IsRenaming.Value },
             isRenaming => CreateNameContent(vm, isRenaming));
 
@@ -72,9 +72,9 @@ internal sealed class GroupHeaderRow : MultiChildView, IBind<GroupHeaderRowViewM
 
     private View CreateNameContent(GroupHeaderRowViewModel vm, bool isRenaming)
     {
-        if (isRenaming) return new GroupRenameField(vm.Group, Context!.Get<IRepoRegistry>()!);
+        if (isRenaming) return new GroupRenameField(vm.Group, this.Context!.Get<IRepoRegistry>()!);
 
-        var name = new TextView
+        var name = new TextView(CompatUi.Canvas)
         {
             Text = vm.Group.Name,
             HorizontalTextAlignment = TextAlignment.Start,

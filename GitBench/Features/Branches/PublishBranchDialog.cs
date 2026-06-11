@@ -10,7 +10,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchDialogViewModel>
+internal sealed class PublishBranchDialog : ContainerView, IBind<PublishBranchDialogViewModel>
 {
     private readonly Action _onClose;
     private readonly DialogShell _shell;
@@ -21,7 +21,7 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
     {
         _onClose = onClose;
 
-        var subtitle = new TextView
+        var subtitle = new TextView(CompatUi.Canvas)
         {
             Text = "First push — choose a remote and set the upstream",
             HorizontalTextAlignment = TextAlignment.Center,
@@ -70,9 +70,9 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
         vm.Remotes.Subscribe(remotes => _remoteDropdown.SetOptions(remotes));
     }
 
-    private static FlexRowView BuildLabeledRow(string label, MultiChildView value)
+    private static FlexRowView BuildLabeledRow(string label, View value)
     {
-        var labelText = new TextView
+        var labelText = new TextView(CompatUi.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
@@ -100,7 +100,7 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
 
     private static FlexRowView BuildBranchChip(string name)
     {
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -109,7 +109,7 @@ internal sealed class PublishBranchDialog : MultiChildView, IBind<PublishBranchD
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        var label = new TextView
+        var label = new TextView(CompatUi.Canvas)
         {
             Text = name,
             VerticalTextAlignment = TextAlignment.Center,
@@ -139,7 +139,7 @@ internal sealed class RemoteDropdown : HoverableButton
     {
         Height = 30;
 
-        var icon = new TextView
+        var icon = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.Branch,
             FontFamily = LucideIcons.FontFamily,
@@ -148,7 +148,7 @@ internal sealed class RemoteDropdown : HoverableButton
         };
         icon.BindThemedTextColor(s => s.DialogBody.BodyText);
 
-        _labelView = new TextView
+        _labelView = new TextView(CompatUi.Canvas)
         {
             Text = "(no remotes)",
             VerticalTextAlignment = TextAlignment.Center,
@@ -157,7 +157,7 @@ internal sealed class RemoteDropdown : HoverableButton
             ? s.DialogBody.RowTextMissing
             : s.DialogFrame.TitleText);
 
-        _chevron = new TextView
+        _chevron = new TextView(CompatUi.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -212,7 +212,7 @@ internal sealed class RemoteDropdown : HoverableButton
     protected override void OnClicked()
     {
         if (_options.Count <= 1) return;
-        var ctx = Context;
+        var ctx = this.Context;
         if (ctx == null) return;
         var items = new List<RepoBarContextMenu.Item>(_options.Count);
         foreach (var opt in _options)
