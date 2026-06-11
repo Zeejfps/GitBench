@@ -87,10 +87,10 @@ internal sealed record AppView : Widget
                                                 Children =
                                                 {
                                                     new OperationBannerView().BuildView(ctx),
-                                                    new ActionsToolbar(),
+                                                    new ActionsToolbar().BuildView(ctx),
                                                 },
                                             },
-                                            Center = new MainContentView(),
+                                            Center = new MainContentView(ctx),
                                         },
                                     } } },
                                 },

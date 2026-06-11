@@ -39,12 +39,14 @@ internal sealed record DetachedHeadBannerView : Widget
         };
         text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        var createBranchButton = new ActionButton(
-            LucideIcons.Branch,
-            "Create branch",
-            tooltip: "Create a branch here so these commits aren't lost",
-            backgroundColor: 0xFF4E8B3D);
-        createBranchButton.BindCommand(vm.CreateBranch);
+        var createBranchButton = new ActionButton
+        {
+            Icon = LucideIcons.Branch,
+            Label = "Create branch",
+            Tooltip = "Create a branch here so these commits aren't lost",
+            Background = 0xFF4E8B3D,
+            Command = vm.CreateBranch,
+        }.BuildView(ctx);
 
         var banner = new RectView
         {

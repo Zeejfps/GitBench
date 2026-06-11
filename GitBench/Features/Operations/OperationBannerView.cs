@@ -37,17 +37,21 @@ internal sealed record OperationBannerView : Widget
         };
         text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        var continueButton = new ActionButton(
-            LucideIcons.ChevronsRight,
-            tooltip: "Continue",
-            backgroundColor: 0xFF4E8B3D);
-        continueButton.BindCommand(vm.Continue);
+        var continueButton = new ActionButton
+        {
+            Icon = LucideIcons.ChevronsRight,
+            Tooltip = "Continue",
+            Background = 0xFF4E8B3D,
+            Command = vm.Continue,
+        }.BuildView(ctx);
 
-        var abortButton = new ActionButton(
-            LucideIcons.X,
-            tooltip: "Abort",
-            backgroundColor: 0xFFB3514B);
-        abortButton.BindCommand(vm.Abort);
+        var abortButton = new ActionButton
+        {
+            Icon = LucideIcons.X,
+            Tooltip = "Abort",
+            Background = 0xFFB3514B,
+            Command = vm.Abort,
+        }.BuildView(ctx);
 
         var spinnerIcon = new TextView(ctx.Canvas)
         {

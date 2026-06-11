@@ -1,6 +1,8 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Controls;
 
@@ -10,28 +12,29 @@ namespace GitBench.Controls;
 /// this wider separator block is what creates the visual grouping; uniform gaps would
 /// make the toolbar read as one long row regardless of how many separators we drew.
 /// </summary>
-internal sealed class SeparatorSpacer : ContainerView
+internal sealed record SeparatorSpacer : Widget
 {
     private const float SeparatorWidth = 1f;
     private const float SeparatorBreathingRoom = 9f;
     private const float SeparatorHeight = 18f;
 
-    public SeparatorSpacer()
+    protected override View CreateView(Context ctx)
     {
-        Width = SeparatorWidth + SeparatorBreathingRoom * 2;
-
+        var theme = ctx.Theme();
         var line = new RectView
         {
             Width = SeparatorWidth,
             Height = SeparatorHeight,
         };
-        line.BindThemedBackgroundColor(s => s.Palette.Border);
+        line.BindBackgroundColor(() => theme.Styles.Value.Palette.Border);
 
-        AddChildToSelf(new FlexRowView
+        var root = new ContainerView { Width = SeparatorWidth + SeparatorBreathingRoom * 2 };
+        root.Children.Add(new FlexRowView
         {
             CrossAxisAlignment = CrossAxisAlignment.Center,
             MainAxisAlignment = MainAxisAlignment.Center,
             Children = { line },
         });
+        return root;
     }
 }

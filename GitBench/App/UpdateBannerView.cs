@@ -31,12 +31,14 @@ internal sealed record UpdateBannerView : Widget
         text.BindText(updateService.BannerMessage);
         text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        var restartButton = new ActionButton(
-            LucideIcons.Package,
-            label: "Restart",
-            tooltip: "Restart to finish updating",
-            backgroundColor: 0xFF4E8B3D);
-        restartButton.BindCommand(new Command(updateService.ApplyAndRestart));
+        var restartButton = new ActionButton
+        {
+            Icon = LucideIcons.Package,
+            Label = "Restart",
+            Tooltip = "Restart to finish updating",
+            Background = 0xFF4E8B3D,
+            Command = new Command(updateService.ApplyAndRestart),
+        }.BuildView(ctx);
 
         var row = new FlexRowView
         {

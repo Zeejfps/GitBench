@@ -42,12 +42,14 @@ internal sealed record SubmoduleStatusBannerView : Widget
             ? "1 submodule is out of date — its working tree differs from the commit the main repo records."
             : $"{n} submodules are out of date — their working trees differ from the commits the main repo records.");
 
-        var updateButton = new ActionButton(
-            LucideIcons.Package,
-            "Update submodules",
-            tooltip: "Check submodules out to the commit the main repo records",
-            backgroundColor: 0xFF4E8B3D);
-        updateButton.BindCommand(vm.UpdateSubmodules);
+        var updateButton = new ActionButton
+        {
+            Icon = LucideIcons.Package,
+            Label = "Update submodules",
+            Tooltip = "Check submodules out to the commit the main repo records",
+            Background = 0xFF4E8B3D,
+            Command = vm.UpdateSubmodules,
+        }.BuildView(ctx);
 
         var banner = new RectView
         {

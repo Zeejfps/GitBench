@@ -1,37 +1,23 @@
 using GitBench.App;
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
-using ZGF.Observable;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Toolbar;
 
-internal sealed class ActionsToolbar : ContainerView, IBind<ActionsToolbarViewModel>
+internal sealed record ActionsToolbar : Widget
 {
     private const float ToolbarHeight = 44f;
     private const int HorizontalPadding = 8;
     private const float WithinClusterGap = 2f;
 
-    private readonly ActionButton _pushButton;
-    private readonly ActionButton _pullButton;
-    private readonly ActionButton _fetchButton;
-    private readonly ActionButton _branchButton;
-    private readonly ActionButton _stashButton;
-    private readonly ActionButton _openFolderButton;
-    private readonly ActionButton _openTerminalButton;
-
-    public ActionsToolbar()
+    protected override View CreateView(Context ctx)
     {
-        Height = ToolbarHeight;
-
-        _pushButton = new ActionButton(LucideIcons.Push, "Push", badgeColor: s => s.ActionsToolbar.BadgeAhead);
-        _pullButton = new ActionButton(LucideIcons.Pull, "Pull", badgeColor: s => s.ActionsToolbar.BadgeBehind);
-        _fetchButton = new ActionButton(LucideIcons.Fetch, "Fetch");
-        _branchButton = new ActionButton(LucideIcons.Branch, "Branch");
-        _stashButton = new ActionButton(LucideIcons.Stash, "Stash");
-        _openFolderButton = new ActionButton(LucideIcons.FolderOpen, tooltip: "Open in file explorer");
-        _openTerminalButton = new ActionButton(LucideIcons.SquareTerminal, tooltip: "Open in terminal");
+        var vm = ctx.Require<ActionsToolbarViewModel>();
+        var theme = ctx.Theme();
 
         var contentRow = new FlexRowView
         {
@@ -39,17 +25,62 @@ internal sealed class ActionsToolbar : ContainerView, IBind<ActionsToolbarViewMo
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                new ModeSwitcherView(),
-                new SeparatorSpacer(),
-                _fetchButton,
-                _pullButton,
-                _pushButton,
-                new SeparatorSpacer(),
-                _stashButton,
-                _branchButton,
+                new ModeSwitcherView().BuildView(ctx),
+                new SeparatorSpacer().BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.Fetch,
+                    BindIcon = () => vm.IsFetching.Value ? LucideIcons.Loader : LucideIcons.Fetch,
+                    BindLabel = () => vm.IsFetching.Value ? "Fetching" : "Fetch",
+                    IconRotation = vm.FetchRotation,
+                    Command = vm.Fetch,
+                }.BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.Pull,
+                    BindIcon = () => vm.IsPulling.Value ? LucideIcons.Loader : LucideIcons.Pull,
+                    BindLabel = () => vm.IsPulling.Value ? "Pulling" : "Pull",
+                    IconRotation = vm.PullRotation,
+                    BadgeColor = s => s.ActionsToolbar.BadgeBehind,
+                    BindBadge = () => vm.PullBadge.Value,
+                    Command = vm.Pull,
+                }.BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.Push,
+                    BindIcon = () => vm.IsPushing.Value ? LucideIcons.Loader : LucideIcons.Push,
+                    BindLabel = () => vm.IsPushing.Value ? "Pushing" : "Push",
+                    IconRotation = vm.PushRotation,
+                    BadgeColor = s => s.ActionsToolbar.BadgeAhead,
+                    BindBadge = () => vm.PushBadge.Value,
+                    Command = vm.Push,
+                }.BuildView(ctx),
+                new SeparatorSpacer().BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.Stash,
+                    Label = "Stash",
+                    Command = vm.Stash,
+                }.BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.Branch,
+                    Label = "Branch",
+                    Command = vm.Branch,
+                }.BuildView(ctx),
                 new FlexItem { Grow = 1, Child = new ContainerView() },
-                _openFolderButton,
-                _openTerminalButton,
+                new ActionButton
+                {
+                    Icon = LucideIcons.FolderOpen,
+                    Tooltip = "Open in file explorer",
+                    Command = vm.OpenFolder,
+                }.BuildView(ctx),
+                new ActionButton
+                {
+                    Icon = LucideIcons.SquareTerminal,
+                    Tooltip = "Open in terminal",
+                    Command = vm.OpenTerminal,
+                }.BuildView(ctx),
             }
         };
 
@@ -63,36 +94,12 @@ internal sealed class ActionsToolbar : ContainerView, IBind<ActionsToolbarViewMo
             },
             Children = { contentRow },
         };
-        bar.BindThemedBackgroundColor(s => s.ActionsToolbar.Background);
-        bar.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.ActionsToolbar.BorderBottom });
-        AddChildToSelf(bar);
+        bar.BindBackgroundColor(() => theme.Styles.Value.ActionsToolbar.Background);
+        bar.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.ActionsToolbar.BorderBottom });
 
-        this.UseViewModel(this);
-    }
-
-    public void Bind(ActionsToolbarViewModel vm)
-    {
-        _pushButton.BindCommand(vm.Push);
-        _pullButton.BindCommand(vm.Pull);
-        _fetchButton.BindCommand(vm.Fetch);
-        _branchButton.BindCommand(vm.Branch);
-        _stashButton.BindCommand(vm.Stash);
-        _openFolderButton.BindCommand(vm.OpenFolder);
-        _openTerminalButton.BindCommand(vm.OpenTerminal);
-
-        _pushButton.Badge.BindTo(vm.PushBadge);
-        _pullButton.Badge.BindTo(vm.PullBadge);
-
-        _pushButton.Icon.BindTo(vm.IsPushing, b => b ? LucideIcons.Loader : LucideIcons.Push);
-        _pushButton.Label.BindTo(vm.IsPushing, b => b ? "Pushing" : "Push");
-        _pushButton.IconRotation.BindTo(vm.PushRotation);
-
-        _pullButton.Icon.BindTo(vm.IsPulling, b => b ? LucideIcons.Loader : LucideIcons.Pull);
-        _pullButton.Label.BindTo(vm.IsPulling, b => b ? "Pulling" : "Pull");
-        _pullButton.IconRotation.BindTo(vm.PullRotation);
-
-        _fetchButton.Icon.BindTo(vm.IsFetching, b => b ? LucideIcons.Loader : LucideIcons.Fetch);
-        _fetchButton.Label.BindTo(vm.IsFetching, b => b ? "Fetching" : "Fetch");
-        _fetchButton.IconRotation.BindTo(vm.FetchRotation);
+        var root = new ContainerView { Height = ToolbarHeight };
+        root.Children.Add(bar);
+        root.UseViewModel(() => vm, _ => { });
+        return root;
     }
 }

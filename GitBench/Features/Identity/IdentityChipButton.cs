@@ -5,68 +5,78 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Views;
-using ZGF.Observable;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Identity;
 
 // The status-bar identity chip: an author glyph + the active profile name. Clicking opens a menu
 // (built by the view model) to switch profile for this repo, pin it, or manage profiles. Lives in
 // the status bar, so the menu opens upward.
-internal sealed class IdentityChipButton : HoverableButton
+internal sealed record IdentityChipButton : Widget
 {
-    private readonly Context _ctx;
+    /// <summary>Auto-tracked author glyph.</summary>
+    public required Func<string> BindIcon { get; init; }
 
-    public State<string> Icon { get; } = new(string.Empty);
-    public State<string> Label { get; } = new(string.Empty);
+    /// <summary>Auto-tracked profile name.</summary>
+    public required Func<string> BindLabel { get; init; }
 
     // Supplies the menu items at click time so they reflect the current profiles/resolution.
-    public Func<IReadOnlyList<RepoBarContextMenu.Item>>? MenuProvider { get; set; }
+    public required Func<IReadOnlyList<RepoBarContextMenu.Item>> MenuProvider { get; init; }
 
-    public IdentityChipButton(Context ctx)
+    protected override View CreateView(Context ctx) => new ChipView(ctx, this);
+
+    private sealed class ChipView : HoverableButton
     {
-        _ctx = ctx;
-        var theme = ctx.Theme();
+        private readonly Context _ctx;
+        private readonly IdentityChipButton _w;
 
-        var icon = new TextView(ctx.Canvas)
+        public ChipView(Context ctx, IdentityChipButton w)
         {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindText(Icon);
-        icon.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
+            _ctx = ctx;
+            _w = w;
+            var theme = ctx.Theme();
 
-        var label = new TextView(ctx.Canvas)
-        {
-            FontSize = 11f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindText(Label);
-        label.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
-
-        var background = new RectView
-        {
-            BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle { Left = 4, Right = 4 },
-            Children =
+            var icon = new TextView(ctx.Canvas)
             {
-                new FlexRowView
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 12f,
+                VerticalTextAlignment = TextAlignment.Center,
+            };
+            icon.BindText(w.BindIcon);
+            icon.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
+
+            var label = new TextView(ctx.Canvas)
+            {
+                FontSize = 11f,
+                VerticalTextAlignment = TextAlignment.Center,
+            };
+            label.BindText(w.BindLabel);
+            label.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
+
+            var background = new RectView
+            {
+                BorderRadius = BorderRadiusStyle.All(4),
+                Padding = new PaddingStyle { Left = 4, Right = 4 },
+                Children =
                 {
-                    Gap = 4,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
-                    Children = { icon, label },
+                    new FlexRowView
+                    {
+                        Gap = 4,
+                        CrossAxisAlignment = CrossAxisAlignment.Center,
+                        Children = { icon, label },
+                    },
                 },
-            },
-        };
-        background.BindBackgroundColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHoverBackground : 0u);
+            };
+            background.BindBackgroundColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHoverBackground : 0u);
 
-        SetBackground(background);
-    }
+            SetBackground(background);
+        }
 
-    protected override void OnClicked()
-    {
-        var items = MenuProvider?.Invoke();
-        if (items == null || items.Count == 0) return;
-        RepoBarContextMenu.Show(_ctx, Position.TopLeft, items, MenuPlacement.Above);
+        protected override void OnClicked()
+        {
+            var items = _w.MenuProvider();
+            if (items.Count == 0) return;
+            RepoBarContextMenu.Show(_ctx, Position.TopLeft, items, MenuPlacement.Above);
+        }
     }
 }

@@ -1,32 +1,38 @@
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.App;
 
-internal sealed class ModeSwitcherView : ContainerView, IBind<ModeSwitcherViewModel>
+internal sealed record ModeSwitcherView : Widget
 {
     private const float PillHeight = 28f;
     private const float PillCornerRadius = 5f;
 
-    private readonly SegmentView _history;
-    private readonly SegmentView _localChanges;
-
-    public ModeSwitcherView()
+    protected override View CreateView(Context ctx)
     {
-        Height = PillHeight;
+        var vm = ctx.Require<ModeSwitcherViewModel>();
+        var theme = ctx.Theme();
 
         const float innerRadius = PillCornerRadius - 1f;
-        _history = new SegmentView(
-            "History",
-            new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius });
-        _localChanges = new SegmentView(
-            "Changes",
-            new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius });
+        var history = new SegmentView
+        {
+            Label = "History",
+            Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
+            Model = vm.HistorySegment,
+        }.BuildView(ctx);
+        var localChanges = new SegmentView
+        {
+            Label = "Changes",
+            Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
+            Model = vm.LocalChangesSegment,
+        }.BuildView(ctx);
 
         var separator = new RectView { Width = 1f };
-        separator.BindThemedBackgroundColor(s => s.ModeSwitcher.SegmentSeparator);
+        separator.BindBackgroundColor(() => theme.Styles.Value.ModeSwitcher.SegmentSeparator);
 
         var pill = new RectView
         {
@@ -37,19 +43,15 @@ internal sealed class ModeSwitcherView : ContainerView, IBind<ModeSwitcherViewMo
             {
                 new RowView
                 {
-                    Children = { _localChanges, separator, _history },
+                    Children = { localChanges, separator, history },
                 },
             },
         };
-        pill.BindThemedBorderColor(s => BorderColorStyle.All(s.ModeSwitcher.PillBorder));
-        AddChildToSelf(pill);
+        pill.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.ModeSwitcher.PillBorder));
 
-        this.UseViewModel(this);
-    }
-
-    public void Bind(ModeSwitcherViewModel vm)
-    {
-        _history.Bind(vm.HistorySegment);
-        _localChanges.Bind(vm.LocalChangesSegment);
+        var root = new ContainerView { Height = PillHeight };
+        root.Children.Add(pill);
+        root.UseViewModel(() => vm, _ => { });
+        return root;
     }
 }

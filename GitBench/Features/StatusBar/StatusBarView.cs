@@ -30,7 +30,12 @@ internal sealed record StatusBarView : Widget
         var (branchCluster, branchName) = Segment(ctx, LucideIcons.Branch);
         var (aheadCluster, aheadText) = Segment(ctx, LucideIcons.ChevronUp);
         var (behindCluster, behindText) = Segment(ctx, LucideIcons.ChevronDown);
-        var identityChip = new IdentityChipButton(ctx);
+        var identityChip = new IdentityChipButton
+        {
+            BindIcon = () => vm.IdentityGlyph.Value,
+            BindLabel = () => vm.IdentityText.Value,
+            MenuProvider = vm.BuildIdentityMenu,
+        }.BuildView(ctx);
 
         var left = new FlexRowView
         {
@@ -39,8 +44,19 @@ internal sealed record StatusBarView : Widget
             Children = { repoCluster, branchCluster, aheadCluster, behindCluster, identityChip },
         };
 
-        var themeButton = new StatusBarIconButton(ctx, "Toggle theme");
-        var updateButton = new StatusBarIconButton(ctx, "Check for updates");
+        var themeButton = new StatusBarIconButton
+        {
+            Tooltip = "Toggle theme",
+            BindIcon = () => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon,
+            Command = vm.ToggleTheme,
+        }.BuildView(ctx);
+        var updateButton = new StatusBarIconButton
+        {
+            Tooltip = "Check for updates",
+            BindIcon = () => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch,
+            IconRotation = vm.UpdateIconRotation,
+            Command = vm.CheckForUpdates,
+        }.BuildView(ctx);
 
         // Brief inline result of a manual check ("up to date" / "failed"); hidden when empty.
         var updateFeedback = new TextView(ctx.Canvas)
@@ -104,16 +120,6 @@ internal sealed record StatusBarView : Widget
         behindText.BindText(vm.BehindText);
 
         identityChip.BindIsVisible(vm.ShowIdentity, b => b);
-        identityChip.Label.BindTo(vm.IdentityText);
-        identityChip.Icon.BindTo(vm.IdentityGlyph);
-        identityChip.MenuProvider = vm.BuildIdentityMenu;
-
-        themeButton.BindCommand(vm.ToggleTheme);
-        themeButton.Icon.BindTo(vm.Theme, m => m == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon);
-
-        updateButton.BindCommand(vm.CheckForUpdates);
-        updateButton.Icon.BindTo(vm.IsCheckingUpdates, busy => busy ? LucideIcons.Loader : LucideIcons.Fetch);
-        updateButton.IconRotation.BindTo(vm.UpdateIconRotation);
 
         updateFeedback.BindText(vm.UpdateCheckFeedback, m => m ?? string.Empty);
         updateFeedback.BindIsVisible(vm.UpdateCheckFeedback, m => !string.IsNullOrEmpty(m));

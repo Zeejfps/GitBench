@@ -26,7 +26,7 @@ internal sealed class LocalChangesContentView : ContainerView, IBind<LocalChange
     private readonly LocalChangesPanel _unstagedPanel;
     private readonly LocalChangesPanel _stagedPanel;
     private readonly TextView _placeholder;
-    private readonly ActionButton _showErrorButton;
+    private readonly View _showErrorButton;
     private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
     private readonly DiffView _diffView;
@@ -104,9 +104,13 @@ internal sealed class LocalChangesContentView : ContainerView, IBind<LocalChange
         // block — opens it in the scrollable OperationErrorDialog. Status re-reads on every
         // working-tree change, so the failure surfaces inline (one line) and the full block is
         // pulled up on demand rather than auto-popping a modal each poll.
-        _showErrorButton = new ActionButton(
-            LucideIcons.TriangleAlert, "Show full error", tooltip: "Open the full git error");
-        _showErrorButton.Command.Value = new Command(() => _vm?.ShowLoadError());
+        _showErrorButton = new ActionButton
+        {
+            Icon = LucideIcons.TriangleAlert,
+            Label = "Show full error",
+            Tooltip = "Open the full git error",
+            OnClick = () => _vm?.ShowLoadError(),
+        }.BuildView(CompatUi.Current);
 
         _placeholderHost = new FlexColumnView
         {

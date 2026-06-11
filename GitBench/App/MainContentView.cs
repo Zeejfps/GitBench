@@ -2,6 +2,7 @@ using ZGF.Gui.Views;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Observable;
 
 namespace GitBench.App;
@@ -19,11 +20,11 @@ public sealed class MainContentView : ContainerView
     private readonly HistoryView _history = new();
     private readonly LocalChangesView _localChanges = new();
 
-    public MainContentView()
+    public MainContentView(Context ctx)
     {
         AddChildToSelf(_history);
         AddChildToSelf(_localChanges);
-        this.Use(ctx => ctx.Get<State<MainViewMode>>()?.Subscribe(SetActive));
+        this.Bind(ctx.Require<State<MainViewMode>>(), SetActive);
     }
 
     private void SetActive(MainViewMode mode)
