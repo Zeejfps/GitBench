@@ -1,9 +1,14 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
-using GitBench.Theming;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
 
@@ -15,27 +20,34 @@ namespace GitBench.Features.Submodules;
 /// Self-managing: toggles <see cref="View.IsVisible"/> off (collapsing its layout slot) when no
 /// submodule is out of date. Not dismissible — it clears once the submodules are updated.
 /// </summary>
-internal sealed class SubmoduleStatusBannerView : ContainerView, IBind<SubmoduleStatusBannerViewModel>
+internal sealed record SubmoduleStatusBannerView : Widget
 {
-    private readonly ActionButton _updateButton;
-    private readonly TextView _text;
-
-    public SubmoduleStatusBannerView()
+    protected override View CreateView(Context ctx)
     {
-        IsVisible = false;
+        var vm = new SubmoduleStatusBannerViewModel(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        _text = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+
+        var text = new TextView(ctx.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
-        _text.BindThemedTextColor(s => s.Banner.Text);
+        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
+        text.BindText(vm.OutdatedCount, n => n == 1
+            ? "1 submodule is out of date — its working tree differs from the commit the main repo records."
+            : $"{n} submodules are out of date — their working trees differ from the commits the main repo records.");
 
-        _updateButton = new ActionButton(
+        var updateButton = new ActionButton(
             LucideIcons.Package,
             "Update submodules",
             tooltip: "Check submodules out to the commit the main repo records",
             backgroundColor: 0xFF4E8B3D);
+        updateButton.BindCommand(vm.UpdateSubmodules);
 
         var banner = new RectView
         {
@@ -49,25 +61,17 @@ internal sealed class SubmoduleStatusBannerView : ContainerView, IBind<Submodule
                     CrossAxisAlignment = CrossAxisAlignment.Center,
                     Children =
                     {
-                        new FlexItem { Grow = 1, Child = _text },
-                        _updateButton,
+                        new FlexItem { Grow = 1, Child = text },
+                        updateButton,
                     },
                 },
             },
         };
-        banner.BindThemedBackgroundColor(s => s.Banner.Background);
-        banner.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border });
-        AddChildToSelf(banner);
+        banner.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
+        banner.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border });
+        banner.BindIsVisible(() => vm.OutdatedCount.Value > 0);
 
-        this.UseViewModel(this);
-    }
-
-    public void Bind(SubmoduleStatusBannerViewModel vm)
-    {
-        _updateButton.BindCommand(vm.UpdateSubmodules);
-        _text.BindText(vm.OutdatedCount, n => n == 1
-            ? "1 submodule is out of date — its working tree differs from the commit the main repo records."
-            : $"{n} submodules are out of date — their working trees differ from the commits the main repo records.");
-        vm.OutdatedCount.Subscribe(n => IsVisible = n > 0);
+        banner.UseViewModel(() => vm, _ => { });
+        return banner;
     }
 }

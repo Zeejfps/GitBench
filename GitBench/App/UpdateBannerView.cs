@@ -1,10 +1,11 @@
 using GitBench.Controls;
 using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.App;
@@ -15,19 +16,20 @@ namespace GitBench.App;
 /// off while no update is pending, so layout skips it (no residual gap) — same pattern as
 /// <see cref="OperationBannerView"/> / <see cref="ErrorBarView"/>.
 /// </summary>
-internal sealed class UpdateBannerView : ContainerView
+internal sealed record UpdateBannerView : Widget
 {
-    public UpdateBannerView(UpdateService updateService)
+    protected override View CreateView(Context ctx)
     {
-        this.BindIsVisible(updateService.BannerMessage, m => m != null);
+        var updateService = ctx.Require<UpdateService>();
+        var theme = ctx.Theme();
 
-        var text = new TextView(CompatUi.Canvas)
+        var text = new TextView(ctx.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
         text.BindText(updateService.BannerMessage);
-        text.BindThemedTextColor(s => s.Banner.Text);
+        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
         var restartButton = new ActionButton(
             LucideIcons.Package,
@@ -59,8 +61,9 @@ internal sealed class UpdateBannerView : ContainerView
             },
             Children = { row },
         };
-        banner.BindThemedBackgroundColor(s => s.Banner.Background);
-        banner.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border });
-        AddChildToSelf(banner);
+        banner.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
+        banner.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border });
+        banner.BindIsVisible(updateService.BannerMessage, m => m != null);
+        return banner;
     }
 }

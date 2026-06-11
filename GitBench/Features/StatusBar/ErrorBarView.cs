@@ -1,4 +1,5 @@
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
@@ -15,16 +16,17 @@ internal sealed class ErrorBarView : ContainerView
 {
     public State<string?> Message { get; } = new(null);
 
-    public ErrorBarView(int verticalPadding = 4)
+    public ErrorBarView(Context ctx, int verticalPadding = 4)
     {
+        var theme = ctx.Theme();
         this.BindIsVisible(Message, m => m != null);
 
-        var text = new TextView(CompatUi.Canvas)
+        var text = new TextView(ctx.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
         };
         text.BindText(Message);
-        text.BindThemedTextColor(s => s.Banner.Text);
+        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
         var box = new RectView
         {
@@ -39,8 +41,8 @@ internal sealed class ErrorBarView : ContainerView
             },
             Children = { text },
         };
-        box.BindThemedBackgroundColor(s => s.Banner.Background);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(s.Banner.Border));
+        box.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
+        box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.Banner.Border));
         AddChildToSelf(box);
     }
 }

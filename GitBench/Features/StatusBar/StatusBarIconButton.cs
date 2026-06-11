@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
@@ -21,12 +21,13 @@ internal sealed class StatusBarIconButton : HoverableButton
     /// to spin a <see cref="LucideIcons.Loader"/> while a background op runs.</summary>
     public State<float> IconRotation { get; } = new(0f);
 
-    public StatusBarIconButton(string? tooltip = null) : base(tooltip: tooltip)
+    public StatusBarIconButton(Context ctx, string? tooltip = null) : base(tooltip: tooltip)
     {
+        var theme = ctx.Theme();
         Width = 22;
         Height = 18;
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 13,
@@ -35,14 +36,14 @@ internal sealed class StatusBarIconButton : HoverableButton
         };
         label.BindText(Icon);
         label.BindRotation(IconRotation);
-        label.BindThemedTextColor(s => IsHovered.Value ? s.StatusBar.IconHover : s.StatusBar.Icon);
+        label.BindTextColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHover : theme.Styles.Value.StatusBar.Icon);
 
         var background = new RectView
         {
             BorderRadius = BorderRadiusStyle.All(4),
             Children = { label },
         };
-        background.BindThemedBackgroundColor(s => IsHovered.Value ? s.StatusBar.IconHoverBackground : 0u);
+        background.BindBackgroundColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHoverBackground : 0u);
 
         SetBackground(background);
     }

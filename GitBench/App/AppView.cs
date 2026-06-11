@@ -12,24 +12,29 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.KeyboardModule;
 
 namespace GitBench.App;
 
-public sealed class AppView : ContainerView
+internal sealed record AppView : Widget
 {
-    public AppView(PreferencesService preferences, UpdateService updateService)
+    protected override View CreateView(Context ctx)
     {
+        var preferences = ctx.Require<PreferencesService>();
         var prefs = preferences.Current;
+
+        var root = new ContainerView();
+
         // Full-width update banner stacked above the main layout. It self-hides (collapsing
         // its layout slot) until an update is staged, so the FlexColumn shows no residual bar.
         // Kept separate from the per-repo operations banner below.
-        Children.Add(new FlexColumnView
+        root.Children.Add(new FlexColumnView
         {
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new UpdateBannerView(updateService),
+                new UpdateBannerView().BuildView(ctx),
                 new FlexItem
                 {
                     Grow = 1,
@@ -50,11 +55,11 @@ public sealed class AppView : ContainerView
                                 // Repo-level detached-HEAD warning, stacked above both the
                                 // branches sidebar and the main content so it's visible on any
                                 // tab. Self-hides (collapsing its slot) when nothing's at risk.
-                                new DetachedHeadBannerView(),
+                                new DetachedHeadBannerView().BuildView(ctx),
                                 // Sits just below: warns when submodules are out of date with
                                 // the recorded pointer and offers a one-click update. Also
                                 // self-hides when everything's in sync.
-                                new SubmoduleStatusBannerView(),
+                                new SubmoduleStatusBannerView().BuildView(ctx),
                                 new FlexItem
                                 {
                                     Grow = 1,
@@ -81,7 +86,7 @@ public sealed class AppView : ContainerView
                                                 CrossAxisAlignment = CrossAxisAlignment.Stretch,
                                                 Children =
                                                 {
-                                                    new OperationBannerView(),
+                                                    new OperationBannerView().BuildView(ctx),
                                                     new ActionsToolbar(),
                                                 },
                                             },
@@ -91,24 +96,26 @@ public sealed class AppView : ContainerView
                                 },
                             },
                         },
-                        South = new StatusBarView(),
+                        South = new StatusBarView().BuildView(ctx),
                     } } },
                 },
             },
         });
-        Children.Add(new DragOverlay());
+        root.Children.Add(new DragOverlay());
 
         var dialogSurfaceView = new DialogSurfaceView();
-        Children.Add(dialogSurfaceView);
+        root.Children.Add(dialogSurfaceView);
 
-        Behaviors.Add(new DialogPresenter(dialogSurfaceView));
+        root.Behaviors.Add(new DialogPresenter(dialogSurfaceView));
 
         // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
-        Children.Add(new DiffWindowsView());
+        root.Children.Add(new DiffWindowsView());
 
-        this.UseController(ctx => new AppKeybindController(
+        root.UseController(ctx.Require<InputSystem>(), () => new AppKeybindController(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IMessageBus>()));
+
+        return root;
     }
 }
 

@@ -38,7 +38,7 @@ var updateService = services.Require<UpdateService>();
 using var appHost = builder.UseContent(ctx =>
 {
     CompatUi.SetMain(ctx);
-    return ViewContexts.RegisterRoot(new AppView(preferences, updateService), ctx);
+    return ViewContexts.RegisterRoot(new AppView().BuildView(ctx), ctx);
 }).Build();
 appHost.OnWindowResized += preferences.SetWindowSize;
 

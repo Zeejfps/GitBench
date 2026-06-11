@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.ContextMenu;
@@ -14,30 +14,35 @@ namespace GitBench.Features.Identity;
 // the status bar, so the menu opens upward.
 internal sealed class IdentityChipButton : HoverableButton
 {
+    private readonly Context _ctx;
+
     public State<string> Icon { get; } = new(string.Empty);
     public State<string> Label { get; } = new(string.Empty);
 
     // Supplies the menu items at click time so they reflect the current profiles/resolution.
     public Func<IReadOnlyList<RepoBarContextMenu.Item>>? MenuProvider { get; set; }
 
-    public IdentityChipButton()
+    public IdentityChipButton(Context ctx)
     {
-        var icon = new TextView(CompatUi.Canvas)
+        _ctx = ctx;
+        var theme = ctx.Theme();
+
+        var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 12f,
             VerticalTextAlignment = TextAlignment.Center,
         };
         icon.BindText(Icon);
-        icon.BindThemedTextColor(s => s.StatusBar.Text);
+        icon.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(ctx.Canvas)
         {
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,
         };
         label.BindText(Label);
-        label.BindThemedTextColor(s => s.StatusBar.Text);
+        label.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
 
         var background = new RectView
         {
@@ -53,16 +58,15 @@ internal sealed class IdentityChipButton : HoverableButton
                 },
             },
         };
-        background.BindThemedBackgroundColor(s => IsHovered.Value ? s.StatusBar.IconHoverBackground : 0u);
+        background.BindBackgroundColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHoverBackground : 0u);
 
         SetBackground(background);
     }
 
     protected override void OnClicked()
     {
-        var ctx = this.Context;
         var items = MenuProvider?.Invoke();
-        if (ctx == null || items == null || items.Count == 0) return;
-        RepoBarContextMenu.Show(ctx, Position.TopLeft, items, MenuPlacement.Above);
+        if (items == null || items.Count == 0) return;
+        RepoBarContextMenu.Show(_ctx, Position.TopLeft, items, MenuPlacement.Above);
     }
 }

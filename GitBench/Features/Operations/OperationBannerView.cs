@@ -1,8 +1,13 @@
 using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Theming;
+using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
@@ -12,40 +17,39 @@ namespace GitBench.Features.Operations;
 /// stash-apply conflict. Self-managing: toggles <see cref="View.IsVisible"/> based on
 /// state, so the view is skipped by layout (no residual gap) when there's nothing to show.
 /// </summary>
-internal sealed class OperationBannerView : ContainerView, IBind<OperationStateBannerViewModel>
+internal sealed record OperationBannerView : Widget
 {
-    private readonly TextView _text;
-    private readonly ActionButton _abortButton;
-    private readonly ActionButton _continueButton;
-    private readonly TextView _spinnerIcon;
-    private readonly FlexItem _textItem;
-    private readonly FlexRowView _row;
-
-    private RepoOperationState _currentState = RepoOperationState.None;
-    private bool _isBusy;
-
-    public OperationBannerView()
+    protected override View CreateView(Context ctx)
     {
-        IsVisible = false;
+        var vm = new OperationStateBannerViewModel(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IFrameTicker>(),
+            ctx.Require<IMessageBus>());
 
-        _text = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+
+        var text = new TextView(ctx.Canvas)
         {
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
-        _text.BindThemedTextColor(s => s.Banner.Text);
+        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        _continueButton = new ActionButton(
+        var continueButton = new ActionButton(
             LucideIcons.ChevronsRight,
             tooltip: "Continue",
             backgroundColor: 0xFF4E8B3D);
+        continueButton.BindCommand(vm.Continue);
 
-        _abortButton = new ActionButton(
+        var abortButton = new ActionButton(
             LucideIcons.X,
             tooltip: "Abort",
             backgroundColor: 0xFFB3514B);
+        abortButton.BindCommand(vm.Abort);
 
-        _spinnerIcon = new TextView(CompatUi.Canvas)
+        var spinnerIcon = new TextView(ctx.Canvas)
         {
             Text = LucideIcons.Loader,
             FontFamily = LucideIcons.FontFamily,
@@ -54,19 +58,20 @@ internal sealed class OperationBannerView : ContainerView, IBind<OperationStateB
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 20,
         };
-        _spinnerIcon.BindThemedTextColor(s => s.Banner.Text);
+        spinnerIcon.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        _textItem = new FlexItem { Grow = 1, Child = _text };
+        var textItem = new FlexItem { Grow = 1, Child = text };
 
-        _row = new FlexRowView
+        var row = new FlexRowView
         {
             Gap = 4,
             CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { _textItem, _abortButton },
+            Children = { textItem, abortButton },
         };
 
         var banner = new RectView
         {
+            IsVisible = false,
             BorderSize = new BorderSizeStyle { Bottom = 1 },
             Padding = new PaddingStyle
             {
@@ -75,58 +80,54 @@ internal sealed class OperationBannerView : ContainerView, IBind<OperationStateB
                 Top = 6,
                 Bottom = 6,
             },
-            Children = { _row },
+            Children = { row },
         };
-        banner.BindThemedBackgroundColor(s => s.Banner.Background);
-        banner.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border });
-        AddChildToSelf(banner);
+        banner.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
+        banner.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border });
 
-        this.UseViewModel(this);
-    }
+        var currentState = RepoOperationState.None;
+        var isBusy = false;
 
-    public void Bind(OperationStateBannerViewModel vm)
-    {
-        _abortButton.BindCommand(vm.Abort);
-        _continueButton.BindCommand(vm.Continue);
-        vm.State.Subscribe(SetState);
-        vm.IsBusy.Subscribe(SetIsBusy);
-        vm.BusyRotation.Subscribe(r => _spinnerIcon.Rotation = r);
-    }
-
-    private void SetState(RepoOperationState state)
-    {
-        _currentState = state;
-        if (state == RepoOperationState.None)
+        void Render()
         {
-            _isBusy = false;
-            _spinnerIcon.Rotation = 0f;
-            IsVisible = false;
-            return;
+            row.Children.Clear();
+            row.Children.Add(textItem);
+            if (isBusy)
+            {
+                text.Text = BusyMessageFor(currentState);
+                row.Children.Add(spinnerIcon);
+                return;
+            }
+            text.Text = MessageFor(currentState);
+            if (SupportsContinue(currentState)) row.Children.Add(continueButton);
+            row.Children.Add(abortButton);
         }
-        Render();
-        IsVisible = true;
-    }
 
-    private void SetIsBusy(bool busy)
-    {
-        _isBusy = busy;
-        if (!busy) _spinnerIcon.Rotation = 0f;
-        if (_currentState != RepoOperationState.None) Render();
-    }
-
-    private void Render()
-    {
-        _row.Children.Clear();
-        _row.Children.Add(_textItem);
-        if (_isBusy)
+        banner.Bind(vm.State, state =>
         {
-            _text.Text = BusyMessageFor(_currentState);
-            _row.Children.Add(_spinnerIcon);
-            return;
-        }
-        _text.Text = MessageFor(_currentState);
-        if (SupportsContinue(_currentState)) _row.Children.Add(_continueButton);
-        _row.Children.Add(_abortButton);
+            currentState = state;
+            if (state == RepoOperationState.None)
+            {
+                isBusy = false;
+                spinnerIcon.Rotation = 0f;
+                banner.IsVisible = false;
+                return;
+            }
+            Render();
+            banner.IsVisible = true;
+        });
+
+        banner.Bind(vm.IsBusy, busy =>
+        {
+            isBusy = busy;
+            if (!busy) spinnerIcon.Rotation = 0f;
+            if (currentState != RepoOperationState.None) Render();
+        });
+
+        banner.Bind(vm.BusyRotation, r => spinnerIcon.Rotation = r);
+
+        banner.UseViewModel(() => vm, _ => { });
+        return banner;
     }
 
     private static bool SupportsContinue(RepoOperationState state) => state switch

@@ -87,7 +87,7 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
             Children = { _amendCheckbox, _commitButton },
         };
 
-        _errorBar = new ErrorBarView();
+        _errorBar = new ErrorBarView(CompatUi.Current);
         var column = new ColumnView
         {
             Gap = 8,

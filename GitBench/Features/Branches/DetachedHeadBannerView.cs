@@ -1,7 +1,13 @@
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Features.Repos;
+using GitBench.Git;
+using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
@@ -13,27 +19,32 @@ namespace GitBench.Features.Branches;
 /// layout slot in the surrounding FlexColumn) when there's nothing at risk. Not dismissible —
 /// it clears automatically once the commits land on a branch.
 /// </summary>
-internal sealed class DetachedHeadBannerView : ContainerView, IBind<DetachedHeadBannerViewModel>
+internal sealed record DetachedHeadBannerView : Widget
 {
-    private readonly ActionButton _createBranchButton;
-
-    public DetachedHeadBannerView()
+    protected override View CreateView(Context ctx)
     {
-        IsVisible = false;
+        var vm = new DetachedHeadBannerViewModel(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var text = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+
+        var text = new TextView(ctx.Canvas)
         {
             Text = "Detached HEAD — your latest commits aren't on any branch.",
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
-        text.BindThemedTextColor(s => s.Banner.Text);
+        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
 
-        _createBranchButton = new ActionButton(
+        var createBranchButton = new ActionButton(
             LucideIcons.Branch,
             "Create branch",
             tooltip: "Create a branch here so these commits aren't lost",
             backgroundColor: 0xFF4E8B3D);
+        createBranchButton.BindCommand(vm.CreateBranch);
 
         var banner = new RectView
         {
@@ -48,21 +59,16 @@ internal sealed class DetachedHeadBannerView : ContainerView, IBind<DetachedHead
                     Children =
                     {
                         new FlexItem { Grow = 1, Child = text },
-                        _createBranchButton,
+                        createBranchButton,
                     },
                 },
             },
         };
-        banner.BindThemedBackgroundColor(s => s.Banner.Background);
-        banner.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border });
-        AddChildToSelf(banner);
+        banner.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
+        banner.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border });
+        banner.BindIsVisible(() => vm.IsAtRisk.Value);
 
-        this.UseViewModel(this);
-    }
-
-    public void Bind(DetachedHeadBannerViewModel vm)
-    {
-        _createBranchButton.BindCommand(vm.CreateBranch);
-        vm.IsAtRisk.Subscribe(atRisk => IsVisible = atRisk);
+        banner.UseViewModel(() => vm, _ => { });
+        return banner;
     }
 }
