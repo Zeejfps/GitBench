@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -17,7 +18,7 @@ public sealed record Checkbox : Widget
     protected override View CreateView(Context ctx)
     {
         var view = new CheckboxView(Label);
-        view.Use(() => view.IsChecked.BindTwoWay(Value));
+        view.BindTwoWay(view.IsChecked, Value);
         return view;
     }
 }
