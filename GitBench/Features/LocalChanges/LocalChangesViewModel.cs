@@ -269,6 +269,15 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             };
         });
     }
+
+    private void DropAmendSession()
+    {
+        if (_amend == null) return;
+        var title = _amend.PreAmendTitle;
+        var description = _amend.PreAmendDescription;
+        _amend = null;
+        Update(s => s with { Amend = false, Title = title, Description = description });
+    }
     
     /// <summary>
     /// Updates selection for a row click. Files and folders are independent selectable
@@ -768,6 +777,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var active = _registry.Active.Value;
         if (active == null)
         {
+            DropAmendSession();
             _stagedFromIndex = Empty;
             _renderedRepoId = null;
             _mergeActive = false;
@@ -789,6 +799,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         var isCrossRepoSwitch = _renderedRepoId != active.Id;
         _renderedRepoId = active.Id;
+        if (isCrossRepoSwitch) DropAmendSession();
 
         if (fetched == null)
         {
@@ -848,7 +859,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 work: () => (_gitService.GetHeadCommitFiles(repo), null),
                 onResult: (headFiles, _) =>
                 {
-                    if (_amend != null && headFiles != null && _registry.Active.Value?.Id == repo.Id)
+                    if (_registry.Active.Value?.Id != repo.Id) return;
+                    if (_amend != null && headFiles != null)
                         _amend.UpdateHeadFiles(headFiles);
                     ApplySnapshot(snap, drift);
                 });
