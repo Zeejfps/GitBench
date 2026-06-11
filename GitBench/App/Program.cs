@@ -37,22 +37,22 @@ var builder = GuiApp.CreateBuilder(new StartupConfig
     WindowHeight = initialPrefs.WindowHeight,
     IsUndecorated = false
 });
-var context = builder.Services;
-context.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
+var services = builder.Services;
+services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
-var registry = context.Require<IRepoRegistry>();
-var gitService = context.Require<IGitService>();
-var repoActivity = context.Require<IRepoActivityTracker>();
-var messageBus = context.Require<IMessageBus>();
-var themeMode = context.Require<State<ThemeMode>>();
-var updateService = context.Require<UpdateService>();
+var registry = services.Require<IRepoRegistry>();
+var gitService = services.Require<IGitService>();
+var repoActivity = services.Require<IRepoActivityTracker>();
+var messageBus = services.Require<IMessageBus>();
+var themeMode = services.Require<State<ThemeMode>>();
+var updateService = services.Require<UpdateService>();
 
 using var snapshotStore = new RepoSnapshotStore(registry, gitService, messageBus);
-context.AddService<IRepoSnapshotStore>(snapshotStore);
+services.AddService<IRepoSnapshotStore>(snapshotStore);
 using var operationsStore = new RepoOperationsStore(registry, gitService, messageBus);
-context.AddService<IRepoOperationsStore>(operationsStore);
+services.AddService<IRepoOperationsStore>(operationsStore);
 using var statusStore = new RepoStatusStore(operationsStore, registry, gitService, messageBus);
-context.AddService<IRepoStatusStore>(statusStore);
+services.AddService<IRepoStatusStore>(statusStore);
 
 var appView = new AppView(preferences, updateService);
 using var appHost = builder.UseContent(appView).Build();
@@ -65,15 +65,15 @@ var fontAssembly = typeof(LucideIcons).Assembly;
 appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
 appHost.RegisterFont(DiffOptions.MonoFontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
 
-context.AddService<ITooltipService>(new PopupTooltipService(
-    context.Require<IPopupWindowFactory>(),
-    context.Require<IWindowCoordinates>(),
-    measureContext: context));
+services.AddService<ITooltipService>(new PopupTooltipService(
+    services.Require<IPopupWindowFactory>(),
+    services.Require<IWindowCoordinates>(),
+    measureContext: services));
 
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     appHost.SetIcon("Assets/commit_bench_icon.rgba");
 
-var dispatcher = context.Require<IUiDispatcher>();
+var dispatcher = services.Require<IUiDispatcher>();
 using var repoWatchers = new RepoWatcherService(registry, dispatcher, messageBus, repoActivity);
 using var worktreeSync = new WorktreeSyncService(registry, gitService, dispatcher, messageBus);
 using var submoduleSync = new SubmoduleSyncService(registry, gitService, dispatcher, messageBus);
@@ -92,7 +92,7 @@ if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
     try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon_mac.png"); }
     catch (Exception ex) { Console.WriteLine($"[About] icon load failed: {ex.Message}"); }
 }
-context.InstallNativeAppMenu(themeMode, updateService, dispatcher);
+services.InstallNativeAppMenu(themeMode, updateService, dispatcher);
 
 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
 

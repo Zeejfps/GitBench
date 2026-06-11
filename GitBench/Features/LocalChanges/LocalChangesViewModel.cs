@@ -68,10 +68,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
 
     private IReadOnlyList<FileChange> _stagedFromIndex = Empty;
-    private AmendSession? _amend;
-    // True once we've populated the commit box for an in-progress merge; tracks the
-    // not-merging↔merging transition so resolving conflicts doesn't re-clobber edits.
-    private bool _mergeActive;
     // Repo whose working-tree data is currently reflected in state; distinguishes a cross-repo
     // switch (blank the panels) from a same-repo refresh (keep them visible).
     private Guid? _renderedRepoId;
@@ -238,30 +234,34 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     public void SetAmend(bool on)
     {
+        EditorMode mode;
         string title, description;
         if (on)
         {
-            _amend = AmendSession.Begin(
+            if (State.Value.Editor is not EditorMode.Normal) return;
+            var session = AmendSession.Begin(
                 _gitService,
                 _registry.Active.Value,
                 State.Value.Title,
                 State.Value.Description);
-            title = _amend.Title;
-            description = _amend.Description;
+            mode = new EditorMode.Amending(session);
+            title = session.Title;
+            description = session.Description;
         }
         else
         {
-            title = _amend?.PreAmendTitle ?? string.Empty;
-            description = _amend?.PreAmendDescription ?? string.Empty;
-            _amend = null;
+            if (State.Value.Editor is not EditorMode.Amending amending) return;
+            mode = EditorMode.Idle;
+            title = amending.Session.PreAmendTitle;
+            description = amending.Session.PreAmendDescription;
         }
 
         Update(s =>
         {
-            var staged = ComputeDisplayedStaged();
+            var staged = ComputeDisplayedStaged(mode);
             return s with
             {
-                Amend = on,
+                Editor = mode,
                 Title = title,
                 Description = description,
                 Staged = staged,
@@ -272,11 +272,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     private void DropAmendSession()
     {
-        if (_amend == null) return;
-        var title = _amend.PreAmendTitle;
-        var description = _amend.PreAmendDescription;
-        _amend = null;
-        Update(s => s with { Amend = false, Title = title, Description = description });
+        if (State.Value.Editor is not EditorMode.Amending amending) return;
+        Update(s => s with
+        {
+            Editor = EditorMode.Idle,
+            Title = amending.Session.PreAmendTitle,
+            Description = amending.Session.PreAmendDescription,
+        });
     }
     
     /// <summary>
@@ -619,9 +621,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // While amending, the staged panel may include HEAD-only files (not in the
         // index) that the user wants to drop from the amended commit. Those need a
         // reset against HEAD~1; truly-staged files take the normal unstage path.
-        if (_amend != null && _amend.HeadFiles.Count > 0)
+        if (State.Value.Editor is EditorMode.Amending { Session: var session } && session.HeadFiles.Count > 0)
         {
-            var (toUnstage, toResetToParent) = _amend.Classify(paths, _stagedFromIndex);
+            var (toUnstage, toResetToParent) = session.Classify(paths, _stagedFromIndex);
             if (toResetToParent.Count > 0)
             {
                 RunUnstageWithReset(toUnstage, toResetToParent);
@@ -751,12 +753,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 // After a successful commit the editor is cleared regardless of mode.
                 // When amending we also drop the session — bypassing SetAmend(false)'s
                 // restore-from-backup, which would put the pre-amend text back.
-                _amend = null;
                 Update(s => s with
                 {
                     CommitBusy = false,
                     OpError = null,
-                    Amend = false,
+                    Editor = EditorMode.Idle,
                     Title = string.Empty,
                     Description = string.Empty,
                     Staged = Empty,
@@ -780,7 +781,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             DropAmendSession();
             _stagedFromIndex = Empty;
             _renderedRepoId = null;
-            _mergeActive = false;
             Update(s => s with
             {
                 HasRepo = false,
@@ -792,7 +792,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Unstaged = Empty,
                 Selection = LocalChanges.Selection.Empty,
                 DriftedSubmodules = [],
-                IsMerging = false,
+                Editor = EditorMode.Idle,
             });
             return;
         }
@@ -848,7 +848,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         HandleMergeState(data.MergeMessage);
 
-        if (_amend != null)
+        if (State.Value.Editor is EditorMode.Amending)
         {
             // HEAD may have moved (e.g. an external commit) while amending — refresh HEAD's file
             // list off-thread before applying so the staged panel's HEAD-only rows stay valid.
@@ -860,8 +860,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 onResult: (headFiles, _) =>
                 {
                     if (_registry.Active.Value?.Id != repo.Id) return;
-                    if (_amend != null && headFiles != null)
-                        _amend.UpdateHeadFiles(headFiles);
+                    if (State.Value.Editor is EditorMode.Amending amending && headFiles != null)
+                        amending.Session.UpdateHeadFiles(headFiles);
                     ApplySnapshot(snap, drift);
                 });
             return;
@@ -876,28 +876,17 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // editor — staging a conflict mid-merge reloads but must not overwrite the user's edits.
     private void HandleMergeState(string? mergeMessage)
     {
+        var wasMerging = State.Value.Editor is EditorMode.Merging;
         var isMerging = mergeMessage != null;
-        if (isMerging && !_mergeActive)
+        if (isMerging && !wasMerging)
         {
-            _mergeActive = true;
-            if (_amend == null)
-            {
-                var (title, description) = SplitMergeMessage(mergeMessage!);
-                Update(s => s with { IsMerging = true, Title = title, Description = description });
-            }
-            else
-            {
-                Update(s => s with { IsMerging = true });
-            }
+            DropAmendSession();
+            var (title, description) = SplitMergeMessage(mergeMessage!);
+            Update(s => s with { Editor = new EditorMode.Merging(), Title = title, Description = description });
         }
-        else if (!isMerging && _mergeActive)
+        else if (!isMerging && wasMerging)
         {
-            _mergeActive = false;
-            Update(s => s with { IsMerging = false, Title = string.Empty, Description = string.Empty });
-        }
-        else if (State.Value.IsMerging != isMerging)
-        {
-            Update(s => s with { IsMerging = isMerging });
+            Update(s => s with { Editor = EditorMode.Idle, Title = string.Empty, Description = string.Empty });
         }
     }
 
@@ -931,7 +920,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         _stagedFromIndex = snap.Staged;
         Update(s =>
         {
-            var staged = ComputeDisplayedStaged();
+            var staged = ComputeDisplayedStaged(s.Editor);
             return s with
             {
                 IsLoading = false,
@@ -1035,6 +1024,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         });
     }
 
-    private IReadOnlyList<FileChange> ComputeDisplayedStaged()
-        => _amend?.MergeWithIndex(_stagedFromIndex) ?? _stagedFromIndex;
+    private IReadOnlyList<FileChange> ComputeDisplayedStaged(EditorMode editor)
+        => editor is EditorMode.Amending amending
+            ? amending.Session.MergeWithIndex(_stagedFromIndex)
+            : _stagedFromIndex;
 }

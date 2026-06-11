@@ -6,7 +6,7 @@ namespace GitBench.Features.LocalChanges;
 internal readonly record struct LocalChangesState(
     string Title,
     string Description,
-    bool Amend,
+    EditorMode Editor,
     bool HasRepo,
     bool IsLoading,
     string? LoadError,
@@ -22,10 +22,6 @@ internal readonly record struct LocalChangesState(
     // Submodules whose current HEAD differs from the parent's recorded pointer. Empty
     // when nothing is drifted. Shown in a dedicated section above the file panels.
     IReadOnlyList<SubmoduleInfo> DriftedSubmodules,
-    // Flat list vs. directory tree. Persisted globally via PreferencesService.
-    // A merge is in progress: the commit box is pre-filled with the merge message and
-    // committing finishes the merge (the operation banner hides its Continue button).
-    bool IsMerging,
     FileViewMode ViewMode,
     // Folder full-paths currently collapsed in tree mode, per side. In-memory only
     // (resets on repo switch / relaunch). Missing key ⇒ expanded.
@@ -37,10 +33,16 @@ internal readonly record struct LocalChangesState(
 
     private static readonly IReadOnlySet<string> EmptyCollapsed = new HashSet<string>();
 
+    public bool Amend => Editor is EditorMode.Amending;
+
+    // A merge is in progress: the commit box is pre-filled with the merge message and
+    // committing finishes the merge (the operation banner hides its Continue button).
+    public bool IsMerging => Editor is EditorMode.Merging;
+
     public static LocalChangesState Initial { get; } = new(
         Title: string.Empty,
         Description: string.Empty,
-        Amend: false,
+        Editor: EditorMode.Idle,
         HasRepo: false,
         IsLoading: false,
         LoadError: null,
@@ -51,7 +53,6 @@ internal readonly record struct LocalChangesState(
         OpError: null,
         CommitBusy: false,
         DriftedSubmodules: [],
-        IsMerging: false,
         ViewMode: FileViewMode.Flat,
         UnstagedCollapsed: EmptyCollapsed,
         StagedCollapsed: EmptyCollapsed);
