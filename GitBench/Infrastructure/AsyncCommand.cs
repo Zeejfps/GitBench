@@ -1,4 +1,3 @@
-using GitBench.Features.Repos;
 using ZGF.Observable;
 
 namespace GitBench.Infrastructure;
@@ -16,7 +15,7 @@ namespace GitBench.Infrastructure;
 /// </summary>
 internal sealed class AsyncCommand : ICommand
 {
-    private readonly OperationRunner _runner;
+    private readonly IUiDispatcher _dispatcher;
     private readonly Func<string?> _work;
     private readonly Action _onSuccess;
     private readonly Action<string>? _onError;
@@ -44,7 +43,7 @@ internal sealed class AsyncCommand : ICommand
         IReadable<bool>? gate = null,
         Action<string>? onError = null)
     {
-        _runner = new OperationRunner(dispatcher);
+        _dispatcher = dispatcher;
         _work = work;
         _onSuccess = onSuccess;
         _onError = onError;
@@ -73,14 +72,21 @@ internal sealed class AsyncCommand : ICommand
         if (!CanExecute.Value) return;
         _error.Value = null;
         _isRunning.Value = true;
-        _runner.Run(
-            _work,
-            ex => ex.Message,
-            error =>
-            {
-                _isRunning.Value = false;
-                if (error != null) { _error.Value = error; _onError?.Invoke(error); return; }
-                _onSuccess();
-            });
+
+        Task.Run(() =>
+        {
+            string? error;
+            try { error = _work(); }
+            catch (Exception ex) { error = ex.Message; }
+            _dispatcher.Post(() => Complete(error));
+        });
+    }
+
+    private void Complete(string? error)
+    {
+        _isRunning.Value = false;
+        if (error is null) { _onSuccess(); return; }
+        _error.Value = error;
+        _onError?.Invoke(error);
     }
 }
