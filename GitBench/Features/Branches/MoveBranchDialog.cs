@@ -1,11 +1,11 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
@@ -16,57 +16,58 @@ namespace GitBench.Features.Branches;
 /// leave those commits unreachable. The fast-forward case skips this dialog (applied directly
 /// by <see cref="CommitsViewModel"/>). Runs `git checkout -B &lt;branch&gt; &lt;sha&gt;` on confirm.
 /// </summary>
-internal sealed class MoveBranchDialog : ContainerView, IBind<MoveBranchDialogViewModel>
+internal sealed record MoveBranchDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required string BranchName { get; init; }
+    public required string Sha { get; init; }
+    public required string ShortSha { get; init; }
+    public required string Summary { get; init; }
+    public required Action OnClose { get; init; }
 
-    public MoveBranchDialog(Repo repo, string branchName, string sha, string shortSha, string summary, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new MoveBranchDialogViewModel(
+            new MoveBranchRequest(Repo, BranchName, Sha),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var subtitle = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Reset '{branchName}' to the selected revision and check it out",
-            TextWrap = TextWrap.Wrap,
-        };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var commitLine = new TextView(CompatUi.Canvas)
-        {
-            Text = string.IsNullOrEmpty(summary) ? shortSha : $"{shortSha}  {summary}",
-            TextWrap = TextWrap.NoWrap,
-        };
-        commitLine.BindThemedTextColor(s => s.DialogBody.BodyText);
-        var commitClip = new ClippingView { Children = { commitLine } };
-
-        var warning = DialogFrame.Hint(
-            $"'{branchName}' has commits that aren't in {shortSha}. Resetting it here will leave those commits unreachable from any branch.",
-            TextWrap.Wrap);
-
-        _shell = new DialogShell("Reset branch to revision", onClose)
-        {
+            Title = "Reset branch to revision",
+            OnClose = OnClose,
             Width = DialogFrame.WidthWide,
             Action = ("Reset branch", DialogButtonRole.Destructive),
-            Body = { subtitle, commitClip, warning },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Move,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Reset '{BranchName}' to the selected revision and check it out",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new Clipped
+                {
+                    Child = new ThemedText
+                    {
+                        Value = string.IsNullOrEmpty(Summary) ? ShortSha : $"{ShortSha}  {Summary}",
+                        Wrap = TextWrap.NoWrap,
+                        Color = s => s.DialogBody.BodyText,
+                    },
+                },
+                new ThemedText
+                {
+                    Value = $"'{BranchName}' has commits that aren't in {ShortSha}. Resetting it here will leave those commits unreachable from any branch.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new MoveBranchRequest(repo, branchName, sha);
-        this.UseViewModel(
-            ctx => new MoveBranchDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(MoveBranchDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-        _shell.BindCommand(vm.Move);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

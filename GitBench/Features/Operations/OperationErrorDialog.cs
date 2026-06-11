@@ -1,13 +1,15 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Operations;
 
@@ -21,27 +23,30 @@ namespace GitBench.Features.Operations;
 /// The body wraps at the dialog's content width and only scrolls vertically; that keeps
 /// long lines visible without letting wide content stretch the dialog horizontally.
 /// </summary>
-public sealed class OperationErrorDialog : ContainerView
+internal sealed record OperationErrorDialog : Widget
 {
     private const float CloseButtonSize = 28f;
 
-    public OperationErrorDialog(string title, string message, Action onClose)
-    {
-        Width = DialogFrame.WidthWide;
-        Height = 360;
+    public required string Title { get; init; }
+    public required string Message { get; init; }
+    public required Action OnClose { get; init; }
 
-        var titleView = new TextView(CompatUi.Canvas)
+    protected override View CreateView(Context ctx)
+    {
+        var theme = ctx.Theme();
+
+        var titleView = new ThemedText
         {
-            Text = title,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        titleView.BindThemedTextColor(s => s.DialogFrame.TitleText);
+            Value = Title,
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = s => s.DialogFrame.TitleText,
+        }.BuildView(ctx);
 
         // Pull IClipboard lazily off the context — the dialog is constructed before it's
         // attached, so capturing it in a closure that runs on click is the simplest path.
         var copyButton = new DialogCopyButton(
-            () => this.Context?.Get<IClipboard>()?.SetText(message),
+            () => ctx.Get<IClipboard>()?.SetText(Message),
             tooltip: "Copy error to clipboard");
 
         // Symmetric left spacer keeps the title centered: matches the combined width of the
@@ -56,17 +61,17 @@ public sealed class OperationErrorDialog : ContainerView
                 new ContainerView { Width = CloseButtonSize * 2 },
                 new FlexItem { Grow = 1, Child = titleView },
                 copyButton,
-                new DialogCloseButton(onClose),
+                new DialogCloseButton(OnClose),
             },
         };
 
-        var messageView = new TextView(CompatUi.Canvas)
+        var messageView = new ThemedText
         {
-            Text = message,
+            Value = Message,
             FontFamily = DiffOptions.MonoFontFamily,
-            TextWrap = TextWrap.Wrap,
-        };
-        messageView.BindThemedTextColor(s => s.DialogBody.BodyText);
+            Wrap = TextWrap.Wrap,
+            Color = s => s.DialogBody.BodyText,
+        }.BuildView(ctx);
 
         // VerticalScrollPane forces its child to viewport width — that gives the wrapping
         // TextView the bound it needs to wrap instead of measuring its own one-line natural
@@ -79,7 +84,8 @@ public sealed class OperationErrorDialog : ContainerView
             Padding = new PaddingStyle { Left = 8, Right = 8, Top = 6, Bottom = 6 },
             Children = { messageView },
         });
-        scrollPane.UseController(_ => new VerticalScrollPaneWheelController(scrollPane));
+        scrollPane.UseController(ctx.Require<InputSystem>(),
+            () => new VerticalScrollPaneWheelController(scrollPane));
 
         var vScrollBar = ScrollBars.CreateVertical();
 
@@ -96,11 +102,11 @@ public sealed class OperationErrorDialog : ContainerView
                 },
             },
         };
-        scrollHost.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
-        scrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        scrollHost.Use(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
+        scrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
+        scrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
+        scrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        var okButton = new DialogButton("OK", onClose, DialogButtonRole.Primary)
+        var okButton = new DialogButton("OK", OnClose, DialogButtonRole.Primary)
         {
             Height = DialogFrame.DefaultButtonHeight,
             MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
@@ -117,7 +123,7 @@ public sealed class OperationErrorDialog : ContainerView
         };
 
         var separator = new RectView { Height = 1 };
-        separator.BindThemedBackgroundColor(s => s.DialogFrame.HeaderSeparator);
+        separator.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.HeaderSeparator);
 
         var frame = new RectView
         {
@@ -140,11 +146,17 @@ public sealed class OperationErrorDialog : ContainerView
                 },
             },
         };
-        frame.BindThemedBackgroundColor(s => s.DialogFrame.Background);
-        frame.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        AddChildToSelf(frame);
+        frame.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.Background);
+        frame.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
 
-        this.UseController(_ => new DialogKbmController(onClose));
+        var root = new ContainerView
+        {
+            Width = DialogFrame.WidthWide,
+            Height = 360,
+        };
+        root.Children.Add(frame);
+        root.UseController(ctx.Require<InputSystem>(), () => new DialogKbmController(OnClose));
+        return root;
     }
 }
 

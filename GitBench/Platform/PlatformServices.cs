@@ -64,7 +64,7 @@ internal static class PlatformServices
             void CheckForUpdates() =>
                 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: true);
             void ShowAbout() =>
-                bus.Broadcast(new ShowDialogMessage(onClose => new AboutDialog(onClose)));
+                bus.Broadcast(new ShowDialogMessage(onClose => new AboutDialog { OnClose = onClose }));
 
             context.Require<IAppMenu>().Install(new AppMenuBar
             {

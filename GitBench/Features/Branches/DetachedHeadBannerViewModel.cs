@@ -44,7 +44,12 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog(repo, "HEAD", onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
+        {
+            Repo = repo,
+            SuggestedStartPoint = "HEAD",
+            OnClose = onClose,
+        }));
     }
 
     private void Reload()

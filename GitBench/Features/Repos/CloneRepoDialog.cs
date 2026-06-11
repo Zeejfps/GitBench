@@ -1,11 +1,11 @@
-using ZGF.Gui.Views;
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Platform;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.TextInput;
+using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -15,73 +15,61 @@ namespace GitBench.Features.Repos;
 /// directory (with a Browse button), and the subfolder name, then runs <c>git clone</c> and
 /// opens the result. See <see cref="CloneRepoDialogViewModel"/>.
 /// </summary>
-internal sealed class CloneRepoDialog : ContainerView, IBind<CloneRepoDialogViewModel>
+internal sealed record CloneRepoDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _urlField;
-    private readonly LabeledInputField _locationField;
-    private readonly LabeledInputField _nameField;
-    private readonly DialogShell _shell;
-    private CloneRepoDialogViewModel? _vm;
+    public required Action OnClose { get; init; }
 
-    public CloneRepoDialog(Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
-
-        _urlField = new LabeledInputField("Repository URL")
-        {
-            Placeholder = "https://github.com/user/repo.git",
-        };
+        var vm = new CloneRepoDialogViewModel(
+            ctx.Require<IGitService>(),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
         // No fixed Width — DialogButton sizes to its label (it carries its own 16px horizontal
         // padding), so pinning a width clips "Browse…".
-        var browseButton = new DialogButton("Browse…", PickLocation)
+        var browseButton = new DialogButton("Browse…", () =>
+        {
+            var shell = ctx.Get<IPlatformShell>();
+            var picked = shell?.PickFolder("Choose where to clone");
+            if (!string.IsNullOrEmpty(picked))
+                vm.ParentDir.Value = picked;
+        })
         {
             Height = 28,
         };
-        _locationField = new LabeledInputField("Clone into")
-        {
-            Accessory = browseButton,
-            Hint = "Parent folder. The repository is cloned into a new subfolder here.",
-        };
 
-        _nameField = new LabeledInputField("Folder name");
-
-        _shell = new DialogShell("Clone repository", onClose)
+        var view = new Dialog
         {
+            Title = "Clone repository",
+            OnClose = OnClose,
             Action = ("Clone", DialogButtonRole.Primary),
-            Body = { _urlField, _locationField, _nameField },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_urlField.Input, _locationField.Input, _nameField.Input);
+            Command = vm.Clone,
+            Body =
+            [
+                new LabeledInput
+                {
+                    Label = "Repository URL",
+                    Value = vm.Url,
+                    Placeholder = "https://github.com/user/repo.git",
+                },
+                new LabeledInput
+                {
+                    Label = "Clone into",
+                    Value = vm.ParentDir,
+                    Hint = "Parent folder. The repository is cloned into a new subfolder here.",
+                    Accessory = new Raw { View = browseButton },
+                },
+                new LabeledInput
+                {
+                    Label = "Folder name",
+                    Value = vm.FolderName,
+                },
+            ],
+        }.BuildView(ctx);
 
-        this.UseViewModel(
-            ctx => new CloneRepoDialogViewModel(
-                ctx.Require<IGitService>(),
-                ctx.Require<IRepoRegistry>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(CloneRepoDialogViewModel vm)
-    {
-        _vm = vm;
-        vm.CloseRequested += _onClose;
-
-        _urlField.Input.BindTwoWay(vm.Url);
-        _locationField.Input.BindTwoWay(vm.ParentDir);
-        _nameField.Input.BindTwoWay(vm.FolderName);
-        _shell.BindCommand(vm.Clone);
-
-        _shell.BeginEditing();
-    }
-
-    private void PickLocation()
-    {
-        var shell = this.Context?.Get<IPlatformShell>();
-        var picked = shell?.PickFolder("Choose where to clone");
-        if (!string.IsNullOrEmpty(picked) && _vm != null)
-            _vm.ParentDir.Value = picked;
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

@@ -5,10 +5,11 @@ using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
@@ -18,74 +19,62 @@ namespace GitBench.Features.Operations;
 /// header. Mirrors Fork's "Remote" dialog: an editable remote name + repository URL, with
 /// a scheme dropdown that rewrites the URL between SSH and HTTPS. Runs
 /// <c>git remote rename</c> (when the name changed) then <c>git remote set-url</c>.
+/// Leaving <see cref="RemoteName"/> null selects add-mode: seeds the remote name with the
+/// conventional "origin" and runs <c>git remote add</c> on save instead of rename/set-url.
 /// </summary>
-internal sealed class EditRemoteDialog : ContainerView, IBind<EditRemoteDialogViewModel>
+internal sealed record EditRemoteDialog : Widget
 {
-    private readonly LabeledInputField _nameField;
-    private readonly LabeledInputField _urlField;
-    private readonly SchemeDropdown _schemeDropdown;
-    private readonly DialogShell _shell;
-    private readonly Action _onClose;
+    public required Repo Repo { get; init; }
+    public string? RemoteName { get; init; }
+    public required Action OnClose { get; init; }
 
-    public EditRemoteDialog(Repo repo, string remoteName, Action onClose)
-        : this(new EditRemoteRequest(repo, remoteName),
-               "Remote", "Edit URL of the remote repository", "Save", onClose)
+    protected override View CreateView(Context ctx)
     {
-    }
+        var isAdd = RemoteName is null;
+        var request = isAdd
+            ? new EditRemoteRequest(Repo, "origin", IsAdd: true)
+            : new EditRemoteRequest(Repo, RemoteName!);
 
-    // Add-mode: seeds the remote name with the conventional "origin" and runs
-    // `git remote add` on save instead of rename/set-url.
-    public EditRemoteDialog(Repo repo, Action onClose)
-        : this(new EditRemoteRequest(repo, "origin", IsAdd: true),
-               "Add Remote", "Add a new remote repository", "Add", onClose)
-    {
-    }
+        var vm = new EditRemoteDialogViewModel(
+            request,
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-    private EditRemoteDialog(EditRemoteRequest request, string title, string subtitleText, string confirmLabel, Action onClose)
-    {
-        _onClose = onClose;
+        var schemeDropdown = new SchemeDropdown(ctx);
+        schemeDropdown.Bind(vm.Scheme, schemeDropdown.SetScheme);
+        schemeDropdown.SchemeSelected += vm.SetScheme;
 
-        var subtitle = new TextView(CompatUi.Canvas) { Text = subtitleText };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _nameField = new LabeledInputField("Remote");
-
-        _schemeDropdown = new SchemeDropdown();
-        _urlField = new LabeledInputField("Repository URL")
+        var view = new Dialog
         {
-            Accessory = _schemeDropdown,
-        };
-
-        _shell = new DialogShell(title, onClose)
-        {
+            Title = isAdd ? "Add Remote" : "Remote",
+            OnClose = OnClose,
             Width = DialogFrame.WidthWide,
-            Action = (confirmLabel, DialogButtonRole.Primary),
-            Body = { subtitle, _nameField, _urlField },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_nameField.Input, _urlField.Input);
+            Action = (isAdd ? "Add" : "Save", DialogButtonRole.Primary),
+            Command = vm.Save,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = isAdd ? "Add a new remote repository" : "Edit URL of the remote repository",
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new LabeledInput
+                {
+                    Label = "Remote",
+                    Value = vm.Name,
+                },
+                new LabeledInput
+                {
+                    Label = "Repository URL",
+                    Value = vm.Url,
+                    Accessory = new Raw { View = schemeDropdown },
+                },
+            ],
+        }.BuildView(ctx);
 
-        this.UseViewModel(
-            ctx => new EditRemoteDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(EditRemoteDialogViewModel vm)
-    {
-        _nameField.Input.BindTwoWay(vm.Name);
-        _urlField.Input.BindTwoWay(vm.Url);
-
-        vm.Scheme.Subscribe(_schemeDropdown.SetScheme);
-        _schemeDropdown.SchemeSelected += vm.SetScheme;
-
-        _shell.BindCommand(vm.Save);
-        vm.CloseRequested += _onClose;
-
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }
 
@@ -96,24 +85,27 @@ internal sealed class EditRemoteDialog : ContainerView, IBind<EditRemoteDialogVi
 /// </summary>
 internal sealed class SchemeDropdown : HoverableButton
 {
+    private readonly Context _ctx;
     private readonly TextView _labelView;
     private RemoteUrlScheme _scheme = RemoteUrlScheme.Other;
 
     public event Action<RemoteUrlScheme>? SchemeSelected;
 
-    public SchemeDropdown()
+    public SchemeDropdown(Context ctx)
     {
+        _ctx = ctx;
+        var theme = ctx.Theme();
         Width = 84;
         Height = 28;
 
-        _labelView = new TextView(CompatUi.Canvas)
+        _labelView = new TextView(ctx.Canvas)
         {
             Text = LabelFor(_scheme),
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _labelView.BindThemedTextColor(s => s.DialogFrame.TitleText);
+        _labelView.BindTextColor(() => theme.Styles.Value.DialogFrame.TitleText);
 
-        var chevron = new TextView(CompatUi.Canvas)
+        var chevron = new TextView(ctx.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -122,7 +114,7 @@ internal sealed class SchemeDropdown : HoverableButton
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 14,
         };
-        chevron.BindThemedTextColor(s => s.DialogBody.RowText);
+        chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
 
         var row = new FlexRowView
         {
@@ -154,14 +146,12 @@ internal sealed class SchemeDropdown : HoverableButton
 
     protected override void OnClicked()
     {
-        var ctx = this.Context;
-        if (ctx == null) return;
         var items = new List<RepoBarContextMenu.Item>
         {
             new(LabelFor(RemoteUrlScheme.Https), () => SchemeSelected?.Invoke(RemoteUrlScheme.Https)),
             new(LabelFor(RemoteUrlScheme.Ssh), () => SchemeSelected?.Invoke(RemoteUrlScheme.Ssh)),
         };
-        RepoBarContextMenu.Show(ctx, Position.BottomLeft, items);
+        RepoBarContextMenu.Show(_ctx, Position.BottomLeft, items);
     }
 
     private static string LabelFor(RemoteUrlScheme scheme) => scheme switch

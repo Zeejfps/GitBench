@@ -187,9 +187,17 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                     case ResetProbe.NeedsDialog d:
                         var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
                         var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
-                        _bus.Broadcast(new ShowDialogMessage(onClose => new ResetCommitDialog(
-                            capturedRepo, capturedSha, shortSha, summary, snap.HeadBranchName,
-                            d.Staged, d.Unstaged, onClose)));
+                        _bus.Broadcast(new ShowDialogMessage(onClose => new ResetCommitDialog
+                        {
+                            Repo = capturedRepo,
+                            Sha = capturedSha,
+                            ShortSha = shortSha,
+                            Summary = summary,
+                            BranchName = snap.HeadBranchName,
+                            StagedCount = d.Staged,
+                            UnstagedCount = d.Unstaged,
+                            OnClose = onClose,
+                        }));
                         break;
                 }
             });
@@ -211,8 +219,14 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var summary = LookupSummary(snap, sha) ?? string.Empty;
         var capturedRepo = repo;
         var capturedSha = sha;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateTagDialog(
-            capturedRepo, capturedSha, shortSha, summary, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateTagDialog
+        {
+            Repo = capturedRepo,
+            Sha = capturedSha,
+            ShortSha = shortSha,
+            Summary = summary,
+            OnClose = onClose,
+        }));
     }
 
     // ---- create branch ----
@@ -227,8 +241,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         if (repo == null) return;
         var capturedRepo = repo;
         var capturedStart = startPoint;
-        _bus.Broadcast(new ShowDialogMessage(onClose =>
-            new CreateBranchDialog(capturedRepo, capturedStart, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
+        {
+            Repo = capturedRepo,
+            SuggestedStartPoint = capturedStart,
+            OnClose = onClose,
+        }));
     }
 
     // ---- reset a branch to here (detached-HEAD recovery) ----
@@ -276,8 +294,15 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                     case MoveBranchProbe.NeedsConfirm:
                         var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
                         var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
-                        _bus.Broadcast(new ShowDialogMessage(onClose => new MoveBranchDialog(
-                            capturedRepo, capturedBranch, capturedSha, shortSha, summary, onClose)));
+                        _bus.Broadcast(new ShowDialogMessage(onClose => new MoveBranchDialog
+                        {
+                            Repo = capturedRepo,
+                            BranchName = capturedBranch,
+                            Sha = capturedSha,
+                            ShortSha = shortSha,
+                            Summary = summary,
+                            OnClose = onClose,
+                        }));
                         break;
                 }
             });

@@ -233,13 +233,13 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
             "Add profile…",
-            () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(null, onClose)))));
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog { Existing = null, OnClose = onClose }))));
 
         if (activeProfileId is { } editId && _profiles.Find(editId) is { } editable)
         {
             items.Add(new RepoBarContextMenu.Item(
                 $"Edit “{editable.DisplayName}”…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog(editable, onClose)))));
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog { Existing = editable, OnClose = onClose }))));
             items.Add(new RepoBarContextMenu.Item(
                 $"Delete “{editable.DisplayName}”",
                 () => _profiles.Remove(editable.Id)));

@@ -55,7 +55,7 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
         var repo = _registry.Active.Value;
         var state = State.Value;
         if (repo == null || state == RepoOperationState.None) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new AbortOperationDialog(repo, state, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new AbortOperationDialog { Repo = repo, State = state, OnClose = onClose }));
     }
 
     private void DoContinue()

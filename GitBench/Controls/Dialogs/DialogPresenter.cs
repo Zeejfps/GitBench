@@ -45,7 +45,12 @@ public sealed class DialogPresenter : IViewBehavior
         // git CLI almost always writes *something* on failure); this guard is a backstop
         // for the few paths where we couldn't extract any meaningful text.
         if (string.IsNullOrWhiteSpace(m.Message)) return;
-        ShowDialog(new OperationErrorDialog(m.Title, m.Message, OnDialogClosed));
+        ShowDialog(new OperationErrorDialog
+        {
+            Title = m.Title,
+            Message = m.Message,
+            OnClose = OnDialogClosed,
+        }.BuildView(_windowContext!));
     }
 
     private void ShowDialog(View dialog)

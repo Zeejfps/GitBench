@@ -3,12 +3,14 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Operations;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
@@ -20,43 +22,78 @@ namespace GitBench.Features.LocalChanges;
 /// destructive action: the worktree changes (and any untracked files in the set) cannot
 /// be recovered from git afterwards.
 /// </summary>
-internal sealed class DiscardChangesDialog : ContainerView, IBind<DiscardChangesViewModel>
+internal sealed record DiscardChangesDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly DialogShell _shell;
-    private readonly ColumnView _fileListColumn;
-    private readonly TextView _fileListHeader;
-    private readonly TextView _fileListEmpty;
-    private DiscardChangesViewModel? _vm;
+    public required Repo Repo { get; init; }
+    public required IReadOnlyList<string> Paths { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DiscardChangesDialog(Repo repo, IReadOnlyList<string> paths, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        Height = 480f;
+        var vm = new DiscardChangesViewModel(
+            new DiscardChangesRequest(Repo, Paths),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        _onClose = onClose;
-
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = "Discarding cannot be undone. Choose the changes to discard.",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
+            Title = "Discard changes",
+            OnClose = OnClose,
+            Width = DialogFrame.WidthWide,
+            Height = 480f,
+            BodyGap = 10,
+            Action = ("Discard", DialogButtonRole.Destructive),
+            Command = vm.Discard,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = "Discarding cannot be undone. Choose the changes to discard.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new ThemedText
+                {
+                    Bind = () => vm.FilesHeader.Value,
+                    Color = s => s.DialogBody.SectionHeaderText,
+                },
+                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
+            ],
+        }.BuildView(ctx);
 
-        _fileListHeader = DialogFrame.Label("Files");
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
+    }
 
-        _fileListEmpty = new TextView(CompatUi.Canvas)
+    private static View BuildFileList(Context ctx, DiscardChangesViewModel vm)
+    {
+        var theme = ctx.Theme();
+        var column = new ColumnView { Gap = 1 };
+
+        var files = vm.Files.Value;
+        if (files.Count == 0)
         {
-            Text = "No unstaged changes.",
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _fileListEmpty.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
-
-        _fileListColumn = new ColumnView { Gap = 1 };
+            var empty = new TextView(ctx.Canvas)
+            {
+                Text = "No unstaged changes.",
+                HorizontalTextAlignment = TextAlignment.Center,
+                VerticalTextAlignment = TextAlignment.Center,
+            };
+            empty.BindTextColor(() => theme.Styles.Value.FileChangesSection.EmptyPlaceholderText);
+            column.Children.Add(empty);
+        }
+        else
+        {
+            foreach (var file in files)
+                column.Children.Add(BuildRow(ctx, vm, file));
+        }
 
         var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(_fileListColumn);
-        scrollPane.UseController(_ => new VerticalScrollPaneWheelController(scrollPane));
+        scrollPane.Children.Add(column);
+        scrollPane.UseController(ctx.Require<InputSystem>(),
+            () => new VerticalScrollPaneWheelController(scrollPane));
 
         var vScrollBar = ScrollBars.CreateVertical();
 
@@ -74,73 +111,24 @@ internal sealed class DiscardChangesDialog : ContainerView, IBind<DiscardChanges
                 },
             },
         };
-        fileScrollHost.BindThemedBackgroundColor(s => s.DialogFrame.InsetBackground);
-        fileScrollHost.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        fileScrollHost.Use(_ => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
+        fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
+        fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
+        fileScrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        _shell = new DialogShell("Discard changes", onClose)
-        {
-            Width = DialogFrame.WidthWide,
-            BodyGap = 10,
-            Action = ("Discard", DialogButtonRole.Destructive),
-            Body =
-            {
-                prompt,
-                _fileListHeader,
-                new FlexItem { Grow = 1, Child = fileScrollHost },
-            },
-        };
-        AddChildToSelf(_shell.View);
-
-        _shell.AttachConfirmKeys(this);
-
-        var request = new DiscardChangesRequest(repo, paths);
-        this.UseViewModel(
-            ctx => new DiscardChangesViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
+        return fileScrollHost;
     }
 
-    public void Bind(DiscardChangesViewModel vm)
+    private static View BuildRow(Context ctx, DiscardChangesViewModel vm, DiscardFileRow file)
     {
-        _vm = vm;
-        vm.CloseRequested += _onClose;
-
-        _shell.BindCommand(vm.Discard);
-        _fileListHeader.BindText(vm.FilesHeader);
-
-        vm.Files.Subscribe(RenderFiles);
-    }
-
-    private void RenderFiles(IReadOnlyList<DiscardFileRow> files)
-    {
-        _fileListColumn.Children.Clear();
-
-        if (files.Count == 0)
-        {
-            _fileListColumn.Children.Add(_fileListEmpty);
-            return;
-        }
-
-        foreach (var file in files)
-            _fileListColumn.Children.Add(BuildRow(file));
-    }
-
-    private CheckboxView BuildRow(DiscardFileRow file)
-    {
-        var vm = _vm!;
-
+        var theme = ctx.Theme();
         var badge = FileChangesUI.CreateStatusBadge(file.Display);
 
-        var pathText = new TextView(CompatUi.Canvas)
+        var pathText = new TextView(ctx.Canvas)
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
         };
-        pathText.BindThemedTextColor(s => s.FileChangeRow.RowText);
+        pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 
         var rowContent = new FlexRowView
         {

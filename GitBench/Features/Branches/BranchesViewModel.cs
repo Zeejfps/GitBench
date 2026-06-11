@@ -437,8 +437,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CheckoutBranchDialog(
-            repo, remoteName, fullPath, fullPath, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CheckoutBranchDialog
+        {
+            Repo = repo,
+            RemoteName = remoteName,
+            RemoteBranchName = fullPath,
+            SuggestedLocalName = fullPath,
+            OnClose = onClose,
+        }));
     }
 
     // Double-click applies with pop semantics: on a clean apply, prompt to drop the stash.
@@ -583,7 +589,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // Mirror the toolbar's Branch action: seed the starting point with the current
         // HEAD branch, falling back to "HEAD" when detached (no branch name to seed from).
         var suggested = GetHeadBranchName() ?? "HEAD";
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog(repo, suggested, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
+        {
+            Repo = repo,
+            SuggestedStartPoint = suggested,
+            OnClose = onClose,
+        }));
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalBranchMenuItems(string fullPath, bool isHead)
@@ -643,30 +654,47 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             var capturedHead = headBranch;
             items.Add(new RepoBarContextMenu.Item(
                 $"Merge {capturedName} into {capturedHead}…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog(
-                    new MergeBranchRequest(capturedRepo, capturedName, capturedName, capturedHead), onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog
+                {
+                    Request = new MergeBranchRequest(capturedRepo, capturedName, capturedName, capturedHead),
+                    OnClose = onClose,
+                })),
                 LucideIcons.Merge,
                 Enabled: canMerge,
                 LabelSegments: BuildMergeSegments(capturedName, capturedHead)));
             items.Add(new RepoBarContextMenu.Item(
                 $"Rebase {capturedHead} onto {capturedName}…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog(
-                    new RebaseBranchRequest(capturedRepo, capturedHead, capturedName, capturedName), onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog
+                {
+                    Request = new RebaseBranchRequest(capturedRepo, capturedHead, capturedName, capturedName),
+                    OnClose = onClose,
+                })),
                 LucideIcons.Merge,
                 Enabled: canMerge,
                 LabelSegments: BuildRebaseSegments(capturedHead, capturedName)));
         }
         items.Add(new RepoBarContextMenu.Item(
             "Rename…",
-            () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameBranchDialog(capturedRepo, capturedName, onClose))),
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameBranchDialog
+            {
+                Repo = capturedRepo,
+                CurrentName = capturedName,
+                OnClose = onClose,
+            })),
             LucideIcons.PencilLine,
             Enabled: !renameDisabled));
         var upstreamRemote = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamRemote : null;
         var upstreamBranch = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamBranch : null;
         items.Add(new RepoBarContextMenu.Item(
             "Delete…",
-            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteLocalBranchDialog(
-                capturedRepo, capturedName, upstreamRemote, upstreamBranch, onClose))),
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteLocalBranchDialog
+            {
+                Repo = capturedRepo,
+                BranchName = capturedName,
+                UpstreamRemote = upstreamRemote,
+                UpstreamBranch = upstreamBranch,
+                OnClose = onClose,
+            })),
             LucideIcons.Trash,
             Enabled: !deleteDisabled));
 
@@ -683,8 +711,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         {
             new RepoBarContextMenu.Item(
                 "Add remote…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog(
-                    capturedRepo, onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog
+                {
+                    Repo = capturedRepo,
+                    OnClose = onClose,
+                })),
                 LucideIcons.Fetch),
         };
         if (RemotesHaveCollapsibles())
@@ -702,8 +733,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         {
             new RepoBarContextMenu.Item(
                 $"Edit {capturedRemote}…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog(
-                    repo, capturedRemote, onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog
+                {
+                    Repo = repo,
+                    RemoteName = capturedRemote,
+                    OnClose = onClose,
+                })),
                 LucideIcons.PencilLine),
         };
         if (RemoteHasFolders(capturedRemote))
@@ -739,15 +774,21 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             var sourceRef = display;
             items.Add(new RepoBarContextMenu.Item(
                 $"Merge {display} into {capturedHead}…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog(
-                    new MergeBranchRequest(capturedRepo, sourceRef, display, capturedHead), onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog
+                {
+                    Request = new MergeBranchRequest(capturedRepo, sourceRef, display, capturedHead),
+                    OnClose = onClose,
+                })),
                 LucideIcons.Merge,
                 Enabled: !state.IsBranchOpInFlight,
                 LabelSegments: BuildMergeSegments(display, capturedHead)));
             items.Add(new RepoBarContextMenu.Item(
                 $"Rebase {capturedHead} onto {display}…",
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog(
-                    new RebaseBranchRequest(capturedRepo, capturedHead, sourceRef, display), onClose))),
+                () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog
+                {
+                    Request = new RebaseBranchRequest(capturedRepo, capturedHead, sourceRef, display),
+                    OnClose = onClose,
+                })),
                 LucideIcons.Merge,
                 Enabled: !state.IsBranchOpInFlight,
                 LabelSegments: BuildRebaseSegments(capturedHead, display)));
@@ -755,8 +796,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         items.Add(new RepoBarContextMenu.Item(
             "Delete remote branch…",
-            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteRemoteBranchDialog(
-                capturedRepo, capturedRemote, capturedName, onClose))),
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteRemoteBranchDialog
+            {
+                Repo = capturedRepo,
+                RemoteName = capturedRemote,
+                BranchName = capturedName,
+                OnClose = onClose,
+            })),
             LucideIcons.Trash));
         return items;
     }

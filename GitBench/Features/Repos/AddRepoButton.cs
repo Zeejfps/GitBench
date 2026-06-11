@@ -57,5 +57,5 @@ public sealed class AddRepoButton : HoverableButton
 
     private void ShowCloneDialog()
         => this.Context?.Get<IMessageBus>()?.Broadcast(
-            new ShowDialogMessage(onClose => new CloneRepoDialog(onClose)));
+            new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose }));
 }

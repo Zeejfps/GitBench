@@ -1,10 +1,13 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Platform;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.App;
 
@@ -12,7 +15,7 @@ namespace GitBench.App;
 /// "About GitBench" modal: app icon, name, version, a link to the repo, and copyright.
 /// Opened from the macOS app menu (and reusable from a Help menu on other platforms).
 /// </summary>
-public sealed class AboutDialog : ContainerView
+internal sealed record AboutDialog : Widget
 {
     private const string RepoUrl = "https://github.com/Zeejfps/GitBench";
 
@@ -23,9 +26,11 @@ public sealed class AboutDialog : ContainerView
     /// </summary>
     public static string? IconImageId { get; set; }
 
-    public AboutDialog(Action onClose)
+    public required Action OnClose { get; init; }
+
+    protected override View CreateView(Context ctx)
     {
-        Width = 360;
+        var theme = ctx.Theme();
 
         var closeRow = new FlexRowView
         {
@@ -34,43 +39,43 @@ public sealed class AboutDialog : ContainerView
             Children =
             {
                 new FlexItem { Grow = 1, Child = new ContainerView() },
-                new DialogCloseButton(onClose),
+                new DialogCloseButton(OnClose),
             },
         };
 
-        var name = new TextView(CompatUi.Canvas)
+        var name = new ThemedText
         {
-            Text = "GitBench",
+            Value = "GitBench",
             FontSize = 22,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        name.BindThemedTextColor(s => s.DialogFrame.TitleText);
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = s => s.DialogFrame.TitleText,
+        }.BuildView(ctx);
 
-        var version = new TextView(CompatUi.Canvas)
+        var version = new ThemedText
         {
-            Text = $"v{AppVersion.Display}",
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        version.BindThemedTextColor(s => s.Palette.TextSecondary);
-        
+            Value = $"v{AppVersion.Display}",
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = s => s.Palette.TextSecondary,
+        }.BuildView(ctx);
+
         var repoButton = new DialogButton(
             "View on GitHub",
-            () => this.Context?.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
+            () => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
             DialogButtonRole.Primary)
         {
             Height = DialogFrame.DefaultButtonHeight,
             MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
         };
 
-        var copyright = new TextView(CompatUi.Canvas)
+        var copyright = new ThemedText
         {
-            Text = "© 2026 Zee Vasilyev",
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        copyright.BindThemedTextColor(s => s.Palette.TextMuted);
+            Value = "© 2026 Zee Vasilyev",
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = s => s.Palette.TextMuted,
+        }.BuildView(ctx);
 
         var content = new FlexColumnView
         {
@@ -78,7 +83,7 @@ public sealed class AboutDialog : ContainerView
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                BuildLogo(),
+                BuildLogo(ctx),
                 name,
                 version,
                 repoButton,
@@ -101,27 +106,29 @@ public sealed class AboutDialog : ContainerView
                 },
             },
         };
-        frame.BindThemedBackgroundColor(s => s.DialogFrame.Background);
-        frame.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
-        AddChildToSelf(frame);
+        frame.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.Background);
+        frame.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
 
-        this.UseController(_ => new DialogKbmController(onClose));
+        var root = new ContainerView { Width = 360 };
+        root.Children.Add(frame);
+        root.UseController(ctx.Require<InputSystem>(), () => new DialogKbmController(OnClose));
+        return root;
     }
 
-    private static View BuildLogo()
+    private static View BuildLogo(Context ctx)
     {
         if (IconImageId != null)
-            return new ImageView(CompatUi.Canvas) { ImageId = IconImageId, Width = 84, Height = 84 };
+            return new ImageView(ctx.Canvas) { ImageId = IconImageId, Width = 84, Height = 84 };
 
-        var glyph = new TextView(CompatUi.Canvas)
+        var glyph = new ThemedText
         {
-            Text = LucideIcons.FolderGit2,
+            Value = LucideIcons.FolderGit2,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 60,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        glyph.BindThemedTextColor(s => s.Palette.Accent);
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = s => s.Palette.Accent,
+        }.BuildView(ctx);
         return new ContainerView { Width = 84, Height = 84, Children = { glyph } };
     }
 }

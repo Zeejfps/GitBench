@@ -1,8 +1,8 @@
-using ZGF.Gui.Views;
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.TextInput;
+using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Identity;
@@ -10,72 +10,71 @@ namespace GitBench.Features.Identity;
 // Add/edit form for a single identity profile: a display name, the author name/email injected
 // per commit, an optional SSH key, and a single host/owner match rule. Power users can add
 // multiple match rules by editing identity-profiles.json directly; the form keeps to one.
-internal sealed class IdentityProfileEditDialog : ContainerView, IBind<IdentityProfileEditDialogViewModel>
+internal sealed record IdentityProfileEditDialog : Widget
 {
-    private readonly LabeledInputField _displayName;
-    private readonly LabeledInputField _authorName;
-    private readonly LabeledInputField _authorEmail;
-    private readonly LabeledInputField _sshKey;
-    private readonly LabeledInputField _matchHost;
-    private readonly LabeledInputField _matchOwner;
-    private readonly DialogShell _shell;
-    private readonly Action _onClose;
+    public required IdentityProfile? Existing { get; init; }
+    public required Action OnClose { get; init; }
 
-    public IdentityProfileEditDialog(IdentityProfile? existing, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new IdentityProfileEditDialogViewModel(
+            Existing,
+            ctx.Require<IdentityProfileService>(),
+            ctx.Require<IUiDispatcher>());
 
-        _displayName = new LabeledInputField("Profile name") { Placeholder = "Work" };
-        _authorName = new LabeledInputField("Author name") { Placeholder = "Jane Dev" };
-        _authorEmail = new LabeledInputField("Author email") { Placeholder = "jane@company.com" };
-        _sshKey = new LabeledInputField("SSH key (optional)")
+        var add = Existing == null;
+        var view = new Dialog
         {
-            Placeholder = "~/.ssh/id_work",
-            Hint = "Used for fetch/push from repos matched by this profile.",
-        };
-        _matchHost = new LabeledInputField("Match: host")
-        {
-            Placeholder = "github.com",
-            Hint = "Repos whose remote is on this host use this profile.",
-        };
-        _matchOwner = new LabeledInputField("Match: owner (optional)")
-        {
-            Placeholder = "your-org",
-            Hint = "Limit to one org/user. Leave blank to match any repo on the host.",
-        };
-
-        var add = existing == null;
-        _shell = new DialogShell(add ? "New identity" : "Edit identity", onClose)
-        {
+            Title = add ? "New identity" : "Edit identity",
+            OnClose = OnClose,
             Width = DialogFrame.WidthWide,
             Action = (add ? "Add" : "Save", DialogButtonRole.Primary),
-            Body = { _displayName, _authorName, _authorEmail, _sshKey, _matchHost, _matchOwner },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(
-            _displayName.Input, _authorName.Input, _authorEmail.Input,
-            _sshKey.Input, _matchHost.Input, _matchOwner.Input);
+            Command = vm.Save,
+            Body =
+            [
+                new LabeledInput
+                {
+                    Label = "Profile name",
+                    Value = vm.DisplayName,
+                    Placeholder = "Work",
+                },
+                new LabeledInput
+                {
+                    Label = "Author name",
+                    Value = vm.AuthorName,
+                    Placeholder = "Jane Dev",
+                },
+                new LabeledInput
+                {
+                    Label = "Author email",
+                    Value = vm.AuthorEmail,
+                    Placeholder = "jane@company.com",
+                },
+                new LabeledInput
+                {
+                    Label = "SSH key (optional)",
+                    Value = vm.SshKeyPath,
+                    Placeholder = "~/.ssh/id_work",
+                    Hint = "Used for fetch/push from repos matched by this profile.",
+                },
+                new LabeledInput
+                {
+                    Label = "Match: host",
+                    Value = vm.MatchHost,
+                    Placeholder = "github.com",
+                    Hint = "Repos whose remote is on this host use this profile.",
+                },
+                new LabeledInput
+                {
+                    Label = "Match: owner (optional)",
+                    Value = vm.MatchOwner,
+                    Placeholder = "your-org",
+                    Hint = "Limit to one org/user. Leave blank to match any repo on the host.",
+                },
+            ],
+        }.BuildView(ctx);
 
-        this.UseViewModel(
-            ctx => new IdentityProfileEditDialogViewModel(
-                existing,
-                ctx.Require<IdentityProfileService>(),
-                ctx.Require<IUiDispatcher>()),
-            Bind);
-    }
-
-    public void Bind(IdentityProfileEditDialogViewModel vm)
-    {
-        _displayName.Input.BindTwoWay(vm.DisplayName);
-        _authorName.Input.BindTwoWay(vm.AuthorName);
-        _authorEmail.Input.BindTwoWay(vm.AuthorEmail);
-        _sshKey.Input.BindTwoWay(vm.SshKeyPath);
-        _matchHost.Input.BindTwoWay(vm.MatchHost);
-        _matchOwner.Input.BindTwoWay(vm.MatchOwner);
-
-        _shell.BindCommand(vm.Save);
-        vm.CloseRequested += _onClose;
-
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

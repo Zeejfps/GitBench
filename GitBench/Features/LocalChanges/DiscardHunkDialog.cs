@@ -2,55 +2,54 @@ using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed class DiscardHunkDialog : ContainerView, IBind<DiscardHunkViewModel>
+internal sealed record DiscardHunkDialog : Widget
 {
-    private readonly DialogShell _shell;
-    private readonly Action _onClose;
+    public required Repo Repo { get; init; }
+    public required string Path { get; init; }
+    public required string Patch { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DiscardHunkDialog(Repo repo, string path, string patch, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        Height = 200f;
+        var vm = new DiscardHunkViewModel(
+            new DiscardHunkRequest(Repo, Patch),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        _onClose = onClose;
-
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Discard this hunk in {path}? This cannot be undone.",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _shell = new DialogShell("Discard hunk", onClose)
-        {
+            Title = "Discard hunk",
+            OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
+            Height = 200f,
             Action = ("Discard", DialogButtonRole.Destructive),
-            Body = { new FlexItem { Grow = 1, Child = prompt } },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Discard,
+            ConfirmKeys = true,
+            Body =
+            [
+                new Grow
+                {
+                    Child = new ThemedText
+                    {
+                        Value = $"Discard this hunk in {Path}? This cannot be undone.",
+                        Wrap = TextWrap.Wrap,
+                        Color = s => s.DialogBody.BodyText,
+                    },
+                },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new DiscardHunkRequest(repo, patch);
-        this.UseViewModel(
-            ctx => new DiscardHunkViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(DiscardHunkViewModel vm)
-    {
-        _shell.BindCommand(vm.Discard);
-        vm.CloseRequested += _onClose;
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }
 

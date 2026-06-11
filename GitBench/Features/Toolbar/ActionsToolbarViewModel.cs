@@ -90,7 +90,11 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Subscriptions.Add(_bus.SubscribeScoped<PullDivergedMessage>(m =>
         {
             if (_registry.Active.Value?.Id == m.Repo.Id)
-                _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog(m.Repo, onClose)));
+                _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog
+                {
+                    Repo = m.Repo,
+                    OnClose = onClose,
+                }));
         }));
     }
 
@@ -167,7 +171,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var suggested = status.IsDetached || string.IsNullOrEmpty(status.CurrentBranchName)
             ? "HEAD"
             : status.CurrentBranchName;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog(repo, suggested, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
+        {
+            Repo = repo,
+            SuggestedStartPoint = suggested,
+            OnClose = onClose,
+        }));
     }
 
     private void DoStash()
@@ -192,8 +201,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             && !string.IsNullOrEmpty(status.CurrentBranchName))
         {
             var localBranch = status.CurrentBranchName!;
-            _bus.Broadcast(new ShowDialogMessage(onClose => new PublishBranchDialog(
-                new PublishBranchRequest(repo, localBranch), onClose)));
+            _bus.Broadcast(new ShowDialogMessage(onClose => new PublishBranchDialog
+            {
+                Repo = repo,
+                LocalBranch = localBranch,
+                OnClose = onClose,
+            }));
             return;
         }
 
@@ -203,8 +216,14 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             && status.Behind > 0)
         {
             var branchName = status.CurrentBranchName ?? string.Empty;
-            _bus.Broadcast(new ShowDialogMessage(onClose => new ForcePushDialog(
-                repo, branchName, status.Ahead, status.Behind, onClose)));
+            _bus.Broadcast(new ShowDialogMessage(onClose => new ForcePushDialog
+            {
+                Repo = repo,
+                BranchName = branchName,
+                Ahead = status.Ahead,
+                Behind = status.Behind,
+                OnClose = onClose,
+            }));
             return;
         }
 

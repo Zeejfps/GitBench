@@ -641,7 +641,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         if (paths.Count == 0) return;
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog(repo, paths, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog { Repo = repo, Paths = paths, OnClose = onClose }));
     }
 
     // Stashes the working-tree changes for the given paths (git's default "WIP on…"

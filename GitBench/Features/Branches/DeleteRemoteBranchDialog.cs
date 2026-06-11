@@ -1,9 +1,10 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
@@ -13,48 +14,46 @@ namespace GitBench.Features.Branches;
 /// `git push &lt;remote&gt; --delete &lt;branch&gt;` — a network operation that doesn't touch
 /// local branches. The server may refuse for protected refs; that error is surfaced.
 /// </summary>
-internal sealed class DeleteRemoteBranchDialog : ContainerView, IBind<DeleteRemoteBranchDialogViewModel>
+internal sealed record DeleteRemoteBranchDialog : Widget
 {
-    private readonly DialogShell _shell;
-    private readonly Action _onClose;
+    public required Repo Repo { get; init; }
+    public required string RemoteName { get; init; }
+    public required string BranchName { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DeleteRemoteBranchDialog(Repo repo, string remoteName, string branchName, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new DeleteRemoteBranchDialogViewModel(
+            new DeleteRemoteBranchRequest(Repo, RemoteName, BranchName),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var prompt = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Delete '{branchName}' from remote '{remoteName}'?",
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var hint = DialogFrame.Hint(
-            "This is a network operation. Your local branches are not affected.",
-            TextWrap.Wrap);
-
-        _shell = new DialogShell("Delete remote branch", onClose)
-        {
+            Title = "Delete remote branch",
+            OnClose = OnClose,
             Action = ("Delete", DialogButtonRole.Destructive),
-            Body = { prompt, hint },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Delete,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Delete '{BranchName}' from remote '{RemoteName}'?",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new ThemedText
+                {
+                    Value = "This is a network operation. Your local branches are not affected.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new DeleteRemoteBranchRequest(repo, remoteName, branchName);
-        this.UseViewModel(
-            ctx => new DeleteRemoteBranchDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(DeleteRemoteBranchDialogViewModel vm)
-    {
-        _shell.BindCommand(vm.Delete);
-        vm.CloseRequested += _onClose;
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

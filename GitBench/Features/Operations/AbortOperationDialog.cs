@@ -1,10 +1,13 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
@@ -15,53 +18,45 @@ namespace GitBench.Features.Operations;
 /// All variants are destructive — any in-progress conflict resolutions and (for
 /// reset --merge) conflicting worktree edits are thrown away — so the user confirms first.
 /// </summary>
-internal sealed class AbortOperationDialog : ContainerView, IBind<AbortOperationDialogViewModel>
+internal sealed record AbortOperationDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required RepoOperationState State { get; init; }
+    public required Action OnClose { get; init; }
 
-    public AbortOperationDialog(Repo repo, RepoOperationState state, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new AbortOperationDialogViewModel(
+            new AbortOperationRequest(Repo, State),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var (titleText, bodyText) = CopyFor(state);
-        var confirmLabel = AbortOperationDialogViewModel.DefaultConfirmLabel(state);
+        var (titleText, bodyText) = CopyFor(State);
 
-        var prompt = new TextView(CompatUi.Canvas)
+        var prompt = new ThemedText
         {
-            Text = bodyText,
-            TextWrap = TextWrap.Wrap,
-        };
-        prompt.BindThemedTextColor(s => s.DialogBody.BodyText);
+            Value = bodyText,
+            Wrap = TextWrap.Wrap,
+            Color = s => s.DialogBody.BodyText,
+        }.BuildView(ctx);
 
-        _shell = new DialogShell(titleText, onClose)
+        var shell = new DialogShell(titleText, OnClose)
         {
-            Action = (confirmLabel, DialogButtonRole.Destructive),
+            Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(State), DialogButtonRole.Destructive),
             Body = { new FlexItem { Grow = 1, Child = prompt } },
         };
-        AddChildToSelf(_shell.View);
 
-        _shell.AttachConfirmKeys(this);
+        var root = new ContainerView();
+        root.Children.Add(shell.View);
 
-        var request = new AbortOperationRequest(repo, state);
-        this.UseViewModel(
-            ctx => new AbortOperationDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
+        shell.BindCommand(vm.Abort, vm.Error);
+        root.Bind(vm.ConfirmButtonLabel, label => shell.ActionButton.Label = label);
+        root.UseController(ctx.Require<InputSystem>(),
+            () => new DialogKbmController(() => shell.ActionButton.PerformClick(), OnClose));
 
-    public void Bind(AbortOperationDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _shell.ActionButton.BindBusyCommand(vm.Abort);
-        _shell.CancelButton.DisableWhile(vm.Abort.IsRunning);
-        _shell.Error.BindText(vm.Error, s => s ?? string.Empty);
-
-        vm.ConfirmButtonLabel.Subscribe(label => _shell.ActionButton.Label = label);
+        root.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return root;
     }
 
     private static (string Title, string Body) CopyFor(RepoOperationState state) => state switch

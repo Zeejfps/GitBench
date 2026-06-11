@@ -244,7 +244,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         if (!TryGetPatchContext(hunkIndex, out var repo, out var diff)) return;
         var patch = HunkPatchBuilder.Build(diff, hunkIndex);
-        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardHunkDialog(repo, diff.Path, patch, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardHunkDialog { Repo = repo, Path = diff.Path, Patch = patch, OnClose = onClose }));
     }
 
     private void ApplyHunk(int hunkIndex, bool cached, bool reverse)

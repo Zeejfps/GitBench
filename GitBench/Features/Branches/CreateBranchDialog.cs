@@ -1,10 +1,10 @@
-using ZGF.Gui.Views;
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.TextInput;
+using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
@@ -15,53 +15,51 @@ namespace GitBench.Features.Branches;
 /// branch name) + a "checkout after create" checkbox. Runs `git branch &lt;name&gt; &lt;start&gt;` or
 /// `git checkout -b &lt;name&gt; &lt;start&gt;` depending on the checkbox.
 /// </summary>
-internal sealed class CreateBranchDialog : ContainerView, IBind<CreateBranchDialogViewModel>
+internal sealed record CreateBranchDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _nameField;
-    private readonly LabeledInputField _startPointField;
-    private readonly CheckboxView _checkoutCheckbox;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required string SuggestedStartPoint { get; init; }
+    public required Action OnClose { get; init; }
 
-    public CreateBranchDialog(Repo repo, string suggestedStartPoint, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new CreateBranchDialogViewModel(
+            Repo,
+            SuggestedStartPoint,
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        _nameField = new LabeledInputField("Branch name");
-        _startPointField = new LabeledInputField("Starting point")
+        var view = new Dialog
         {
-            Hint = "Branch, tag, or commit SHA. Leave blank for HEAD.",
-        };
-        _checkoutCheckbox = new CheckboxView("Check out after create") { Height = 22 };
-
-        _shell = new DialogShell("Create branch", onClose)
-        {
+            Title = "Create branch",
+            OnClose = OnClose,
             Action = ("Create", DialogButtonRole.Primary),
-            Body = { _nameField, _startPointField, _checkoutCheckbox },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_nameField.Input, _startPointField.Input);
+            Command = vm.Create,
+            Body =
+            [
+                new LabeledInput
+                {
+                    Label = "Branch name",
+                    Value = vm.Name,
+                    Status = vm.NameStatus,
+                },
+                new LabeledInput
+                {
+                    Label = "Starting point",
+                    Value = vm.StartPoint,
+                    Hint = "Branch, tag, or commit SHA. Leave blank for HEAD.",
+                },
+                new Checkbox
+                {
+                    Label = "Check out after create",
+                    Value = vm.Checkout,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        this.UseViewModel(
-            ctx => new CreateBranchDialogViewModel(
-                repo,
-                suggestedStartPoint,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(CreateBranchDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _shell.BindCommand(vm.Create);
-        _nameField.Input.BindTwoWay(vm.Name);
-        _nameField.BindStatus(vm.NameStatus);
-        _startPointField.Input.BindTwoWay(vm.StartPoint);
-        _checkoutCheckbox.IsChecked.BindTwoWay(vm.Checkout);
-
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

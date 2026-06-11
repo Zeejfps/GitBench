@@ -1,12 +1,10 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
@@ -17,59 +15,51 @@ namespace GitBench.Features.Branches;
 /// the same as in `git branch -m`. The force checkbox switches the underlying call to -M,
 /// allowing the rename to overwrite an existing branch of the new name.
 /// </summary>
-internal sealed class RenameBranchDialog : ContainerView, IBind<RenameBranchDialogViewModel>
+internal sealed record RenameBranchDialog : Widget
 {
-    private readonly Action _onClose;
-    private readonly LabeledInputField _nameField;
-    private readonly CheckboxView _forceCheckbox;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required string CurrentName { get; init; }
+    public required Action OnClose { get; init; }
 
-    public RenameBranchDialog(Repo repo, string currentName, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new RenameBranchDialogViewModel(
+            new RenameBranchRequest(Repo, CurrentName),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var subtitle = new TextView(CompatUi.Canvas)
+        var view = new Dialog
         {
-            Text = $"Renaming '{currentName}'",
-            TextWrap = TextWrap.Wrap,
-        };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        _nameField = new LabeledInputField("New name");
-
-        _forceCheckbox = new CheckboxView("Force rename even if target exists")
-        {
-            Height = 22,
-        };
-
-        _shell = new DialogShell("Rename branch", onClose)
-        {
+            Title = "Rename branch",
+            OnClose = OnClose,
             Action = ("Rename", DialogButtonRole.Primary),
-            Body = { subtitle, _nameField, _forceCheckbox },
-        };
-        AddChildToSelf(_shell.View);
-        _shell.SubmitFrom(_nameField.Input);
+            Command = vm.Rename,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Renaming '{CurrentName}'",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new LabeledInput
+                {
+                    Label = "New name",
+                    Value = vm.Name,
+                    Status = vm.NameStatus,
+                    SelectAllOnOpen = true,
+                },
+                new Checkbox
+                {
+                    Label = "Force rename even if target exists",
+                    Value = vm.Force,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        var request = new RenameBranchRequest(repo, currentName);
-        this.UseViewModel(
-            ctx => new RenameBranchDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
-    }
-
-    public void Bind(RenameBranchDialogViewModel vm)
-    {
-        vm.CloseRequested += _onClose;
-
-        _nameField.Input.BindTwoWay(vm.Name);
-        _nameField.BindStatus(vm.NameStatus);
-        _forceCheckbox.IsChecked.BindTwoWay(vm.Force);
-        _shell.BindCommand(vm.Rename);
-
-        _nameField.Input.SelectAll();
-        _shell.BeginEditing();
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 }

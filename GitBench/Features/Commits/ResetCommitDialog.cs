@@ -3,9 +3,11 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -16,167 +18,126 @@ namespace GitBench.Features.Commits;
 /// "Reset type:" stack, with the reset mode picked via a coloured-dot dropdown (green
 /// soft, amber mixed, red hard) so the destructiveness reads at a glance.
 /// </summary>
-internal sealed class ResetCommitDialog : ContainerView, IBind<ResetCommitDialogViewModel>
+internal sealed record ResetCommitDialog : Widget
 {
     internal const uint SoftColor = 0xFF57F287;
     internal const uint MixedColor = 0xFFE6A85C;
     internal const uint HardColor = 0xFFED4245;
 
-    private readonly Action _onClose;
-    private readonly ResetModeDropdown _modeDropdown;
-    private readonly DialogShell _shell;
+    public required Repo Repo { get; init; }
+    public required string Sha { get; init; }
+    public required string ShortSha { get; init; }
+    public required string Summary { get; init; }
+    public required string? BranchName { get; init; }
+    public required int StagedCount { get; init; }
+    public required int UnstagedCount { get; init; }
+    public required Action OnClose { get; init; }
 
-    public ResetCommitDialog(
-        Repo repo,
-        string sha,
-        string shortSha,
-        string summary,
-        string? branchName,
-        int stagedCount,
-        int unstagedCount,
-        Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new ResetCommitDialogViewModel(
+            new ResetCommitRequest(Repo, Sha),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var subtitle = new TextView(CompatUi.Canvas)
+        var modeDropdown = new ResetModeDropdown(ctx);
+        modeDropdown.BindTwoWay(modeDropdown.SelectedState, vm.Mode);
+
+        var view = new Dialog
         {
-            Text = branchName != null
-                ? $"Move the '{branchName}' branch HEAD to the selected revision"
-                : "Move HEAD to the selected revision",
-            TextWrap = TextWrap.Wrap,
-        };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var dirtyHint = DialogFrame.Hint(BuildDirtyHint(stagedCount, unstagedCount), TextWrap.Wrap);
-
-        var branchRow = BuildLabeledRow("Branch:", BuildBranchValue(branchName));
-        var moveToRow = BuildLabeledRow("Move to:", BuildCommitValue(shortSha, summary));
-        _modeDropdown = new ResetModeDropdown();
-        var modeRow = BuildLabeledRow("Reset type:", _modeDropdown);
-
-        _shell = new DialogShell("Reset to revision", onClose)
-        {
+            Title = "Reset to revision",
+            OnClose = OnClose,
             Width = DialogFrame.WidthWide,
             Action = ("Reset", DialogButtonRole.Destructive),
-            Body = { subtitle, dirtyHint, branchRow, moveToRow, modeRow },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Reset,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = BranchName != null
+                        ? $"Move the '{BranchName}' branch HEAD to the selected revision"
+                        : "Move HEAD to the selected revision",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new ThemedText
+                {
+                    Value = BuildDirtyHint(StagedCount, UnstagedCount),
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+                new LabeledRow { Label = "Branch:", Value = BranchValue(BranchName) },
+                new LabeledRow { Label = "Move to:", Value = CommitValue(ShortSha, Summary) },
+                new LabeledRow { Label = "Reset type:", Value = new Raw { View = modeDropdown } },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new ResetCommitRequest(repo, sha);
-        this.UseViewModel(
-            ctx => new ResetCommitDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 
-    public void Bind(ResetCommitDialogViewModel vm)
+    private static IWidget BranchValue(string? branchName) => new Row
     {
-        vm.CloseRequested += _onClose;
-        _modeDropdown.SelectedState.BindTwoWay(vm.Mode);
-        _shell.BindCommand(vm.Reset);
-    }
-
-    private static FlexRowView BuildLabeledRow(string label, View value)
-    {
-        var labelText = new TextView(CompatUi.Canvas)
-        {
-            Text = label,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        labelText.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
-        var labelColumn = new FlexRowView
-        {
-            Width = 90,
-            MainAxisAlignment = MainAxisAlignment.End,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { labelText },
-        };
-        return new FlexRowView
-        {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Height = 30,
-            Children =
+        Gap = 6,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new ThemedText
             {
-                labelColumn,
-                new FlexItem { Grow = 1, Child = value },
+                Value = LucideIcons.Branch,
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 14,
+                Width = 16,
+                VAlign = TextAlignment.Center,
+                Color = s => s.DialogBody.BodyText,
             },
-        };
-    }
-
-    private static View BuildBranchValue(string? branchName)
-    {
-        var icon = new TextView(CompatUi.Canvas)
-        {
-            Text = LucideIcons.Branch,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
-            VerticalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        icon.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var label = new TextView(CompatUi.Canvas)
-        {
-            Text = branchName ?? "(detached HEAD)",
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindThemedTextColor(s => s.DialogFrame.TitleText);
-        return new FlexRowView
-        {
-            Gap = 6,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { icon, label },
-        };
-    }
-
-    private static View BuildCommitValue(string shortSha, string summary)
-    {
-        var dot = new TextView(CompatUi.Canvas)
-        {
-            Text = "●",
-            FontSize = 10,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        dot.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var shaLabel = new TextView(CompatUi.Canvas)
-        {
-            Text = shortSha,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        shaLabel.BindThemedTextColor(s => s.DialogFrame.TitleText);
-
-        var summaryLabel = new TextView(CompatUi.Canvas)
-        {
-            Text = summary,
-            VerticalTextAlignment = TextAlignment.Center,
-            TextWrap = TextWrap.NoWrap,
-        };
-        summaryLabel.BindThemedTextColor(s => s.DialogBody.BodyText);
-        var summaryClip = new ClippingView
-        {
-            Children = { summaryLabel },
-        };
-        return new FlexRowView
-        {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+            new ThemedText
             {
-                dot,
-                shaLabel,
-                new FlexItem { Grow = 1, Child = summaryClip },
+                Value = branchName ?? "(detached HEAD)",
+                VAlign = TextAlignment.Center,
+                Color = s => s.DialogFrame.TitleText,
             },
-        };
-    }
+        ],
+    };
+
+    private static IWidget CommitValue(string shortSha, string summary) => new Row
+    {
+        Gap = 8,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new ThemedText
+            {
+                Value = "●",
+                FontSize = 10,
+                Width = 16,
+                HAlign = TextAlignment.Center,
+                VAlign = TextAlignment.Center,
+                Color = s => s.DialogBody.BodyText,
+            },
+            new ThemedText
+            {
+                Value = shortSha,
+                VAlign = TextAlignment.Center,
+                Color = s => s.DialogFrame.TitleText,
+            },
+            new Grow
+            {
+                Child = new Clipped
+                {
+                    Child = new ThemedText
+                    {
+                        Value = summary,
+                        VAlign = TextAlignment.Center,
+                        Wrap = TextWrap.NoWrap,
+                        Color = s => s.DialogBody.BodyText,
+                    },
+                },
+            },
+        ],
+    };
 
     private static string BuildDirtyHint(int staged, int unstaged)
     {
@@ -202,39 +163,37 @@ internal sealed class ResetModeDropdown : HoverableButton
 
     public ResetMode Selected => SelectedState.Value;
 
-    private readonly TextView _dotView;
-    private readonly TextView _labelView;
-    private readonly TextView _detailView;
-
-    public ResetModeDropdown()
+    public ResetModeDropdown(Context ctx)
     {
         Height = 30;
+        var theme = ctx.Theme();
 
-        _dotView = new TextView(CompatUi.Canvas)
+        var dotView = new TextView(ctx.Canvas)
         {
             Text = "●",
             FontSize = 12,
-            TextColor = LookupColor(ResetMode.Mixed),
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 14,
         };
-        _labelView = new TextView(CompatUi.Canvas)
+        dotView.BindTextColor(() => LookupColor(SelectedState.Value));
+
+        var labelView = new TextView(ctx.Canvas)
         {
-            Text = LookupLabel(ResetMode.Mixed),
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _labelView.BindThemedTextColor(s => s.DialogFrame.TitleText);
+        labelView.BindText(() => LookupLabel(SelectedState.Value));
+        labelView.BindTextColor(() => theme.Styles.Value.DialogFrame.TitleText);
 
-        _detailView = new TextView(CompatUi.Canvas)
+        var detailView = new TextView(ctx.Canvas)
         {
-            Text = LookupDetail(ResetMode.Mixed),
             VerticalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.NoWrap,
         };
-        _detailView.BindThemedTextColor(s => s.DialogBody.RowTextMissing);
+        detailView.BindText(() => LookupDetail(SelectedState.Value));
+        detailView.BindTextColor(() => theme.Styles.Value.DialogBody.RowTextMissing);
 
-        var chevron = new TextView(CompatUi.Canvas)
+        var chevron = new TextView(ctx.Canvas)
         {
             Text = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
@@ -243,13 +202,13 @@ internal sealed class ResetModeDropdown : HoverableButton
             HorizontalTextAlignment = TextAlignment.Center,
             Width = 16,
         };
-        chevron.BindThemedTextColor(s => s.DialogBody.RowText);
+        chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
 
         // Wrapping the detail in a ClippingView keeps long descriptions from overflowing
         // past the chevron — the framework's TextView doesn't clip on its own.
         var detailClip = new ClippingView
         {
-            Children = { _detailView },
+            Children = { detailView },
         };
 
         var row = new FlexRowView
@@ -258,8 +217,8 @@ internal sealed class ResetModeDropdown : HoverableButton
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {
-                _dotView,
-                _labelView,
+                dotView,
+                labelView,
                 new FlexItem { Grow = 1, Child = detailClip },
                 chevron,
             },
@@ -274,13 +233,6 @@ internal sealed class ResetModeDropdown : HoverableButton
         };
         BorderedButtonChrome.Bind(background, IsHovered);
         SetBackground(background);
-
-        SelectedState.Subscribe(s =>
-        {
-            _dotView.TextColor = LookupColor(s);
-            _labelView.Text = LookupLabel(s);
-            _detailView.Text = LookupDetail(s);
-        });
     }
 
     protected override void OnClicked()
