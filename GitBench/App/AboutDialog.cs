@@ -54,10 +54,7 @@ public sealed class AboutDialog : MultiChildView
             VerticalTextAlignment = TextAlignment.Center,
         };
         version.BindThemedTextColor(s => s.Palette.TextSecondary);
-
-        // Pull IPlatformShell lazily off the context — the dialog is constructed before it's
-        // attached, so the click closure resolves it at invoke time (same pattern as the copy
-        // button in OperationErrorDialog).
+        
         var repoButton = new DialogButton(
             "View on GitHub",
             () => Context?.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
