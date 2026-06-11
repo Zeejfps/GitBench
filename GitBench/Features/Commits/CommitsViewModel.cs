@@ -303,8 +303,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         var capturedRepo = repo;
         var capturedTag = tagName;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteTagDialog(
-            capturedRepo, capturedTag, onClose)));
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteTagDialog
+        {
+            Repo = capturedRepo,
+            TagName = capturedTag,
+            OnClose = onClose,
+        }));
     }
 
     // ---- cherry-pick / revert ----

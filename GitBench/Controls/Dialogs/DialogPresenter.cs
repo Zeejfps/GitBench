@@ -8,6 +8,7 @@ public sealed class DialogPresenter : IViewBehavior
 {
     private readonly DialogSurfaceView _dialogSurfaceView;
     private IMessageBus? _bus;
+    private Context? _windowContext;
     private Action<ShowDialogMessage>? _onShowDialog;
 
     public DialogPresenter(DialogSurfaceView dialogSurfaceView)
@@ -17,11 +18,13 @@ public sealed class DialogPresenter : IViewBehavior
 
     public void Attach(View view)
     {
-        var bus = ViewContexts.Require(view).Get<IMessageBus>();
+        var context = ViewContexts.Require(view);
+        var bus = context.Get<IMessageBus>();
         if (bus is null) return;
 
         _bus = bus;
-        _onShowDialog = m => ShowDialog(m.CreateDialog(OnDialogClosed));
+        _windowContext = context;
+        _onShowDialog = m => ShowDialog(m.CreateDialog(_windowContext!, OnDialogClosed));
         bus.Subscribe(_onShowDialog);
         bus.Subscribe<ShowOperationErrorMessage>(OnShowOperationError);
     }

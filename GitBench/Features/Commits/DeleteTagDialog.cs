@@ -2,9 +2,10 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Messages;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -15,97 +16,78 @@ namespace GitBench.Features.Commits;
 /// remote (`git push &lt;remote&gt; --delete refs/tags/&lt;name&gt;`). Mirrors the Branches view's
 /// delete dialogs.
 /// </summary>
-internal sealed class DeleteTagDialog : ContainerView, IBind<DeleteTagDialogViewModel>
+internal sealed record DeleteTagDialog : Widget
 {
-    private readonly DialogShell _shell;
-    private readonly CheckboxView _remoteCheckbox;
-    private readonly Action _onClose;
+    public required Repo Repo { get; init; }
+    public required string TagName { get; init; }
+    public required Action OnClose { get; init; }
 
-    public DeleteTagDialog(Repo repo, string tagName, Action onClose)
+    protected override View CreateView(Context ctx)
     {
-        _onClose = onClose;
+        var vm = new DeleteTagDialogViewModel(
+            new DeleteTagRequest(Repo, TagName),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>());
 
-        var subtitle = new TextView(CompatUi.Canvas) { Text = "Delete tag from your repository", TextWrap = TextWrap.Wrap };
-        subtitle.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var tagRow = BuildLabeledRow("Tag:", BuildTagValue(tagName));
-
-        _remoteCheckbox = new CheckboxView("Delete tag from remote repositories") { Height = 22 };
-
-        _shell = new DialogShell("Delete tag", onClose)
+        var view = new Dialog
         {
+            Title = "Delete tag",
+            OnClose = OnClose,
             Action = ("Delete Tag", DialogButtonRole.Destructive),
-            Body = { subtitle, tagRow, _remoteCheckbox },
-        };
-        AddChildToSelf(_shell.View);
+            Command = vm.Delete,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = "Delete tag from your repository",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new LabeledRow { Label = "Tag:", Value = TagValue(TagName) },
+                new Checkbox
+                {
+                    Label = "Delete tag from remote repositories",
+                    Value = vm.DeleteFromRemotes,
+                    Height = 22,
+                },
+            ],
+        }.BuildView(ctx);
 
-        _shell.AttachConfirmKeys(this);
-
-        var request = new DeleteTagRequest(repo, tagName);
-        this.UseViewModel(
-            ctx => new DeleteTagDialogViewModel(
-                request,
-                ctx.Require<IGitService>(),
-                ctx.Require<IUiDispatcher>(),
-                ctx.Require<IMessageBus>()),
-            Bind);
+        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
+        return view;
     }
 
-    public void Bind(DeleteTagDialogViewModel vm)
+    private static IWidget TagValue(string tagName) => new Row
     {
-        vm.CloseRequested += _onClose;
-
-        _remoteCheckbox.IsChecked.BindTwoWay(vm.DeleteFromRemotes);
-        _shell.BindCommand(vm.Delete);
-    }
-
-    private static FlexRowView BuildLabeledRow(string label, View value)
-    {
-        var labelText = new TextView(CompatUi.Canvas) { Text = label, VerticalTextAlignment = TextAlignment.Center };
-        labelText.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
-        return new FlexRowView
-        {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Height = 28,
-            Children =
+        Gap = 8,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new ThemedText
             {
-                labelText,
-                new FlexItem { Grow = 1, Child = value },
+                Value = LucideIcons.Tag,
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 14,
+                Width = 16,
+                HAlign = TextAlignment.Center,
+                VAlign = TextAlignment.Center,
+                Color = s => s.DialogBody.BodyText,
             },
-        };
-    }
-
-    private static View BuildTagValue(string tagName)
-    {
-        var icon = new TextView(CompatUi.Canvas)
-        {
-            Text = LucideIcons.Tag,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        icon.BindThemedTextColor(s => s.DialogBody.BodyText);
-
-        var nameLabel = new TextView(CompatUi.Canvas)
-        {
-            Text = tagName,
-            VerticalTextAlignment = TextAlignment.Center,
-            TextWrap = TextWrap.NoWrap,
-        };
-        nameLabel.BindThemedTextColor(s => s.DialogFrame.TitleText);
-
-        return new FlexRowView
-        {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+            new Grow
             {
-                icon,
-                new FlexItem { Grow = 1, Child = new ClippingView { Children = { nameLabel } } },
+                Child = new Clipped
+                {
+                    Child = new ThemedText
+                    {
+                        Value = tagName,
+                        VAlign = TextAlignment.Center,
+                        Wrap = TextWrap.NoWrap,
+                        Color = s => s.DialogFrame.TitleText,
+                    },
+                },
             },
-        };
-    }
+        ],
+    };
 }
