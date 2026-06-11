@@ -58,19 +58,19 @@ internal static class AppServices
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>
         {
-            var store = ctx.Create<RepoSnapshotStore>();
+            var store = ctx.Require<RepoSnapshotStore>();
             store.Start(ctx.Require<IUiDispatcher>());
             return store;
         }, eager: true);
         context.AddSingleton<IRepoOperationsStore>(ctx =>
         {
-            var store = ctx.Create<RepoOperationsStore>();
+            var store = ctx.Require<RepoOperationsStore>();
             store.Start(ctx.Require<IUiDispatcher>());
             return store;
         }, eager: true);
         context.AddSingleton<IRepoStatusStore>(ctx =>
         {
-            var store = ctx.Create<RepoStatusStore>();
+            var store = ctx.Require<RepoStatusStore>();
             store.Start(ctx.Require<IUiDispatcher>());
             return store;
         }, eager: true);

@@ -138,7 +138,7 @@ public sealed class DialogButton : HoverableButton
     {
         BindCommand(command);
 
-        _busySpinner = Context?.Create<SpinnerAnimation>();
+        _busySpinner = Context?.Get<SpinnerAnimation>();
         _busySpinner?.Rotation.Subscribe(r => IconRotation = r);
 
         command.IsRunning.Subscribe(running =>
