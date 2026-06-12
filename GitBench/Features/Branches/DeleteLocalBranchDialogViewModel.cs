@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class DeleteLocalBranchDialogViewModel : IDisposable
+internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
 {
     private readonly DeleteLocalBranchRequest _request;
     private readonly IGitService _gitService;

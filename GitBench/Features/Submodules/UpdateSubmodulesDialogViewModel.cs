@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
 
-internal sealed class UpdateSubmodulesDialogViewModel : IDisposable
+internal sealed class UpdateSubmodulesDialogViewModel : IDialogViewModel
 {
     public State<bool> Init { get; } = new(true);
     public State<bool> Recursive { get; } = new(false);

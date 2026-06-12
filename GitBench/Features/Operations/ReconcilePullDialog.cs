@@ -22,7 +22,7 @@ internal sealed record ReconcilePullDialog : Widget
     public required Repo Repo { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new ReconcilePullDialogViewModel(
             Repo,
@@ -30,8 +30,9 @@ internal sealed record ReconcilePullDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
+            ViewModel = vm,
             Title = "Reconcile divergent branches",
             OnClose = OnClose,
             BodyGap = 10,
@@ -64,10 +65,7 @@ internal sealed record ReconcilePullDialog : Widget
                     Color = s => s.DialogBody.RowTextMissing,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget StrategyCheckbox(Context ctx, ReconcilePullDialogViewModel vm, string label, PullStrategy strategy)

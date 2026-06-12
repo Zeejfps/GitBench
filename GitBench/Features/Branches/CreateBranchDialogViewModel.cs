@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class CreateBranchDialogViewModel : IDisposable
+internal sealed class CreateBranchDialogViewModel : IDialogViewModel
 {
     public State<string> Name { get; } = new(string.Empty);
     public State<string> StartPoint { get; }

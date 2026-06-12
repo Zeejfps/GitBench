@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class MergeBranchDialogViewModel : IDisposable
+internal sealed class MergeBranchDialogViewModel : IDialogViewModel
 {
     public State<MergeStrategy> Strategy { get; } = new(MergeStrategy.Default);
     public State<MergePreviewState> PreviewState { get; } = new(MergePreviewState.Unknown);

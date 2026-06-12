@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class MoveBranchDialogViewModel : IDisposable
+internal sealed class MoveBranchDialogViewModel : IDialogViewModel
 {
     public AsyncCommand Move { get; }
 

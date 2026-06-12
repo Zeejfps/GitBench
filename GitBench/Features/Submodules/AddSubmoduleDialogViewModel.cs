@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
 
-internal sealed class AddSubmoduleDialogViewModel : IDisposable
+internal sealed class AddSubmoduleDialogViewModel : IDialogViewModel
 {
     public State<string> Url { get; } = new(string.Empty);
     public State<string> Path { get; } = new(string.Empty);

@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -22,7 +21,7 @@ internal sealed record RenameStashDialog : Widget
     public required string CurrentMessage { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new RenameStashDialogViewModel(
             new RenameStashRequest(Repo, Index, CurrentMessage),
@@ -30,10 +29,11 @@ internal sealed record RenameStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Rename stash",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Rename", DialogButtonRole.Primary),
             Command = vm.Rename,
             Body =
@@ -51,9 +51,6 @@ internal sealed record RenameStashDialog : Widget
                     SelectAllOnOpen = true,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

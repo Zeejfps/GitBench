@@ -4,7 +4,6 @@ using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -19,7 +18,7 @@ internal sealed record CloneRepoDialog : Widget
 {
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new CloneRepoDialogViewModel(
             ctx.Require<IGitService>(),
@@ -40,10 +39,11 @@ internal sealed record CloneRepoDialog : Widget
             Height = 28,
         };
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Clone repository",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Clone", DialogButtonRole.Primary),
             Command = vm.Clone,
             Body =
@@ -67,9 +67,6 @@ internal sealed record CloneRepoDialog : Widget
                     Value = vm.FolderName,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

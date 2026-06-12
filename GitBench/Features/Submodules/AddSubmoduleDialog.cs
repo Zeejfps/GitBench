@@ -18,7 +18,7 @@ internal sealed record AddSubmoduleDialog : Widget
     public required Repo Primary { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new AddSubmoduleDialogViewModel(
             new AddSubmoduleViewRequest(Primary),
@@ -26,10 +26,11 @@ internal sealed record AddSubmoduleDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Add submodule",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Add", DialogButtonRole.Primary),
             Command = vm.Add,
             Body =
@@ -59,9 +60,6 @@ internal sealed record AddSubmoduleDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

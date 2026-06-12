@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
 
-internal sealed class RenameStashDialogViewModel : IDisposable
+internal sealed class RenameStashDialogViewModel : IDialogViewModel
 {
     public State<string> Message { get; }
 

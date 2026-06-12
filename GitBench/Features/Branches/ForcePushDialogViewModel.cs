@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class ForcePushDialogViewModel : IDisposable
+internal sealed class ForcePushDialogViewModel : IDialogViewModel
 {
     public AsyncCommand ForcePush { get; }
 

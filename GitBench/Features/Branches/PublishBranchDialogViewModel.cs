@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class PublishBranchDialogViewModel : IDisposable
+internal sealed class PublishBranchDialogViewModel : IDialogViewModel
 {
     private readonly PublishBranchRequest _request;
     private readonly IGitService _gitService;

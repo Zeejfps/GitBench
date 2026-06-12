@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
 
-internal sealed class RemoveWorktreeDialogViewModel : IDisposable
+internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
 {
     public State<bool> Force { get; } = new(false);
 

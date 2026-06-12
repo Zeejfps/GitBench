@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class RebaseBranchDialogViewModel : IDisposable
+internal sealed class RebaseBranchDialogViewModel : IDialogViewModel
 {
     public State<bool> Autostash { get; } = new(false);
     public State<RebasePreviewState> PreviewState { get; } = new(RebasePreviewState.Unknown);

@@ -28,7 +28,7 @@ internal sealed record DiscardChangesDialog : Widget
     public required IReadOnlyList<string> Paths { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DiscardChangesViewModel(
             new DiscardChangesRequest(Repo, Paths),
@@ -36,8 +36,9 @@ internal sealed record DiscardChangesDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
+            ViewModel = vm,
             Title = "Discard changes",
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
@@ -61,10 +62,7 @@ internal sealed record DiscardChangesDialog : Widget
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static View BuildFileList(Context ctx, DiscardChangesViewModel vm)

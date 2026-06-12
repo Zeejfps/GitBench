@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -21,7 +20,7 @@ internal sealed record DeleteRemoteBranchDialog : Widget
     public required string BranchName { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DeleteRemoteBranchDialogViewModel(
             new DeleteRemoteBranchRequest(Repo, RemoteName, BranchName),
@@ -29,10 +28,11 @@ internal sealed record DeleteRemoteBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Delete remote branch",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Delete", DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
@@ -51,9 +51,6 @@ internal sealed record DeleteRemoteBranchDialog : Widget
                     Color = s => s.DialogBody.RowTextMissing,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

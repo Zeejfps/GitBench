@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
 
-internal sealed class CreateWorktreeDialogViewModel : IDisposable
+internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
 {
     public State<string> Path { get; } = new(string.Empty);
     public State<string> StartPoint { get; } = new("HEAD");

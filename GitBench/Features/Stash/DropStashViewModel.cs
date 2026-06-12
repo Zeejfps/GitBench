@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Stash;
 
-internal sealed class DropStashViewModel : IDisposable
+internal sealed class DropStashViewModel : IDialogViewModel
 {
     public AsyncCommand Drop { get; }
 

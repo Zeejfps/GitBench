@@ -18,7 +18,7 @@ internal sealed record MergeBranchDialog : Widget
     public required MergeBranchRequest Request { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new MergeBranchDialogViewModel(
             Request,
@@ -29,7 +29,7 @@ internal sealed record MergeBranchDialog : Widget
         var optionDropdown = new MergeOptionDropdown(ctx);
         optionDropdown.BindTwoWay(optionDropdown.SelectedState, vm.Strategy);
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Merge branch",
             OnClose = OnClose,
@@ -37,6 +37,7 @@ internal sealed record MergeBranchDialog : Widget
             Action = ("Merge", DialogButtonRole.Primary),
             Command = vm.Merge,
             ConfirmKeys = true,
+            ViewModel = vm,
             FooterLead = PreviewChip(vm),
             Body =
             [
@@ -44,10 +45,7 @@ internal sealed record MergeBranchDialog : Widget
                 BuildLabeledRow("Into:", BuildBranchChip(Request.TargetBranch)),
                 BuildLabeledRow("Merge Option:", new Raw { View = optionDropdown }),
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget PreviewChip(MergeBranchDialogViewModel vm)

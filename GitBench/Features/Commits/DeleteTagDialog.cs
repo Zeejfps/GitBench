@@ -22,7 +22,7 @@ internal sealed record DeleteTagDialog : Widget
     public required string TagName { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DeleteTagDialogViewModel(
             new DeleteTagRequest(Repo, TagName),
@@ -30,10 +30,11 @@ internal sealed record DeleteTagDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Delete tag",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Delete Tag", DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
@@ -53,10 +54,7 @@ internal sealed record DeleteTagDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget TagValue(string tagName) => new Row

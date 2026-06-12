@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -23,7 +22,7 @@ internal sealed record DropStashDialog : Widget
     public required string Subject { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DropStashViewModel(
             Repo,
@@ -32,10 +31,11 @@ internal sealed record DropStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = $"Drop {Label}?",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthCompact,
             CancelLabel = "Keep",
             Action = ("Drop", DialogButtonRole.Destructive),
@@ -50,9 +50,6 @@ internal sealed record DropStashDialog : Widget
                     Color = s => s.DialogBody.BodyText,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

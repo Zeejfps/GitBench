@@ -33,7 +33,7 @@ internal sealed record ResetCommitDialog : Widget
     public required int UnstagedCount { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new ResetCommitDialogViewModel(
             new ResetCommitRequest(Repo, Sha),
@@ -44,10 +44,11 @@ internal sealed record ResetCommitDialog : Widget
         var modeDropdown = new ResetModeDropdown(ctx);
         modeDropdown.BindTwoWay(modeDropdown.SelectedState, vm.Mode);
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Reset to revision",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Action = ("Reset", DialogButtonRole.Destructive),
             Command = vm.Reset,
@@ -72,10 +73,7 @@ internal sealed record ResetCommitDialog : Widget
                 new LabeledRow { Label = "Move to:", Value = CommitValue(ShortSha, Summary) },
                 new LabeledRow { Label = "Reset type:", Value = new Raw { View = modeDropdown } },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget BranchValue(string? branchName) => new Row

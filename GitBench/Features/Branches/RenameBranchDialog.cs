@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -21,7 +20,7 @@ internal sealed record RenameBranchDialog : Widget
     public required string CurrentName { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new RenameBranchDialogViewModel(
             new RenameBranchRequest(Repo, CurrentName),
@@ -29,10 +28,11 @@ internal sealed record RenameBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Rename branch",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Rename", DialogButtonRole.Primary),
             Command = vm.Rename,
             Body =
@@ -57,9 +57,6 @@ internal sealed record RenameBranchDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

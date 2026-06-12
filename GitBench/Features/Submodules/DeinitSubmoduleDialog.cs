@@ -18,7 +18,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
     public required Repo Submodule { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DeinitSubmoduleDialogViewModel(
             new DeinitSubmoduleViewRequest(Primary, Submodule),
@@ -26,10 +26,11 @@ internal sealed record DeinitSubmoduleDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Deinit submodule",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Deinit", DialogButtonRole.Destructive),
             Command = vm.Deinit,
             ConfirmKeys = true,
@@ -56,9 +57,6 @@ internal sealed record DeinitSubmoduleDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

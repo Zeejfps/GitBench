@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -17,7 +16,7 @@ internal sealed record ForcePushDialog : Widget
     public required int Behind { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new ForcePushDialogViewModel(
             Repo,
@@ -27,10 +26,11 @@ internal sealed record ForcePushDialog : Widget
 
         var displayBranch = string.IsNullOrEmpty(BranchName) ? "this branch" : $"'{BranchName}'";
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Force push?",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Force push", DialogButtonRole.Destructive),
             Command = vm.ForcePush,
             ConfirmKeys = true,
@@ -46,9 +46,6 @@ internal sealed record ForcePushDialog : Widget
                     Color = s => s.DialogBody.BodyText,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

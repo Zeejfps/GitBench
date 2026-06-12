@@ -4,7 +4,6 @@ using GitBench.Infrastructure;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -17,7 +16,7 @@ internal sealed record DiscardHunkDialog : Widget
     public required string Patch { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DiscardHunkViewModel(
             new DiscardHunkRequest(Repo, Patch),
@@ -25,8 +24,9 @@ internal sealed record DiscardHunkDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
+            ViewModel = vm,
             Title = "Discard hunk",
             OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
@@ -46,16 +46,13 @@ internal sealed record DiscardHunkDialog : Widget
                     },
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }
 
 public readonly record struct DiscardHunkRequest(Repo Repo, string Patch);
 
-internal sealed class DiscardHunkViewModel : IDisposable
+internal sealed class DiscardHunkViewModel : IDialogViewModel
 {
     public AsyncCommand Discard { get; }
     public event Action? CloseRequested;

@@ -21,7 +21,7 @@ internal sealed record UpdateSubmodulesDialog : Widget
     public required Repo? Target { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new UpdateSubmodulesDialogViewModel(
             new UpdateSubmodulesViewRequest(Primary, Target),
@@ -29,10 +29,11 @@ internal sealed record UpdateSubmodulesDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = Target is null ? "Update all submodules" : "Update submodule",
             OnClose = OnClose,
+            ViewModel = vm,
             BodyGap = 10,
             Action = ("Update", DialogButtonRole.Primary),
             Command = vm.Update,
@@ -66,10 +67,7 @@ internal sealed record UpdateSubmodulesDialog : Widget
                     Color = s => s.DialogBody.RowTextMissing,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget ModeCheckbox(Context ctx, UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)

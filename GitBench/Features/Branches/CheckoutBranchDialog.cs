@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -22,7 +21,7 @@ internal sealed record CheckoutBranchDialog : Widget
     public required string SuggestedLocalName { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new CheckoutBranchDialogViewModel(
             new CheckoutRequest(Repo, RemoteName, RemoteBranchName, SuggestedLocalName),
@@ -30,10 +29,11 @@ internal sealed record CheckoutBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Checkout branch",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Checkout", DialogButtonRole.Primary),
             Command = vm.Checkout,
             Body =
@@ -58,9 +58,6 @@ internal sealed record CheckoutBranchDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

@@ -8,7 +8,7 @@ namespace GitBench.Features.LocalChanges;
 
 internal sealed record DiscardFileRow(string Path, FileChange Display);
 
-internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>
+internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>, IDialogViewModel
 {
     private readonly Repo _repo;
     private readonly IGitService _gitService;

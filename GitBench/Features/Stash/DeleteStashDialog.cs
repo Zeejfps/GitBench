@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -21,7 +20,7 @@ internal sealed record DeleteStashDialog : Widget
     public required string Subject { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DropStashViewModel(
             Repo,
@@ -30,10 +29,11 @@ internal sealed record DeleteStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Delete stash?",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthCompact,
             Action = ("Delete", DialogButtonRole.Destructive),
             Command = vm.Drop,
@@ -47,9 +47,6 @@ internal sealed record DeleteStashDialog : Widget
                     Color = s => s.DialogBody.BodyText,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

@@ -26,7 +26,7 @@ internal sealed record RemoveWorktreeDialog : Widget
     public required Repo Worktree { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new RemoveWorktreeDialogViewModel(
             new RemoveWorktreeRequest(Primary, Worktree),
@@ -78,12 +78,13 @@ internal sealed record RemoveWorktreeDialog : Widget
         // ClippingView wraps the dialog so a child that measures too wide (e.g. a path that
         // can't be word-broken because it has no spaces) still can't draw past the dialog's
         // rounded edge. The path block also does its own pre-wrap above.
-        var view = new Clipped
+        return new Clipped
         {
             Child = new Dialog
             {
                 Title = "Remove worktree",
                 OnClose = OnClose,
+                ViewModel = vm,
                 Action = ("Remove", DialogButtonRole.Destructive),
                 Command = vm.Remove,
                 ConfirmKeys = true,
@@ -110,9 +111,6 @@ internal sealed record RemoveWorktreeDialog : Widget
                     },
                 ],
             },
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

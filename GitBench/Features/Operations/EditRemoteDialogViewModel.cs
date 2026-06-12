@@ -14,7 +14,7 @@ namespace GitBench.Features.Operations;
 /// typed-edit feedback loop. <see cref="Save"/> runs <c>git remote rename</c> (only when
 /// the name changed) followed by <c>git remote set-url</c>.
 /// </summary>
-internal sealed class EditRemoteDialogViewModel : IDisposable
+internal sealed class EditRemoteDialogViewModel : IDialogViewModel
 {
     private readonly State<string> _name;
     private readonly State<string> _url;

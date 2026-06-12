@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class CheckoutBranchDialogViewModel : IDisposable
+internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
 {
     public State<string> Name { get; }
     public State<bool> Track { get; } = new(true);

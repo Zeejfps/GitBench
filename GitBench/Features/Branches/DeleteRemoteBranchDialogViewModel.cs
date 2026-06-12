@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class DeleteRemoteBranchDialogViewModel : IDisposable
+internal sealed class DeleteRemoteBranchDialogViewModel : IDialogViewModel
 {
     public AsyncCommand Delete { get; }
     public event Action? CloseRequested;

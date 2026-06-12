@@ -11,7 +11,7 @@ internal readonly record struct StashRequest(Repo Repo);
 
 internal sealed record StashFileRow(string Path, FileChange Display, bool IsUntracked);
 
-internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>
+internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, IDialogViewModel
 {
     private readonly Repo _repo;
     private readonly IGitService _gitService;

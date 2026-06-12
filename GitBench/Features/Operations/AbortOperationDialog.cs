@@ -24,7 +24,7 @@ internal sealed record AbortOperationDialog : Widget
     public required RepoOperationState State { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new AbortOperationDialogViewModel(
             new AbortOperationRequest(Repo, State),
@@ -34,29 +34,26 @@ internal sealed record AbortOperationDialog : Widget
 
         var (titleText, bodyText) = CopyFor(State);
 
-        var prompt = new ThemedText
+        return new Dialog
         {
-            Value = bodyText,
-            Wrap = TextWrap.Wrap,
-            Color = s => s.DialogBody.BodyText,
-        }.BuildView(ctx);
-
-        var shell = new DialogShell(ctx, titleText, OnClose)
-        {
+            Title = titleText,
+            OnClose = OnClose,
             Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(State), DialogButtonRole.Destructive),
-            Body = { new FlexItem { Grow = 1, Child = prompt } },
+            Command = vm.Abort,
+            Error = vm.Error,
+            BindActionLabel = vm.ConfirmButtonLabel,
+            ConfirmKeys = true,
+            ViewModel = vm,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = bodyText,
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+            ],
         };
-
-        var root = new ContainerView();
-        root.Children.Add(shell.View);
-
-        shell.BindCommand(vm.Abort, vm.Error);
-        root.Bind(vm.ConfirmButtonLabel, label => shell.ActionButton.Label = label);
-        root.UseController(ctx.Require<InputSystem>(),
-            () => new DialogKbmController(() => shell.ActionButton.PerformClick(), OnClose));
-
-        root.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return root;
     }
 
     private static (string Title, string Body) CopyFor(RepoOperationState state) => state switch

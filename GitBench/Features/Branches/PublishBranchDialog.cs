@@ -18,7 +18,7 @@ internal sealed record PublishBranchDialog : Widget
     public required string LocalBranch { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new PublishBranchDialogViewModel(
             new PublishBranchRequest(Repo, LocalBranch),
@@ -30,7 +30,7 @@ internal sealed record PublishBranchDialog : Widget
         remoteDropdown.BindTwoWay(remoteDropdown.SelectedState, vm.SelectedRemote);
         remoteDropdown.Bind(vm.Remotes, remoteDropdown.SetOptions);
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Publish branch",
             OnClose = OnClose,
@@ -39,6 +39,7 @@ internal sealed record PublishBranchDialog : Widget
             Command = vm.Publish,
             Error = vm.ErrorMessage,
             ConfirmKeys = true,
+            ViewModel = vm,
             Body =
             [
                 new ThemedText
@@ -57,10 +58,7 @@ internal sealed record PublishBranchDialog : Widget
                     Height = 24,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget BranchChip(string name) => new Row

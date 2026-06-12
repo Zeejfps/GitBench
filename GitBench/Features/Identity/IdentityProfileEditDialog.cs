@@ -1,7 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -15,7 +14,7 @@ internal sealed record IdentityProfileEditDialog : Widget
     public required IdentityProfile? Existing { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new IdentityProfileEditDialogViewModel(
             Existing,
@@ -23,10 +22,11 @@ internal sealed record IdentityProfileEditDialog : Widget
             ctx.Require<IUiDispatcher>());
 
         var add = Existing == null;
-        var view = new Dialog
+        return new Dialog
         {
             Title = add ? "New identity" : "Edit identity",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Action = (add ? "Add" : "Save", DialogButtonRole.Primary),
             Command = vm.Save,
@@ -72,9 +72,6 @@ internal sealed record IdentityProfileEditDialog : Widget
                     Hint = "Limit to one org/user. Leave blank to match any repo on the host.",
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

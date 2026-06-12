@@ -3,7 +3,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -17,7 +16,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
     public string? UpstreamBranch { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new DeleteLocalBranchDialogViewModel(
             new DeleteLocalBranchRequest(Repo, BranchName, UpstreamRemote, UpstreamBranch),
@@ -56,17 +55,15 @@ internal sealed record DeleteLocalBranchDialog : Widget
             });
         }
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Delete branch",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Delete", DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
             Body = body.ToArray(),
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

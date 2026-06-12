@@ -6,7 +6,7 @@ namespace GitBench.Features.Identity;
 // Backs IdentityProfileEditDialog: add a new identity profile, or edit an existing one. There is
 // no git work, so the action's off-thread step is a no-op and the actual list mutation runs in
 // onSuccess (the UI thread) — ObservableList is not safe to mutate from a background thread.
-internal sealed class IdentityProfileEditDialogViewModel : IDisposable
+internal sealed class IdentityProfileEditDialogViewModel : IDialogViewModel
 {
     private readonly IdentityProfile? _existing;
     private readonly IdentityProfileService _profiles;

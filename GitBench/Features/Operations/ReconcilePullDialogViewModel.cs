@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
-internal sealed class ReconcilePullDialogViewModel : IDisposable
+internal sealed class ReconcilePullDialogViewModel : IDialogViewModel
 {
     public State<PullStrategy> Strategy { get; } = new(PullStrategy.Merge);
 

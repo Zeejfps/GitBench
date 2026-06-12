@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
 
-internal sealed class DeinitSubmoduleDialogViewModel : IDisposable
+internal sealed class DeinitSubmoduleDialogViewModel : IDialogViewModel
 {
     public State<bool> Force { get; } = new(false);
 

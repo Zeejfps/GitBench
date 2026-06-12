@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-internal sealed class ResetCommitDialogViewModel : IDisposable
+internal sealed class ResetCommitDialogViewModel : IDialogViewModel
 {
     public State<ResetMode> Mode { get; } = new(ResetMode.Mixed);
 

@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
-internal sealed class AbortOperationDialogViewModel : IDisposable
+internal sealed class AbortOperationDialogViewModel : IDialogViewModel
 {
     private readonly State<bool> _forceQuitMode = new(false);
     // Plain field, not a State<T>: written in the background work lambda and read back in the

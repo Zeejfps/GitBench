@@ -4,7 +4,6 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -25,7 +24,7 @@ internal sealed record MoveBranchDialog : Widget
     public required string Summary { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new MoveBranchDialogViewModel(
             new MoveBranchRequest(Repo, BranchName, Sha),
@@ -33,10 +32,11 @@ internal sealed record MoveBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Reset branch to revision",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Action = ("Reset branch", DialogButtonRole.Destructive),
             Command = vm.Move,
@@ -65,9 +65,6 @@ internal sealed record MoveBranchDialog : Widget
                     Color = s => s.DialogBody.RowTextMissing,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }

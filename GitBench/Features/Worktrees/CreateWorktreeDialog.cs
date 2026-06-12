@@ -19,7 +19,7 @@ internal sealed record CreateWorktreeDialog : Widget
     public required Repo Primary { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new CreateWorktreeDialogViewModel(
             new CreateWorktreeRequest(Primary),
@@ -32,10 +32,11 @@ internal sealed record CreateWorktreeDialog : Widget
             Height = 28,
         };
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "New worktree",
             OnClose = OnClose,
+            ViewModel = vm,
             Action = ("Create", DialogButtonRole.Primary),
             Command = vm.Create,
             Body =
@@ -66,10 +67,7 @@ internal sealed record CreateWorktreeDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)

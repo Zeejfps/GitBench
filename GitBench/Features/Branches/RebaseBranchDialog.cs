@@ -16,7 +16,7 @@ internal sealed record RebaseBranchDialog : Widget
     public required RebaseBranchRequest Request { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new RebaseBranchDialogViewModel(
             Request,
@@ -24,10 +24,11 @@ internal sealed record RebaseBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Rebase",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Action = ("Rebase", DialogButtonRole.Primary),
             Command = vm.Rebase,
@@ -51,10 +52,7 @@ internal sealed record RebaseBranchDialog : Widget
                     Height = 24,
                 }),
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static IWidget PreviewChip(RebaseBranchDialogViewModel vm)

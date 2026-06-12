@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-internal sealed class RenameBranchDialogViewModel : IDisposable
+internal sealed class RenameBranchDialogViewModel : IDialogViewModel
 {
     public State<string> Name { get; }
     public State<bool> Force { get; } = new(false);

@@ -10,7 +10,7 @@ namespace GitBench.Features.Repos;
 /// into, and the subfolder name (auto-derived from the URL until the user edits it). On a
 /// successful clone it registers and activates the new repo, mirroring "Open from folder".
 /// </summary>
-internal sealed class CloneRepoDialogViewModel : IDisposable
+internal sealed class CloneRepoDialogViewModel : IDialogViewModel
 {
     public State<string> Url { get; } = new(string.Empty);
     public State<string> ParentDir { get; } = new(string.Empty);

@@ -28,7 +28,7 @@ internal sealed record EditRemoteDialog : Widget
     public string? RemoteName { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var isAdd = RemoteName is null;
         var request = isAdd
@@ -45,8 +45,9 @@ internal sealed record EditRemoteDialog : Widget
         schemeDropdown.Bind(vm.Scheme, schemeDropdown.SetScheme);
         schemeDropdown.SchemeSelected += vm.SetScheme;
 
-        var view = new Dialog
+        return new Dialog
         {
+            ViewModel = vm,
             Title = isAdd ? "Add Remote" : "Remote",
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
@@ -71,10 +72,7 @@ internal sealed record EditRemoteDialog : Widget
                     Accessory = new Raw { View = schemeDropdown },
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 }
 

@@ -25,7 +25,7 @@ internal sealed record StashDialog : Widget
     public required Repo Repo { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = new StashDialogViewModel(
             new StashRequest(Repo),
@@ -40,10 +40,11 @@ internal sealed record StashDialog : Widget
         var keepStaged = new State<bool>(vm.KeepStaged.Value);
         keepStaged.Changed += vm.SetKeepStaged;
 
-        var view = new Dialog
+        return new Dialog
         {
             Title = "Stash changes",
             OnClose = OnClose,
+            ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Height = 520f,
             BodyGap = 10,
@@ -69,10 +70,7 @@ internal sealed record StashDialog : Widget
                     Height = 22,
                 },
             ],
-        }.BuildView(ctx);
-
-        view.UseViewModel(() => vm, v => v.CloseRequested += OnClose);
-        return view;
+        };
     }
 
     private static View BuildFileList(Context ctx, StashDialogViewModel vm)

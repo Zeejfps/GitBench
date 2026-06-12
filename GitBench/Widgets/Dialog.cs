@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Infrastructure;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -31,6 +32,12 @@ internal sealed record Dialog : Widget
 
     /// <summary>Error source when the VM surfaces it separately from the command's own.</summary>
     public IReadable<string?>? Error { get; init; }
+
+    /// <summary>Rooted for the view's mounted lifetime; CloseRequested routes to OnClose.</summary>
+    public IDialogViewModel? ViewModel { get; init; }
+
+    /// <summary>Live override of the action button's label.</summary>
+    public IReadable<string>? BindActionLabel { get; init; }
 
     /// <summary>Enter performs the action, Esc cancels — for input-free confirmation dialogs.</summary>
     public bool ConfirmKeys { get; init; }
@@ -79,6 +86,12 @@ internal sealed record Dialog : Widget
             root.UseController(ctx.Require<InputSystem>(),
                 () => new DialogKbmController(() => shell.ActionButton.PerformClick(), OnClose));
         }
+
+        if (BindActionLabel != null)
+            root.Bind(BindActionLabel, label => shell.ActionButton.Label = label);
+
+        if (ViewModel is { } viewModel)
+            root.UseViewModel(() => viewModel, vm => vm.CloseRequested += OnClose);
 
         return root;
     }

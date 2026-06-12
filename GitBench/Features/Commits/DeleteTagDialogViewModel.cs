@@ -5,7 +5,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-internal sealed class DeleteTagDialogViewModel : IDisposable
+internal sealed class DeleteTagDialogViewModel : IDialogViewModel
 {
     public State<bool> DeleteFromRemotes { get; } = new(false);
 
