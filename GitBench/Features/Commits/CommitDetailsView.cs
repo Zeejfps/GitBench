@@ -2,7 +2,9 @@ using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -10,7 +12,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
-internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsViewModel>
+internal sealed class CommitDetailsView : ContainerView
 {
     private const int Padding = 14;
     private const float AvatarSize = 36f;
@@ -36,6 +38,8 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
         return AvatarPalette[idx];
     }
 
+    private readonly ICanvas _canvas;
+    private readonly IThemeService<ThemeStyles> _theme;
     private readonly ColumnView _headerInfo;
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
@@ -47,16 +51,21 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
     private readonly ListArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
 
-    public CommitDetailsView()
+    public CommitDetailsView(Context ctx)
     {
+        var input = ctx.Require<InputSystem>();
+        _canvas = ctx.Canvas;
+        _theme = ctx.Theme();
+        var vm = ctx.Require<CommitDetailsViewModel>();
+
         _headerInfo = new ColumnView { Gap = 8 };
 
         _headerScrollPane = new ScrollPane();
         _headerScrollPane.Children.Add(_headerInfo);
-        _headerScrollPane.UseController(_ => new ScrollPaneWheelController(_headerScrollPane));
+        _headerScrollPane.UseController(input, () => new ScrollPaneWheelController(_headerScrollPane));
 
-        var headerVScrollBar = ScrollBars.CreateVertical();
-        var headerHScrollBar = ScrollBars.CreateHorizontal();
+        var headerVScrollBar = ScrollBars.CreateVertical(ctx);
+        var headerHScrollBar = ScrollBars.CreateHorizontal(ctx);
         var headerWithBars = new BorderLayoutView
         {
             Center = _headerScrollPane,
@@ -75,36 +84,36 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
 
         var innerSplitterHovered = new State<bool>(false);
         var innerSplitter = new RectView();
-        innerSplitter.BindThemedBackgroundColor(s =>
+        innerSplitter.BindThemedBackgroundColor(_theme, s =>
             innerSplitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
         _innerSplit = new VerticalSplitContainer(headerWithBars, _changesSection, innerSplitter, bottomFraction: 1f / 2f)
         {
             BottomVisible = false,
         };
-        innerSplitter.UseController(ctx => new SplitterController(
+        innerSplitter.UseController(input, () => new SplitterController(
             ctx,
             DragAxis.Y,
             _innerSplit.AdjustBottomFractionByPixels,
             h => innerSplitterHovered.Value = h));
 
-        _diffView = new DiffView(CompatUi.Current);
-        _diffHeader = new DiffPaneHeader(CompatUi.Current);
+        _diffView = new DiffView(ctx);
+        _diffHeader = new DiffPaneHeader(ctx);
 
         var diffPane = new BorderLayoutView
         {
             North = _diffHeader,
             Center = _diffView,
         };
-        _diffHeader.IsCollapsed.Subscribe(c => diffPane.Center = c ? null : _diffView);
+        this.Bind(_diffHeader.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
 
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
-        splitter.BindThemedBackgroundColor(s =>
+        splitter.BindThemedBackgroundColor(_theme, s =>
             splitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
 
         _splitContainer = new VerticalSplitContainer(_innerSplit, diffPane, splitter, bottomFraction: 1f / 2f);
 
-        splitter.UseController(ctx => new SplitterController(
+        splitter.UseController(input, () => new SplitterController(
             ctx,
             DragAxis.Y,
             _splitContainer.AdjustBottomFractionByPixels,
@@ -115,11 +124,11 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
             BorderSize = new BorderSizeStyle { Left = 1 },
             Children = { _splitContainer },
         };
-        panel.BindThemedBackgroundColor(s => s.CommitDetailsView.Background);
-        panel.BindThemedBorderColor(s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
+        panel.BindThemedBackgroundColor(_theme, s => s.CommitDetailsView.Background);
+        panel.BindThemedBorderColor(_theme, s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
         AddChildToSelf(panel);
 
-        this.Use(_ => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
+        this.Use(() => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
 
         // Up/Down arrow navigation over the Changes list, mirroring the local-changes panels.
         // The list is a flat single-select list, so there are no folders to expand and no
@@ -131,20 +140,21 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
             () => { },
             () => { });
         _arrowController.OnToggleFullFile = () => _vm?.DiffVm.ToggleFullFile();
-        this.UseController(_ => _arrowController);
+        this.UseController(input, _arrowController);
 
-        this.UseViewModel(this);
+        this.UseViewModel(() => vm, Bind);
     }
 
-    public void Bind(CommitDetailsViewModel vm)
+    private void Bind(CommitDetailsViewModel vm)
     {
+        if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
-        vm.RenderState.Subscribe(SetRenderState);
+        this.Bind(vm.RenderState, SetRenderState);
         _diffView.Bind(vm.DiffVm);
         _diffHeader.Bind(vm.DiffVm);
-        _selectedPath.BindTo(vm.SelectedPath);
-        vm.SelectedPath.Subscribe(path =>
+        this.Bind(vm.SelectedPath, path =>
         {
+            _selectedPath.Value = path;
             if (path != null) _changesSection.EnsureRowVisible(path);
         });
         _splitContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
@@ -167,12 +177,12 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
     private void ShowPlaceholder(string text)
     {
         _headerInfo.Children.Clear();
-        var placeholder = new TextView(CompatUi.Canvas)
+        var placeholder = new TextView(_canvas)
         {
             Text = text,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        placeholder.BindThemedTextColor(s => s.CommitDetailsView.PlaceholderText);
+        placeholder.BindThemedTextColor(_theme, s => s.CommitDetailsView.PlaceholderText);
         _headerInfo.Children.Add(placeholder);
         _headerScrollPane.ScrollToOrigin();
         _changesSection.SetFiles(Array.Empty<FileChange>());
@@ -188,30 +198,30 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
 
         if (!string.IsNullOrEmpty(d.MessageShort))
         {
-            var subject = new TextView(CompatUi.Canvas) { Text = d.MessageShort };
-            subject.BindThemedTextColor(s => s.CommitDetailsView.PrimaryText);
+            var subject = new TextView(_canvas) { Text = d.MessageShort };
+            subject.BindThemedTextColor(_theme, s => s.CommitDetailsView.PrimaryText);
             topColumn.Children.Add(subject);
         }
 
         var body = ExtractBody(d.Message, d.MessageShort);
         if (!string.IsNullOrEmpty(body))
         {
-            var bodyText = new TextView(CompatUi.Canvas) { Text = body };
-            bodyText.BindThemedTextColor(s => s.CommitDetailsView.SecondaryText);
+            var bodyText = new TextView(_canvas) { Text = body };
+            bodyText.BindThemedTextColor(_theme, s => s.CommitDetailsView.SecondaryText);
             topColumn.Children.Add(bodyText);
         }
 
-        var commitLine = new TextView(CompatUi.Canvas) { Text = $"Commit:  {d.Sha}" };
-        commitLine.BindThemedTextColor(s => s.CommitDetailsView.MutedText);
+        var commitLine = new TextView(_canvas) { Text = $"Commit:  {d.Sha}" };
+        commitLine.BindThemedTextColor(_theme, s => s.CommitDetailsView.MutedText);
         topColumn.Children.Add(commitLine);
 
-        var parentLine = new TextView(CompatUi.Canvas)
+        var parentLine = new TextView(_canvas)
         {
             Text = d.ParentShas.Count == 0
                 ? "Parents: (none)"
                 : "Parents: " + string.Join(", ", d.ParentShas.Select(ShortSha)),
         };
-        parentLine.BindThemedTextColor(s => s.CommitDetailsView.MutedText);
+        parentLine.BindThemedTextColor(_theme, s => s.CommitDetailsView.MutedText);
         topColumn.Children.Add(parentLine);
 
         _headerInfo.Children.Add(new PaddingView
@@ -225,7 +235,7 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
         _headerScrollPane.ScrollToOrigin();
     }
 
-    private static View BuildAuthorHeader(CommitDetails d)
+    private View BuildAuthorHeader(CommitDetails d)
     {
         var avatarSeed = !string.IsNullOrEmpty(d.AuthorEmail) ? d.AuthorEmail : d.AuthorName;
         var avatar = new RectView
@@ -236,7 +246,7 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
             BorderRadius = BorderRadiusStyle.All(AvatarSize * 0.5f),
             Children =
             {
-                new TextView(CompatUi.Canvas)
+                new TextView(_canvas)
                 {
                     Text = Initials(d.AuthorName, d.AuthorEmail),
                     TextColor = 0xFFFFFFFF,
@@ -247,11 +257,11 @@ internal sealed class CommitDetailsView : ContainerView, IBind<CommitDetailsView
             },
         };
 
-        var authorName = new TextView(CompatUi.Canvas) { Text = FormatAuthor(d.AuthorName, d.AuthorEmail) };
-        authorName.BindThemedTextColor(s => s.CommitDetailsView.PrimaryText);
+        var authorName = new TextView(_canvas) { Text = FormatAuthor(d.AuthorName, d.AuthorEmail) };
+        authorName.BindThemedTextColor(_theme, s => s.CommitDetailsView.PrimaryText);
 
-        var date = new TextView(CompatUi.Canvas) { Text = FormatFullDate(d.AuthorWhen) };
-        date.BindThemedTextColor(s => s.CommitDetailsView.MutedText);
+        var date = new TextView(_canvas) { Text = FormatFullDate(d.AuthorWhen) };
+        date.BindThemedTextColor(_theme, s => s.CommitDetailsView.MutedText);
 
         var info = new ColumnView
         {

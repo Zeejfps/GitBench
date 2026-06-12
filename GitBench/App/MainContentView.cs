@@ -17,11 +17,12 @@ namespace GitBench.App;
 /// </summary>
 public sealed class MainContentView : ContainerView
 {
-    private readonly HistoryView _history = new();
+    private readonly HistoryView _history;
     private readonly LocalChangesView _localChanges = new();
 
     public MainContentView(Context ctx)
     {
+        _history = new HistoryView(ctx);
         AddChildToSelf(_history);
         AddChildToSelf(_localChanges);
         this.Bind(ctx.Require<State<MainViewMode>>(), SetActive);

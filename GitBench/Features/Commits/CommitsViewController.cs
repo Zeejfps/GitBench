@@ -15,14 +15,15 @@ namespace GitBench.Features.Commits;
 /// </summary>
 internal sealed class CommitsViewController : KeyboardMouseController
 {
-    private readonly CommitsView _view;
+    private readonly CommitsView.Core _view;
+    private readonly InputSystem _input;
     private CommitsView.DividerKind _activeDivider = CommitsView.DividerKind.None;
     private float _lastDragX;
 
-    public CommitsViewController(CommitsView view, Context context)
+    public CommitsViewController(CommitsView.Core view, Context context)
     {
         _view = view;
-        _ = context;
+        _input = context.Require<InputSystem>();
     }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
@@ -41,7 +42,7 @@ internal sealed class CommitsViewController : KeyboardMouseController
 
             _activeDivider = divider;
             _lastDragX = e.Mouse.Point.X;
-            _view.Context.StealFocus(this);
+            _input.StealFocus(this);
             e.Consume();
             return;
         }
@@ -49,7 +50,7 @@ internal sealed class CommitsViewController : KeyboardMouseController
         if (e.State == InputState.Released && _activeDivider != CommitsView.DividerKind.None)
         {
             _activeDivider = CommitsView.DividerKind.None;
-            _view.Context.Blur(this);
+            _input.Blur(this);
             e.Consume();
         }
     }

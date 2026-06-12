@@ -159,12 +159,15 @@ internal sealed class ResetModeDropdown : HoverableButton
         (ResetMode.Hard, "Hard", "Discard all local changes", ResetCommitDialog.HardColor),
     };
 
+    private readonly Context _ctx;
+
     public State<ResetMode> SelectedState { get; } = new(ResetMode.Mixed);
 
     public ResetMode Selected => SelectedState.Value;
 
     public ResetModeDropdown(Context ctx)
     {
+        _ctx = ctx;
         Height = 30;
         var theme = ctx.Theme();
 
@@ -231,14 +234,13 @@ internal sealed class ResetModeDropdown : HoverableButton
             Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
             Children = { row },
         };
-        BorderedButtonChrome.Bind(background, IsHovered);
+        BorderedButtonChrome.Bind(background, theme, IsHovered);
         SetBackground(background);
     }
 
     protected override void OnClicked()
     {
-        var ctx = this.Context;
-        if (ctx == null) return;
+        var ctx = _ctx;
         var items = new List<RepoBarContextMenu.Item>(Options.Length);
         foreach (var opt in Options)
         {

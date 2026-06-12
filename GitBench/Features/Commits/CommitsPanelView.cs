@@ -1,9 +1,9 @@
 using GitBench.Controls;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
-using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -13,25 +13,27 @@ public sealed class CommitsPanelView : ContainerView
 {
     private const float WarningBarHeight = 24f;
 
-    private readonly CommitsView _commits;
+    private readonly CommitsView.Core _commits;
     private readonly CommitSearchBarView _searchBar;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly RectView _warningBar;
     private readonly TextView _warningText;
     private readonly State<bool> _truncated = new(false);
 
-    public CommitsPanelView()
+    internal CommitsPanelView(Context ctx)
     {
-        _commits = new CommitsView();
-        _searchBar = new CommitSearchBarView();
-        _scrollBar = ScrollBars.CreateVertical();
+        var theme = ctx.Theme();
 
-        _warningText = new TextView(CompatUi.Canvas)
+        _commits = new CommitsView.Core(ctx);
+        _searchBar = new CommitSearchBarView(ctx);
+        _scrollBar = ScrollBars.CreateVertical(ctx);
+
+        _warningText = new TextView(ctx.Canvas)
         {
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _warningText.BindThemedTextColor(s => s.Banner.Text);
+        _warningText.BindThemedTextColor(theme, s => s.Banner.Text);
         _warningText.BindText(_truncated, t => t ? "History truncated." : null);
 
         _warningBar = new RectView
@@ -39,12 +41,12 @@ public sealed class CommitsPanelView : ContainerView
             Height = 0f,
             Children = { _warningText },
         };
-        _warningBar.BindThemedBackgroundColor(s =>
+        _warningBar.BindThemedBackgroundColor(theme, s =>
             _truncated.Value ? s.Banner.Background : 0u);
-        _warningBar.BindThemedBorderColor(s => _truncated.Value
+        _warningBar.BindThemedBorderColor(theme, s => _truncated.Value
             ? new BorderColorStyle { Top = s.Banner.Border }
             : new BorderColorStyle());
-        _truncated.Subscribe(t =>
+        this.Bind(_truncated, t =>
         {
             _warningBar.Height = t ? WarningBarHeight : 0f;
             _warningBar.BorderSize = t ? new BorderSizeStyle { Top = 1 } : new BorderSizeStyle();
@@ -58,7 +60,7 @@ public sealed class CommitsPanelView : ContainerView
             South = _warningBar,
         });
 
-        this.UseController(_ => new CommitsPanelController(_commits, _searchBar, _scrollBar, _truncated));
+        this.Use(() => new CommitsPanelController(_commits, _searchBar, _scrollBar, _truncated));
     }
 
     protected override void OnLayoutChildren()
@@ -70,15 +72,15 @@ public sealed class CommitsPanelView : ContainerView
     }
 }
 
-internal sealed class CommitsPanelController : KeyboardMouseController, IDisposable
+internal sealed class CommitsPanelController : IDisposable
 {
-    private readonly CommitsView _commits;
+    private readonly CommitsView.Core _commits;
     private readonly CommitSearchBarView _searchBar;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly State<bool> _truncated;
 
     public CommitsPanelController(
-        CommitsView commits, CommitSearchBarView searchBar, VerticalScrollBarView scrollBar, State<bool> truncated)
+        CommitsView.Core commits, CommitSearchBarView searchBar, VerticalScrollBarView scrollBar, State<bool> truncated)
     {
         _commits = commits;
         _searchBar = searchBar;

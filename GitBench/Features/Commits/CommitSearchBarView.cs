@@ -1,12 +1,15 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.KeyboardModule;
+using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
@@ -14,8 +17,8 @@ namespace GitBench.Features.Commits;
 /// Slim filter bar shown above the commit list: a single rounded search box containing a leading
 /// search icon, the text input, and a trailing clear (✕) button that appears once there's text.
 /// Changes are surfaced via <see cref="QueryChanged"/>; the panel forwards those to
-/// <see cref="CommitsView.SetSearchQuery"/>. It deliberately holds no view model — the
-/// <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView"/>.
+/// <see cref="CommitsView.Core.SetSearchQuery"/>. It deliberately holds no view model — the
+/// <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView.Core"/>.
 /// </summary>
 internal sealed class CommitSearchBarView : ContainerView
 {
@@ -23,21 +26,24 @@ internal sealed class CommitSearchBarView : ContainerView
 
     private readonly TextInputView _input;
     private readonly SearchInputKbmController _controller;
-    private readonly CommitSearchClearButton _clear;
+    private readonly View _clear;
 
     // Fires on every edit (including programmatic clear) with the current text.
     public event Action<string>? QueryChanged;
 
-    public CommitSearchBarView()
+    public CommitSearchBarView(Context ctx)
     {
         Height = BarHeight;
 
+        var input = ctx.Require<InputSystem>();
+        var theme = ctx.Theme();
+
         _input = DialogFrame.TextInput();
         _input.PlaceholderText = "Filter commits…";
-        _controller = new SearchInputKbmController(_input) { OnEscape = Clear };
-        _input.UseController(_ => _controller);
+        _controller = new SearchInputKbmController(_input, input, ctx.Get<IClipboard>()) { OnEscape = Clear };
+        _input.UseController(input, _controller);
 
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 14,
@@ -45,12 +51,13 @@ internal sealed class CommitSearchBarView : ContainerView
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        icon.BindThemedTextColor(s => s.CommitsView.RowTextDim);
+        icon.BindThemedTextColor(theme, s => s.CommitsView.RowTextDim);
 
-        _clear = new CommitSearchClearButton(Clear) { IsVisible = false };
+        _clear = BuildClearButton(ctx, input, theme, Clear);
+        _clear.IsVisible = false;
 
         // Subscribe only after _clear exists — TextValue fires immediately with the current value.
-        _input.TextValue.Subscribe(OnTextChanged);
+        this.Bind(_input.TextValue, OnTextChanged);
 
         // Icon (left) · input (grows) · clear (right), all inside one bordered, rounded box.
         var box = new RectView
@@ -73,8 +80,8 @@ internal sealed class CommitSearchBarView : ContainerView
                 },
             },
         };
-        box.BindThemedBackgroundColor(s => s.TextInput.Background);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(s.TextInput.Border));
+        box.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
+        box.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
 
         var root = new RectView
         {
@@ -82,11 +89,53 @@ internal sealed class CommitSearchBarView : ContainerView
             BorderSize = new BorderSizeStyle { Bottom = 1 },
             Children = { box },
         };
-        root.BindThemedBackgroundColor(s => s.CommitsView.HeaderBackground);
-        root.BindThemedBorderColor(s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom });
+        root.BindThemedBackgroundColor(theme, s => s.CommitsView.HeaderBackground);
+        root.BindThemedBorderColor(theme, s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom });
 
         AddChildToSelf(root);
     }
+
+    // Small icon-only "clear filter" button. Chrome mirrors StatusBarIconButton (status-bar
+    // palette, rounded hover fill) but carries a fixed X glyph and a click action.
+    private static View BuildClearButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme, Action onClick)
+    {
+        var hovered = new State<bool>(false);
+
+        var label = new TextView(ctx.Canvas)
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = 12,
+            Text = LucideIcons.X,
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center,
+        };
+        label.BindTextColor(() => hovered.Value
+            ? theme.Styles.Value.StatusBar.IconHover
+            : theme.Styles.Value.StatusBar.Icon);
+
+        var button = new RectView
+        {
+            Width = 18,
+            Height = 18,
+            BorderRadius = BorderRadiusStyle.All(4),
+            Children = { label },
+        };
+        button.BindBackgroundColor(() => hovered.Value
+            ? theme.Styles.Value.StatusBar.IconHoverBackground
+            : 0u);
+        button.UseController(input, new KbmHandlers
+        {
+            OnClick = onClick,
+            OnHoverEnter = () => hovered.Value = true,
+            OnHoverExit = () => hovered.Value = false,
+        });
+        button.Use(() => new Tooltip(button, ctx, "Clear filter", hovered, AlwaysEnabled));
+        return button;
+    }
+
+    // The clear button is always actionable, so its tooltip never needs to gate on an enabled
+    // state — Tooltip still requires an IReadable<bool>, so hand it a constant.
+    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
 
     private void OnTextChanged(string text)
     {
@@ -110,7 +159,8 @@ internal sealed class SearchInputKbmController : BaseTextInputKbmController
 
     public Action? OnEscape { get; set; }
 
-    public SearchInputKbmController(TextInputView input) : base(input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>())
+    public SearchInputKbmController(TextInputView input, InputSystem inputSystem, IClipboard? clipboard)
+        : base(input, inputSystem, clipboard)
     {
         _input = input;
     }
@@ -129,35 +179,5 @@ internal sealed class SearchInputKbmController : BaseTextInputKbmController
     public override void OnFocusLost()
     {
         _input.StopEditing();
-    }
-}
-
-// Small icon-only "clear filter" button. Chrome mirrors StatusBarIconButton (status-bar palette,
-// rounded hover fill) but carries a fixed X glyph and a click action.
-internal sealed class CommitSearchClearButton : HoverableButton
-{
-    public CommitSearchClearButton(Action onClick) : base(onClick, tooltip: "Clear filter")
-    {
-        Width = 18;
-        Height = 18;
-
-        var label = new TextView(CompatUi.Canvas)
-        {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            Text = LucideIcons.X,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindThemedTextColor(s => IsHovered.Value ? s.StatusBar.IconHover : s.StatusBar.Icon);
-
-        var background = new RectView
-        {
-            BorderRadius = BorderRadiusStyle.All(4),
-            Children = { label },
-        };
-        background.BindThemedBackgroundColor(s => IsHovered.Value ? s.StatusBar.IconHoverBackground : 0u);
-
-        SetBackground(background);
     }
 }

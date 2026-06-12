@@ -1,9 +1,10 @@
 using ZGF.Gui.Views;
 using GitBench.App;
-using GitBench.Controls;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 
@@ -24,33 +25,31 @@ public sealed class HistoryView : ContainerView
 
     private readonly CommitsPanelView _commits;
     private readonly CommitDetailsView _details;
+    private readonly PreferencesService? _preferences;
     private float _detailsWidth = DefaultDetailsWidth;
     private bool _dividerHovered;
-    private PreferencesService? _preferences;
 
     private HistorySplitterStyles _splitterStyles = ThemeStyles.Dark.HistorySplitter;
 
-    public HistoryView()
+    public HistoryView(Context ctx)
     {
-        _commits = new CommitsPanelView();
-        _details = new CommitDetailsView();
+        var input = ctx.Require<InputSystem>();
+
+        _commits = new CommitsPanelView(ctx);
+        _details = new CommitDetailsView(ctx);
         AddChildToSelf(_commits);
         AddChildToSelf(_details);
-        this.UseController(_ => new HistoryViewController(this));
+        this.UseController(input, () => new HistoryViewController(this, input));
 
-        this.BindThemed(s =>
+        this.BindThemed(ctx.Theme(), s =>
         {
             _splitterStyles = s.HistorySplitter;
             SetDirty();
         });
 
-        this.Use(ctx =>
-        {
-            _preferences = ctx.Get<PreferencesService>();
-            if (_preferences is not null)
-                _detailsWidth = _preferences.Current.CommitDetailsWidth;
-            return new ActionDisposable(() => _preferences = null);
-        });
+        _preferences = ctx.Get<PreferencesService>();
+        if (_preferences is not null)
+            _detailsWidth = _preferences.Current.CommitDetailsWidth;
     }
 
     protected override void OnLayoutChildren()
@@ -129,12 +128,14 @@ public sealed class HistoryView : ContainerView
 internal sealed class HistoryViewController : KeyboardMouseController
 {
     private readonly HistoryView _view;
+    private readonly InputSystem _input;
     private bool _dragging;
     private float _lastDragX;
 
-    public HistoryViewController(HistoryView view)
+    public HistoryViewController(HistoryView view, InputSystem input)
     {
         _view = view;
+        _input = input;
     }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
@@ -147,7 +148,7 @@ internal sealed class HistoryViewController : KeyboardMouseController
             {
                 _dragging = true;
                 _lastDragX = e.Mouse.Point.X;
-                _view.Context.StealFocus(this);
+                _input.StealFocus(this);
                 e.Consume();
             }
             return;
@@ -156,7 +157,7 @@ internal sealed class HistoryViewController : KeyboardMouseController
         if (e.State == InputState.Released && _dragging)
         {
             _dragging = false;
-            _view.Context.Blur(this);
+            _input.Blur(this);
             e.Consume();
         }
     }
