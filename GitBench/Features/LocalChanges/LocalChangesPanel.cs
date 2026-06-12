@@ -3,8 +3,10 @@ using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
@@ -28,6 +30,8 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 {
+    private readonly Context _ctx;
+    private readonly ICanvas _canvas;
     private readonly string _title;
     private readonly DiffSide _side;
     private readonly IReadable<Selection> _selection;
@@ -100,6 +104,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     public float HorizontalScale { get; private set; } = 1f;
 
     public LocalChangesPanel(
+        Context ctx,
         string title,
         DiffSide side,
         View emptyPlaceholder,
@@ -111,6 +116,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         Action<FileRow>? onFolderToggle = null,
         Func<FileRow?, IReadOnlyList<RepoBarContextMenu.Item>>? buildContextMenu = null)
     {
+        _ctx = ctx;
+        _canvas = ctx.Canvas;
         _title = title;
         _side = side;
         _selection = selection;
@@ -119,8 +126,9 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _onEmptyAreaClicked = onEmptyAreaClicked;
         _onFolderToggle = onFolderToggle;
         _buildContextMenu = buildContextMenu;
+        var input = ctx.Require<InputSystem>();
 
-        _headerText = FileChangesUI.CreateHeaderText(title);
+        _headerText = FileChangesUI.CreateHeaderText(ctx, title);
         _emptyPlaceholder = emptyPlaceholder;
 
         View headerContent;
@@ -149,7 +157,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             headerContent = _headerText;
         }
 
-        var headerBar = FileChangesUI.CreateHeaderBar(headerContent);
+        var headerBar = FileChangesUI.CreateHeaderBar(ctx, headerContent);
 
         _list = new VirtualRowListView
         {
@@ -167,8 +175,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _bodyContainer.Children.Add(_emptyPlaceholder);
         _currentBody = _emptyPlaceholder;
 
-        _scrollBar = ScrollBars.CreateVertical();
-        _hScrollBar = ScrollBars.CreateHorizontal();
+        _scrollBar = ScrollBars.CreateVertical(ctx);
+        _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         AddChildToSelf(new BorderLayoutView
         {
@@ -178,13 +186,13 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             South = _hScrollBar,
         });
 
-        _list.UseController(_ => new VirtualRowListController(_list));
+        _list.UseController(input, () => new VirtualRowListController(_list));
 
         // Selection changes only affect row visuals; a SetDirty is enough — every frame
         // redraws and the ItemBuilder reads the current selection on demand.
-        selection.Subscribe(_ => SetDirty());
+        this.Bind(selection, _ => SetDirty());
 
-        this.BindThemed(s =>
+        this.BindThemed(ctx.Theme(), s =>
         {
             _rowStyles = s.FileChangeRow;
             _pathTextStyle.TextColor = _rowStyles.RowText;
@@ -194,7 +202,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             SetDirty();
         });
 
-        this.Use(_ => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+        this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
     }
 
     public void SetFiles(IReadOnlyList<FileChange> files)
@@ -315,7 +323,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
     private void OnRowContextRequested(int rowIndex, PointF point)
     {
-        if (this.Context == null || _buildContextMenu == null) return;
+        if (_buildContextMenu == null) return;
 
         var onRow = rowIndex >= 0 && rowIndex < _rows.Count;
         var target = onRow ? _rows[rowIndex] : null;
@@ -324,7 +332,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         if (items.Count == 0) return;
 
         if (onRow) _list.SetContextHighlight(rowIndex);
-        var opened = RepoBarContextMenu.Show(this.Context, point, items);
+        var opened = RepoBarContextMenu.Show(_ctx, point, items);
         if (opened == null)
         {
             _list.SetContextHighlight(null);
@@ -336,7 +344,6 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
-        if (this.Context == null) return;
 
         var row = _rows[rowIndex];
         var selection = _selection.Value;
@@ -345,7 +352,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         if (row.Kind == FileRowKind.Folder)
         {
             FileChangesUI.DrawFolderRow(
-                this.Context.Canvas,
+                _canvas,
                 rowRect,
                 row.DisplayName,
                 row.Indent,
@@ -363,7 +370,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
         var file = row.File!;
         FileChangesUI.DrawFileRow(
-            this.Context.Canvas,
+            _canvas,
             rowRect,
             file,
             isSelected,

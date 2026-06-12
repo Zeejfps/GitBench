@@ -1,6 +1,7 @@
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.LocalChanges;
@@ -12,13 +13,14 @@ internal sealed class LocalChangesHeaderActionButton : HoverableButton
 
     private readonly TextView _iconView;
 
-    public LocalChangesHeaderActionButton(string icon, Action? onClick = null, string? tooltip = null)
+    public LocalChangesHeaderActionButton(Context ctx, string icon, Action? onClick = null, string? tooltip = null)
         : base(onClick, tooltip)
     {
         Width = ButtonSize;
         Height = ButtonSize;
 
-        var iconView = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var iconView = new TextView(ctx.Canvas)
         {
             Text = icon,
             FontFamily = LucideIcons.FontFamily,
@@ -27,7 +29,7 @@ internal sealed class LocalChangesHeaderActionButton : HoverableButton
             VerticalTextAlignment = TextAlignment.Center,
         };
         _iconView = iconView;
-        iconView.BindThemedTextColor(s =>
+        iconView.BindThemedTextColor(theme, s =>
         {
             if (!IsEnabled) return s.HeaderActionButton.IconDisabled;
             return IsHovered ? s.HeaderActionButton.IconHover : s.HeaderActionButton.IconIdle;
@@ -38,7 +40,7 @@ internal sealed class LocalChangesHeaderActionButton : HoverableButton
             BorderRadius = BorderRadiusStyle.All(3),
             Children = { iconView },
         };
-        background.BindThemedBackgroundColor(s =>
+        background.BindThemedBackgroundColor(theme, s =>
             IsEnabled && IsHovered ? s.HeaderActionButton.BackgroundHover : s.HeaderActionButton.Background);
         SetBackground(background);
     }

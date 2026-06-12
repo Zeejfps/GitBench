@@ -129,7 +129,7 @@ internal sealed record StashDialog : Widget
     private static View BuildRow(Context ctx, StashDialogViewModel vm, StashFileRow file)
     {
         var theme = ctx.Theme();
-        var badge = FileChangesUI.CreateStatusBadge(file.Display);
+        var badge = FileChangesUI.CreateStatusBadge(ctx, file.Display);
 
         var pathText = new TextView(ctx.Canvas)
         {

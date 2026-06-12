@@ -23,6 +23,7 @@ namespace GitBench.Features.Diff;
 /// </remarks>
 internal sealed class DiffView : ContainerView
 {
+    private readonly Context _ctx;
     private readonly DiffContentView _content;
     private readonly RectView _panel;
     private readonly View _diffBody;
@@ -33,6 +34,7 @@ internal sealed class DiffView : ContainerView
 
     public DiffView(Context ctx)
     {
+        _ctx = ctx;
         _content = new DiffContentView(ctx);
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
@@ -76,6 +78,7 @@ internal sealed class DiffView : ContainerView
     private void ShowConflict(DiffRenderState.Conflict conflict)
     {
         _conflictView ??= new ConflictResolveView(
+            _ctx,
             onTakeOurs: () => _vm?.ResolveTakeOurs(),
             onTakeTheirs: () => _vm?.ResolveTakeTheirs(),
             onTakeBoth: () => _vm?.ResolveTakeBoth(),

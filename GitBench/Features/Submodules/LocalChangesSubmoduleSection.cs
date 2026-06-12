@@ -1,7 +1,8 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.Submodules;
@@ -14,24 +15,26 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
 {
     private const int ContentPadding = 10;
 
+    private readonly Context _ctx;
     private readonly TextView _headerText;
     private readonly ColumnView _rows;
     private readonly Action<string> _onStage;
     private readonly Action<string> _onReset;
 
-    public LocalChangesSubmoduleSection(Action<string> onStage, Action<string> onReset)
+    public LocalChangesSubmoduleSection(Context ctx, Action<string> onStage, Action<string> onReset)
     {
+        _ctx = ctx;
         _onStage = onStage;
         _onReset = onReset;
 
-        _headerText = FileChangesUI.CreateHeaderText("Submodules");
+        _headerText = FileChangesUI.CreateHeaderText(ctx, "Submodules");
         _rows = new ColumnView { Gap = FileChangesUI.RowGap };
 
         AddChildToSelf(new ColumnView
         {
             Children =
             {
-                FileChangesUI.CreateHeaderBar(_headerText),
+                FileChangesUI.CreateHeaderBar(ctx, _headerText),
                 new PaddingView
                 {
                     Padding = new PaddingStyle
@@ -57,14 +60,15 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
 
     private View BuildRow(SubmoduleInfo info)
     {
-        var badgeText = new TextView(CompatUi.Canvas)
+        var theme = _ctx.Theme();
+        var badgeText = new TextView(_ctx.Canvas)
         {
             Text = "S",
             FontSize = 11f,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        badgeText.BindThemedTextColor(s => s.SubmoduleSection.BadgeText);
+        badgeText.BindThemedTextColor(theme, s => s.SubmoduleSection.BadgeText);
 
         var badge = new RectView
         {
@@ -73,22 +77,22 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
             BorderRadius = BorderRadiusStyle.All(3),
             Children = { badgeText },
         };
-        badge.BindThemedBackgroundColor(s => s.SubmoduleSection.BadgeBackground);
+        badge.BindThemedBackgroundColor(theme, s => s.SubmoduleSection.BadgeBackground);
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(_ctx.Canvas)
         {
             Text = $"{info.Path}  ·  {DriftLabel(info)}",
         };
-        label.BindThemedTextColor(s => s.SubmoduleSection.RowText);
+        label.BindThemedTextColor(theme, s => s.SubmoduleSection.RowText);
 
         var stageButton = new LocalChangesHeaderActionButton(
-            LucideIcons.ChevronRight, () => _onStage(info.Path), "Stage pointer update");
+            _ctx, LucideIcons.ChevronRight, () => _onStage(info.Path), "Stage pointer update");
         // Stageable only when the submodule is actually modified (not when it's
         // uninitialized or in a merge conflict — both need different actions).
         stageButton.IsEnabled.Value = info.Status == SubmoduleStatus.Modified;
 
         var resetButton = new LocalChangesHeaderActionButton(
-            LucideIcons.X, () => _onReset(info.Path), "Reset to recorded SHA");
+            _ctx, LucideIcons.X, () => _onReset(info.Path), "Reset to recorded SHA");
         resetButton.IsEnabled.Value = info.Status != SubmoduleStatus.NotInitialized;
 
         return new FlexRowView

@@ -1,8 +1,10 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.LocalChanges;
@@ -25,47 +27,48 @@ internal static class FileChangesUI
 
     public static string FormatHeader(string title, int count) => $"{title} ({count})";
 
-    public static TextView CreateHeaderText(string title)
+    public static TextView CreateHeaderText(Context ctx, string title)
     {
-        var view = new TextView(CompatUi.Canvas) { Text = FormatHeader(title, 0) };
-        view.BindThemedTextColor(s => s.FileChangesSection.HeaderText);
+        var view = new TextView(ctx.Canvas) { Text = FormatHeader(title, 0) };
+        view.BindThemedTextColor(ctx.Theme(), s => s.FileChangesSection.HeaderText);
         return view;
     }
 
-    public static TextView CreateEmptyPlaceholder(string emptyText)
+    public static TextView CreateEmptyPlaceholder(Context ctx, string emptyText)
     {
-        var view = new TextView(CompatUi.Canvas) { Text = emptyText };
-        view.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
+        var view = new TextView(ctx.Canvas) { Text = emptyText };
+        view.BindThemedTextColor(ctx.Theme(), s => s.FileChangesSection.EmptyPlaceholderText);
         return view;
     }
 
     /// <summary>Centered icon / title / hint stack shown when a panel has no rows.</summary>
-    public static View CreateEmptyState(string icon, string title, string hint)
+    public static View CreateEmptyState(Context ctx, string icon, string title, string hint)
     {
-        var iconView = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var iconView = new TextView(ctx.Canvas)
         {
             Text = icon,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 28f,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        iconView.BindThemedTextColor(s => s.FileChangesSection.EmptyStateIcon);
+        iconView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyStateIcon);
 
-        var titleView = new TextView(CompatUi.Canvas)
+        var titleView = new TextView(ctx.Canvas)
         {
             Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        titleView.BindThemedTextColor(s => s.FileChangesSection.EmptyPlaceholderText);
+        titleView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyPlaceholderText);
 
-        var hintView = new TextView(CompatUi.Canvas)
+        var hintView = new TextView(ctx.Canvas)
         {
             Text = hint,
             FontSize = 11f,
             HorizontalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
-        hintView.BindThemedTextColor(s => s.FileChangesSection.EmptyStateHint);
+        hintView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyStateHint);
 
         return new PaddingView
         {
@@ -83,8 +86,9 @@ internal static class FileChangesUI
         };
     }
 
-    public static RectView CreateHeaderBar(View content)
+    public static RectView CreateHeaderBar(Context ctx, View content)
     {
+        var theme = ctx.Theme();
         var view = new RectView
         {
             BorderSize = new BorderSizeStyle { Top = 1, Bottom = 1 },
@@ -97,8 +101,8 @@ internal static class FileChangesUI
             },
             Children = { content },
         };
-        view.BindThemedBackgroundColor(s => s.FileChangesSection.HeaderBackground);
-        view.BindThemedBorderColor(s => new BorderColorStyle
+        view.BindThemedBackgroundColor(theme, s => s.FileChangesSection.HeaderBackground);
+        view.BindThemedBorderColor(theme, s => new BorderColorStyle
         {
             Top = s.FileChangesSection.HeaderBorder,
             Bottom = s.FileChangesSection.HeaderBorder,
@@ -107,17 +111,18 @@ internal static class FileChangesUI
     }
 
     /// <summary>Square colored badge containing the single-letter status glyph for a file.</summary>
-    public static RectView CreateStatusBadge(FileChange file)
+    public static RectView CreateStatusBadge(Context ctx, FileChange file)
     {
+        var theme = ctx.Theme();
         var status = file.Status;
-        var glyph = new TextView(CompatUi.Canvas)
+        var glyph = new TextView(ctx.Canvas)
         {
             Text = FileChangeFormatting.StatusGlyph(status),
             FontSize = 11f,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        glyph.BindThemedTextColor(s => s.FileChangeRow.BadgeText);
+        glyph.BindThemedTextColor(theme, s => s.FileChangeRow.BadgeText);
 
         var badge = new RectView
         {
@@ -126,7 +131,7 @@ internal static class FileChangesUI
             BorderRadius = BorderRadiusStyle.All(3),
             Children = { glyph },
         };
-        badge.BindThemedBackgroundColor(s => s.FileChangeRow.StatusColor(status));
+        badge.BindThemedBackgroundColor(theme, s => s.FileChangeRow.StatusColor(status));
         return badge;
     }
 

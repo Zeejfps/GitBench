@@ -1,23 +1,23 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.StatusBar;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
-using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// The bottom strip of the Local Changes view: commit title input, growing description
-/// field, amend checkbox, commit button, and an inline error banner. <see cref="Bind"/>
-/// wires the controls two-way to a <see cref="LocalChangesViewModel"/>; there are no
-/// pass-through properties or events.
+/// field, amend checkbox, commit button, and an inline error banner. The controls are
+/// wired two-way to a <see cref="LocalChangesViewModel"/>; there are no pass-through
+/// properties or events.
 /// </summary>
-internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel>
+internal sealed class CommitBarView : ContainerView
 {
     private const int Padding = 10;
     private const float CommitButtonWidth = 120f;
@@ -30,15 +30,20 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
     private readonly CheckboxView _amendCheckbox;
     private readonly DialogButton _commitButton;
     private readonly ErrorBarView _errorBar;
+    private readonly LocalChangesViewModel _vm;
 
-    public CommitBarView()
+    public CommitBarView(Context ctx, LocalChangesViewModel vm)
     {
-        _titleInput = new TextInputView(CompatUi.Canvas)
+        _vm = vm;
+        var theme = ctx.Theme();
+        var input = ctx.Require<InputSystem>();
+
+        _titleInput = new TextInputView(ctx.Canvas)
         {
             TextWrap = TextWrap.NoWrap,
             PlaceholderText = "Commit title",
         };
-        _titleInput.BindThemed(s =>
+        _titleInput.BindThemed(theme, s =>
         {
             _titleInput.BackgroundColor = s.TextInput.Background;
             _titleInput.TextColor = s.TextInput.Text;
@@ -46,8 +51,8 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
             _titleInput.SelectionRectColor = s.TextInput.Selection;
             _titleInput.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _titleController = new TextInputViewKbmController(_titleInput, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>());
-        _titleInput.UseController(_ => _titleController);
+        _titleController = new TextInputViewKbmController(_titleInput, input, ctx.Get<IClipboard>());
+        _titleInput.UseController(input, _titleController);
 
         // No PreferredHeight — let the box size to one line of text plus padding/border.
         // The input itself reports MeasureHeight = lineHeight (single line, NoWrap), and the
@@ -59,8 +64,8 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
             Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
             Children = { _titleInput },
         };
-        titleBox.BindThemedBackgroundColor(s => s.TextInput.Background);
-        titleBox.BindThemedBorderColor(s => BorderColorStyle.All(s.TextInput.Border));
+        titleBox.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
+        titleBox.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
 
         _descriptionField = new GrowingDescriptionField(DescriptionMinHeight, DescriptionMaxHeight)
         {
@@ -87,7 +92,7 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
             Children = { _amendCheckbox, _commitButton },
         };
 
-        _errorBar = new ErrorBarView(CompatUi.Current);
+        _errorBar = new ErrorBarView(ctx);
         var column = new ColumnView
         {
             Gap = 8,
@@ -106,12 +111,24 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
             },
             Children = { column },
         };
-        bar.BindThemedBackgroundColor(s => s.CommitBar.Background);
-        bar.BindThemedBorderColor(s => new BorderColorStyle { Top = s.CommitBar.TopBorder });
+        bar.BindThemedBackgroundColor(theme, s => s.CommitBar.Background);
+        bar.BindThemedBorderColor(theme, s => new BorderColorStyle { Top = s.CommitBar.TopBorder });
         AddChildToSelf(bar);
-    }
 
-    private LocalChangesViewModel? _vm;
+        _titleInput.BindTwoWay(vm.Title, vm.SetTitle);
+        _descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
+
+        // Amend checkbox is two-way against vm.Amend; record equality stops the loop.
+        this.Bind(vm.Amend, b => _amendCheckbox.IsChecked.Value = b);
+        _amendCheckbox.IsChecked.Changed += b => vm.SetAmend(b);
+
+        this.Bind(vm.CommitEnabled, b => _commitButton.IsEnabled.Value = b);
+        this.Bind(vm.OpError, m => _errorBar.Message.Value = m);
+
+        this.Bind(vm.CommitBusy, _ => UpdateCommitButton());
+        this.Bind(vm.IsMerging, _ => UpdateCommitButton());
+        this.Bind(vm.CommitRotation, r => _commitButton.IconRotation = r);
+    }
 
     // Adds the commit title and description to the shared focus ring after the unstaged
     // file list, ahead of the commit button.
@@ -139,28 +156,8 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
         _commitButton.OnShiftTab = () => ring.Previous(commitStop);
     }
 
-    public void Bind(LocalChangesViewModel vm)
-    {
-        _vm = vm;
-
-        _titleInput.BindTwoWay(vm.Title, vm.SetTitle);
-        _descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
-
-        // Amend checkbox is two-way against vm.Amend; record equality stops the loop.
-        vm.Amend.Subscribe(b => _amendCheckbox.IsChecked.Value = b);
-        _amendCheckbox.IsChecked.Changed += b => vm.SetAmend(b);
-
-        vm.CommitEnabled.Subscribe(b => _commitButton.IsEnabled.Value = b);
-        _errorBar.Message.BindTo(vm.OpError);
-
-        vm.CommitBusy.Subscribe(_ => UpdateCommitButton());
-        vm.IsMerging.Subscribe(_ => UpdateCommitButton());
-        vm.CommitRotation.Subscribe(r => _commitButton.IconRotation = r);
-    }
-
     private void UpdateCommitButton()
     {
-        if (_vm == null) return;
         var busy = _vm.CommitBusy.Value;
         var merging = _vm.IsMerging.Value;
         _commitButton.Icon = busy ? LucideIcons.Loader : string.Empty;
@@ -170,5 +167,5 @@ internal sealed class CommitBarView : ContainerView, IBind<LocalChangesViewModel
         if (!busy) _commitButton.IconRotation = 0f;
     }
 
-    private void OnCommitClicked() => _vm?.Commit();
+    private void OnCommitClicked() => _vm.Commit();
 }

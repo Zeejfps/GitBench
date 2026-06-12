@@ -4,8 +4,10 @@ using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Messages;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
@@ -30,6 +32,9 @@ namespace GitBench.Features.LocalChanges;
 public sealed class FileChangesSection : ContainerView, IScrollableContent
 {
     private readonly string _title;
+    private readonly ICanvas _canvas;
+    private readonly IRepoRegistry? _registry;
+    private readonly IMessageBus? _bus;
     private readonly TextView _headerText;
     private readonly TextView _emptyPlaceholder;
     private readonly RectView _bodyContainer;
@@ -73,17 +78,22 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     public float VerticalScale { get; private set; } = 1f;
     public float HorizontalScale { get; private set; } = 1f;
 
-    public FileChangesSection(
+    internal FileChangesSection(
+        Context ctx,
         string title,
         string emptyText = "(none)",
         IReadable<string?>? selectedPath = null,
         Action<FileChange>? onRowClicked = null)
     {
         _title = title;
+        _canvas = ctx.Canvas;
+        _registry = ctx.Get<IRepoRegistry>();
+        _bus = ctx.Get<IMessageBus>();
         _selectedPath = selectedPath;
         _onRowClicked = onRowClicked;
-        _headerText = FileChangesUI.CreateHeaderText(title);
-        _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(emptyText);
+        var input = ctx.Require<InputSystem>();
+        _headerText = FileChangesUI.CreateHeaderText(ctx, title);
+        _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
 
         _list = new VirtualRowListView
         {
@@ -96,24 +106,24 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _bodyContainer = new RectView();
         _bodyContainer.Children.Add(_emptyPlaceholder);
 
-        _scrollBar = ScrollBars.CreateVertical();
-        _hScrollBar = ScrollBars.CreateHorizontal();
+        _scrollBar = ScrollBars.CreateVertical(ctx);
+        _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         AddChildToSelf(new BorderLayoutView
         {
-            North = FileChangesUI.CreateHeaderBar(_headerText),
+            North = FileChangesUI.CreateHeaderBar(ctx, _headerText),
             Center = _bodyContainer,
             East = _scrollBar,
             South = _hScrollBar,
         });
 
-        _list.UseController(_ => new VirtualRowListController(_list));
+        _list.UseController(input, () => new VirtualRowListController(_list));
 
         // Selection changes only flip row visuals; a SetDirty is enough — the ItemBuilder
         // reads the current selection on demand each draw.
-        _selectedPath?.Subscribe(_ => SetDirty());
+        if (_selectedPath != null) this.Bind(_selectedPath, _ => SetDirty());
 
-        this.BindThemed(s =>
+        this.BindThemed(ctx.Theme(), s =>
         {
             _rowStyles = s.FileChangeRow;
             _pathTextStyle.TextColor = _rowStyles.RowText;
@@ -121,7 +131,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             SetDirty();
         });
 
-        this.Use(_ => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+        this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
     }
 
     public void SetFiles(IReadOnlyList<FileChange> files)
@@ -169,12 +179,11 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
         if (rowIndex < 0 || rowIndex >= _files.Count) return;
-        if (this.Context == null) return;
 
         var file = _files[rowIndex];
         var isSelected = _selectedPath?.Value == file.Path;
         FileChangesUI.DrawFileRow(
-            this.Context.Canvas,
+            _canvas,
             rowRect,
             file,
             isSelected,
@@ -202,9 +211,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     // we resolve relative to the active repo's parent and match by GetFullPath.
     private void ActivateSubmoduleAndJump(string submodulePath, SubmodulePointerChange change)
     {
-        if (this.Context == null) return;
-        var registry = this.Context.Get<IRepoRegistry>();
-        var bus = this.Context.Get<IMessageBus>();
+        var registry = _registry;
         if (registry == null) return;
 
         var active = registry.Active.Value;
@@ -221,7 +228,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             if (string.Equals(System.IO.Path.GetFullPath(r.Path), target, PathComparison))
             {
                 if (!r.IsMissing) registry.SetActive(r.Id);
-                bus?.Broadcast(new JumpToSubmoduleCommitMessage(r.Id, change.FromSha, change.ToSha));
+                _bus?.Broadcast(new JumpToSubmoduleCommitMessage(r.Id, change.FromSha, change.ToSha));
                 return;
             }
         }

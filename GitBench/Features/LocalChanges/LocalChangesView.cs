@@ -1,19 +1,18 @@
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed class LocalChangesView : ContainerView, IBind<LocalChangesViewModel>
+internal sealed class LocalChangesView : ContainerView
 {
-    private readonly LocalChangesContentView _content;
-    private readonly CommitBarView _commitBar;
-
-    public LocalChangesView()
+    public LocalChangesView(Context ctx)
     {
-        _content = new LocalChangesContentView();
-        _commitBar = new CommitBarView();
+        var vm = ctx.Require<LocalChangesViewModel>();
+        var content = new LocalChangesContentView(ctx, vm);
+        var commitBar = new CommitBarView(ctx, vm);
 
         var bg = new RectView
         {
@@ -21,27 +20,21 @@ internal sealed class LocalChangesView : ContainerView, IBind<LocalChangesViewMo
             {
                 new BorderLayoutView
                 {
-                    Center = _content,
-                    South = _commitBar,
+                    Center = content,
+                    South = commitBar,
                 },
             },
         };
-        bg.BindThemedBackgroundColor(s => s.Palette.Surface);
+        bg.BindThemedBackgroundColor(ctx.Theme(), s => s.Palette.Surface);
         AddChildToSelf(bg);
 
         // Tab cycles unstaged files → commit title → commit description → commit button
         // (when enabled) → (back to files).
         var focusRing = new FocusRing();
-        _content.RegisterFocusStops(focusRing);
-        _commitBar.RegisterFocusStops(focusRing);
-        _commitBar.RegisterCommitButtonStop(focusRing);
+        content.RegisterFocusStops(focusRing);
+        commitBar.RegisterFocusStops(focusRing);
+        commitBar.RegisterCommitButtonStop(focusRing);
 
-        this.UseViewModel(this);
-    }
-
-    public void Bind(LocalChangesViewModel vm)
-    {
-        _content.Bind(vm);
-        _commitBar.Bind(vm);
+        this.UseViewModel(() => vm, _ => { });
     }
 }

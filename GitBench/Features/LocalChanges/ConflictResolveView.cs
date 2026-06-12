@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Git;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -26,6 +27,8 @@ internal sealed class ConflictResolveView : ContainerView
     private const float ButtonHeight = 34f;
     private const float ButtonStackWidth = 220f;
 
+    private readonly Context _ctx;
+    private readonly IThemeService<ThemeStyles> _theme;
     private readonly Action _onTakeOurs;
     private readonly Action _onTakeTheirs;
     private readonly Action _onTakeBoth;
@@ -35,12 +38,15 @@ internal sealed class ConflictResolveView : ContainerView
     private readonly ColumnView _column;
 
     public ConflictResolveView(
+        Context ctx,
         Action onTakeOurs,
         Action onTakeTheirs,
         Action onTakeBoth,
         Action onOpenInEditor,
         Action onMarkResolved)
     {
+        _ctx = ctx;
+        _theme = ctx.Theme();
         _onTakeOurs = onTakeOurs;
         _onTakeTheirs = onTakeTheirs;
         _onTakeBoth = onTakeBoth;
@@ -60,7 +66,7 @@ internal sealed class ConflictResolveView : ContainerView
                 },
             },
         };
-        background.BindThemedBackgroundColor(s => s.DiffView.PanelBackground);
+        background.BindThemedBackgroundColor(_theme, s => s.DiffView.PanelBackground);
         AddChildToSelf(background);
     }
 
@@ -73,9 +79,9 @@ internal sealed class ConflictResolveView : ContainerView
         var theirsChecked = new State<bool>(false);
         var oursChecked = new State<bool>(false);
 
-        var theirsCard = new ConflictCard(ctx.Theirs, theirsChecked);
-        var oursCard = new ConflictCard(ctx.Ours, oursChecked);
-        var junction = new MergeJunctionView(theirsChecked, oursChecked);
+        var theirsCard = new ConflictCard(_ctx, ctx.Theirs, theirsChecked);
+        var oursCard = new ConflictCard(_ctx, ctx.Ours, oursChecked);
+        var junction = new MergeJunctionView(_theme, theirsChecked, oursChecked);
 
         var mergeButton = new DialogButton("Merge", role: DialogButtonRole.Primary) { Height = ButtonHeight };
         var canMerge = new Derived<bool>(() => theirsChecked.Value || oursChecked.Value);
@@ -100,8 +106,8 @@ internal sealed class ConflictResolveView : ContainerView
                 _ => "Merge",
             };
         }
-        theirsChecked.Subscribe(_ => UpdateMergeLabel());
-        oursChecked.Subscribe(_ => UpdateMergeLabel());
+        mergeButton.Bind(theirsChecked, _ => UpdateMergeLabel());
+        mergeButton.Bind(oursChecked, _ => UpdateMergeLabel());
         UpdateMergeLabel();
 
         var openButton = new DialogButton("Merge in editor", _onOpenInEditor) { Height = ButtonHeight };
@@ -131,19 +137,19 @@ internal sealed class ConflictResolveView : ContainerView
         }));
     }
 
-    private static View BuildFileNameRow(string path)
+    private View BuildFileNameRow(string path)
     {
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(_ctx.Canvas)
         {
             Text = LucideIcons.File,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 15f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        icon.BindThemedTextColor(s => s.Palette.TextMedium);
+        icon.BindThemedTextColor(_theme, s => s.Palette.TextMedium);
 
-        var name = new TextView(CompatUi.Canvas) { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
-        name.BindThemedTextColor(s => s.Palette.TextStrong);
+        var name = new TextView(_ctx.Canvas) { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
+        name.BindThemedTextColor(_theme, s => s.Palette.TextStrong);
 
         return new FlexRowView
         {
@@ -160,22 +166,22 @@ internal sealed class ConflictResolveView : ContainerView
         Children = { child },
     };
 
-    private static View BuildTitleRow()
+    private View BuildTitleRow()
     {
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(_ctx.Canvas)
         {
             Text = LucideIcons.TriangleAlert,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 18f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        icon.BindThemedTextColor(s => s.FileChangeRow.StatusModified);
+        icon.BindThemedTextColor(_theme, s => s.FileChangeRow.StatusModified);
 
-        var title = new TextView(CompatUi.Canvas) { Text = "Merge conflict", FontSize = 16f, VerticalTextAlignment = TextAlignment.Center };
-        title.BindThemedTextColor(s => s.Palette.TextStrong);
+        var title = new TextView(_ctx.Canvas) { Text = "Merge conflict", FontSize = 16f, VerticalTextAlignment = TextAlignment.Center };
+        title.BindThemedTextColor(_theme, s => s.Palette.TextStrong);
 
-        var subtitle = new TextView(CompatUi.Canvas) { Text = "Select the changes or merge them manually", HorizontalTextAlignment = TextAlignment.Center };
-        subtitle.BindThemedTextColor(s => s.Palette.TextMuted);
+        var subtitle = new TextView(_ctx.Canvas) { Text = "Select the changes or merge them manually", HorizontalTextAlignment = TextAlignment.Center };
+        subtitle.BindThemedTextColor(_theme, s => s.Palette.TextMuted);
 
         return new ColumnView
         {
@@ -193,8 +199,9 @@ internal sealed class ConflictResolveView : ContainerView
         };
     }
 
-    private static View BuildChangeBadge(ConflictChangeKind kind)
+    private static View BuildChangeBadge(Context ctx, ConflictChangeKind kind)
     {
+        var theme = ctx.Theme();
         var status = kind switch
         {
             ConflictChangeKind.Added => FileChangeStatus.Added,
@@ -211,22 +218,22 @@ internal sealed class ConflictResolveView : ContainerView
         // Use the same tinted Lucide status glyph the unstaged/history file rows draw
         // (FileChangeFormatting.StatusIcon), paired with the spelled-out label in the matching
         // status color.
-        var icon = new TextView(CompatUi.Canvas)
+        var icon = new TextView(ctx.Canvas)
         {
             Text = FileChangeFormatting.StatusIcon(status),
             FontFamily = LucideIcons.FontFamily,
             FontSize = 14f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        icon.BindThemedTextColor(s => s.FileChangeRow.StatusColor(status));
+        icon.BindThemedTextColor(theme, s => s.FileChangeRow.StatusColor(status));
 
-        var label = new TextView(CompatUi.Canvas)
+        var label = new TextView(ctx.Canvas)
         {
             Text = text,
             FontSize = 11f,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        label.BindThemedTextColor(s => s.FileChangeRow.StatusColor(status));
+        label.BindThemedTextColor(theme, s => s.FileChangeRow.StatusColor(status));
 
         return new FlexRowView
         {
@@ -252,27 +259,28 @@ internal sealed class ConflictResolveView : ContainerView
     {
         private readonly State<bool> _checked;
 
-        public ConflictCard(ConflictSideInfo side, State<bool> checkedState)
+        public ConflictCard(Context ctx, ConflictSideInfo side, State<bool> checkedState)
         {
             _checked = checkedState;
             Width = CardWidth;
 
-            var branchIcon = new TextView(CompatUi.Canvas)
+            var theme = ctx.Theme();
+            var branchIcon = new TextView(ctx.Canvas)
             {
                 Text = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 13f,
                 VerticalTextAlignment = TextAlignment.Center,
             };
-            branchIcon.BindThemedTextColor(s => s.Palette.TextMedium);
+            branchIcon.BindThemedTextColor(theme, s => s.Palette.TextMedium);
 
-            var name = new TextView(CompatUi.Canvas)
+            var name = new TextView(ctx.Canvas)
             {
                 Text = side.Label,
                 VerticalTextAlignment = TextAlignment.Center,
                 TextOverflow = TextOverflow.Ellipsis,
             };
-            name.BindThemedTextColor(s => s.Palette.TextStrong);
+            name.BindThemedTextColor(theme, s => s.Palette.TextStrong);
 
             var header = new FlexRowView
             {
@@ -280,26 +288,26 @@ internal sealed class ConflictResolveView : ContainerView
                 CrossAxisAlignment = CrossAxisAlignment.Center,
                 Children =
                 {
-                    BuildCheckIndicator(_checked),
+                    BuildCheckIndicator(ctx, _checked),
                     branchIcon,
                     new FlexItem { Grow = 1, Child = name },
-                    BuildChangeBadge(side.Change),
+                    BuildChangeBadge(ctx, side.Change),
                 },
             };
 
             var divider = new RectView { Height = 1 };
-            divider.BindThemedBackgroundColor(s => s.Palette.Border);
+            divider.BindThemedBackgroundColor(theme, s => s.Palette.Border);
 
-            var commitText = new TextView(CompatUi.Canvas)
+            var commitText = new TextView(ctx.Canvas)
             {
                 Text = side.ShortSha.Length > 0 ? $"{side.ShortSha}  {side.Subject}" : side.Subject,
                 VerticalTextAlignment = TextAlignment.Center,
                 TextOverflow = TextOverflow.Ellipsis,
             };
-            commitText.BindThemedTextColor(s => s.Palette.TextSecondary);
+            commitText.BindThemedTextColor(theme, s => s.Palette.TextSecondary);
 
-            var date = new TextView(CompatUi.Canvas) { Text = FormatDate(side.When), VerticalTextAlignment = TextAlignment.Center };
-            date.BindThemedTextColor(s => s.Palette.TextMuted);
+            var date = new TextView(ctx.Canvas) { Text = FormatDate(side.When), VerticalTextAlignment = TextAlignment.Center };
+            date.BindThemedTextColor(theme, s => s.Palette.TextMuted);
 
             var commitRow = new FlexRowView
             {
@@ -328,8 +336,8 @@ internal sealed class ConflictResolveView : ContainerView
                     },
                 },
             };
-            card.BindThemedBackgroundColor(s => IsHovered.Value ? s.Palette.SurfaceHover : s.Palette.SurfaceRaised);
-            card.BindThemedBorderColor(s => BorderColorStyle.All(
+            card.BindThemedBackgroundColor(theme, s => IsHovered.Value ? s.Palette.SurfaceHover : s.Palette.SurfaceRaised);
+            card.BindThemedBorderColor(theme, s => BorderColorStyle.All(
                 _checked.Value ? s.Palette.Accent : s.Palette.Border));
             SetBackground(card);
         }
@@ -339,16 +347,17 @@ internal sealed class ConflictResolveView : ContainerView
         // A non-interactive checkbox visual in the card's top-left corner. The whole card is
         // the click target (ConflictCard.OnClicked), so this is purely an indicator — making
         // it its own button would double-toggle the shared flag when clicked.
-        private static View BuildCheckIndicator(State<bool> checkedState)
+        private static View BuildCheckIndicator(Context ctx, State<bool> checkedState)
         {
-            var glyph = new TextView(CompatUi.Canvas)
+            var theme = ctx.Theme();
+            var glyph = new TextView(ctx.Canvas)
             {
                 FontSize = 12f,
                 HorizontalTextAlignment = TextAlignment.Center,
                 VerticalTextAlignment = TextAlignment.Center,
             };
             glyph.BindText(checkedState, c => c ? "✓" : string.Empty);
-            glyph.BindThemedTextColor(s => s.Checkbox.CheckGlyph);
+            glyph.BindThemedTextColor(theme, s => s.Checkbox.CheckGlyph);
 
             var box = new RectView
             {
@@ -358,8 +367,8 @@ internal sealed class ConflictResolveView : ContainerView
                 BorderRadius = BorderRadiusStyle.All(3),
                 Children = { glyph },
             };
-            box.BindThemedBackgroundColor(s => checkedState.Value ? s.Checkbox.BoxFillChecked : 0x00000000u);
-            box.BindThemedBorderColor(s => BorderColorStyle.All(
+            box.BindThemedBackgroundColor(theme, s => checkedState.Value ? s.Checkbox.BoxFillChecked : 0x00000000u);
+            box.BindThemedBorderColor(theme, s => BorderColorStyle.All(
                 checkedState.Value ? s.Checkbox.BoxFillChecked : s.Checkbox.BoxBorderIdle));
             return box;
         }
@@ -378,15 +387,15 @@ internal sealed class ConflictResolveView : ContainerView
         private readonly State<bool> _ours;
         private uint _lineColor;
 
-        public MergeJunctionView(State<bool> theirsChecked, State<bool> oursChecked)
+        public MergeJunctionView(IThemeService<ThemeStyles> theme, State<bool> theirsChecked, State<bool> oursChecked)
         {
             Width = Width_;
             _theirs = theirsChecked;
             _ours = oursChecked;
             // Repaint when either side's selection flips so segments appear/disappear.
-            _theirs.Subscribe(_ => SetDirty());
-            _ours.Subscribe(_ => SetDirty());
-            this.BindThemed(s => { _lineColor = s.Palette.Accent; SetDirty(); });
+            this.Bind(_theirs, _ => SetDirty());
+            this.Bind(_ours, _ => SetDirty());
+            this.BindThemed(theme, s => { _lineColor = s.Palette.Accent; SetDirty(); });
         }
 
         // Junction height doesn't drive the row (the cards do); it's stretched to the row.

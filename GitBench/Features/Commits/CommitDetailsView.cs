@@ -74,6 +74,7 @@ internal sealed class CommitDetailsView : ContainerView
         };
 
         _changesSection = new FileChangesSection(
+            ctx,
             "Changes",
             selectedPath: _selectedPath,
             onRowClicked: f =>
