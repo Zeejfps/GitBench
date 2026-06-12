@@ -7,7 +7,8 @@ public sealed record DialogFrameStyles(
     uint HeaderSeparator,
     uint ErrorText,
     uint WarningText,
-    uint InsetBackground);
+    uint InsetBackground,
+    uint Shadow);
 
 public sealed record TextInputStyles(
     uint Background,
@@ -80,7 +81,8 @@ public partial record ThemeStyles
             HeaderSeparator: p.DialogHeaderSeparator,
             ErrorText: status.DialogError,
             WarningText: status.DialogWarning,
-            InsetBackground: p.SurfaceSunken);
+            InsetBackground: p.SurfaceSunken,
+            Shadow: p.Shadow);
 
     private static TextInputStyles BuildTextInput(ThemePalette p) =>
         new(

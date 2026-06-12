@@ -75,42 +75,36 @@ internal sealed record RemoveWorktreeDialog : Widget
         pathBox.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         pathBox.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
 
-        // ClippingView wraps the dialog so a child that measures too wide (e.g. a path that
-        // can't be word-broken because it has no spaces) still can't draw past the dialog's
-        // rounded edge. The path block also does its own pre-wrap above.
-        return new Clipped
+        return new Dialog
         {
-            Child = new Dialog
-            {
-                Title = "Remove worktree",
-                OnClose = OnClose,
-                ViewModel = vm,
-                Action = ("Remove", DialogButtonRole.Destructive),
-                Command = vm.Remove,
-                ConfirmKeys = true,
-                Body =
-                [
-                    new ThemedText
-                    {
-                        Value = $"Remove worktree '{Worktree.DisplayName}'?",
-                        Wrap = TextWrap.Wrap,
-                        Color = s => s.DialogBody.BodyText,
-                    },
-                    new Raw { View = pathBox },
-                    new Checkbox
-                    {
-                        Label = "Remove even if dirty",
-                        Value = vm.Force,
-                        Height = 22,
-                    },
-                    new ThemedText
-                    {
-                        Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
-                        Wrap = TextWrap.Wrap,
-                        Color = s => s.DialogBody.RowTextMissing,
-                    },
-                ],
-            },
+            Title = "Remove worktree",
+            OnClose = OnClose,
+            ViewModel = vm,
+            Action = ("Remove", DialogButtonRole.Destructive),
+            Command = vm.Remove,
+            ConfirmKeys = true,
+            Body =
+            [
+                new ThemedText
+                {
+                    Value = $"Remove worktree '{Worktree.DisplayName}'?",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.BodyText,
+                },
+                new Raw { View = pathBox },
+                new Checkbox
+                {
+                    Label = "Remove even if dirty",
+                    Value = vm.Force,
+                    Height = 22,
+                },
+                new ThemedText
+                {
+                    Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
+                    Wrap = TextWrap.Wrap,
+                    Color = s => s.DialogBody.RowTextMissing,
+                },
+            ],
         };
     }
 }

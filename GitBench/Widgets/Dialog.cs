@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Infrastructure;
 using ZGF.Gui;
@@ -61,8 +62,22 @@ internal sealed record Dialog : Widget
         foreach (var widget in Body)
             shell.Body.Add(widget.BuildView(bodyScope));
 
+        // Stacked under a clip that keeps over-wide body content (e.g. unbreakable paths)
+        // from drawing past the frame's rounded edge; the shadow sits outside the clip so
+        // its blur isn't cut off.
+        var shadow = new RectView { BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius) };
+        shadow.BindThemed(ctx.Theme(), s => shadow.BoxShadow = new BoxShadowStyle
+        {
+            OffsetX = 0f,
+            OffsetY = -8f,
+            Blur = 24f,
+            Spread = 0f,
+            Color = s.DialogFrame.Shadow,
+        });
+
         var root = new ContainerView();
-        root.Children.Add(shell.View);
+        root.Children.Add(shadow);
+        root.Children.Add(new ClippingView { Children = { shell.View } });
 
         if (Command != null)
         {
