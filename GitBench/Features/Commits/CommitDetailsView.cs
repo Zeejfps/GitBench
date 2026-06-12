@@ -136,6 +136,7 @@ internal sealed class CommitDetailsView : ContainerView
         // stage/discard actions — only row movement is wired.
         _arrowController = new ListArrowKbmController(
             this,
+            input,
             (delta, _) => _vm?.MoveSelection(delta),
             _ => { },
             () => { },

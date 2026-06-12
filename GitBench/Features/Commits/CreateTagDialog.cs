@@ -33,10 +33,10 @@ internal sealed record CreateTagDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var messageField = new GrowingDescriptionField(72f, 200f) { PlaceholderText = "optional" };
+        var messageField = new GrowingDescriptionField(ctx, 72f, 200f) { PlaceholderText = "optional" };
         messageField.BindTwoWay(vm.Message, vm.SetMessage);
 
-        var shell = new DialogShell("Create tag", OnClose)
+        var shell = new DialogShell(ctx, "Create tag", OnClose)
         {
             Width = DialogFrame.WidthWide,
             Action = ("Create", DialogButtonRole.Primary),

@@ -43,10 +43,9 @@ internal sealed record OperationErrorDialog : Widget
             Color = s => s.DialogFrame.TitleText,
         }.BuildView(ctx);
 
-        // Pull IClipboard lazily off the context — the dialog is constructed before it's
-        // attached, so capturing it in a closure that runs on click is the simplest path.
         var copyButton = new DialogCopyButton(
-            () => ctx.Get<IClipboard>()?.SetText(Message),
+            ctx,
+            () => Message,
             tooltip: "Copy error to clipboard");
 
         // Symmetric left spacer keeps the title centered: matches the combined width of the
@@ -61,7 +60,7 @@ internal sealed record OperationErrorDialog : Widget
                 new ContainerView { Width = CloseButtonSize * 2 },
                 new FlexItem { Grow = 1, Child = titleView },
                 copyButton,
-                new DialogCloseButton(OnClose),
+                new DialogCloseButton(ctx, OnClose),
             },
         };
 
@@ -87,7 +86,7 @@ internal sealed record OperationErrorDialog : Widget
         scrollPane.UseController(ctx.Require<InputSystem>(),
             () => new VerticalScrollPaneWheelController(scrollPane));
 
-        var vScrollBar = ScrollBars.CreateVertical();
+        var vScrollBar = ScrollBars.CreateVertical(ctx);
 
         var scrollHost = new RectView
         {
@@ -106,7 +105,7 @@ internal sealed record OperationErrorDialog : Widget
         scrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
         scrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        var okButton = new DialogButton("OK", OnClose, DialogButtonRole.Primary)
+        var okButton = new DialogButton(ctx, "OK", OnClose, DialogButtonRole.Primary)
         {
             Height = DialogFrame.DefaultButtonHeight,
             MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,

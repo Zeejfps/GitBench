@@ -53,7 +53,7 @@ internal sealed record ActionButton : Widget
         private readonly uint? _iconColor;
 
         public ButtonView(Context ctx, ActionButton w)
-            : base(w.OnClick, w.Tooltip)
+            : base(ctx, w.OnClick, w.Tooltip)
         {
             _w = w;
             _iconColor = w.IconColor ?? (w.Background != null ? 0xFFFFFFFFu : (uint?)null);

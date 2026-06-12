@@ -156,7 +156,7 @@ internal sealed class MergeOptionDropdown : HoverableButton
 
     public MergeStrategy Selected => SelectedState.Value;
 
-    public MergeOptionDropdown(Context ctx)
+    public MergeOptionDropdown(Context ctx) : base(ctx)
     {
         _ctx = ctx;
         var theme = ctx.Theme();
@@ -205,7 +205,7 @@ internal sealed class MergeOptionDropdown : HoverableButton
             Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
             Children = { row },
         };
-        BorderedButtonChrome.Bind(background, IsHovered);
+        BorderedButtonChrome.Bind(background, theme, IsHovered);
         SetBackground(background);
 
         this.Bind(SelectedState, s =>

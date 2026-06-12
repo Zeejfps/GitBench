@@ -1,5 +1,6 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 
@@ -27,7 +28,7 @@ internal static class DialogFrame
     // that absorbs any height the frame is short on, and an optional pinned footer below it. The
     // header and footer stay put while the body scrolls, so a dialog capped to the window by
     // CenterView keeps its title and buttons visible no matter how tall its content is.
-    public static View Build(string title, Action onClose, View body, View? footer = null, float width = WidthStandard)
+    public static View Build(Context ctx, string title, Action onClose, View body, View? footer = null, float width = WidthStandard)
     {
         var column = new FlexColumnView
         {
@@ -35,25 +36,25 @@ internal static class DialogFrame
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                Header(title, onClose),
-                Separator(),
-                new FlexItem { Grow = 1, Child = new DialogScrollRegion(body) },
+                Header(ctx, title, onClose),
+                Separator(ctx),
+                new FlexItem { Grow = 1, Child = new DialogScrollRegion(ctx, body) },
             },
         };
         if (footer != null)
             column.Children.Add(footer);
-        return Wrap(column, width);
+        return Wrap(ctx, column, width);
     }
 
-    public static FlexRowView Header(string title, Action onClose)
+    public static FlexRowView Header(Context ctx, string title, Action onClose)
     {
-        var titleText = new TextView(CompatUi.Canvas)
+        var titleText = new TextView(ctx.Canvas)
         {
             Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        titleText.BindThemedTextColor(s => s.DialogFrame.TitleText);
+        titleText.BindThemedTextColor(ctx.Theme(), s => s.DialogFrame.TitleText);
 
         return new FlexRowView
         {
@@ -63,15 +64,15 @@ internal static class DialogFrame
             {
                 new ContainerView { Width = CloseButtonSize },
                 new FlexItem { Grow = 1, Child = titleText },
-                new DialogCloseButton(onClose),
+                new DialogCloseButton(ctx, onClose),
             },
         };
     }
 
-    public static RectView Separator()
+    public static RectView Separator(Context ctx)
     {
         var view = new RectView { Height = 1 };
-        view.BindThemedBackgroundColor(s => s.DialogFrame.HeaderSeparator);
+        view.BindThemedBackgroundColor(ctx.Theme(), s => s.DialogFrame.HeaderSeparator);
         return view;
     }
 
@@ -100,35 +101,35 @@ internal static class DialogFrame
         };
     }
 
-    public static TextView ErrorView()
+    public static TextView ErrorView(Context ctx)
     {
-        var view = new TextView(CompatUi.Canvas)
+        var view = new TextView(ctx.Canvas)
         {
             Text = string.Empty,
             TextWrap = TextWrap.Wrap,
         };
-        view.BindThemedTextColor(s => s.DialogFrame.ErrorText);
+        view.BindThemedTextColor(ctx.Theme(), s => s.DialogFrame.ErrorText);
         return view;
     }
 
-    public static TextView Label(string text)
+    public static TextView Label(Context ctx, string text)
     {
-        var view = new TextView(CompatUi.Canvas) { Text = text };
-        view.BindThemedTextColor(s => s.DialogBody.SectionHeaderText);
+        var view = new TextView(ctx.Canvas) { Text = text };
+        view.BindThemedTextColor(ctx.Theme(), s => s.DialogBody.SectionHeaderText);
         return view;
     }
 
-    public static TextView Hint(string text, TextWrap wrap = TextWrap.NoWrap)
+    public static TextView Hint(Context ctx, string text, TextWrap wrap = TextWrap.NoWrap)
     {
-        var view = new TextView(CompatUi.Canvas) { Text = text, TextWrap = wrap };
-        view.BindThemedTextColor(s => s.DialogBody.RowTextMissing);
+        var view = new TextView(ctx.Canvas) { Text = text, TextWrap = wrap };
+        view.BindThemedTextColor(ctx.Theme(), s => s.DialogBody.RowTextMissing);
         return view;
     }
 
-    public static TextInputView TextInput()
+    public static TextInputView TextInput(Context ctx)
     {
-        var view = new TextInputView(CompatUi.Canvas);
-        view.BindThemed(s =>
+        var view = new TextInputView(ctx.Canvas);
+        view.BindThemed(ctx.Theme(), s =>
         {
             view.BackgroundColor = s.TextInput.Background;
             view.TextColor = s.TextInput.Text;
@@ -139,7 +140,7 @@ internal static class DialogFrame
         return view;
     }
 
-    public static RectView WrapInput(TextInputView input)
+    public static RectView WrapInput(Context ctx, TextInputView input)
     {
         var view = new RectView
         {
@@ -149,12 +150,13 @@ internal static class DialogFrame
             Height = 28,
             Children = { input },
         };
-        view.BindThemedBackgroundColor(s => s.TextInput.Background);
-        view.BindThemedBorderColor(s => BorderColorStyle.All(s.TextInput.Border));
+        var theme = ctx.Theme();
+        view.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
+        view.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
         return view;
     }
 
-    private static RectView Wrap(View child, float width)
+    private static RectView Wrap(Context ctx, View child, float width)
     {
         var view = new RectView
         {
@@ -164,8 +166,9 @@ internal static class DialogFrame
             Padding = PaddingStyle.All(DefaultPadding),
             Children = { child },
         };
-        view.BindThemedBackgroundColor(s => s.DialogFrame.Background);
-        view.BindThemedBorderColor(s => BorderColorStyle.All(s.DialogFrame.Border));
+        var theme = ctx.Theme();
+        view.BindThemedBackgroundColor(theme, s => s.DialogFrame.Background);
+        view.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.DialogFrame.Border));
         return view;
     }
 }

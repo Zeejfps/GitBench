@@ -30,7 +30,7 @@ internal sealed record LabeledInput : Widget
 
     protected override View CreateView(Context ctx)
     {
-        var field = new LabeledInputField(Label);
+        var field = new LabeledInputField(ctx, Label);
         if (Placeholder != null) field.Placeholder = Placeholder;
         if (Hint != null) field.Hint = Hint;
         if (Status != null) field.BindStatus(Status);

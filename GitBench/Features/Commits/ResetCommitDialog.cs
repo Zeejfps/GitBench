@@ -165,7 +165,7 @@ internal sealed class ResetModeDropdown : HoverableButton
 
     public ResetMode Selected => SelectedState.Value;
 
-    public ResetModeDropdown(Context ctx)
+    public ResetModeDropdown(Context ctx) : base(ctx)
     {
         _ctx = ctx;
         Height = 30;

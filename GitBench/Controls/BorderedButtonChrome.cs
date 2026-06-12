@@ -25,24 +25,16 @@ internal static class BorderedButtonChrome
             BorderColorStyle.All(isHovered.Value ? theme.Styles.Value.BorderedButton.BorderHover : theme.Styles.Value.BorderedButton.BorderIdle));
     }
 
-    public static void Bind(RectView background, IReadable<bool> isHovered)
-    {
-        background.BindThemedBackgroundColor(s =>
-            isHovered.Value ? s.BorderedButton.BackgroundHover : s.BorderedButton.BackgroundIdle);
-        background.BindThemedBorderColor(s =>
-            BorderColorStyle.All(isHovered.Value ? s.BorderedButton.BorderHover : s.BorderedButton.BorderIdle));
-    }
-
     /// <summary>
     /// Same as the <see cref="IReadable{T}"/> overload but driven by a derived predicate —
     /// useful when "is hovered" needs to be combined with another state (e.g. disabled
     /// buttons that shouldn't react to the pointer).
     /// </summary>
-    public static void Bind(RectView background, Func<bool> isEffectivelyHovered)
+    public static void Bind(RectView background, IThemeService<ThemeStyles> theme, Func<bool> isEffectivelyHovered)
     {
-        background.BindThemedBackgroundColor(s =>
+        background.BindThemedBackgroundColor(theme, s =>
             isEffectivelyHovered() ? s.BorderedButton.BackgroundHover : s.BorderedButton.BackgroundIdle);
-        background.BindThemedBorderColor(s =>
+        background.BindThemedBorderColor(theme, s =>
             BorderColorStyle.All(isEffectivelyHovered() ? s.BorderedButton.BorderHover : s.BorderedButton.BorderIdle));
     }
 }

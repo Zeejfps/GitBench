@@ -55,9 +55,9 @@ internal sealed record UpdateSubmodulesDialog : Widget
                     Value = "Strategy",
                     Color = s => s.DialogBody.SectionHeaderText,
                 },
-                ModeCheckbox(vm, "Checkout (default — reset to recorded SHA)", SubmoduleUpdateMode.Checkout),
-                ModeCheckbox(vm, "Merge (--merge)", SubmoduleUpdateMode.Merge),
-                ModeCheckbox(vm, "Rebase (--rebase)", SubmoduleUpdateMode.Rebase),
+                ModeCheckbox(ctx, vm, "Checkout (default — reset to recorded SHA)", SubmoduleUpdateMode.Checkout),
+                ModeCheckbox(ctx, vm, "Merge (--merge)", SubmoduleUpdateMode.Merge),
+                ModeCheckbox(ctx, vm, "Rebase (--rebase)", SubmoduleUpdateMode.Rebase),
                 new ThemedText
                 {
                     Value = "Merge/rebase strategies may leave the submodule mid-merge on conflict — " +
@@ -72,9 +72,9 @@ internal sealed record UpdateSubmodulesDialog : Widget
         return view;
     }
 
-    private static IWidget ModeCheckbox(UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)
+    private static IWidget ModeCheckbox(Context ctx, UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)
     {
-        var view = new CheckboxView(label) { Height = 22 };
+        var view = new CheckboxView(ctx, label) { Height = 22 };
         view.Bind(vm.Mode, m => view.IsChecked.Value = m == mode);
         view.IsChecked.Changed += isCheckedNow =>
         {

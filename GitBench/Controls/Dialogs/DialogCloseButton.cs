@@ -1,18 +1,21 @@
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Controls.Dialogs;
 
 public sealed class DialogCloseButton : HoverableButton
 {
-    public DialogCloseButton(Action onClick, string? tooltip = "Close")
-        : base(onClick, tooltip)
+    public DialogCloseButton(Context ctx, Action onClick, string? tooltip = "Close")
+        : base(ctx, onClick, tooltip)
     {
         Width = 28;
         Height = 28;
 
-        var label = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var label = new TextView(ctx.Canvas)
         {
             Text = LucideIcons.X,
             FontFamily = LucideIcons.FontFamily,
@@ -20,7 +23,7 @@ public sealed class DialogCloseButton : HoverableButton
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        label.BindThemedTextColor(s =>
+        label.BindThemedTextColor(theme, s =>
             IsHovered.Value ? s.DialogIconButton.TextHover : s.DialogIconButton.TextIdle);
 
         var background = new RectView
@@ -28,7 +31,7 @@ public sealed class DialogCloseButton : HoverableButton
             BorderRadius = BorderRadiusStyle.All(4),
             Children = { label }
         };
-        background.BindThemedBackgroundColor(s =>
+        background.BindThemedBackgroundColor(theme, s =>
             IsHovered.Value ? s.DialogIconButton.BackgroundHover : s.DialogIconButton.BackgroundIdle);
 
         SetBackground(background);

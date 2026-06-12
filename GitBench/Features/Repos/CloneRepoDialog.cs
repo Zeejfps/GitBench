@@ -29,7 +29,7 @@ internal sealed record CloneRepoDialog : Widget
 
         // No fixed Width — DialogButton sizes to its label (it carries its own 16px horizontal
         // padding), so pinning a width clips "Browse…".
-        var browseButton = new DialogButton("Browse…", () =>
+        var browseButton = new DialogButton(ctx, "Browse…", () =>
         {
             var shell = ctx.Get<IPlatformShell>();
             var picked = shell?.PickFolder("Choose where to clone");

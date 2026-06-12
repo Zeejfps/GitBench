@@ -173,6 +173,7 @@ internal sealed class LocalChangesContentView : ContainerView
 
         _arrowController = new ListArrowKbmController(
             this,
+            input,
             (delta, extend) => _vm.MoveSelection(delta, extend),
             expand => _vm.SetCursorFolderExpanded(expand),
             OnActivateSelection,

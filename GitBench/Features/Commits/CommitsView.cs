@@ -157,6 +157,7 @@ internal sealed record CommitsView : Widget
             // focus when a row is clicked (see OnRowClicked).
             _arrowController = new ListArrowKbmController(
                 this,
+                input,
                 (delta, _) => _vm.MoveSelection(delta),
                 _ => { },
                 () => { },
@@ -202,11 +203,16 @@ internal sealed record CommitsView : Widget
                 catch (OperationCanceledException) { /* expected */ }
             }, cts.Token);
 
-            return new ActionDisposable(() =>
+            return new CancelOnDispose(cts);
+        }
+
+        private sealed class CancelOnDispose(CancellationTokenSource cts) : IDisposable
+        {
+            public void Dispose()
             {
                 cts.Cancel();
                 cts.Dispose();
-            });
+            }
         }
 
         protected override void OnLayoutChild(in RectF position, View child)

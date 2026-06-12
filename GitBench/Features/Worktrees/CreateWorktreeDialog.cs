@@ -27,7 +27,7 @@ internal sealed record CreateWorktreeDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var browseButton = new DialogButton("Browse…", () => PickPath(ctx, vm))
+        var browseButton = new DialogButton(ctx, "Browse…", () => PickPath(ctx, vm))
         {
             Height = 28,
         };

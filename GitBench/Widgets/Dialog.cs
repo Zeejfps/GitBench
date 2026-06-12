@@ -37,7 +37,7 @@ internal sealed record Dialog : Widget
 
     protected override View CreateView(Context ctx)
     {
-        var shell = new DialogShell(Title, OnClose)
+        var shell = new DialogShell(ctx, Title, OnClose)
         {
             Action = Action,
             BodyGap = BodyGap,

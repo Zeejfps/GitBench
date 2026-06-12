@@ -95,7 +95,7 @@ internal sealed record DiscardChangesDialog : Widget
         scrollPane.UseController(ctx.Require<InputSystem>(),
             () => new VerticalScrollPaneWheelController(scrollPane));
 
-        var vScrollBar = ScrollBars.CreateVertical();
+        var vScrollBar = ScrollBars.CreateVertical(ctx);
 
         var fileScrollHost = new RectView
         {
@@ -141,7 +141,7 @@ internal sealed record DiscardChangesDialog : Widget
             },
         };
 
-        var checkbox = new CheckboxView(rowContent)
+        var checkbox = new CheckboxView(ctx, rowContent)
         {
             Height = 22,
         };

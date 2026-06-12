@@ -67,12 +67,12 @@ internal sealed class CommitBarView : ContainerView
         titleBox.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
         titleBox.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
 
-        _descriptionField = new GrowingDescriptionField(DescriptionMinHeight, DescriptionMaxHeight)
+        _descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight)
         {
             PlaceholderText = "Commit description",
         };
 
-        _commitButton = new DialogButton("Commit", OnCommitClicked)
+        _commitButton = new DialogButton(ctx, "Commit", OnCommitClicked)
         {
             // MinWidthConstraint, not a fixed Width: a set Width is a hard override in
             // View.MeasureWidth, pinning the button at 120px while the centered content row
@@ -83,7 +83,7 @@ internal sealed class CommitBarView : ContainerView
             Height = 28,
         };
 
-        _amendCheckbox = new CheckboxView("Amend");
+        _amendCheckbox = new CheckboxView(ctx, "Amend");
 
         var buttonRow = new FlexRowView
         {

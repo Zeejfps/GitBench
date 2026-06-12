@@ -1,6 +1,8 @@
 using GitBench.Infrastructure;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Controls.Dialogs;
@@ -22,7 +24,7 @@ public sealed class DialogButton : HoverableButton
     private readonly TextView _iconView;
     private readonly TextView _labelView;
     private readonly FlexRowView _row;
-    private SpinnerAnimation? _busySpinner;
+    private readonly SpinnerAnimation? _busySpinner;
 
     public string Label
     {
@@ -54,9 +56,12 @@ public sealed class DialogButton : HoverableButton
         set => _iconView.Rotation = value;
     }
 
-    public DialogButton(string label, Action? onClick = null, DialogButtonRole role = DialogButtonRole.Default) : base(onClick)
+    public DialogButton(Context ctx, string label, Action? onClick = null, DialogButtonRole role = DialogButtonRole.Default) : base(ctx, onClick)
     {
-        _iconView = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        _busySpinner = ctx.Get<SpinnerAnimation>();
+
+        _iconView = new TextView(ctx.Canvas)
         {
             Text = string.Empty,
             FontFamily = LucideIcons.FontFamily,
@@ -64,15 +69,15 @@ public sealed class DialogButton : HoverableButton
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        _iconView.BindThemedTextColor(s => SelectText(s, role));
+        _iconView.BindThemedTextColor(theme, s => SelectText(s, role));
 
-        _labelView = new TextView(CompatUi.Canvas)
+        _labelView = new TextView(ctx.Canvas)
         {
             Text = label,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        _labelView.BindThemedTextColor(s => SelectText(s, role));
+        _labelView.BindThemedTextColor(theme, s => SelectText(s, role));
 
         _row = new FlexRowView
         {
@@ -96,13 +101,13 @@ public sealed class DialogButton : HoverableButton
         {
             // Hover styling only when enabled — a disabled button shouldn't react to the pointer.
             // Focus-ring highlighting reuses the same chrome so a tabbed-to button looks hovered.
-            BorderedButtonChrome.Bind(background,
+            BorderedButtonChrome.Bind(background, theme,
                 () => IsEnabled.Value && (IsHovered.Value || IsFocusHighlighted.Value));
         }
         else
         {
-            background.BindThemedBackgroundColor(s => SelectFill(s, role));
-            background.BindThemedBorderColor(s => BorderColorStyle.All(SelectFill(s, role)));
+            background.BindThemedBackgroundColor(theme, s => SelectFill(s, role));
+            background.BindThemedBorderColor(theme, s => BorderColorStyle.All(SelectFill(s, role)));
         }
         SetBackground(background);
     }
@@ -131,14 +136,12 @@ public sealed class DialogButton : HoverableButton
     /// Like <see cref="HoverableButton.BindCommand"/>, but additionally shows a spinning loader
     /// icon while the command runs. The spinner is owned by the button and driven entirely off
     /// <see cref="AsyncCommand.IsRunning"/>, so dialogs need no per-VM busy-state plumbing — the
-    /// view model just exposes the command. Call from <c>Bind</c>, after the button is attached
-    /// to a context (its dispatcher is resolved from <see cref="ContainerView.Context"/>).
+    /// view model just exposes the command.
     /// </summary>
     internal void BindBusyCommand(AsyncCommand command)
     {
         BindCommand(command);
 
-        _busySpinner = this.Context?.Get<SpinnerAnimation>();
         _busySpinner?.Rotation.Subscribe(r => IconRotation = r);
 
         command.IsRunning.Subscribe(running =>

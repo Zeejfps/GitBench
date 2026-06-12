@@ -40,7 +40,6 @@ internal sealed class FocusRing
             var next = _stops[nextIndex];
             if (ReferenceEquals(next, current)) break;
             var canFocus = next.CanFocus == null || next.CanFocus();
-            Console.WriteLine($"[focusdbg] Move from {index} dir {direction} -> candidate {nextIndex} canFocus={canFocus}");
             if (!canFocus) continue;
             current.Blur?.Invoke();
             next.Focus();

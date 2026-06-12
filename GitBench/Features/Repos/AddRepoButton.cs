@@ -18,7 +18,7 @@ public sealed record AddRepoButton : Widget
     {
         private readonly Context _ctx;
 
-        public ButtonView(Context ctx)
+        public ButtonView(Context ctx) : base(ctx)
         {
             _ctx = ctx;
             Height = 30;

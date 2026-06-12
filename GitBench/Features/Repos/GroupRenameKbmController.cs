@@ -11,7 +11,7 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
     private readonly IRepoRegistry _registry;
     private bool _finished;
 
-    public GroupRenameKbmController(TextInputView input, InputSystem inputSystem, Guid groupId, IRepoRegistry registry) : base(input, inputSystem, CompatUi.Current.Get<ZGF.Gui.IClipboard>())
+    public GroupRenameKbmController(TextInputView input, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard, Guid groupId, IRepoRegistry registry) : base(input, inputSystem, clipboard)
     {
         _input = input;
         _groupId = groupId;

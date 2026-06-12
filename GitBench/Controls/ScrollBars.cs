@@ -1,5 +1,6 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
@@ -9,23 +10,18 @@ namespace GitBench.Controls;
 
 internal static class ScrollBars
 {
-    public static VerticalScrollBarView CreateVertical()
-    {
-        return CreateVerticalBar(CompatUi.Input);
-    }
-
     public static VerticalScrollBarView CreateVertical(Context ctx)
     {
-        return CreateVerticalBar(ctx.Require<InputSystem>());
+        return CreateVerticalBar(ctx, ctx.Require<InputSystem>());
     }
 
-    private static VerticalScrollBarView CreateVerticalBar(InputSystem input)
+    private static VerticalScrollBarView CreateVerticalBar(Context ctx, InputSystem input)
     {
         var bar = new VerticalScrollBarView
         {
             TrackBorderSize = new BorderSizeStyle { Left = 1 },
         };
-        bar.BindThemed(s =>
+        bar.BindThemed(ctx.Theme(), s =>
         {
             bar.TrackBackgroundColor = s.ScrollBar.TrackBackground;
             bar.TrackBorderColor = new BorderColorStyle
@@ -36,7 +32,7 @@ internal static class ScrollBars
                 Bottom = s.ScrollBar.TrackBorder,
             };
         });
-        StyleThumb(bar.Thumb);
+        StyleThumb(ctx, bar.Thumb);
         WireVertical(bar, input);
         return bar;
     }
@@ -83,23 +79,18 @@ internal static class ScrollBars
         });
     }
 
-    public static HorizontalScrollBarView CreateHorizontal()
-    {
-        return CreateHorizontalBar(CompatUi.Input);
-    }
-
     public static HorizontalScrollBarView CreateHorizontal(Context ctx)
     {
-        return CreateHorizontalBar(ctx.Require<InputSystem>());
+        return CreateHorizontalBar(ctx, ctx.Require<InputSystem>());
     }
 
-    private static HorizontalScrollBarView CreateHorizontalBar(InputSystem input)
+    private static HorizontalScrollBarView CreateHorizontalBar(Context ctx, InputSystem input)
     {
         var bar = new HorizontalScrollBarView(input)
         {
             TrackBorderSize = new BorderSizeStyle { Top = 1 },
         };
-        bar.BindThemed(s =>
+        bar.BindThemed(ctx.Theme(), s =>
         {
             bar.TrackBackgroundColor = s.ScrollBar.TrackBackground;
             bar.TrackBorderColor = new BorderColorStyle
@@ -110,15 +101,15 @@ internal static class ScrollBars
                 Bottom = s.ScrollBar.TrackBorder,
             };
         });
-        StyleThumb(bar.Thumb);
+        StyleThumb(ctx, bar.Thumb);
         bar.UseController(input, () => new HorizontalScrollBarViewController(bar));
         return bar;
     }
 
-    private static void StyleThumb(VerticalScrollBarThumbView thumb)
+    private static void StyleThumb(Context ctx, VerticalScrollBarThumbView thumb)
     {
         thumb.BorderSize = BorderSizeStyle.All(1);
-        thumb.BindThemed(s =>
+        thumb.BindThemed(ctx.Theme(), s =>
         {
             thumb.IdleBackgroundColor = s.ScrollBar.ThumbIdleBackground;
             thumb.HoveredBackgroundColor = s.ScrollBar.ThumbHoverBackground;
@@ -132,10 +123,10 @@ internal static class ScrollBars
         });
     }
 
-    private static void StyleThumb(HorizontalScrollBarThumbView thumb)
+    private static void StyleThumb(Context ctx, HorizontalScrollBarThumbView thumb)
     {
         thumb.BorderSize = BorderSizeStyle.All(1);
-        thumb.BindThemed(s =>
+        thumb.BindThemed(ctx.Theme(), s =>
         {
             thumb.IdleBackgroundColor = s.ScrollBar.ThumbIdleBackground;
             thumb.HoveredBackgroundColor = s.ScrollBar.ThumbHoverBackground;

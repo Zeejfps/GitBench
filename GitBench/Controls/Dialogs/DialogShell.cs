@@ -4,6 +4,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -18,7 +19,7 @@ namespace GitBench.Controls.Dialogs;
 ///
 /// Usage (object-initializer style):
 /// <code>
-/// _shell = new DialogShell("Create branch", onClose)
+/// _shell = new DialogShell(ctx, "Create branch", onClose)
 /// {
 ///     Action = ("Create", DialogButtonRole.Primary),
 ///     Body = { _nameField, _startPointField },
@@ -46,6 +47,7 @@ internal sealed class DialogShell
             new(t.Label, t.Role, t.OnClick);
     }
 
+    private readonly Context _ctx;
     private readonly string _title;
     private readonly Action _onClose;
 
@@ -76,8 +78,9 @@ internal sealed class DialogShell
     /// <summary>Body rows, top to bottom. Populated via a collection initializer.</summary>
     public List<View> Body { get; } = new();
 
-    public DialogShell(string title, Action onClose)
+    public DialogShell(Context ctx, string title, Action onClose)
     {
+        _ctx = ctx;
         _title = title;
         _onClose = onClose;
     }
@@ -100,9 +103,9 @@ internal sealed class DialogShell
         if (string.IsNullOrEmpty(Action.Label))
             throw new InvalidOperationException("DialogShell.Action must be set before use.");
 
-        _errorView = DialogFrame.ErrorView();
-        _cancelButton = new DialogButton(CancelLabel, _onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _actionButton = new DialogButton(Action.Label, Action.OnClick, Action.Role) { Height = DialogFrame.DefaultButtonHeight };
+        _errorView = DialogFrame.ErrorView(_ctx);
+        _cancelButton = new DialogButton(_ctx, CancelLabel, _onClose) { Height = DialogFrame.DefaultButtonHeight };
+        _actionButton = new DialogButton(_ctx, Action.Label, Action.OnClick, Action.Role) { Height = DialogFrame.DefaultButtonHeight };
 
         var footer = FooterLead is null
             ? DialogFrame.ButtonsRow(_cancelButton, _actionButton)
@@ -116,7 +119,7 @@ internal sealed class DialogShell
         foreach (var child in Body) content.Children.Add(child);
         content.Children.Add(_errorView);
 
-        _view = DialogFrame.Build(_title, _onClose, content, footer, Width);
+        _view = DialogFrame.Build(_ctx, _title, _onClose, content, footer, Width);
     }
 
     /// <summary>
@@ -146,21 +149,17 @@ internal sealed class DialogShell
     public void SubmitFrom(params TextInputView[] inputs)
     {
         EnsureBuilt();
+        var inputSystem = _ctx.Require<InputSystem>();
+        var clipboard = _ctx.Get<IClipboard>();
         foreach (var input in inputs)
         {
-            var controller = new CheckoutDialogKbmController(input, () => _actionButton!.PerformClick(), _onClose);
-            input.UseController(_ => controller);
+            var controller = new CheckoutDialogKbmController(
+                input, inputSystem, clipboard, () => _actionButton!.PerformClick(), _onClose);
+            input.UseController(inputSystem, controller);
             _firstInputController ??= controller;
         }
     }
 
     /// <summary>Begins editing the first input registered via <see cref="SubmitFrom"/>.</summary>
     public void BeginEditing() => _firstInputController?.BeginEditing();
-
-    /// <summary>
-    /// For input-free confirmation dialogs: attaches a dialog-level controller so Enter performs
-    /// the action and Esc cancels. Call as <c>shell.AttachConfirmKeys(this)</c>.
-    /// </summary>
-    public void AttachConfirmKeys(View owner)
-        => owner.UseController(_ => new DialogKbmController(() => ActionButton.PerformClick(), _onClose));
 }

@@ -38,7 +38,7 @@ internal sealed class CommitSearchBarView : ContainerView
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
 
-        _input = DialogFrame.TextInput();
+        _input = DialogFrame.TextInput(ctx);
         _input.PlaceholderText = "Filter commits…";
         _controller = new SearchInputKbmController(_input, input, ctx.Get<IClipboard>()) { OnEscape = Clear };
         _input.UseController(input, _controller);

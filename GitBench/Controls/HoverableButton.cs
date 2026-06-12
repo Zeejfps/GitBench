@@ -11,6 +11,7 @@ public abstract class HoverableButton : ContainerView
 {
     private readonly Action? _onClick;
     private readonly HoverableButtonController _controller;
+    private readonly InputSystem _input;
 
     protected State<bool> IsHovered { get; } = new(false);
     public State<bool> IsEnabled { get; } = new(true);
@@ -33,30 +34,27 @@ public abstract class HoverableButton : ContainerView
         set => _controller.OnShiftTab = value;
     }
 
-    protected HoverableButton(Action? onClick = null, string? tooltip = null)
+    protected HoverableButton(Context ctx, Action? onClick = null, string? tooltip = null)
     {
         _onClick = onClick;
+        _input = ctx.Require<InputSystem>();
         _controller = new HoverableButtonController(
             () => { if (IsEnabled) OnClicked(); },
             h => IsHovered.Set(h),
             f => IsFocusHighlighted.Set(f));
-        this.UseController(_ => _controller);
+        this.UseController(_input, _controller);
 
         if (!string.IsNullOrEmpty(tooltip))
         {
-            this.Use(ctx => new Tooltip(this, ctx, tooltip, IsHovered, IsEnabled));
+            this.Use(() => new Tooltip(this, ctx, tooltip, IsHovered, IsEnabled));
         }
     }
 
     // Steals keyboard focus to this button (highlighting it); paired with Blur for the
-    // focus ring. No-op until the button is attached to a context.
-    public void FocusSelf()
-    {
-        var input = this.Context?.Get<InputSystem>();
-        Console.WriteLine($"[focusdbg] FocusSelf {GetType().Name} ctx={this.Context != null} input={input != null} interactable={(input?.IsInteractable(_controller))}");
-        input?.StealFocus(_controller);
-    }
-    public void Blur() => this.Context?.Get<InputSystem>()?.Blur(_controller);
+    // focus ring.
+    public void FocusSelf() => _input.StealFocus(_controller);
+
+    public void Blur() => _input.Blur(_controller);
 
     protected virtual void OnClicked()
     {

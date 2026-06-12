@@ -37,7 +37,7 @@ internal sealed record DiffWindowRootView : Widget
         // The pop-out has no file list to host the "F" full-file toggle, so wire it at the
         // window root instead (the toolbar button is the other entry point).
         panel.UseController(ctx.Require<InputSystem>(),
-            () => new DiffWindowKeyController(panel, vm.Diff.ToggleFullFile));
+            () => new DiffWindowKeyController(panel, ctx.Require<InputSystem>(), vm.Diff.ToggleFullFile));
 
         toolbar.Bind(vm.Diff);
         diff.Bind(vm.Diff);

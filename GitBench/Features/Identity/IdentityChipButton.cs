@@ -30,7 +30,7 @@ internal sealed record IdentityChipButton : Widget
         private readonly Context _ctx;
         private readonly IdentityChipButton _w;
 
-        public ChipView(Context ctx, IdentityChipButton w)
+        public ChipView(Context ctx, IdentityChipButton w) : base(ctx)
         {
             _ctx = ctx;
             _w = w;

@@ -8,9 +8,11 @@ namespace GitBench.Controls.Dialogs;
 public sealed class DialogSurfaceView : ContainerView
 {
     private readonly ContainerView _overlay;
+    private readonly InputSystem _input;
 
-    public DialogSurfaceView()
+    public DialogSurfaceView(InputSystem input)
     {
+        _input = input;
         _overlay = new ContainerView
         {
             ZIndex = 1000,
@@ -23,7 +25,7 @@ public sealed class DialogSurfaceView : ContainerView
         {
             BackgroundColor = 0xB0000000,
         };
-        backdrop.UseController(_ => new DialogInputBlockingController());
+        backdrop.UseController(_input, new DialogInputBlockingController());
         _overlay.Children.Add(backdrop);
 
         _overlay.Children.Add(new CenterView

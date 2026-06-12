@@ -91,7 +91,7 @@ internal sealed class SchemeDropdown : HoverableButton
 
     public event Action<RemoteUrlScheme>? SchemeSelected;
 
-    public SchemeDropdown(Context ctx)
+    public SchemeDropdown(Context ctx) : base(ctx)
     {
         _ctx = ctx;
         var theme = ctx.Theme();
@@ -134,7 +134,7 @@ internal sealed class SchemeDropdown : HoverableButton
             Padding = new PaddingStyle { Left = 8, Right = 6, Top = 4, Bottom = 4 },
             Children = { row },
         };
-        BorderedButtonChrome.Bind(background, IsHovered);
+        BorderedButtonChrome.Bind(background, theme, IsHovered);
         SetBackground(background);
     }
 

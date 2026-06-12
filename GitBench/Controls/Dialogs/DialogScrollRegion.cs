@@ -2,6 +2,7 @@ using GitBench.Features.Operations;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 
@@ -20,19 +21,19 @@ internal sealed class DialogScrollRegion : ContainerView
     private readonly VerticalScrollPane _pane;
     private readonly VerticalScrollBarView _bar;
 
-    public DialogScrollRegion(View content)
+    public DialogScrollRegion(Context ctx, View content)
     {
         _pane = new VerticalScrollPane();
         _pane.Children.Add(content);
-        _pane.UseController(_ => new VerticalScrollPaneWheelController(_pane));
+        _pane.UseController(ctx.Require<InputSystem>(), () => new VerticalScrollPaneWheelController(_pane));
 
-        _bar = ScrollBars.CreateVertical();
+        _bar = ScrollBars.CreateVertical(ctx);
         // FlexRowView skips invisible children, so the bar costs no horizontal gutter until the
         // content actually overflows. Scale < 1 means the viewport is smaller than the content —
         // i.e. there is somewhere to scroll to.
         _bar.IsVisible = false;
         _pane.ScrollPositionChanged += _ => _bar.IsVisible = _pane.Scale < 1f;
-        this.Use(_ => new VerticalScrollBarSyncController(_pane, _bar));
+        this.Use(() => new VerticalScrollBarSyncController(_pane, _bar));
 
         AddChildToSelf(new FlexRowView
         {

@@ -43,6 +43,7 @@ internal sealed record AppView : Widget
                     Child = new ContainerView { Children = { new BorderLayoutView
                     {
                         West = ResizableLeftSidebar.Build(
+                            ctx,
                             new RepoBar().BuildView(ctx),
                             initialWidth: prefs.RepoBarWidth,
                             minWidth: 220f,
@@ -68,6 +69,7 @@ internal sealed record AppView : Widget
                                     Child = new ContainerView { Children = { new BorderLayoutView
                                     {
                                         West = ResizableLeftSidebar.Build(
+                                            ctx,
                                             new FlexColumnView
                                             {
                                                 CrossAxisAlignment = CrossAxisAlignment.Stretch,
@@ -101,12 +103,12 @@ internal sealed record AppView : Widget
                 },
             },
         });
-        root.Children.Add(new DragOverlay());
+        root.Children.Add(new DragOverlay(ctx));
 
-        var dialogSurfaceView = new DialogSurfaceView();
+        var dialogSurfaceView = new DialogSurfaceView(ctx.Require<InputSystem>());
         root.Children.Add(dialogSurfaceView);
 
-        root.Behaviors.Add(new DialogPresenter(dialogSurfaceView));
+        root.Behaviors.Add(new DialogPresenter(ctx, dialogSurfaceView));
 
         // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
         root.Children.Add(new DiffWindowsView(ctx));

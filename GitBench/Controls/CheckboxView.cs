@@ -1,4 +1,5 @@
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
@@ -14,32 +15,34 @@ public sealed class CheckboxView : HoverableButton
 
     public State<bool> IsChecked { get; } = new(false);
 
-    public CheckboxView(string label)
+    public CheckboxView(Context ctx, string label) : base(ctx)
     {
-        var labelView = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var labelView = new TextView(ctx.Canvas)
         {
             Text = label,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        labelView.BindThemedTextColor(SelectForeground);
-        Initialize(labelView);
+        labelView.BindThemedTextColor(theme, SelectForeground);
+        Initialize(ctx, labelView);
     }
 
-    public CheckboxView(View content)
+    public CheckboxView(Context ctx, View content) : base(ctx)
     {
-        Initialize(content);
+        Initialize(ctx, content);
     }
 
-    private void Initialize(View content)
+    private void Initialize(Context ctx, View content)
     {
-        var checkGlyph = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var checkGlyph = new TextView(ctx.Canvas)
         {
             FontSize = CheckGlyphSize,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };
         checkGlyph.BindText(IsChecked, c => c ? "✓" : string.Empty);
-        checkGlyph.BindThemedTextColor(s => IsEnabled.Value ? s.Checkbox.CheckGlyph : s.Checkbox.TextDisabled);
+        checkGlyph.BindThemedTextColor(theme, s => IsEnabled.Value ? s.Checkbox.CheckGlyph : s.Checkbox.TextDisabled);
 
         var box = new RectView
         {
@@ -49,8 +52,8 @@ public sealed class CheckboxView : HoverableButton
             BorderRadius = BorderRadiusStyle.All(BoxRadius),
             Children = { checkGlyph },
         };
-        box.BindThemedBackgroundColor(SelectBoxFill);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(SelectBoxBorder(s)));
+        box.BindThemedBackgroundColor(theme, SelectBoxFill);
+        box.BindThemedBorderColor(theme, s => BorderColorStyle.All(SelectBoxBorder(s)));
 
         SetBackground(new FlexRowView
         {

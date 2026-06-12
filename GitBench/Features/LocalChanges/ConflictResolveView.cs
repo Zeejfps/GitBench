@@ -83,7 +83,7 @@ internal sealed class ConflictResolveView : ContainerView
         var oursCard = new ConflictCard(_ctx, ctx.Ours, oursChecked);
         var junction = new MergeJunctionView(_theme, theirsChecked, oursChecked);
 
-        var mergeButton = new DialogButton("Merge", role: DialogButtonRole.Primary) { Height = ButtonHeight };
+        var mergeButton = new DialogButton(_ctx, "Merge", role: DialogButtonRole.Primary) { Height = ButtonHeight };
         var canMerge = new Derived<bool>(() => theirsChecked.Value || oursChecked.Value);
         mergeButton.BindCommand(new Command(() =>
         {
@@ -110,12 +110,12 @@ internal sealed class ConflictResolveView : ContainerView
         mergeButton.Bind(oursChecked, _ => UpdateMergeLabel());
         UpdateMergeLabel();
 
-        var openButton = new DialogButton("Merge in editor", _onOpenInEditor) { Height = ButtonHeight };
+        var openButton = new DialogButton(_ctx, "Merge in editor", _onOpenInEditor) { Height = ButtonHeight };
         openButton.Icon = LucideIcons.ExternalLink;
 
         // For conflicts already resolved outside the app: stages the file as-is so the path
         // clears the unmerged state, no side-pick needed.
-        var resolvedButton = new DialogButton("Mark as resolved", _onMarkResolved) { Height = ButtonHeight };
+        var resolvedButton = new DialogButton(_ctx, "Mark as resolved", _onMarkResolved) { Height = ButtonHeight };
         resolvedButton.Icon = LucideIcons.CheckSquare;
 
         _column.Children.Clear();
@@ -259,7 +259,7 @@ internal sealed class ConflictResolveView : ContainerView
     {
         private readonly State<bool> _checked;
 
-        public ConflictCard(Context ctx, ConflictSideInfo side, State<bool> checkedState)
+        public ConflictCard(Context ctx, ConflictSideInfo side, State<bool> checkedState) : base(ctx)
         {
             _checked = checkedState;
             Width = CardWidth;

@@ -39,7 +39,7 @@ internal sealed record AboutDialog : Widget
             Children =
             {
                 new FlexItem { Grow = 1, Child = new ContainerView() },
-                new DialogCloseButton(OnClose),
+                new DialogCloseButton(ctx, OnClose),
             },
         };
 
@@ -61,6 +61,7 @@ internal sealed record AboutDialog : Widget
         }.BuildView(ctx);
 
         var repoButton = new DialogButton(
+            ctx,
             "View on GitHub",
             () => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
             DialogButtonRole.Primary)

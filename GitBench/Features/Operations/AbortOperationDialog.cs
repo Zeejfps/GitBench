@@ -41,7 +41,7 @@ internal sealed record AbortOperationDialog : Widget
             Color = s => s.DialogBody.BodyText,
         }.BuildView(ctx);
 
-        var shell = new DialogShell(titleText, OnClose)
+        var shell = new DialogShell(ctx, titleText, OnClose)
         {
             Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(State), DialogButtonRole.Destructive),
             Body = { new FlexItem { Grow = 1, Child = prompt } },

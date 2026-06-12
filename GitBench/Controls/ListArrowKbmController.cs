@@ -22,6 +22,7 @@ namespace GitBench.Controls;
 internal sealed class ListArrowKbmController : KeyboardMouseController
 {
     private readonly View _view;
+    private readonly InputSystem _input;
     private readonly Action<int, bool> _onMove;
     private readonly Action<bool> _onExpand;
     private readonly Action _onActivate;
@@ -38,20 +39,21 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
 
     public ListArrowKbmController(
         View view,
+        InputSystem input,
         Action<int, bool> onMove,
         Action<bool> onExpand,
         Action onActivate,
         Action onDelete)
     {
         _view = view;
+        _input = input;
         _onMove = onMove;
         _onExpand = onExpand;
         _onActivate = onActivate;
         _onDelete = onDelete;
     }
 
-    public void TakeFocus()
-        => _view.Context?.Get<InputSystem>()?.StealFocus(this);
+    public void TakeFocus() => _input.StealFocus(this);
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
@@ -107,6 +109,6 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
         if (e.Phase != EventPhase.Bubbling) return;
         if (e.State != InputState.Pressed) return;
         if (_view.Position.ContainsPoint(e.Mouse.Point)) return;
-        _view.Context?.Get<InputSystem>()?.Blur(this);
+        _input.Blur(this);
     }
 }

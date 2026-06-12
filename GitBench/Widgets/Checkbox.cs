@@ -17,7 +17,7 @@ public sealed record Checkbox : Widget
 
     protected override View CreateView(Context ctx)
     {
-        var view = new CheckboxView(Label);
+        var view = new CheckboxView(ctx, Label);
         view.BindTwoWay(view.IsChecked, Value);
         return view;
     }

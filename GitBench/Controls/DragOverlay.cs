@@ -1,5 +1,6 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Controls;
@@ -7,27 +8,20 @@ namespace GitBench.Controls;
 public sealed class DragOverlay : ContainerView
 {
     private readonly RectView _indicator;
-    private IDragController? _dragController;
+    private readonly IDragController? _dragController;
 
-    public DragOverlay()
+    public DragOverlay(Context ctx)
     {
         ZIndex = 900;
         _indicator = new RectView
         {
             BorderRadius = BorderRadiusStyle.All(1),
         };
-        _indicator.BindThemedBackgroundColor(s => s.Palette.Accent);
+        _indicator.BindThemedBackgroundColor(ctx.Theme(), s => s.Palette.Accent);
 
-        this.Use(ctx =>
-        {
-            _dragController = ctx.Get<IDragController>();
-            var subscription = _dragController?.Target.Subscribe(OnTargetChanged);
-            return new ActionDisposable(() =>
-            {
-                subscription?.Dispose();
-                _dragController = null;
-            });
-        });
+        _dragController = ctx.Get<IDragController>();
+        if (_dragController is { } drag)
+            this.Use(() => drag.Target.Subscribe(OnTargetChanged));
     }
 
     private void OnTargetChanged(DropTarget? target)

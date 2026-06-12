@@ -83,12 +83,7 @@ internal sealed class DiffWindowsView : ContainerView
 
         var win = _windowFactory.Open(new SecondaryWindowRequest
         {
-            BuildRoot = ctx =>
-            {
-                using (CompatUi.Push(ctx))
-                    return ViewContexts.RegisterRoot(
-                        new DiffWindowRootView { Model = windowVm }.BuildView(ctx), ctx);
-            },
+            BuildRoot = ctx => new DiffWindowRootView { Model = windowVm }.BuildView(ctx),
             Title = windowVm.Title,
             Width = 900,
             Height = 700,

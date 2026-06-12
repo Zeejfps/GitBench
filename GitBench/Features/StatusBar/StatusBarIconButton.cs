@@ -38,7 +38,7 @@ internal sealed record StatusBarIconButton : Widget
     private sealed class ButtonView : HoverableButton
     {
         public ButtonView(Context ctx, StatusBarIconButton w)
-            : base(tooltip: w.Tooltip)
+            : base(ctx, tooltip: w.Tooltip)
         {
             var theme = ctx.Theme();
             Width = 22;

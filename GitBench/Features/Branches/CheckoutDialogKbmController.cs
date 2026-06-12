@@ -10,20 +10,15 @@ internal sealed class CheckoutDialogKbmController : BaseTextInputKbmController
     private readonly Action _onSubmit;
     private readonly Action _onCancel;
 
-    public CheckoutDialogKbmController(TextInputView input, Action onSubmit, Action onCancel) : base(input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>())
+    public CheckoutDialogKbmController(
+        TextInputView input,
+        InputSystem inputSystem,
+        ZGF.Gui.IClipboard? clipboard,
+        Action onSubmit,
+        Action onCancel) : base(input, inputSystem, clipboard)
     {
         _onSubmit = onSubmit;
         _onCancel = onCancel;
-    }
-
-    public CheckoutDialogKbmController(TextInputView input, ICommand onSubmit, Action onCancel)
-        : this(input, onSubmit.Execute, onCancel)
-    {
-    }
-
-    public CheckoutDialogKbmController(TextInputView input, IReadable<ICommand?> onSubmit, Action onCancel)
-        : this(input, () => onSubmit.Value?.Execute(), onCancel)
-    {
     }
 
     protected override void OnKeyboardKeyPressed(ref KeyboardKeyEvent e)

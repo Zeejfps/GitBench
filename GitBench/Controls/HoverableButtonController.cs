@@ -36,7 +36,6 @@ public sealed class HoverableButtonController(
 
     public override void OnFocusGained()
     {
-        Console.WriteLine($"[focusdbg] OnFocusGained hasHandler={onFocusChanged != null}");
         _isFocused = true;
         onFocusChanged?.Invoke(true);
     }

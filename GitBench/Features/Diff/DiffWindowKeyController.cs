@@ -16,11 +16,13 @@ namespace GitBench.Features.Diff;
 internal sealed class DiffWindowKeyController : KeyboardMouseController
 {
     private readonly View _view;
+    private readonly InputSystem _input;
     private readonly Action _onToggleFullFile;
 
-    public DiffWindowKeyController(View view, Action onToggleFullFile)
+    public DiffWindowKeyController(View view, InputSystem input, Action onToggleFullFile)
     {
         _view = view;
+        _input = input;
         _onToggleFullFile = onToggleFullFile;
     }
 
@@ -39,6 +41,6 @@ internal sealed class DiffWindowKeyController : KeyboardMouseController
         if (e.State != InputState.Pressed) return;
         if (!_view.Position.ContainsPoint(e.Mouse.Point)) return;
         // Latch keyboard focus to this window's content without consuming the click.
-        _view.Context?.Get<InputSystem>()?.StealFocus(this);
+        _input.StealFocus(this);
     }
 }

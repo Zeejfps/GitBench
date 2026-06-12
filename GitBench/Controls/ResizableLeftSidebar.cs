@@ -1,6 +1,8 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Observable;
 
@@ -69,6 +71,7 @@ internal sealed class ResizableLeftSidebar : ContainerView
     /// styling), and wires the splitter controller in one place. Returns the wrapper.
     /// </summary>
     public static ResizableLeftSidebar Build(
+        Context ctx,
         View content,
         float initialWidth,
         float minWidth = 140f,
@@ -77,7 +80,7 @@ internal sealed class ResizableLeftSidebar : ContainerView
     {
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
-        splitter.BindThemedBackgroundColor(s =>
+        splitter.BindThemedBackgroundColor(ctx.Theme(), s =>
             splitterHovered.Value ? s.SidebarSplitter.Hover : s.SidebarSplitter.Idle);
 
         var sidebar = new ResizableLeftSidebar(content, splitter, initialWidth, minWidth, maxWidth)
@@ -85,7 +88,7 @@ internal sealed class ResizableLeftSidebar : ContainerView
             WidthChanged = onWidthChanged,
         };
 
-        splitter.UseController(ctx => new SplitterController(
+        splitter.UseController(ctx.Require<InputSystem>(), () => new SplitterController(
             ctx,
             DragAxis.X,
             sidebar.AdjustWidthByPixels,

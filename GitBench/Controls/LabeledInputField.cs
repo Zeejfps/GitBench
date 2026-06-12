@@ -1,6 +1,8 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
 using ZGF.Observable;
@@ -71,11 +73,12 @@ internal sealed class LabeledInputField : ContainerView
         }
     }
 
-    public LabeledInputField(string label)
+    public LabeledInputField(Context ctx, string label)
     {
-        var labelView = DialogFrame.Label(label);
+        var theme = ctx.Theme();
+        var labelView = DialogFrame.Label(ctx, label);
 
-        _input = DialogFrame.TextInput();
+        _input = DialogFrame.TextInput(ctx);
 
         _box = new RectView
         {
@@ -84,11 +87,11 @@ internal sealed class LabeledInputField : ContainerView
             Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
             Children = { _input },
         };
-        _box.BindThemedBackgroundColor(s => s.TextInput.Background);
+        _box.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
         // Own the border binding (rather than DialogFrame.WrapInput's fixed one) so it can be
         // swapped to the error/warning color when a status is set. Cache the styles for the
         // status-driven recompute.
-        _box.BindThemed(s =>
+        _box.BindThemed(theme, s =>
         {
             _styles = s;
             Refresh();
@@ -102,10 +105,10 @@ internal sealed class LabeledInputField : ContainerView
             Children = { new FlexItem { Grow = 1, Child = _box } },
         };
 
-        _hint = DialogFrame.Hint(string.Empty, TextWrap.Wrap);
+        _hint = DialogFrame.Hint(ctx, string.Empty, TextWrap.Wrap);
         _hint.IsVisible = false;
 
-        _message = new TextView(CompatUi.Canvas) { Text = string.Empty, TextWrap = TextWrap.Wrap, IsVisible = false };
+        _message = new TextView(ctx.Canvas) { Text = string.Empty, TextWrap = TextWrap.Wrap, IsVisible = false };
 
         AddChildToSelf(new FlexColumnView
         {

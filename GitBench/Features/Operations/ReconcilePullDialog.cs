@@ -53,9 +53,9 @@ internal sealed record ReconcilePullDialog : Widget
                     Value = "Strategy",
                     Color = s => s.DialogBody.SectionHeaderText,
                 },
-                StrategyCheckbox(vm, "Merge (--no-rebase)", PullStrategy.Merge),
-                StrategyCheckbox(vm, "Rebase (--rebase)", PullStrategy.Rebase),
-                StrategyCheckbox(vm, "Fast-forward only (--ff-only)", PullStrategy.FastForwardOnly),
+                StrategyCheckbox(ctx, vm, "Merge (--no-rebase)", PullStrategy.Merge),
+                StrategyCheckbox(ctx, vm, "Rebase (--rebase)", PullStrategy.Rebase),
+                StrategyCheckbox(ctx, vm, "Fast-forward only (--ff-only)", PullStrategy.FastForwardOnly),
                 new ThemedText
                 {
                     Value = "Merge or rebase may stop on conflicts — the Operation banner will offer Abort. " +
@@ -70,9 +70,9 @@ internal sealed record ReconcilePullDialog : Widget
         return view;
     }
 
-    private static IWidget StrategyCheckbox(ReconcilePullDialogViewModel vm, string label, PullStrategy strategy)
+    private static IWidget StrategyCheckbox(Context ctx, ReconcilePullDialogViewModel vm, string label, PullStrategy strategy)
     {
-        var view = new CheckboxView(label) { Height = 22 };
+        var view = new CheckboxView(ctx, label) { Height = 22 };
         view.Bind(vm.Strategy, m => view.IsChecked.Value = m == strategy);
         view.IsChecked.Changed += isCheckedNow =>
         {

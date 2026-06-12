@@ -1,6 +1,7 @@
 using GitBench.Features.Commits;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
@@ -68,17 +69,20 @@ internal sealed class GrowingDescriptionField : ContainerView
 
     public void SetText(ReadOnlySpan<char> text) => _input.SetText(text);
 
-    public GrowingDescriptionField(float minHeight, float maxHeight)
+    public GrowingDescriptionField(Context ctx, float minHeight, float maxHeight)
     {
         _minHeight = minHeight;
         _maxHeight = maxHeight;
 
-        _input = new TextInputView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var inputSystem = ctx.Require<InputSystem>();
+
+        _input = new TextInputView(ctx.Canvas)
         {
             TextVerticalAlignment = TextAlignment.Start,
             TextWrap = TextWrap.Wrap,
         };
-        _input.BindThemed(s =>
+        _input.BindThemed(theme, s =>
         {
             _input.BackgroundColor = s.TextInput.Background;
             _input.TextColor = s.TextInput.Text;
@@ -86,14 +90,14 @@ internal sealed class GrowingDescriptionField : ContainerView
             _input.SelectionRectColor = s.TextInput.Selection;
             _input.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _inputController = new TextInputViewKbmController(_input, CompatUi.Input, CompatUi.Current.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
-        _input.UseController(_ => _inputController);
+        _inputController = new TextInputViewKbmController(_input, inputSystem, ctx.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
+        _input.UseController(inputSystem, _inputController);
 
         _scrollPane = new ScrollPane();
         _scrollPane.Children.Add(_input);
-        _scrollPane.UseController(_ => new ScrollPaneWheelController(_scrollPane));
+        _scrollPane.UseController(inputSystem, () => new ScrollPaneWheelController(_scrollPane));
 
-        _scrollBar = ScrollBars.CreateVertical();
+        _scrollBar = ScrollBars.CreateVertical(ctx);
 
         var box = new RectView
         {
@@ -115,11 +119,11 @@ internal sealed class GrowingDescriptionField : ContainerView
                 },
             },
         };
-        box.BindThemedBackgroundColor(s => s.TextInput.Background);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(s.TextInput.Border));
+        box.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
+        box.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
         AddChildToSelf(box);
 
-        this.Use(_ => new ScrollSyncController(_scrollPane, _scrollBar));
+        this.Use(() => new ScrollSyncController(_scrollPane, _scrollBar));
 
         // Start at the min size; the first OnLayoutChildren pass will refine this.
         Height = _minHeight;

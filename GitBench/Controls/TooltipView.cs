@@ -1,6 +1,7 @@
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 
 namespace GitBench.Controls;
@@ -11,15 +12,16 @@ public sealed class TooltipView : ContainerView
     private const int VerticalPadding = 4;
     private const float CornerRadius = 4f;
 
-    public TooltipView(string text)
+    public TooltipView(Context ctx, string text)
     {
-        var label = new TextView(CompatUi.Canvas)
+        var theme = ctx.Theme();
+        var label = new TextView(ctx.Canvas)
         {
             Text = text,
             FontSize = 12,
             VerticalTextAlignment = TextAlignment.Center,
         };
-        label.BindThemedTextColor(s => s.Tooltip.Text);
+        label.BindThemedTextColor(theme, s => s.Tooltip.Text);
 
         var box = new RectView
         {
@@ -34,9 +36,9 @@ public sealed class TooltipView : ContainerView
             },
             Children = { label },
         };
-        box.BindThemedBackgroundColor(s => s.Tooltip.Background);
-        box.BindThemedBorderColor(s => BorderColorStyle.All(s.Tooltip.Border));
-        box.BindThemed(s => box.BoxShadow = new BoxShadowStyle
+        box.BindThemedBackgroundColor(theme, s => s.Tooltip.Background);
+        box.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.Tooltip.Border));
+        box.BindThemed(theme, s => box.BoxShadow = new BoxShadowStyle
         {
             OffsetX = 0f,
             OffsetY = -4f,

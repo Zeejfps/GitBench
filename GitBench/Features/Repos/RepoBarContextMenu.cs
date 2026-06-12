@@ -1,6 +1,7 @@
 using GitBench.Controls;
-using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Geometry;
+using ZGF.Gui.Bindings;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Components.ContextMenu;
@@ -36,11 +37,9 @@ public static class RepoBarContextMenu
 
         var coords = context.Get<IWindowCoordinates>();
         var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
-        var opened = manager.ShowContextMenu(popupCtx =>
-        {
-            using (CompatUi.Push(popupCtx))
-                return ViewContexts.RegisterRoot(BuildMenu(manager, items), popupCtx);
-        }, screen, placement: placement);
+        var opened = manager.ShowContextMenu(
+            popupCtx => BuildMenu(popupCtx, manager, items),
+            screen, placement: placement);
         if (opened == null) return null;
 
         // Keyboard navigation registers against the popup's own input system; the popup's
@@ -51,14 +50,16 @@ public static class RepoBarContextMenu
 
     // Builds a themed menu from the item list. Recursed (via a per-item factory) for
     // submenus so nested menus share the same styling and click-to-close behavior.
-    private static ContextMenu BuildMenu(IContextMenuHost manager, IReadOnlyList<Item> items)
+    private static ContextMenu BuildMenu(Context ctx, IContextMenuHost manager, IReadOnlyList<Item> items)
     {
+        var theme = ctx.Theme();
+        var input = ctx.Require<InputSystem>();
         var menu = new ContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
             Padding = PaddingStyle.All(4),
         };
-        menu.BindThemed(s =>
+        menu.BindThemed(theme, s =>
         {
             menu.BackgroundColor = s.ContextMenu.Background;
             menu.BorderColor = BorderColorStyle.All(s.ContextMenu.Border);
@@ -69,12 +70,12 @@ public static class RepoBarContextMenu
             if (item.IsSeparator)
             {
                 var separator = new RectView { Height = 1 };
-                separator.BindThemedBackgroundColor(s => s.ContextMenu.Border);
+                separator.BindThemedBackgroundColor(theme, s => s.ContextMenu.Border);
                 menu.Children.Add(separator);
                 continue;
             }
 
-            var menuItem = new ContextMenuItem(CompatUi.Canvas)
+            var menuItem = new ContextMenuItem(ctx.Canvas)
             {
                 Text = item.Label,
                 Icon = item.Icon,
@@ -83,7 +84,7 @@ public static class RepoBarContextMenu
                 IsEnabled = item.Enabled,
                 Shortcut = item.Shortcut,
             };
-            menuItem.BindThemed(s =>
+            menuItem.BindThemed(theme, s =>
             {
                 menuItem.SelectedBackgroundColor = s.ContextMenu.ItemSelectedBackground;
                 menuItem.TextColor = s.ContextMenu.ItemText;
@@ -92,7 +93,7 @@ public static class RepoBarContextMenu
             });
 
             if (item.LabelSegments is { Count: > 0 } segs)
-                menuItem.SetLabelView(BuildSegmentsView(segs, item.Enabled));
+                menuItem.SetLabelView(BuildSegmentsView(ctx, segs, item.Enabled));
 
             var captured = item;
             if (captured.Submenu is { Count: > 0 } submenu)
@@ -102,17 +103,13 @@ public static class RepoBarContextMenu
                 // flips IsArrowVisible on).
                 menuItem.ArrowGlyph = LucideIcons.ChevronRight;
                 menuItem.ArrowFontFamily = LucideIcons.FontFamily;
-                menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(
+                menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(
                     menuItem, ctx,
-                    subMenuFactory: subCtx =>
-                    {
-                        using (CompatUi.Push(subCtx))
-                            return ViewContexts.RegisterRoot(BuildMenu(manager, submenu), subCtx);
-                    }));
+                    subMenuFactory: subCtx => BuildMenu(subCtx, manager, submenu)));
             }
             else
             {
-                menuItem.UseController(ctx => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
+                menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
                 {
                     // Dismiss the entire menu chain (parent + any open submenus), then act.
                     // Deferred close — a synchronous teardown here would unregister controllers
@@ -127,8 +124,9 @@ public static class RepoBarContextMenu
         return menu;
     }
 
-    private static View BuildSegmentsView(IReadOnlyList<MenuLabelSegment> segments, bool enabled)
+    private static View BuildSegmentsView(Context ctx, IReadOnlyList<MenuLabelSegment> segments, bool enabled)
     {
+        var theme = ctx.Theme();
         var row = new FlexRowView
         {
             Gap = 0,
@@ -136,7 +134,7 @@ public static class RepoBarContextMenu
         };
         foreach (var seg in segments)
         {
-            var tv = new TextView(CompatUi.Canvas)
+            var tv = new TextView(ctx.Canvas)
             {
                 Text = seg.Text,
                 VerticalTextAlignment = TextAlignment.Center,
@@ -147,11 +145,11 @@ public static class RepoBarContextMenu
             }
             else if (seg.Bold && enabled)
             {
-                tv.BindThemedTextColor(s => s.ContextMenu.AccentText);
+                tv.BindThemedTextColor(theme, s => s.ContextMenu.AccentText);
             }
             else
             {
-                tv.BindThemedTextColor(s => enabled ? s.ContextMenu.ItemText : s.ContextMenu.ItemTextDisabled);
+                tv.BindThemedTextColor(theme, s => enabled ? s.ContextMenu.ItemText : s.ContextMenu.ItemTextDisabled);
             }
             if (seg.Bold && enabled)
                 tv.FontWeight = FontWeight.Bold;

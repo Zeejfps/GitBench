@@ -14,7 +14,7 @@ internal sealed class LocalChangesHeaderActionButton : HoverableButton
     private readonly TextView _iconView;
 
     public LocalChangesHeaderActionButton(Context ctx, string icon, Action? onClick = null, string? tooltip = null)
-        : base(onClick, tooltip)
+        : base(ctx, onClick, tooltip)
     {
         Width = ButtonSize;
         Height = ButtonSize;

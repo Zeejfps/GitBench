@@ -91,14 +91,16 @@ internal readonly record struct PublishBranchRequest(Repo Repo, string LocalBran
 
 internal sealed class RemoteDropdown : HoverableButton
 {
+    private readonly Context _ctx;
     private readonly TextView _chevron;
     private IReadOnlyList<string> _options = Array.Empty<string>();
 
     public State<string> SelectedState { get; } = new(string.Empty);
     public string Selected => SelectedState.Value;
 
-    public RemoteDropdown(Context ctx)
+    public RemoteDropdown(Context ctx) : base(ctx)
     {
+        _ctx = ctx;
         Height = 30;
         var theme = ctx.Theme();
 
@@ -150,7 +152,7 @@ internal sealed class RemoteDropdown : HoverableButton
             Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
             Children = { row },
         };
-        BorderedButtonChrome.Bind(background, IsHovered);
+        BorderedButtonChrome.Bind(background, theme, IsHovered);
         SetBackground(background);
     }
 
@@ -170,8 +172,7 @@ internal sealed class RemoteDropdown : HoverableButton
     protected override void OnClicked()
     {
         if (_options.Count <= 1) return;
-        var ctx = this.Context;
-        if (ctx == null) return;
+        var ctx = _ctx;
         var items = new List<RepoBarContextMenu.Item>(_options.Count);
         foreach (var opt in _options)
         {
