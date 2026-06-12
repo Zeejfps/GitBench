@@ -1,7 +1,6 @@
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -12,46 +11,52 @@ internal sealed record ModeSwitcherView : Widget
     private const float PillHeight = 28f;
     private const float PillCornerRadius = 5f;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<ModeSwitcherViewModel>();
         var theme = ctx.Theme();
 
         const float innerRadius = PillCornerRadius - 1f;
-        var history = new SegmentView
+        return new Box
         {
-            Label = "History",
-            Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
-            Model = vm.HistorySegment,
-        }.BuildView(ctx);
-        var localChanges = new SegmentView
-        {
-            Label = "Changes",
-            Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
-            Model = vm.LocalChangesSegment,
-        }.BuildView(ctx);
-
-        var separator = new RectView { Width = 1f };
-        separator.BindBackgroundColor(() => theme.Styles.Value.ModeSwitcher.SegmentSeparator);
-
-        var pill = new RectView
-        {
-            BackgroundColor = 0x00000000u,
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(PillCornerRadius),
+            Height = PillHeight,
             Children =
-            {
-                new RowView
+            [
+                new Box
                 {
-                    Children = { localChanges, separator, history },
+                    Background = 0x00000000u,
+                    BorderSize = BorderSizeStyle.All(1),
+                    BorderRadius = BorderRadiusStyle.All(PillCornerRadius),
+                    BindBorder = () => BorderColorStyle.All(theme.Styles.Value.ModeSwitcher.PillBorder),
+                    Children =
+                    [
+                        new Row
+                        {
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                new SegmentView
+                                {
+                                    Label = "Changes",
+                                    Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
+                                    Model = vm.LocalChangesSegment,
+                                },
+                                new Box
+                                {
+                                    Width = 1f,
+                                    BindBackground = () => theme.Styles.Value.ModeSwitcher.SegmentSeparator,
+                                },
+                                new SegmentView
+                                {
+                                    Label = "History",
+                                    Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
+                                    Model = vm.HistorySegment,
+                                },
+                            ],
+                        },
+                    ],
                 },
-            },
-        };
-        pill.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.ModeSwitcher.PillBorder));
-
-        var root = new ContainerView { Height = PillHeight };
-        root.Children.Add(pill);
-        root.UseViewModel(() => vm, _ => { });
-        return root;
+            ],
+        }.BindVm(vm);
     }
 }
