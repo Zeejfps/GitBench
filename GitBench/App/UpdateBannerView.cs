@@ -3,7 +3,6 @@ using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -18,40 +17,12 @@ namespace GitBench.App;
 /// </summary>
 internal sealed record UpdateBannerView : Widget
 {
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var updateService = ctx.Require<UpdateService>();
         var theme = ctx.Theme();
 
-        var text = new TextView(ctx.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-            TextWrap = TextWrap.Wrap,
-        };
-        text.BindText(updateService.BannerMessage);
-        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
-
-        var restartButton = new ActionButton
-        {
-            Icon = LucideIcons.Package,
-            Label = "Restart",
-            Tooltip = "Restart to finish updating",
-            Background = 0xFF4E8B3D,
-            Command = new Command(updateService.ApplyAndRestart),
-        }.BuildView(ctx);
-
-        var row = new FlexRowView
-        {
-            Gap = 4,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = text },
-                restartButton,
-            },
-        };
-
-        var banner = new RectView
+        return new Box
         {
             BorderSize = new BorderSizeStyle { Bottom = 1 },
             Padding = new PaddingStyle
@@ -61,11 +32,38 @@ internal sealed record UpdateBannerView : Widget
                 Top = 6,
                 Bottom = 6,
             },
-            Children = { row },
+            BindBackground = () => theme.Styles.Value.Banner.Background,
+            BindBorder = () => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border },
+            BindVisible = () => updateService.BannerMessage.Value != null,
+            Children =
+            [
+                new Row
+                {
+                    Gap = 4,
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Children =
+                    [
+                        new Grow
+                        {
+                            Child = new ThemedText
+                            {
+                                VAlign = TextAlignment.Center,
+                                Wrap = TextWrap.Wrap,
+                                Bind = () => updateService.BannerMessage.Value,
+                                Color = s => s.Banner.Text,
+                            },
+                        },
+                        new ActionButton
+                        {
+                            Icon = LucideIcons.Package,
+                            Label = "Restart",
+                            Tooltip = "Restart to finish updating",
+                            Background = 0xFF4E8B3D,
+                            Command = new Command(updateService.ApplyAndRestart),
+                        },
+                    ],
+                },
+            ],
         };
-        banner.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
-        banner.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border });
-        banner.BindIsVisible(updateService.BannerMessage, m => m != null);
-        return banner;
     }
 }

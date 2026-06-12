@@ -1,15 +1,12 @@
 using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Widgets;
 
 /// <summary>
-/// Text whose color follows the active theme. The GitBench counterpart of the framework's
-/// <see cref="ZGF.Gui.Widgets.Text"/>, extended with the props GitBench text actually uses
-/// (font family for icon glyphs, wrapping, weight).
+/// Text whose color follows the active theme. Composes the framework's
+/// <see cref="ZGF.Gui.Widgets.Text"/>, adding only the theme-styles color selector.
 /// </summary>
 public sealed record ThemedText : Widget
 {
@@ -28,21 +25,21 @@ public sealed record ThemedText : Widget
     /// <summary>Auto-tracked text binding; overrides <see cref="Value"/> once mounted.</summary>
     public Func<string?>? Bind { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        var v = new TextView(ctx.Canvas) { Text = Value };
-        if (FontSize.IsSet) v.FontSize = FontSize;
-        if (FontFamily != null) v.FontFamily = FontFamily;
-        if (Weight.IsSet) v.FontWeight = Weight;
-        if (Wrap.IsSet) v.TextWrap = Wrap;
-        if (HAlign.IsSet) v.HorizontalTextAlignment = HAlign;
-        if (VAlign.IsSet) v.VerticalTextAlignment = VAlign;
-        if (Bind != null) v.BindText(Bind);
-        if (Color != null)
+        var theme = ctx.Theme();
+        var color = Color;
+        return new Text
         {
-            var theme = ctx.Theme();
-            v.BindTextColor(() => Color(theme.Styles.Value));
-        }
-        return v;
+            Value = Value,
+            FontSize = FontSize,
+            FontFamily = FontFamily,
+            Weight = Weight,
+            Wrap = Wrap,
+            HAlign = HAlign,
+            VAlign = VAlign,
+            Bind = Bind,
+            BindColor = color != null ? () => color(theme.Styles.Value) : null,
+        };
     }
 }
