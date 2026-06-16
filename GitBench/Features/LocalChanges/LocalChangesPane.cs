@@ -3,8 +3,17 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.LocalChanges;
+
+/// <summary>
+/// The working-tree pane: the staged/unstaged file panels and diff above the commit bar.
+/// </summary>
+internal sealed record LocalChangesPane : Widget
+{
+    protected override View CreateView(Context ctx) => new LocalChangesView(ctx);
+}
 
 internal sealed class LocalChangesView : ContainerView
 {

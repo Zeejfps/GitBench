@@ -22,7 +22,7 @@ internal sealed record WorkspaceView : Widget
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children = [new OperationBannerView(), new ActionsToolbar()],
             },
-            Center = new Raw { View = new MainContentView(ctx) },
+            Center = new MainContentView(),
         },
     };
 }

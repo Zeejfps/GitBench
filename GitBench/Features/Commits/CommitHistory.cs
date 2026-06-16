@@ -7,14 +7,20 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Commits;
 
 /// <summary>
-/// Lays out the commits panel on the left and a resizable commit details panel on the right,
-/// with a draggable divider between them.
+/// The commit-history pane: the commits list on the left and a resizable commit details panel
+/// on the right, with a draggable divider between them.
 /// </summary>
-public sealed class HistoryView : ContainerView
+public sealed record CommitHistory : Widget
+{
+    protected override View CreateView(Context ctx) => new HistoryView(ctx);
+}
+
+internal sealed class HistoryView : ContainerView
 {
     private const float MinDetailsWidth = 240f;
     private const float MaxDetailsWidth = 800f;
