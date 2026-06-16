@@ -12,13 +12,11 @@ internal sealed record BranchesHeader : Widget
     private const float HeaderHeight = 44f;
     private const int HorizontalPadding = 8;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<BranchesHeaderViewModel>();
         var theme = ctx.Theme();
-        var view = Layout(vm, theme).BuildView(ctx);
-        view.UseViewModel(() => vm, _ => { });
-        return view;
+        return Layout(vm, theme).BindVm(vm);
     }
 
     private static IWidget Layout(BranchesHeaderViewModel vm, IThemeService<ThemeStyles> theme) => new Box
