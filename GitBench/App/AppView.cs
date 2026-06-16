@@ -18,16 +18,11 @@ internal sealed record AppView : Widget
     {
         var input = ctx.Require<InputSystem>();
 
-        // Shared instance: mounted as a layer below, and handed to the presenter behavior above.
-        var dialogSurface = new DialogSurfaceView(input);
-
         var frame = new Column
         {
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                // Full-width update banner; self-hides (collapsing its slot) until an update is
-                // staged. Separate from the per-repo operation banner inside the workspace.
                 new UpdateBannerView(),
                 new Grow
                 {
@@ -46,13 +41,11 @@ internal sealed record AppView : Widget
             Children =
             [
                 frame,
-                new Raw { View = new DragOverlay(ctx) },
-                new Raw { View = dialogSurface },
-                // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
-                new Raw { View = new DiffWindowsView(ctx) },
+                new DragOverlay(),
+                new DialogSurface(),
+                new DiffWindowsView(),
             ],
         }
-        .WithBehaviors(new DialogPresenter(ctx, dialogSurface))
         .WithController(input, () => new AppKeybindController(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IMessageBus>()));
