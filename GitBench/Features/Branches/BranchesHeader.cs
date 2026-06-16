@@ -22,8 +22,8 @@ internal sealed record BranchesHeader : Widget
             Height = HeaderHeight,
             BorderSize = new BorderSizeStyle { Top = 0, Bottom = 1 },
             Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
-            BindBackground = () => theme.Styles.Value.BranchesHeader.Background,
-            BindBorder = () => new BorderColorStyle { Bottom = theme.Styles.Value.BranchesHeader.BorderBottom },
+            Background = Prop.Bind(() => theme.Styles.Value.BranchesHeader.Background),
+            BorderColor = Prop.Bind(() => new BorderColorStyle { Bottom = theme.Styles.Value.BranchesHeader.BorderBottom }),
             Children =
             [
                 new Row

@@ -32,8 +32,8 @@ internal sealed record UpdateBannerView : Widget
                 Top = 6,
                 Bottom = 6,
             },
-            BindBackground = () => theme.Styles.Value.Banner.Background,
-            BindBorder = () => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border },
+            Background = Prop.Bind(() => theme.Styles.Value.Banner.Background),
+            BorderColor = Prop.Bind(() => new BorderColorStyle { Bottom = theme.Styles.Value.Banner.Border }),
             BindVisible = () => updateService.BannerMessage.Value != null,
             Children =
             [
