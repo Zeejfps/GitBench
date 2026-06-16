@@ -22,8 +22,8 @@ internal sealed record BranchesHeader : Widget
             Height = HeaderHeight,
             BorderSize = new BorderSizeStyle { Top = 0, Bottom = 1 },
             Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
-            Background = theme.Styles.Map(s => s.BranchesHeader.Background),
-            BorderColor = theme.Styles.Map(s => new BorderColorStyle { Bottom = s.BranchesHeader.BorderBottom }),
+            Background = theme.Styles.Bind(s => s.BranchesHeader.Background),
+            BorderColor = theme.Styles.Bind(s => new BorderColorStyle { Bottom = s.BranchesHeader.BorderBottom }),
             Children =
             [
                 new Row
@@ -48,7 +48,7 @@ internal sealed record BranchLabel : Widget
     protected override IWidget Build(Context ctx) => new Box
     {
         Padding = new PaddingStyle { Left = 6, Right = 6 },
-        Visible = BranchName.Map(n => !string.IsNullOrEmpty(n)),
+        Visible = BranchName.Bind(n => !string.IsNullOrEmpty(n)),
         Children =
         [
             new Row

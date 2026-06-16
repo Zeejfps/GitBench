@@ -27,7 +27,7 @@ internal sealed record ModeSwitcherView : Widget
                     Background = 0x00000000u,
                     BorderSize = BorderSizeStyle.All(1),
                     BorderRadius = BorderRadiusStyle.All(PillCornerRadius),
-                    BorderColor = theme.Styles.Map(s => BorderColorStyle.All(s.ModeSwitcher.PillBorder)),
+                    BorderColor = theme.Styles.Bind(s => BorderColorStyle.All(s.ModeSwitcher.PillBorder)),
                     Children =
                     [
                         new Row
@@ -44,7 +44,7 @@ internal sealed record ModeSwitcherView : Widget
                                 new Box
                                 {
                                     Width = 1f,
-                                    Background = theme.Styles.Map(s => s.ModeSwitcher.SegmentSeparator),
+                                    Background = theme.Styles.Bind(s => s.ModeSwitcher.SegmentSeparator),
                                 },
                                 new SegmentView
                                 {

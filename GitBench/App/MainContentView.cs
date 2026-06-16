@@ -25,11 +25,11 @@ internal sealed record MainContentView : Widget
             [
                 new CommitHistory
                 {
-                    Visible = mode.Map(m => m == MainViewMode.History)
+                    Visible = mode.Bind(m => m == MainViewMode.History)
                 },
                 new WorkingChanges
                 {
-                    Visible = mode.Map(m => m == MainViewMode.LocalChanges)
+                    Visible = mode.Bind(m => m == MainViewMode.LocalChanges)
                 },
             ],
         };
