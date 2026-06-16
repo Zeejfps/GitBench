@@ -24,7 +24,7 @@ internal sealed record MainContentView : Widget
             Children =
             [
                 new CommitHistory { BindVisible = () => mode.Value == MainViewMode.History },
-                new LocalChangesPane { BindVisible = () => mode.Value == MainViewMode.LocalChanges },
+                new WorkingChanges { BindVisible = () => mode.Value == MainViewMode.LocalChanges },
             ],
         };
     }
