@@ -1,12 +1,8 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Branches;
 using GitBench.Features.Diff;
-using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.StatusBar;
-using GitBench.Features.Submodules;
-using GitBench.Features.Toolbar;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -18,104 +14,47 @@ namespace GitBench.App;
 
 internal sealed record AppView : Widget
 {
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        var preferences = ctx.Require<PreferencesService>();
-        var prefs = preferences.Current;
+        var input = ctx.Require<InputSystem>();
 
-        var root = new ContainerView();
+        // Shared instance: mounted as a layer below, and handed to the presenter behavior above.
+        var dialogSurface = new DialogSurfaceView(input);
 
-        // Full-width update banner stacked above the main layout. It self-hides (collapsing
-        // its layout slot) until an update is staged, so the FlexColumn shows no residual bar.
-        // Kept separate from the per-repo operations banner below.
-        root.Children.Add(new FlexColumnView
+        var frame = new Column
         {
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
-            {
-                new UpdateBannerView().BuildView(ctx),
-                new FlexItem
+            [
+                // Full-width update banner; self-hides (collapsing its slot) until an update is
+                // staged. Separate from the per-repo operation banner inside the workspace.
+                new UpdateBannerView(),
+                new Grow
                 {
-                    Grow = 1,
-                    // Wrapped in a ContainerView so it satisfies FlexItem.Child (BorderLayoutView
-                    // is a plain View); the wrapper stretches the layout to fill the grow region.
-                    Child = new ContainerView { Children = { new BorderLayoutView
+                    Child = new BorderLayout
                     {
-                        West = ResizableLeftSidebar.Build(
-                            ctx,
-                            new RepoBar().BuildView(ctx),
-                            initialWidth: prefs.RepoBarWidth,
-                            minWidth: 220f,
-                            onWidthChanged: preferences.SetRepoBarWidth),
-                        Center = new FlexColumnView
-                        {
-                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                            Children =
-                            {
-                                // Repo-level detached-HEAD warning, stacked above both the
-                                // branches sidebar and the main content so it's visible on any
-                                // tab. Self-hides (collapsing its slot) when nothing's at risk.
-                                new DetachedHeadBannerView().BuildView(ctx),
-                                // Sits just below: warns when submodules are out of date with
-                                // the recorded pointer and offers a one-click update. Also
-                                // self-hides when everything's in sync.
-                                new SubmoduleStatusBannerView().BuildView(ctx),
-                                new FlexItem
-                                {
-                                    Grow = 1,
-                                    // ContainerView wrapper stretches the BorderLayout to fill
-                                    // the grow region (BorderLayoutView is a plain View).
-                                    Child = new ContainerView { Children = { new BorderLayoutView
-                                    {
-                                        West = ResizableLeftSidebar.Build(
-                                            ctx,
-                                            new FlexColumnView
-                                            {
-                                                CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                                                Children =
-                                                {
-                                                    new BranchesHeader().BuildView(ctx),
-                                                    new FlexItem { Grow = 1, Child = new BranchesView().BuildView(ctx) },
-                                                },
-                                            },
-                                            initialWidth: prefs.BranchesWidth,
-                                            onWidthChanged: preferences.SetBranchesWidth),
-                                        Center = new BorderLayoutView
-                                        {
-                                            North = new FlexColumnView
-                                            {
-                                                CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                                                Children =
-                                                {
-                                                    new OperationBannerView().BuildView(ctx),
-                                                    new ActionsToolbar().BuildView(ctx),
-                                                },
-                                            },
-                                            Center = new MainContentView(ctx),
-                                        },
-                                    } } },
-                                },
-                            },
-                        },
-                        South = new StatusBarView().BuildView(ctx),
-                    } } },
+                        West = new RepoBarSidebar(),
+                        Center = new RepoView(),
+                        South = new StatusBarView(),
+                    },
                 },
-            },
-        });
-        root.Children.Add(new DragOverlay(ctx));
+            ],
+        };
 
-        var dialogSurfaceView = new DialogSurfaceView(ctx.Require<InputSystem>());
-        root.Children.Add(dialogSurfaceView);
-
-        root.Behaviors.Add(new DialogPresenter(ctx, dialogSurfaceView));
-
-        // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
-        root.Children.Add(new DiffWindowsView(ctx));
-
-        root.UseController(ctx.Require<InputSystem>(), () => new AppKeybindController(
+        return new Stack
+        {
+            Children =
+            [
+                frame,
+                new Raw { View = new DragOverlay(ctx) },
+                new Raw { View = dialogSurface },
+                // Headless host that materializes pop-out diff windows from DiffWindowsViewModel.
+                new Raw { View = new DiffWindowsView(ctx) },
+            ],
+        }
+        .WithBehaviors(new DialogPresenter(ctx, dialogSurface))
+        .WithController(input, () => new AppKeybindController(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IMessageBus>()));
-
-        return root;
     }
 }
