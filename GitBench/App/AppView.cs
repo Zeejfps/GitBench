@@ -119,7 +119,3 @@ internal sealed record AppView : Widget
         return root;
     }
 }
-
-// Window-level keyboard shortcuts. Sits at the app root so the hover-built focus queue
-// always includes it; descendant text inputs let F5 fall through (they only consume
-// printable keys / editing shortcuts), so the refresh fires regardless of focus.
