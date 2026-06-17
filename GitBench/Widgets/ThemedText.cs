@@ -10,25 +10,22 @@ namespace GitBench.Widgets;
 /// </summary>
 public sealed record ThemedText : Widget
 {
-    public string? Value { get; init; }
+    /// <summary>The text: a constant, an observable, a projection, or a compute (see <see cref="Prop{T}"/>).</summary>
+    public Prop<string?> Value { get; init; }
 
     /// <summary>Selects the text color from the active theme; re-fires on theme swaps.</summary>
     public Func<ThemeStyles, uint>? Color { get; init; }
 
-    public StyleValue<float> FontSize { get; init; }
-    public string? FontFamily { get; init; }
-    public StyleValue<FontWeight> Weight { get; init; }
-    public StyleValue<TextWrap> Wrap { get; init; }
-    public StyleValue<TextAlignment> HAlign { get; init; }
-    public StyleValue<TextAlignment> VAlign { get; init; }
-
-    /// <summary>Auto-tracked text binding; overrides <see cref="Value"/> once mounted.</summary>
-    public Func<string?>? Bind { get; init; }
+    public Prop<float> FontSize { get; init; }
+    public Prop<string> FontFamily { get; init; }
+    public Prop<FontWeight> Weight { get; init; }
+    public Prop<TextWrap> Wrap { get; init; }
+    public Prop<TextAlignment> HAlign { get; init; }
+    public Prop<TextAlignment> VAlign { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
         var theme = ctx.Theme();
-        var color = Color;
         return new Text
         {
             Value = Value,
@@ -38,8 +35,7 @@ public sealed record ThemedText : Widget
             Wrap = Wrap,
             HAlign = HAlign,
             VAlign = VAlign,
-            Bind = Bind,
-            BindColor = color != null ? () => color(theme.Styles.Value) : null,
+            Color = Color != null ? theme.Styles.Bind(Color) : default,
         };
     }
 }

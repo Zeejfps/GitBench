@@ -67,13 +67,13 @@ internal sealed record BranchLabel : Widget
                     },
                     new ThemedText
                     {
-                        Bind = () => IsDetached.Value ? "at" : "on",
+                        Value = IsDetached.Bind(d => d ? "at" : "on"),
                         VAlign = TextAlignment.Center,
                         Color = s => s.BranchesHeader.PrefixText,
                     },
                     new ThemedText
                     {
-                        Bind = () => BranchName.Value,
+                        Value = Prop.Bind(BranchName),
                         FontSize = 18f,
                         Weight = FontWeight.Bold,
                         VAlign = TextAlignment.Center,

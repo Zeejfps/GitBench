@@ -71,23 +71,23 @@ internal sealed record RebaseBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
                     VAlign = TextAlignment.Center,
-                    Bind = () => vm.PreviewState.Value switch
+                    Value = vm.PreviewState.Bind(s => s switch
                     {
                         RebasePreviewState.Clean => LucideIcons.CheckSquare,
                         RebasePreviewState.Conflicts => LucideIcons.CloudOff,
                         _ => string.Empty,
-                    },
+                    }),
                     Color = color,
                 },
                 new ThemedText
                 {
                     VAlign = TextAlignment.Center,
-                    Bind = () => vm.PreviewState.Value switch
+                    Value = vm.PreviewState.Bind(s => s switch
                     {
                         RebasePreviewState.Clean => "Rebase can be done without conflicts",
                         RebasePreviewState.Conflicts => "Rebase will produce conflicts",
                         _ => string.Empty,
-                    },
+                    }),
                     Color = color,
                 },
             ],

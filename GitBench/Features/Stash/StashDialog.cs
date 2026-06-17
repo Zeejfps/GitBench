@@ -59,7 +59,7 @@ internal sealed record StashDialog : Widget
                 },
                 new ThemedText
                 {
-                    Bind = () => vm.FilesHeader.Value,
+                    Value = Prop.Bind(vm.FilesHeader),
                     Color = s => s.DialogBody.SectionHeaderText,
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },

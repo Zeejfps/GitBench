@@ -64,23 +64,23 @@ internal sealed record MergeBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
                     VAlign = TextAlignment.Center,
-                    Bind = () => vm.PreviewState.Value switch
+                    Value = vm.PreviewState.Bind(s => s switch
                     {
                         MergePreviewState.Clean => LucideIcons.CheckSquare,
                         MergePreviewState.Conflicts => LucideIcons.CloudOff,
                         _ => string.Empty,
-                    },
+                    }),
                     Color = color,
                 },
                 new ThemedText
                 {
                     VAlign = TextAlignment.Center,
-                    Bind = () => vm.PreviewState.Value switch
+                    Value = vm.PreviewState.Bind(s => s switch
                     {
                         MergePreviewState.Clean => "Merge can be done without conflicts",
                         MergePreviewState.Conflicts => "Merge will produce conflicts",
                         _ => string.Empty,
-                    },
+                    }),
                     Color = color,
                 },
             ],

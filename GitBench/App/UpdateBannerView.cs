@@ -49,7 +49,7 @@ internal sealed record UpdateBannerView : Widget
                             {
                                 VAlign = TextAlignment.Center,
                                 Wrap = TextWrap.Wrap,
-                                Bind = () => updateService.BannerMessage.Value,
+                                Value = updateService.BannerMessage,
                                 Color = s => s.Banner.Text,
                             },
                         },
