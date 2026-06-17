@@ -26,7 +26,7 @@ internal sealed record GroupSection : Widget
                 {
                     Gap = 2,
                     CrossAxis = CrossAxisAlignment.Stretch,
-                    Items = vm.VisiblePrimaries,
+                    Items = Prop.Bind(vm.VisiblePrimaries),
                     Template = primary => new RepoEntry { Primary = primary },
                 },
             ],
