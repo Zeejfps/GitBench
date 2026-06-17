@@ -18,7 +18,7 @@ internal sealed record RepoView : Widget
         CrossAxis = CrossAxisAlignment.Stretch,
         Children =
         [
-            new DetachedHeadBannerView(),
+            new DetachedHeadBanner(),
             new SubmoduleStatusBannerView(),
             new Grow { Child = new WorkspaceView() },
         ],

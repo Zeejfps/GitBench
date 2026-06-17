@@ -14,4 +14,8 @@ public static class Theme
     /// <summary>A text/background/border color selected from the active theme styles.</summary>
     public static Prop<uint> Color(Func<ThemeStyles, uint> select) =>
         Prop.Deferred(ctx => ctx.Theme().Styles.Bind(select));
+
+    /// <summary>A per-edge border color selected from the active theme styles.</summary>
+    public static Prop<BorderColorStyle> BorderColor(Func<ThemeStyles, BorderColorStyle> select) =>
+        Prop.Deferred(ctx => ctx.Theme().Styles.Bind(select));
 }

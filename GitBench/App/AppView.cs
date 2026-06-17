@@ -1,7 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
-using GitBench.Features.Repos;
 using GitBench.Features.StatusBar;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
