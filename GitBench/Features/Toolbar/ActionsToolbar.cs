@@ -40,7 +40,7 @@ internal sealed record ActionsToolbar : Widget
                     Label = Prop.Bind<string?>(() => vm.IsPulling.Value ? "Pulling" : "Pull"),
                     IconRotation = Prop.Bind(vm.PullRotation),
                     BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
-                    Badge = Prop.Bind(vm.PullBadge),
+                    Badge = vm.PullBadge,
                     Command = vm.Pull,
                 }.BuildView(ctx),
                 new ActionButton
@@ -49,7 +49,7 @@ internal sealed record ActionsToolbar : Widget
                     Label = Prop.Bind<string?>(() => vm.IsPushing.Value ? "Pushing" : "Push"),
                     IconRotation = Prop.Bind(vm.PushRotation),
                     BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
-                    Badge = Prop.Bind(vm.PushBadge),
+                    Badge = vm.PushBadge,
                     Command = vm.Push,
                 }.BuildView(ctx),
                 new SeparatorSpacer().BuildView(ctx),

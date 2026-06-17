@@ -10,8 +10,9 @@ namespace GitBench.Controls;
 
 /// <summary>
 /// Toolbar/banner action button: icon, optional label, optional count badge, optional solid
-/// fill. Config and reactive bindings flow through init-only <see cref="Prop{T}"/>s; the click is
-/// wired through <see cref="Command"/> (busy/disable-aware) or <see cref="OnClick"/>.
+/// fill. Composes <see cref="KbmInput"/> over a themed <see cref="Box"/>; hover and enabled
+/// state drive the colors. Click runs <see cref="Command"/> (which no-ops while disabled) or
+/// <see cref="OnClick"/>.
 /// </summary>
 internal sealed record ActionButton : Widget
 {
@@ -23,14 +24,13 @@ internal sealed record ActionButton : Widget
 
     public string? Tooltip { get; init; }
 
-    /// <summary>Setting this enables the count badge and selects its color — bind a theme color
-    /// with <see cref="GitBench.Widgets.Theme.Color"/>.</summary>
+    /// <summary>Count shown in a badge next to the icon; null or 0 hides it.</summary>
+    public IReadable<int?>? Badge { get; init; }
+
+    /// <summary>Badge text color — bind a theme color with <see cref="GitBench.Widgets.Theme.Color"/>.</summary>
     public Prop<uint> BadgeColor { get; init; }
 
-    /// <summary>Badge count; null or 0 hides the badge.</summary>
-    public Prop<int?> Badge { get; init; }
-
-    public uint? IconColor { get; init; }
+    /// <summary>Solid fill; when set the button paints a filled, rounded chip with white glyphs.</summary>
     public uint? Background { get; init; }
 
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
@@ -41,133 +41,110 @@ internal sealed record ActionButton : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var theme = ctx.Theme();
+        var styles = ctx.Theme().Styles;
         var hovered = new State<bool>(false);
-        var iconColor = IconColor ?? (Background != null ? 0xFFFFFFFFu : null);
-        var command = Command;
-        var onClick = OnClick;
+        var enabled = Command?.CanExecute;
 
-        // The badge count and color drive both the badge text and the icon tint, so they're
-        // read back inside the color computes — materialize them from their props.
-        var hasBadge = BadgeColor.IsSet;
-        var badgeCount = new State<int?>(null);
-        var badgeColor = new State<uint>(0);
+        Prop<uint> foreground = Prop.Bind(() => Foreground(styles.Value, hovered.Value, enabled));
 
-        bool Enabled() => command?.CanExecute.Value ?? true;
-
-        uint SelectBackground(ThemeStyles s)
+        IWidget button = new KbmInput
         {
-            if (Background is uint bg)
+            OnClick = Activate,
+            OnHoverEnter = () => hovered.Value = true,
+            OnHoverExit = () => hovered.Value = false,
+            Child = new Box
             {
-                if (!Enabled()) return Darken(bg, 0x40);
-                return hovered.Value ? Lighten(bg, 0x18) : bg;
-            }
-            return Enabled() && hovered.Value ? s.ActionButton.BackgroundHover : s.ActionButton.BackgroundIdle;
-        }
+                Height = 28,
+                BorderRadius = Background is null ? default : BorderRadiusStyle.All(6),
+                Padding = HorizontalPadding(),
+                Background = Prop.Bind(() => Surface(styles.Value, hovered.Value, enabled)),
+                Children = [Content(foreground)],
+            },
+        };
 
-        uint SelectForeground(ThemeStyles s)
-        {
-            if (!Enabled()) return s.ActionButton.TextDisabled;
-            if (hasBadge && badgeCount.Value is > 0) return badgeColor.Value;
-            if (iconColor is uint ic) return ic;
-            return hovered.Value ? s.ActionButton.TextHover : s.ActionButton.TextIdle;
-        }
+        return Tooltip is { Length: > 0 } tooltip
+            ? button.Use(v => new Tooltip(v, ctx, tooltip, hovered, enabled ?? AlwaysEnabled))
+            : button;
+    }
 
-        uint SelectLabelForeground(ThemeStyles s)
-        {
-            if (!Enabled()) return s.ActionButton.TextDisabled;
-            // On a colored-background button the label must match the (white) icon, not the
-            // theme's default text color — otherwise dark text on the green fill is unreadable.
-            if (iconColor is uint ic) return ic;
-            return hovered.Value ? s.ActionButton.TextHover : s.ActionButton.TextIdle;
-        }
-
+    private IWidget Content(Prop<uint> foreground)
+    {
         var icon = new Text
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 15,
             VAlign = TextAlignment.Center,
             Value = Icon,
-            Color = Prop.Bind(() => SelectForeground(theme.Styles.Value)),
+            Color = foreground,
             Rotation = IconRotation,
         };
 
-        var iconGroupChildren = new List<IWidget> { icon };
-        if (hasBadge)
-        {
-            iconGroupChildren.Add(new Text
-            {
-                VAlign = TextAlignment.Center,
-                Color = Prop.Bind(() => badgeColor.Value),
-                Value = Prop.Bind<string?>(() => badgeCount.Value?.ToString() ?? string.Empty),
-                Visible = Prop.Bind(() => badgeCount.Value is > 0),
-            });
-        }
-
-        var countIconGroup = new Row
+        IWidget glyphs = Badge is null ? icon : new Row
         {
             Gap = 0,
             CrossAxis = CrossAxisAlignment.Stretch,
-            Children = [.. iconGroupChildren],
-        };
-
-        var rowChildren = new List<IWidget> { countIconGroup };
-        var hasLabel = Label.IsSet;
-        if (hasLabel)
-        {
-            rowChildren.Add(new Text
-            {
-                VAlign = TextAlignment.Center,
-                Value = Label,
-                Color = Prop.Bind(() => SelectLabelForeground(theme.Styles.Value)),
-            });
-        }
-
-        var horizontalPadding = hasLabel ? 8 : (Background != null ? 10 : 6);
-        var box = new Box
-        {
-            Height = 28,
-            BorderRadius = Background != null ? BorderRadiusStyle.All(6) : default,
-            Padding = new PaddingStyle { Left = horizontalPadding, Right = horizontalPadding },
-            Background = Prop.Bind(() => SelectBackground(theme.Styles.Value)),
             Children =
             [
-                new Row
+                icon,
+                new Text
                 {
-                    Gap = 6,
-                    CrossAxis = CrossAxisAlignment.Stretch,
-                    Children = [.. rowChildren],
+                    VAlign = TextAlignment.Center,
+                    Color = BadgeColor,
+                    Value = Badge.Bind(count => count?.ToString()),
+                    Visible = Badge.Bind(count => count is > 0),
                 },
             ],
         };
 
-        IWidget interactive = new KbmInput
+        if (!Label.IsSet) return glyphs;
+
+        return new Row
         {
-            OnClick = () =>
-            {
-                if (command is { } cmd) cmd.Execute();
-                else onClick?.Invoke();
-            },
-            OnHoverEnter = () => hovered.Value = true,
-            OnHoverExit = () => hovered.Value = false,
-            Child = box,
+            Gap = 6,
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children =
+            [
+                glyphs,
+                new Text { VAlign = TextAlignment.Center, Value = Label, Color = foreground },
+            ],
         };
-
-        if (hasBadge)
-        {
-            interactive = interactive
-                .Materialize(ctx, Badge, badgeCount)
-                .Materialize(ctx, BadgeColor, badgeColor);
-        }
-
-        if (Tooltip is { Length: > 0 } tooltipText)
-        {
-            IReadable<bool> isEnabled = command?.CanExecute ?? new State<bool>(true);
-            interactive = interactive.Use(v => new Tooltip(v, ctx, tooltipText, hovered, isEnabled));
-        }
-
-        return interactive;
     }
+
+    private void Activate()
+    {
+        if (Command is { } command) command.Execute();
+        else OnClick?.Invoke();
+    }
+
+    private PaddingStyle HorizontalPadding()
+    {
+        var pad = Label.IsSet ? 8 : Background is null ? 6 : 10;
+        return new PaddingStyle { Left = pad, Right = pad };
+    }
+
+    // Glyph/label color: white on a solid fill, otherwise the themed idle/hover/disabled ramp.
+    private uint Foreground(ThemeStyles styles, bool hovered, IReadable<bool>? enabled)
+    {
+        var s = styles.ActionButton;
+        if (enabled is { Value: false }) return s.TextDisabled;
+        if (Background is not null) return 0xFFFFFFFFu;
+        return hovered ? s.TextHover : s.TextIdle;
+    }
+
+    // Fill color: a solid button lightens on hover / darkens when disabled; a plain button uses
+    // the themed idle/hover surface.
+    private uint Surface(ThemeStyles styles, bool hovered, IReadable<bool>? enabled)
+    {
+        var s = styles.ActionButton;
+        if (Background is uint fill)
+        {
+            if (enabled is { Value: false }) return Darken(fill, 0x40);
+            return hovered ? Lighten(fill, 0x18) : fill;
+        }
+        return enabled is not { Value: false } && hovered ? s.BackgroundHover : s.BackgroundIdle;
+    }
+
+    private static readonly State<bool> AlwaysEnabled = new(true);
 
     private static uint Lighten(uint argb, uint delta)
     {
@@ -181,9 +158,9 @@ internal sealed record ActionButton : Widget
     private static uint Darken(uint argb, uint delta)
     {
         var a = (argb >> 24) & 0xFF;
-        var r = ((argb >> 16) & 0xFF);
-        var g = ((argb >> 8) & 0xFF);
-        var b = (argb & 0xFF);
+        var r = (argb >> 16) & 0xFF;
+        var g = (argb >> 8) & 0xFF;
+        var b = argb & 0xFF;
         r = r > delta ? r - delta : 0;
         g = g > delta ? g - delta : 0;
         b = b > delta ? b - delta : 0;
