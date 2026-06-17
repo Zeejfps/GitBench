@@ -17,7 +17,6 @@ internal sealed record Segment : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var styles = ctx.Theme().Styles;
         var hovered = new State<bool>(false);
 
         return new KbmInput
@@ -29,10 +28,7 @@ internal sealed record Segment : Widget
             {
                 Height = SegmentHeight,
                 BorderRadius = Radius,
-                Background = Prop.Bind(() =>
-                    Model.IsActive.Value ? styles.Value.ModeSwitcher.SegmentActiveBackground :
-                    hovered.Value ? styles.Value.ModeSwitcher.SegmentHoverBackground :
-                    styles.Value.ModeSwitcher.SegmentIdleBackground),
+                Background = Theme.Color(s => s.ModeSwitcher.SegmentBackground(Model.IsActive.Value, hovered.Value)),
                 Children =
                 [
                     new Padding
@@ -45,10 +41,7 @@ internal sealed record Segment : Widget
                                 Value = Label,
                                 HAlign = TextAlignment.Center,
                                 VAlign = TextAlignment.Center,
-                                Color = Prop.Bind(() =>
-                                    Model.IsActive.Value ? styles.Value.ModeSwitcher.SegmentActiveText :
-                                    hovered.Value ? styles.Value.ModeSwitcher.SegmentHoverText :
-                                    styles.Value.ModeSwitcher.SegmentIdleText),
+                                Color = Theme.Color(s => s.ModeSwitcher.SegmentText(Model.IsActive.Value, hovered.Value)),
                             },
                         ],
                     },

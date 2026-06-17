@@ -11,7 +11,10 @@ public sealed record GroupHeaderRowStyles(
     uint ChevronText,
     uint BackgroundIdle,
     uint BackgroundHover,
-    uint NameText);
+    uint NameText)
+{
+    public uint Background(bool hovered) => hovered ? BackgroundHover : BackgroundIdle;
+}
 
 public sealed record GroupRenameFieldStyles(
     uint Background,
@@ -30,7 +33,14 @@ public sealed record RepoBarRowStyles(
     uint IconAccentWorktree,
     uint IconAccentSubmodule,
     uint BadgeError,
-    uint BadgeDirty);
+    uint BadgeDirty)
+{
+    public uint Background(bool active, bool hovered)
+        => active ? BackgroundActive : hovered ? BackgroundHover : BackgroundIdle;
+
+    public uint Text(bool active, bool missing)
+        => missing ? TextMissing : active ? TextActive : TextIdle;
+}
 
 public sealed record BranchesViewStyles(
     uint ViewBackground,

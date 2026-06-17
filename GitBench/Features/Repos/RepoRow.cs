@@ -21,7 +21,6 @@ internal sealed record RepoRow : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-        var styles = ctx.Theme().Styles;
         var registry = ctx.Require<IRepoRegistry>();
         var input = ctx.Require<InputSystem>();
         var hovered = new State<bool>(false);
@@ -35,30 +34,22 @@ internal sealed record RepoRow : Widget
         };
         var leftPad = RepoBar.RowPaddingLeft + (int)TreeMetrics.IndentLevel * vm.Depth;
 
-        uint TextColor(ThemeStyles s) => vm.IsMissing.Value
-            ? s.RepoBarRow.TextMissing
-            : vm.IsActive.Value ? s.RepoBarRow.TextActive : s.RepoBarRow.TextIdle;
-
         // Primary icons share the label's missing/active/idle color; nested icons use the kind accent
         // (muted to the missing color when the checkout is gone).
         uint IconColor(ThemeStyles s)
         {
-            if (isPrimary) return TextColor(s);
+            if (isPrimary) return s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value);
             if (vm.IsMissing.Value) return s.RepoBarRow.TextMissing;
             return vm.Kind == RepoKind.Worktree
                 ? s.RepoBarRow.IconAccentWorktree
                 : s.RepoBarRow.IconAccentSubmodule;
         }
 
-        uint Background(ThemeStyles s) => vm.IsActive.Value
-            ? s.RepoBarRow.BackgroundActive
-            : hovered.Value ? s.RepoBarRow.BackgroundHover : s.RepoBarRow.BackgroundIdle;
-
         IWidget row = new Box
         {
             Height = isPrimary ? 28 : 26,
             BorderRadius = BorderRadiusStyle.All(4),
-            Background = Prop.Bind(() => Background(styles.Value)),
+            Background = Theme.Color(s => s.RepoBarRow.Background(vm.IsActive.Value, hovered.Value)),
             Children =
             [
                 new Padding
@@ -81,7 +72,7 @@ internal sealed record RepoRow : Widget
                                     Width = RepoBar.RowIconWidth,
                                     HAlign = TextAlignment.Center,
                                     VAlign = TextAlignment.Center,
-                                    Color = Prop.Bind(() => IconColor(styles.Value)),
+                                    Color = Theme.Color(IconColor),
                                 },
                                 new Grow
                                 {
@@ -91,7 +82,7 @@ internal sealed record RepoRow : Widget
                                         HAlign = TextAlignment.Start,
                                         VAlign = TextAlignment.Center,
                                         Overflow = TextOverflow.Ellipsis,
-                                        Color = Prop.Bind(() => TextColor(styles.Value)),
+                                        Color = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value)),
                                     },
                                 },
                                 new Box
@@ -99,9 +90,9 @@ internal sealed record RepoRow : Widget
                                     Width = 8,
                                     Height = 8,
                                     BorderRadius = BorderRadiusStyle.All(4),
-                                    Background = Prop.Bind(() => vm.Badge.Value == RepoRowBadge.Error
-                                        ? styles.Value.RepoBarRow.BadgeError
-                                        : styles.Value.RepoBarRow.BadgeDirty),
+                                    Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
+                                        ? s.RepoBarRow.BadgeError
+                                        : s.RepoBarRow.BadgeDirty),
                                     Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
                                 },
                             ],

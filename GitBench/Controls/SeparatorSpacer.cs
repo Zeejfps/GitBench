@@ -18,7 +18,6 @@ internal sealed record SeparatorSpacer : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var theme = ctx.Theme();
         return new Center
         {
             Width = SeparatorWidth + SeparatorBreathingRoom * 2,
@@ -26,7 +25,7 @@ internal sealed record SeparatorSpacer : Widget
             {
                 Width = SeparatorWidth,
                 Height = SeparatorHeight,
-                Background = Prop.Bind(() => theme.Styles.Value.Palette.Border),
+                Background = Theme.Color(s => s.Palette.Border),
             },
         };
     }

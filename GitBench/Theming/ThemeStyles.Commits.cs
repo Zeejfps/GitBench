@@ -12,7 +12,14 @@ public sealed record ModeSwitcherStyles(
     uint SegmentActiveBackground,
     uint SegmentIdleText,
     uint SegmentHoverText,
-    uint SegmentActiveText);
+    uint SegmentActiveText)
+{
+    public uint SegmentBackground(bool active, bool hovered)
+        => active ? SegmentActiveBackground : hovered ? SegmentHoverBackground : SegmentIdleBackground;
+
+    public uint SegmentText(bool active, bool hovered)
+        => active ? SegmentActiveText : hovered ? SegmentHoverText : SegmentIdleText;
+}
 
 public sealed record CommitDetailsViewStyles(
     uint Background,

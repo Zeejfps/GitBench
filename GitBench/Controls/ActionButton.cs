@@ -45,7 +45,7 @@ internal sealed record ActionButton : Widget
         var hovered = new State<bool>(false);
         var enabled = Command?.CanExecute;
 
-        Prop<uint> foreground = Prop.Bind(() => Foreground(styles.Value, hovered.Value, enabled));
+        Prop<uint> foreground = styles.Bind(s => Foreground(s, hovered.Value, enabled));
 
         IWidget button = new KbmInput
         {
@@ -56,7 +56,7 @@ internal sealed record ActionButton : Widget
             {
                 Height = 28,
                 BorderRadius = Background is null ? default : BorderRadiusStyle.All(6),
-                Background = Prop.Bind(() => Surface(styles.Value, hovered.Value, enabled)),
+                Background = styles.Bind(s => Surface(s, hovered.Value, enabled)),
                 Children =
                 [
                     new Padding

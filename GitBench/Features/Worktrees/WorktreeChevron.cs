@@ -15,7 +15,6 @@ public sealed record WorktreeChevron : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-        var theme = ctx.Theme();
 
         return new KbmInput
         {
@@ -32,7 +31,7 @@ public sealed record WorktreeChevron : Widget
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
                         Width = RepoBar.RowChevronWidth,
-                        Color = Prop.Bind(() => theme.Styles.Value.Palette.TextSecondary),
+                        Color = Theme.Color(s => s.Palette.TextSecondary),
                         Value = Prop.Bind<string?>(() =>
                             !vm.HasChildren.Value ? string.Empty
                             : vm.IsExpanded.Value ? LucideIcons.ChevronDown : LucideIcons.ChevronRight),

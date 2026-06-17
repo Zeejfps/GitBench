@@ -16,16 +16,13 @@ internal sealed record GroupHeaderRow : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = Model;
-        var styles = ctx.Theme().Styles;
         var isHovered = new State<bool>(false);
 
         var root = new Box
         {
             Height = 22,
             BorderRadius = BorderRadiusStyle.All(4),
-            Background = Prop.Bind(() => isHovered.Value
-                ? styles.Value.GroupHeaderRow.BackgroundHover
-                : styles.Value.GroupHeaderRow.BackgroundIdle),
+            Background = Theme.Color(s => s.GroupHeaderRow.Background(isHovered.Value)),
             Children =
             [
                 new Padding
