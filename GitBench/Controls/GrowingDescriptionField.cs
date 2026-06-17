@@ -103,19 +103,25 @@ internal sealed class GrowingDescriptionField : ContainerView
         {
             BorderSize = BorderSizeStyle.All((int)BoxBorderThickness),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle
-            {
-                Left = (int)BoxPaddingHorizontal,
-                Right = (int)BoxPaddingHorizontal,
-                Top = (int)BoxPaddingVertical,
-                Bottom = (int)BoxPaddingVertical,
-            },
             Children =
             {
-                new BorderLayoutView
+                new PaddingView
                 {
-                    Center = _scrollPane,
-                    East = _scrollBar,
+                    Padding = new PaddingStyle
+                    {
+                        Left = (int)BoxPaddingHorizontal,
+                        Right = (int)BoxPaddingHorizontal,
+                        Top = (int)BoxPaddingVertical,
+                        Bottom = (int)BoxPaddingVertical,
+                    },
+                    Children =
+                    {
+                        new BorderLayoutView
+                        {
+                            Center = _scrollPane,
+                            East = _scrollBar,
+                        },
+                    },
                 },
             },
         };

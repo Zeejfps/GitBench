@@ -128,19 +128,25 @@ internal sealed record OperationErrorDialog : Widget
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(10),
-            Padding = PaddingStyle.All(20),
             Children =
             {
-                new FlexColumnView
+                new PaddingView
                 {
-                    Gap = 12,
-                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                    Padding = PaddingStyle.All(20),
                     Children =
                     {
-                        headerRow,
-                        separator,
-                        new FlexItem { Grow = 1, Child = scrollHost },
-                        buttonsRow,
+                        new FlexColumnView
+                        {
+                            Gap = 12,
+                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                            Children =
+                            {
+                                headerRow,
+                                separator,
+                                new FlexItem { Grow = 1, Child = scrollHost },
+                                buttonsRow,
+                            },
+                        },
                     },
                 },
             },

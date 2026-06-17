@@ -146,9 +146,15 @@ internal static class DialogFrame
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
             Height = 28,
-            Children = { input },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                    Children = { input },
+                },
+            },
         };
         var theme = ctx.Theme();
         view.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
@@ -163,8 +169,14 @@ internal static class DialogFrame
             Width = width,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(DefaultBorderRadius),
-            Padding = PaddingStyle.All(DefaultPadding),
-            Children = { child },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = PaddingStyle.All(DefaultPadding),
+                    Children = { child },
+                },
+            },
         };
         var theme = ctx.Theme();
         view.BindThemedBackgroundColor(theme, s => s.DialogFrame.Background);

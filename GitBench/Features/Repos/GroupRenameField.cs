@@ -34,8 +34,14 @@ internal sealed record GroupRenameField : Widget
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle { Left = 4, Right = 4 },
-            Children = { input }
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 4, Right = 4 },
+                    Children = { input },
+                },
+            },
         };
         box.BindBackgroundColor(() => theme.Styles.Value.GroupRenameField.Background);
         box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.GroupRenameField.Border));

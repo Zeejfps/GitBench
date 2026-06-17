@@ -69,20 +69,26 @@ internal sealed class DiffPaneHeader : ContainerView
         {
             Height = HeaderHeight,
             BorderSize = new BorderSizeStyle { Top = 1, Bottom = 1 },
-            Padding = new PaddingStyle { Left = 8, Right = 6 },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    Gap = 6f,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    Padding = new PaddingStyle { Left = 8, Right = 6 },
                     Children =
                     {
-                        chevron,
-                        new FlexItem { Grow = 1, Child = title },
-                        _lfsBadge,
-                        BuildFullFileToggleButton(ctx, input, theme),
-                        BuildOpenInWindowButton(ctx, input, theme),
+                        new FlexRowView
+                        {
+                            Gap = 6f,
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Children =
+                            {
+                                chevron,
+                                new FlexItem { Grow = 1, Child = title },
+                                _lfsBadge,
+                                BuildFullFileToggleButton(ctx, input, theme),
+                                BuildOpenInWindowButton(ctx, input, theme),
+                            },
+                        },
                     },
                 },
             },

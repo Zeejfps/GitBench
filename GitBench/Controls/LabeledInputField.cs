@@ -84,8 +84,14 @@ internal sealed class LabeledInputField : ContainerView
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
-            Children = { _input },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                    Children = { _input },
+                },
+            },
         };
         _box.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
         // Own the border binding (rather than DialogFrame.WrapInput's fixed one) so it can be

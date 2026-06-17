@@ -39,8 +39,11 @@ internal sealed class LfsBadgeView : RectView
 
         Height = 16f;
         BorderRadius = BorderRadiusStyle.All(8);
-        Padding = new PaddingStyle { Left = 7, Right = 7 };
-        Children.Add(label);
+        Children.Add(new PaddingView
+        {
+            Padding = new PaddingStyle { Left = 7, Right = 7 },
+            Children = { label },
+        });
 
         this.BindBackgroundColor(() => _state.Value == LfsBadge.Tracked
             ? theme.Styles.Value.DiffView.LfsBadgeTrackedBackground

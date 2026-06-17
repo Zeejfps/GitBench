@@ -92,14 +92,20 @@ internal static class FileChangesUI
         var view = new RectView
         {
             BorderSize = new BorderSizeStyle { Top = 1, Bottom = 1 },
-            Padding = new PaddingStyle
+            Children =
             {
-                Left = HeaderPadding,
-                Right = HeaderPadding,
-                Top = HeaderPadding,
-                Bottom = HeaderPadding,
+                new PaddingView
+                {
+                    Padding = new PaddingStyle
+                    {
+                        Left = HeaderPadding,
+                        Right = HeaderPadding,
+                        Top = HeaderPadding,
+                        Bottom = HeaderPadding,
+                    },
+                    Children = { content },
+                },
             },
-            Children = { content },
         };
         view.BindThemedBackgroundColor(theme, s => s.FileChangesSection.HeaderBackground);
         view.BindThemedBorderColor(theme, s => new BorderColorStyle

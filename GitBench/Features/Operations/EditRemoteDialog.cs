@@ -129,8 +129,14 @@ internal sealed class SchemeDropdown : HoverableButton
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle { Left = 8, Right = 6, Top = 4, Bottom = 4 },
-            Children = { row },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 8, Right = 6, Top = 4, Bottom = 4 },
+                    Children = { row },
+                },
+            },
         };
         BorderedButtonChrome.Bind(background, theme, IsHovered);
         SetBackground(background);

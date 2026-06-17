@@ -72,19 +72,25 @@ public abstract record NestedRepoRow : Widget
         var background = new RectView
         {
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle { Left = leftPad, Right = 12 },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    Gap = RepoBar.RowIconGap,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    Padding = new PaddingStyle { Left = leftPad, Right = 12 },
                     Children =
                     {
-                        chevronSlot,
-                        icon,
-                        new FlexItem { Grow = 1, Child = label },
-                        RowChrome.CreateBadge(theme, status, repo.Id),
+                        new FlexRowView
+                        {
+                            Gap = RepoBar.RowIconGap,
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Children =
+                            {
+                                chevronSlot,
+                                icon,
+                                new FlexItem { Grow = 1, Child = label },
+                                RowChrome.CreateBadge(theme, status, repo.Id),
+                            }
+                        }
                     }
                 }
             }

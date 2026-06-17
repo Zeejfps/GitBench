@@ -99,13 +99,19 @@ internal sealed record DiscardChangesDialog : Widget
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = PaddingStyle.All(6),
             Children =
             {
-                new BorderLayoutView
+                new PaddingView
                 {
-                    Center = scrollPane,
-                    East = vScrollBar,
+                    Padding = PaddingStyle.All(6),
+                    Children =
+                    {
+                        new BorderLayoutView
+                        {
+                            Center = scrollPane,
+                            East = vScrollBar,
+                        },
+                    },
                 },
             },
         };

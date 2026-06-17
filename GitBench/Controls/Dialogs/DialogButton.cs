@@ -91,11 +91,17 @@ public sealed class DialogButton : HoverableButton
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(6),
-            // Horizontal padding gives short labels breathing room and lets the button size
-            // to its text (clamped up by MinWidthConstraint in DialogFrame.ButtonsRow) instead
-            // of being pinned to a hand-tuned Width per dialog.
-            Padding = new PaddingStyle { Left = 16, Right = 16 },
-            Children = { _row },
+            Children =
+            {
+                // Horizontal padding gives short labels breathing room and lets the button size
+                // to its text (clamped up by MinWidthConstraint in DialogFrame.ButtonsRow) instead
+                // of being pinned to a hand-tuned Width per dialog.
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 16, Right = 16 },
+                    Children = { _row },
+                },
+            },
         };
         if (role == DialogButtonRole.Default)
         {

@@ -38,8 +38,14 @@ internal sealed record SegmentView : Widget
         var bg = new RectView
         {
             BorderRadius = Radius,
-            Padding = new PaddingStyle { Left = 12, Right = 12 },
-            Children = { labelView },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 12, Right = 12 },
+                    Children = { labelView },
+                },
+            },
         };
         bg.BindBackgroundColor(() =>
             isActive.Value ? theme.Styles.Value.ModeSwitcher.SegmentActiveBackground :

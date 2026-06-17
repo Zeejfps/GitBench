@@ -79,20 +79,26 @@ internal sealed record StatusBarView : Widget
         var bar = new RectView
         {
             BorderSize = new BorderSizeStyle { Top = 1 },
-            Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    Gap = 8,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
                     Children =
                     {
-                        themeButton,
-                        new FlexItem { Grow = 1, Child = left },
-                        updateFeedback,
-                        updateButton,
-                        version,
+                        new FlexRowView
+                        {
+                            Gap = 8,
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Children =
+                            {
+                                themeButton,
+                                new FlexItem { Grow = 1, Child = left },
+                                updateFeedback,
+                                updateButton,
+                                version,
+                            },
+                        },
                     },
                 },
             },

@@ -55,14 +55,20 @@ internal sealed class CommitBarView : ContainerView
         _titleInput.UseController(input, _titleController);
 
         // No PreferredHeight — let the box size to one line of text plus padding/border.
-        // The input itself reports MeasureHeight = lineHeight (single line, NoWrap), and the
-        // RectView adds its own padding+border on top.
+        // The input itself reports MeasureHeight = lineHeight (single line, NoWrap); the
+        // PaddingView inset and the RectView border add to that.
         var titleBox = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
-            Children = { _titleInput },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                    Children = { _titleInput },
+                },
+            },
         };
         titleBox.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
         titleBox.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
@@ -102,14 +108,20 @@ internal sealed class CommitBarView : ContainerView
         var bar = new RectView
         {
             BorderSize = new BorderSizeStyle { Top = 1 },
-            Padding = new PaddingStyle
+            Children =
             {
-                Left = Padding,
-                Right = Padding,
-                Top = Padding,
-                Bottom = Padding,
+                new PaddingView
+                {
+                    Padding = new PaddingStyle
+                    {
+                        Left = Padding,
+                        Right = Padding,
+                        Top = Padding,
+                        Bottom = Padding,
+                    },
+                    Children = { column },
+                },
             },
-            Children = { column },
         };
         bar.BindThemedBackgroundColor(theme, s => s.CommitBar.Background);
         bar.BindThemedBorderColor(theme, s => new BorderColorStyle { Top = s.CommitBar.TopBorder });

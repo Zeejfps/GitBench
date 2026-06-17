@@ -49,19 +49,25 @@ internal sealed class DiffWindowToolbar : ContainerView
         {
             Height = ToolbarHeight,
             BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Padding = new PaddingStyle { Left = 10, Right = 8 },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    Gap = 8f,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    Padding = new PaddingStyle { Left = 10, Right = 8 },
                     Children =
                     {
-                        new FlexItem { Grow = 1, Child = _title },
-                        _lfsBadge,
-                        BuildFullFileToggleButton(ctx, input, theme),
-                        BuildStageButton(ctx, input, theme),
+                        new FlexRowView
+                        {
+                            Gap = 8f,
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Children =
+                            {
+                                new FlexItem { Grow = 1, Child = _title },
+                                _lfsBadge,
+                                BuildFullFileToggleButton(ctx, input, theme),
+                                BuildStageButton(ctx, input, theme),
+                            },
+                        },
                     },
                 },
             },
@@ -134,7 +140,7 @@ internal sealed class DiffWindowToolbar : ContainerView
             ? theme.Styles.Value.DiffView.HeaderTitleHover
             : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
-        var btn = new RectView
+        var btn = new PaddingView
         {
             Height = 18f,
             Padding = new PaddingStyle { Left = 8, Right = 8 },

@@ -55,19 +55,25 @@ public sealed record RepoRow : Widget
         var background = new RectView
         {
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle { Left = RepoBar.RowPaddingLeft, Right = 12 },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    Gap = RepoBar.RowIconGap,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    Padding = new PaddingStyle { Left = RepoBar.RowPaddingLeft, Right = 12 },
                     Children =
                     {
-                        chevronSlot,
-                        icon,
-                        new FlexItem { Grow = 1, Child = label },
-                        statusBadge,
+                        new FlexRowView
+                        {
+                            Gap = RepoBar.RowIconGap,
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Children =
+                            {
+                                chevronSlot,
+                                icon,
+                                new FlexItem { Grow = 1, Child = label },
+                                statusBadge,
+                            }
+                        }
                     }
                 }
             }

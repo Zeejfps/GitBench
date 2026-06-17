@@ -63,14 +63,20 @@ internal sealed record RemoveWorktreeDialog : Widget
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle
+            Children =
             {
-                Left = (int)CodeBlockInnerPadding,
-                Right = (int)CodeBlockInnerPadding,
-                Top = 6,
-                Bottom = 6,
+                new PaddingView
+                {
+                    Padding = new PaddingStyle
+                    {
+                        Left = (int)CodeBlockInnerPadding,
+                        Right = (int)CodeBlockInnerPadding,
+                        Top = 6,
+                        Bottom = 6,
+                    },
+                    Children = { pathTextView },
+                },
             },
-            Children = { pathTextView },
         };
         pathBox.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         pathBox.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));

@@ -64,18 +64,24 @@ internal sealed class CommitSearchBarView : ContainerView
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle { Left = 8, Right = 6, Top = 2, Bottom = 2 },
             Children =
             {
-                new FlexRowView
+                new PaddingView
                 {
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
-                    Gap = 8,
+                    Padding = new PaddingStyle { Left = 8, Right = 6, Top = 2, Bottom = 2 },
                     Children =
                     {
-                        icon,
-                        new FlexItem { Grow = 1, Child = _input },
-                        _clear,
+                        new FlexRowView
+                        {
+                            CrossAxisAlignment = CrossAxisAlignment.Center,
+                            Gap = 8,
+                            Children =
+                            {
+                                icon,
+                                new FlexItem { Grow = 1, Child = _input },
+                                _clear,
+                            },
+                        },
                     },
                 },
             },
@@ -85,9 +91,15 @@ internal sealed class CommitSearchBarView : ContainerView
 
         var root = new RectView
         {
-            Padding = new PaddingStyle { Left = 8, Right = 8, Top = 5, Bottom = 5 },
             BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Children = { box },
+            Children =
+            {
+                new PaddingView
+                {
+                    Padding = new PaddingStyle { Left = 8, Right = 8, Top = 5, Bottom = 5 },
+                    Children = { box },
+                },
+            },
         };
         root.BindThemedBackgroundColor(theme, s => s.CommitsView.HeaderBackground);
         root.BindThemedBorderColor(theme, s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom });

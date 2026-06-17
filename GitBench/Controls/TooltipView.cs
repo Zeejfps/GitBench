@@ -27,14 +27,20 @@ public sealed class TooltipView : ContainerView
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(CornerRadius),
-            Padding = new PaddingStyle
+            Children =
             {
-                Left = HorizontalPadding,
-                Right = HorizontalPadding,
-                Top = VerticalPadding,
-                Bottom = VerticalPadding,
+                new PaddingView
+                {
+                    Padding = new PaddingStyle
+                    {
+                        Left = HorizontalPadding,
+                        Right = HorizontalPadding,
+                        Top = VerticalPadding,
+                        Bottom = VerticalPadding,
+                    },
+                    Children = { label },
+                },
             },
-            Children = { label },
         };
         box.BindThemedBackgroundColor(theme, s => s.Tooltip.Background);
         box.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.Tooltip.Border));

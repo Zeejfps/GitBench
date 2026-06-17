@@ -56,14 +56,20 @@ internal sealed record IdentityChipButton : Widget
             var background = new RectView
             {
                 BorderRadius = BorderRadiusStyle.All(4),
-                Padding = new PaddingStyle { Left = 4, Right = 4 },
                 Children =
                 {
-                    new FlexRowView
+                    new PaddingView
                     {
-                        Gap = 4,
-                        CrossAxisAlignment = CrossAxisAlignment.Center,
-                        Children = { icon, label },
+                        Padding = new PaddingStyle { Left = 4, Right = 4 },
+                        Children =
+                        {
+                            new FlexRowView
+                            {
+                                Gap = 4,
+                                CrossAxisAlignment = CrossAxisAlignment.Center,
+                                Children = { icon, label },
+                            },
+                        },
                     },
                 },
             };

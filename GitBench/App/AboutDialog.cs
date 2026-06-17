@@ -96,14 +96,20 @@ internal sealed record AboutDialog : Widget
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(10),
-            Padding = PaddingStyle.All(20),
             Children =
             {
-                new FlexColumnView
+                new PaddingView
                 {
-                    Gap = 12,
-                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                    Children = { closeRow, content },
+                    Padding = PaddingStyle.All(20),
+                    Children =
+                    {
+                        new FlexColumnView
+                        {
+                            Gap = 12,
+                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                            Children = { closeRow, content },
+                        },
+                    },
                 },
             },
         };

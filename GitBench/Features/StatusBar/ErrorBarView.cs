@@ -32,14 +32,20 @@ internal sealed class ErrorBarView : ContainerView
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(3),
-            Padding = new PaddingStyle
+            Children =
             {
-                Left = 8,
-                Right = 8,
-                Top = verticalPadding,
-                Bottom = verticalPadding,
+                new PaddingView
+                {
+                    Padding = new PaddingStyle
+                    {
+                        Left = 8,
+                        Right = 8,
+                        Top = verticalPadding,
+                        Bottom = verticalPadding,
+                    },
+                    Children = { text },
+                },
             },
-            Children = { text },
         };
         box.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
         box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.Banner.Border));
