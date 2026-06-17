@@ -20,7 +20,7 @@ internal sealed record RepoView : Widget
         [
             new DetachedHeadBanner(),
             new SubmoduleStatusBanner(),
-            new Grow { Child = new WorkspaceView() },
+            new Grow { Child = new WorkspaceWidget() },
         ],
     };
 }
