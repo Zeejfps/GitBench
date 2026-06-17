@@ -59,7 +59,7 @@ internal sealed record MergeBranchDialog : Widget
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
-                new ThemedText
+                new Text
                 {
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
@@ -70,9 +70,9 @@ internal sealed record MergeBranchDialog : Widget
                         MergePreviewState.Conflicts => LucideIcons.CloudOff,
                         _ => string.Empty,
                     }),
-                    Color = color,
+                    Color = Theme.Color(color),
                 },
-                new ThemedText
+                new Text
                 {
                     VAlign = TextAlignment.Center,
                     Value = vm.PreviewState.Bind(s => s switch
@@ -81,7 +81,7 @@ internal sealed record MergeBranchDialog : Widget
                         MergePreviewState.Conflicts => "Merge will produce conflicts",
                         _ => string.Empty,
                     }),
-                    Color = color,
+                    Color = Theme.Color(color),
                 },
             ],
         };
@@ -101,11 +101,11 @@ internal sealed record MergeBranchDialog : Widget
                 CrossAxis = CrossAxisAlignment.Center,
                 Children =
                 [
-                    new ThemedText
+                    new Text
                     {
                         Value = label,
                         VAlign = TextAlignment.Center,
-                        Color = s => s.DialogBody.SectionHeaderText,
+                        Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                     },
                 ],
             },
@@ -119,19 +119,19 @@ internal sealed record MergeBranchDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 14,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-            new ThemedText
+            new Text
             {
                 Value = name,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogFrame.TitleText,
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
         ],
     };

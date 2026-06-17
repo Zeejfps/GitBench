@@ -49,16 +49,16 @@ internal sealed record DiscardChangesDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = "Discarding cannot be undone. Choose the changes to discard.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new ThemedText
+                new Text
                 {
                     Value = Prop.Bind(vm.FilesHeader),
-                    Color = s => s.DialogBody.SectionHeaderText,
+                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
             ],

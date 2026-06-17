@@ -57,27 +57,27 @@ internal sealed record BranchLabel : Widget
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [
-                    new ThemedText
+                    new Text
                     {
                         Value = LucideIcons.Branch,
                         FontFamily = LucideIcons.FontFamily,
                         FontSize = 15f,
                         VAlign = TextAlignment.Center,
-                        Color = s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText,
+                        Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
                     },
-                    new ThemedText
+                    new Text
                     {
                         Value = IsDetached.Bind(d => d ? "at" : "on"),
                         VAlign = TextAlignment.Center,
-                        Color = s => s.BranchesHeader.PrefixText,
+                        Color = Theme.Color(s => s.BranchesHeader.PrefixText),
                     },
-                    new ThemedText
+                    new Text
                     {
                         Value = Prop.Bind(BranchName),
                         FontSize = 18f,
                         Weight = FontWeight.Bold,
                         VAlign = TextAlignment.Center,
-                        Color = s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText,
+                        Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
                     },
                 ],
             },

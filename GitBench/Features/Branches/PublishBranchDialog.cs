@@ -42,12 +42,12 @@ internal sealed record PublishBranchDialog : Widget
             ViewModel = vm,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = "First push — choose a remote and set the upstream",
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
                 new LabeledRow { Label = "Branch:", Value = BranchChip(LocalBranch) },
                 new LabeledRow { Label = "To:", Value = new Raw { View = remoteDropdown } },
@@ -67,19 +67,19 @@ internal sealed record PublishBranchDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 14,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-            new ThemedText
+            new Text
             {
                 Value = name,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogFrame.TitleText,
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
         ],
     };

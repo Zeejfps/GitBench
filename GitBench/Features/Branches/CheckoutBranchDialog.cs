@@ -38,11 +38,11 @@ internal sealed record CheckoutBranchDialog : Widget
             Command = vm.Checkout,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Create a local branch from {RemoteName}/{RemoteBranchName}",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {

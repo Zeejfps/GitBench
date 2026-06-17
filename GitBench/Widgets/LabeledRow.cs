@@ -21,11 +21,11 @@ public sealed record LabeledRow : Widget
         Height = 28,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = Label,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.SectionHeaderText,
+                Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
             },
             new Grow { Child = Value },
         ],

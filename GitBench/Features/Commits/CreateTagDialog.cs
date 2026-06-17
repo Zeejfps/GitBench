@@ -44,11 +44,11 @@ internal sealed record CreateTagDialog : Widget
 
         IWidget[] body =
         [
-            new ThemedText
+            new Text
             {
                 Value = "Create annotated tag",
                 Wrap = TextWrap.Wrap,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
             new LabeledRow { Label = "Create tag at:", Value = CommitValue(ctx, ShortSha, Summary) },
             // Each label sits tight against its field (small intra-group gap); the column's
@@ -67,10 +67,10 @@ internal sealed record CreateTagDialog : Widget
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [
-                    new ThemedText
+                    new Text
                     {
                         Value = "Message",
-                        Color = s => s.DialogBody.SectionHeaderText,
+                        Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                     },
                     new Raw { View = messageField },
                 ],
@@ -126,20 +126,20 @@ internal sealed record CreateTagDialog : Widget
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
-                new ThemedText
+                new Text
                 {
                     Value = "●",
                     FontSize = 10,
                     Width = 16,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new ThemedText
+                new Text
                 {
                     Value = shortSha,
                     VAlign = TextAlignment.Center,
-                    Color = s => s.DialogFrame.TitleText,
+                    Color = Theme.Color(s => s.DialogFrame.TitleText),
                 },
                 new Grow { Child = new Raw { View = summaryLabel } },
             ],

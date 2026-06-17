@@ -46,11 +46,11 @@ internal sealed record AbortOperationDialog : Widget
             ViewModel = vm,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = bodyText,
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
             ],
         };

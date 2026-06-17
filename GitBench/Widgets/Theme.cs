@@ -1,12 +1,12 @@
-using GitBench.Widgets;
+using GitBench.Theming;
 using ZGF.Gui;
 
-namespace GitBench.Theming;
+namespace GitBench.Widgets;
 
 /// <summary>
 /// Theme-sourced <see cref="Prop{T}"/> values. <see cref="Color"/> defers theme resolution to the
 /// build <see cref="Context"/>, so a themed color is an ordinary <see cref="Prop{T}"/> that is
-/// ctx-free to author and re-binds on theme swaps — no <c>ThemedText</c> wrapper or bespoke
+/// ctx-free to author and re-binds on theme swaps — no wrapper widget or bespoke
 /// <c>Func&lt;ThemeStyles, uint&gt;</c> selector prop required.
 /// </summary>
 public static class Theme

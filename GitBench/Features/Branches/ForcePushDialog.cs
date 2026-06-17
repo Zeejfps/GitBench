@@ -36,14 +36,14 @@ internal sealed record ForcePushDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"{displayBranch} has diverged from its upstream — {Ahead} ahead, {Behind} behind. "
                           + "A regular push will be rejected. Force-push (with lease) will overwrite the remote "
                           + "branch with your local history; any commits on the remote that you haven't fetched "
                           + "will be lost. The lease refuses the push if the remote moved since your last fetch.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
             ],
         };

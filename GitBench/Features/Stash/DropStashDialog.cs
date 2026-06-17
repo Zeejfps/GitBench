@@ -43,11 +43,11 @@ internal sealed record DropStashDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Applied: {Subject}\n\nDrop this stash now? This cannot be undone.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
             ],
         };

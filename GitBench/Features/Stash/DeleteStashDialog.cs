@@ -40,11 +40,11 @@ internal sealed record DeleteStashDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"{Subject}\n\nThis stash will be permanently deleted. This cannot be undone.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
             ],
         };

@@ -43,26 +43,26 @@ internal sealed record MoveBranchDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Reset '{BranchName}' to the selected revision and check it out",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new Clipped
                 {
-                    Child = new ThemedText
+                    Child = new Text
                     {
                         Value = string.IsNullOrEmpty(Summary) ? ShortSha : $"{ShortSha}  {Summary}",
                         Wrap = TextWrap.NoWrap,
-                        Color = s => s.DialogBody.BodyText,
+                        Color = Theme.Color(s => s.DialogBody.BodyText),
                     },
                 },
-                new ThemedText
+                new Text
                 {
                     Value = $"'{BranchName}' has commits that aren't in {ShortSha}. Resetting it here will leave those commits unreachable from any branch.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             ],
         };

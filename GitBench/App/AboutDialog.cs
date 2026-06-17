@@ -1,7 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Platform;
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;

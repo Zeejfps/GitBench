@@ -57,10 +57,10 @@ internal sealed record StashDialog : Widget
                     Label = "Message",
                     Value = message,
                 },
-                new ThemedText
+                new Text
                 {
                     Value = Prop.Bind(vm.FilesHeader),
-                    Color = s => s.DialogBody.SectionHeaderText,
+                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
                 new Checkbox

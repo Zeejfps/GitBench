@@ -45,12 +45,12 @@ internal sealed record UpdateBannerView : Widget
                     [
                         new Grow
                         {
-                            Child = new ThemedText
+                            Child = new Text
                             {
                                 VAlign = TextAlignment.Center,
                                 Wrap = TextWrap.Wrap,
                                 Value = updateService.BannerMessage,
-                                Color = s => s.Banner.Text,
+                                Color = Theme.Color(s => s.Banner.Text),
                             },
                         },
                         new ActionButton

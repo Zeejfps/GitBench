@@ -35,12 +35,12 @@ internal sealed record OperationErrorDialog : Widget
     {
         var theme = ctx.Theme();
 
-        var titleView = new ThemedText
+        var titleView = new Text
         {
             Value = Title,
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
-            Color = s => s.DialogFrame.TitleText,
+            Color = Theme.Color(s => s.DialogFrame.TitleText),
         }.BuildView(ctx);
 
         var copyButton = new DialogCopyButton(
@@ -64,12 +64,12 @@ internal sealed record OperationErrorDialog : Widget
             },
         };
 
-        var messageView = new ThemedText
+        var messageView = new Text
         {
             Value = Message,
             FontFamily = DiffOptions.MonoFontFamily,
             Wrap = TextWrap.Wrap,
-            Color = s => s.DialogBody.BodyText,
+            Color = Theme.Color(s => s.DialogBody.BodyText),
         }.BuildView(ctx);
 
         // VerticalScrollPane forces its child to viewport width — that gives the wrapping

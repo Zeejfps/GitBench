@@ -38,11 +38,11 @@ internal sealed record RenameStashDialog : Widget
             Command = vm.Rename,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Renaming '{CurrentMessage}'",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {

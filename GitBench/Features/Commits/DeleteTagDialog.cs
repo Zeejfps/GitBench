@@ -40,11 +40,11 @@ internal sealed record DeleteTagDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = "Delete tag from your repository",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new LabeledRow { Label = "Tag:", Value = TagValue(TagName) },
                 new Checkbox
@@ -63,7 +63,7 @@ internal sealed record DeleteTagDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = LucideIcons.Tag,
                 FontFamily = LucideIcons.FontFamily,
@@ -71,18 +71,18 @@ internal sealed record DeleteTagDialog : Widget
                 Width = 16,
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
             new Grow
             {
                 Child = new Clipped
                 {
-                    Child = new ThemedText
+                    Child = new Text
                     {
                         Value = tagName,
                         VAlign = TextAlignment.Center,
                         Wrap = TextWrap.NoWrap,
-                        Color = s => s.DialogFrame.TitleText,
+                        Color = Theme.Color(s => s.DialogFrame.TitleText),
                     },
                 },
             },

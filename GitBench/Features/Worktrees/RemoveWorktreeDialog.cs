@@ -50,13 +50,13 @@ internal sealed record RemoveWorktreeDialog : Widget
         var wrappedPath = PathWrap.Wrap(Worktree.Path, pathTextStyle, available, ctx.Canvas);
 
         var theme = ctx.Theme();
-        var pathTextView = new ThemedText
+        var pathTextView = new Text
         {
             Value = wrappedPath,
             FontFamily = DiffOptions.MonoFontFamily,
             FontSize = 12f,
             Wrap = TextWrap.Wrap,
-            Color = s => s.DialogBody.BodyText,
+            Color = Theme.Color(s => s.DialogBody.BodyText),
         }.BuildView(ctx);
 
         var pathBox = new RectView
@@ -85,11 +85,11 @@ internal sealed record RemoveWorktreeDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Remove worktree '{Worktree.DisplayName}'?",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new Raw { View = pathBox },
                 new Checkbox
@@ -98,11 +98,11 @@ internal sealed record RemoveWorktreeDialog : Widget
                     Value = vm.Force,
                     Height = 22,
                 },
-                new ThemedText
+                new Text
                 {
                     Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             ],
         };

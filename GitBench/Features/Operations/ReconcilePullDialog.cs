@@ -42,27 +42,27 @@ internal sealed record ReconcilePullDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"'{Repo.DisplayName}' and its upstream have both moved on. " +
                             "Choose how to reconcile them, then pull.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new ThemedText
+                new Text
                 {
                     Value = "Strategy",
-                    Color = s => s.DialogBody.SectionHeaderText,
+                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                 },
                 StrategyCheckbox(ctx, vm, "Merge (--no-rebase)", PullStrategy.Merge),
                 StrategyCheckbox(ctx, vm, "Rebase (--rebase)", PullStrategy.Rebase),
                 StrategyCheckbox(ctx, vm, "Fast-forward only (--ff-only)", PullStrategy.FastForwardOnly),
-                new ThemedText
+                new Text
                 {
                     Value = "Merge or rebase may stop on conflicts — the Operation banner will offer Abort. " +
                             "Fast-forward only refuses unless your branch hasn't moved.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             ],
         };

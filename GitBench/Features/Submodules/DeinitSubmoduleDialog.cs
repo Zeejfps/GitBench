@@ -36,19 +36,19 @@ internal sealed record DeinitSubmoduleDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = $"Deinit and remove submodule '{Submodule.DisplayName}'?",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new ThemedText
+                new Text
                 {
                     Value = "Runs `git submodule deinit` followed by `git rm`. The submodule will " +
                             "be removed from the working tree and the deletion staged in the parent " +
                             "for your next commit.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
                 new Checkbox
                 {

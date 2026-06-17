@@ -55,19 +55,19 @@ internal sealed record ResetCommitDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = BranchName != null
                         ? $"Move the '{BranchName}' branch HEAD to the selected revision"
                         : "Move HEAD to the selected revision",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new ThemedText
+                new Text
                 {
                     Value = BuildDirtyHint(StagedCount, UnstagedCount),
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
                 new LabeledRow { Label = "Branch:", Value = BranchValue(BranchName) },
                 new LabeledRow { Label = "Move to:", Value = CommitValue(ShortSha, Summary) },
@@ -82,20 +82,20 @@ internal sealed record ResetCommitDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 14,
                 Width = 16,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-            new ThemedText
+            new Text
             {
                 Value = branchName ?? "(detached HEAD)",
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogFrame.TitleText,
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
         ],
     };
@@ -106,31 +106,31 @@ internal sealed record ResetCommitDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = "●",
                 FontSize = 10,
                 Width = 16,
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-            new ThemedText
+            new Text
             {
                 Value = shortSha,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogFrame.TitleText,
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
             new Grow
             {
                 Child = new Clipped
                 {
-                    Child = new ThemedText
+                    Child = new Text
                     {
                         Value = summary,
                         VAlign = TextAlignment.Center,
                         Wrap = TextWrap.NoWrap,
-                        Color = s => s.DialogBody.BodyText,
+                        Color = Theme.Color(s => s.DialogBody.BodyText),
                     },
                 },
             },

@@ -55,10 +55,10 @@ internal sealed record EditRemoteDialog : Widget
             Command = vm.Save,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = isAdd ? "Add a new remote repository" : "Edit URL of the remote repository",
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {

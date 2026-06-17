@@ -26,11 +26,11 @@ internal sealed record DeleteLocalBranchDialog : Widget
 
         var body = new List<IWidget>
         {
-            new ThemedText
+            new Text
             {
                 Value = $"Delete local branch '{BranchName}'?",
                 Wrap = TextWrap.Wrap,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
             new Checkbox
             {
@@ -38,11 +38,11 @@ internal sealed record DeleteLocalBranchDialog : Widget
                 Value = vm.Force,
                 Height = 22,
             },
-            new ThemedText
+            new Text
             {
                 Value = "Unchecked: refuses if the branch isn't fully merged into its upstream or HEAD.",
                 Wrap = TextWrap.Wrap,
-                Color = s => s.DialogBody.RowTextMissing,
+                Color = Theme.Color(s => s.DialogBody.RowTextMissing),
             },
         };
         if (vm.HasUpstream)

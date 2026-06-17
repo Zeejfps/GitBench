@@ -41,30 +41,30 @@ internal sealed record UpdateSubmodulesDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = Target is null
                         ? $"Run `git submodule update` on every submodule under '{Primary.DisplayName}'."
                         : $"Run `git submodule update` on '{Target.DisplayName}'.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.BodyText,
+                    Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new Checkbox { Label = "Init missing submodules (--init)", Value = vm.Init, Height = 22 },
                 new Checkbox { Label = "Recurse into nested submodules (--recursive)", Value = vm.Recursive, Height = 22 },
-                new ThemedText
+                new Text
                 {
                     Value = "Strategy",
-                    Color = s => s.DialogBody.SectionHeaderText,
+                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                 },
                 ModeCheckbox(ctx, vm, "Checkout (default — reset to recorded SHA)", SubmoduleUpdateMode.Checkout),
                 ModeCheckbox(ctx, vm, "Merge (--merge)", SubmoduleUpdateMode.Merge),
                 ModeCheckbox(ctx, vm, "Rebase (--rebase)", SubmoduleUpdateMode.Rebase),
-                new ThemedText
+                new Text
                 {
                     Value = "Merge/rebase strategies may leave the submodule mid-merge on conflict — " +
                             "the Operation banner will offer Abort.",
                     Wrap = TextWrap.Wrap,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             ],
         };

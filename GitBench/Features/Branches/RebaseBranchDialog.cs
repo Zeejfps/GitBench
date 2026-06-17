@@ -36,12 +36,12 @@ internal sealed record RebaseBranchDialog : Widget
             FooterLead = PreviewChip(vm),
             Body =
             [
-                new ThemedText
+                new Text
                 {
                     Value = "Copy commits from one branch to another",
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = s => s.DialogBody.RowTextMissing,
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
                 BuildLabeledRow("Rebase:", BuildBranchChip(Request.SourceBranch)),
                 BuildLabeledRow("On:", BuildBranchChip(Request.TargetDisplay)),
@@ -66,7 +66,7 @@ internal sealed record RebaseBranchDialog : Widget
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
-                new ThemedText
+                new Text
                 {
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
@@ -77,9 +77,9 @@ internal sealed record RebaseBranchDialog : Widget
                         RebasePreviewState.Conflicts => LucideIcons.CloudOff,
                         _ => string.Empty,
                     }),
-                    Color = color,
+                    Color = Theme.Color(color),
                 },
-                new ThemedText
+                new Text
                 {
                     VAlign = TextAlignment.Center,
                     Value = vm.PreviewState.Bind(s => s switch
@@ -88,7 +88,7 @@ internal sealed record RebaseBranchDialog : Widget
                         RebasePreviewState.Conflicts => "Rebase will produce conflicts",
                         _ => string.Empty,
                     }),
-                    Color = color,
+                    Color = Theme.Color(color),
                 },
             ],
         };
@@ -108,11 +108,11 @@ internal sealed record RebaseBranchDialog : Widget
                 CrossAxis = CrossAxisAlignment.Center,
                 Children =
                 [
-                    new ThemedText
+                    new Text
                     {
                         Value = label,
                         VAlign = TextAlignment.Center,
-                        Color = s => s.DialogBody.SectionHeaderText,
+                        Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                     },
                 ],
             },
@@ -126,19 +126,19 @@ internal sealed record RebaseBranchDialog : Widget
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
-            new ThemedText
+            new Text
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 14,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogBody.BodyText,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-            new ThemedText
+            new Text
             {
                 Value = name,
                 VAlign = TextAlignment.Center,
-                Color = s => s.DialogFrame.TitleText,
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
         ],
     };

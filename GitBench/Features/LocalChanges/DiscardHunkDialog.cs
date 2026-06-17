@@ -38,11 +38,11 @@ internal sealed record DiscardHunkDialog : Widget
             [
                 new Grow
                 {
-                    Child = new ThemedText
+                    Child = new Text
                     {
                         Value = $"Discard this hunk in {Path}? This cannot be undone.",
                         Wrap = TextWrap.Wrap,
-                        Color = s => s.DialogBody.BodyText,
+                        Color = Theme.Color(s => s.DialogBody.BodyText),
                     },
                 },
             ],
