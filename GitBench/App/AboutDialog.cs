@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Platform;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -43,21 +44,21 @@ internal sealed record AboutDialog : Widget
             },
         };
 
-        var name = new ThemedText
+        var name = new Text
         {
             Value = "GitBench",
             FontSize = 22,
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
-            Color = s => s.DialogFrame.TitleText,
+            Color = Theme.Color(s => s.DialogFrame.TitleText),
         }.BuildView(ctx);
 
-        var version = new ThemedText
+        var version = new Text
         {
             Value = $"v{AppVersion.Display}",
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
-            Color = s => s.Palette.TextSecondary,
+            Color = Theme.Color(s => s.Palette.TextSecondary),
         }.BuildView(ctx);
 
         var repoButton = new DialogButton(
@@ -70,12 +71,12 @@ internal sealed record AboutDialog : Widget
             MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
         };
 
-        var copyright = new ThemedText
+        var copyright = new Text
         {
             Value = "© 2026 Zee Vasilyev",
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
-            Color = s => s.Palette.TextMuted,
+            Color = Theme.Color(s => s.Palette.TextMuted),
         }.BuildView(ctx);
 
         var content = new FlexColumnView
@@ -121,14 +122,14 @@ internal sealed record AboutDialog : Widget
         if (IconImageId != null)
             return new ImageView(ctx.Canvas) { ImageId = IconImageId, Width = 84, Height = 84 };
 
-        var glyph = new ThemedText
+        var glyph = new Text
         {
             Value = LucideIcons.FolderGit2,
             FontFamily = LucideIcons.FontFamily,
             FontSize = 60,
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
-            Color = s => s.Palette.Accent,
+            Color = Theme.Color(s => s.Palette.Accent),
         }.BuildView(ctx);
         return new ContainerView { Width = 84, Height = 84, Children = { glyph } };
     }
