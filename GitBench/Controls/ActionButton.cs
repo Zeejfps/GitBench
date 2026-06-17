@@ -10,32 +10,31 @@ namespace GitBench.Controls;
 
 /// <summary>
 /// Toolbar/banner action button: icon, optional label, optional count badge, optional solid
-/// fill. Static config and auto-tracked bindings flow through init-only props; the click is
+/// fill. Config and reactive bindings flow through init-only <see cref="Prop{T}"/>s; the click is
 /// wired through <see cref="Command"/> (busy/disable-aware) or <see cref="OnClick"/>.
 /// </summary>
 internal sealed record ActionButton : Widget
 {
-    public required string Icon { get; init; }
-    public string? Label { get; init; }
+    /// <summary>Icon glyph; a constant or an auto-tracked binding (<c>Prop.Bind(() =&gt; …)</c>).</summary>
+    public required Prop<string?> Icon { get; init; }
+
+    /// <summary>Optional label next to the icon; unset renders icon-only.</summary>
+    public Prop<string?> Label { get; init; }
+
     public string? Tooltip { get; init; }
 
-    /// <summary>Auto-tracked icon glyph binding; overrides <see cref="Icon"/> once mounted.</summary>
-    public Func<string>? BindIcon { get; init; }
+    /// <summary>Setting this enables the count badge and selects its color — bind a theme color
+    /// with <see cref="GitBench.Widgets.Theme.Color"/>.</summary>
+    public Prop<uint> BadgeColor { get; init; }
 
-    /// <summary>Auto-tracked label binding; overrides <see cref="Label"/> once mounted.</summary>
-    public Func<string>? BindLabel { get; init; }
-
-    /// <summary>Enables the count badge next to the icon and selects its themed color.</summary>
-    public Func<ThemeStyles, uint>? BadgeColor { get; init; }
-
-    /// <summary>Auto-tracked badge count; null or 0 hides the badge.</summary>
-    public Func<int?>? BindBadge { get; init; }
+    /// <summary>Badge count; null or 0 hides the badge.</summary>
+    public Prop<int?> Badge { get; init; }
 
     public uint? IconColor { get; init; }
     public uint? Background { get; init; }
 
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
-    public IReadable<float>? IconRotation { get; init; }
+    public Prop<float> IconRotation { get; init; }
 
     public ICommand? Command { get; init; }
     public Action? OnClick { get; init; }
@@ -44,9 +43,15 @@ internal sealed record ActionButton : Widget
     {
         var theme = ctx.Theme();
         var hovered = new State<bool>(false);
-        var iconColor = IconColor ?? (Background != null ? 0xFFFFFFFFu : (uint?)null);
+        var iconColor = IconColor ?? (Background != null ? 0xFFFFFFFFu : null);
         var command = Command;
         var onClick = OnClick;
+
+        // The badge count and color drive both the badge text and the icon tint, so they're
+        // read back inside the color computes — materialize them from their props.
+        var hasBadge = BadgeColor.IsSet;
+        var badgeCount = new State<int?>(null);
+        var badgeColor = new State<uint>(0);
 
         bool Enabled() => command?.CanExecute.Value ?? true;
 
@@ -63,7 +68,7 @@ internal sealed record ActionButton : Widget
         uint SelectForeground(ThemeStyles s)
         {
             if (!Enabled()) return s.ActionButton.TextDisabled;
-            if (BindBadge?.Invoke() is > 0 && BadgeColor != null) return BadgeColor(s);
+            if (hasBadge && badgeCount.Value is > 0) return badgeColor.Value;
             if (iconColor is uint ic) return ic;
             return hovered.Value ? s.ActionButton.TextHover : s.ActionButton.TextIdle;
         }
@@ -77,26 +82,25 @@ internal sealed record ActionButton : Widget
             return hovered.Value ? s.ActionButton.TextHover : s.ActionButton.TextIdle;
         }
 
-        Prop<string?> iconValue = BindIcon != null ? Prop.Bind(() => (string?)BindIcon()) : Icon;
         var icon = new Text
         {
             FontFamily = LucideIcons.FontFamily,
             FontSize = 15,
             VAlign = TextAlignment.Center,
-            Value = iconValue,
+            Value = Icon,
             Color = Prop.Bind(() => SelectForeground(theme.Styles.Value)),
-            Rotation = IconRotation != null ? Prop.Bind(IconRotation) : Prop<float>.Unset,
+            Rotation = IconRotation,
         };
 
         var iconGroupChildren = new List<IWidget> { icon };
-        if (BadgeColor is { } badgeColor)
+        if (hasBadge)
         {
             iconGroupChildren.Add(new Text
             {
                 VAlign = TextAlignment.Center,
-                Color = Theme.Color(badgeColor),
-                Value = Prop.Bind<string?>(() => BindBadge?.Invoke()?.ToString() ?? string.Empty),
-                Visible = Prop.Bind(() => BindBadge?.Invoke() is > 0),
+                Color = Prop.Bind(() => badgeColor.Value),
+                Value = Prop.Bind<string?>(() => badgeCount.Value?.ToString() ?? string.Empty),
+                Visible = Prop.Bind(() => badgeCount.Value is > 0),
             });
         }
 
@@ -108,14 +112,13 @@ internal sealed record ActionButton : Widget
         };
 
         var rowChildren = new List<IWidget> { countIconGroup };
-        var hasLabel = Label != null || BindLabel != null;
+        var hasLabel = Label.IsSet;
         if (hasLabel)
         {
-            Prop<string?> labelValue = BindLabel != null ? Prop.Bind(() => (string?)BindLabel()) : Label;
             rowChildren.Add(new Text
             {
                 VAlign = TextAlignment.Center,
-                Value = labelValue,
+                Value = Label,
                 Color = Prop.Bind(() => SelectLabelForeground(theme.Styles.Value)),
             });
         }
@@ -149,6 +152,13 @@ internal sealed record ActionButton : Widget
             OnHoverExit = () => hovered.Value = false,
             Child = box,
         };
+
+        if (hasBadge)
+        {
+            interactive = interactive
+                .Materialize(ctx, Badge, badgeCount)
+                .Materialize(ctx, BadgeColor, badgeColor);
+        }
 
         if (Tooltip is { Length: > 0 } tooltipText)
         {
