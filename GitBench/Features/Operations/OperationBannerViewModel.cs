@@ -8,7 +8,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
-internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBannerState>
+internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerState>
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
@@ -18,13 +18,14 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
     // runs there, and a reload landing mid-continue must not drop the continue's result.
     private readonly GenerationGuard _continueLane;
 
-    public IReadable<RepoOperationState> State { get; }
+    public IReadable<bool> IsActive { get; }
+    public new IReadable<RepoOperationState> State { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
     public IReadable<float> BusyRotation => _spinner.Rotation;
     public Command Abort { get; }
     public Command Continue { get; }
 
-    public OperationStateBannerViewModel(
+    public OperationBannerViewModel(
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
@@ -38,6 +39,9 @@ internal sealed class OperationStateBannerViewModel : ViewModelBase<OperationBan
         _spinner = new SpinnerAnimation(ticker);
         _continueLane = CreateLane();
 
+        // Declared before State so the banner swaps out before any per-state content would
+        // re-render when the operation clears.
+        IsActive = Slice(s => s.State != RepoOperationState.None);
         State = Slice(s => s.State);
         Abort = new Command(DoAbort);
         // Continue stays disabled while unmerged paths remain — git would refuse anyway.

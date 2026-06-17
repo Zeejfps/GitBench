@@ -13,7 +13,7 @@ namespace GitBench.App;
 /// Banner shown above the main content when a downloaded update has been staged. Clicking
 /// Restart relaunches into the new version. Self-managing: toggles <see cref="View.IsVisible"/>
 /// off while no update is pending, so layout skips it (no residual gap) — same pattern as
-/// <see cref="OperationBannerView"/> / <see cref="ErrorBarView"/>.
+/// <see cref="OperationBannerWidget"/> / <see cref="ErrorBarView"/>.
 /// </summary>
 internal sealed record UpdateBannerView : Widget
 {

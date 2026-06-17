@@ -20,7 +20,7 @@ internal sealed record WorkspaceWidget : Widget
             North = new Column
             {
                 CrossAxis = CrossAxisAlignment.Stretch,
-                Children = [new OperationBannerView(), new ActionsToolbar()],
+                Children = [new OperationBannerWidget(), new ActionsToolbar()],
             },
             Center = new MainContent(),
         },
