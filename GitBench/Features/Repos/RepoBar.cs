@@ -1,8 +1,8 @@
 using GitBench.Controls;
-using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -21,23 +21,13 @@ internal sealed record RepoBar : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoBarViewModel>();
-        var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
-
-        var scrollPane = new ScrollPane();
-        scrollPane.Children.Add((Each.Of(vm.GroupSections, new GroupSection(), gap: 2) with
-        {
-            CrossAxis = CrossAxisAlignment.Stretch,
-        }).BuildView(ctx));
-        scrollPane.UseController(input, () => new ScrollPaneWheelController(scrollPane));
-
-        var vScrollBar = ScrollBars.CreateVertical(ctx);
 
         var bar = new Box
         {
             BorderSize = new BorderSizeStyle { Right = 1 },
-            Background = Prop.Bind(() => theme.Styles.Value.RepoBar.Background),
-            BorderColor = Prop.Bind(() => new BorderColorStyle { Right = theme.Styles.Value.RepoBar.RightBorder }),
+            Background = Theme.Color(s => s.RepoBar.Background),
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Right = s.RepoBar.RightBorder }),
             Children =
             [
                 new Column
@@ -47,13 +37,15 @@ internal sealed record RepoBar : Widget
                     [
                         new Grow
                         {
-                            Child = new Row
+                            Child = new ScrollArea
                             {
-                                CrossAxis = CrossAxisAlignment.Stretch,
+                                Style = Theme.ScrollBar(),
                                 Children =
                                 [
-                                    new Grow { Child = new Raw { View = scrollPane } },
-                                    new Raw { View = vScrollBar },
+                                    Each.Of(vm.GroupSections, new GroupSection(), gap: 2) with
+                                    {
+                                        CrossAxis = CrossAxisAlignment.Stretch,
+                                    },
                                 ],
                             },
                         },
@@ -69,7 +61,6 @@ internal sealed record RepoBar : Widget
 
         return bar
             .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)))
-            .Use(_ => new ScrollSyncController(scrollPane, vScrollBar))
             .BindVm(vm);
     }
 
