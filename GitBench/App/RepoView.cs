@@ -19,7 +19,7 @@ internal sealed record RepoView : Widget
         Children =
         [
             new DetachedHeadBanner(),
-            new SubmoduleStatusBannerView(),
+            new SubmoduleStatusBanner(),
             new Grow { Child = new WorkspaceView() },
         ],
     };

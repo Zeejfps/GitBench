@@ -10,14 +10,10 @@ namespace GitBench.Features.Submodules;
 /// Repo-level banner shown whenever the active repo has submodules whose working tree no
 /// longer matches the commit the parent records (modified or conflicted). This is the safety
 /// net for the gap left when `git pull --recurse-submodules` can't reconcile a dirty/conflicted
-/// submodule. Mounted alongside the detached-HEAD banner so it's visible on any tab. The banner
-/// is swapped in by <see cref="Show"/> only while submodules are out of date, so its views and
-/// bindings exist only when shown; the view model is owned by the swap host
-/// (<see cref="WidgetExtensions.BindVm"/>) so it keeps listening and can re-show the banner. The
-/// host collapses its layout slot when nothing is out of date. Not dismissible — it clears once
-/// the submodules are updated.
+/// submodule. Mounted alongside the detached-HEAD banner so it's visible on any tab.
+/// Not dismissible — it clears once the submodules are updated.
 /// </summary>
-internal sealed record SubmoduleStatusBannerView : Widget
+internal sealed record SubmoduleStatusBanner : Widget
 {
     protected override IWidget Build(Context ctx)
     {

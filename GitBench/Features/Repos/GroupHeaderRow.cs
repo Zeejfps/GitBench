@@ -1,8 +1,6 @@
 using GitBench.Controls;
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -15,76 +13,65 @@ internal sealed record GroupHeaderRow : Widget
 {
     public required GroupHeaderRowViewModel Model { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = Model;
-        var theme = ctx.Theme();
+        var styles = ctx.Theme().Styles;
         var isHovered = new State<bool>(false);
 
-        var chevron = new TextView(ctx.Canvas)
+        var root = new Box
         {
-            Text = ChevronFor(vm.Group.IsCollapsed),
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 11f,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        chevron.BindTextColor(() => theme.Styles.Value.GroupHeaderRow.ChevronText);
-
-        var nameSlot = new ContainerView();
-        nameSlot.Children.BindChildren(
-            () => new[] { vm.IsRenaming.Value },
-            isRenaming => CreateNameContent(ctx, vm, isRenaming));
-
-        var background = new RectView
-        {
+            Height = 22,
             BorderRadius = BorderRadiusStyle.All(4),
             Padding = new PaddingStyle { Left = 2, Right = 8 },
+            Background = Prop.Bind(() => isHovered.Value
+                ? styles.Value.GroupHeaderRow.BackgroundHover
+                : styles.Value.GroupHeaderRow.BackgroundIdle),
             Children =
-            {
-                new FlexRowView
+            [
+                new Row
                 {
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
+                    CrossAxis = CrossAxisAlignment.Center,
                     Gap = 8,
                     Children =
-                    {
-                        chevron,
-                        new FlexItem { Grow = 1, Child = nameSlot },
-                    }
-                }
-            }
+                    [
+                        new Text
+                        {
+                            Value = ChevronFor(vm.Group.IsCollapsed),
+                            FontFamily = LucideIcons.FontFamily,
+                            FontSize = 11f,
+                            HAlign = TextAlignment.Center,
+                            VAlign = TextAlignment.Center,
+                            Width = 16,
+                            Color = Theme.Color(s => s.GroupHeaderRow.ChevronText),
+                        },
+                        new Grow { Child = NameSlot(vm) },
+                    ],
+                },
+            ],
         };
-        background.BindBackgroundColor(() =>
-            isHovered.Value ? theme.Styles.Value.GroupHeaderRow.BackgroundHover : theme.Styles.Value.GroupHeaderRow.BackgroundIdle);
 
-        var root = new ContainerView { Height = 22 };
-        root.Children.Add(background);
-
-        root.UseController(ctx.Require<InputSystem>(), () => new GroupHeaderController(
-            root, ctx,
+        return root.WithController(ctx.Require<InputSystem>(), view => new GroupHeaderController(
+            view, ctx,
             vm.Group,
             h => isHovered.Value = h,
             _ => BuildMenuItems(vm),
             () => vm.IsRenaming.Value,
             vm.ToggleCollapsed.Execute));
-        return root;
     }
 
-    private static View CreateNameContent(Context ctx, GroupHeaderRowViewModel vm, bool isRenaming)
+    private static IWidget NameSlot(GroupHeaderRowViewModel vm) => new Show
     {
-        if (isRenaming) return new GroupRenameField { Group = vm.Group }.BuildView(ctx);
-
-        var theme = ctx.Theme();
-        var name = new TextView(ctx.Canvas)
+        When = vm.IsRenaming,
+        Then = () => new GroupRenameField { Group = vm.Group },
+        Else = () => new Text
         {
-            Text = vm.Group.Name,
-            HorizontalTextAlignment = TextAlignment.Start,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        name.BindTextColor(() => theme.Styles.Value.GroupHeaderRow.NameText);
-        return name;
-    }
+            Value = vm.Group.Name,
+            HAlign = TextAlignment.Start,
+            VAlign = TextAlignment.Center,
+            Color = Theme.Color(s => s.GroupHeaderRow.NameText),
+        },
+    };
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(GroupHeaderRowViewModel vm)
     {
