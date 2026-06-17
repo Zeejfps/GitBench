@@ -9,11 +9,9 @@ namespace GitBench.Features.Repos;
 
 internal sealed record GroupSection : Widget
 {
-    public required GroupSectionViewModel Model { get; init; }
-
     protected override IWidget Build(Context ctx)
     {
-        var vm = Model;
+        var vm = ctx.Require<GroupSectionViewModel>();
 
         return new Column
         {

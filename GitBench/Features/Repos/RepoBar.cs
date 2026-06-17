@@ -1,10 +1,8 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -19,84 +17,67 @@ internal sealed record RepoBar : Widget
     internal const int RowChevronWidth = 12;
     internal const int RowIconWidth = 16;
     internal const int RowIconGap = 6;
-    // Nests a worktree/submodule one level (icon-to-icon) under its primary, matching the
-    // other tree views' per-level step.
-    internal const int WorktreeRowExtraIndent = (int)TreeMetrics.IndentLevel;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoBarViewModel>();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
 
-        var sections = new FlexColumnView
-        {
-            Gap = 2,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-        };
-        sections.Children.BindChildren(
-            vm.GroupSections,
-            s => new GroupSection { Model = s }.BuildView(ctx));
-
         var scrollPane = new ScrollPane();
-        scrollPane.Children.Add(sections);
+        scrollPane.Children.Add((Each.Of(vm.GroupSections, new GroupSection(), gap: 2) with
+        {
+            CrossAxis = CrossAxisAlignment.Stretch,
+        }).BuildView(ctx));
         scrollPane.UseController(input, () => new ScrollPaneWheelController(scrollPane));
 
         var vScrollBar = ScrollBars.CreateVertical(ctx);
 
-        var scrollArea = new FlexRowView
-        {
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = scrollPane },
-                vScrollBar,
-            },
-        };
-
-        var bar = new RectView
+        var bar = new Box
         {
             BorderSize = new BorderSizeStyle { Right = 1 },
+            Background = Prop.Bind(() => theme.Styles.Value.RepoBar.Background),
+            BorderColor = Prop.Bind(() => new BorderColorStyle { Right = theme.Styles.Value.RepoBar.RightBorder }),
             Children =
-            {
-                new FlexColumnView
+            [
+                new Column
                 {
-                    CrossAxisAlignment = CrossAxisAlignment.Stretch,
+                    CrossAxis = CrossAxisAlignment.Stretch,
                     Children =
-                    {
-                        new FlexItem { Grow = 1, Child = scrollArea },
-                        new PaddingView
+                    [
+                        new Grow
                         {
-                            Padding = new PaddingStyle
+                            Child = new Row
                             {
-                                Left = HorizontalPadding,
-                                Right = HorizontalPadding,
-                                Top = HorizontalPadding,
-                                Bottom = HorizontalPadding,
+                                CrossAxis = CrossAxisAlignment.Stretch,
+                                Children =
+                                [
+                                    new Grow { Child = new Raw { View = scrollPane } },
+                                    new Raw { View = vScrollBar },
+                                ],
                             },
-                            Children = { new AddRepoButton().BuildView(ctx) },
                         },
-                    }
-                }
-            }
+                        new Box
+                        {
+                            Padding = PaddingStyle.All(HorizontalPadding),
+                            Children = [new AddRepoButton()],
+                        },
+                    ],
+                },
+            ],
         };
-        bar.BindBackgroundColor(() => theme.Styles.Value.RepoBar.Background);
-        bar.BindBorderColor(() => new BorderColorStyle { Right = theme.Styles.Value.RepoBar.RightBorder });
 
-        var root = new ContainerView();
-        root.Children.Add(bar);
-
-        root.UseController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)));
-        root.Use(() => new ScrollSyncController(scrollPane, vScrollBar));
-        root.UseViewModel(() => vm, _ => { });
-        return root;
+        return bar
+            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)))
+            .Use(_ => new ScrollSyncController(scrollPane, vScrollBar))
+            .BindVm(vm);
     }
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(RepoBarViewModel vm)
     {
         var items = new List<RepoBarContextMenu.Item>
         {
-            new RepoBarContextMenu.Item("New group", () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
+            new("New group", () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
         };
         if (vm.HasMultipleGroups)
         {
