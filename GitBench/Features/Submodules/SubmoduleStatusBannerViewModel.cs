@@ -17,6 +17,7 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
 
+    public IReadable<bool> IsOutdated { get; }
     public IReadable<int> OutdatedCount { get; }
     public Command UpdateSubmodules { get; }
 
@@ -31,6 +32,9 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
         _gitService = gitService;
         _bus = bus;
 
+        // Declared before OutdatedCount so the banner swaps out (via Show) before the count
+        // text would briefly re-render with the cleared value on the count→0 transition.
+        IsOutdated = Slice(s => s.OutdatedCount > 0);
         OutdatedCount = Slice(s => s.OutdatedCount);
         UpdateSubmodules = new Command(DoUpdateSubmodules);
 
