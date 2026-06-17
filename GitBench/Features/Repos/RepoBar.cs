@@ -42,8 +42,11 @@ internal sealed record RepoBar : Widget
                                 Style = Theme.ScrollBar(),
                                 Children =
                                 [
-                                    Each.Of(vm.GroupSections, new GroupSection(), gap: 2) with
+                                    new Each<GroupSectionViewModel>
                                     {
+                                        Items = vm.GroupSections,
+                                        Template = new GroupSection(),
+                                        Gap = 2,
                                         CrossAxis = CrossAxisAlignment.Stretch,
                                     },
                                 ],
