@@ -14,14 +14,14 @@ internal sealed class RepoBarViewModel : IDisposable
 
     public bool HasMultipleGroups => _registry.Groups.Count > 1;
 
-    public RepoBarViewModel(IRepoRegistry registry)
+    public RepoBarViewModel(IRepoRegistry registry, RepoNodeFactory nodes)
     {
         _registry = registry;
         NewGroup = new Command(DoNewGroup);
         ExpandAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(false));
         CollapseAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(true));
         GroupSections = _registry.Groups.Map(
-            g => new GroupSectionViewModel(g, registry, NewGroup),
+            g => new GroupSectionViewModel(g, registry, NewGroup, nodes),
             out _groupSectionsSubscription,
             vm => vm.Dispose());
     }

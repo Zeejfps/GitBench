@@ -53,6 +53,12 @@ internal static class AppServices
             return identityService;
         }, eager: true);
         context.AddSingleton<IDragController, DragController>();
+        context.AddSingleton(ctx => new RepoNodeFactory(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IRepoStatusStore>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IGitService>(),
+            ctx.Get<IPlatformShell>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<UpdateService>();
 
