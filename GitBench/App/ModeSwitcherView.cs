@@ -35,7 +35,7 @@ internal sealed record ModeSwitcherView : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                new SegmentView
+                                new Segment
                                 {
                                     Label = "Changes",
                                     Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
@@ -46,7 +46,7 @@ internal sealed record ModeSwitcherView : Widget
                                     Width = 1f,
                                     Background = theme.Styles.Bind(s => s.ModeSwitcher.SegmentSeparator),
                                 },
-                                new SegmentView
+                                new Segment
                                 {
                                     Label = "History",
                                     Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },

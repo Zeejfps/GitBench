@@ -7,7 +7,7 @@ using ZGF.Observable;
 namespace GitBench.Controls;
 
 /// <summary>One half of the mode-switcher pill; activates its segment on click.</summary>
-internal sealed record SegmentView : Widget
+internal sealed record Segment : Widget
 {
     private const float SegmentHeight = 28f;
 
