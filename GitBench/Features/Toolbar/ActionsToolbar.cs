@@ -37,15 +37,15 @@ internal sealed record ActionsToolbar : Widget
                         new SeparatorSpacer(),
                         new ActionButton
                         {
-                            Icon = Prop.Bind<string?>(() => vm.IsFetching.Value ? LucideIcons.Loader : LucideIcons.Fetch),
-                            Label = Prop.Bind<string?>(() => vm.IsFetching.Value ? "Fetching" : "Fetch"),
+                            Icon = vm.IsFetching.Bind(string? (f) => f ? LucideIcons.Loader : LucideIcons.Fetch),
+                            Label = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch"),
                             IconRotation = Prop.Bind(vm.FetchRotation),
                             Command = vm.Fetch,
                         },
                         new ActionButton
                         {
-                            Icon = Prop.Bind<string?>(() => vm.IsPulling.Value ? LucideIcons.Loader : LucideIcons.Pull),
-                            Label = Prop.Bind<string?>(() => vm.IsPulling.Value ? "Pulling" : "Pull"),
+                            Icon = vm.IsPulling.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Pull),
+                            Label = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull"),
                             IconRotation = Prop.Bind(vm.PullRotation),
                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
                             Badge = vm.PullBadge,
@@ -53,8 +53,8 @@ internal sealed record ActionsToolbar : Widget
                         },
                         new ActionButton
                         {
-                            Icon = Prop.Bind<string?>(() => vm.IsPushing.Value ? LucideIcons.Loader : LucideIcons.Push),
-                            Label = Prop.Bind<string?>(() => vm.IsPushing.Value ? "Pushing" : "Push"),
+                            Icon = vm.IsPushing.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Push),
+                            Label = vm.IsPushing.Bind(string? (p) => p ? "Pushing" : "Push"),
                             IconRotation = Prop.Bind(vm.PushRotation),
                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
                             Badge = vm.PushBadge,
