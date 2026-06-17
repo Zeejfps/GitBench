@@ -1,7 +1,5 @@
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Controls;
@@ -18,23 +16,18 @@ internal sealed record SeparatorSpacer : Widget
     private const float SeparatorBreathingRoom = 9f;
     private const float SeparatorHeight = 18f;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var theme = ctx.Theme();
-        var line = new RectView
+        return new Center
         {
-            Width = SeparatorWidth,
-            Height = SeparatorHeight,
+            Width = SeparatorWidth + SeparatorBreathingRoom * 2,
+            Child = new Box
+            {
+                Width = SeparatorWidth,
+                Height = SeparatorHeight,
+                Background = Prop.Bind(() => theme.Styles.Value.Palette.Border),
+            },
         };
-        line.BindBackgroundColor(() => theme.Styles.Value.Palette.Border);
-
-        var root = new ContainerView { Width = SeparatorWidth + SeparatorBreathingRoom * 2 };
-        root.Children.Add(new FlexRowView
-        {
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            MainAxisAlignment = MainAxisAlignment.Center,
-            Children = { line },
-        });
-        return root;
     }
 }

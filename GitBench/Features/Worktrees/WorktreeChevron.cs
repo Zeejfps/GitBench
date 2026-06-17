@@ -3,10 +3,7 @@ using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
+using ZGF.Gui.Desktop.Widgets;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Worktrees;
@@ -20,48 +17,45 @@ public sealed record WorktreeChevron : Widget
 {
     public required Repo Repo { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var repo = Repo;
         var registry = ctx.Require<IRepoRegistry>();
         var theme = ctx.Theme();
 
-        var chevron = new TextView(ctx.Canvas)
+        return new KbmInput
         {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 11f,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-            Width = RepoBar.RowChevronWidth,
-        };
-        chevron.BindTextColor(() => theme.Styles.Value.Palette.TextSecondary);
-        // Reads of registry.Repos and the WorktreesChanged version are auto-tracked, so
-        // the chevron updates whenever children appear/disappear or expand state flips.
-        // No children → empty glyph (the slot still reserves its width for alignment).
-        chevron.BindText(() =>
-        {
-            _ = registry.WorktreesChanged.Value;
-            if (!HasChildren(repo.Id, registry)) return string.Empty;
-            return registry.IsWorktreeExpanded(repo.Id) ? LucideIcons.ChevronDown : LucideIcons.ChevronRight;
-        });
-
-        var background = new RectView
-        {
-            Width = RepoBar.RowChevronWidth,
-            Children = { chevron },
-        };
-
-        var root = new ContainerView { Width = RepoBar.RowChevronWidth };
-        root.Children.Add(background);
-
-        root.UseController(ctx.Require<InputSystem>(), () => new HoverableButtonController(
-            () =>
+            OnClick = () =>
             {
                 if (!HasChildren(repo.Id, registry)) return;
                 registry.SetWorktreeExpanded(repo.Id, !registry.IsWorktreeExpanded(repo.Id));
             },
-            _ => { }));
-        return root;
+            Child = new Box
+            {
+                Width = RepoBar.RowChevronWidth,
+                Children =
+                [
+                    new Text
+                    {
+                        FontFamily = LucideIcons.FontFamily,
+                        FontSize = 11f,
+                        HAlign = TextAlignment.Center,
+                        VAlign = TextAlignment.Center,
+                        Width = RepoBar.RowChevronWidth,
+                        Color = Prop.Bind(() => theme.Styles.Value.Palette.TextSecondary),
+                        // The WorktreesChanged read and the child scan are auto-tracked, so the
+                        // chevron refreshes whenever children appear/disappear or expand flips.
+                        // No children → empty glyph (the slot still reserves its width for alignment).
+                        Value = Prop.Bind<string?>(() =>
+                        {
+                            _ = registry.WorktreesChanged.Value;
+                            if (!HasChildren(repo.Id, registry)) return string.Empty;
+                            return registry.IsWorktreeExpanded(repo.Id) ? LucideIcons.ChevronDown : LucideIcons.ChevronRight;
+                        }),
+                    },
+                ],
+            },
+        };
     }
 
     private static bool HasChildren(Guid primaryId, IRepoRegistry registry)
