@@ -21,17 +21,23 @@ internal sealed record BranchesHeader : Widget
         {
             Height = HeaderHeight,
             BorderSize = new BorderSizeStyle { Top = 0, Bottom = 1 },
-            Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
             Background = theme.Styles.Bind(s => s.BranchesHeader.Background),
             BorderColor = theme.Styles.Bind(s => new BorderColorStyle { Bottom = s.BranchesHeader.BorderBottom }),
             Children =
             [
-                new Row
+                new Padding
                 {
-                    CrossAxis = CrossAxisAlignment.Center,
+                    Amount = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
                     Children =
                     [
-                        new BranchLabel { BranchName = vm.BranchName, IsDetached = vm.IsDetached },
+                        new Row
+                        {
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Children =
+                            [
+                                new BranchLabel { BranchName = vm.BranchName, IsDetached = vm.IsDetached },
+                            ],
+                        },
                     ],
                 },
             ],
@@ -45,9 +51,9 @@ internal sealed record BranchLabel : Widget
     public required IReadable<string?> BranchName { get; init; }
     public required IReadable<bool> IsDetached { get; init; }
 
-    protected override IWidget Build(Context ctx) => new Box
+    protected override IWidget Build(Context ctx) => new Padding
     {
-        Padding = new PaddingStyle { Left = 6, Right = 6 },
+        Amount = new PaddingStyle { Left = 6, Right = 6 },
         Visible = BranchName.Bind(n => !string.IsNullOrEmpty(n)),
         Children =
         [

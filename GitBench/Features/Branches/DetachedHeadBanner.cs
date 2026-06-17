@@ -34,32 +34,38 @@ internal sealed record DetachedHeadBanner : Widget
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border }),
         BorderSize = new BorderSizeStyle { Bottom = 1 },
-        Padding = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
         Children =
         [
-            new Row
+            new Padding
             {
-                Gap = 8,
-                CrossAxis = CrossAxisAlignment.Center,
+                Amount = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
                 Children =
                 [
-                    new Grow
+                    new Row
                     {
-                        Child = new Text
-                        {
-                            Value = "Detached HEAD — your latest commits aren't on any branch.",
-                            VAlign = TextAlignment.Center,
-                            Wrap = TextWrap.Wrap,
-                            Color = Theme.Color(s => s.Banner.Text),
-                        },
-                    },
-                    new ActionButton
-                    {
-                        Icon = LucideIcons.Branch,
-                        Label = "Create branch",
-                        Tooltip = "Create a branch here so these commits aren't lost",
-                        Background = 0xFF4E8B3D,
-                        Command = vm.CreateBranch,
+                        Gap = 8,
+                        CrossAxis = CrossAxisAlignment.Center,
+                        Children =
+                        [
+                            new Grow
+                            {
+                                Child = new Text
+                                {
+                                    Value = "Detached HEAD — your latest commits aren't on any branch.",
+                                    VAlign = TextAlignment.Center,
+                                    Wrap = TextWrap.Wrap,
+                                    Color = Theme.Color(s => s.Banner.Text),
+                                },
+                            },
+                            new ActionButton
+                            {
+                                Icon = LucideIcons.Branch,
+                                Label = "Create branch",
+                                Tooltip = "Create a branch here so these commits aren't lost",
+                                Background = 0xFF4E8B3D,
+                                Command = vm.CreateBranch,
+                            },
+                        ],
                     },
                 ],
             },

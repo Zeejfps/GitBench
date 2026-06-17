@@ -52,9 +52,9 @@ internal sealed record RepoBar : Widget
                                 ],
                             },
                         },
-                        new Box
+                        new Padding
                         {
-                            Padding = PaddingStyle.All(HorizontalPadding),
+                            Amount = PaddingStyle.All(HorizontalPadding),
                             Children = [new AddRepoButton()],
                         },
                     ],

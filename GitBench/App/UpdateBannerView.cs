@@ -25,41 +25,47 @@ internal sealed record UpdateBannerView : Widget
         return new Box
         {
             BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Padding = new PaddingStyle
-            {
-                Left = 12,
-                Right = 12,
-                Top = 6,
-                Bottom = 6,
-            },
             Background = theme.Styles.Bind(s => s.Banner.Background),
             BorderColor = theme.Styles.Bind(s => new BorderColorStyle { Bottom = s.Banner.Border }),
             Visible = updateService.BannerMessage.Bind(m => m != null),
             Children =
             [
-                new Row
+                new Padding
                 {
-                    Gap = 4,
-                    CrossAxis = CrossAxisAlignment.Center,
+                    Amount = new PaddingStyle
+                    {
+                        Left = 12,
+                        Right = 12,
+                        Top = 6,
+                        Bottom = 6,
+                    },
                     Children =
                     [
-                        new Grow
+                        new Row
                         {
-                            Child = new Text
-                            {
-                                VAlign = TextAlignment.Center,
-                                Wrap = TextWrap.Wrap,
-                                Value = updateService.BannerMessage,
-                                Color = Theme.Color(s => s.Banner.Text),
-                            },
-                        },
-                        new ActionButton
-                        {
-                            Icon = LucideIcons.Package,
-                            Label = "Restart",
-                            Tooltip = "Restart to finish updating",
-                            Background = 0xFF4E8B3D,
-                            Command = new Command(updateService.ApplyAndRestart),
+                            Gap = 4,
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Children =
+                            [
+                                new Grow
+                                {
+                                    Child = new Text
+                                    {
+                                        VAlign = TextAlignment.Center,
+                                        Wrap = TextWrap.Wrap,
+                                        Value = updateService.BannerMessage,
+                                        Color = Theme.Color(s => s.Banner.Text),
+                                    },
+                                },
+                                new ActionButton
+                                {
+                                    Icon = LucideIcons.Package,
+                                    Label = "Restart",
+                                    Tooltip = "Restart to finish updating",
+                                    Background = 0xFF4E8B3D,
+                                    Command = new Command(updateService.ApplyAndRestart),
+                                },
+                            ],
                         },
                     ],
                 },

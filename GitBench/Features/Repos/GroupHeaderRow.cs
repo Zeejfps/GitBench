@@ -23,29 +23,35 @@ internal sealed record GroupHeaderRow : Widget
         {
             Height = 22,
             BorderRadius = BorderRadiusStyle.All(4),
-            Padding = new PaddingStyle { Left = 2, Right = 8 },
             Background = Prop.Bind(() => isHovered.Value
                 ? styles.Value.GroupHeaderRow.BackgroundHover
                 : styles.Value.GroupHeaderRow.BackgroundIdle),
             Children =
             [
-                new Row
+                new Padding
                 {
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Gap = 8,
+                    Amount = new PaddingStyle { Left = 2, Right = 8 },
                     Children =
                     [
-                        new Text
+                        new Row
                         {
-                            Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value)),
-                            FontFamily = LucideIcons.FontFamily,
-                            FontSize = 11f,
-                            HAlign = TextAlignment.Center,
-                            VAlign = TextAlignment.Center,
-                            Width = 16,
-                            Color = Theme.Color(s => s.GroupHeaderRow.ChevronText),
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Gap = 8,
+                            Children =
+                            [
+                                new Text
+                                {
+                                    Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value)),
+                                    FontFamily = LucideIcons.FontFamily,
+                                    FontSize = 11f,
+                                    HAlign = TextAlignment.Center,
+                                    VAlign = TextAlignment.Center,
+                                    Width = 16,
+                                    Color = Theme.Color(s => s.GroupHeaderRow.ChevronText),
+                                },
+                                new Grow { Child = NameSlot(vm) },
+                            ],
                         },
-                        new Grow { Child = NameSlot(vm) },
                     ],
                 },
             ],

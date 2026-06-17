@@ -56,9 +56,15 @@ internal sealed record ActionButton : Widget
             {
                 Height = 28,
                 BorderRadius = Background is null ? default : BorderRadiusStyle.All(6),
-                Padding = HorizontalPadding(),
                 Background = Prop.Bind(() => Surface(styles.Value, hovered.Value, enabled)),
-                Children = [Content(foreground)],
+                Children =
+                [
+                    new Padding
+                    {
+                        Amount = HorizontalPadding(),
+                        Children = [Content(foreground)],
+                    },
+                ],
             },
         };
 

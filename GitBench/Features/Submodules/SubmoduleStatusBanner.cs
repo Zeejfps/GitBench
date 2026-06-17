@@ -31,32 +31,38 @@ internal sealed record SubmoduleStatusBanner : Widget
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border }),
         BorderSize = new BorderSizeStyle { Bottom = 1 },
-        Padding = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
         Children =
         [
-            new Row
+            new Padding
             {
-                Gap = 8,
-                CrossAxis = CrossAxisAlignment.Center,
+                Amount = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
                 Children =
                 [
-                    new Grow
+                    new Row
                     {
-                        Child = new Text
-                        {
-                            Value = vm.OutdatedCount.Bind(BannerText),
-                            VAlign = TextAlignment.Center,
-                            Wrap = TextWrap.Wrap,
-                            Color = Theme.Color(s => s.Banner.Text),
-                        },
-                    },
-                    new ActionButton
-                    {
-                        Icon = LucideIcons.Package,
-                        Label = "Update submodules",
-                        Tooltip = "Check submodules out to the commit the main repo records",
-                        Background = 0xFF4E8B3D,
-                        Command = vm.UpdateSubmodules,
+                        Gap = 8,
+                        CrossAxis = CrossAxisAlignment.Center,
+                        Children =
+                        [
+                            new Grow
+                            {
+                                Child = new Text
+                                {
+                                    Value = vm.OutdatedCount.Bind(BannerText),
+                                    VAlign = TextAlignment.Center,
+                                    Wrap = TextWrap.Wrap,
+                                    Color = Theme.Color(s => s.Banner.Text),
+                                },
+                            },
+                            new ActionButton
+                            {
+                                Icon = LucideIcons.Package,
+                                Label = "Update submodules",
+                                Tooltip = "Check submodules out to the commit the main repo records",
+                                Background = 0xFF4E8B3D,
+                                Command = vm.UpdateSubmodules,
+                            },
+                        ],
                     },
                 ],
             },
