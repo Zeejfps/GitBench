@@ -19,7 +19,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
     private readonly GenerationGuard _continueLane;
 
     public IReadable<bool> IsActive { get; }
-    public new IReadable<RepoOperationState> State { get; }
+    public IReadable<RepoOperationState> OperationState { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
     public IReadable<float> BusyRotation => _spinner.Rotation;
     public Command Abort { get; }
@@ -42,7 +42,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
         // Declared before State so the banner swaps out before any per-state content would
         // re-render when the operation clears.
         IsActive = Slice(s => s.State != RepoOperationState.None);
-        State = Slice(s => s.State);
+        OperationState = Slice(s => s.State);
         Abort = new Command(DoAbort);
         // Continue stays disabled while unmerged paths remain — git would refuse anyway.
         var canContinue = Slice(s => s.State != RepoOperationState.None && !s.HasConflicts);
@@ -57,7 +57,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
     private void DoAbort()
     {
         var repo = _registry.Active.Value;
-        var state = State.Value;
+        var state = OperationState.Value;
         if (repo == null || state == RepoOperationState.None) return;
         _bus.Broadcast(new ShowDialogMessage(onClose => new AbortOperationDialog { Repo = repo, State = state, OnClose = onClose }));
     }
@@ -65,7 +65,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
     private void DoContinue()
     {
         var repo = _registry.Active.Value;
-        var state = State.Value;
+        var state = OperationState.Value;
         if (repo == null || state == RepoOperationState.None) return;
 
         var service = _gitService;

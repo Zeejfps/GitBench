@@ -44,8 +44,8 @@ internal sealed record OperationBannerWidget : Widget
                         Child = new Text
                         {
                             Value = Prop.Bind<string?>(() => vm.IsBusy.Value
-                                ? BusyMessageFor(vm.State.Value)
-                                : MessageFor(vm.State.Value)),
+                                ? BusyMessageFor(vm.OperationState.Value)
+                                : MessageFor(vm.OperationState.Value)),
                             VAlign = TextAlignment.Center,
                             Wrap = TextWrap.Wrap,
                             Color = Theme.Color(s => s.Banner.Text),
@@ -88,7 +88,7 @@ internal sealed record OperationBannerWidget : Widget
                 Tooltip = "Continue",
                 Background = 0xFF4E8B3D,
                 Command = vm.Continue,
-                Visible = Prop.Bind(() => SupportsContinue(vm.State.Value)),
+                Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
             },
             new ActionButton
             {
