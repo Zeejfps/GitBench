@@ -22,13 +22,14 @@ public sealed record WorktreeChevron : Widget
         var repo = Repo;
         var registry = ctx.Require<IRepoRegistry>();
         var theme = ctx.Theme();
+        var expanded = registry.WatchWorktreeExpanded(repo.Id);
 
         return new KbmInput
         {
             OnClick = () =>
             {
                 if (!HasChildren(repo.Id, registry)) return;
-                registry.SetWorktreeExpanded(repo.Id, !registry.IsWorktreeExpanded(repo.Id));
+                registry.SetWorktreeExpanded(repo.Id, !expanded.Value);
             },
             Child = new Box
             {
@@ -43,15 +44,9 @@ public sealed record WorktreeChevron : Widget
                         VAlign = TextAlignment.Center,
                         Width = RepoBar.RowChevronWidth,
                         Color = Prop.Bind(() => theme.Styles.Value.Palette.TextSecondary),
-                        // The WorktreesChanged read and the child scan are auto-tracked, so the
-                        // chevron refreshes whenever children appear/disappear or expand flips.
-                        // No children → empty glyph (the slot still reserves its width for alignment).
                         Value = Prop.Bind<string?>(() =>
-                        {
-                            _ = registry.WorktreesChanged.Value;
-                            if (!HasChildren(repo.Id, registry)) return string.Empty;
-                            return registry.IsWorktreeExpanded(repo.Id) ? LucideIcons.ChevronDown : LucideIcons.ChevronRight;
-                        }),
+                            !HasChildren(repo.Id, registry) ? string.Empty
+                            : expanded.Value ? LucideIcons.ChevronDown : LucideIcons.ChevronRight),
                     },
                 ],
             },

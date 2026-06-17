@@ -11,8 +11,8 @@ namespace GitBench.Features.Submodules;
 // Composite that renders a single submodule row with its own (collapsible) nested children
 // stacked below — the submodule analogue of RepoEntry. This is what lets the RepoBar show
 // submodules-of-submodules: each SubmoduleEntry recurses via RepoTreeChildren, so the tree
-// extends as deep as the discovery walk found. Folds independently of its parent (its own
-// chevron drives IsWorktreeExpanded for its id).
+// extends as deep as the discovery walk found. Folds independently of its parent — its own
+// chevron toggles the expand state keyed to its id.
 public sealed record SubmoduleEntry : Widget
 {
     public required Repo Submodule { get; init; }
@@ -23,6 +23,7 @@ public sealed record SubmoduleEntry : Widget
         var submodule = Submodule;
         var depth = Depth;
         var registry = ctx.Require<IRepoRegistry>();
+        var expanded = registry.WatchWorktreeExpanded(submodule.Id);
 
         var children = new FlexColumnView
         {
@@ -33,8 +34,7 @@ public sealed record SubmoduleEntry : Widget
         children.Children.BindChildren(
             () =>
             {
-                _ = registry.WorktreesChanged.Value;
-                if (!registry.IsWorktreeExpanded(submodule.Id))
+                if (!expanded.Value)
                     return System.Linq.Enumerable.Empty<View>();
                 return RepoTreeChildren.Build(ctx, submodule.Id, registry, depth + 1);
             },

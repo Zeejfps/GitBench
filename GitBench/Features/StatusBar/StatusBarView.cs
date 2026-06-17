@@ -4,7 +4,6 @@ using GitBench.Features.Identity;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -21,146 +20,123 @@ internal sealed record StatusBarView : Widget
     private const int BarHeight = 22;
     private const int HorizontalPadding = 8;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<StatusBarViewModel>();
-        var theme = ctx.Theme();
 
-        var (repoCluster, repoName) = Segment(ctx, LucideIcons.FolderGit2);
-        var (branchCluster, branchName) = Segment(ctx, LucideIcons.Branch);
-        var (aheadCluster, aheadText) = Segment(ctx, LucideIcons.ChevronUp);
-        var (behindCluster, behindText) = Segment(ctx, LucideIcons.ChevronDown);
-        var identityChip = new IdentityChipButton
-        {
-            BindIcon = () => vm.IdentityGlyph.Value,
-            BindLabel = () => vm.IdentityText.Value,
-            MenuProvider = vm.BuildIdentityMenu,
-        }.BuildView(ctx);
-
-        var left = new FlexRowView
+        var left = new Row
         {
             Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { repoCluster, branchCluster, aheadCluster, behindCluster, identityChip },
-        };
-
-        var themeButton = new StatusBarIconButton
-        {
-            Tooltip = "Toggle theme",
-            BindIcon = () => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon,
-            Command = vm.ToggleTheme,
-        }.BuildView(ctx);
-        var updateButton = new StatusBarIconButton
-        {
-            Tooltip = "Check for updates",
-            BindIcon = () => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch,
-            IconRotation = vm.UpdateIconRotation,
-            Command = vm.CheckForUpdates,
-        }.BuildView(ctx);
-
-        // Brief inline result of a manual check ("up to date" / "failed"); hidden when empty.
-        var updateFeedback = new TextView(ctx.Canvas)
-        {
-            FontSize = 11f,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.End,
-        };
-        updateFeedback.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
-
-        var version = new TextView(ctx.Canvas)
-        {
-            Text = $"v{AppVersion.Display}",
-            FontSize = 11f,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.End,
-        };
-        version.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
-
-        var bar = new RectView
-        {
-            BorderSize = new BorderSizeStyle { Top = 1 },
+            CrossAxis = CrossAxisAlignment.Center,
             Children =
-            {
-                new PaddingView
+            [
+                Segment(LucideIcons.FolderGit2, Prop.Bind(vm.HasActiveRepo), Prop.Bind(vm.RepoName)),
+                Segment(LucideIcons.Branch, Prop.Bind(vm.HasBranch), Prop.Bind(vm.Branch)),
+                Segment(LucideIcons.ChevronUp, Prop.Bind(vm.ShowAhead), Prop.Bind<string?>(() => vm.AheadText.Value)),
+                Segment(LucideIcons.ChevronDown, Prop.Bind(vm.ShowBehind), Prop.Bind<string?>(() => vm.BehindText.Value)),
+                new IdentityChipButton
                 {
-                    Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
-                    Children =
-                    {
-                        new FlexRowView
-                        {
-                            Gap = 8,
-                            CrossAxisAlignment = CrossAxisAlignment.Center,
-                            Children =
-                            {
-                                themeButton,
-                                new FlexItem { Grow = 1, Child = left },
-                                updateFeedback,
-                                updateButton,
-                                version,
-                            },
-                        },
-                    },
+                    BindIcon = () => vm.IdentityGlyph.Value,
+                    BindLabel = () => vm.IdentityText.Value,
+                    MenuProvider = vm.BuildIdentityMenu,
+                    Visible = Prop.Bind(vm.ShowIdentity),
                 },
-            },
+            ],
         };
-        bar.BindBackgroundColor(() => theme.Styles.Value.StatusBar.Background);
-        bar.BindBorderColor(() => new BorderColorStyle { Top = theme.Styles.Value.StatusBar.TopBorder });
 
-        // Fix the bar height here (not on the inner RectView): the inner view also carries a
-        // 1px top border, so giving it an explicit Height would make its measured size exceed
-        // its laid-out size by the border and leave a 1px gap above the bar. Sizing the outer
-        // view and letting the RectView fill the region keeps it flush against the content.
-        var root = new ContainerView { Height = BarHeight };
-        root.Children.Add(bar);
-
-        repoCluster.BindIsVisible(vm.HasActiveRepo, b => b);
-        repoName.BindText(vm.RepoName);
-
-        branchCluster.BindIsVisible(vm.HasBranch, b => b);
-        branchName.BindText(vm.Branch);
-
-        aheadCluster.BindIsVisible(vm.ShowAhead, b => b);
-        aheadText.BindText(vm.AheadText);
-
-        behindCluster.BindIsVisible(vm.ShowBehind, b => b);
-        behindText.BindText(vm.BehindText);
-
-        identityChip.BindIsVisible(vm.ShowIdentity, b => b);
-
-        updateFeedback.BindText(vm.UpdateCheckFeedback, m => m ?? string.Empty);
-        updateFeedback.BindIsVisible(vm.UpdateCheckFeedback, m => !string.IsNullOrEmpty(m));
-
-        root.UseViewModel(() => vm, _ => { });
-        return root;
+        // Fix the bar height on the outer box, not the inner one: the inner box also carries a 1px
+        // top border, so giving it an explicit Height would make its measured size exceed its
+        // laid-out size by the border and leave a 1px gap above the bar. Sizing the outer box and
+        // letting the inner one fill the region keeps it flush against the content.
+        return new Box
+        {
+            Height = BarHeight,
+            Children =
+            [
+                new Box
+                {
+                    BorderSize = new BorderSizeStyle { Top = 1 },
+                    Background = Theme.Color(s => s.StatusBar.Background),
+                    BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.StatusBar.TopBorder }),
+                    Children =
+                    [
+                        new Padding
+                        {
+                            Amount = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
+                            Children =
+                            [
+                                new Row
+                                {
+                                    Gap = 8,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        new StatusBarIconButton
+                                        {
+                                            Tooltip = "Toggle theme",
+                                            BindIcon = () => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon,
+                                            Command = vm.ToggleTheme,
+                                        },
+                                        new Grow { Child = left },
+                                        new Text
+                                        {
+                                            FontSize = 11f,
+                                            VAlign = TextAlignment.Center,
+                                            HAlign = TextAlignment.End,
+                                            Color = Theme.Color(s => s.StatusBar.Text),
+                                            // Brief inline result of a manual check ("up to date" / "failed"); hidden when empty.
+                                            Value = Prop.Bind<string?>(() => vm.UpdateCheckFeedback.Value ?? string.Empty),
+                                            Visible = vm.UpdateCheckFeedback.Bind(m => !string.IsNullOrEmpty(m)),
+                                        },
+                                        new StatusBarIconButton
+                                        {
+                                            Tooltip = "Check for updates",
+                                            BindIcon = () => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch,
+                                            IconRotation = vm.UpdateIconRotation,
+                                            Command = vm.CheckForUpdates,
+                                        },
+                                        new Text
+                                        {
+                                            Value = $"v{AppVersion.Display}",
+                                            FontSize = 11f,
+                                            VAlign = TextAlignment.Center,
+                                            HAlign = TextAlignment.End,
+                                            Color = Theme.Color(s => s.StatusBar.Text),
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }.BindVm(vm);
     }
 
-    // An icon glyph + label pair. Returns the row (for visibility binding) and the label
-    // TextView (for text binding). Both glyph and label render in the muted status-bar color.
-    private static (FlexRowView Row, TextView Label) Segment(Context ctx, string glyph)
+    // An icon glyph + label pair, both in the muted status-bar color; the row hides as a unit when
+    // its data is absent.
+    private static IWidget Segment(string glyph, Prop<bool> visible, Prop<string?> label) => new Row
     {
-        var theme = ctx.Theme();
-        var icon = new TextView(ctx.Canvas)
-        {
-            Text = glyph,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
-
-        var label = new TextView(ctx.Canvas)
-        {
-            FontSize = 11f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindTextColor(() => theme.Styles.Value.StatusBar.Text);
-
-        var row = new FlexRowView
-        {
-            Gap = 4,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { icon, label },
-        };
-        return (row, label);
-    }
+        Gap = 4,
+        CrossAxis = CrossAxisAlignment.Center,
+        Visible = visible,
+        Children =
+        [
+            new Text
+            {
+                Value = glyph,
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 12f,
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.StatusBar.Text),
+            },
+            new Text
+            {
+                Value = label,
+                FontSize = 11f,
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.StatusBar.Text),
+            },
+        ],
+    };
 }

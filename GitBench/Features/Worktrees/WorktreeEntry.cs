@@ -20,6 +20,7 @@ public sealed record WorktreeEntry : Widget
         var worktree = Worktree;
         var depth = Depth;
         var registry = ctx.Require<IRepoRegistry>();
+        var expanded = registry.WatchWorktreeExpanded(worktree.Id);
 
         var children = new FlexColumnView
         {
@@ -30,9 +31,8 @@ public sealed record WorktreeEntry : Widget
         children.Children.BindChildren(
             () =>
             {
-                _ = registry.WorktreesChanged.Value;
-                if (!registry.IsWorktreeExpanded(worktree.Id))
-                    return System.Linq.Enumerable.Empty<View>();
+                if (!expanded.Value)
+                    return Enumerable.Empty<View>();
                 return RepoTreeChildren.Build(ctx, worktree.Id, registry, depth + 1);
             },
             v => v);

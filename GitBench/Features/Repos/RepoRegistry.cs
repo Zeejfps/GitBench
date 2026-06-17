@@ -12,7 +12,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 
     private readonly string _statePath;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
-    private readonly Dictionary<Guid, bool> _worktreesExpanded;
+    private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
 
     // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
@@ -28,7 +28,8 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     {
         _statePath = statePath;
         _branchesUi = new Dictionary<Guid, BranchesUiState>(initial.BranchesUi);
-        _worktreesExpanded = new Dictionary<Guid, bool>(initial.WorktreesExpanded);
+        _expanded = new Dictionary<Guid, State<bool>>();
+        foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
         _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
 
         Repos = new ObservableList<Repo>();
@@ -240,7 +241,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
             if (idsToRemove.Contains(Repos[i].Id)) Repos.RemoveAt(i);
         }
 
-        foreach (var id in idsToRemove) _worktreesExpanded.Remove(id);
+        foreach (var id in idsToRemove) RemoveExpandedState(id);
 
         if (Active.Value is { } active && idsToRemove.Contains(active.Id))
         {
@@ -289,15 +290,32 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         }
     }
 
-    public bool IsWorktreeExpanded(Guid primaryId)
-        => !_worktreesExpanded.TryGetValue(primaryId, out var v) || v;
+    public IReadable<bool> WatchWorktreeExpanded(Guid primaryId) => ExpandedState(primaryId);
 
     public void SetWorktreeExpanded(Guid primaryId, bool expanded)
     {
-        if (IsWorktreeExpanded(primaryId) == expanded) return;
-        _worktreesExpanded[primaryId] = expanded;
-        WorktreesChanged.Value++;
+        var state = ExpandedState(primaryId);
+        if (state.Value == expanded) return;
+        state.Value = expanded;
         Save();
+    }
+
+    // The expand flag for one row's fold chevron, created lazily and defaulting to expanded.
+    // A live State (rather than a dict entry guarded by a global counter) so the chevron and
+    // the child-row lists bind to it directly.
+    private State<bool> ExpandedState(Guid primaryId)
+    {
+        if (!_expanded.TryGetValue(primaryId, out var state))
+        {
+            state = new State<bool>(true);
+            _expanded[primaryId] = state;
+        }
+        return state;
+    }
+
+    private void RemoveExpandedState(Guid primaryId)
+    {
+        if (_expanded.Remove(primaryId, out var state)) state.Dispose();
     }
 
     public Guid? GetIdentityOverride(Guid repoId)
@@ -538,7 +556,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         {
             if (Repos[i].Id != repoId) continue;
             Repos.RemoveAt(i);
-            _worktreesExpanded.Remove(repoId);
+            RemoveExpandedState(repoId);
             if (Active.Value?.Id == repoId) Active.Value = fallbackActive;
             removedAny = true;
             break;
@@ -556,8 +574,13 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
             RebuildLookups();
             _overrideMapDirty = false;
         }
+        // Only collapsed rows carry information — expanded is the default, so an expanded entry
+        // is redundant and would bloat the state file with one row per rendered repo.
+        var collapsed = _expanded
+            .Where(kv => !kv.Value.Value)
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Value);
         RepoStateStore.Save(_statePath, Repos, Groups.Select(g => g.ToState()).ToList(),
-            Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
+            Active.Value?.Id, _branchesUi, collapsed, _identityOverride);
     }
 
     private Group? FindGroup(Guid id)

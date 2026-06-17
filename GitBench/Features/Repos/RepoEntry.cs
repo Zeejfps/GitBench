@@ -22,6 +22,7 @@ public sealed record RepoEntry : Widget
     {
         var primary = Primary;
         var registry = ctx.Require<IRepoRegistry>();
+        var expanded = registry.WatchWorktreeExpanded(primary.Id);
 
         var children = new FlexColumnView
         {
@@ -32,8 +33,7 @@ public sealed record RepoEntry : Widget
         children.Children.BindChildren(
             () =>
             {
-                _ = registry.WorktreesChanged.Value;
-                if (!registry.IsWorktreeExpanded(primary.Id))
+                if (!expanded.Value)
                     return System.Linq.Enumerable.Empty<View>();
                 // Direct children sit at depth 1; SubmoduleEntry recurses for deeper nesting.
                 return RepoTreeChildren.Build(ctx, primary.Id, registry, depth: 1);

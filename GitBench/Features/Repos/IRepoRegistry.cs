@@ -11,8 +11,9 @@ public interface IRepoRegistry
     State<Repo?> Active { get; }
     State<Guid?> RenamingGroupId { get; }
     // Bumped whenever the set of children (worktrees OR submodules) attached to a primary
-    // changes, or when expand state flips. Single counter so the chevron/RepoEntry need
-    // only watch one slot to know "something nested moved."
+    // changes, or a primary's branch is recorded. Watched by BranchesViewModel to refresh the
+    // markers for branches a sibling worktree has checked out. (Row expand/collapse is its own
+    // per-row observable — see WatchWorktreeExpanded — and no longer rides this counter.)
     State<int> WorktreesChanged { get; }
     void Open(string path);
     void SetActive(Guid id);
@@ -31,9 +32,9 @@ public interface IRepoRegistry
     void SetBranchesUi(Guid repoId, BranchesUiState state);
     IEnumerable<Repo> GetWorktrees(Guid primaryId);
     IEnumerable<Repo> GetSubmodules(Guid primaryId);
-    // Shared expand toggle: a single chevron on the primary controls visibility of both
-    // worktree and submodule children. Naming kept for backward compatibility.
-    bool IsWorktreeExpanded(Guid primaryId);
+    // Shared fold for a row's children (worktrees AND submodules). A live observable so the
+    // chevron glyph and the child-row lists bind to it directly; the name predates submodules.
+    IReadable<bool> WatchWorktreeExpanded(Guid primaryId);
     void SetWorktreeExpanded(Guid primaryId, bool expanded);
     // Manual per-repo identity override (a profile id) that takes precedence over auto-matching.
     Guid? GetIdentityOverride(Guid repoId);
