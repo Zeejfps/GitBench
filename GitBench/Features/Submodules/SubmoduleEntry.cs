@@ -2,7 +2,6 @@ using GitBench.Features.Repos;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -18,61 +17,58 @@ public sealed record SubmoduleEntry : Widget
     public required Repo Submodule { get; init; }
     public required int Depth { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var submodule = Submodule;
-        var depth = Depth;
         var registry = ctx.Require<IRepoRegistry>();
         var expanded = registry.WatchWorktreeExpanded(submodule.Id);
+        var childDepth = Depth + 1;
 
-        var children = new FlexColumnView
+        return new Column
         {
             Gap = 2,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-        };
-
-        children.Children.BindChildren(
-            () =>
-            {
-                if (!expanded.Value)
-                    return System.Linq.Enumerable.Empty<View>();
-                return RepoTreeChildren.Build(ctx, submodule.Id, registry, depth + 1);
-            },
-            v => v);
-
-        var root = new ContainerView();
-        root.Children.Add(new FlexColumnView
-        {
-            Gap = 2,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
-            {
-                new SubmoduleRow { Repo = submodule, Depth = depth }.BuildView(ctx),
-                children,
-            },
-        });
-        return root;
+            [
+                new SubmoduleRow { Repo = submodule, Depth = Depth },
+                new Column<Repo>
+                {
+                    Gap = 2,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Items = Prop.Bind(() => expanded.Value
+                        ? RepoTreeChildren.ChildRepos(submodule.Id, registry)
+                        : Array.Empty<Repo>()),
+                    Template = repo => RepoTreeChildren.Entry(repo, childDepth),
+                },
+            ],
+        };
     }
 }
 
-// Shared factory for the child rows under any RepoBar parent (primary, worktree, or
-// submodule). Worktrees first, then submodules — both recursive composites that carry their
-// own nested children, same order/indent at every level.
+// Shared factory for the child rows under any RepoBar parent (primary, worktree, or submodule).
 internal static class RepoTreeChildren
 {
-    public static IReadOnlyList<View> Build(Context ctx, System.Guid parentId, IRepoRegistry registry, int depth)
+    // Worktrees first, then submodules — both recursive composites that carry their own nested
+    // children, same order/indent at every level.
+    public static IReadOnlyList<Repo> ChildRepos(Guid parentId, IRepoRegistry registry)
+    {
+        var repos = new List<Repo>();
+        foreach (var r in registry.Repos)
+            if (r.ParentRepoId == parentId && r.IsWorktree) repos.Add(r);
+        foreach (var r in registry.Repos)
+            if (r.ParentRepoId == parentId && r.IsSubmodule) repos.Add(r);
+        return repos;
+    }
+
+    public static IWidget Entry(Repo repo, int depth) => repo.IsWorktree
+        ? new WorktreeEntry { Worktree = repo, Depth = depth }
+        : new SubmoduleEntry { Submodule = repo, Depth = depth };
+
+    public static IReadOnlyList<View> Build(Context ctx, Guid parentId, IRepoRegistry registry, int depth)
     {
         var views = new List<View>();
-        foreach (var r in registry.Repos)
-        {
-            if (r.ParentRepoId == parentId && r.IsWorktree)
-                views.Add(new WorktreeEntry { Worktree = r, Depth = depth }.BuildView(ctx));
-        }
-        foreach (var r in registry.Repos)
-        {
-            if (r.ParentRepoId == parentId && r.IsSubmodule)
-                views.Add(new SubmoduleEntry { Submodule = r, Depth = depth }.BuildView(ctx));
-        }
+        foreach (var r in ChildRepos(parentId, registry))
+            views.Add(Entry(r, depth).BuildView(ctx));
         return views;
     }
 }
