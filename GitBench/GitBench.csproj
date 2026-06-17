@@ -5,7 +5,11 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <PublishAot>true</PublishAot>
+        <!-- AOT only for published releases (CI publishes -c Release). In Debug, PublishAot would
+             bake MetadataUpdater/StartupHook=false into runtimeconfig.json and disable Hot Reload
+             without actually AOT-compiling, so keep it off there. -->
+        <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
+        <IsAotCompatible>true</IsAotCompatible>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <ApplicationIcon>Assets\commit_bench_icon.ico</ApplicationIcon>
         <!-- Default for local/dev builds. CI overrides with a -p:Version=<tag> publish arg
