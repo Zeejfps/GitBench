@@ -1,9 +1,6 @@
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
+using ZGF.Gui.Desktop.Widgets;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -18,45 +15,45 @@ internal sealed record SegmentView : Widget
     public required BorderRadiusStyle Radius { get; init; }
     public required SegmentViewModel Model { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        var theme = ctx.Theme();
-        var isActive = new State<bool>(false);
-        var isHovered = new State<bool>(false);
+        var styles = ctx.Theme().Styles;
+        var hovered = new State<bool>(false);
 
-        var labelView = new TextView(ctx.Canvas)
+        return new KbmInput
         {
-            Text = Label,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-        };
-        labelView.BindTextColor(() =>
-            isActive.Value ? theme.Styles.Value.ModeSwitcher.SegmentActiveText :
-            isHovered.Value ? theme.Styles.Value.ModeSwitcher.SegmentHoverText :
-            theme.Styles.Value.ModeSwitcher.SegmentIdleText);
-
-        var bg = new RectView
-        {
-            BorderRadius = Radius,
-            Children =
+            OnClick = Model.Activate,
+            OnHoverEnter = () => hovered.Value = true,
+            OnHoverExit = () => hovered.Value = false,
+            Child = new Box
             {
-                new PaddingView
-                {
-                    Padding = new PaddingStyle { Left = 12, Right = 12 },
-                    Children = { labelView },
-                },
+                Height = SegmentHeight,
+                BorderRadius = Radius,
+                Background = Prop.Bind(() =>
+                    Model.IsActive.Value ? styles.Value.ModeSwitcher.SegmentActiveBackground :
+                    hovered.Value ? styles.Value.ModeSwitcher.SegmentHoverBackground :
+                    styles.Value.ModeSwitcher.SegmentIdleBackground),
+                Children =
+                [
+                    new Padding
+                    {
+                        Amount = new PaddingStyle { Left = 12, Right = 12 },
+                        Children =
+                        [
+                            new Text
+                            {
+                                Value = Label,
+                                HAlign = TextAlignment.Center,
+                                VAlign = TextAlignment.Center,
+                                Color = Prop.Bind(() =>
+                                    Model.IsActive.Value ? styles.Value.ModeSwitcher.SegmentActiveText :
+                                    hovered.Value ? styles.Value.ModeSwitcher.SegmentHoverText :
+                                    styles.Value.ModeSwitcher.SegmentIdleText),
+                            },
+                        ],
+                    },
+                ],
             },
         };
-        bg.BindBackgroundColor(() =>
-            isActive.Value ? theme.Styles.Value.ModeSwitcher.SegmentActiveBackground :
-            isHovered.Value ? theme.Styles.Value.ModeSwitcher.SegmentHoverBackground :
-            theme.Styles.Value.ModeSwitcher.SegmentIdleBackground);
-
-        var root = new ContainerView { Height = SegmentHeight };
-        root.Children.Add(bg);
-        root.Bind(Model.IsActive, b => isActive.Value = b);
-        root.UseController(ctx.Require<InputSystem>(),
-            () => new HoverableButtonController(Model.Activate, h => isHovered.Value = h));
-        return root;
     }
 }
