@@ -45,7 +45,7 @@ internal sealed record ActionButton : Widget
         var hovered = new State<bool>(false);
         var enabled = Command?.CanExecute;
 
-        Prop<uint> foreground = styles.Bind(s => Foreground(s, hovered.Value, enabled));
+        var foreground = styles.Bind(s => Foreground(s, hovered.Value, enabled));
 
         IWidget button = new KbmInput
         {
