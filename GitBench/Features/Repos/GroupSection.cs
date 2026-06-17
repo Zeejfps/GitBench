@@ -1,5 +1,5 @@
+using GitBench.Git;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -11,32 +11,25 @@ internal sealed record GroupSection : Widget
 {
     public required GroupSectionViewModel Model { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = Model;
 
-        var rows = new FlexColumnView
+        return new Column
         {
             Gap = 2,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-        };
-        rows.Children.BindChildren(
-            vm.VisiblePrimaries,
-            primary => new RepoEntry { Primary = primary }.BuildView(ctx));
-
-        var root = new ContainerView();
-        root.Children.Add(new FlexColumnView
-        {
-            Gap = 2,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
-            {
-                new GroupHeaderRow { Model = vm.HeaderVm }.BuildView(ctx),
-                rows,
-            }
-        });
-
-        root.UseController(ctx.Require<InputSystem>(), () => new GroupSectionController(root, ctx, vm.GroupId));
-        return root;
+            [
+                new GroupHeaderRow { Model = vm.HeaderVm },
+                new Column<Repo>
+                {
+                    Gap = 2,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Items = vm.VisiblePrimaries,
+                    Template = primary => new RepoEntry { Primary = primary },
+                },
+            ],
+        }.WithController(ctx.Require<InputSystem>(), view => new GroupSectionController(view, ctx, vm.GroupId));
     }
 }

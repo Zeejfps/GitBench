@@ -13,7 +13,7 @@ public static class RepoStateStore
 
     public sealed record State(
         List<Repo> Repos,
-        List<Group> Groups,
+        List<GroupState> Groups,
         Guid? ActiveRepoId,
         Dictionary<Guid, BranchesUiState> BranchesUi,
         Dictionary<Guid, bool> WorktreesExpanded,
@@ -23,7 +23,7 @@ public static class RepoStateStore
     {
         public int SchemaVersion { get; set; }
         public List<Repo> Repos { get; set; } = new();
-        public List<Group>? Groups { get; set; }
+        public List<GroupState>? Groups { get; set; }
         public Guid? ActiveRepoId { get; set; }
         public Dictionary<Guid, BranchesUiState>? BranchesUi { get; set; }
         public Dictionary<Guid, bool>? WorktreesExpanded { get; set; }
@@ -80,7 +80,7 @@ public static class RepoStateStore
             {
                 groups =
                 [
-                    new Group(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false,
+                    new GroupState(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false,
                         RepoIds: repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToList())
 
                 ];
@@ -108,7 +108,7 @@ public static class RepoStateStore
     public static void Save(
         string path,
         IReadOnlyList<Repo> repos,
-        IReadOnlyList<Group> groups,
+        IReadOnlyList<GroupState> groups,
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
@@ -134,10 +134,10 @@ public static class RepoStateStore
 
     private static State EmptyState()
     {
-        var defaultGroup = new Group(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false, RepoIds: new List<Guid>());
+        var defaultGroup = new GroupState(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false, RepoIds: new List<Guid>());
         return new State(
             new List<Repo>(),
-            new List<Group> { defaultGroup },
+            new List<GroupState> { defaultGroup },
             null,
             new Dictionary<Guid, BranchesUiState>(),
             new Dictionary<Guid, bool>(),
@@ -147,7 +147,7 @@ public static class RepoStateStore
     // Worktrees are children of a primary repo and never appear directly in a Group —
     // they're discovered by ParentRepoId at render time. Filter them out of every
     // RepoIds set defensively, in case a hand-edit or older state file slipped one in.
-    private static List<Group> ReconcileGroups(List<Group> groups, List<Repo> repos)
+    private static List<GroupState> ReconcileGroups(List<GroupState> groups, List<Repo> repos)
     {
         var primaries = repos.Where(r => r.ParentRepoId is null).ToList();
         var primaryIds = primaries.Select(r => r.Id).ToHashSet();

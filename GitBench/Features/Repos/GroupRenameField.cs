@@ -27,7 +27,7 @@ internal sealed record GroupRenameField : Widget
             input.CaretColor = s.GroupRenameField.Caret;
             input.SelectionRectColor = s.GroupRenameField.Selection;
         });
-        input.Enter(Group.Name);
+        input.Enter(Group.Name.Value);
         input.SelectAll();
 
         var box = new RectView

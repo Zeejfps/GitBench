@@ -37,7 +37,7 @@ internal sealed record GroupHeaderRow : Widget
                     [
                         new Text
                         {
-                            Value = ChevronFor(vm.Group.IsCollapsed),
+                            Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value)),
                             FontFamily = LucideIcons.FontFamily,
                             FontSize = 11f,
                             HAlign = TextAlignment.Center,

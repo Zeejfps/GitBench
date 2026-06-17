@@ -93,7 +93,7 @@ public class RepoIdentityOverrideTests
         var profileId = Guid.NewGuid();
         var state = new RepoStateStore.State(
             new List<Repo> { new(repoId, dir + Path.DirectorySeparatorChar, "repo") },
-            new List<Group> { new(Guid.NewGuid(), "g", false, new List<Guid> { repoId }) },
+            new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { repoId }) },
             repoId,
             new(), new(),
             new Dictionary<Guid, Guid> { [repoId] = profileId });
@@ -120,7 +120,7 @@ public class RepoIdentityOverrideTests
                 new(primaryId, primaryDir, "primary"),
                 new(worktreeId, worktreeDir, "wt", primaryId) { Kind = RepoKind.Worktree },
             },
-            new List<Group> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
+            new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
             primaryId,
             new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = profileId });
@@ -145,7 +145,7 @@ public class RepoIdentityOverrideTests
                 new(primaryId, primaryDir, "primary"),
                 new(worktreeId, worktreeDir, "wt", primaryId) { Kind = RepoKind.Worktree },
             },
-            new List<Group> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
+            new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
             primaryId,
             new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = primaryProfile, [worktreeId] = worktreeProfile });

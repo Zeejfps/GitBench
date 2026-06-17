@@ -40,7 +40,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         Repos.Changed += _ => _overrideMapDirty = true;
 
         Groups = new ObservableList<Group>();
-        foreach (var g in initial.Groups) Groups.Add(g);
+        foreach (var g in initial.Groups) Groups.Add(Group.FromState(g));
 
         Active = new State<Repo?>(
             initial.ActiveRepoId is { } id
@@ -76,8 +76,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         var repo = new Repo(Guid.NewGuid(), normalized, Path.GetFileName(normalized));
         Repos.Add(repo);
 
-        var first = Groups[0];
-        Groups.Replace(0, first with { RepoIds = first.RepoIds.Append(repo.Id).ToList() });
+        Groups[0].RepoIds.Add(repo.Id);
 
         Active.Value = repo;
         Save();
@@ -94,22 +93,18 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 
     public void ToggleGroupCollapsed(Guid groupId)
     {
-        for (var i = 0; i < Groups.Count; i++)
-        {
-            if (Groups[i].Id != groupId) continue;
-            Groups.Replace(i, Groups[i] with { IsCollapsed = !Groups[i].IsCollapsed });
-            Save();
-            return;
-        }
+        if (FindGroup(groupId) is not { } group) return;
+        group.IsCollapsed.Value = !group.IsCollapsed.Value;
+        Save();
     }
 
     public void SetAllGroupsCollapsed(bool collapsed)
     {
         var changed = false;
-        for (var i = 0; i < Groups.Count; i++)
+        foreach (var group in Groups)
         {
-            if (Groups[i].IsCollapsed == collapsed) continue;
-            Groups.Replace(i, Groups[i] with { IsCollapsed = collapsed });
+            if (group.IsCollapsed.Value == collapsed) continue;
+            group.IsCollapsed.Value = collapsed;
             changed = true;
         }
         if (changed) Save();
@@ -118,7 +113,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     public Guid CreateGroup(string name)
     {
         var displayName = string.IsNullOrWhiteSpace(name) ? DefaultNewGroupName : name;
-        var group = new Group(Guid.NewGuid(), displayName, IsCollapsed: false, RepoIds: new List<Guid>());
+        var group = new Group(Guid.NewGuid(), displayName, isCollapsed: false, repoIds: new List<Guid>());
         Groups.Add(group);
         Save();
         return group.Id;
@@ -128,27 +123,16 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     {
         var trimmed = (newName ?? string.Empty).Trim();
         if (string.IsNullOrEmpty(trimmed)) return;
-        for (var i = 0; i < Groups.Count; i++)
-        {
-            if (Groups[i].Id != id) continue;
-            if (Groups[i].Name == trimmed) return;
-            Groups.Replace(i, Groups[i] with { Name = trimmed });
-            Save();
-            return;
-        }
+        if (FindGroup(id) is not { } group || group.Name.Value == trimmed) return;
+        group.Name.Value = trimmed;
+        Save();
     }
 
     public void DeleteGroup(Guid id)
     {
         if (Groups.Count <= 1) return;
 
-        var index = -1;
-        for (var i = 0; i < Groups.Count; i++)
-        {
-            if (Groups[i].Id != id) continue;
-            index = i;
-            break;
-        }
+        var index = IndexOfGroup(id);
         if (index < 0) return;
 
         var orphans = Groups[index].RepoIds.ToList();
@@ -156,9 +140,8 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 
         if (orphans.Count > 0)
         {
-            var targetIndex = index < Groups.Count ? index : Groups.Count - 1;
-            var target = Groups[targetIndex];
-            Groups.Replace(targetIndex, target with { RepoIds = target.RepoIds.Concat(orphans).ToList() });
+            var target = Groups[index < Groups.Count ? index : Groups.Count - 1];
+            foreach (var repoId in orphans) target.RepoIds.Add(repoId);
         }
         Save();
     }
@@ -169,49 +152,34 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         var repo = Repos.FirstOrDefault(r => r.Id == repoId);
         if (repo is not null && !repo.IsPrimary) return;
 
-        int sourceGroupIndex = -1;
-        int sourceRepoIndex = -1;
-        for (var i = 0; i < Groups.Count; i++)
+        Group? source = null;
+        var sourceRepoIndex = -1;
+        foreach (var g in Groups)
         {
-            var repoIdx = Groups[i].RepoIds.IndexOf(repoId);
+            var repoIdx = g.RepoIds.IndexOf(repoId);
             if (repoIdx < 0) continue;
-            sourceGroupIndex = i;
+            source = g;
             sourceRepoIndex = repoIdx;
             break;
         }
-        if (sourceGroupIndex < 0) return;
+        if (source is null) return;
 
-        var targetGroupIndex = -1;
-        for (var i = 0; i < Groups.Count; i++)
-        {
-            if (Groups[i].Id != targetGroupId) continue;
-            targetGroupIndex = i;
-            break;
-        }
-        if (targetGroupIndex < 0) return;
+        var target = FindGroup(targetGroupId);
+        if (target is null) return;
 
-        if (sourceGroupIndex == targetGroupIndex)
+        if (ReferenceEquals(source, target))
         {
-            var ids = Groups[sourceGroupIndex].RepoIds.ToList();
-            ids.RemoveAt(sourceRepoIndex);
             var adjusted = insertIndex > sourceRepoIndex ? insertIndex - 1 : insertIndex;
-            adjusted = Math.Clamp(adjusted, 0, ids.Count);
-            ids.Insert(adjusted, repoId);
-            if (ids.SequenceEqual(Groups[sourceGroupIndex].RepoIds)) return;
-            Groups.Replace(sourceGroupIndex, Groups[sourceGroupIndex] with { RepoIds = ids });
+            adjusted = Math.Clamp(adjusted, 0, source.RepoIds.Count - 1);
+            if (adjusted == sourceRepoIndex) return;
+            source.RepoIds.Move(sourceRepoIndex, adjusted);
             Save();
             return;
         }
 
-        var sourceIds = Groups[sourceGroupIndex].RepoIds.ToList();
-        sourceIds.RemoveAt(sourceRepoIndex);
-        Groups.Replace(sourceGroupIndex, Groups[sourceGroupIndex] with { RepoIds = sourceIds });
-
-        var targetIds = Groups[targetGroupIndex].RepoIds.ToList();
-        var insertAt = Math.Clamp(insertIndex, 0, targetIds.Count);
-        targetIds.Insert(insertAt, repoId);
-        Groups.Replace(targetGroupIndex, Groups[targetGroupIndex] with { RepoIds = targetIds });
-
+        source.RepoIds.RemoveAt(sourceRepoIndex);
+        var insertAt = Math.Clamp(insertIndex, 0, target.RepoIds.Count);
+        target.RepoIds.Insert(insertAt, repoId);
         Save();
     }
 
@@ -258,11 +226,13 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
             }
         }
 
-        for (var i = 0; i < Groups.Count; i++)
+        foreach (var group in Groups)
         {
-            if (!Groups[i].RepoIds.Any(idsToRemove.Contains)) continue;
-            var ids = Groups[i].RepoIds.Where(id => !idsToRemove.Contains(id)).ToList();
-            Groups.Replace(i, Groups[i] with { RepoIds = ids });
+            for (var k = group.RepoIds.Count - 1; k >= 0; k--)
+            {
+                if (idsToRemove.Contains(group.RepoIds[k]))
+                    group.RepoIds.RemoveAt(k);
+            }
         }
 
         for (var i = Repos.Count - 1; i >= 0; i--)
@@ -586,7 +556,22 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
             RebuildLookups();
             _overrideMapDirty = false;
         }
-        RepoStateStore.Save(_statePath, Repos, Groups, Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
+        RepoStateStore.Save(_statePath, Repos, Groups.Select(g => g.ToState()).ToList(),
+            Active.Value?.Id, _branchesUi, _worktreesExpanded, _identityOverride);
+    }
+
+    private Group? FindGroup(Guid id)
+    {
+        foreach (var g in Groups)
+            if (g.Id == id) return g;
+        return null;
+    }
+
+    private int IndexOfGroup(Guid id)
+    {
+        for (var i = 0; i < Groups.Count; i++)
+            if (Groups[i].Id == id) return i;
+        return -1;
     }
 }
 
