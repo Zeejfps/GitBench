@@ -2,7 +2,6 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -14,89 +13,82 @@ internal sealed record ActionsToolbar : Widget
     private const int HorizontalPadding = 8;
     private const float WithinClusterGap = 2f;
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<ActionsToolbarViewModel>();
-        var theme = ctx.Theme();
+        var styles = ctx.Theme().Styles;
 
-        var contentRow = new FlexRowView
+        return new Box
         {
-            Gap = WithinClusterGap,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new ModeSwitcherView().BuildView(ctx),
-                new SeparatorSpacer().BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = Prop.Bind<string?>(() => vm.IsFetching.Value ? LucideIcons.Loader : LucideIcons.Fetch),
-                    Label = Prop.Bind<string?>(() => vm.IsFetching.Value ? "Fetching" : "Fetch"),
-                    IconRotation = Prop.Bind(vm.FetchRotation),
-                    Command = vm.Fetch,
-                }.BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = Prop.Bind<string?>(() => vm.IsPulling.Value ? LucideIcons.Loader : LucideIcons.Pull),
-                    Label = Prop.Bind<string?>(() => vm.IsPulling.Value ? "Pulling" : "Pull"),
-                    IconRotation = Prop.Bind(vm.PullRotation),
-                    BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
-                    Badge = vm.PullBadge,
-                    Command = vm.Pull,
-                }.BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = Prop.Bind<string?>(() => vm.IsPushing.Value ? LucideIcons.Loader : LucideIcons.Push),
-                    Label = Prop.Bind<string?>(() => vm.IsPushing.Value ? "Pushing" : "Push"),
-                    IconRotation = Prop.Bind(vm.PushRotation),
-                    BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
-                    Badge = vm.PushBadge,
-                    Command = vm.Push,
-                }.BuildView(ctx),
-                new SeparatorSpacer().BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = LucideIcons.Stash,
-                    Label = "Stash",
-                    Command = vm.Stash,
-                }.BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = LucideIcons.Branch,
-                    Label = "Branch",
-                    Command = vm.Branch,
-                }.BuildView(ctx),
-                new FlexItem { Grow = 1, Child = new ContainerView() },
-                new ActionButton
-                {
-                    Icon = LucideIcons.FolderOpen,
-                    Tooltip = "Open in file explorer",
-                    Command = vm.OpenFolder,
-                }.BuildView(ctx),
-                new ActionButton
-                {
-                    Icon = LucideIcons.SquareTerminal,
-                    Tooltip = "Open in terminal",
-                    Command = vm.OpenTerminal,
-                }.BuildView(ctx),
-            }
-        };
-
-        var bar = new RectView
-        {
+            Height = ToolbarHeight,
+            Background = styles.Bind(s => s.ActionsToolbar.Background),
             BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Padding = new PaddingStyle
-            {
-                Left = HorizontalPadding,
-                Right = HorizontalPadding,
-            },
-            Children = { contentRow },
-        };
-        bar.BindBackgroundColor(() => theme.Styles.Value.ActionsToolbar.Background);
-        bar.BindBorderColor(() => new BorderColorStyle { Bottom = theme.Styles.Value.ActionsToolbar.BorderBottom });
-
-        var root = new ContainerView { Height = ToolbarHeight };
-        root.Children.Add(bar);
-        root.UseViewModel(() => vm, _ => { });
-        return root;
+            BorderColor = styles.Bind(s => new BorderColorStyle { Bottom = s.ActionsToolbar.BorderBottom }),
+            Padding = new PaddingStyle { Left = HorizontalPadding, Right = HorizontalPadding },
+            Children =
+            [
+                new Row
+                {
+                    Gap = WithinClusterGap,
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Children =
+                    [
+                        new ModeSwitcherView(),
+                        new SeparatorSpacer(),
+                        new ActionButton
+                        {
+                            Icon = Prop.Bind<string?>(() => vm.IsFetching.Value ? LucideIcons.Loader : LucideIcons.Fetch),
+                            Label = Prop.Bind<string?>(() => vm.IsFetching.Value ? "Fetching" : "Fetch"),
+                            IconRotation = Prop.Bind(vm.FetchRotation),
+                            Command = vm.Fetch,
+                        },
+                        new ActionButton
+                        {
+                            Icon = Prop.Bind<string?>(() => vm.IsPulling.Value ? LucideIcons.Loader : LucideIcons.Pull),
+                            Label = Prop.Bind<string?>(() => vm.IsPulling.Value ? "Pulling" : "Pull"),
+                            IconRotation = Prop.Bind(vm.PullRotation),
+                            BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
+                            Badge = vm.PullBadge,
+                            Command = vm.Pull,
+                        },
+                        new ActionButton
+                        {
+                            Icon = Prop.Bind<string?>(() => vm.IsPushing.Value ? LucideIcons.Loader : LucideIcons.Push),
+                            Label = Prop.Bind<string?>(() => vm.IsPushing.Value ? "Pushing" : "Push"),
+                            IconRotation = Prop.Bind(vm.PushRotation),
+                            BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
+                            Badge = vm.PushBadge,
+                            Command = vm.Push,
+                        },
+                        new SeparatorSpacer(),
+                        new ActionButton
+                        {
+                            Icon = LucideIcons.Stash,
+                            Label = "Stash",
+                            Command = vm.Stash,
+                        },
+                        new ActionButton
+                        {
+                            Icon = LucideIcons.Branch,
+                            Label = "Branch",
+                            Command = vm.Branch,
+                        },
+                        new Spacer(),
+                        new ActionButton
+                        {
+                            Icon = LucideIcons.FolderOpen,
+                            Tooltip = "Open in file explorer",
+                            Command = vm.OpenFolder,
+                        },
+                        new ActionButton
+                        {
+                            Icon = LucideIcons.SquareTerminal,
+                            Tooltip = "Open in terminal",
+                            Command = vm.OpenTerminal,
+                        },
+                    ],
+                },
+            ],
+        }.BindVm(vm);
     }
 }
