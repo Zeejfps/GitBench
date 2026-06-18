@@ -1,8 +1,6 @@
 using GitBench.Controls;
-using GitBench.Controls.Dialogs;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -10,59 +8,48 @@ using ZGF.Observable;
 namespace GitBench.Features.StatusBar;
 
 /// <summary>
-/// Small icon-only button sized to fit inside the <see cref="StatusBarView"/>. The icon glyph
-/// is driven through <see cref="BindIcon"/> so callers can swap it reactively (e.g. sun/moon
-/// for the theme toggle). Chrome mirrors <see cref="DialogCloseButton"/> but uses the
-/// status-bar palette.
+/// Small icon-only button sized to fit inside the <see cref="StatusBarView"/>. The glyph is an
+/// auto-tracked <see cref="Icon"/> so callers can swap it reactively (e.g. sun/moon for the theme
+/// toggle), and <see cref="Rotation"/> can spin it (drive a <see cref="SpinnerAnimation"/> while a
+/// background op runs). Live state (hover/press/enabled) lives on a
+/// <see cref="StatusBarIconButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface,
+/// so the <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>)
+/// and an optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>.
 /// </summary>
-internal sealed record StatusBarIconButton : Widget
+internal sealed record StatusBarIconButton : Widget<StatusBarIconButtonState>
 {
-    public string? Tooltip { get; init; }
+    private const float BoxWidth = 22f;
+    private const float BoxHeight = 18f;
 
-    /// <summary>Auto-tracked icon glyph.</summary>
-    public required Func<string> BindIcon { get; init; }
-
-    /// <summary>Angle (radians) of the glyph; drive it from a <see cref="SpinnerAnimation"/>
-    /// to spin a <see cref="LucideIcons.Loader"/> while a background op runs.</summary>
-    public IReadable<float>? IconRotation { get; init; }
-
+    /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public required ICommand Command { get; init; }
 
-    protected override View CreateView(Context ctx)
-    {
-        var view = new ButtonView(ctx, this);
-        view.BindCommand(Command);
-        return view;
-    }
+    /// <summary>Icon glyph; a constant or an auto-tracked binding (<c>Prop.Bind(() =&gt; …)</c>).</summary>
+    public required Prop<string?> Icon { get; init; }
 
-    private sealed class ButtonView : HoverableButton
-    {
-        public ButtonView(Context ctx, StatusBarIconButton w)
-            : base(ctx, tooltip: w.Tooltip)
-        {
-            var theme = ctx.Theme();
-            Width = 22;
-            Height = 18;
+    /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
+    public Prop<float> Rotation { get; init; }
 
-            var label = new TextView(ctx.Canvas)
+    protected override StatusBarIconButtonState CreateState(Context ctx) => new(Command);
+
+    protected override IWidget Build(Context ctx, StatusBarIconButtonState state) => new Box
+    {
+        Width = BoxWidth,
+        Height = BoxHeight,
+        BorderRadius = BorderRadiusStyle.All(4),
+        Background = Theme.Color(s => s.StatusBar.IconButtonBackground(state)),
+        Children =
+        [
+            new Text
             {
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 13,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center,
-            };
-            label.BindText(w.BindIcon);
-            if (w.IconRotation != null) label.BindRotation(w.IconRotation);
-            label.BindTextColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHover : theme.Styles.Value.StatusBar.Icon);
-
-            var background = new RectView
-            {
-                BorderRadius = BorderRadiusStyle.All(4),
-                Children = { label },
-            };
-            background.BindBackgroundColor(() => IsHovered.Value ? theme.Styles.Value.StatusBar.IconHoverBackground : 0u);
-
-            SetBackground(background);
-        }
-    }
+                HAlign = TextAlignment.Center,
+                VAlign = TextAlignment.Center,
+                Value = Icon,
+                Rotation = Rotation,
+                Color = Theme.Color(s => s.StatusBar.IconColor(state)),
+            },
+        ],
+    };
 }

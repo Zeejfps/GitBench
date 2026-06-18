@@ -1,3 +1,5 @@
+using ZGF.Gui.Widgets;
+
 namespace GitBench.Theming;
 
 public sealed record HeaderActionButtonStyles(
@@ -17,7 +19,16 @@ public sealed record StatusBarStyles(
     uint Text,
     uint Icon,
     uint IconHover,
-    uint IconHoverBackground);
+    uint IconHoverBackground)
+{
+    // Icon-button glyph color: brighter while hovered.
+    internal uint IconColor(IInteractable s) =>
+        s.Enabled.Value && s.Hovered.Value ? IconHover : Icon;
+
+    // Icon-button fill: transparent idle, the hover wash while hovered.
+    internal uint IconButtonBackground(IInteractable s) =>
+        s.Enabled.Value && s.Hovered.Value ? IconHoverBackground : 0u;
+}
 
 public sealed record ActionsToolbarStyles(
     uint Background,

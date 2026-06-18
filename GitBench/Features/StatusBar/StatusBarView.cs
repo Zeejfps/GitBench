@@ -4,6 +4,7 @@ using GitBench.Features.Identity;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -73,10 +74,10 @@ internal sealed record StatusBarView : Widget
                                     [
                                         new StatusBarIconButton
                                         {
-                                            Tooltip = "Toggle theme",
-                                            BindIcon = () => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon,
+                                            Icon = Prop.Bind<string?>(() => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon),
                                             Command = vm.ToggleTheme,
-                                        },
+                                        }.WithTooltip("Toggle theme")
+                                            .WithController<KbmController>(),
                                         new Grow { Child = left },
                                         new Text
                                         {
@@ -90,11 +91,11 @@ internal sealed record StatusBarView : Widget
                                         },
                                         new StatusBarIconButton
                                         {
-                                            Tooltip = "Check for updates",
-                                            BindIcon = () => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch,
-                                            IconRotation = vm.UpdateIconRotation,
+                                            Icon = Prop.Bind<string?>(() => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch),
+                                            Rotation = Prop.Bind(vm.UpdateIconRotation),
                                             Command = vm.CheckForUpdates,
-                                        },
+                                        }.WithTooltip("Check for updates")
+                                            .WithController<KbmController>(),
                                         new Text
                                         {
                                             Value = $"v{AppVersion.Display}",

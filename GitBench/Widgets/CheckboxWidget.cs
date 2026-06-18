@@ -11,8 +11,8 @@ namespace GitBench.Widgets;
 /// beside the box, or arbitrary <see cref="Content"/> when a plain label isn't enough. Live state
 /// (hover, press, checked) lives on a <see cref="CheckboxState"/> the widget creates in
 /// <see cref="CreateState"/> and exposes as its <see cref="IInteractable"/> surface, so the
-/// <em>parent</em> attaches a controller (<c>checkbox.WithController&lt;KbmController&gt;()</c>) — it
-/// picks the modality, the widget stays neutral.
+/// <em>parent</em> attaches a controller (<c>checkbox.WithController&lt;KbmController&gt;()</c>) and an
+/// optional tooltip (<c>checkbox.WithTooltip("…")</c>) — it picks the modality, the widget stays neutral.
 /// </summary>
 public sealed record CheckboxWidget : Widget<CheckboxState>
 {
