@@ -14,7 +14,7 @@ namespace GitBench.Widgets;
 /// drive its hover and press, toggling on the rising edge of <see cref="IInteractable.Pressed"/>,
 /// so it works the same under any input modality.
 /// </summary>
-public sealed record Checkbox : Widget, IInteractableWidget, ICheckbox
+public sealed record Checkbox : Widget, ICheckbox
 {
     private const float BoxSize = 16f;
     private const float BoxRadius = 3f;
