@@ -1,13 +1,14 @@
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Widgets;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-/// <summary>One half of the mode-switcher pill; activates its segment on click.</summary>
-internal sealed record Segment : Widget
+/// <summary>One half of the mode-switcher pill; activates its segment on press. Live hover/press state
+/// lives on a <see cref="ButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface, so
+/// the parent attaches the controller (<c>segment.WithController&lt;KbmController&gt;()</c>).</summary>
+internal sealed record Segment : Widget<ButtonState>
 {
     private const float SegmentHeight = 28f;
 
@@ -15,38 +16,29 @@ internal sealed record Segment : Widget
     public required BorderRadiusStyle Radius { get; init; }
     public required SegmentViewModel Model { get; init; }
 
-    protected override IWidget Build(Context ctx)
-    {
-        var hovered = new State<bool>(false);
+    protected override ButtonState CreateState(Context ctx) => new(new Command(Model.Activate));
 
-        return new KbmInput
-        {
-            OnClick = Model.Activate,
-            OnHoverEnter = () => hovered.Value = true,
-            OnHoverExit = () => hovered.Value = false,
-            Child = new Box
+    protected override IWidget Build(Context ctx, ButtonState state) => new Box
+    {
+        Height = SegmentHeight,
+        BorderRadius = Radius,
+        Background = Theme.Color(s => s.ModeSwitcher.SegmentBackground(Model.IsActive.Value, state.Hovered.Value)),
+        Children =
+        [
+            new Padding
             {
-                Height = SegmentHeight,
-                BorderRadius = Radius,
-                Background = Theme.Color(s => s.ModeSwitcher.SegmentBackground(Model.IsActive.Value, hovered.Value)),
+                Amount = new PaddingStyle { Left = 12, Right = 12 },
                 Children =
                 [
-                    new Padding
+                    new Text
                     {
-                        Amount = new PaddingStyle { Left = 12, Right = 12 },
-                        Children =
-                        [
-                            new Text
-                            {
-                                Value = Label,
-                                HAlign = TextAlignment.Center,
-                                VAlign = TextAlignment.Center,
-                                Color = Theme.Color(s => s.ModeSwitcher.SegmentText(Model.IsActive.Value, hovered.Value)),
-                            },
-                        ],
+                        Value = Label,
+                        HAlign = TextAlignment.Center,
+                        VAlign = TextAlignment.Center,
+                        Color = Theme.Color(s => s.ModeSwitcher.SegmentText(Model.IsActive.Value, state.Hovered.Value)),
                     },
                 ],
             },
-        };
-    }
+        ],
+    };
 }

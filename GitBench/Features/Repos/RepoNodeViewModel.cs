@@ -59,6 +59,10 @@ internal sealed class RepoNodeViewModel : IDisposable
     public IReadable<bool> IsExpanded { get; }
     public ObservableList<RepoNodeViewModel> Children => _children.Items;
 
+    // Folds the row's subtree. Gated on HasChildren, so a childless row's chevron is inert — its click
+    // falls through to the row instead of being swallowed.
+    public ICommand ToggleExpand { get; }
+
     public RepoNodeViewModel(
         Repo repo,
         int depth,
@@ -93,6 +97,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         _childRepos = new Derived<IReadOnlyList<Repo>>(ComputeChildRepos);
         _children = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _childRepos, r => r.Id, r => factory.Create(r, depth + 1));
+
+        ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
     }
 
     public void Activate() => _registry.SetActive(RepoId);
@@ -100,8 +106,6 @@ internal sealed class RepoNodeViewModel : IDisposable
     // A submodule with no .git of its own has nothing to navigate to; worktrees and primaries
     // always activate.
     public bool CanActivate() => Kind != RepoKind.Submodule || !IsMissing.Value;
-
-    public void ToggleExpand() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value);
 
     // Worktrees first, then submodules — both recurse, same order/indent at every level. Empty while
     // collapsed so a folded subtree builds no rows (and spawns no child view models).

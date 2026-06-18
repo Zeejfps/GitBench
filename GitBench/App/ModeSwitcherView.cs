@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -40,7 +41,7 @@ internal sealed record ModeSwitcherView : Widget
                                     Label = "Changes",
                                     Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
                                     Model = vm.LocalChangesSegment,
-                                },
+                                }.WithController<KbmController>(),
                                 new Box
                                 {
                                     Width = 1f,
@@ -51,7 +52,7 @@ internal sealed record ModeSwitcherView : Widget
                                     Label = "History",
                                     Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
                                     Model = vm.HistorySegment,
-                                },
+                                }.WithController<KbmController>(),
                             ],
                         },
                     ],

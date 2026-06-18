@@ -63,7 +63,7 @@ internal sealed record RepoRow : Widget
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [
-                                new WorktreeChevron(),
+                                new WorktreeChevron().WithController<KbmController>(),
                                 new Text
                                 {
                                     Value = glyph,
