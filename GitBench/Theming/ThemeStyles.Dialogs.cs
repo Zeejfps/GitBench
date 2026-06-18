@@ -1,3 +1,5 @@
+using GitBench.Widgets;
+
 namespace GitBench.Theming;
 
 public sealed record DialogFrameStyles(
@@ -63,7 +65,30 @@ public sealed record CheckboxStyles(
     uint BoxFillChecked,
     uint BoxFillCheckedHover,
     uint BoxFillDisabled,
-    uint CheckGlyph);
+    uint CheckGlyph)
+{
+    public uint Foreground(ICheckbox cb)
+    {
+        if (!cb.Enabled.Value) return TextDisabled;
+        return cb.Hovered.Value ? TextHover : TextIdle;
+    }
+
+    public uint BoxFill(ICheckbox cb)
+    {
+        if (!cb.Enabled.Value) return cb.Checked.Value ? BoxFillDisabled : 0x00000000u;
+        if (!cb.Checked.Value) return 0x00000000u;
+        return cb.Hovered.Value ? BoxFillCheckedHover : BoxFillChecked;
+    }
+
+    public uint BoxBorder(ICheckbox cb)
+    {
+        if (!cb.Enabled.Value) return BoxBorderDisabled;
+        if (cb.Checked.Value) return cb.Hovered.Value ? BoxFillCheckedHover : BoxFillChecked;
+        return cb.Hovered.Value ? BoxBorderHover : BoxBorderIdle;
+    }
+
+    public uint GlyphColor(ICheckbox cb) => cb.Enabled.Value ? CheckGlyph : TextDisabled;
+}
 
 public sealed record DialogBodyStyles(
     uint BodyText,
