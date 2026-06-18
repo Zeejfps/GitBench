@@ -10,6 +10,6 @@ namespace GitBench.Widgets;
 /// </summary>
 public interface ICheckbox : IInteractableWidget
 {
-    /// <summary>True when the box is ticked; the toggle target a click writes.</summary>
-    State<bool> Checked { get; }
+    /// <summary>True when the box is ticked; the read side of the value a click writes back.</summary>
+    IReadable<bool> Checked { get; }
 }

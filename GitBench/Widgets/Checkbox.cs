@@ -7,11 +7,11 @@ using ZGF.Observable;
 namespace GitBench.Widgets;
 
 /// <summary>
-/// Themed checkbox bound two-way to a <see cref="State{T}"/> — clicking toggles the box and
-/// writes the state, external writes move the box. Renders a <see cref="Label"/> beside the box,
+/// Themed checkbox whose <see cref="Checked"/> input is a two-way <see cref="Prop{T}"/> — clicking
+/// toggles the box and writes back through it, external writes move the box. Renders a <see cref="Label"/> beside the box,
 /// or arbitrary <see cref="Content"/> when a plain label isn't enough. The widget is just state
-/// and visuals: it implements <see cref="IInteractable"/> and lets a <see cref="KbmController"/>
-/// drive its hover and press, toggling on the rising edge of <see cref="IInteractable.Pressed"/>,
+/// and visuals: it implements <see cref="IInteractableWidget"/> and lets a <see cref="KbmController"/>
+/// drive its hover and press, toggling on the rising edge of <see cref="IInteractableWidget.Pressed"/>,
 /// so it works the same under any input modality.
 /// </summary>
 public sealed record Checkbox : Widget, ICheckbox
@@ -21,7 +21,7 @@ public sealed record Checkbox : Widget, ICheckbox
     private const float CheckGlyphSize = 12f;
 
     /// <summary>The two-way toggle target: clicking writes it, external writes move the box.</summary>
-    public required State<bool> Value { get; init; }
+    public Prop<bool> Checked { get; init; }
 
     /// <summary>Text beside the box; ignored when <see cref="Content"/> is set.</summary>
     public Prop<string?> Label { get; init; }
@@ -32,17 +32,21 @@ public sealed record Checkbox : Widget, ICheckbox
     private readonly State<bool> _enabled = new(true);
     private readonly State<bool> _hovered = new(false);
     private readonly State<bool> _pressed = new(false);
+    private IReadable<bool>? _checked;
 
-    State<bool> IInteractable.Hovered => _hovered;
-    State<bool> IInteractable.Pressed => _pressed;
-    State<bool> IInteractable.Enabled => _enabled;
-    State<bool> ICheckbox.Checked => Value;
+    IWritable<bool> IInteractableWidget.Hovered => _hovered;
+    IWritable<bool> IInteractableWidget.Pressed => _pressed;
+    IReadable<bool> IInteractableWidget.Enabled => _enabled;
+    IReadable<bool> ICheckbox.Checked => _checked!;
 
     protected override IWidget Build(Context ctx)
     {
+        var checkedValue = Checked.ToReadable(ctx);
+        _checked = checkedValue;
+
         _pressed.Changed += pressed =>
         {
-            if (pressed) Value.Value = !Value.Value;
+            if (pressed) Checked.Write(!checkedValue.Value);
         };
 
         return new Row
@@ -66,7 +70,7 @@ public sealed record Checkbox : Widget, ICheckbox
                             FontSize = CheckGlyphSize,
                             HAlign = TextAlignment.Center,
                             VAlign = TextAlignment.Center,
-                            Value = Value.Bind(string?(c) => c ? "✓" : string.Empty),
+                            Value = checkedValue.Bind(string?(c) => c ? "✓" : string.Empty),
                             Color = Theme.Color(s => s.Checkbox.GlyphColor(this)),
                         },
                     ],

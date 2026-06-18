@@ -64,7 +64,7 @@ internal sealed record CreateWorktreeDialog : Widget
                 new Checkbox
                 {
                     Label = "Force (allow non-empty path or re-used branch)",
-                    Value = vm.Force,
+                    Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

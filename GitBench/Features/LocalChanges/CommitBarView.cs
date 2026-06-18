@@ -90,7 +90,7 @@ internal sealed class CommitBarView : ContainerView
             Height = 28,
         };
 
-        var amendCheckbox = new Checkbox { Label = "Amend", Value = _amend }.WithController<KbmController>().BuildView(ctx);
+        var amendCheckbox = new Checkbox { Label = "Amend", Checked = _amend }.WithController<KbmController>().BuildView(ctx);
 
         var buttonRow = new FlexRowView
         {

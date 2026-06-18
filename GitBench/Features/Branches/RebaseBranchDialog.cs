@@ -49,7 +49,7 @@ internal sealed record RebaseBranchDialog : Widget
                 BuildLabeledRow("", new Checkbox
                 {
                     Label = "Stash and reapply local changes",
-                    Value = vm.Autostash,
+                    Checked = vm.Autostash,
                     Height = 24,
                 }.WithController<KbmController>()),
             ],

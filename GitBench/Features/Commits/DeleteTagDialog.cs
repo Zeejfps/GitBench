@@ -51,7 +51,7 @@ internal sealed record DeleteTagDialog : Widget
                 new Checkbox
                 {
                     Label = "Delete tag from remote repositories",
-                    Value = vm.DeleteFromRemotes,
+                    Checked = vm.DeleteFromRemotes,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

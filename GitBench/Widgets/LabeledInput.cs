@@ -9,13 +9,14 @@ namespace GitBench.Widgets;
 
 /// <summary>
 /// Single-line dialog text field: label above, optional hint and validation message below,
-/// two-way bound to a string <see cref="State{T}"/>. Inside a <see cref="Dialog"/> body it
+/// two-way bound through a string <see cref="Prop{T}"/> (write-back active when its source is
+/// writable). Inside a <see cref="Dialog"/> body it
 /// auto-registers for Enter-submit/Esc-cancel and first-field focus.
 /// </summary>
 internal sealed record LabeledInput : Widget
 {
     public required string Label { get; init; }
-    public required State<string> Value { get; init; }
+    public required Prop<string> Value { get; init; }
     public string? Placeholder { get; init; }
     public string? Hint { get; init; }
 
@@ -35,7 +36,7 @@ internal sealed record LabeledInput : Widget
         if (Hint != null) field.Hint = Hint;
         if (Status != null) field.BindStatus(Status);
         if (Accessory != null) field.Accessory = Accessory.BuildView(ctx);
-        field.Input.BindTwoWay(Value);
+        field.Input.BindTwoWay(Value.ToReadable(ctx), Value.Write);
         ctx.Get<DialogInputRegistry>()?.Register(field.Input, SelectAllOnOpen);
         return field;
     }

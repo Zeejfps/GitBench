@@ -57,7 +57,7 @@ internal sealed record AddSubmoduleDialog : Widget
                 new Checkbox
                 {
                     Label = "Force (allow paths previously used)",
-                    Value = vm.Force,
+                    Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

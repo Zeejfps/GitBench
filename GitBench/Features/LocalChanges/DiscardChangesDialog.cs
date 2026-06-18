@@ -153,7 +153,7 @@ internal sealed record DiscardChangesDialog : Widget
         return new Checkbox
         {
             Content = new Raw { View = rowContent },
-            Value = isChecked,
+            Checked = isChecked,
             Height = 22,
         }.WithController<KbmController>().BuildView(ctx);
     }

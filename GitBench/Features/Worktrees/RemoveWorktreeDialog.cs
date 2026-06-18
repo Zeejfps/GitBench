@@ -102,7 +102,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                 new Checkbox
                 {
                     Label = "Remove even if dirty",
-                    Value = vm.Force,
+                    Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
                 new Text

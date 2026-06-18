@@ -55,7 +55,7 @@ internal sealed record CheckoutBranchDialog : Widget
                 new Checkbox
                 {
                     Label = "Track this remote branch",
-                    Value = vm.Track,
+                    Checked = vm.Track,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

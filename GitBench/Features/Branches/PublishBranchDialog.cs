@@ -55,7 +55,7 @@ internal sealed record PublishBranchDialog : Widget
                 new Checkbox
                 {
                     Label = "Track this remote branch (set upstream)",
-                    Value = vm.SetUpstream,
+                    Checked = vm.SetUpstream,
                     Height = 24,
                 }.WithController<KbmController>(),
             ],

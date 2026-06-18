@@ -36,7 +36,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
             new Checkbox
             {
                 Label = "Delete even if not merged",
-                Value = vm.Force,
+                Checked = vm.Force,
                 Height = 22,
             }.WithController<KbmController>(),
             new Text
@@ -51,7 +51,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
             body.Add(new Checkbox
             {
                 Label = $"Also delete '{UpstreamBranch}' on '{UpstreamRemote}'",
-                Value = vm.DeleteRemote,
+                Checked = vm.DeleteRemote,
                 Height = 22,
             }.WithController<KbmController>());
         }

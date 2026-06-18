@@ -54,7 +54,7 @@ internal sealed record RenameBranchDialog : Widget
                 new Checkbox
                 {
                     Label = "Force rename even if target exists",
-                    Value = vm.Force,
+                    Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

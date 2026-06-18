@@ -54,7 +54,7 @@ internal sealed record CreateBranchDialog : Widget
                 new Checkbox
                 {
                     Label = "Check out after create",
-                    Value = vm.Checkout,
+                    Checked = vm.Checkout,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

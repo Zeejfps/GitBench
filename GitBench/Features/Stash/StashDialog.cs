@@ -66,7 +66,7 @@ internal sealed record StashDialog : Widget
                 new Checkbox
                 {
                     Label = "Keep staged changes in index",
-                    Value = keepStaged,
+                    Checked = keepStaged,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],
@@ -158,7 +158,7 @@ internal sealed record StashDialog : Widget
         return new Checkbox
         {
             Content = new Raw { View = rowContent },
-            Value = isChecked,
+            Checked = isChecked,
             Height = 22,
         }.WithController<KbmController>().BuildView(ctx);
     }

@@ -54,7 +54,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
                 new Checkbox
                 {
                     Label = "Deinit even if dirty",
-                    Value = vm.Force,
+                    Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
             ],

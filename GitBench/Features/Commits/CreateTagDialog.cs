@@ -76,7 +76,7 @@ internal sealed record CreateTagDialog : Widget
                     new Raw { View = messageField },
                 ],
             },
-            new Checkbox { Label = "Push to all remotes", Value = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
+            new Checkbox { Label = "Push to all remotes", Checked = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
         ];
 
         var inputs = new DialogInputRegistry();
