@@ -58,7 +58,7 @@ internal sealed record DetachedHeadBanner : Widget
                                     Color = Theme.Color(s => s.Banner.Text),
                                 },
                             },
-                            new ActionButton
+                            new ButtonWidget
                             {
                                 Style = ButtonStyle.Filled(0xFF4E8B3D),
                                 Command = vm.CreateBranch,

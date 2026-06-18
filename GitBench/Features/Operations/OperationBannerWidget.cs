@@ -93,7 +93,7 @@ internal sealed record OperationBannerWidget : Widget
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
-                new ActionButton
+                new ButtonWidget
                 {
                     Style = continueStyle,
                     ContentInset = continueStyle.IconOnlyInset,
@@ -103,7 +103,7 @@ internal sealed record OperationBannerWidget : Widget
                 }.WithTooltip("Continue")
                     .WithController<KbmController>(),
                 
-                new ActionButton
+                new ButtonWidget
                 {
                     Style = abortStyle,
                     ContentInset = abortStyle.IconOnlyInset,

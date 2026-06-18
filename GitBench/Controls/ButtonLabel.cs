@@ -5,7 +5,7 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Controls;
 
 /// <summary>
-/// The text label segment of an <see cref="ActionButton"/>. Its color tracks the ambient
+/// The text label segment of an <see cref="ButtonWidget"/>. Its color tracks the ambient
 /// <see cref="Foreground"/> (the idle/hover/disabled ramp the button establishes), so it renders
 /// correctly inside any <see cref="Foreground"/> scope.
 /// </summary>

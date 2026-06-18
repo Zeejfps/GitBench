@@ -6,7 +6,7 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Controls;
 
 /// <summary>
-/// The icon segment of an <see cref="ActionButton"/>: a Lucide glyph whose color tracks the ambient
+/// The icon segment of an <see cref="ButtonWidget"/>: a Lucide glyph whose color tracks the ambient
 /// <see cref="Foreground"/>, optionally with a count badge hugging it. The badge is null/0-hidden and
 /// sits tight against the glyph; the glyph renders correctly inside any <see cref="Foreground"/> scope.
 /// </summary>

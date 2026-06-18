@@ -9,7 +9,7 @@ namespace GitBench.Controls;
 /// <see cref="ICommand"/>, and <see cref="IInteractable.Enabled"/> tracks its
 /// <see cref="ICommand.CanExecute"/>. A widget owns it and exposes it as its <see cref="IInteractable"/>
 /// surface, so a controller drives it and the theme reads hover/enabled from one place. Backs
-/// <see cref="ActionButton"/> (in all its styles) and any other widget whose interaction is "a press
+/// <see cref="ButtonWidget"/> (in all its styles) and any other widget whose interaction is "a press
 /// runs a command". A plain leaf state (nothing external subscribes), so it needs no disposal — it
 /// falls out of scope with the view tree.
 /// </summary>

@@ -15,7 +15,7 @@ namespace GitBench.Controls;
 /// optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>. The
 /// themed glyph/label color is published to the content subtree via a <see cref="Foreground"/> scope.
 /// </summary>
-internal sealed record ActionButton : Widget<ButtonState>
+internal sealed record ButtonWidget : Widget<ButtonState>
 {
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public ICommand? Command { get; init; }

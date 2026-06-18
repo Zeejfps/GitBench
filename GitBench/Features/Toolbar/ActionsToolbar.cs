@@ -40,7 +40,7 @@ internal sealed record ActionsToolbar : Widget
                             [
                                 new ModeSwitcherView(),
                                 new SeparatorSpacer(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.Fetch,
                                     Children =
@@ -53,7 +53,7 @@ internal sealed record ActionsToolbar : Widget
                                         new ButtonLabel { Value = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch") },
                                     ],
                                 }.WithController<KbmController>(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.Pull,
                                     Children =
@@ -68,7 +68,7 @@ internal sealed record ActionsToolbar : Widget
                                         new ButtonLabel { Value = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull") },
                                     ],
                                 }.WithController<KbmController>(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.Push,
                                     Children =
@@ -84,7 +84,7 @@ internal sealed record ActionsToolbar : Widget
                                     ],
                                 }.WithController<KbmController>(),
                                 new SeparatorSpacer(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.Stash,
                                     Children =
@@ -93,7 +93,7 @@ internal sealed record ActionsToolbar : Widget
                                         new ButtonLabel { Value = "Stash" },
                                     ],
                                 }.WithController<KbmController>(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.Branch,
                                     Children =
@@ -103,14 +103,14 @@ internal sealed record ActionsToolbar : Widget
                                     ],
                                 }.WithController<KbmController>(),
                                 new Spacer(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.OpenFolder,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
                                     Children = [new ButtonIcon { Value = LucideIcons.FolderOpen }],
                                 }.WithTooltip("Open in file explorer")
                                     .WithController<KbmController>(),
-                                new ActionButton
+                                new ButtonWidget
                                 {
                                     Command = vm.OpenTerminal,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,

@@ -6,7 +6,7 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Controls;
 
 /// <summary>
-/// The visual treatment of an <see cref="ActionButton"/>: <see cref="Plain"/> is the transparent, themed
+/// The visual treatment of an <see cref="ButtonWidget"/>: <see cref="Plain"/> is the transparent, themed
 /// toolbar look; <see cref="Filled"/> is a solid rounded chip with white glyphs (the banner call-to-action);
 /// <see cref="Bare"/> drops the surface and padding entirely (a chrome-less glyph) and takes a caller-supplied
 /// color ramp. The button composes a style and reads its colors and chrome from it, so the look lives here as
@@ -40,7 +40,7 @@ internal sealed record ButtonStyle
     public BorderRadiusStyle Radius => _fill is null ? default : BorderRadiusStyle.All(6);
 
     /// <summary>Horizontal inset for an icon-only button: tighter for the plain toolbar look, chunkier
-    /// for the filled chip. Labeled buttons use <see cref="ActionButton.ContentInset"/>'s default.</summary>
+    /// for the filled chip. Labeled buttons use <see cref="ButtonWidget.ContentInset"/>'s default.</summary>
     public PaddingStyle IconOnlyInset
     {
         get

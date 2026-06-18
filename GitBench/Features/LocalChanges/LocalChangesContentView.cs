@@ -113,7 +113,7 @@ internal sealed class LocalChangesContentView : ContainerView
         // block — opens it in the scrollable OperationErrorDialog. Status re-reads on every
         // working-tree change, so the failure surfaces inline (one line) and the full block is
         // pulled up on demand rather than auto-popping a modal each poll.
-        _showErrorButton = new ActionButton
+        _showErrorButton = new ButtonWidget
         {
             Command = new Command(() => _vm.ShowLoadError()),
             Children =
