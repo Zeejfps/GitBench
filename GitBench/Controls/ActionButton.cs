@@ -1,3 +1,4 @@
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -12,7 +13,7 @@ namespace GitBench.Controls;
 /// <see cref="ActionButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface, so the
 /// <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>) and an
 /// optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>. The
-/// themed glyph/label color is published to the content subtree as <see cref="Foreground"/>.
+/// themed glyph/label color is published to the content subtree via a <see cref="Foreground"/> scope.
 /// </summary>
 internal sealed record ActionButton : Widget<ActionButtonState>
 {
@@ -30,11 +31,6 @@ internal sealed record ActionButton : Widget<ActionButtonState>
     /// optional <see cref="ButtonLabel"/>.</summary>
     public IWidget[] Children { get; init; } = [];
 
-    /// <summary>The themed glyph/label color (the idle/hover/disabled ramp) for content built inside
-    /// an <see cref="ActionButton"/>, resolved from the build context like <c>Theme.Color</c>.</summary>
-    public static Prop<uint> Foreground =>
-        Prop.Deferred(ctx => ctx.Require<ButtonForeground>().Color);
-
     protected override ActionButtonState CreateState(Context ctx) => new(Command);
 
     protected override IWidget Build(Context ctx, ActionButtonState state) => new Box
@@ -49,9 +45,9 @@ internal sealed record ActionButton : Widget<ActionButtonState>
                 Amount = ContentInset,
                 Children =
                 [
-                    new Provide<ButtonForeground>
+                    new Foreground
                     {
-                        Value = new ButtonForeground(Style.Foreground(state)),
+                        Value = Style.Foreground(state),
                         Child = new Row
                         {
                             Gap = 6,
@@ -63,13 +59,4 @@ internal sealed record ActionButton : Widget<ActionButtonState>
             },
         ],
     };
-}
-
-/// <summary>
-/// Carries an <see cref="ActionButton"/>'s themed foreground color down to its content subtree through
-/// the build <see cref="Context"/>. A class so it can be registered as a context service.
-/// </summary>
-internal sealed class ButtonForeground(Prop<uint> color)
-{
-    public Prop<uint> Color { get; } = color;
 }
