@@ -15,6 +15,9 @@ internal sealed record ButtonIcon : Widget
     /// <summary>Icon glyph; a constant or an auto-tracked binding (<c>Prop.Bind(() =&gt; …)</c>).</summary>
     public required Prop<string?> Value { get; init; }
 
+    /// <summary>Glyph size; defaults to the toolbar size. Smaller insets (e.g. a 24px header) pass a smaller value.</summary>
+    public Prop<float> FontSize { get; init; } = 15;
+
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
     public Prop<float> Rotation { get; init; }
 
@@ -33,7 +36,7 @@ internal sealed record ButtonIcon : Widget
             new Text
             {
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 15,
+                FontSize = FontSize,
                 VAlign = TextAlignment.Center,
                 Value = Value,
                 Rotation = Rotation,

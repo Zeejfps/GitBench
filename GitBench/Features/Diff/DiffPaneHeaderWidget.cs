@@ -89,24 +89,22 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
     // Toggles the diff body between the normal diff and the after-side full file. Tinted while active
     // so it reads as an engaged toggle, not a one-shot action.
     private static IWidget FullFileToggleButton(DiffViewModel vm) =>
-        new IconButton
+        new ActionButton
         {
-            Width = 16f,
-            Icon = LucideIcons.FileText,
-            Command = new Command(vm.ToggleFullFile),
-            Foreground = s => Theme.Color(t => vm.Mode.Value == DiffViewMode.FullFile
+            Style = ButtonStyle.Bare(s => Theme.Color(t => vm.Mode.Value == DiffViewMode.FullFile
                 ? t.DiffView.HeaderToggleActive
-                : t.DiffView.HeaderButtonColor(s)),
+                : t.DiffView.HeaderButtonColor(s))),
+            Command = new Command(vm.ToggleFullFile),
+            Children = [new ButtonIcon { Value = LucideIcons.FileText, FontSize = 12f }],
         }.WithTooltip("Toggle full file")
             .WithController<KbmController>();
 
     private static IWidget OpenInWindowButton(DiffViewModel vm) =>
-        new IconButton
+        new ActionButton
         {
-            Width = 16f,
-            Icon = LucideIcons.ExternalLink,
+            Style = ButtonStyle.Bare(s => Theme.Color(t => t.DiffView.HeaderButtonColor(s))),
             Command = new Command(vm.RequestOpenInWindow),
-            Foreground = s => Theme.Color(t => t.DiffView.HeaderButtonColor(s)),
+            Children = [new ButtonIcon { Value = LucideIcons.ExternalLink, FontSize = 12f }],
         }.WithTooltip("Open in new window")
             .WithController<KbmController>();
 }

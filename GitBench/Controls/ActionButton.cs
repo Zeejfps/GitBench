@@ -33,30 +33,33 @@ internal sealed record ActionButton : Widget<ButtonState>
 
     protected override ButtonState CreateState(Context ctx) => new(Command);
 
-    protected override IWidget Build(Context ctx, ButtonState state) => new Box
+    protected override IWidget Build(Context ctx, ButtonState state)
     {
-        Height = 28,
-        BorderRadius = Style.Radius,
-        Background = Style.Surface(state),
-        Children =
-        [
-            new Padding
+        var content = new Foreground
+        {
+            Value = Style.Foreground(state),
+            Child = new Row
             {
-                Amount = ContentInset,
-                Children =
-                [
-                    new Foreground
-                    {
-                        Value = Style.Foreground(state),
-                        Child = new Row
-                        {
-                            Gap = 6,
-                            CrossAxis = CrossAxisAlignment.Stretch,
-                            Children = Children,
-                        },
-                    },
-                ],
+                Gap = 6,
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children = Children,
             },
-        ],
-    };
+        };
+
+        // Bare styles own no chrome — render the content directly. The chip styles wrap it in a
+        // surface box with horizontal padding.
+        if (!Style.HasSurface)
+            return content;
+
+        return new Box
+        {
+            Height = 28,
+            BorderRadius = Style.Radius,
+            Background = Style.Surface(state),
+            Children =
+            [
+                new Padding { Amount = ContentInset, Children = [content] },
+            ],
+        };
+    }
 }
