@@ -13,21 +13,21 @@ namespace GitBench.Features.Diff;
 /// Header strip for the embedded diff panes (Local Changes, Commit Details): a collapse chevron and
 /// "Diff View" title, an LFS badge, and full-file / open-in-window buttons. The whole bar is the
 /// collapse toggle — a press flips <see cref="DiffViewModel.IsCollapsed"/>; the nested buttons consume
-/// their own clicks first. Live hover/press state lives on an <see cref="ActionButtonState"/> exposed
+/// their own clicks first. Live hover/press state lives on an <see cref="ButtonState"/> exposed
 /// as the widget's <see cref="IInteractable"/> surface, so the host attaches the controller
 /// (<c>header.WithController&lt;KbmController&gt;()</c>) and provides the <see cref="DiffViewModel"/> the
 /// header reads collapse, mode, and LFS status from.
 /// </summary>
-internal sealed record DiffPaneHeaderWidget : Widget<ActionButtonState>
+internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 {
     // Height of the always-visible header strip. The host pins the collapsed pane to exactly this
     // height, keeping the chevron clickable.
     public const float HeaderHeight = 24f;
 
-    protected override ActionButtonState CreateState(Context ctx) =>
+    protected override ButtonState CreateState(Context ctx) =>
         new(new Command(ctx.Require<DiffViewModel>().ToggleCollapse));
 
-    protected override IWidget Build(Context ctx, ActionButtonState state)
+    protected override IWidget Build(Context ctx, ButtonState state)
     {
         var vm = ctx.Require<DiffViewModel>();
 

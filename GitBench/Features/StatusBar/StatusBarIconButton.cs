@@ -12,11 +12,11 @@ namespace GitBench.Features.StatusBar;
 /// auto-tracked <see cref="Icon"/> so callers can swap it reactively (e.g. sun/moon for the theme
 /// toggle), and <see cref="Rotation"/> can spin it (drive a <see cref="SpinnerAnimation"/> while a
 /// background op runs). Live state (hover/press/enabled) lives on a
-/// <see cref="StatusBarIconButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface,
+/// <see cref="ButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface,
 /// so the <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>)
 /// and an optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>.
 /// </summary>
-internal sealed record StatusBarIconButton : Widget<StatusBarIconButtonState>
+internal sealed record StatusBarIconButton : Widget<ButtonState>
 {
     private const float BoxWidth = 22f;
     private const float BoxHeight = 18f;
@@ -30,9 +30,9 @@ internal sealed record StatusBarIconButton : Widget<StatusBarIconButtonState>
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
     public Prop<float> Rotation { get; init; }
 
-    protected override StatusBarIconButtonState CreateState(Context ctx) => new(Command);
+    protected override ButtonState CreateState(Context ctx) => new(Command);
 
-    protected override IWidget Build(Context ctx, StatusBarIconButtonState state) => new Box
+    protected override IWidget Build(Context ctx, ButtonState state) => new Box
     {
         Width = BoxWidth,
         Height = BoxHeight,

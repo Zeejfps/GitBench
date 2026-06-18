@@ -11,11 +11,11 @@ namespace GitBench.Controls;
 /// or padding of its own (unlike <see cref="ActionButton"/>, and distinct from <see cref="ButtonIcon"/>,
 /// which is the icon <em>segment</em> of one). The glyph color is resolved from the button's live
 /// interaction state through <see cref="Foreground"/>, so the caller supplies the themed idle/hover/active
-/// ramp. State lives on an <see cref="ActionButtonState"/> exposed as the widget's <see cref="IInteractable"/>
+/// ramp. State lives on an <see cref="ButtonState"/> exposed as the widget's <see cref="IInteractable"/>
 /// surface, so the parent attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>) and an
 /// optional tooltip (<c>button.WithTooltip("…")</c>).
 /// </summary>
-internal sealed record IconButton : Widget<ActionButtonState>
+internal sealed record IconButton : Widget<ButtonState>
 {
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public required ICommand Command { get; init; }
@@ -29,9 +29,9 @@ internal sealed record IconButton : Widget<ActionButtonState>
 
     public Prop<float> FontSize { get; init; } = 12f;
 
-    protected override ActionButtonState CreateState(Context ctx) => new(Command);
+    protected override ButtonState CreateState(Context ctx) => new(Command);
 
-    protected override IWidget Build(Context ctx, ActionButtonState state) => new Text
+    protected override IWidget Build(Context ctx, ButtonState state) => new Text
     {
         FontFamily = LucideIcons.FontFamily,
         FontSize = FontSize,

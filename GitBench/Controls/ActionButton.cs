@@ -10,12 +10,12 @@ namespace GitBench.Controls;
 /// An action button: a hover/press/enabled-driven box wrapping caller-supplied content (typically a
 /// <see cref="ButtonIcon"/> and an optional <see cref="ButtonLabel"/>). <see cref="Style"/> picks the
 /// look — the plain themed toolbar button or a solid filled chip. Live state lives on an
-/// <see cref="ActionButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface, so the
+/// <see cref="ButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface, so the
 /// <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>) and an
 /// optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>. The
 /// themed glyph/label color is published to the content subtree via a <see cref="Foreground"/> scope.
 /// </summary>
-internal sealed record ActionButton : Widget<ActionButtonState>
+internal sealed record ActionButton : Widget<ButtonState>
 {
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public ICommand? Command { get; init; }
@@ -31,9 +31,9 @@ internal sealed record ActionButton : Widget<ActionButtonState>
     /// optional <see cref="ButtonLabel"/>.</summary>
     public IWidget[] Children { get; init; } = [];
 
-    protected override ActionButtonState CreateState(Context ctx) => new(Command);
+    protected override ButtonState CreateState(Context ctx) => new(Command);
 
-    protected override IWidget Build(Context ctx, ActionButtonState state) => new Box
+    protected override IWidget Build(Context ctx, ButtonState state) => new Box
     {
         Height = 28,
         BorderRadius = Style.Radius,
