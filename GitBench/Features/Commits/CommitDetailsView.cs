@@ -8,6 +8,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -44,7 +45,6 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
     private readonly DiffView _diffView;
-    private readonly DiffPaneHeader _diffHeader;
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
     private readonly State<string?> _selectedPath = new(null);
@@ -98,14 +98,18 @@ internal sealed class CommitDetailsView : ContainerView
             h => innerSplitterHovered.Value = h));
 
         _diffView = new DiffView(ctx);
-        _diffHeader = new DiffPaneHeader(ctx);
 
+        var diffHeader = new Provide<DiffViewModel>
+        {
+            Value = vm.DiffVm,
+            Child = new DiffPaneHeaderWidget(),
+        }.BuildView(ctx);
         var diffPane = new BorderLayoutView
         {
-            North = _diffHeader,
+            North = diffHeader,
             Center = _diffView,
         };
-        this.Bind(_diffHeader.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
+        this.Bind(vm.DiffVm.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
 
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
@@ -153,14 +157,13 @@ internal sealed class CommitDetailsView : ContainerView
         _vm = vm;
         this.Bind(vm.RenderState, SetRenderState);
         _diffView.Bind(vm.DiffVm);
-        _diffHeader.Bind(vm.DiffVm);
         this.Bind(vm.SelectedPath, path =>
         {
             _selectedPath.Value = path;
             if (path != null) _changesSection.EnsureRowVisible(path);
         });
         _splitContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _splitContainer.BindBottomCollapsed(_diffHeader.IsCollapsed, DiffPaneHeader.HeaderHeight);
+        _splitContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
     }
 
     private void SetRenderState(CommitDetailsRenderState state)

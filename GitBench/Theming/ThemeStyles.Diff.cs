@@ -1,3 +1,5 @@
+using ZGF.Gui.Widgets;
+
 namespace GitBench.Theming;
 
 public sealed record DiffViewStyles(
@@ -13,7 +15,12 @@ public sealed record DiffViewStyles(
     uint LfsBadgeTrackedBackground,
     uint LfsBadgeTrackedText,
     uint LfsBadgeUntrackedBackground,
-    uint LfsBadgeUntrackedText);
+    uint LfsBadgeUntrackedText)
+{
+    // Header icon-button glyph: the idle/hover ramp shared by the chevron, title, and buttons.
+    internal uint HeaderButtonColor(IInteractable s) =>
+        s.Enabled.Value && s.Hovered.Value ? HeaderTitleHover : HeaderTitleIdle;
+}
 
 public sealed record DiffContentStyles(
     uint Background,

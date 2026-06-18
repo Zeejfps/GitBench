@@ -9,6 +9,7 @@ using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
@@ -31,7 +32,6 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
     private readonly DiffView _diffView;
-    private readonly DiffPaneHeader _diffHeader;
     private readonly VerticalSplitContainer _snapshotContainer;
     private readonly LocalChangesHeaderActionButton _discardButton;
     private readonly LocalChangesHeaderActionButton _stageSelectedButton;
@@ -139,16 +139,20 @@ internal sealed class LocalChangesContentView : ContainerView
             onReset: path => _vm.ResetSubmoduleToRecorded(path));
 
         _diffView = new DiffView(ctx);
-        _diffHeader = new DiffPaneHeader(ctx);
 
         // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
         // only the header strip remains (the split container pins the pane to header height).
+        var diffHeader = new Provide<DiffViewModel>
+        {
+            Value = vm.DiffVm,
+            Child = new DiffPaneHeaderWidget(),
+        }.BuildView(ctx);
         var diffPane = new BorderLayoutView
         {
-            North = _diffHeader,
+            North = diffHeader,
             Center = _diffView,
         };
-        this.Bind(_diffHeader.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
+        this.Bind(vm.DiffVm.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
 
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
@@ -210,9 +214,8 @@ internal sealed class LocalChangesContentView : ContainerView
             _stagedPanel.EnsureRowVisible(cursor);
         });
         _diffView.Bind(vm.DiffVm);
-        _diffHeader.Bind(vm.DiffVm);
         _snapshotContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _snapshotContainer.BindBottomCollapsed(_diffHeader.IsCollapsed, DiffPaneHeader.HeaderHeight);
+        _snapshotContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
 
         _discardButton.BindCommand(vm.Discard);
         _stageSelectedButton.BindCommand(vm.StageSelected);

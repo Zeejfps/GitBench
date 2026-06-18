@@ -68,6 +68,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // StartLoad to decide whether to assemble a diff or a full-file render.
     public IReadable<DiffViewMode> Mode { get; }
 
+    // Whether the embedded pane is collapsed to its header strip. The header chevron toggles it;
+    // the host nulls the diff body and pins the pane to header height when set. Sticky per-pane
+    // like Mode, and unused in the pop-out window (which has no collapse affordance).
+    private readonly State<bool> _isCollapsed = new(false);
+    public IReadable<bool> IsCollapsed => _isCollapsed;
+
     // The side of the currently-loaded diff (null until a diff loads). Drives the header's
     // file-level Stage/Unstage button: Unstaged → "Stage file", Staged → "Unstage file",
     // Commit → hidden (history diffs aren't stageable).
@@ -133,6 +139,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target == null) return;
         _bus.Broadcast(new OpenDiffWindowMessage(target));
     }
+
+    public void ToggleCollapse() => _isCollapsed.Value = !_isCollapsed.Value;
 
     // Flips this pane between Diff and FullFile, then reloads so the render state is rebuilt for
     // the current target under the new mode. Sticky: the new mode carries to the next file too.
