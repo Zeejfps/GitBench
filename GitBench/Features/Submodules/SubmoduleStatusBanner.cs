@@ -57,7 +57,6 @@ internal sealed record SubmoduleStatusBanner : Widget
                             },
                             new ActionButton
                             {
-                                Tooltip = "Check submodules out to the commit the main repo records",
                                 Style = ButtonStyle.Filled(0xFF4E8B3D),
                                 Command = vm.UpdateSubmodules,
                                 Children =
@@ -65,7 +64,8 @@ internal sealed record SubmoduleStatusBanner : Widget
                                     new ButtonIcon { Value = LucideIcons.Package },
                                     new ButtonLabel { Value = "Update submodules" },
                                 ],
-                            }.WithController<KbmController>(),
+                            }.WithTooltip("Check submodules out to the commit the main repo records")
+                                .WithController<KbmController>(),
                         ],
                     },
                 ],

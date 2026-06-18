@@ -105,18 +105,18 @@ internal sealed record ActionsToolbar : Widget
                                 new Spacer(),
                                 new ActionButton
                                 {
-                                    Tooltip = "Open in file explorer",
                                     Command = vm.OpenFolder,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
                                     Children = [new ButtonIcon { Value = LucideIcons.FolderOpen }],
-                                }.WithController<KbmController>(),
+                                }.WithTooltip("Open in file explorer")
+                                    .WithController<KbmController>(),
                                 new ActionButton
                                 {
-                                    Tooltip = "Open in terminal",
                                     Command = vm.OpenTerminal,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
                                     Children = [new ButtonIcon { Value = LucideIcons.SquareTerminal }],
-                                }.WithController<KbmController>(),
+                                }.WithTooltip("Open in terminal")
+                                    .WithController<KbmController>(),
                             ],
                         },
                     ],

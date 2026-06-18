@@ -60,7 +60,6 @@ internal sealed record DetachedHeadBanner : Widget
                             },
                             new ActionButton
                             {
-                                Tooltip = "Create a branch here so these commits aren't lost",
                                 Style = ButtonStyle.Filled(0xFF4E8B3D),
                                 Command = vm.CreateBranch,
                                 Children =
@@ -68,7 +67,8 @@ internal sealed record DetachedHeadBanner : Widget
                                     new ButtonIcon { Value = LucideIcons.Branch },
                                     new ButtonLabel { Value = "Create branch" },
                                 ],
-                            }.WithController<KbmController>(),
+                            }.WithTooltip("Create a branch here so these commits aren't lost")
+                                .WithController<KbmController>(),
                         ],
                     },
                 ],

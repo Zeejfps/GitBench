@@ -95,21 +95,22 @@ internal sealed record OperationBannerWidget : Widget
             [
                 new ActionButton
                 {
-                    Tooltip = "Continue",
                     Style = continueStyle,
                     ContentInset = continueStyle.IconOnlyInset,
                     Command = vm.Continue,
                     Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
                     Children = [new ButtonIcon { Value = LucideIcons.ChevronsRight }],
-                }.WithController<KbmController>(),
+                }.WithTooltip("Continue")
+                    .WithController<KbmController>(),
+                
                 new ActionButton
                 {
-                    Tooltip = "Abort",
                     Style = abortStyle,
                     ContentInset = abortStyle.IconOnlyInset,
                     Command = vm.Abort,
                     Children = [new ButtonIcon { Value = LucideIcons.X }],
-                }.WithController<KbmController>(),
+                }.WithTooltip("Abort")
+                    .WithController<KbmController>(),
             ],
         };
     }

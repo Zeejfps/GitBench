@@ -60,7 +60,6 @@ internal sealed record UpdateBannerView : Widget
                                 },
                                 new ActionButton
                                 {
-                                    Tooltip = "Restart to finish updating",
                                     Style = ButtonStyle.Filled(0xFF4E8B3D),
                                     Command = new Command(updateService.ApplyAndRestart),
                                     Children =
@@ -68,7 +67,8 @@ internal sealed record UpdateBannerView : Widget
                                         new ButtonIcon { Value = LucideIcons.Package },
                                         new ButtonLabel { Value = "Restart" },
                                     ],
-                                }.WithController<KbmController>(),
+                                }.WithTooltip("Restart to finish updating")
+                                    .WithController<KbmController>(),
                             ],
                         },
                     ],

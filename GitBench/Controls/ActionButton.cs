@@ -10,15 +10,12 @@ namespace GitBench.Controls;
 /// <see cref="ButtonIcon"/> and an optional <see cref="ButtonLabel"/>). <see cref="Style"/> picks the
 /// look — the plain themed toolbar button or a solid filled chip. Live state lives on an
 /// <see cref="ActionButtonState"/> exposed as the widget's <see cref="IInteractable"/> surface, so the
-/// <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>) and a
-/// press runs <see cref="Command"/>. The themed glyph/label color is published to the content subtree
-/// as <see cref="Foreground"/>.
+/// <em>parent</em> attaches a controller (<c>button.WithController&lt;KbmController&gt;()</c>) and an
+/// optional tooltip (<c>button.WithTooltip("…")</c>), and a press runs <see cref="Command"/>. The
+/// themed glyph/label color is published to the content subtree as <see cref="Foreground"/>.
 /// </summary>
 internal sealed record ActionButton : Widget<ActionButtonState>
 {
-    /// <summary>Hover tooltip; unset (or empty) shows none.</summary>
-    public Prop<string?> Tooltip { get; init; }
-
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public ICommand? Command { get; init; }
 
@@ -65,7 +62,7 @@ internal sealed record ActionButton : Widget<ActionButtonState>
                 ],
             },
         ],
-    }.WithTooltip(ctx, Tooltip, state.Hovered, state.Enabled);
+    };
 }
 
 /// <summary>
