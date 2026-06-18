@@ -115,10 +115,13 @@ internal sealed class LocalChangesContentView : ContainerView
         // pulled up on demand rather than auto-popping a modal each poll.
         _showErrorButton = new ActionButton
         {
-            Icon = LucideIcons.TriangleAlert,
-            Label = "Show full error",
             Tooltip = "Open the full git error",
             Command = new Command(() => _vm.ShowLoadError()),
+            Children =
+            [
+                new ButtonIcon { Value = LucideIcons.TriangleAlert },
+                new ButtonLabel { Value = "Show full error" },
+            ],
         }.WithController<KbmController>().BuildView(ctx);
 
         _placeholderHost = new FlexColumnView

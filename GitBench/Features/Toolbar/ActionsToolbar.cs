@@ -42,54 +42,80 @@ internal sealed record ActionsToolbar : Widget
                                 new SeparatorSpacer(),
                                 new ActionButton
                                 {
-                                    Icon = vm.IsFetching.Bind(string? (f) => f ? LucideIcons.Loader : LucideIcons.Fetch),
-                                    Label = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch"),
-                                    IconRotation = Prop.Bind(vm.FetchRotation),
                                     Command = vm.Fetch,
+                                    Children =
+                                    [
+                                        new ButtonIcon
+                                        {
+                                            Value = vm.IsFetching.Bind(string? (f) => f ? LucideIcons.Loader : LucideIcons.Fetch),
+                                            Rotation = Prop.Bind(vm.FetchRotation),
+                                        },
+                                        new ButtonLabel { Value = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch") },
+                                    ],
                                 }.WithController<KbmController>(),
                                 new ActionButton
                                 {
-                                    Icon = vm.IsPulling.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Pull),
-                                    Label = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull"),
-                                    IconRotation = Prop.Bind(vm.PullRotation),
-                                    BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
-                                    Badge = Prop.Bind(vm.PullBadge),
                                     Command = vm.Pull,
+                                    Children =
+                                    [
+                                        new ButtonIcon
+                                        {
+                                            Value = vm.IsPulling.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Pull),
+                                            Rotation = Prop.Bind(vm.PullRotation),
+                                            Badge = Prop.Bind(vm.PullBadge),
+                                            BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
+                                        },
+                                        new ButtonLabel { Value = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull") },
+                                    ],
                                 }.WithController<KbmController>(),
                                 new ActionButton
                                 {
-                                    Icon = vm.IsPushing.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Push),
-                                    Label = vm.IsPushing.Bind(string? (p) => p ? "Pushing" : "Push"),
-                                    IconRotation = Prop.Bind(vm.PushRotation),
-                                    BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
-                                    Badge = Prop.Bind(vm.PushBadge),
                                     Command = vm.Push,
+                                    Children =
+                                    [
+                                        new ButtonIcon
+                                        {
+                                            Value = vm.IsPushing.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Push),
+                                            Rotation = Prop.Bind(vm.PushRotation),
+                                            Badge = Prop.Bind(vm.PushBadge),
+                                            BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
+                                        },
+                                        new ButtonLabel { Value = vm.IsPushing.Bind(string? (p) => p ? "Pushing" : "Push") },
+                                    ],
                                 }.WithController<KbmController>(),
                                 new SeparatorSpacer(),
                                 new ActionButton
                                 {
-                                    Icon = LucideIcons.Stash,
-                                    Label = "Stash",
                                     Command = vm.Stash,
+                                    Children =
+                                    [
+                                        new ButtonIcon { Value = LucideIcons.Stash },
+                                        new ButtonLabel { Value = "Stash" },
+                                    ],
                                 }.WithController<KbmController>(),
                                 new ActionButton
                                 {
-                                    Icon = LucideIcons.Branch,
-                                    Label = "Branch",
                                     Command = vm.Branch,
+                                    Children =
+                                    [
+                                        new ButtonIcon { Value = LucideIcons.Branch },
+                                        new ButtonLabel { Value = "Branch" },
+                                    ],
                                 }.WithController<KbmController>(),
                                 new Spacer(),
                                 new ActionButton
                                 {
-                                    Icon = LucideIcons.FolderOpen,
                                     Tooltip = "Open in file explorer",
                                     Command = vm.OpenFolder,
+                                    ContentInset = ButtonStyle.Plain.IconOnlyInset,
+                                    Children = [new ButtonIcon { Value = LucideIcons.FolderOpen }],
                                 }.WithController<KbmController>(),
                                 new ActionButton
                                 {
-                                    Icon = LucideIcons.SquareTerminal,
                                     Tooltip = "Open in terminal",
                                     Command = vm.OpenTerminal,
+                                    ContentInset = ButtonStyle.Plain.IconOnlyInset,
+                                    Children = [new ButtonIcon { Value = LucideIcons.SquareTerminal }],
                                 }.WithController<KbmController>(),
                             ],
                         },

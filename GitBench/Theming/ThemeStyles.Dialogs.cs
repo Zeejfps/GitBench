@@ -1,5 +1,5 @@
-using GitBench.Controls;
 using GitBench.Widgets;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Theming;
 
@@ -42,24 +42,26 @@ public sealed record ActionButtonStyles(
     uint TextHover,
     uint TextDisabled)
 {
-    // Glyph/label color: white on a solid fill, otherwise the themed idle/hover/disabled ramp.
-    internal uint Foreground(IActionButton b)
+    // Plain glyph/label color: the themed idle/hover/disabled ramp.
+    internal uint Foreground(IInteractable s)
     {
-        if (!b.Enabled.Value) return TextDisabled;
-        if (b.Fill.Value is not null) return 0xFFFFFFFFu;
-        return b.Hovered.Value ? TextHover : TextIdle;
+        if (!s.Enabled.Value) return TextDisabled;
+        return s.Hovered.Value ? TextHover : TextIdle;
     }
 
-    // Fill color: a solid button lightens on hover / darkens when disabled; a plain button uses the
-    // themed idle/hover surface.
-    internal uint Surface(IActionButton b)
+    // Plain fill: transparent idle, the themed surface on hover.
+    internal uint Surface(IInteractable s) =>
+        s.Enabled.Value && s.Hovered.Value ? BackgroundHover : BackgroundIdle;
+
+    // Filled chip glyph/label color: white while enabled, the themed disabled text otherwise.
+    internal uint FilledForeground(IInteractable s) =>
+        s.Enabled.Value ? 0xFFFFFFFFu : TextDisabled;
+
+    // Filled chip fill, from the caller's base color: lightens on hover, darkens when disabled.
+    internal uint FilledSurface(uint color, IInteractable s)
     {
-        if (b.Fill.Value is uint solid)
-        {
-            if (!b.Enabled.Value) return Darken(solid, 0x40);
-            return b.Hovered.Value ? Lighten(solid, 0x18) : solid;
-        }
-        return b.Enabled.Value && b.Hovered.Value ? BackgroundHover : BackgroundIdle;
+        if (!s.Enabled.Value) return Darken(color, 0x40);
+        return s.Hovered.Value ? Lighten(color, 0x18) : color;
     }
 
     private static uint Lighten(uint argb, uint delta)

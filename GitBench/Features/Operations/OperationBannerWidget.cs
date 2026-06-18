@@ -83,29 +83,36 @@ internal sealed record OperationBannerWidget : Widget
         Rotation = Prop.Bind(vm.BusyRotation),
     };
 
-    private static IWidget Actions(OperationBannerViewModel vm) => new Row
+    private static IWidget Actions(OperationBannerViewModel vm)
     {
-        Gap = 4,
-        CrossAxis = CrossAxisAlignment.Center,
-        Children =
-        [
-            new ActionButton
-            {
-                Icon = LucideIcons.ChevronsRight,
-                Tooltip = "Continue",
-                Background = 0xFF4E8B3D,
-                Command = vm.Continue,
-                Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
-            }.WithController<KbmController>(),
-            new ActionButton
-            {
-                Icon = LucideIcons.X,
-                Tooltip = "Abort",
-                Background = 0xFFB3514B,
-                Command = vm.Abort,
-            }.WithController<KbmController>(),
-        ],
-    };
+        var continueStyle = ButtonStyle.Filled(0xFF4E8B3D);
+        var abortStyle = ButtonStyle.Filled(0xFFB3514B);
+        return new Row
+        {
+            Gap = 4,
+            CrossAxis = CrossAxisAlignment.Center,
+            Children =
+            [
+                new ActionButton
+                {
+                    Tooltip = "Continue",
+                    Style = continueStyle,
+                    ContentInset = continueStyle.IconOnlyInset,
+                    Command = vm.Continue,
+                    Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
+                    Children = [new ButtonIcon { Value = LucideIcons.ChevronsRight }],
+                }.WithController<KbmController>(),
+                new ActionButton
+                {
+                    Tooltip = "Abort",
+                    Style = abortStyle,
+                    ContentInset = abortStyle.IconOnlyInset,
+                    Command = vm.Abort,
+                    Children = [new ButtonIcon { Value = LucideIcons.X }],
+                }.WithController<KbmController>(),
+            ],
+        };
+    }
 
     private static bool SupportsContinue(RepoOperationState state) => state switch
     {
