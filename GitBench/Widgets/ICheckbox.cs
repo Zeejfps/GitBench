@@ -4,11 +4,11 @@ using ZGF.Observable;
 namespace GitBench.Widgets;
 
 /// <summary>
-/// A <see cref="Checkbox"/>'s surface to its theme styling: an <see cref="IInteractableWidget"/> (so a
-/// controller can drive its hover/press) plus the two-way <see cref="Checked"/> value, letting
-/// <c>CheckboxStyles</c> resolve every color from one reference instead of loose booleans.
+/// A checkbox's surface to its theme styling: an <see cref="IInteractable"/> (hover/press/enabled)
+/// plus the two-way <see cref="Checked"/> value, letting <c>CheckboxStyles</c> resolve every color
+/// from one reference instead of loose booleans. Implemented by <see cref="CheckboxState"/>.
 /// </summary>
-public interface ICheckbox : IInteractableWidget
+public interface ICheckbox : IInteractable
 {
     /// <summary>True when the box is ticked; the read side of the value a click writes back.</summary>
     IReadable<bool> Checked { get; }
