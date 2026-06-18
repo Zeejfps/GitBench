@@ -102,7 +102,7 @@ internal sealed class CommitDetailsView : ContainerView
         var diffHeader = new Provide<DiffViewModel>
         {
             Value = vm.DiffVm,
-            Child = new DiffPaneHeaderWidget(),
+            Child = new DiffPaneHeaderWidget().WithController<KbmController>(),
         }.BuildView(ctx);
         var diffPane = new BorderLayoutView
         {

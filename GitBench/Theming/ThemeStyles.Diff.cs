@@ -20,6 +20,10 @@ public sealed record DiffViewStyles(
     // Header icon-button glyph: the idle/hover ramp shared by the chevron, title, and buttons.
     internal uint HeaderButtonColor(IInteractable s) =>
         s.Enabled.Value && s.Hovered.Value ? HeaderTitleHover : HeaderTitleIdle;
+
+    // The header bar's surface: tints on hover (the whole strip is the collapse toggle).
+    internal uint HeaderBackground(IInteractable s) =>
+        s.Hovered.Value ? HeaderBackgroundHover : HeaderBackgroundIdle;
 }
 
 public sealed record DiffContentStyles(
