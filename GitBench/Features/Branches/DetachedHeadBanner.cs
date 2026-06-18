@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -64,7 +65,7 @@ internal sealed record DetachedHeadBanner : Widget
                                 Tooltip = "Create a branch here so these commits aren't lost",
                                 Background = 0xFF4E8B3D,
                                 Command = vm.CreateBranch,
-                            },
+                            }.WithController<KbmController>(),
                         ],
                     },
                 ],

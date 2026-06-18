@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -95,14 +96,14 @@ internal sealed record OperationBannerWidget : Widget
                 Background = 0xFF4E8B3D,
                 Command = vm.Continue,
                 Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
-            },
+            }.WithController<KbmController>(),
             new ActionButton
             {
                 Icon = LucideIcons.X,
                 Tooltip = "Abort",
                 Background = 0xFFB3514B,
                 Command = vm.Abort,
-            },
+            }.WithController<KbmController>(),
         ],
     };
 

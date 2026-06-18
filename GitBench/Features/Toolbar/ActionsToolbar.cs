@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -45,51 +46,51 @@ internal sealed record ActionsToolbar : Widget
                                     Label = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch"),
                                     IconRotation = Prop.Bind(vm.FetchRotation),
                                     Command = vm.Fetch,
-                                },
+                                }.WithController<KbmController>(),
                                 new ActionButton
                                 {
                                     Icon = vm.IsPulling.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Pull),
                                     Label = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull"),
                                     IconRotation = Prop.Bind(vm.PullRotation),
                                     BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
-                                    Badge = vm.PullBadge,
+                                    Badge = Prop.Bind(vm.PullBadge),
                                     Command = vm.Pull,
-                                },
+                                }.WithController<KbmController>(),
                                 new ActionButton
                                 {
                                     Icon = vm.IsPushing.Bind(string? (p) => p ? LucideIcons.Loader : LucideIcons.Push),
                                     Label = vm.IsPushing.Bind(string? (p) => p ? "Pushing" : "Push"),
                                     IconRotation = Prop.Bind(vm.PushRotation),
                                     BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
-                                    Badge = vm.PushBadge,
+                                    Badge = Prop.Bind(vm.PushBadge),
                                     Command = vm.Push,
-                                },
+                                }.WithController<KbmController>(),
                                 new SeparatorSpacer(),
                                 new ActionButton
                                 {
                                     Icon = LucideIcons.Stash,
                                     Label = "Stash",
                                     Command = vm.Stash,
-                                },
+                                }.WithController<KbmController>(),
                                 new ActionButton
                                 {
                                     Icon = LucideIcons.Branch,
                                     Label = "Branch",
                                     Command = vm.Branch,
-                                },
+                                }.WithController<KbmController>(),
                                 new Spacer(),
                                 new ActionButton
                                 {
                                     Icon = LucideIcons.FolderOpen,
                                     Tooltip = "Open in file explorer",
                                     Command = vm.OpenFolder,
-                                },
+                                }.WithController<KbmController>(),
                                 new ActionButton
                                 {
                                     Icon = LucideIcons.SquareTerminal,
                                     Tooltip = "Open in terminal",
                                     Command = vm.OpenTerminal,
-                                },
+                                }.WithController<KbmController>(),
                             ],
                         },
                     ],

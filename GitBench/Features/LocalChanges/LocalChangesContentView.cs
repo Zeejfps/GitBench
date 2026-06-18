@@ -118,8 +118,8 @@ internal sealed class LocalChangesContentView : ContainerView
             Icon = LucideIcons.TriangleAlert,
             Label = "Show full error",
             Tooltip = "Open the full git error",
-            OnClick = () => _vm.ShowLoadError(),
-        }.BuildView(ctx);
+            Command = new Command(() => _vm.ShowLoadError()),
+        }.WithController<KbmController>().BuildView(ctx);
 
         _placeholderHost = new FlexColumnView
         {

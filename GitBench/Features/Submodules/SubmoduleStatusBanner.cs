@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -61,7 +62,7 @@ internal sealed record SubmoduleStatusBanner : Widget
                                 Tooltip = "Check submodules out to the commit the main repo records",
                                 Background = 0xFF4E8B3D,
                                 Command = vm.UpdateSubmodules,
-                            },
+                            }.WithController<KbmController>(),
                         ],
                     },
                 ],

@@ -3,6 +3,7 @@ using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -64,7 +65,7 @@ internal sealed record UpdateBannerView : Widget
                                     Tooltip = "Restart to finish updating",
                                     Background = 0xFF4E8B3D,
                                     Command = new Command(updateService.ApplyAndRestart),
-                                },
+                                }.WithController<KbmController>(),
                             ],
                         },
                     ],
