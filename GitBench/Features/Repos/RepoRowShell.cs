@@ -1,43 +1,35 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Worktrees;
-using GitBench.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-// A single RepoBar row, rendered from its node view model. One widget for every kind — primary,
-// worktree, submodule — with glyph, accent, indent, badge, and context menu all driven by the view
-// model. Primaries drag-to-reorder; nested rows just activate on click.
-internal sealed record RepoRow : Widget
+// Shared visual layout for a RepoBar row: indent, expansion chevron, kind glyph, name, and status
+// dot, all driven by the surrounding node view model. The primary and nested variants supply the
+// glyph, height, and glyph size; the hover flag is owned by the variant's state and drives the accent.
+internal sealed record RepoRowShell : Widget
 {
+    public required string Glyph { get; init; }
+    public required float RowHeight { get; init; }
+    public required float GlyphSize { get; init; }
+    public required IReadable<bool> Hovered { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-        var registry = ctx.Require<IRepoRegistry>();
-        var input = ctx.Require<InputSystem>();
-        var hovered = new State<bool>(false);
-
-        var isPrimary = vm.Kind == RepoKind.Primary;
-        var glyph = vm.Kind switch
-        {
-            RepoKind.Worktree => LucideIcons.Branch,
-            RepoKind.Submodule => LucideIcons.Package,
-            _ => LucideIcons.FolderGit2,
-        };
         var leftPad = RepoBar.RowPaddingLeft + (int)TreeMetrics.IndentLevel * vm.Depth;
 
-        IWidget row = new Box
+        return new Box
         {
-            Height = isPrimary ? 28 : 26,
+            Height = RowHeight,
             BorderRadius = BorderRadiusStyle.All(4),
-            Background = Theme.Color(s => s.RepoBarRow.Background(vm.IsActive.Value, hovered.Value)),
+            Background = Theme.Color(s => s.RepoBarRow.Background(vm.IsActive.Value, Hovered.Value)),
             Children =
             [
                 new Padding
@@ -54,9 +46,9 @@ internal sealed record RepoRow : Widget
                                 new WorktreeChevron().WithController<KbmController>(),
                                 new Text
                                 {
-                                    Value = glyph,
+                                    Value = Glyph,
                                     FontFamily = LucideIcons.FontFamily,
-                                    FontSize = isPrimary ? 14f : 13f,
+                                    FontSize = GlyphSize,
                                     Width = RepoBar.RowIconWidth,
                                     HAlign = TextAlignment.Center,
                                     VAlign = TextAlignment.Center,
@@ -89,11 +81,5 @@ internal sealed record RepoRow : Widget
                 },
             ],
         };
-
-        return isPrimary
-            ? row.WithController(input, view => new RepoRowController(
-                view, ctx, vm.Repo, registry, vm.Activate, h => hovered.Value = h, _ => vm.BuildMenuItems()))
-            : row.WithController(input, () => new NavigableRowController(
-                ctx, vm.Activate, h => hovered.Value = h, _ => vm.BuildMenuItems()));
     }
 }

@@ -1,3 +1,5 @@
+using GitBench.Controls;
+using GitBench.Git;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -12,14 +14,15 @@ internal sealed record RepoNode : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-
         return new Column
         {
             Gap = 2,
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new RepoRow(),
+                vm.Kind == RepoKind.Primary
+                    ? new PrimaryRepoRow().WithController<RepoRowController>()
+                    : new NavigableRepoRow().WithController<NavigableRowController>(),
                 new Each<RepoNodeViewModel>
                 {
                     Items = vm.Children,

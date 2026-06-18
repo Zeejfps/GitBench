@@ -5,7 +5,6 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
-using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
@@ -14,13 +13,9 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     private const float DragThresholdSq = 6f * 6f;
 
     private readonly View _view;
-    private readonly Context _context;
-    private readonly Repo _repo;
+    private readonly IRepoRow _target;
     private readonly IRepoRegistry _registry;
-    private readonly ICommand _activate;
-    private readonly Action<bool> _onHoverChanged;
-    private readonly Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> _buildMenuItems;
-
+    private readonly Context _context;
     private readonly IDragController? _dragController;
     private readonly InputSystem _inputSystem;
 
@@ -30,29 +25,22 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
     public RepoRowController(
         View view,
-        Context context,
-        Repo repo,
+        IRepoRow target,
         IRepoRegistry registry,
-        ICommand activate,
-        Action<bool> onHoverChanged,
-        Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> buildMenuItems)
+        InputSystem inputSystem,
+        Context context,
+        IDragController? dragController = null)
     {
         _view = view;
-        _context = context;
-        _repo = repo;
+        _target = target;
         _registry = registry;
-        _activate = activate;
-        _onHoverChanged = onHoverChanged;
-        _buildMenuItems = buildMenuItems;
+        _inputSystem = inputSystem;
+        _context = context;
+        _dragController = dragController;
 
-        _dragController = context.Get<IDragController>();
-        _inputSystem = context.Get<InputSystem>()!;
-
-        var group = _registry.FindGroupContaining(_repo.Id);
+        var group = _registry.FindGroupContaining(_target.Repo.Id);
         if (group is not null)
-        {
-            _dragController?.RegisterRepoRow(view, group.Id, _repo.Id);
-        }
+            _dragController?.RegisterRepoRow(view, group.Id, _target.Repo.Id);
     }
 
     public void Dispose()
@@ -68,13 +56,13 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     public override void OnMouseEnter(ref MouseEnterEvent e)
     {
         if (_dragging) return;
-        _onHoverChanged(true);
+        _target.Hovered.Value = true;
     }
 
     public override void OnMouseExit(ref MouseExitEvent e)
     {
         if (_dragging) return;
-        _onHoverChanged(false);
+        _target.Hovered.Value = false;
     }
 
     public override void OnMouseMoved(ref MouseMoveEvent e)
@@ -88,8 +76,8 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
             if (dx * dx + dy * dy < DragThresholdSq) return;
 
             _dragging = true;
-            _onHoverChanged(false);
-            _dragController?.StartRepoDrag(_repo, e.Mouse.Point);
+            _target.Hovered.Value = false;
+            _dragController?.StartRepoDrag(_target.Repo, e.Mouse.Point);
             e.Consume();
             return;
         }
@@ -105,7 +93,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         if (e.Button == MouseButton.Right && e.State == InputState.Pressed)
         {
             if (_dragging) return;
-            var items = _buildMenuItems(e.Mouse.Point);
+            var items = _target.BuildMenuItems();
             if (items.Count > 0)
             {
                 RepoBarContextMenu.Show(_context, e.Mouse.Point, items);
@@ -137,7 +125,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
             }
             else
             {
-                _activate.Execute();
+                _target.Activate.Execute();
             }
             _inputSystem.Blur(this);
             e.Consume();
