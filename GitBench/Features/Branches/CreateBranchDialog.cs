@@ -51,7 +51,7 @@ internal sealed record CreateBranchDialog : Widget
                     Value = vm.StartPoint,
                     Hint = "Branch, tag, or commit SHA. Leave blank for HEAD.",
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Check out after create",
                     Checked = vm.Checkout,

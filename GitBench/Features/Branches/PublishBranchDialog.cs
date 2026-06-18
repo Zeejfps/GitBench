@@ -52,7 +52,7 @@ internal sealed record PublishBranchDialog : Widget
                 },
                 new LabeledRow { Label = "Branch:", Value = BranchChip(LocalBranch) },
                 new LabeledRow { Label = "To:", Value = new Raw { View = remoteDropdown } },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Track this remote branch (set upstream)",
                     Checked = vm.SetUpstream,

@@ -4,7 +4,7 @@ using ZGF.Observable;
 namespace GitBench.Widgets;
 
 /// <summary>
-/// A <see cref="Checkbox"/>'s live state: the controller-driven interaction trio plus the bound
+/// A <see cref="CheckboxWidget"/>'s live state: the controller-driven interaction trio plus the bound
 /// <see cref="Checked"/> value, and the toggle behavior that writes the rising edge of
 /// <see cref="IInteractable.Pressed"/> back through the checked source. The widget delegates its
 /// <see cref="IInteractable"/>/<see cref="ICheckbox"/> surface to this, so the controller drives it

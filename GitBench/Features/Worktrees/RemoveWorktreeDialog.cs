@@ -99,7 +99,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                     Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new Raw { View = pathBox },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Remove even if dirty",
                     Checked = vm.Force,

@@ -63,7 +63,7 @@ internal sealed record StashDialog : Widget
                     Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Keep staged changes in index",
                     Checked = keepStaged,
@@ -155,7 +155,7 @@ internal sealed record StashDialog : Widget
 
         var isChecked = new State<bool>(vm.CheckedPaths.Value.Contains(file.Path));
         isChecked.Changed += _ => vm.ToggleFile(file.Path);
-        return new Checkbox
+        return new CheckboxWidget
         {
             Content = new Raw { View = rowContent },
             Checked = isChecked,

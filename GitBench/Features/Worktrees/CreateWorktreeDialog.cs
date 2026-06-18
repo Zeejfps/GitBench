@@ -61,7 +61,7 @@ internal sealed record CreateWorktreeDialog : Widget
                     Hint = "Leave blank to check out the start point as-is.",
                     Status = vm.NewBranchStatus,
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Force (allow non-empty path or re-used branch)",
                     Checked = vm.Force,

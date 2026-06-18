@@ -51,7 +51,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Deinit even if dirty",
                     Checked = vm.Force,

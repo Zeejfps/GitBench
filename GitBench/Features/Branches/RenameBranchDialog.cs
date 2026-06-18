@@ -51,7 +51,7 @@ internal sealed record RenameBranchDialog : Widget
                     Status = vm.NameStatus,
                     SelectAllOnOpen = true,
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Force rename even if target exists",
                     Checked = vm.Force,

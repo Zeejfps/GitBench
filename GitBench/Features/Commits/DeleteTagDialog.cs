@@ -48,7 +48,7 @@ internal sealed record DeleteTagDialog : Widget
                     Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
                 new LabeledRow { Label = "Tag:", Value = TagValue(TagName) },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Delete tag from remote repositories",
                     Checked = vm.DeleteFromRemotes,

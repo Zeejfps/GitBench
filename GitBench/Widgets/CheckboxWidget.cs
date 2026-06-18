@@ -14,7 +14,7 @@ namespace GitBench.Widgets;
 /// <em>parent</em> attaches a controller (<c>checkbox.WithController&lt;KbmController&gt;()</c>) — it
 /// picks the modality, the widget stays neutral.
 /// </summary>
-public sealed record Checkbox : StatefulWidget<CheckboxState>
+public sealed record CheckboxWidget : Widget<CheckboxState>
 {
     private const float BoxSize = 16f;
     private const float BoxRadius = 3f;

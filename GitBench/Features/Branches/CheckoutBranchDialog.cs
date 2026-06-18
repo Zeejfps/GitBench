@@ -52,7 +52,7 @@ internal sealed record CheckoutBranchDialog : Widget
                     Status = vm.NameStatus,
                     SelectAllOnOpen = true,
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Track this remote branch",
                     Checked = vm.Track,

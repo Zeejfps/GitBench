@@ -150,7 +150,7 @@ internal sealed record DiscardChangesDialog : Widget
         var isChecked = new State<bool>(vm.CheckedPaths.Value.Contains(file.Path));
         isChecked.Changed += _ => vm.ToggleFile(file.Path);
 
-        return new Checkbox
+        return new CheckboxWidget
         {
             Content = new Raw { View = rowContent },
             Checked = isChecked,

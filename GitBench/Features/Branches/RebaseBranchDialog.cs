@@ -46,7 +46,7 @@ internal sealed record RebaseBranchDialog : Widget
                 },
                 BuildLabeledRow("Rebase:", BuildBranchChip(Request.SourceBranch)),
                 BuildLabeledRow("On:", BuildBranchChip(Request.TargetDisplay)),
-                BuildLabeledRow("", new Checkbox
+                BuildLabeledRow("", new CheckboxWidget
                 {
                     Label = "Stash and reapply local changes",
                     Checked = vm.Autostash,

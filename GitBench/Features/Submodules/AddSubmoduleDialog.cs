@@ -54,7 +54,7 @@ internal sealed record AddSubmoduleDialog : Widget
                     Hint = "Leave blank to pin to the upstream HEAD at clone time.",
                     Status = vm.BranchStatus,
                 },
-                new Checkbox
+                new CheckboxWidget
                 {
                     Label = "Force (allow paths previously used)",
                     Checked = vm.Force,
