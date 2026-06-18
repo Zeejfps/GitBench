@@ -9,7 +9,7 @@ public sealed class Tooltip : IDisposable
 
     private readonly View _target;
     private readonly Context _context;
-    private readonly string _text;
+    private readonly IReadable<string?> _text;
     private readonly IReadable<bool> _isHovered;
     private readonly IReadable<bool> _isEnabled;
 
@@ -22,6 +22,16 @@ public sealed class Tooltip : IDisposable
         View target,
         Context context,
         string text,
+        IReadable<bool> isHovered,
+        IReadable<bool> isEnabled)
+        : this(target, context, (IReadable<string?>)new State<string?>(text), isHovered, isEnabled)
+    {
+    }
+
+    public Tooltip(
+        View target,
+        Context context,
+        IReadable<string?> text,
         IReadable<bool> isHovered,
         IReadable<bool> isEnabled)
     {
@@ -99,9 +109,11 @@ public sealed class Tooltip : IDisposable
 
     private void ShowNow()
     {
+        var text = _text.Value;
+        if (string.IsNullOrEmpty(text)) return;
         var service = _context.Get<ITooltipService>();
         if (service == null) return;
-        service.Show(this, _text, _target.Position);
+        service.Show(this, text, _target.Position);
         _isShown = true;
     }
 

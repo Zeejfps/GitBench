@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Widgets;
 
 namespace GitBench.Theming;
@@ -39,7 +40,49 @@ public sealed record ActionButtonStyles(
     uint BackgroundHover,
     uint TextIdle,
     uint TextHover,
-    uint TextDisabled);
+    uint TextDisabled)
+{
+    // Glyph/label color: white on a solid fill, otherwise the themed idle/hover/disabled ramp.
+    internal uint Foreground(IActionButton b)
+    {
+        if (!b.Enabled.Value) return TextDisabled;
+        if (b.Fill.Value is not null) return 0xFFFFFFFFu;
+        return b.Hovered.Value ? TextHover : TextIdle;
+    }
+
+    // Fill color: a solid button lightens on hover / darkens when disabled; a plain button uses the
+    // themed idle/hover surface.
+    internal uint Surface(IActionButton b)
+    {
+        if (b.Fill.Value is uint solid)
+        {
+            if (!b.Enabled.Value) return Darken(solid, 0x40);
+            return b.Hovered.Value ? Lighten(solid, 0x18) : solid;
+        }
+        return b.Enabled.Value && b.Hovered.Value ? BackgroundHover : BackgroundIdle;
+    }
+
+    private static uint Lighten(uint argb, uint delta)
+    {
+        var a = (argb >> 24) & 0xFF;
+        var r = Math.Min(0xFFu, ((argb >> 16) & 0xFF) + delta);
+        var g = Math.Min(0xFFu, ((argb >> 8) & 0xFF) + delta);
+        var b = Math.Min(0xFFu, (argb & 0xFF) + delta);
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    private static uint Darken(uint argb, uint delta)
+    {
+        var a = (argb >> 24) & 0xFF;
+        var r = (argb >> 16) & 0xFF;
+        var g = (argb >> 8) & 0xFF;
+        var b = argb & 0xFF;
+        r = r > delta ? r - delta : 0;
+        g = g > delta ? g - delta : 0;
+        b = b > delta ? b - delta : 0;
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
+}
 
 // Filled footer buttons (the "action" button next to Cancel). Primary uses the theme
 // accent; Destructive uses the danger red for delete/discard/force/abort/reset actions.

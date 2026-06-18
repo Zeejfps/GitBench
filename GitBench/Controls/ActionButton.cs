@@ -3,7 +3,6 @@ using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
-using ThemeStyles = GitBench.Theming.ThemeStyles;
 
 namespace GitBench.Controls;
 
@@ -22,7 +21,8 @@ internal sealed record ActionButton : Widget<ActionButtonState>
     /// <summary>Optional label next to the icon; unset renders icon-only.</summary>
     public Prop<string?> Label { get; init; }
 
-    public string? Tooltip { get; init; }
+    /// <summary>Hover tooltip; unset (or empty) shows none.</summary>
+    public Prop<string?> Tooltip { get; init; }
 
     /// <summary>Count shown in a badge next to the icon; null or 0 hides it.</summary>
     public Prop<int?> Badge { get; init; }
@@ -31,7 +31,7 @@ internal sealed record ActionButton : Widget<ActionButtonState>
     public Prop<uint> BadgeColor { get; init; }
 
     /// <summary>Solid fill; when set the button paints a filled, rounded chip with white glyphs.</summary>
-    public uint? Background { get; init; }
+    public Prop<uint?> Background { get; init; }
 
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
     public Prop<float> IconRotation { get; init; }
@@ -39,30 +39,31 @@ internal sealed record ActionButton : Widget<ActionButtonState>
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public ICommand? Command { get; init; }
 
-    protected override ActionButtonState CreateState(Context ctx) => new(Command);
+    protected override ActionButtonState CreateState(Context ctx) =>
+        new(Command, Background.ToReadable(ctx));
 
     protected override IWidget Build(Context ctx, ActionButtonState state)
     {
-        var foreground = Theme.Color(s => Foreground(s, state));
+        var foreground = Theme.Color(s => s.ActionButton.Foreground(state));
 
         IWidget button = new Box
         {
             Height = 28,
-            BorderRadius = Background is null ? default : BorderRadiusStyle.All(6),
-            Background = Theme.Color(s => Surface(s, state)),
+            BorderRadius = Prop.Bind(() => state.Fill.Value is null ? default : BorderRadiusStyle.All(6)),
+            Background = Theme.Color(s => s.ActionButton.Surface(state)),
             Children =
             [
                 new Padding
                 {
-                    Amount = HorizontalPadding(),
+                    Amount = Prop.Bind(() => HorizontalPadding(state.Fill.Value)),
                     Children = [Content(foreground)],
                 },
             ],
         };
 
-        return Tooltip is { Length: > 0 } tooltip
-            ? button.Use(v => new Tooltip(v, ctx, tooltip, state.Hovered, state.Enabled))
-            : button;
+        if (!Tooltip.IsSet) return button;
+        var tooltip = Tooltip.ToReadable(ctx);
+        return button.Use(v => new Tooltip(v, ctx, tooltip, state.Hovered, state.Enabled));
     }
 
     private IWidget Content(Prop<uint> foreground)
@@ -108,52 +109,9 @@ internal sealed record ActionButton : Widget<ActionButtonState>
         };
     }
 
-    private PaddingStyle HorizontalPadding()
+    private PaddingStyle HorizontalPadding(uint? fill)
     {
-        var pad = Label.IsSet ? 8 : Background is null ? 6 : 10;
+        var pad = Label.IsSet ? 8 : fill is null ? 6 : 10;
         return new PaddingStyle { Left = pad, Right = pad };
-    }
-
-    // Glyph/label color: white on a solid fill, otherwise the themed idle/hover/disabled ramp.
-    private uint Foreground(ThemeStyles styles, IInteractable state)
-    {
-        var s = styles.ActionButton;
-        if (!state.Enabled.Value) return s.TextDisabled;
-        if (Background is not null) return 0xFFFFFFFFu;
-        return state.Hovered.Value ? s.TextHover : s.TextIdle;
-    }
-
-    // Fill color: a solid button lightens on hover / darkens when disabled; a plain button uses
-    // the themed idle/hover surface.
-    private uint Surface(ThemeStyles styles, IInteractable state)
-    {
-        var s = styles.ActionButton;
-        if (Background is uint fill)
-        {
-            if (!state.Enabled.Value) return Darken(fill, 0x40);
-            return state.Hovered.Value ? Lighten(fill, 0x18) : fill;
-        }
-        return state.Enabled.Value && state.Hovered.Value ? s.BackgroundHover : s.BackgroundIdle;
-    }
-
-    private static uint Lighten(uint argb, uint delta)
-    {
-        var a = (argb >> 24) & 0xFF;
-        var r = Math.Min(0xFFu, ((argb >> 16) & 0xFF) + delta);
-        var g = Math.Min(0xFFu, ((argb >> 8) & 0xFF) + delta);
-        var b = Math.Min(0xFFu, (argb & 0xFF) + delta);
-        return (a << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    private static uint Darken(uint argb, uint delta)
-    {
-        var a = (argb >> 24) & 0xFF;
-        var r = (argb >> 16) & 0xFF;
-        var g = (argb >> 8) & 0xFF;
-        var b = argb & 0xFF;
-        r = r > delta ? r - delta : 0;
-        g = g > delta ? g - delta : 0;
-        b = b > delta ? b - delta : 0;
-        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 }
