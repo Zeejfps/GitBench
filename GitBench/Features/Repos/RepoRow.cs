@@ -2,7 +2,6 @@ using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -34,17 +33,6 @@ internal sealed record RepoRow : Widget
         };
         var leftPad = RepoBar.RowPaddingLeft + (int)TreeMetrics.IndentLevel * vm.Depth;
 
-        // Primary icons share the label's missing/active/idle color; nested icons use the kind accent
-        // (muted to the missing color when the checkout is gone).
-        uint IconColor(ThemeStyles s)
-        {
-            if (isPrimary) return s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value);
-            if (vm.IsMissing.Value) return s.RepoBarRow.TextMissing;
-            return vm.Kind == RepoKind.Worktree
-                ? s.RepoBarRow.IconAccentWorktree
-                : s.RepoBarRow.IconAccentSubmodule;
-        }
-
         IWidget row = new Box
         {
             Height = isPrimary ? 28 : 26,
@@ -72,7 +60,7 @@ internal sealed record RepoRow : Widget
                                     Width = RepoBar.RowIconWidth,
                                     HAlign = TextAlignment.Center,
                                     VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(IconColor),
+                                    Color = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
                                 },
                                 new Grow
                                 {

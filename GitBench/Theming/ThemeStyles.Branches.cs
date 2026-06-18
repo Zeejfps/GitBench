@@ -1,3 +1,5 @@
+using GitBench.Git;
+
 namespace GitBench.Theming;
 
 public sealed record BranchesHeaderStyles(
@@ -40,6 +42,15 @@ public sealed record RepoBarRowStyles(
 
     public uint Text(bool active, bool missing)
         => missing ? TextMissing : active ? TextActive : TextIdle;
+
+    // Row icon: primaries follow the label ramp; nested icons use the kind accent, muted to the
+    // missing color when the checkout is gone.
+    public uint Icon(RepoKind kind, bool active, bool missing)
+    {
+        if (kind == RepoKind.Primary) return Text(active, missing);
+        if (missing) return TextMissing;
+        return kind == RepoKind.Worktree ? IconAccentWorktree : IconAccentSubmodule;
+    }
 }
 
 public sealed record BranchesViewStyles(
