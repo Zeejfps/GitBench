@@ -24,7 +24,7 @@ internal sealed class DiffWindowToolbar : ContainerView
 
     private readonly State<DiffSide?> _side = new(null);
     private readonly State<bool> _fullFileActive = new(false);
-    private readonly LfsBadgeView _lfsBadge;
+    private readonly State<LfsBadge> _lfsStatus = new(LfsBadge.None);
     private readonly TextView _title;
 
     private DiffViewModel? _vm;
@@ -36,7 +36,6 @@ internal sealed class DiffWindowToolbar : ContainerView
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
-        _lfsBadge = new LfsBadgeView(ctx);
 
         _title = new TextView(ctx.Canvas)
         {
@@ -63,7 +62,7 @@ internal sealed class DiffWindowToolbar : ContainerView
                             Children =
                             {
                                 new FlexItem { Grow = 1, Child = _title },
-                                _lfsBadge,
+                                new LfsBadgeWidget { Status = _lfsStatus }.BuildView(ctx),
                                 BuildFullFileToggleButton(ctx, input, theme),
                                 BuildStageButton(ctx, input, theme),
                             },
@@ -90,7 +89,7 @@ internal sealed class DiffWindowToolbar : ContainerView
         _onToggleFullFile = vm.ToggleFullFile;
         if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
-        this.Bind(vm.LfsStatus, _lfsBadge.SetStatus);
+        this.Bind(vm.LfsStatus, _lfsStatus.Set);
         this.Bind(vm.CurrentSide, s => _side.Value = s);
         this.Bind(vm.Mode, m => _fullFileActive.Value = m == DiffViewMode.FullFile);
     }

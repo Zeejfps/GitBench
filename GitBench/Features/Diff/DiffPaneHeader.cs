@@ -26,7 +26,7 @@ internal sealed class DiffPaneHeader : ContainerView
     public const float HeaderHeight = 24f;
 
     private readonly State<bool> _isCollapsed = new(false);
-    private readonly LfsBadgeView _lfsBadge;
+    private readonly State<LfsBadge> _lfsStatus = new(LfsBadge.None);
     // Mirrors the bound VM's Mode so the full-file toggle button can paint its active tint.
     private readonly State<bool> _fullFileActive = new(false);
 
@@ -38,7 +38,6 @@ internal sealed class DiffPaneHeader : ContainerView
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
-        _lfsBadge = new LfsBadgeView(ctx);
 
         var hovered = new State<bool>(false);
 
@@ -84,7 +83,7 @@ internal sealed class DiffPaneHeader : ContainerView
                             {
                                 chevron,
                                 new FlexItem { Grow = 1, Child = title },
-                                _lfsBadge,
+                                new LfsBadgeWidget { Status = _lfsStatus }.BuildView(ctx),
                                 BuildFullFileToggleButton(ctx, input, theme),
                                 BuildOpenInWindowButton(ctx, input, theme),
                             },
@@ -121,7 +120,7 @@ internal sealed class DiffPaneHeader : ContainerView
         _onToggleFullFile = vm.ToggleFullFile;
         if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
-        this.Bind(vm.LfsStatus, _lfsBadge.SetStatus);
+        this.Bind(vm.LfsStatus, _lfsStatus.Set);
         this.Bind(vm.Mode, m => _fullFileActive.Value = m == DiffViewMode.FullFile);
     }
 
