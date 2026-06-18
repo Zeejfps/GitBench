@@ -5,6 +5,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
+using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
@@ -16,6 +17,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     private readonly Context _context;
     private readonly Repo _repo;
     private readonly IRepoRegistry _registry;
+    private readonly ICommand _activate;
     private readonly Action<bool> _onHoverChanged;
     private readonly Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> _buildMenuItems;
 
@@ -31,6 +33,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         Context context,
         Repo repo,
         IRepoRegistry registry,
+        ICommand activate,
         Action<bool> onHoverChanged,
         Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> buildMenuItems)
     {
@@ -38,6 +41,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         _context = context;
         _repo = repo;
         _registry = registry;
+        _activate = activate;
         _onHoverChanged = onHoverChanged;
         _buildMenuItems = buildMenuItems;
 
@@ -133,7 +137,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
             }
             else
             {
-                _registry.SetActive(_repo.Id);
+                _activate.Execute();
             }
             _inputSystem.Blur(this);
             e.Consume();

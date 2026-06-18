@@ -104,8 +104,8 @@ internal sealed record RepoRow : Widget
 
         return isPrimary
             ? row.WithController(input, view => new RepoRowController(
-                view, ctx, vm.Repo, registry, h => hovered.Value = h, _ => vm.BuildMenuItems()))
+                view, ctx, vm.Repo, registry, vm.Activate, h => hovered.Value = h, _ => vm.BuildMenuItems()))
             : row.WithController(input, () => new NavigableRowController(
-                ctx, vm.RepoId, registry, h => hovered.Value = h, _ => vm.BuildMenuItems(), vm.CanActivate));
+                ctx, vm.Activate, h => hovered.Value = h, _ => vm.BuildMenuItems()));
     }
 }

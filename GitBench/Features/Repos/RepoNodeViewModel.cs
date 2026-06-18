@@ -39,6 +39,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Derived<bool> _isActive;
     private readonly Derived<RepoRowBadge> _badge;
     private readonly Derived<bool> _hasChildren;
+    private readonly Derived<bool> _canActivate;
     private readonly Derived<IReadOnlyList<Repo>> _childRepos;
     private readonly KeyedViewModelList<Repo, Guid, RepoNodeViewModel> _children;
 
@@ -62,6 +63,10 @@ internal sealed class RepoNodeViewModel : IDisposable
     // Folds the row's subtree. Gated on HasChildren, so a childless row's chevron is inert — its click
     // falls through to the row instead of being swallowed.
     public ICommand ToggleExpand { get; }
+
+    // Makes this repo the active one. Gated for a missing submodule (no working tree to open);
+    // primaries and worktrees always activate.
+    public ICommand Activate { get; }
 
     public RepoNodeViewModel(
         Repo repo,
@@ -93,19 +98,15 @@ internal sealed class RepoNodeViewModel : IDisposable
             return st.HasUnseenError ? RepoRowBadge.Error : st.IsDirty ? RepoRowBadge.Dirty : RepoRowBadge.None;
         });
         _hasChildren = new Derived<bool>(() => HasAnyChild(RepoId));
+        _canActivate = new Derived<bool>(() => Kind != RepoKind.Submodule || !IsMissing.Value);
 
         _childRepos = new Derived<IReadOnlyList<Repo>>(ComputeChildRepos);
         _children = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _childRepos, r => r.Id, r => factory.Create(r, depth + 1));
 
         ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
+        Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
     }
-
-    public void Activate() => _registry.SetActive(RepoId);
-
-    // A submodule with no .git of its own has nothing to navigate to; worktrees and primaries
-    // always activate.
-    public bool CanActivate() => Kind != RepoKind.Submodule || !IsMissing.Value;
 
     // Worktrees first, then submodules — both recurse, same order/indent at every level. Empty while
     // collapsed so a folded subtree builds no rows (and spawns no child view models).
@@ -240,6 +241,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     {
         _children.Dispose();
         _childRepos.Dispose();
+        _canActivate.Dispose();
         _hasChildren.Dispose();
         _badge.Dispose();
         _isActive.Dispose();

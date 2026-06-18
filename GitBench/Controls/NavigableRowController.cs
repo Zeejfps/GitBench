@@ -3,36 +3,31 @@ using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
+using ZGF.Observable;
 
 namespace GitBench.Controls;
 
-// Click → activate; right-click → context menu. Used for rows that don't participate in
-// drag-to-reorder (worktrees, submodules — they follow their parent). The optional
-// canActivate predicate lets the caller veto activation (e.g. SubmoduleRow on a missing
-// submodule has no working tree to navigate to).
+// Click → run the activate command; right-click → context menu. Used for rows that don't participate
+// in drag-to-reorder (worktrees, submodules — they follow their parent). The command's CanExecute
+// vetoes activation (e.g. a missing submodule has no working tree to navigate to), so a vetoed click
+// is left unconsumed.
 internal sealed class NavigableRowController : KeyboardMouseController
 {
     private readonly Context _context;
-    private readonly Guid _id;
-    private readonly IRepoRegistry _registry;
+    private readonly ICommand _activate;
     private readonly Action<bool> _onHoverChanged;
     private readonly Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> _buildMenuItems;
-    private readonly Func<bool>? _canActivate;
 
     public NavigableRowController(
         Context context,
-        Guid id,
-        IRepoRegistry registry,
+        ICommand activate,
         Action<bool> onHoverChanged,
-        Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> buildMenuItems,
-        Func<bool>? canActivate = null)
+        Func<PointF, IReadOnlyList<RepoBarContextMenu.Item>> buildMenuItems)
     {
         _context = context;
-        _id = id;
-        _registry = registry;
+        _activate = activate;
         _onHoverChanged = onHoverChanged;
         _buildMenuItems = buildMenuItems;
-        _canActivate = canActivate;
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _onHoverChanged(true);
@@ -55,10 +50,9 @@ internal sealed class NavigableRowController : KeyboardMouseController
 
         if (e.Button != MouseButton.Left) return;
         if (e.State != InputState.Released) return;
+        if (!_activate.CanExecute.Value) return;
 
-        if (_canActivate is not null && !_canActivate()) return;
-
-        _registry.SetActive(_id);
+        _activate.Execute();
         e.Consume();
     }
 }
