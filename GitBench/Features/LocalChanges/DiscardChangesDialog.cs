@@ -145,16 +145,17 @@ internal sealed record DiscardChangesDialog : Widget
             },
         };
 
-        var checkbox = new CheckboxView(ctx, rowContent)
-        {
-            Height = 22,
-        };
         // Seed from VM state BEFORE wiring Changed, so the initial paint doesn't trigger
         // a phantom toggle through the handler.
-        checkbox.IsChecked.Value = vm.CheckedPaths.Value.Contains(file.Path);
-        checkbox.IsChecked.Changed += _ => vm.ToggleFile(file.Path);
+        var isChecked = new State<bool>(vm.CheckedPaths.Value.Contains(file.Path));
+        isChecked.Changed += _ => vm.ToggleFile(file.Path);
 
-        return checkbox;
+        return new Checkbox
+        {
+            Content = new Raw { View = rowContent },
+            Value = isChecked,
+            Height = 22,
+        }.WithController<KbmController>().BuildView(ctx);
     }
 }
 

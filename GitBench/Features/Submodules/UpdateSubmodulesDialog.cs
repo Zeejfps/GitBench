@@ -5,6 +5,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -49,8 +50,8 @@ internal sealed record UpdateSubmodulesDialog : Widget
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(s => s.DialogBody.BodyText),
                 },
-                new Checkbox { Label = "Init missing submodules (--init)", Value = vm.Init, Height = 22 },
-                new Checkbox { Label = "Recurse into nested submodules (--recursive)", Value = vm.Recursive, Height = 22 },
+                new Checkbox { Label = "Init missing submodules (--init)", Value = vm.Init, Height = 22 }.WithController<KbmController>(),
+                new Checkbox { Label = "Recurse into nested submodules (--recursive)", Value = vm.Recursive, Height = 22 }.WithController<KbmController>(),
                 new Text
                 {
                     Value = "Strategy",
@@ -72,14 +73,15 @@ internal sealed record UpdateSubmodulesDialog : Widget
 
     private static IWidget ModeCheckbox(Context ctx, UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)
     {
-        var view = new CheckboxView(ctx, label) { Height = 22 };
-        view.Bind(vm.Mode, m => view.IsChecked.Value = m == mode);
-        view.IsChecked.Changed += isCheckedNow =>
+        var selected = new State<bool>(vm.Mode.Value == mode);
+        var view = new Checkbox { Label = label, Value = selected, Height = 22 }.WithController<KbmController>().BuildView(ctx);
+        view.Bind(vm.Mode, m => selected.Value = m == mode);
+        selected.Changed += isCheckedNow =>
         {
             if (!isCheckedNow)
             {
                 if (vm.Mode.Value == mode)
-                    view.IsChecked.Value = true;
+                    selected.Value = true;
                 return;
             }
             if (vm.Mode.Value == mode) return;

@@ -3,6 +3,7 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -56,7 +57,7 @@ internal sealed record CheckoutBranchDialog : Widget
                     Label = "Track this remote branch",
                     Value = vm.Track,
                     Height = 22,
-                },
+                }.WithController<KbmController>(),
             ],
         };
     }

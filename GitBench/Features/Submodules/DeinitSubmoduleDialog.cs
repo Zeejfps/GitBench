@@ -3,6 +3,7 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -55,7 +56,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
                     Label = "Deinit even if dirty",
                     Value = vm.Force,
                     Height = 22,
-                },
+                }.WithController<KbmController>(),
             ],
         };
     }

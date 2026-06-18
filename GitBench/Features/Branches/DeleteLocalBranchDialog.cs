@@ -3,6 +3,7 @@ using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -37,7 +38,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
                 Label = "Delete even if not merged",
                 Value = vm.Force,
                 Height = 22,
-            },
+            }.WithController<KbmController>(),
             new Text
             {
                 Value = "Unchecked: refuses if the branch isn't fully merged into its upstream or HEAD.",
@@ -52,7 +53,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
                 Label = $"Also delete '{UpstreamBranch}' on '{UpstreamRemote}'",
                 Value = vm.DeleteRemote,
                 Height = 22,
-            });
+            }.WithController<KbmController>());
         }
 
         return new Dialog

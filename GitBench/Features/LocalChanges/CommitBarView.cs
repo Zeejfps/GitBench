@@ -8,6 +8,7 @@ using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
@@ -27,7 +28,7 @@ internal sealed class CommitBarView : ContainerView
     private readonly TextInputView _titleInput;
     private readonly TextInputViewKbmController _titleController;
     private readonly GrowingDescriptionField _descriptionField;
-    private readonly CheckboxView _amendCheckbox;
+    private readonly State<bool> _amend = new(false);
     private readonly DialogButton _commitButton;
     private readonly ErrorBarView _errorBar;
     private readonly LocalChangesViewModel _vm;
@@ -89,13 +90,13 @@ internal sealed class CommitBarView : ContainerView
             Height = 28,
         };
 
-        _amendCheckbox = new CheckboxView(ctx, "Amend");
+        var amendCheckbox = new Checkbox { Label = "Amend", Value = _amend }.WithController<KbmController>().BuildView(ctx);
 
         var buttonRow = new FlexRowView
         {
             MainAxisAlignment = MainAxisAlignment.SpaceBetween,
             CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { _amendCheckbox, _commitButton },
+            Children = { amendCheckbox, _commitButton },
         };
 
         _errorBar = new ErrorBarView(ctx);
@@ -131,8 +132,8 @@ internal sealed class CommitBarView : ContainerView
         _descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
         // Amend checkbox is two-way against vm.Amend; record equality stops the loop.
-        this.Bind(vm.Amend, b => _amendCheckbox.IsChecked.Value = b);
-        _amendCheckbox.IsChecked.Changed += b => vm.SetAmend(b);
+        this.Bind(vm.Amend, b => _amend.Value = b);
+        _amend.Changed += b => vm.SetAmend(b);
 
         this.Bind(vm.CommitEnabled, b => _commitButton.IsEnabled.Value = b);
         this.Bind(vm.OpError, m => _errorBar.Message.Value = m);

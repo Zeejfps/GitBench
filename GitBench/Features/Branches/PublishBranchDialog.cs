@@ -6,6 +6,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -56,7 +57,7 @@ internal sealed record PublishBranchDialog : Widget
                     Label = "Track this remote branch (set upstream)",
                     Value = vm.SetUpstream,
                     Height = 24,
-                },
+                }.WithController<KbmController>(),
             ],
         };
     }

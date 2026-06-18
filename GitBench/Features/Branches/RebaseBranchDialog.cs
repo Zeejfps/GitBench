@@ -5,6 +5,7 @@ using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -50,7 +51,7 @@ internal sealed record RebaseBranchDialog : Widget
                     Label = "Stash and reapply local changes",
                     Value = vm.Autostash,
                     Height = 24,
-                }),
+                }.WithController<KbmController>()),
             ],
         };
     }

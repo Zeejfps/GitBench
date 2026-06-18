@@ -68,7 +68,7 @@ internal sealed record StashDialog : Widget
                     Label = "Keep staged changes in index",
                     Value = keepStaged,
                     Height = 22,
-                },
+                }.WithController<KbmController>(),
             ],
         };
     }
@@ -153,12 +153,13 @@ internal sealed record StashDialog : Widget
             },
         };
 
-        var checkbox = new CheckboxView(ctx, rowContent)
+        var isChecked = new State<bool>(vm.CheckedPaths.Value.Contains(file.Path));
+        isChecked.Changed += _ => vm.ToggleFile(file.Path);
+        return new Checkbox
         {
+            Content = new Raw { View = rowContent },
+            Value = isChecked,
             Height = 22,
-        };
-        checkbox.IsChecked.Value = vm.CheckedPaths.Value.Contains(file.Path);
-        checkbox.IsChecked.Changed += _ => vm.ToggleFile(file.Path);
-        return checkbox;
+        }.WithController<KbmController>().BuildView(ctx);
     }
 }

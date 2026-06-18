@@ -6,6 +6,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -103,7 +104,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                     Label = "Remove even if dirty",
                     Value = vm.Force,
                     Height = 22,
-                },
+                }.WithController<KbmController>(),
                 new Text
                 {
                     Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",

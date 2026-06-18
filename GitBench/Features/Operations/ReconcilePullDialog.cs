@@ -5,6 +5,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -70,14 +71,15 @@ internal sealed record ReconcilePullDialog : Widget
 
     private static IWidget StrategyCheckbox(Context ctx, ReconcilePullDialogViewModel vm, string label, PullStrategy strategy)
     {
-        var view = new CheckboxView(ctx, label) { Height = 22 };
-        view.Bind(vm.Strategy, m => view.IsChecked.Value = m == strategy);
-        view.IsChecked.Changed += isCheckedNow =>
+        var selected = new State<bool>(vm.Strategy.Value == strategy);
+        var view = new Checkbox { Label = label, Value = selected, Height = 22 }.WithController<KbmController>().BuildView(ctx);
+        view.Bind(vm.Strategy, m => selected.Value = m == strategy);
+        selected.Changed += isCheckedNow =>
         {
             if (!isCheckedNow)
             {
                 if (vm.Strategy.Value == strategy)
-                    view.IsChecked.Value = true;
+                    selected.Value = true;
                 return;
             }
             if (vm.Strategy.Value == strategy) return;

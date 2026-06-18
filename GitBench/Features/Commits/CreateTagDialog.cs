@@ -5,6 +5,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -75,7 +76,7 @@ internal sealed record CreateTagDialog : Widget
                     new Raw { View = messageField },
                 ],
             },
-            new Checkbox { Label = "Push to all remotes", Value = vm.PushToAllRemotes, Height = 22 },
+            new Checkbox { Label = "Push to all remotes", Value = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
         ];
 
         var inputs = new DialogInputRegistry();

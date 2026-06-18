@@ -4,6 +4,7 @@ using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -65,7 +66,7 @@ internal sealed record CreateWorktreeDialog : Widget
                     Label = "Force (allow non-empty path or re-used branch)",
                     Value = vm.Force,
                     Height = 22,
-                },
+                }.WithController<KbmController>(),
             ],
         };
     }
