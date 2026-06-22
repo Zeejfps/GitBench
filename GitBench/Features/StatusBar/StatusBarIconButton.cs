@@ -18,8 +18,11 @@ namespace GitBench.Features.StatusBar;
 /// </summary>
 internal sealed record StatusBarIconButton : Widget<ButtonState>
 {
-    private const float BoxWidth = 22f;
-    private const float BoxHeight = 18f;
+    /// <summary>Box dimensions and glyph size; default to the status-bar sizing, overridable for
+    /// reuse in tighter spots (e.g. the commit filter's clear button).</summary>
+    public float BoxWidth { get; init; } = 22f;
+    public float BoxHeight { get; init; } = 18f;
+    public float IconSize { get; init; } = 13f;
 
     /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
     public required ICommand Command { get; init; }
@@ -43,7 +46,7 @@ internal sealed record StatusBarIconButton : Widget<ButtonState>
             new Text
             {
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 13,
+                FontSize = IconSize,
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
                 Value = Icon,

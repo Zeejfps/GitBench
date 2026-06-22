@@ -1,6 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Theming;
+using GitBench.Features.StatusBar;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -8,6 +8,7 @@ using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
 
@@ -16,149 +17,100 @@ namespace GitBench.Features.Commits;
 /// <summary>
 /// Slim filter bar shown above the commit list: a single rounded search box containing a leading
 /// search icon, the text input, and a trailing clear (✕) button that appears once there's text.
-/// Changes are surfaced via <see cref="QueryChanged"/>; the panel forwards those to
+/// Edits are surfaced through <see cref="OnQueryChanged"/>; the panel forwards those to
 /// <see cref="CommitsView.Core.SetSearchQuery"/>. It deliberately holds no view model — the
 /// <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView.Core"/>.
 /// </summary>
-internal sealed class CommitSearchBarView : ContainerView
+internal sealed record CommitSearchBarView : Widget
 {
     private const float BarHeight = 36f;
 
-    private readonly TextInputView _input;
-    private readonly SearchInputKbmController _controller;
-    private readonly View _clear;
+    /// <summary>Fires on every edit (including a programmatic clear) with the current text.</summary>
+    public required Action<string> OnQueryChanged { get; init; }
 
-    // Fires on every edit (including programmatic clear) with the current text.
-    public event Action<string>? QueryChanged;
-
-    public CommitSearchBarView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        Height = BarHeight;
+        var inputSystem = ctx.Require<InputSystem>();
 
-        var input = ctx.Require<InputSystem>();
-        var theme = ctx.Theme();
+        var textInput = DialogFrame.TextInput(ctx);
+        textInput.PlaceholderText = "Filter commits…";
 
-        _input = DialogFrame.TextInput(ctx);
-        _input.PlaceholderText = "Filter commits…";
-        _controller = new SearchInputKbmController(_input, input, ctx.Get<IClipboard>()) { OnEscape = Clear };
-        _input.UseController(input, _controller);
-
-        var icon = new TextView(ctx.Canvas)
+        void Clear()
         {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
-            Text = LucideIcons.Search,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindThemedTextColor(theme, s => s.CommitsView.RowTextDim);
+            if (textInput.Text.Length == 0) return;
+            textInput.Clear(); // fires TextValue → OnQueryChanged("")
+        }
 
-        _clear = BuildClearButton(ctx, input, theme, Clear);
-        _clear.IsVisible = false;
+        var controller = new SearchInputKbmController(textInput, inputSystem, ctx.Get<IClipboard>()) { OnEscape = Clear };
+        textInput.UseController(inputSystem, controller);
+        textInput.Bind(textInput.TextValue, OnQueryChanged);
 
-        // Subscribe only after _clear exists — TextValue fires immediately with the current value.
-        this.Bind(_input.TextValue, OnTextChanged);
-
-        // Icon (left) · input (grows) · clear (right), all inside one bordered, rounded box.
-        var box = new RectView
+        // Icon-only clear button: same chrome as the status-bar icon buttons, sized down for the bar.
+        var clear = new StatusBarIconButton
         {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(4),
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = new PaddingStyle { Left = 8, Right = 6, Top = 2, Bottom = 2 },
-                    Children =
-                    {
-                        new FlexRowView
-                        {
-                            CrossAxisAlignment = CrossAxisAlignment.Center,
-                            Gap = 8,
-                            Children =
-                            {
-                                icon,
-                                new FlexItem { Grow = 1, Child = _input },
-                                _clear,
-                            },
-                        },
-                    },
-                },
-            },
-        };
-        box.BindThemedBackgroundColor(theme, s => s.TextInput.Background);
-        box.BindThemedBorderColor(theme, s => BorderColorStyle.All(s.TextInput.Border));
+            Icon = LucideIcons.X,
+            Command = new Command(Clear),
+            BoxWidth = 18,
+            BoxHeight = 18,
+            IconSize = 12,
+            Visible = textInput.TextValue.Bind(t => t.Length > 0),
+        }
+            .WithTooltip("Clear filter")
+            .WithController<KbmController>();
 
-        var root = new RectView
+        return new Box
         {
+            Height = BarHeight,
             BorderSize = new BorderSizeStyle { Bottom = 1 },
+            Background = Theme.Color(s => s.CommitsView.HeaderBackground),
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom }),
             Children =
-            {
-                new PaddingView
+            [
+                new Padding
                 {
-                    Padding = new PaddingStyle { Left = 8, Right = 8, Top = 5, Bottom = 5 },
-                    Children = { box },
+                    Amount = new PaddingStyle { Left = 8, Right = 8, Top = 5, Bottom = 5 },
+                    Children =
+                    [
+                        new Box
+                        {
+                            BorderSize = BorderSizeStyle.All(1),
+                            BorderRadius = BorderRadiusStyle.All(4),
+                            Background = Theme.Color(s => s.TextInput.Background),
+                            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
+                            Children =
+                            [
+                                new Padding
+                                {
+                                    Amount = new PaddingStyle { Left = 8, Right = 6, Top = 2, Bottom = 2 },
+                                    Children =
+                                    [
+                                        new Row
+                                        {
+                                            CrossAxis = CrossAxisAlignment.Center,
+                                            Gap = 8,
+                                            Children =
+                                            [
+                                                new Text
+                                                {
+                                                    FontFamily = LucideIcons.FontFamily,
+                                                    FontSize = 14,
+                                                    Value = LucideIcons.Search,
+                                                    HAlign = TextAlignment.Center,
+                                                    VAlign = TextAlignment.Center,
+                                                    Color = Theme.Color(s => s.CommitsView.RowTextDim),
+                                                },
+                                                new Grow { Child = new Raw { View = textInput } },
+                                                clear,
+                                            ],
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
                 },
-            },
+            ],
         };
-        root.BindThemedBackgroundColor(theme, s => s.CommitsView.HeaderBackground);
-        root.BindThemedBorderColor(theme, s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom });
-
-        AddChildToSelf(root);
-    }
-
-    // Small icon-only "clear filter" button. Chrome mirrors StatusBarIconButton (status-bar
-    // palette, rounded hover fill) but carries a fixed X glyph and a click action.
-    private static View BuildClearButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme, Action onClick)
-    {
-        var hovered = new State<bool>(false);
-
-        var label = new TextView(ctx.Canvas)
-        {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            Text = LucideIcons.X,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindTextColor(() => hovered.Value
-            ? theme.Styles.Value.StatusBar.IconHover
-            : theme.Styles.Value.StatusBar.Icon);
-
-        var button = new RectView
-        {
-            Width = 18,
-            Height = 18,
-            BorderRadius = BorderRadiusStyle.All(4),
-            Children = { label },
-        };
-        button.BindBackgroundColor(() => hovered.Value
-            ? theme.Styles.Value.StatusBar.IconHoverBackground
-            : 0u);
-        button.UseController(input, new KbmHandlers
-        {
-            OnClick = onClick,
-            OnHoverEnter = () => hovered.Value = true,
-            OnHoverExit = () => hovered.Value = false,
-        });
-        button.Use(() => new Tooltip(button, ctx, "Clear filter", hovered, AlwaysEnabled));
-        return button;
-    }
-
-    // The clear button is always actionable, so its tooltip never needs to gate on an enabled
-    // state — Tooltip still requires an IReadable<bool>, so hand it a constant.
-    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
-
-    private void OnTextChanged(string text)
-    {
-        _clear.IsVisible = text.Length > 0;
-        QueryChanged?.Invoke(text);
-    }
-
-    private void Clear()
-    {
-        if (_input.Text.Length == 0) return;
-        _input.Clear(); // fires TextValue → OnTextChanged("") → QueryChanged("")
     }
 }
 
