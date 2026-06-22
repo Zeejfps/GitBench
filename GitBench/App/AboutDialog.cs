@@ -39,7 +39,7 @@ internal sealed record AboutDialog : Widget
             Children =
             {
                 new FlexItem { Grow = 1, Child = new ContainerView() },
-                new DialogCloseButton(ctx, OnClose),
+                new DialogCloseButton { OnClose = OnClose }.BuildView(ctx),
             },
         };
 

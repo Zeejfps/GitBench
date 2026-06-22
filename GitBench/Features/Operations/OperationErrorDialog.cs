@@ -60,7 +60,7 @@ internal sealed record OperationErrorDialog : Widget
                 new ContainerView { Width = CloseButtonSize * 2 },
                 new FlexItem { Grow = 1, Child = titleView },
                 copyButton,
-                new DialogCloseButton(ctx, OnClose),
+                new DialogCloseButton { OnClose = OnClose }.BuildView(ctx),
             },
         };
 

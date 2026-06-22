@@ -65,7 +65,7 @@ internal static class DialogFrame
             {
                 new ContainerView { Width = CloseButtonSize },
                 new FlexItem { Grow = 1, Child = titleText },
-                new DialogCloseButton(ctx, onClose),
+                new DialogCloseButton { OnClose = onClose }.BuildView(ctx),
             },
         };
     }
