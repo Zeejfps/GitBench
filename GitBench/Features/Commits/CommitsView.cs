@@ -230,6 +230,14 @@ internal sealed record CommitsView : Widget
             base.OnLayoutChild(in position, child);
         }
 
+        protected override void OnLayoutChildren()
+        {
+            base.OnLayoutChildren();
+            // Emit each layout pass (as VerticalScrollPane does) so a resize that changes the
+            // viewport/content ratio re-syncs a bound scrollbar's gutter, not just user scrolls.
+            NotifyScrollChanged();
+        }
+
         private void SetRenderState(CommitsRenderState vm)
         {
             var newSnap = (vm as CommitsRenderState.Loaded)?.Snapshot;

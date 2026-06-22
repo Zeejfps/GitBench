@@ -29,7 +29,7 @@ internal sealed class HistoryView : ContainerView
     private const float DividerHitWidth = 6f;
     private const float DividerThickness = 1f;
 
-    private readonly CommitsPanelView _commits;
+    private readonly View _commits;
     private readonly CommitDetailsView _details;
     private readonly PreferencesService? _preferences;
     private float _detailsWidth = DefaultDetailsWidth;
@@ -41,7 +41,7 @@ internal sealed class HistoryView : ContainerView
     {
         var input = ctx.Require<InputSystem>();
 
-        _commits = new CommitsPanelView(ctx);
+        _commits = new CommitsPanelWidget().BuildView(ctx);
         _details = new CommitDetailsView(ctx);
         AddChildToSelf(_commits);
         AddChildToSelf(_details);
