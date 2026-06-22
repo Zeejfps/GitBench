@@ -4,7 +4,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -28,8 +27,6 @@ internal sealed record IdentityChipButton : Widget<ButtonState>
 
     protected override IWidget Build(Context ctx, ButtonState state)
     {
-        var input = ctx.Require<InputSystem>();
-
         return new Box
         {
             BorderRadius = BorderRadiusStyle.All(4),
@@ -67,7 +64,7 @@ internal sealed record IdentityChipButton : Widget<ButtonState>
                     ],
                 },
             ],
-        }.WithController(input, v => new MenuButtonController(v, state, anchor =>
+        }.WithController(ctx, v => new MenuButtonController(v, state, anchor =>
         {
             var items = MenuProvider();
             if (items.Count == 0) return;

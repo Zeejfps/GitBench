@@ -40,6 +40,7 @@ internal sealed record RepoBar : Widget
                             Child = new ScrollArea
                             {
                                 Style = Theme.ScrollBar(),
+                                AutoHide = true,
                                 Children =
                                 [
                                     new Each<GroupSectionViewModel>

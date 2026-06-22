@@ -1,47 +1,33 @@
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
-using ZGF.Observable;
 
 namespace GitBench.Controls.Dialogs;
 
+/// <summary>
+/// Routes dialog-level keys to an <see cref="IDialog"/> — Esc cancels, Enter/NumpadEnter confirms —
+/// mirroring how <c>KbmController</c> drives an <c>IInteractable</c>. The dialog supplies the target
+/// (its <see cref="DialogState"/>); the controller never knows the concrete dialog.
+/// </summary>
 internal sealed class DialogKbmController : KeyboardMouseController
 {
-    private readonly Action _onConfirm;
-    private readonly Action _onCancel;
+    private readonly IDialog _dialog;
 
-    public DialogKbmController(Action onConfirm, Action onCancel)
-    {
-        _onConfirm = onConfirm;
-        _onCancel = onCancel;
-    }
-
-    public DialogKbmController(Action onClose) : this(onClose, onClose)
-    {
-    }
-
-    public DialogKbmController(ICommand confirm, Action onCancel)
-        : this(confirm.Execute, onCancel)
-    {
-    }
-
-    public DialogKbmController(IReadable<ICommand?> confirm, Action onCancel)
-        : this(() => confirm.Value?.Execute(), onCancel)
-    {
-    }
+    public DialogKbmController(IDialog dialog) => _dialog = dialog;
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.State != InputState.Pressed) return;
+
         if (e.Key == KeyboardKey.Escape)
         {
             e.Consume();
-            _onCancel();
+            _dialog.Cancel();
         }
-        else if (e.Key == KeyboardKey.Enter || e.Key == KeyboardKey.NumpadEnter)
+        else if (e.Key is KeyboardKey.Enter or KeyboardKey.NumpadEnter)
         {
             e.Consume();
-            _onConfirm();
+            _dialog.Confirm();
         }
     }
 }

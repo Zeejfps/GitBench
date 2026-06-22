@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using GitBench.App;
+using GitBench.Controls.Dialogs;
 using GitBench.Messages;
 using GitBench.Theming;
 using ZGF.Gui;
@@ -64,7 +65,8 @@ internal static class PlatformServices
             void CheckForUpdates() =>
                 _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: true);
             void ShowAbout() =>
-                bus.Broadcast(new ShowDialogMessage(onClose => new AboutDialog { OnClose = onClose }));
+                bus.Broadcast(new ShowDialogMessage(onClose =>
+                    new AboutDialog { OnClose = onClose }.WithController<DialogKbmController>()));
 
             context.Require<IAppMenu>().Install(new AppMenuBar
             {

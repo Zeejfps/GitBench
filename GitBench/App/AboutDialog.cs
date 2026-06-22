@@ -4,7 +4,6 @@ using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -15,7 +14,7 @@ namespace GitBench.App;
 /// "About GitBench" modal: app icon, name, version, a link to the repo, and copyright.
 /// Opened from the macOS app menu (and reusable from a Help menu on other platforms).
 /// </summary>
-internal sealed record AboutDialog : Widget
+internal sealed record AboutDialog : Widget<DialogState>
 {
     private const string RepoUrl = "https://github.com/Zeejfps/GitBench";
 
@@ -28,10 +27,10 @@ internal sealed record AboutDialog : Widget
 
     public required Action OnClose { get; init; }
 
-    protected override IWidget Build(Context ctx)
-    {
-        var input = ctx.Require<InputSystem>();
+    protected override DialogState CreateState(Context ctx) => new(OnClose);
 
+    protected override IWidget Build(Context ctx, DialogState state)
+    {
         return new Box
         {
             Width = 360,
@@ -103,7 +102,7 @@ internal sealed record AboutDialog : Widget
                     ],
                 },
             ],
-        }.WithController(input, () => new DialogKbmController(OnClose));
+        };
     }
 
     private static IWidget BuildLogo()

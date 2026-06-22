@@ -98,8 +98,9 @@ internal sealed record Dialog : Widget
 
         if (ConfirmKeys)
         {
+            var dialogState = new DialogState(OnClose, shell.PerformAction);
             root.UseController(ctx.Require<InputSystem>(),
-                () => new DialogKbmController(shell.PerformAction, OnClose));
+                () => new DialogKbmController(dialogState));
         }
 
         if (BindActionLabel != null)

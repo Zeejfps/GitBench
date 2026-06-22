@@ -5,7 +5,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -17,8 +16,6 @@ internal sealed record AddRepoButton : Widget<ButtonState>
 
     protected override IWidget Build(Context ctx, ButtonState state)
     {
-        var input = ctx.Require<InputSystem>();
-
         return new Box
         {
             Height = 30,
@@ -38,7 +35,7 @@ internal sealed record AddRepoButton : Widget<ButtonState>
                     Color = Theme.Color(s => s.Palette.TextSecondary),
                 },
             ],
-        }.WithController(input, v => new MenuButtonController(v, state,
+        }.WithController(ctx, v => new MenuButtonController(v, state,
             // Anchor at the button's top edge and grow upward — the button lives at the very bottom
             // of the sidebar, so a downward menu would spill off-screen and get clamped over it.
             anchor => RepoBarContextMenu.Show(ctx, anchor, BuildItems(ctx), MenuPlacement.Above)));

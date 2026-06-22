@@ -49,7 +49,7 @@ public sealed class DialogPresenter : IViewBehavior
             Title = m.Title,
             Message = m.Message,
             OnClose = OnDialogClosed,
-        }.BuildView(_windowContext));
+        }.WithController<DialogKbmController>().BuildView(_windowContext));
     }
 
     private void ShowDialog(View dialog)

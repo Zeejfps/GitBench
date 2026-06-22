@@ -24,7 +24,7 @@ namespace GitBench.Features.Operations;
 /// The body wraps at the dialog's content width and only scrolls vertically; that keeps
 /// long lines visible without letting wide content stretch the dialog horizontally.
 /// </summary>
-internal sealed record OperationErrorDialog : Widget
+internal sealed record OperationErrorDialog : Widget<DialogState>
 {
     private const float CloseButtonSize = 28f;
 
@@ -32,10 +32,10 @@ internal sealed record OperationErrorDialog : Widget
     public required string Message { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override IWidget Build(Context ctx)
-    {
-        var input = ctx.Require<InputSystem>();
+    protected override DialogState CreateState(Context ctx) => new(OnClose);
 
+    protected override IWidget Build(Context ctx, DialogState state)
+    {
         return new Box
         {
             Width = DialogFrame.WidthWide,
@@ -81,7 +81,7 @@ internal sealed record OperationErrorDialog : Widget
                     ],
                 },
             ],
-        }.WithController(input, () => new DialogKbmController(OnClose));
+        };
     }
 
     // Symmetric left spacer keeps the title centered: it matches the combined width of the two
