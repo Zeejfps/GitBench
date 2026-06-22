@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -23,81 +24,123 @@ namespace GitBench.Features.LocalChanges;
 /// for manual resolution. Whole-file resolution only (Phase 1 of the in-app conflict UI);
 /// per-hunk selection is a later pass.
 /// </summary>
-internal sealed class ConflictResolveView : ContainerView
+internal sealed record ConflictResolveView : Widget
 {
     private const float CardWidth = 300f;
     private const float ButtonHeight = 34f;
     private const float ButtonStackWidth = 220f;
 
-    private readonly Context _ctx;
-    private readonly IThemeService<ThemeStyles> _theme;
-    private readonly Action _onTakeOurs;
-    private readonly Action _onTakeTheirs;
-    private readonly Action _onTakeBoth;
-    private readonly Action _onOpenInEditor;
-    private readonly Action _onMarkResolved;
-
-    private readonly ColumnView _column;
-
-    public ConflictResolveView(
-        Context ctx,
-        Action onTakeOurs,
-        Action onTakeTheirs,
-        Action onTakeBoth,
-        Action onOpenInEditor,
-        Action onMarkResolved)
+    protected override IWidget Build(Context ctx)
     {
-        _ctx = ctx;
-        _theme = ctx.Theme();
-        _onTakeOurs = onTakeOurs;
-        _onTakeTheirs = onTakeTheirs;
-        _onTakeBoth = onTakeBoth;
-        _onOpenInEditor = onOpenInEditor;
-        _onMarkResolved = onMarkResolved;
+        var vm = ctx.Require<DiffViewModel>();
 
-        _column = new ColumnView { Gap = 14 };
-
-        var background = new RectView
+        return new Box
         {
+            Background = Theme.Color(s => s.DiffView.PanelBackground),
             Children =
-            {
-                new PaddingView
+            [
+                new Padding
                 {
-                    Padding = new PaddingStyle { Left = 24, Right = 24, Top = 24, Bottom = 24 },
-                    Children = { _column },
+                    Amount = new PaddingStyle { Left = 24, Right = 24, Top = 24, Bottom = 24 },
+                    Children =
+                    [
+                        // The panel is rebuilt per conflict (fresh selection state, cards, commands).
+                        // Keyed on the conflict itself so re-selecting the same file is a no-op while a
+                        // different conflicted file re-seeds. Non-conflict states render nothing — the
+                        // diff pane only mounts this view while a conflict is active.
+                        new Switch<DiffRenderState.Conflict?>
+                        {
+                            Value = new Derived<DiffRenderState.Conflict?>(
+                                () => vm.RenderState.Value as DiffRenderState.Conflict),
+                            Case = conflict => conflict is null
+                                ? Empty.Widget
+                                : BuildPanel(ctx, vm, conflict.Path, conflict.Context),
+                        },
+                    ],
                 },
-            },
+            ],
         };
-        background.BindThemedBackgroundColor(_theme, s => s.DiffView.PanelBackground);
-        AddChildToSelf(background);
     }
 
-    // Rebuilds the panel for a conflict. Cheap and infrequent (only on selecting a conflicted
-    // file), so a full rebuild keeps the wiring simple — fresh state/cards/commands each time.
-    public void SetContext(string path, ConflictContext ctx)
+    private static IWidget BuildPanel(Context ctx, DiffViewModel vm, string path, ConflictContext conflict)
     {
         // The two sides' selection state, shared between each card and its checkbox so clicking
         // either toggles the same flag. Theirs is the incoming side (left), ours the current (right).
         var theirsChecked = new State<bool>(false);
         var oursChecked = new State<bool>(false);
-
-        var theirsCard = new ConflictCard { Side = ctx.Theirs, Checked = theirsChecked }
-            .WithController<KbmController>().BuildView(_ctx);
-        var oursCard = new ConflictCard { Side = ctx.Ours, Checked = oursChecked }
-            .WithController<KbmController>().BuildView(_ctx);
-        var junction = new MergeJunctionView(_theme, theirsChecked, oursChecked);
-
         var canMerge = new Derived<bool>(() => theirsChecked.Value || oursChecked.Value);
 
-        // The button names the action it will take, so the pick is confirmable before clicking:
-        // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
-        var mergeButton = new ActionDialogButton
+        return new Column
+        {
+            Gap = 14,
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children =
+            [
+                BuildTitleRow(),
+                new Center { Child = BuildFileNameRow(path) },
+                new Center
+                {
+                    Child = new Row
+                    {
+                        // Cards sit flush against the inner junction edges; the junction supplies its
+                        // own inset, so no inter-item gap here.
+                        Gap = 0f,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            new ConflictCard { Side = conflict.Theirs, Checked = theirsChecked }
+                                .WithController<KbmController>(),
+                            new Raw { View = new MergeJunctionView(ctx.Theme(), theirsChecked, oursChecked) },
+                            new ConflictCard { Side = conflict.Ours, Checked = oursChecked }
+                                .WithController<KbmController>(),
+                        ],
+                    },
+                },
+                new Center
+                {
+                    Child = new Column
+                    {
+                        Gap = 8,
+                        Width = ButtonStackWidth,
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                        Children =
+                        [
+                            MergeButton(vm, conflict, theirsChecked, oursChecked, canMerge),
+                            new SecondaryDialogButton
+                            {
+                                Label = "Merge in editor",
+                                Icon = LucideIcons.ExternalLink,
+                                Command = new Command(vm.OpenConflictInEditor),
+                                Height = ButtonHeight,
+                            }.WithController<KbmController>(),
+                            // For conflicts already resolved outside the app: stages the file as-is so
+                            // the path clears the unmerged state, no side-pick needed.
+                            new SecondaryDialogButton
+                            {
+                                Label = "Mark as resolved",
+                                Icon = LucideIcons.CheckSquare,
+                                Command = new Command(vm.ResolveMarkResolved),
+                                Height = ButtonHeight,
+                            }.WithController<KbmController>(),
+                        ],
+                    },
+                },
+            ],
+        };
+    }
+
+    // The button names the action it will take, so the pick is confirmable before clicking:
+    // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
+    private static IWidget MergeButton(
+        DiffViewModel vm, ConflictContext conflict,
+        State<bool> theirsChecked, State<bool> oursChecked, IReadable<bool> canMerge) =>
+        new ActionDialogButton
         {
             Label = Prop.Bind<string?>(() => (theirsChecked.Value, oursChecked.Value) switch
             {
                 (true, true) => "Merge both",
-                (true, false) => $"Choose {ctx.Theirs.Label}",
-                (false, true) => $"Choose {ctx.Ours.Label}",
+                (true, false) => $"Choose {conflict.Theirs.Label}",
+                (false, true) => $"Choose {conflict.Ours.Label}",
                 _ => "Merge",
             }),
             Role = DialogButtonRole.Primary,
@@ -105,115 +148,82 @@ internal sealed class ConflictResolveView : ContainerView
             {
                 var t = theirsChecked.Value;
                 var o = oursChecked.Value;
-                if (t && o) _onTakeBoth();
-                else if (t) _onTakeTheirs();
-                else if (o) _onTakeOurs();
+                if (t && o) vm.ResolveTakeBoth();
+                else if (t) vm.ResolveTakeTheirs();
+                else if (o) vm.ResolveTakeOurs();
             }, canMerge),
             Height = ButtonHeight,
-        }.WithController<KbmController>().BuildView(_ctx);
+        }.WithController<KbmController>();
 
-        var openButton = new SecondaryDialogButton
-        {
-            Label = "Merge in editor",
-            Icon = LucideIcons.ExternalLink,
-            Command = new Command(_onOpenInEditor),
-            Height = ButtonHeight,
-        }.WithController<KbmController>().BuildView(_ctx);
-
-        // For conflicts already resolved outside the app: stages the file as-is so the path
-        // clears the unmerged state, no side-pick needed.
-        var resolvedButton = new SecondaryDialogButton
-        {
-            Label = "Mark as resolved",
-            Icon = LucideIcons.CheckSquare,
-            Command = new Command(_onMarkResolved),
-            Height = ButtonHeight,
-        }.WithController<KbmController>().BuildView(_ctx);
-
-        _column.Children.Clear();
-        _column.Children.Add(BuildTitleRow());
-        _column.Children.Add(Centered(BuildFileNameRow(path)));
-        _column.Children.Add(Centered(new FlexRowView
-        {
-            // Boxes sit flush against the inner card edges; the junction supplies its own
-            // inset, so no inter-item gap here.
-            Gap = 0f,
-            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-            Children = { theirsCard, junction, oursCard },
-        }));
-        _column.Children.Add(Centered(new ColumnView
-        {
-            Gap = 8,
-            Width = ButtonStackWidth,
-            Children = { mergeButton, openButton, resolvedButton },
-        }));
-    }
-
-    private View BuildFileNameRow(string path)
+    private static IWidget BuildTitleRow() => new Column
     {
-        var icon = new TextView(_ctx.Canvas)
-        {
-            Text = LucideIcons.File,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 15f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindThemedTextColor(_theme, s => s.Palette.TextMedium);
-
-        var name = new TextView(_ctx.Canvas) { Text = Leaf(path), VerticalTextAlignment = TextAlignment.Center };
-        name.BindThemedTextColor(_theme, s => s.Palette.TextStrong);
-
-        return new FlexRowView
-        {
-            Gap = 8f,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { icon, name },
-        };
-    }
-
-    private static View Centered(View child) => new FlexRowView
-    {
-        MainAxisAlignment = MainAxisAlignment.Center,
-        CrossAxisAlignment = CrossAxisAlignment.Center,
-        Children = { child },
-    };
-
-    private View BuildTitleRow()
-    {
-        var icon = new TextView(_ctx.Canvas)
-        {
-            Text = LucideIcons.TriangleAlert,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 18f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindThemedTextColor(_theme, s => s.FileChangeRow.StatusModified);
-
-        var title = new TextView(_ctx.Canvas) { Text = "Merge conflict", FontSize = 16f, VerticalTextAlignment = TextAlignment.Center };
-        title.BindThemedTextColor(_theme, s => s.Palette.TextStrong);
-
-        var subtitle = new TextView(_ctx.Canvas) { Text = "Select the changes or merge them manually", HorizontalTextAlignment = TextAlignment.Center };
-        subtitle.BindThemedTextColor(_theme, s => s.Palette.TextMuted);
-
-        return new ColumnView
-        {
-            Gap = 4,
-            Children =
+        Gap = 4,
+        CrossAxis = CrossAxisAlignment.Stretch,
+        Children =
+        [
+            new Center
             {
-                Centered(new FlexRowView
+                Child = new Row
                 {
                     Gap = 8f,
-                    CrossAxisAlignment = CrossAxisAlignment.Center,
-                    Children = { icon, title },
-                }),
-                Centered(subtitle),
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Children =
+                    [
+                        new Text
+                        {
+                            Value = LucideIcons.TriangleAlert,
+                            FontFamily = LucideIcons.FontFamily,
+                            FontSize = 18f,
+                            VAlign = TextAlignment.Center,
+                            Color = Theme.Color(s => s.FileChangeRow.StatusModified),
+                        },
+                        new Text
+                        {
+                            Value = "Merge conflict",
+                            FontSize = 16f,
+                            VAlign = TextAlignment.Center,
+                            Color = Theme.Color(s => s.Palette.TextStrong),
+                        },
+                    ],
+                },
             },
-        };
-    }
+            new Center
+            {
+                Child = new Text
+                {
+                    Value = "Select the changes or merge them manually",
+                    HAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.Palette.TextMuted),
+                },
+            },
+        ],
+    };
 
-    private static View BuildChangeBadge(Context ctx, ConflictChangeKind kind)
+    private static IWidget BuildFileNameRow(string path) => new Row
     {
-        var theme = ctx.Theme();
+        Gap = 8f,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new Text
+            {
+                Value = LucideIcons.File,
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 15f,
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.Palette.TextMedium),
+            },
+            new Text
+            {
+                Value = Leaf(path),
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.Palette.TextStrong),
+            },
+        ],
+    };
+
+    private static IWidget BuildChangeBadge(ConflictChangeKind kind)
+    {
         var status = kind switch
         {
             ConflictChangeKind.Added => FileChangeStatus.Added,
@@ -227,31 +237,30 @@ internal sealed class ConflictResolveView : ContainerView
             _ => "modified",
         };
 
-        // Use the same tinted Lucide status glyph the unstaged/history file rows draw
-        // (FileChangeFormatting.StatusIcon), paired with the spelled-out label in the matching
-        // status color.
-        var icon = new TextView(ctx.Canvas)
-        {
-            Text = FileChangeFormatting.StatusIcon(status),
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindThemedTextColor(theme, s => s.FileChangeRow.StatusColor(status));
-
-        var label = new TextView(ctx.Canvas)
-        {
-            Text = text,
-            FontSize = 11f,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        label.BindThemedTextColor(theme, s => s.FileChangeRow.StatusColor(status));
-
-        return new FlexRowView
+        // The same tinted Lucide status glyph the unstaged/history file rows draw, paired with the
+        // spelled-out label in the matching status color.
+        return new Row
         {
             Gap = 6f,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children = { icon, label },
+            CrossAxis = CrossAxisAlignment.Center,
+            Children =
+            [
+                new Text
+                {
+                    Value = FileChangeFormatting.StatusIcon(status),
+                    FontFamily = LucideIcons.FontFamily,
+                    FontSize = 14f,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.FileChangeRow.StatusColor(status)),
+                },
+                new Text
+                {
+                    Value = text,
+                    FontSize = 11f,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.FileChangeRow.StatusColor(status)),
+                },
+            ],
         };
     }
 
@@ -302,7 +311,7 @@ internal sealed class ConflictResolveView : ContainerView
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
-                                        new Raw { View = BuildCheckIndicator(ctx, Checked) },
+                                        BuildCheckIndicator(Checked),
                                         new Text
                                         {
                                             Value = LucideIcons.Branch,
@@ -321,7 +330,7 @@ internal sealed class ConflictResolveView : ContainerView
                                                 Color = Theme.Color(s => s.Palette.TextStrong),
                                             },
                                         },
-                                        new Raw { View = BuildChangeBadge(ctx, Side.Change) },
+                                        BuildChangeBadge(Side.Change),
                                     ],
                                 },
                                 new Box { Height = 1, Background = Theme.Color(s => s.Palette.Border) },
@@ -357,33 +366,29 @@ internal sealed class ConflictResolveView : ContainerView
         };
 
         // A non-interactive checkbox visual in the card's top-left corner. The whole card is
-        // the click target (ConflictCard.OnClicked), so this is purely an indicator — making
+        // the click target (ConflictCard's command), so this is purely an indicator — making
         // it its own button would double-toggle the shared flag when clicked.
-        private static View BuildCheckIndicator(Context ctx, State<bool> checkedState)
+        private static IWidget BuildCheckIndicator(State<bool> checkedState) => new Box
         {
-            var theme = ctx.Theme();
-            var glyph = new TextView(ctx.Canvas)
-            {
-                FontSize = 12f,
-                HorizontalTextAlignment = TextAlignment.Center,
-                VerticalTextAlignment = TextAlignment.Center,
-            };
-            glyph.BindText(checkedState, c => c ? "✓" : string.Empty);
-            glyph.BindThemedTextColor(theme, s => s.Checkbox.CheckGlyph);
-
-            var box = new RectView
-            {
-                Width = 16f,
-                Height = 16f,
-                BorderSize = BorderSizeStyle.All(1),
-                BorderRadius = BorderRadiusStyle.All(3),
-                Children = { glyph },
-            };
-            box.BindThemedBackgroundColor(theme, s => checkedState.Value ? s.Checkbox.BoxFillChecked : 0x00000000u);
-            box.BindThemedBorderColor(theme, s => BorderColorStyle.All(
-                checkedState.Value ? s.Checkbox.BoxFillChecked : s.Checkbox.BoxBorderIdle));
-            return box;
-        }
+            Width = 16f,
+            Height = 16f,
+            BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(3),
+            Background = Theme.Color(s => checkedState.Value ? s.Checkbox.BoxFillChecked : 0x00000000u),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
+                checkedState.Value ? s.Checkbox.BoxFillChecked : s.Checkbox.BoxBorderIdle)),
+            Children =
+            [
+                new Text
+                {
+                    Value = checkedState.Bind(string? (c) => c ? "✓" : string.Empty),
+                    FontSize = 12f,
+                    HAlign = TextAlignment.Center,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.Checkbox.CheckGlyph),
+                },
+            ],
+        };
     }
 
     // The connector between the two cards: a horizontal segment runs toward a card only when

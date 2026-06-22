@@ -61,26 +61,9 @@ internal sealed record DiffView : Widget
                     // alive so swapping back to the diff preserves its scroll position.
                     Value = new Derived<bool>(() => vm.RenderState.Value is DiffRenderState.Conflict),
                     KeepAlive = true,
-                    Case = conflict => conflict ? BuildConflict(ctx, vm) : diffBody,
+                    Case = conflict => conflict ? new ConflictResolveView() : diffBody,
                 },
             ],
         };
-    }
-
-    private static IWidget BuildConflict(Context ctx, DiffViewModel vm)
-    {
-        var conflictView = new ConflictResolveView(
-            ctx,
-            onTakeOurs: vm.ResolveTakeOurs,
-            onTakeTheirs: vm.ResolveTakeTheirs,
-            onTakeBoth: vm.ResolveTakeBoth,
-            onOpenInEditor: vm.OpenConflictInEditor,
-            onMarkResolved: vm.ResolveMarkResolved);
-        conflictView.Bind(vm.RenderState, state =>
-        {
-            if (state is DiffRenderState.Conflict conflict)
-                conflictView.SetContext(conflict.Path, conflict.Context);
-        });
-        return new Raw { View = conflictView };
     }
 }

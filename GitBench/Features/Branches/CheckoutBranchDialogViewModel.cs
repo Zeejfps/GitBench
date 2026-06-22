@@ -43,9 +43,9 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
                 );
                 return outcome;
             },
-            // Close before broadcasting: an error broadcast triggers OverlayView to swap in the
-            // error dialog, and a stale Close() afterwards would dismiss that brand-new dialog
-            // instead of this one. Both paths close, so the ordering holds either way.
+            // Close before broadcasting: an error broadcast swaps in the error dialog, and a stale
+            // Close() afterwards would dismiss that brand-new dialog instead of this one. Both paths
+            // close, so the ordering holds either way.
             onSuccess: () =>
             {
                 CloseRequested?.Invoke();
