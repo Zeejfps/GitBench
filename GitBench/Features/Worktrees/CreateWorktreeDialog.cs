@@ -30,7 +30,7 @@ internal sealed record CreateWorktreeDialog : Widget
 
         var browseButton = new DialogButton(ctx, "Browse…", () => PickPath(ctx, vm))
         {
-            Height = 28,
+            Height = DialogFrame.DefaultButtonHeight,
         };
 
         return new Dialog
