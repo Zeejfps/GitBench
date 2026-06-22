@@ -27,10 +27,6 @@ internal sealed record PublishBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var remoteDropdown = new RemoteDropdown(ctx);
-        remoteDropdown.BindTwoWay(remoteDropdown.SelectedState, vm.SelectedRemote);
-        remoteDropdown.Bind(vm.Remotes, remoteDropdown.SetOptions);
-
         return new Dialog
         {
             Title = "Publish branch",
@@ -51,7 +47,7 @@ internal sealed record PublishBranchDialog : Widget
                     Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
                 new LabeledRow { Label = "Branch:", Value = BranchChip(LocalBranch) },
-                new LabeledRow { Label = "To:", Value = new Raw { View = remoteDropdown } },
+                new LabeledRow { Label = "To:", Value = new RemoteDropdown { Selected = vm.SelectedRemote, Remotes = vm.Remotes } },
                 new CheckboxWidget
                 {
                     Label = "Track this remote branch (set upstream)",
@@ -88,104 +84,52 @@ internal sealed record PublishBranchDialog : Widget
 
 internal readonly record struct PublishBranchRequest(Repo Repo, string LocalBranch);
 
-internal sealed class RemoteDropdown : HoverableButton
+internal sealed record RemoteDropdown : Widget
 {
-    private readonly Context _ctx;
-    private readonly TextView _chevron;
-    private IReadOnlyList<string> _options = Array.Empty<string>();
+    public required State<string> Selected { get; init; }
+    public required IReadable<IReadOnlyList<string>> Remotes { get; init; }
 
-    public State<string> SelectedState { get; } = new(string.Empty);
-    public string Selected => SelectedState.Value;
-
-    public RemoteDropdown(Context ctx) : base(ctx)
+    protected override IWidget Build(Context ctx) => new DropdownWidget
     {
-        _ctx = ctx;
-        Height = 30;
-        var theme = ctx.Theme();
-
-        var icon = new TextView(ctx.Canvas)
-        {
-            Text = LucideIcons.Branch,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        icon.BindTextColor(() => theme.Styles.Value.DialogBody.BodyText);
-
-        var labelView = new TextView(ctx.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        labelView.BindText(() => string.IsNullOrEmpty(SelectedState.Value) ? "(no remotes)" : SelectedState.Value);
-        labelView.BindTextColor(() => string.IsNullOrEmpty(SelectedState.Value)
-            ? theme.Styles.Value.DialogBody.RowTextMissing
-            : theme.Styles.Value.DialogFrame.TitleText);
-
-        _chevron = new TextView(ctx.Canvas)
-        {
-            Text = LucideIcons.ChevronDown,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        _chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
-
-        var row = new FlexRowView
-        {
-            Gap = 6,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+        Height = 30,
+        Gap = 6,
+        // Hover-enabled once there's at least one remote; the chevron and the menu only appear when
+        // there's an actual choice (more than one).
+        Enabled = new Derived<bool>(() => Remotes.Value.Count > 0),
+        ShowChevron = Prop.Bind(() => Remotes.Value.Count > 1),
+        Children =
+        [
+            new Text
             {
-                icon,
-                new FlexItem { Grow = 1, Child = labelView },
-                _chevron,
+                Value = LucideIcons.Branch,
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = 14,
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.DialogBody.BodyText),
             },
-        };
-
-        var background = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children =
+            new Grow
             {
-                new PaddingView
+                Child = new Text
                 {
-                    Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
-                    Children = { row },
+                    VAlign = TextAlignment.Center,
+                    Value = Prop.Bind<string?>(() =>
+                        string.IsNullOrEmpty(Selected.Value) ? "(no remotes)" : Selected.Value),
+                    Color = Theme.Color(s => string.IsNullOrEmpty(Selected.Value)
+                        ? s.DialogBody.RowTextMissing
+                        : s.DialogFrame.TitleText),
                 },
             },
-        };
-        BorderedButtonChrome.Bind(background, theme, IsHovered);
-        SetBackground(background);
-    }
-
-    public void SetOptions(IReadOnlyList<string> options)
+        ],
+    }.WithMenuController(rect =>
     {
-        _options = options;
-        if (options.Count == 0)
+        var remotes = Remotes.Value;
+        if (remotes.Count <= 1) return;
+        var items = new List<RepoBarContextMenu.Item>(remotes.Count);
+        foreach (var remote in remotes)
         {
-            IsEnabled.Value = false;
-            _chevron.Text = string.Empty;
-            return;
+            var captured = remote;
+            items.Add(new RepoBarContextMenu.Item(captured, () => Selected.Value = captured));
         }
-        IsEnabled.Value = true;
-        _chevron.Text = options.Count > 1 ? LucideIcons.ChevronDown : string.Empty;
-    }
-
-    protected override void OnClicked()
-    {
-        if (_options.Count <= 1) return;
-        var ctx = _ctx;
-        var items = new List<RepoBarContextMenu.Item>(_options.Count);
-        foreach (var opt in _options)
-        {
-            var captured = opt;
-            items.Add(new RepoBarContextMenu.Item(
-                captured,
-                () => SelectedState.Value = captured));
-        }
-        RepoBarContextMenu.Show(ctx, Position.BottomLeft, items);
-    }
+        RepoBarContextMenu.Show(ctx, rect.BottomLeft, items);
+    });
 }

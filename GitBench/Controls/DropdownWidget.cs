@@ -22,6 +22,9 @@ internal sealed record DropdownWidget : Widget<ButtonState>
     /// <summary>When set and false, the control reads disabled (no hover) — for "nothing to pick".</summary>
     public IReadable<bool>? Enabled { get; init; }
 
+    /// <summary>Whether the trailing chevron shows; hide it when there's nothing to expand.</summary>
+    public Prop<bool> ShowChevron { get; init; } = true;
+
     protected override ButtonState CreateState(Context ctx) => new(enabled: Enabled);
 
     protected override IWidget Build(Context ctx, ButtonState state)
@@ -37,6 +40,7 @@ internal sealed record DropdownWidget : Widget<ButtonState>
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
             Color = Theme.Color(s => s.DialogBody.RowText),
+            Visible = ShowChevron,
         };
 
         return new Box
