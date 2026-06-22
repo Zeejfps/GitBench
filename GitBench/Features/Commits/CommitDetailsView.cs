@@ -44,7 +44,7 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly ColumnView _headerInfo;
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
-    private readonly DiffView _diffView;
+    private readonly View _diffView;
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
     private readonly State<string?> _selectedPath = new(null);
@@ -97,7 +97,11 @@ internal sealed class CommitDetailsView : ContainerView
             _innerSplit.AdjustBottomFractionByPixels,
             h => innerSplitterHovered.Value = h));
 
-        _diffView = new DiffView(ctx);
+        _diffView = new Provide<DiffViewModel>
+        {
+            Value = vm.DiffVm,
+            Child = new DiffView(),
+        }.BuildView(ctx);
 
         var diffHeader = new Provide<DiffViewModel>
         {
@@ -156,7 +160,6 @@ internal sealed class CommitDetailsView : ContainerView
         if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
         this.Bind(vm.RenderState, SetRenderState);
-        _diffView.Bind(vm.DiffVm);
         this.Bind(vm.SelectedPath, path =>
         {
             _selectedPath.Value = path;

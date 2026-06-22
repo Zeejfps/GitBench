@@ -4,95 +4,83 @@ using GitBench.Git;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Diff;
 
 /// <summary>
 /// The diff body itself: a virtualized, scrollable view of a <see cref="DiffResult"/> with
 /// inline per-hunk Stage/Unstage/Discard. It is intentionally headerless — chrome lives in
-/// the surrounding context: <see cref="DiffPaneHeader"/> for the embedded panes (Local
+/// the surrounding context: <see cref="DiffPaneHeaderWidget"/> for the embedded panes (Local
 /// Changes, Commit Details) and <see cref="DiffWindowToolbar"/> for the pop-out window.
 ///
 /// When the selected file is a conflicted (unmerged) working-tree file, the body swaps from
 /// the diff to a <see cref="ConflictResolveView"/> resolution header.
 /// </summary>
-/// <remarks>
-/// Rendering is virtualized — only rows intersecting the viewport are drawn (see
-/// <see cref="DiffContentView"/>).
-/// </remarks>
-internal sealed class DiffView : ContainerView
+internal sealed record DiffView : Widget
 {
-    private readonly Context _ctx;
-    private readonly DiffContentView _content;
-    private readonly RectView _panel;
-    private readonly View _diffBody;
-
-    private DiffViewModel? _vm;
-    private ConflictResolveView? _conflictView;
-    private View? _panelChild;
-
-    public DiffView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        _ctx = ctx;
-        _content = new DiffContentView(ctx);
+        var vm = ctx.Require<DiffViewModel>();
+
+        var content = new DiffContentView(ctx)
+        {
+            OnStageHunk = vm.StageHunk,
+            OnUnstageHunk = vm.UnstageHunk,
+            OnDiscardHunk = vm.RequestDiscardHunk,
+        };
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
+        content.Use(() => new ScrollSyncController(content, vScrollBar, hScrollBar));
 
-        _diffBody = new BorderLayoutView
+        // Every non-conflict render is pushed into the persistent content view; a Conflict state
+        // swaps in the resolution header instead (see the Switch below), so it's skipped here.
+        // Anchored on the content view so the subscription releases on unmount.
+        content.Bind(vm.RenderState, state =>
         {
-            Center = _content,
-            East = vScrollBar,
-            South = hScrollBar,
+            if (state is not DiffRenderState.Conflict)
+                content.SetRenderState(state);
+        });
+
+        var diffBody = new BorderLayout
+        {
+            Center = new Raw { View = content },
+            East = new Raw { View = vScrollBar },
+            South = new Raw { View = hScrollBar },
         };
 
-        _panel = new RectView { Children = { _diffBody } };
-        _panelChild = _diffBody;
-        _panel.BindThemedBackgroundColor(ctx.Theme(), s => s.DiffView.PanelBackground);
-        AddChildToSelf(_panel);
-
-        this.Use(() => new ScrollSyncController(_content, vScrollBar, hScrollBar));
-    }
-
-    public void Bind(DiffViewModel vm)
-    {
-        _content.OnStageHunk = vm.StageHunk;
-        _content.OnUnstageHunk = vm.UnstageHunk;
-        _content.OnDiscardHunk = vm.RequestDiscardHunk;
-        if (ReferenceEquals(_vm, vm)) return;
-        _vm = vm;
-        this.Bind(vm.RenderState, OnRenderState);
-    }
-
-    private void OnRenderState(DiffRenderState state)
-    {
-        if (state is DiffRenderState.Conflict conflict)
+        return new Box
         {
-            ShowConflict(conflict);
-            return;
-        }
-        SetPanelChild(_diffBody);
-        _content.SetRenderState(state);
+            Background = Theme.Color(s => s.DiffView.PanelBackground),
+            Children =
+            [
+                new Switch<bool>
+                {
+                    // Conflict is the only state that escapes the diff body. Keep both branches
+                    // alive so swapping back to the diff preserves its scroll position.
+                    Value = new Derived<bool>(() => vm.RenderState.Value is DiffRenderState.Conflict),
+                    KeepAlive = true,
+                    Case = conflict => conflict ? BuildConflict(ctx, vm) : diffBody,
+                },
+            ],
+        };
     }
 
-    private void ShowConflict(DiffRenderState.Conflict conflict)
+    private static IWidget BuildConflict(Context ctx, DiffViewModel vm)
     {
-        _conflictView ??= new ConflictResolveView(
-            _ctx,
-            onTakeOurs: () => _vm?.ResolveTakeOurs(),
-            onTakeTheirs: () => _vm?.ResolveTakeTheirs(),
-            onTakeBoth: () => _vm?.ResolveTakeBoth(),
-            onOpenInEditor: () => _vm?.OpenConflictInEditor(),
-            onMarkResolved: () => _vm?.ResolveMarkResolved());
-        _conflictView.SetContext(conflict.Path, conflict.Context);
-        SetPanelChild(_conflictView);
-    }
-
-    private void SetPanelChild(View child)
-    {
-        if (ReferenceEquals(_panelChild, child)) return;
-        _panel.Children.Clear();
-        _panel.Children.Add(child);
-        _panelChild = child;
+        var conflictView = new ConflictResolveView(
+            ctx,
+            onTakeOurs: vm.ResolveTakeOurs,
+            onTakeTheirs: vm.ResolveTakeTheirs,
+            onTakeBoth: vm.ResolveTakeBoth,
+            onOpenInEditor: vm.OpenConflictInEditor,
+            onMarkResolved: vm.ResolveMarkResolved);
+        conflictView.Bind(vm.RenderState, state =>
+        {
+            if (state is DiffRenderState.Conflict conflict)
+                conflictView.SetContext(conflict.Path, conflict.Context);
+        });
+        return new Raw { View = conflictView };
     }
 }

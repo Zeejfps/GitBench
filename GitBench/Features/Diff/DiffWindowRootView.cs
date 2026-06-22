@@ -22,7 +22,11 @@ internal sealed record DiffWindowRootView : Widget
     {
         var vm = Model;
 
-        var diff = new DiffView(ctx);
+        var diff = new Provide<DiffViewModel>
+        {
+            Value = vm.Diff,
+            Child = new DiffView(),
+        }.BuildView(ctx);
         var toolbar = new DiffWindowToolbar(ctx) { Title = vm.Title };
 
         var layout = new BorderLayoutView
@@ -40,7 +44,6 @@ internal sealed record DiffWindowRootView : Widget
             () => new DiffWindowKeyController(panel, ctx.Require<InputSystem>(), vm.Diff.ToggleFullFile));
 
         toolbar.Bind(vm.Diff);
-        diff.Bind(vm.Diff);
 
         return panel;
     }

@@ -31,7 +31,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly View _showErrorButton;
     private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
-    private readonly DiffView _diffView;
+    private readonly View _diffView;
     private readonly VerticalSplitContainer _snapshotContainer;
     private readonly LocalChangesSubmoduleSection _submoduleSection;
     private readonly BorderLayoutView _topHalf;
@@ -148,7 +148,11 @@ internal sealed class LocalChangesContentView : ContainerView
             onStage: path => _vm.StageSubmodulePointer(path),
             onReset: path => _vm.ResetSubmoduleToRecorded(path));
 
-        _diffView = new DiffView(ctx);
+        _diffView = new Provide<DiffViewModel>
+        {
+            Value = vm.DiffVm,
+            Child = new DiffView(),
+        }.BuildView(ctx);
 
         // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
         // only the header strip remains (the split container pins the pane to header height).
@@ -220,7 +224,6 @@ internal sealed class LocalChangesContentView : ContainerView
             _unstagedPanel.EnsureRowVisible(cursor);
             _stagedPanel.EnsureRowVisible(cursor);
         });
-        _diffView.Bind(vm.DiffVm);
         _snapshotContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
         _snapshotContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
 
