@@ -116,31 +116,6 @@ internal static class FileChangesUI
         return view;
     }
 
-    /// <summary>Square colored badge containing the single-letter status glyph for a file.</summary>
-    public static RectView CreateStatusBadge(Context ctx, FileChange file)
-    {
-        var theme = ctx.Theme();
-        var status = file.Status;
-        var glyph = new TextView(ctx.Canvas)
-        {
-            Text = FileChangeFormatting.StatusGlyph(status),
-            FontSize = 11f,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        glyph.BindThemedTextColor(theme, s => s.FileChangeRow.BadgeText);
-
-        var badge = new RectView
-        {
-            Width = BadgeSize,
-            Height = BadgeSize,
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children = { glyph },
-        };
-        badge.BindThemedBackgroundColor(theme, s => s.FileChangeRow.StatusColor(status));
-        return badge;
-    }
-
     /// <summary>
     /// Draws one row of a file-change list at <paramref name="rowRect"/>: selection/hover
     /// background, a status-representing Lucide glyph tinted by the file's status color, then

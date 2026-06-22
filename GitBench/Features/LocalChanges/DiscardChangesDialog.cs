@@ -125,7 +125,7 @@ internal sealed record DiscardChangesDialog : Widget
     private static View BuildRow(Context ctx, DiscardChangesViewModel vm, DiscardFileRow file)
     {
         var theme = ctx.Theme();
-        var badge = FileChangesUI.CreateStatusBadge(ctx, file.Display);
+        var badge = new FileStatusBadge { Status = file.Display.Status }.BuildView(ctx);
 
         var pathText = new TextView(ctx.Canvas)
         {
