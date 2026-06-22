@@ -5,21 +5,21 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-public sealed record AddRepoButton : Widget
+internal sealed record AddRepoButton : Widget<ButtonState>
 {
-    // CreateView (not Build) so the click handler can anchor the menu at the button's own rect.
-    protected override View CreateView(Context ctx)
-    {
-        View? button = null;
-        var state = new ButtonState(new Command(() => ShowMenu(ctx, button!)));
+    protected override ButtonState CreateState(Context ctx) => new(null);
 
-        button = new Box
+    protected override IWidget Build(Context ctx, ButtonState state)
+    {
+        var input = ctx.Require<InputSystem>();
+
+        return new Box
         {
             Height = 30,
             BorderSize = BorderSizeStyle.All(1),
@@ -38,22 +38,17 @@ public sealed record AddRepoButton : Widget
                     Color = Theme.Color(s => s.Palette.TextSecondary),
                 },
             ],
-        }.WithController<KbmController>(state).BuildView(ctx);
-
-        return button;
+        }.WithController(input, v => new MenuButtonController(v, state,
+            // Anchor at the button's top edge and grow upward — the button lives at the very bottom
+            // of the sidebar, so a downward menu would spill off-screen and get clamped over it.
+            anchor => RepoBarContextMenu.Show(ctx, anchor, BuildItems(ctx), MenuPlacement.Above)));
     }
 
-    // Anchor at the button's top edge and grow upward — the button lives at the very bottom of the
-    // sidebar, so a downward menu would spill off-screen and get clamped back over the button.
-    private static void ShowMenu(Context ctx, View anchor)
-    {
-        var items = new List<RepoBarContextMenu.Item>
-        {
-            new("Open from Folder…", () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
-            new("Clone Repository…", () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
-        };
-        RepoBarContextMenu.Show(ctx, anchor.Position.TopLeft, items, MenuPlacement.Above);
-    }
+    private static IReadOnlyList<RepoBarContextMenu.Item> BuildItems(Context ctx) =>
+    [
+        new("Open from Folder…", () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
+        new("Clone Repository…", () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
+    ];
 
     private static void OpenFromFolder(Context ctx)
     {

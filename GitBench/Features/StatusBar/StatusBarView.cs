@@ -37,8 +37,8 @@ internal sealed record StatusBarView : Widget
                 Segment(LucideIcons.ChevronDown, Prop.Bind(vm.ShowBehind), Prop.Bind<string?>(() => vm.BehindText.Value)),
                 new IdentityChipButton
                 {
-                    BindIcon = () => vm.IdentityGlyph.Value,
-                    BindLabel = () => vm.IdentityText.Value,
+                    Icon = vm.IdentityGlyph.Bind(string? (g) => g),
+                    Label = vm.IdentityText.Bind(string? (t) => t),
                     MenuProvider = vm.BuildIdentityMenu,
                     Visible = Prop.Bind(vm.ShowIdentity),
                 },
