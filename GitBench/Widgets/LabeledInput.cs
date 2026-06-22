@@ -56,7 +56,7 @@ internal sealed record LabeledInput : Widget
         var box = new Box
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.ControlBorderRadius),
             Background = Theme.Color(s => s.TextInput.Background),
             BorderColor = borderColor,
             Children =

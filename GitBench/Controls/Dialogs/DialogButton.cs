@@ -90,7 +90,7 @@ public sealed class DialogButton : HoverableButton
         var background = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(6),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.ControlBorderRadius),
             Children =
             {
                 // Horizontal padding gives short labels breathing room and lets the button size

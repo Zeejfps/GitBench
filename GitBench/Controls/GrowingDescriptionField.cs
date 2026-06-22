@@ -1,3 +1,4 @@
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -102,7 +103,7 @@ internal sealed class GrowingDescriptionField : ContainerView
         var box = new RectView
         {
             BorderSize = BorderSizeStyle.All((int)BoxBorderThickness),
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.ControlBorderRadius),
             Children =
             {
                 new PaddingView

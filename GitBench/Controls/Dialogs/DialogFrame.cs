@@ -13,6 +13,10 @@ internal static class DialogFrame
     public const int DefaultPadding = 20;
     public const float DefaultBorderRadius = 10f;
     public const float DefaultButtonHeight = 32f;
+
+    // Shared corner radius for the interactive controls inside a dialog — buttons and text
+    // fields — so the form reads as one family instead of each control picking its own number.
+    public const float ControlBorderRadius = 4f;
     public const float DefaultButtonsGap = 8f;
     public const float DefaultButtonMinWidth = 96f;
 
@@ -146,7 +150,7 @@ internal static class DialogFrame
         var view = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(ControlBorderRadius),
             Height = 28,
             Children =
             {
