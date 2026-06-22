@@ -7,6 +7,18 @@ using ZGF.Observable;
 namespace GitBench.Controls.Dialogs;
 
 /// <summary>
+/// Visual role of a dialog button. <see cref="Default"/> is the outline chrome used for
+/// Cancel/secondary buttons; <see cref="Primary"/> and <see cref="Destructive"/> are filled
+/// (accent / danger-red) so the dialog's commit action stands apart from Cancel.
+/// </summary>
+public enum DialogButtonRole
+{
+    Default,
+    Primary,
+    Destructive,
+}
+
+/// <summary>
 /// A labeled dialog button over the shared <see cref="ButtonState"/> primitive, in one of the
 /// <see cref="DialogButtonRole"/> looks, with an optional leading icon (e.g. a busy spinner). Live
 /// state is exposed as the widget's <see cref="IInteractable"/> surface, so the parent attaches a

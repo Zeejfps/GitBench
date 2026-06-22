@@ -10,8 +10,7 @@ namespace GitBench.Controls;
 
 /// <summary>
 /// Bindings for the bordered-button visual pattern (background + border that flip
-/// between idle and hover states). Shared by <see cref="DialogButton"/>,
-/// <see cref="AddRepoButton"/>, and the in-dialog dropdowns. All bindings drive
+/// between idle and hover states), shared by the in-dialog dropdowns. All bindings drive
 /// the <see cref="BorderedButtonStyles"/> theme group, so the chrome follows the
 /// active theme automatically.
 /// </summary>

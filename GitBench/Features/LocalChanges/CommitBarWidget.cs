@@ -57,27 +57,30 @@ internal sealed record CommitBarWidget : Widget
         };
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
-        var commitButton = new DialogButton(ctx, "Commit", () => vm.Commit())
+        var commitWidget = new DialogButtonWidget
         {
-            // MinWidthConstraint, not a fixed Width: a set Width is a hard override in
-            // View.MeasureWidth, pinning the button at 120px while the centered content row
-            // overflows. The busy state ("Committing" + loader icon) is wider than "Commit",
-            // so a fixed width spills text past the button bounds. MinWidth keeps the resting
-            // size but lets it grow to contain the busy label.
-            MinWidthConstraint = CommitButtonWidth,
+            Label = Prop.Bind<string?>(() =>
+            {
+                var merging = vm.IsMerging.Value;
+                if (vm.CommitBusy.Value) return merging ? "Committing merge" : "Committing";
+                return merging ? "Commit merge" : "Commit";
+            }),
+            Icon = Prop.Bind<string?>(() => vm.CommitBusy.Value ? LucideIcons.Loader : null),
+            IconRotation = Prop.Bind(vm.CommitRotation),
+            Command = new Command(() => vm.Commit(), vm.CommitEnabled),
+            // MinWidth, not a fixed Width: the busy label ("Committing") is wider than "Commit", so a
+            // fixed width would clip it; MinWidth keeps the resting size but lets it grow to fit.
+            MinWidth = CommitButtonWidth,
             Height = 28,
         };
+        var commitButton = commitWidget.BuildView(ctx);
+        var commitController = new KbmController(commitWidget.State);
+        commitButton.UseController(input, commitController);
 
         var amend = new State<bool>(false);
 
-        // The commit controls have no widget form, so they ride in as raw views. The VM-driven
-        // bindings anchor on the commit button (a persistent child) so they release on unmount.
-        commitButton.Bind(vm.CommitEnabled, b => commitButton.IsEnabled.Value = b);
-        commitButton.Bind(vm.CommitBusy, _ => UpdateCommitButton());
-        commitButton.Bind(vm.IsMerging, _ => UpdateCommitButton());
-        commitButton.Bind(vm.CommitRotation, r => commitButton.IconRotation = r);
-
-        // Amend checkbox is two-way against vm.Amend; record equality stops the loop.
+        // Amend checkbox is two-way against vm.Amend; record equality stops the loop. Anchored on the
+        // commit button (a persistent child) so it releases on unmount.
         commitButton.Bind(vm.Amend, b => amend.Value = b);
         amend.Changed += b => vm.SetAmend(b);
 
@@ -122,17 +125,6 @@ internal sealed record CommitBarWidget : Widget
             ],
         };
 
-        void UpdateCommitButton()
-        {
-            var busy = vm.CommitBusy.Value;
-            var merging = vm.IsMerging.Value;
-            commitButton.Icon = busy ? LucideIcons.Loader : string.Empty;
-            commitButton.Label = busy
-                ? (merging ? "Committing merge" : "Committing")
-                : (merging ? "Commit merge" : "Commit");
-            if (!busy) commitButton.IconRotation = 0f;
-        }
-
         // Commit title and description join the ring after the unstaged file list, with the
         // commit button last so it's the final stop in the cycle. The button only participates
         // while enabled, and shows its hover chrome while focused; Enter commits.
@@ -147,11 +139,11 @@ internal sealed record CommitBarWidget : Widget
             descriptionField.OnShiftTab = () => FocusRing.Previous(descriptionStop);
 
             var commitStop = FocusRing.Add(
-                commitButton.FocusSelf,
-                commitButton.Blur,
-                canFocus: () => commitButton.IsEnabled.Value);
-            commitButton.OnTab = () => FocusRing.Next(commitStop);
-            commitButton.OnShiftTab = () => FocusRing.Previous(commitStop);
+                () => input.StealFocus(commitController),
+                () => input.Blur(commitController),
+                canFocus: () => commitWidget.State.Enabled.Value);
+            commitController.OnTab = () => FocusRing.Next(commitStop);
+            commitController.OnShiftTab = () => FocusRing.Previous(commitStop);
         }
     }
 
