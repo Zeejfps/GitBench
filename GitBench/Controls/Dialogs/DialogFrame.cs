@@ -3,6 +3,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Controls.Dialogs;
 
@@ -38,7 +39,7 @@ internal static class DialogFrame
             {
                 Header(ctx, title, onClose),
                 Separator(ctx),
-                new FlexItem { Grow = 1, Child = new DialogScrollRegion(ctx, body) },
+                new FlexItem { Grow = 1, Child = new DialogScrollRegion { Content = new Raw { View = body } }.BuildView(ctx) },
             },
         };
         if (footer != null)

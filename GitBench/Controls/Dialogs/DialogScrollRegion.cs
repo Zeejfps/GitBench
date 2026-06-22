@@ -5,6 +5,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 
 namespace GitBench.Controls.Dialogs;
 
@@ -16,33 +17,34 @@ namespace GitBench.Controls.Dialogs;
 /// hidden, and the dialog looks exactly as it did before. This is the single place every dialog
 /// gets "never taller than the window" without each one wiring its own scroll machinery.
 /// </summary>
-internal sealed class DialogScrollRegion : ContainerView
+internal sealed record DialogScrollRegion : Widget
 {
-    private readonly VerticalScrollPane _pane;
-    private readonly VerticalScrollBarView _bar;
+    public required IWidget Content { get; init; }
 
-    public DialogScrollRegion(Context ctx, View content)
+    protected override View CreateView(Context ctx)
     {
-        _pane = new VerticalScrollPane();
-        _pane.Children.Add(content);
-        _pane.UseController(ctx.Require<InputSystem>(), () => new VerticalScrollPaneWheelController(_pane));
+        var pane = new VerticalScrollPane();
+        pane.Children.Add(Content.BuildView(ctx));
+        pane.UseController(ctx.Require<InputSystem>(), () => new VerticalScrollPaneWheelController(pane));
 
-        _bar = ScrollBars.CreateVertical(ctx);
+        var bar = ScrollBars.CreateVertical(ctx);
         // FlexRowView skips invisible children, so the bar costs no horizontal gutter until the
         // content actually overflows. Scale < 1 means the viewport is smaller than the content —
         // i.e. there is somewhere to scroll to.
-        _bar.IsVisible = false;
-        _pane.ScrollPositionChanged += _ => _bar.IsVisible = _pane.Scale < 1f;
-        this.Use(() => new VerticalScrollBarSyncController(_pane, _bar));
+        bar.IsVisible = false;
+        pane.ScrollPositionChanged += _ => bar.IsVisible = pane.Scale < 1f;
 
-        AddChildToSelf(new FlexRowView
+        var container = new ContainerView();
+        container.Children.Add(new FlexRowView
         {
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new FlexItem { Grow = 1, Child = _pane },
-                _bar,
+                new FlexItem { Grow = 1, Child = pane },
+                bar,
             },
         });
+        container.Use(() => new VerticalScrollBarSyncController(pane, bar));
+        return container;
     }
 }
