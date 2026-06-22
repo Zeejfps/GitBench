@@ -36,7 +36,7 @@ public sealed class PopupTooltipService : ITooltipService
         _currentOwner = owner;
         _currentPopup = _factory.Acquire(new PopupRequest
         {
-            BuildRoot = ctx => new TooltipView(ctx, text),
+            BuildRoot = ctx => new TooltipView { Text = text }.BuildView(ctx),
             Place = (width, height) =>
             {
                 var centerX = anchorScreen.X + anchorScreen.Width / 2;
