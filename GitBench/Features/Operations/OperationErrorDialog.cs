@@ -10,6 +10,7 @@ using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
@@ -31,39 +32,90 @@ internal sealed record OperationErrorDialog : Widget
     public required string Message { get; init; }
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
+    {
+        var input = ctx.Require<InputSystem>();
+
+        return new Box
+        {
+            Width = DialogFrame.WidthWide,
+            Height = 360,
+            BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
+            Background = Theme.Color(s => s.DialogFrame.Background),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
+            Children =
+            [
+                new Padding
+                {
+                    Amount = PaddingStyle.All(DialogFrame.DefaultPadding),
+                    Children =
+                    [
+                        new Column
+                        {
+                            Gap = 12,
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                BuildHeader(),
+                                new Box { Height = 1, Background = Theme.Color(s => s.DialogFrame.HeaderSeparator) },
+                                new Grow { Child = new Raw { View = BuildScrollHost(ctx) } },
+                                new Row
+                                {
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        new Spacer(),
+                                        new DialogButtonWidget
+                                        {
+                                            Label = "OK",
+                                            Role = DialogButtonRole.Primary,
+                                            Command = new Command(OnClose),
+                                            Height = DialogFrame.DefaultButtonHeight,
+                                            MinWidth = DialogFrame.DefaultButtonMinWidth,
+                                        }.WithController<KbmController>(),
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        }.WithController(input, () => new DialogKbmController(OnClose));
+    }
+
+    // Symmetric left spacer keeps the title centered: it matches the combined width of the two
+    // right-side buttons (close + copy), so the grown, center-aligned title lands in the middle.
+    private IWidget BuildHeader() => new Row
+    {
+        Height = 28,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new Box { Width = CloseButtonSize * 2 },
+            new Grow
+            {
+                Child = new Text
+                {
+                    Value = Title,
+                    HAlign = TextAlignment.Center,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.DialogFrame.TitleText),
+                },
+            },
+            new DialogCopyButton { GetText = () => Message, Tooltip = "Copy error to clipboard" },
+            new DialogCloseButton { OnClose = OnClose },
+        ],
+    };
+
+    // The error body scrolls vertically only. VerticalScrollPane forces its child to viewport
+    // width — that gives the wrapping TextView the bound it needs to wrap instead of measuring its
+    // own one-line natural width and stretching the layout horizontally. A two-axis ScrollPane would
+    // let one long line balloon past the dialog edges. The scroll plumbing has no widget form, so it
+    // rides in as a raw view.
+    private View BuildScrollHost(Context ctx)
     {
         var theme = ctx.Theme();
-
-        var titleView = new Text
-        {
-            Value = Title,
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Color = Theme.Color(s => s.DialogFrame.TitleText),
-        }.BuildView(ctx);
-
-        var copyButton = new DialogCopyButton
-        {
-            GetText = () => Message,
-            Tooltip = "Copy error to clipboard",
-        }.BuildView(ctx);
-
-        // Symmetric left spacer keeps the title centered: matches the combined width of the
-        // two right-side buttons plus the row's gap (28 + 28 + Gap). With Gap=0 here, the
-        // spacer width = sum of buttons.
-        var headerRow = new FlexRowView
-        {
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Height = 28,
-            Children =
-            {
-                new ContainerView { Width = CloseButtonSize * 2 },
-                new FlexItem { Grow = 1, Child = titleView },
-                copyButton,
-                new DialogCloseButton { OnClose = OnClose }.BuildView(ctx),
-            },
-        };
 
         var messageView = new Text
         {
@@ -73,11 +125,6 @@ internal sealed record OperationErrorDialog : Widget
             Color = Theme.Color(s => s.DialogBody.BodyText),
         }.BuildView(ctx);
 
-        // VerticalScrollPane forces its child to viewport width — that gives the wrapping
-        // TextView the bound it needs to wrap instead of measuring its own one-line natural
-        // width and stretching the layout horizontally. ScrollPane (two-axis) lets the
-        // child grow to its natural width, which would let one long line balloon past the
-        // dialog edges.
         var scrollPane = new VerticalScrollPane();
         scrollPane.Children.Add(new PaddingView
         {
@@ -92,7 +139,7 @@ internal sealed record OperationErrorDialog : Widget
         var scrollHost = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(4),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.ControlBorderRadius),
             Children =
             {
                 new BorderLayoutView
@@ -106,63 +153,7 @@ internal sealed record OperationErrorDialog : Widget
         scrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
         scrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
-        var okButton = new DialogButton(ctx, "OK", OnClose, DialogButtonRole.Primary)
-        {
-            Height = DialogFrame.DefaultButtonHeight,
-            MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
-        };
-
-        var buttonsRow = new FlexRowView
-        {
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = new ContainerView() },
-                okButton,
-            },
-        };
-
-        var separator = new RectView { Height = 1 };
-        separator.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.HeaderSeparator);
-
-        var frame = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(10),
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = PaddingStyle.All(20),
-                    Children =
-                    {
-                        new FlexColumnView
-                        {
-                            Gap = 12,
-                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                            Children =
-                            {
-                                headerRow,
-                                separator,
-                                new FlexItem { Grow = 1, Child = scrollHost },
-                                buttonsRow,
-                            },
-                        },
-                    },
-                },
-            },
-        };
-        frame.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.Background);
-        frame.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-
-        var root = new ContainerView
-        {
-            Width = DialogFrame.WidthWide,
-            Height = 360,
-        };
-        root.Children.Add(frame);
-        root.UseController(ctx.Require<InputSystem>(), () => new DialogKbmController(OnClose));
-        return root;
+        return scrollHost;
     }
 }
 

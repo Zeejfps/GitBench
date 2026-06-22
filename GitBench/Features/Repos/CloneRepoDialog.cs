@@ -4,6 +4,7 @@ using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -26,19 +27,21 @@ internal sealed record CloneRepoDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        // No fixed Width — DialogButton sizes to its label (it carries its own 16px horizontal
+        // No fixed Width — the button sizes to its label (it carries its own 16px horizontal
         // padding), so pinning a width clips "Browse…". Height matches the field beside it and the
         // footer buttons so the dialog's chrome is one size.
-        var browseButton = new DialogButton(ctx, "Browse…", () =>
+        var browseButton = new DialogButtonWidget
         {
-            var shell = ctx.Get<IPlatformShell>();
-            var picked = shell?.PickFolder("Choose where to clone");
-            if (!string.IsNullOrEmpty(picked))
-                vm.ParentDir.Value = picked;
-        })
-        {
+            Label = "Browse…",
+            Command = new Command(() =>
+            {
+                var shell = ctx.Get<IPlatformShell>();
+                var picked = shell?.PickFolder("Choose where to clone");
+                if (!string.IsNullOrEmpty(picked))
+                    vm.ParentDir.Value = picked;
+            }),
             Height = DialogFrame.DefaultButtonHeight,
-        };
+        }.WithController<KbmController>();
 
         return new Dialog
         {
@@ -60,7 +63,7 @@ internal sealed record CloneRepoDialog : Widget
                     Label = "Clone into",
                     Value = vm.ParentDir,
                     Hint = "Parent folder. The repository is cloned into a new subfolder here.",
-                    Accessory = new Raw { View = browseButton },
+                    Accessory = browseButton,
                 },
                 new LabeledInput
                 {

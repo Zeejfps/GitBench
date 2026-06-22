@@ -28,10 +28,12 @@ internal sealed record CreateWorktreeDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var browseButton = new DialogButton(ctx, "Browse…", () => PickPath(ctx, vm))
+        var browseButton = new DialogButtonWidget
         {
+            Label = "Browse…",
+            Command = new Command(() => PickPath(ctx, vm)),
             Height = DialogFrame.DefaultButtonHeight,
-        };
+        }.WithController<KbmController>();
 
         return new Dialog
         {
@@ -46,7 +48,7 @@ internal sealed record CreateWorktreeDialog : Widget
                 {
                     Label = "Worktree path",
                     Value = vm.Path,
-                    Accessory = new Raw { View = browseButton },
+                    Accessory = browseButton,
                 },
                 new LabeledInput
                 {

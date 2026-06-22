@@ -3,11 +3,11 @@ using GitBench.Controls.Dialogs;
 using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.App;
 
@@ -28,114 +28,105 @@ internal sealed record AboutDialog : Widget
 
     public required Action OnClose { get; init; }
 
-    protected override View CreateView(Context ctx)
+    protected override IWidget Build(Context ctx)
     {
-        var theme = ctx.Theme();
+        var input = ctx.Require<InputSystem>();
 
-        var closeRow = new FlexRowView
+        return new Box
         {
-            Height = 28,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                new FlexItem { Grow = 1, Child = new ContainerView() },
-                new DialogCloseButton { OnClose = OnClose }.BuildView(ctx),
-            },
-        };
-
-        var name = new Text
-        {
-            Value = "GitBench",
-            FontSize = 22,
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Color = Theme.Color(s => s.DialogFrame.TitleText),
-        }.BuildView(ctx);
-
-        var version = new Text
-        {
-            Value = $"v{AppVersion.Display}",
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Color = Theme.Color(s => s.Palette.TextSecondary),
-        }.BuildView(ctx);
-
-        var repoButton = new DialogButton(
-            ctx,
-            "View on GitHub",
-            () => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl),
-            DialogButtonRole.Primary)
-        {
-            Height = DialogFrame.DefaultButtonHeight,
-            MinWidthConstraint = DialogFrame.DefaultButtonMinWidth,
-        };
-
-        var copyright = new Text
-        {
-            Value = "© 2026 Zee Vasilyev",
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Color = Theme.Color(s => s.Palette.TextMuted),
-        }.BuildView(ctx);
-
-        var content = new FlexColumnView
-        {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                BuildLogo(ctx),
-                name,
-                version,
-                repoButton,
-                copyright,
-            },
-        };
-
-        var frame = new RectView
-        {
+            Width = 360,
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(10),
+            BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
+            Background = Theme.Color(s => s.DialogFrame.Background),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
             Children =
-            {
-                new PaddingView
+            [
+                new Padding
                 {
-                    Padding = PaddingStyle.All(20),
+                    Amount = PaddingStyle.All(DialogFrame.DefaultPadding),
                     Children =
-                    {
-                        new FlexColumnView
+                    [
+                        new Column
                         {
                             Gap = 12,
-                            CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                            Children = { closeRow, content },
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                new Row
+                                {
+                                    Height = 28,
+                                    MainAxis = MainAxisAlignment.End,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children = [new DialogCloseButton { OnClose = OnClose }],
+                                },
+                                new Column
+                                {
+                                    Gap = 10,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        BuildLogo(),
+                                        new Text
+                                        {
+                                            Value = "GitBench",
+                                            FontSize = 22,
+                                            HAlign = TextAlignment.Center,
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.DialogFrame.TitleText),
+                                        },
+                                        new Text
+                                        {
+                                            Value = $"v{AppVersion.Display}",
+                                            HAlign = TextAlignment.Center,
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.Palette.TextSecondary),
+                                        },
+                                        new DialogButtonWidget
+                                        {
+                                            Label = "View on GitHub",
+                                            Role = DialogButtonRole.Primary,
+                                            Command = new Command(() => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl)),
+                                            Height = DialogFrame.DefaultButtonHeight,
+                                            MinWidth = DialogFrame.DefaultButtonMinWidth,
+                                        }.WithController<KbmController>(),
+                                        new Text
+                                        {
+                                            Value = "© 2026 Zee Vasilyev",
+                                            HAlign = TextAlignment.Center,
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.Palette.TextMuted),
+                                        },
+                                    ],
+                                },
+                            ],
                         },
-                    },
+                    ],
                 },
-            },
-        };
-        frame.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.Background);
-        frame.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-
-        var root = new ContainerView { Width = 360 };
-        root.Children.Add(frame);
-        root.UseController(ctx.Require<InputSystem>(), () => new DialogKbmController(OnClose));
-        return root;
+            ],
+        }.WithController(input, () => new DialogKbmController(OnClose));
     }
 
-    private static View BuildLogo(Context ctx)
+    private static IWidget BuildLogo()
     {
         if (IconImageId != null)
-            return new ImageView(ctx.Canvas) { ImageId = IconImageId, Width = 84, Height = 84 };
+            return new Image { ImageId = IconImageId, Width = 84, Height = 84 };
 
-        var glyph = new Text
+        return new Box
         {
-            Value = LucideIcons.FolderGit2,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 60,
-            HAlign = TextAlignment.Center,
-            VAlign = TextAlignment.Center,
-            Color = Theme.Color(s => s.Palette.Accent),
-        }.BuildView(ctx);
-        return new ContainerView { Width = 84, Height = 84, Children = { glyph } };
+            Width = 84,
+            Height = 84,
+            Children =
+            [
+                new Text
+                {
+                    Value = LucideIcons.FolderGit2,
+                    FontFamily = LucideIcons.FontFamily,
+                    FontSize = 60,
+                    HAlign = TextAlignment.Center,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.Palette.Accent),
+                },
+            ],
+        };
     }
 }

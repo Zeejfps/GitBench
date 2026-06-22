@@ -7,7 +7,9 @@ using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
@@ -83,40 +85,48 @@ internal sealed class ConflictResolveView : ContainerView
         var oursCard = new ConflictCard(_ctx, ctx.Ours, oursChecked);
         var junction = new MergeJunctionView(_theme, theirsChecked, oursChecked);
 
-        var mergeButton = new DialogButton(_ctx, "Merge", role: DialogButtonRole.Primary) { Height = ButtonHeight };
         var canMerge = new Derived<bool>(() => theirsChecked.Value || oursChecked.Value);
-        mergeButton.BindCommand(new Command(() =>
-        {
-            var t = theirsChecked.Value;
-            var o = oursChecked.Value;
-            if (t && o) _onTakeBoth();
-            else if (t) _onTakeTheirs();
-            else if (o) _onTakeOurs();
-        }, canMerge));
 
         // The button names the action it will take, so the pick is confirmable before clicking:
         // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
-        void UpdateMergeLabel()
+        var mergeButton = new DialogButtonWidget
         {
-            mergeButton.Label = (theirsChecked.Value, oursChecked.Value) switch
+            Label = Prop.Bind<string?>(() => (theirsChecked.Value, oursChecked.Value) switch
             {
                 (true, true) => "Merge both",
                 (true, false) => $"Choose {ctx.Theirs.Label}",
                 (false, true) => $"Choose {ctx.Ours.Label}",
                 _ => "Merge",
-            };
-        }
-        mergeButton.Bind(theirsChecked, _ => UpdateMergeLabel());
-        mergeButton.Bind(oursChecked, _ => UpdateMergeLabel());
-        UpdateMergeLabel();
+            }),
+            Role = DialogButtonRole.Primary,
+            Command = new Command(() =>
+            {
+                var t = theirsChecked.Value;
+                var o = oursChecked.Value;
+                if (t && o) _onTakeBoth();
+                else if (t) _onTakeTheirs();
+                else if (o) _onTakeOurs();
+            }, canMerge),
+            Height = ButtonHeight,
+        }.WithController<KbmController>().BuildView(_ctx);
 
-        var openButton = new DialogButton(_ctx, "Merge in editor", _onOpenInEditor) { Height = ButtonHeight };
-        openButton.Icon = LucideIcons.ExternalLink;
+        var openButton = new DialogButtonWidget
+        {
+            Label = "Merge in editor",
+            Icon = LucideIcons.ExternalLink,
+            Command = new Command(_onOpenInEditor),
+            Height = ButtonHeight,
+        }.WithController<KbmController>().BuildView(_ctx);
 
         // For conflicts already resolved outside the app: stages the file as-is so the path
         // clears the unmerged state, no side-pick needed.
-        var resolvedButton = new DialogButton(_ctx, "Mark as resolved", _onMarkResolved) { Height = ButtonHeight };
-        resolvedButton.Icon = LucideIcons.CheckSquare;
+        var resolvedButton = new DialogButtonWidget
+        {
+            Label = "Mark as resolved",
+            Icon = LucideIcons.CheckSquare,
+            Command = new Command(_onMarkResolved),
+            Height = ButtonHeight,
+        }.WithController<KbmController>().BuildView(_ctx);
 
         _column.Children.Clear();
         _column.Children.Add(BuildTitleRow());
