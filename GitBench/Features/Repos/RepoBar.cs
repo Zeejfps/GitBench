@@ -87,7 +87,11 @@ internal sealed record RepoBar : Widget
     {
         var path = ctx.Get<IPlatformShell>()?.PickFolder("Open Repository");
         if (string.IsNullOrEmpty(path)) return;
-        ctx.Get<IRepoRegistry>()?.Open(path);
+        if (ctx.Get<IRepoRegistry>()?.Open(path) == OpenRepoOutcome.NotAGitRepo)
+            ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
+                "Not a Git Repository",
+                $"{path}\n\nThis folder isn't a Git repository — it has no .git directory. " +
+                "Pick the repository's root folder, or clone a repository instead."));
     }
 
     private static void ShowCloneDialog(Context ctx)

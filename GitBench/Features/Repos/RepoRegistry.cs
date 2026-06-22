@@ -58,20 +58,20 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     public State<Guid?> RenamingGroupId { get; }
     public State<int> WorktreesChanged { get; }
 
-    public void Open(string path)
+    public OpenRepoOutcome Open(string path)
     {
         if (string.IsNullOrWhiteSpace(path))
-            return;
+            return OpenRepoOutcome.NotAGitRepo;
 
         var normalized = Path.GetFullPath(path);
         if (!RepoStateStore.IsGitRepo(normalized))
-            return;
+            return OpenRepoOutcome.NotAGitRepo;
 
         var existing = Repos.FirstOrDefault(r => PathKey.Comparer.Equals(r.Path, normalized));
         if (existing is not null)
         {
             SetActive(existing.Id);
-            return;
+            return OpenRepoOutcome.AlreadyOpen;
         }
 
         var repo = new Repo(Guid.NewGuid(), normalized, Path.GetFileName(normalized));
@@ -81,6 +81,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
 
         Active.Value = repo;
         Save();
+        return OpenRepoOutcome.Opened;
     }
 
     public void SetActive(Guid id)

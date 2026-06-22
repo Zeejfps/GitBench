@@ -4,6 +4,15 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
+// The result of trying to open a folder as a repo: added fresh, already present (and re-activated),
+// or rejected because the folder has no git working tree. Lets the caller surface the rejection.
+public enum OpenRepoOutcome
+{
+    Opened,
+    AlreadyOpen,
+    NotAGitRepo,
+}
+
 public interface IRepoRegistry
 {
     ObservableList<Repo> Repos { get; }
@@ -15,7 +24,7 @@ public interface IRepoRegistry
     // markers for branches a sibling worktree has checked out. (Row expand/collapse is its own
     // per-row observable — see WatchWorktreeExpanded — and no longer rides this counter.)
     State<int> WorktreesChanged { get; }
-    void Open(string path);
+    OpenRepoOutcome Open(string path);
     void SetActive(Guid id);
     void ToggleGroupCollapsed(Guid groupId);
     // Collapses or expands every group at once (RepoBar's "Collapse All" / "Expand All").
