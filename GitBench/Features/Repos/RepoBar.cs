@@ -1,7 +1,10 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
+using GitBench.Messages;
+using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -56,7 +59,13 @@ internal sealed record RepoBar : Widget
                         new Padding
                         {
                             Amount = PaddingStyle.All(HorizontalPadding),
-                            Children = [new AddRepoButton()],
+                            // Anchor the menu at the button's top edge and grow upward — it sits at the
+                            // very bottom of the sidebar, so a downward menu would spill off-screen.
+                            Children =
+                            [
+                                new AddRepoButton().WithMenuController(rect =>
+                                    RepoBarContextMenu.Show(ctx, rect.TopLeft, AddRepoMenuItems(ctx), MenuPlacement.Above)),
+                            ],
                         },
                     ],
                 },
@@ -67,6 +76,23 @@ internal sealed record RepoBar : Widget
             .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)))
             .BindVm(vm);
     }
+
+    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx) =>
+    [
+        new("Open from Folder…", () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
+        new("Clone Repository…", () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
+    ];
+
+    private static void OpenFromFolder(Context ctx)
+    {
+        var path = ctx.Get<IPlatformShell>()?.PickFolder("Open Repository");
+        if (string.IsNullOrEmpty(path)) return;
+        ctx.Get<IRepoRegistry>()?.Open(path);
+    }
+
+    private static void ShowCloneDialog(Context ctx)
+        => ctx.Get<IMessageBus>()?.Broadcast(
+            new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose }));
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(RepoBarViewModel vm)
     {

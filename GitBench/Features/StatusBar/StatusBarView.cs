@@ -1,9 +1,11 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Identity;
+using GitBench.Features.Repos;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -39,9 +41,13 @@ internal sealed record StatusBarView : Widget
                 {
                     Icon = vm.IdentityGlyph.Bind(string? (g) => g),
                     Label = vm.IdentityText.Bind(string? (t) => t),
-                    MenuProvider = vm.BuildIdentityMenu,
                     Visible = Prop.Bind(vm.ShowIdentity),
-                },
+                }.WithMenuController(rect =>
+                {
+                    var items = vm.BuildIdentityMenu();
+                    if (items.Count == 0) return;
+                    RepoBarContextMenu.Show(ctx, rect.TopLeft, items, MenuPlacement.Above);
+                }),
             ],
         };
 
