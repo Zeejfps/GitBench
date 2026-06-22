@@ -26,9 +26,6 @@ internal sealed record MergeBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var optionDropdown = new MergeOptionDropdown(ctx);
-        optionDropdown.BindTwoWay(optionDropdown.SelectedState, vm.Strategy);
-
         return new Dialog
         {
             Title = "Merge branch",
@@ -43,7 +40,7 @@ internal sealed record MergeBranchDialog : Widget
             [
                 BuildLabeledRow("Merge:", BuildBranchChip(Request.SourceDisplay)),
                 BuildLabeledRow("Into:", BuildBranchChip(Request.TargetBranch)),
-                BuildLabeledRow("Merge Option:", new Raw { View = optionDropdown }),
+                BuildLabeledRow("Merge Option:", new MergeOptionDropdown { Selected = vm.Strategy }),
             ],
         };
     }
@@ -137,7 +134,7 @@ internal sealed record MergeBranchDialog : Widget
     };
 }
 
-internal sealed class MergeOptionDropdown : HoverableButton
+internal sealed record MergeOptionDropdown : Widget
 {
     private static readonly (MergeStrategy Strategy, string Label, string Detail)[] Options =
     {
@@ -147,79 +144,33 @@ internal sealed class MergeOptionDropdown : HoverableButton
         (MergeStrategy.Squash, "Squash", "Stage changes for a new commit"),
     };
 
-    private readonly Context _ctx;
-    private readonly TextView _labelView;
-    private readonly TextView _detailView;
-    public State<MergeStrategy> SelectedState { get; } = new(MergeStrategy.Default);
+    public required State<MergeStrategy> Selected { get; init; }
 
-    public MergeStrategy Selected => SelectedState.Value;
-
-    public MergeOptionDropdown(Context ctx) : base(ctx)
+    protected override IWidget Build(Context ctx) => new DropdownWidget
     {
-        _ctx = ctx;
-        var theme = ctx.Theme();
-        Height = 30;
-        _labelView = new TextView(ctx.Canvas)
-        {
-            Text = LookupLabel(MergeStrategy.Default),
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _labelView.BindTextColor(() => theme.Styles.Value.DialogFrame.TitleText);
-
-        _detailView = new TextView(ctx.Canvas)
-        {
-            Text = LookupDetail(MergeStrategy.Default),
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _detailView.BindTextColor(() => theme.Styles.Value.DialogBody.RowTextMissing);
-
-        var chevron = new TextView(ctx.Canvas)
-        {
-            Text = LucideIcons.ChevronDown,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
-
-        var row = new FlexRowView
-        {
-            Gap = 10,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+        Height = 30,
+        Gap = 10,
+        Children =
+        [
+            new Text
             {
-                _labelView,
-                new FlexItem { Grow = 1, Child = _detailView },
-                chevron,
+                VAlign = TextAlignment.Center,
+                Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
             },
-        };
-
-        var background = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children =
+            new Grow
             {
-                new PaddingView
+                Child = new Text
                 {
-                    Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
-                    Children = { row },
+                    VAlign = TextAlignment.Center,
+                    Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             },
-        };
-        BorderedButtonChrome.Bind(background, theme, IsHovered);
-        SetBackground(background);
+        ],
+    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
 
-        this.Bind(SelectedState, s =>
-        {
-            _labelView.Text = LookupLabel(s);
-            _detailView.Text = LookupDetail(s);
-        });
-    }
-
-    protected override void OnClicked()
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildItems()
     {
         var items = new List<RepoBarContextMenu.Item>(Options.Length);
         foreach (var opt in Options)
@@ -227,9 +178,9 @@ internal sealed class MergeOptionDropdown : HoverableButton
             var strategy = opt.Strategy;
             items.Add(new RepoBarContextMenu.Item(
                 $"{opt.Label} — {opt.Detail}",
-                () => SelectedState.Value = strategy));
+                () => Selected.Value = strategy));
         }
-        RepoBarContextMenu.Show(_ctx, Position.BottomLeft, items);
+        return items;
     }
 
     private static string LookupLabel(MergeStrategy s)
