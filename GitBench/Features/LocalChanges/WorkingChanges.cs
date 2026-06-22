@@ -21,7 +21,13 @@ internal sealed class LocalChangesView : ContainerView
     {
         var vm = ctx.Require<LocalChangesViewModel>();
         var content = new LocalChangesContentView(ctx, vm);
-        var commitBar = new CommitBarView(ctx, vm);
+
+        // Tab cycles unstaged files → commit title → commit description → commit button
+        // (when enabled) → (back to files). The file list registers first so it leads the
+        // cycle; the commit bar appends its own stops as it builds.
+        var focusRing = new FocusRing();
+        content.RegisterFocusStops(focusRing);
+        var commitBar = new CommitBarWidget { FocusRing = focusRing }.BuildView(ctx);
 
         var bg = new RectView
         {
@@ -36,13 +42,6 @@ internal sealed class LocalChangesView : ContainerView
         };
         bg.BindThemedBackgroundColor(ctx.Theme(), s => s.Palette.Surface);
         AddChildToSelf(bg);
-
-        // Tab cycles unstaged files → commit title → commit description → commit button
-        // (when enabled) → (back to files).
-        var focusRing = new FocusRing();
-        content.RegisterFocusStops(focusRing);
-        commitBar.RegisterFocusStops(focusRing);
-        commitBar.RegisterCommitButtonStop(focusRing);
 
         this.UseViewModel(() => vm, _ => { });
     }

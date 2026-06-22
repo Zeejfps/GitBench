@@ -1,54 +1,48 @@
-using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.StatusBar;
 
 /// <summary>
-/// Inline warning banner — bordered box with red-on-amber text. Self-managing: setting
-/// <see cref="Message"/> to null toggles <see cref="View.IsVisible"/> off, so the bar is
-/// skipped by layout (no residual gap in Flex/Column/Row containers).
+/// Inline warning banner — a bordered box carrying the active theme's banner colors. Shown only
+/// while <see cref="Message"/> is non-null; a null message collapses the banner so it leaves no
+/// residual gap in the surrounding layout.
 /// </summary>
-internal sealed class ErrorBarView : ContainerView
+internal sealed record ErrorBarView : Widget
 {
-    public State<string?> Message { get; } = new(null);
+    public required IReadable<string?> Message { get; init; }
+    public int VerticalPadding { get; init; } = 4;
 
-    public ErrorBarView(Context ctx, int verticalPadding = 4)
+    protected override IWidget Build(Context ctx) => new Show
     {
-        var theme = ctx.Theme();
-        this.BindIsVisible(Message, m => m != null);
+        When = new Derived<bool>(() => Message.Value != null),
+        Then = () => Banner(Message, VerticalPadding),
+    };
 
-        var text = new TextView(ctx.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        text.BindText(Message);
-        text.BindTextColor(() => theme.Styles.Value.Banner.Text);
-
-        var box = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children =
+    private static IWidget Banner(IReadable<string?> message, int verticalPadding) => new Box
+    {
+        Background = Theme.Color(s => s.Banner.Background),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Banner.Border)),
+        BorderSize = BorderSizeStyle.All(1),
+        BorderRadius = BorderRadiusStyle.All(3),
+        Children =
+        [
+            new Padding
             {
-                new PaddingView
-                {
-                    Padding = new PaddingStyle
+                Amount = new PaddingStyle { Left = 8, Right = 8, Top = verticalPadding, Bottom = verticalPadding },
+                Children =
+                [
+                    new Text
                     {
-                        Left = 8,
-                        Right = 8,
-                        Top = verticalPadding,
-                        Bottom = verticalPadding,
+                        Value = Prop.Bind(message),
+                        VAlign = TextAlignment.Center,
+                        Color = Theme.Color(s => s.Banner.Text),
                     },
-                    Children = { text },
-                },
+                ],
             },
-        };
-        box.BindBackgroundColor(() => theme.Styles.Value.Banner.Background);
-        box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.Banner.Border));
-        AddChildToSelf(box);
-    }
+        ],
+    };
 }
