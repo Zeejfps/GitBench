@@ -97,7 +97,7 @@ internal sealed record CreateTagDialog : Widget
         shell.SubmitFrom(inputs.Entries.Select(e => e.Input).ToArray());
 
         // Reflect the toggle in the primary button's label, like Fork ("Create and Push").
-        root.Bind(vm.PushToAllRemotes, push => shell.ActionButton.Label = push ? "Create and Push" : "Create");
+        root.Bind(vm.PushToAllRemotes, push => shell.SetActionLabel(push ? "Create and Push" : "Create"));
 
         root.UseViewModel(() => vm, v =>
         {

@@ -27,7 +27,12 @@ public sealed record BorderedButtonStyles(
     uint BorderIdle,
     uint BorderHover,
     uint Text,
-    uint TextDisabled);
+    uint TextDisabled)
+{
+    internal uint Surface(IInteractable s) => s.Enabled.Value && s.Hovered.Value ? BackgroundHover : BackgroundIdle;
+    internal uint Border(IInteractable s) => s.Enabled.Value && s.Hovered.Value ? BorderHover : BorderIdle;
+    internal uint Foreground(IInteractable s) => s.Enabled.Value ? Text : TextDisabled;
+}
 
 public sealed record DialogIconButtonStyles(
     uint BackgroundIdle,
@@ -102,7 +107,25 @@ public sealed record DialogActionButtonStyles(
     uint DestructiveFillHover,
     uint DestructiveText,
     uint DisabledFill,
-    uint DisabledText);
+    uint DisabledText)
+{
+    // Filled fill for the dialog's commit action: the disabled wash, else the role's base/hover
+    // color (accent for primary, danger red for destructive).
+    internal uint Fill(bool destructive, IInteractable s)
+    {
+        if (!s.Enabled.Value) return DisabledFill;
+        var hovered = s.Hovered.Value;
+        return destructive
+            ? (hovered ? DestructiveFillHover : DestructiveFill)
+            : (hovered ? PrimaryFillHover : PrimaryFill);
+    }
+
+    internal uint Foreground(bool destructive, IInteractable s)
+    {
+        if (!s.Enabled.Value) return DisabledText;
+        return destructive ? DestructiveText : PrimaryText;
+    }
+}
 
 public sealed record CheckboxStyles(
     uint TextIdle,

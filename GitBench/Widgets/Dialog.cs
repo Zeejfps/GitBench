@@ -99,11 +99,11 @@ internal sealed record Dialog : Widget
         if (ConfirmKeys)
         {
             root.UseController(ctx.Require<InputSystem>(),
-                () => new DialogKbmController(() => shell.ActionButton.PerformClick(), OnClose));
+                () => new DialogKbmController(shell.PerformAction, OnClose));
         }
 
         if (BindActionLabel != null)
-            root.Bind(BindActionLabel, label => shell.ActionButton.Label = label);
+            root.Bind(BindActionLabel, shell.SetActionLabel);
 
         if (ViewModel is { } viewModel)
             root.UseViewModel(() => viewModel, vm => vm.CloseRequested += OnClose);

@@ -1,11 +1,14 @@
+using GitBench.Controls;
 using GitBench.Features.Branches;
 using GitBench.Infrastructure;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Controls.Dialogs;
@@ -52,10 +55,17 @@ internal sealed class DialogShell
     private readonly Action _onClose;
 
     private View? _view;
-    private DialogButton? _actionButton;
-    private DialogButton? _cancelButton;
     private TextView? _errorView;
     private CheckoutDialogKbmController? _firstInputController;
+
+    // Live state the action/cancel buttons bind to, so the label/busy/enabled can be driven after
+    // the shell is built (BindCommand, SetActionLabel) without holding the button views themselves.
+    private readonly State<string?> _actionLabel = new(null);
+    private readonly State<bool> _actionBusy = new(false);
+    private readonly State<bool> _actionEnabled = new(true);
+    private readonly State<bool> _cancelEnabled = new(true);
+    private Action? _action;
+    private SpinnerAnimation? _spinner;
 
     /// <summary>Dialog width; one of the <see cref="DialogFrame"/> width tokens.</summary>
     public float Width { get; init; } = DialogFrame.WidthStandard;
@@ -88,14 +98,22 @@ internal sealed class DialogShell
     /// <summary>The assembled dialog frame. Accessing it materializes the shell.</summary>
     public View View { get { EnsureBuilt(); return _view!; } }
 
-    /// <summary>The action (right) button, e.g. for a custom keyboard binding.</summary>
-    public DialogButton ActionButton { get { EnsureBuilt(); return _actionButton!; } }
-
-    /// <summary>The Cancel (left) button.</summary>
-    public DialogButton CancelButton { get { EnsureBuilt(); return _cancelButton!; } }
-
     /// <summary>The error row, shown empty until bound.</summary>
     public TextView Error { get { EnsureBuilt(); return _errorView!; } }
+
+    /// <summary>Runs the action button's action if enabled — for an Enter key binding.</summary>
+    public void PerformAction()
+    {
+        EnsureBuilt();
+        if (_actionEnabled.Value) _action?.Invoke();
+    }
+
+    /// <summary>Live override of the action button's label.</summary>
+    public void SetActionLabel(string label)
+    {
+        EnsureBuilt();
+        _actionLabel.Value = label;
+    }
 
     private void EnsureBuilt()
     {
@@ -103,13 +121,32 @@ internal sealed class DialogShell
         if (string.IsNullOrEmpty(Action.Label))
             throw new InvalidOperationException("DialogShell.Action must be set before use.");
 
+        _actionLabel.Value = Action.Label;
+        _action = Action.OnClick;
+        _spinner = _ctx.Get<SpinnerAnimation>();
+
         _errorView = DialogFrame.ErrorView(_ctx);
-        _cancelButton = new DialogButton(_ctx, CancelLabel, _onClose) { Height = DialogFrame.DefaultButtonHeight };
-        _actionButton = new DialogButton(_ctx, Action.Label, Action.OnClick, Action.Role) { Height = DialogFrame.DefaultButtonHeight };
+
+        var cancelView = new DialogButtonWidget
+        {
+            Label = CancelLabel,
+            Command = new Command(_onClose, _cancelEnabled),
+            Height = DialogFrame.DefaultButtonHeight,
+        }.WithController<KbmController>().BuildView(_ctx);
+
+        var actionView = new DialogButtonWidget
+        {
+            Label = _actionLabel,
+            Role = Action.Role,
+            Icon = Prop.Bind<string?>(() => _actionBusy.Value ? LucideIcons.Loader : null),
+            IconRotation = _spinner != null ? Prop.Bind(_spinner.Rotation) : default,
+            Command = new Command(() => _action?.Invoke(), _actionEnabled),
+            Height = DialogFrame.DefaultButtonHeight,
+        }.WithController<KbmController>().BuildView(_ctx);
 
         var footer = FooterLead is null
-            ? DialogFrame.ButtonsRow(_cancelButton, _actionButton)
-            : DialogFrame.ButtonsRow(FooterLead, _cancelButton, _actionButton);
+            ? DialogFrame.ButtonsRow(cancelView, actionView)
+            : DialogFrame.ButtonsRow(FooterLead, cancelView, actionView);
 
         var content = new FlexColumnView
         {
@@ -135,8 +172,16 @@ internal sealed class DialogShell
     /// </summary>
     public void BindCommand(AsyncCommand command, IReadable<string?> error)
     {
-        ActionButton.BindBusyCommand(command);
-        CancelButton.DisableWhile(command.IsRunning);
+        EnsureBuilt();
+        _action = command.Execute;
+        _actionEnabled.BindTo(command.CanExecute);
+        _cancelEnabled.BindTo(new Derived<bool>(() => !command.IsRunning.Value));
+        command.IsRunning.Subscribe(running =>
+        {
+            _actionBusy.Value = running;
+            if (running) _spinner?.Start();
+            else _spinner?.Stop();
+        });
         Error.BindText(error, s => s ?? string.Empty);
     }
 
@@ -154,7 +199,7 @@ internal sealed class DialogShell
         foreach (var input in inputs)
         {
             var controller = new CheckoutDialogKbmController(
-                input, inputSystem, clipboard, () => _actionButton!.PerformClick(), _onClose);
+                input, inputSystem, clipboard, PerformAction, _onClose);
             input.UseController(inputSystem, controller);
             _firstInputController ??= controller;
         }
