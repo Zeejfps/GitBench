@@ -25,10 +25,13 @@ internal sealed class ButtonState : IInteractable
     public IReadable<bool> Enabled { get; }
 
     /// <param name="command">The action a press runs; its <see cref="ICommand.CanExecute"/> gates the
-    /// button. Null leaves the button always-enabled and inert on press.</param>
-    public ButtonState(ICommand? command)
+    /// button. Null leaves the button inert on press.</param>
+    /// <param name="enabled">Explicit enabled source — for a button with no command but a gated state
+    /// (e.g. a dropdown disabled when it has nothing to pick). Falls back to the command's
+    /// <see cref="ICommand.CanExecute"/>, then to always-enabled.</param>
+    public ButtonState(ICommand? command = null, IReadable<bool>? enabled = null)
     {
-        Enabled = command?.CanExecute ?? AlwaysEnabled;
+        Enabled = enabled ?? command?.CanExecute ?? AlwaysEnabled;
         _pressed.Changed += pressed =>
         {
             if (pressed) command?.Execute();

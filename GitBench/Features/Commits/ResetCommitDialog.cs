@@ -41,9 +41,6 @@ internal sealed record ResetCommitDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var modeDropdown = new ResetModeDropdown(ctx);
-        modeDropdown.BindTwoWay(modeDropdown.SelectedState, vm.Mode);
-
         return new Dialog
         {
             Title = "Reset to revision",
@@ -71,7 +68,7 @@ internal sealed record ResetCommitDialog : Widget
                 },
                 new LabeledRow { Label = "Branch:", Value = BranchValue(BranchName) },
                 new LabeledRow { Label = "Move to:", Value = CommitValue(ShortSha, Summary) },
-                new LabeledRow { Label = "Reset type:", Value = new Raw { View = modeDropdown } },
+                new LabeledRow { Label = "Reset type:", Value = new ResetModeDropdown { Selected = vm.Mode } },
             ],
         };
     }
@@ -147,7 +144,7 @@ internal sealed record ResetCommitDialog : Widget
     }
 }
 
-internal sealed class ResetModeDropdown : HoverableButton
+internal sealed record ResetModeDropdown : Widget
 {
     // Order: safest → most destructive (Fork uses Soft / Mixed / Hard top-to-bottom).
     private static readonly (ResetMode Mode, string Label, string Detail, uint Color)[] Options =
@@ -157,101 +154,53 @@ internal sealed class ResetModeDropdown : HoverableButton
         (ResetMode.Hard, "Hard", "Discard all local changes", ResetCommitDialog.HardColor),
     };
 
-    private readonly Context _ctx;
+    public required State<ResetMode> Selected { get; init; }
 
-    public State<ResetMode> SelectedState { get; } = new(ResetMode.Mixed);
-
-    public ResetMode Selected => SelectedState.Value;
-
-    public ResetModeDropdown(Context ctx) : base(ctx)
+    protected override IWidget Build(Context ctx) => new DropdownWidget
     {
-        _ctx = ctx;
-        Height = 30;
-        var theme = ctx.Theme();
-
-        var dotView = new TextView(ctx.Canvas)
-        {
-            Text = "●",
-            FontSize = 12,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 14,
-        };
-        dotView.BindTextColor(() => LookupColor(SelectedState.Value));
-
-        var labelView = new TextView(ctx.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        labelView.BindText(() => LookupLabel(SelectedState.Value));
-        labelView.BindTextColor(() => theme.Styles.Value.DialogFrame.TitleText);
-
-        var detailView = new TextView(ctx.Canvas)
-        {
-            VerticalTextAlignment = TextAlignment.Center,
-            TextWrap = TextWrap.NoWrap,
-        };
-        detailView.BindText(() => LookupDetail(SelectedState.Value));
-        detailView.BindTextColor(() => theme.Styles.Value.DialogBody.RowTextMissing);
-
-        var chevron = new TextView(ctx.Canvas)
-        {
-            Text = LucideIcons.ChevronDown,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 16,
-        };
-        chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
-
-        // Wrapping the detail in a ClippingView keeps long descriptions from overflowing
-        // past the chevron — the framework's TextView doesn't clip on its own.
-        var detailClip = new ClippingView
-        {
-            Children = { detailView },
-        };
-
-        var row = new FlexRowView
-        {
-            Gap = 8,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+        Height = 30,
+        Gap = 8,
+        Children =
+        [
+            new Text
             {
-                dotView,
-                labelView,
-                new FlexItem { Grow = 1, Child = detailClip },
-                chevron,
+                Value = "●",
+                FontSize = 12,
+                Width = 14,
+                HAlign = TextAlignment.Center,
+                VAlign = TextAlignment.Center,
+                Color = Prop.Bind(() => LookupColor(Selected.Value)),
             },
-        };
-
-        var background = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children =
+            new Text
             {
-                new PaddingView
+                VAlign = TextAlignment.Center,
+                Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
+                Color = Theme.Color(s => s.DialogFrame.TitleText),
+            },
+            // Detail fills the middle and ellipsizes rather than overflowing past the chevron.
+            new Grow
+            {
+                Child = new Text
                 {
-                    Padding = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
-                    Children = { row },
+                    VAlign = TextAlignment.Center,
+                    Wrap = TextWrap.NoWrap,
+                    Overflow = TextOverflow.Ellipsis,
+                    Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
+                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
                 },
             },
-        };
-        BorderedButtonChrome.Bind(background, theme, IsHovered);
-        SetBackground(background);
-    }
+        ],
+    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
 
-    protected override void OnClicked()
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildItems()
     {
-        var ctx = _ctx;
         var items = new List<RepoBarContextMenu.Item>(Options.Length);
         foreach (var opt in Options)
         {
             var mode = opt.Mode;
             items.Add(new RepoBarContextMenu.Item(
                 $"{opt.Label} — {opt.Detail}",
-                () => SelectedState.Value = mode,
+                () => Selected.Value = mode,
                 LabelSegments: new[]
                 {
                     new MenuLabelSegment("● ", opt.Color),
@@ -259,7 +208,7 @@ internal sealed class ResetModeDropdown : HoverableButton
                     new MenuLabelSegment("  " + opt.Detail),
                 }));
         }
-        RepoBarContextMenu.Show(ctx, Position.BottomLeft, items);
+        return items;
     }
 
     private static string LookupLabel(ResetMode m)
