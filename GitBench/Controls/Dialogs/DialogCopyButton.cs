@@ -1,78 +1,52 @@
-using GitBench.Theming;
+using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Views;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Controls.Dialogs;
 
 /// <summary>
 /// Icon-only "copy to clipboard" button styled to match <see cref="DialogCloseButton"/>.
-/// On click, copies <paramref name="getText"/>'s current value to the clipboard and
-/// momentarily swaps the icon to a checkmark + the tooltip to "Copied!" so the user gets
-/// feedback without needing to paste to verify.
+/// On click, copies <see cref="GetText"/>'s current value to the clipboard and momentarily
+/// swaps the icon to a checkmark so the user gets feedback without needing to paste to verify.
 /// </summary>
-public sealed class DialogCopyButton : HoverableButton
+public sealed record DialogCopyButton : Widget
 {
     private const int FeedbackMs = 1200;
 
-    private readonly TextView _label;
-    private readonly IClipboard? _clipboard;
-    private readonly IUiDispatcher? _dispatcher;
-    private readonly Func<string> _getText;
-    private int _feedbackGen;
+    public required Func<string> GetText { get; init; }
+    public Prop<string?> Tooltip { get; init; } = "Copy";
 
-    public DialogCopyButton(Context ctx, Func<string> getText, string tooltip = "Copy")
-        : base(ctx, null, tooltip)
+    protected override IWidget Build(Context ctx)
     {
-        _getText = getText;
-        _clipboard = ctx.Get<IClipboard>();
-        _dispatcher = ctx.Get<IUiDispatcher>();
-        Width = 28;
-        Height = 28;
+        var clipboard = ctx.Get<IClipboard>();
+        var dispatcher = ctx.Get<IUiDispatcher>();
+        var icon = new State<string?>(LucideIcons.Copy);
+        var feedbackGen = 0;
 
-        var theme = ctx.Theme();
-        _label = new TextView(ctx.Canvas)
+        void ShowFeedback()
         {
-            Text = LucideIcons.Copy,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _label.BindThemedTextColor(theme, s =>
-            IsHovered.Value ? s.DialogIconButton.TextHover : s.DialogIconButton.TextIdle);
+            // Bump generation so a rapid second click doesn't get reverted by the first
+            // click's pending Task — only the most recent click controls the final state.
+            var gen = ++feedbackGen;
+            icon.Value = LucideIcons.CheckSquare;
+            Task.Run(async () =>
+            {
+                await Task.Delay(FeedbackMs);
+                dispatcher?.Post(() => { if (gen == feedbackGen) icon.Value = LucideIcons.Copy; });
+            });
+        }
 
-        var background = new RectView
+        return new IconButtonWidget
         {
-            BorderRadius = BorderRadiusStyle.All(4),
-            Children = { _label }
-        };
-        background.BindThemedBackgroundColor(theme, s =>
-            IsHovered.Value ? s.DialogIconButton.BackgroundHover : s.DialogIconButton.BackgroundIdle);
-
-        SetBackground(background);
-    }
-
-    protected override void OnClicked()
-    {
-        _clipboard?.SetText(_getText());
-        ShowFeedback();
-    }
-
-    private void ShowFeedback()
-    {
-        // Bump generation so a rapid second click doesn't get reverted by the first
-        // click's pending Task — only the most recent click controls the final state.
-        var gen = ++_feedbackGen;
-        _label.Text = LucideIcons.CheckSquare;
-        var dispatcher = _dispatcher;
-        Task.Run(async () =>
-        {
-            await Task.Delay(FeedbackMs);
-            if (dispatcher != null)
-                dispatcher.Post(() => { if (gen == _feedbackGen) _label.Text = LucideIcons.Copy; });
-        });
+            Command = new Command(() => { clipboard?.SetText(GetText()); ShowFeedback(); }),
+            Icon = icon,
+            Width = DialogFrame.CloseButtonSize,
+            Height = DialogFrame.CloseButtonSize,
+            Surface = s => Theme.Color(t => s.Hovered.Value ? t.DialogIconButton.BackgroundHover : t.DialogIconButton.BackgroundIdle),
+            Foreground = s => Theme.Color(t => s.Hovered.Value ? t.DialogIconButton.TextHover : t.DialogIconButton.TextIdle),
+        }.WithTooltip(Tooltip).WithController<KbmController>();
     }
 }

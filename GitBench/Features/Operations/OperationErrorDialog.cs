@@ -43,10 +43,11 @@ internal sealed record OperationErrorDialog : Widget
             Color = Theme.Color(s => s.DialogFrame.TitleText),
         }.BuildView(ctx);
 
-        var copyButton = new DialogCopyButton(
-            ctx,
-            () => Message,
-            tooltip: "Copy error to clipboard");
+        var copyButton = new DialogCopyButton
+        {
+            GetText = () => Message,
+            Tooltip = "Copy error to clipboard",
+        }.BuildView(ctx);
 
         // Symmetric left spacer keeps the title centered: matches the combined width of the
         // two right-side buttons plus the row's gap (28 + 28 + Gap). With Gap=0 here, the
