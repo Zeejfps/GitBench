@@ -4,6 +4,7 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
 
@@ -85,15 +86,21 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         };
         label.BindThemedTextColor(theme, s => s.SubmoduleSection.RowText);
 
-        var stageButton = new LocalChangesHeaderActionButton(
-            _ctx, LucideIcons.ChevronRight, () => _onStage(info.Path), "Stage pointer update");
         // Stageable only when the submodule is actually modified (not when it's
         // uninitialized or in a merge conflict — both need different actions).
-        stageButton.IsEnabled.Value = info.Status == SubmoduleStatus.Modified;
+        var stageButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.ChevronRight,
+            Command = new Command(() => _onStage(info.Path), new State<bool>(info.Status == SubmoduleStatus.Modified)),
+            Tooltip = "Stage pointer update",
+        }.BuildView(_ctx);
 
-        var resetButton = new LocalChangesHeaderActionButton(
-            _ctx, LucideIcons.X, () => _onReset(info.Path), "Reset to recorded SHA");
-        resetButton.IsEnabled.Value = info.Status != SubmoduleStatus.NotInitialized;
+        var resetButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.X,
+            Command = new Command(() => _onReset(info.Path), new State<bool>(info.Status != SubmoduleStatus.NotInitialized)),
+            Tooltip = "Reset to recorded SHA",
+        }.BuildView(_ctx);
 
         return new FlexRowView
         {

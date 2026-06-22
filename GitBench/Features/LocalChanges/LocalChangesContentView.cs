@@ -33,13 +33,6 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly RectView _centerContainer;
     private readonly DiffView _diffView;
     private readonly VerticalSplitContainer _snapshotContainer;
-    private readonly LocalChangesHeaderActionButton _discardButton;
-    private readonly LocalChangesHeaderActionButton _stageSelectedButton;
-    private readonly LocalChangesHeaderActionButton _stageAllButton;
-    private readonly LocalChangesHeaderActionButton _unstageAllButton;
-    private readonly LocalChangesHeaderActionButton _unstageSelectedButton;
-    private readonly LocalChangesHeaderActionButton _viewModeButtonUnstaged;
-    private readonly LocalChangesHeaderActionButton _viewModeButtonStaged;
     private readonly LocalChangesSubmoduleSection _submoduleSection;
     private readonly BorderLayoutView _topHalf;
 
@@ -53,20 +46,37 @@ internal sealed class LocalChangesContentView : ContainerView
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
 
-        _discardButton = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.Trash, tooltip: "Discard selected changes");
-        _stageSelectedButton = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.ChevronRight, tooltip: "Stage selected");
-        _stageAllButton = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.ChevronsRight, tooltip: "Stage all");
-        _unstageAllButton = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.ChevronsLeft, tooltip: "Unstage all");
-        _unstageSelectedButton = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.ChevronLeft, tooltip: "Unstage selected");
-        _viewModeButtonUnstaged = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.List, onClick: () => _vm.ToggleViewMode(), tooltip: "Toggle list / tree view");
-        _viewModeButtonStaged = new LocalChangesHeaderActionButton(
-            ctx, LucideIcons.List, onClick: () => _vm.ToggleViewMode(), tooltip: "Toggle list / tree view");
+        var viewModeIcon = Prop.Bind<string?>(() =>
+            vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
+
+        var discardButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.Trash, Command = vm.Discard, Tooltip = "Discard selected changes",
+        }.BuildView(ctx);
+        var stageSelectedButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.ChevronRight, Command = vm.StageSelected, Tooltip = "Stage selected",
+        }.BuildView(ctx);
+        var stageAllButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.ChevronsRight, Command = vm.StageAll, Tooltip = "Stage all",
+        }.BuildView(ctx);
+        var unstageAllButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.ChevronsLeft, Command = vm.UnstageAll, Tooltip = "Unstage all",
+        }.BuildView(ctx);
+        var unstageSelectedButton = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.ChevronLeft, Command = vm.UnstageSelected, Tooltip = "Unstage selected",
+        }.BuildView(ctx);
+        var viewModeButtonUnstaged = new LocalChangesHeaderActionButton
+        {
+            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = "Toggle list / tree view",
+        }.BuildView(ctx);
+        var viewModeButtonStaged = new LocalChangesHeaderActionButton
+        {
+            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = "Toggle list / tree view",
+        }.BuildView(ctx);
 
         _unstagedPanel = new LocalChangesPanel(
             ctx,
@@ -79,7 +89,7 @@ internal sealed class LocalChangesContentView : ContainerView
                 "Changes you make will appear here."),
             _selection,
             OnRowClick,
-            [_viewModeButtonUnstaged, _discardButton, _stageSelectedButton, _stageAllButton],
+            [viewModeButtonUnstaged, discardButton, stageSelectedButton, stageAllButton],
             onRowActivated: OnUnstagedRowActivated,
             onEmptyAreaClicked: () => _vm.ClearSelection(),
             onFolderToggle: OnFolderToggle,
@@ -95,7 +105,7 @@ internal sealed class LocalChangesContentView : ContainerView
                 "Stage changes to include them in your commit."),
             _selection,
             OnRowClick,
-            [_viewModeButtonStaged, _unstageAllButton, _unstageSelectedButton],
+            [viewModeButtonStaged, unstageAllButton, unstageSelectedButton],
             onRowActivated: OnStagedRowActivated,
             onEmptyAreaClicked: () => _vm.ClearSelection(),
             onFolderToggle: OnFolderToggle,
@@ -200,9 +210,6 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             _unstagedPanel.SetViewMode(mode);
             _stagedPanel.SetViewMode(mode);
-            var icon = mode == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List;
-            _viewModeButtonUnstaged.SetIcon(icon);
-            _viewModeButtonStaged.SetIcon(icon);
         });
         this.Bind(vm.UnstagedCollapsed, set => _unstagedPanel.SetCollapsed(set));
         this.Bind(vm.StagedCollapsed, set => _stagedPanel.SetCollapsed(set));
@@ -216,12 +223,6 @@ internal sealed class LocalChangesContentView : ContainerView
         _diffView.Bind(vm.DiffVm);
         _snapshotContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
         _snapshotContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
-
-        _discardButton.BindCommand(vm.Discard);
-        _stageSelectedButton.BindCommand(vm.StageSelected);
-        _stageAllButton.BindCommand(vm.StageAll);
-        _unstageAllButton.BindCommand(vm.UnstageAll);
-        _unstageSelectedButton.BindCommand(vm.UnstageSelected);
 
         this.Bind(vm.DriftedSubmodules, drift =>
         {

@@ -33,7 +33,11 @@ public sealed record DialogIconButtonStyles(
     uint BackgroundIdle,
     uint BackgroundHover,
     uint TextIdle,
-    uint TextHover);
+    uint TextHover)
+{
+    internal uint Surface(IInteractable s) => s.Hovered.Value ? BackgroundHover : BackgroundIdle;
+    internal uint Foreground(IInteractable s) => s.Hovered.Value ? TextHover : TextIdle;
+}
 
 public sealed record ActionButtonStyles(
     uint BackgroundIdle,

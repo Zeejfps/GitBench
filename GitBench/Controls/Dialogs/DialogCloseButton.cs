@@ -18,7 +18,7 @@ public sealed record DialogCloseButton : Widget
         Icon = LucideIcons.X,
         Width = DialogFrame.CloseButtonSize,
         Height = DialogFrame.CloseButtonSize,
-        Surface = s => Theme.Color(t => s.Hovered.Value ? t.DialogIconButton.BackgroundHover : t.DialogIconButton.BackgroundIdle),
-        Foreground = s => Theme.Color(t => s.Hovered.Value ? t.DialogIconButton.TextHover : t.DialogIconButton.TextIdle),
+        Surface = s => Theme.Color(t => t.DialogIconButton.Surface(s)),
+        Foreground = s => Theme.Color(t => t.DialogIconButton.Foreground(s)),
     }.WithTooltip(Tooltip).WithController<KbmController>();
 }

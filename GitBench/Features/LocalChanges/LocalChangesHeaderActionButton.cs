@@ -1,49 +1,35 @@
 using GitBench.Controls;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
+using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
-internal sealed class LocalChangesHeaderActionButton : HoverableButton
+internal sealed record LocalChangesHeaderActionButton : Widget
 {
     private const float ButtonSize = 22f;
     private const float IconSize = 13f;
 
-    private readonly TextView _iconView;
+    /// <summary>Icon glyph; a constant or an auto-tracked binding (<c>Prop.Bind(() =&gt; …)</c>).</summary>
+    public required Prop<string?> Icon { get; init; }
 
-    public LocalChangesHeaderActionButton(Context ctx, string icon, Action? onClick = null, string? tooltip = null)
-        : base(ctx, onClick, tooltip)
+    /// <summary>The action a press runs; its <see cref="ICommand.CanExecute"/> gates the button.</summary>
+    public ICommand? Command { get; init; }
+
+    public Prop<string?> Tooltip { get; init; }
+
+    protected override IWidget Build(Context ctx) => new IconButtonWidget
     {
-        Width = ButtonSize;
-        Height = ButtonSize;
-
-        var theme = ctx.Theme();
-        var iconView = new TextView(ctx.Canvas)
-        {
-            Text = icon,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = IconSize,
-            HorizontalTextAlignment = TextAlignment.Center,
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _iconView = iconView;
-        iconView.BindThemedTextColor(theme, s =>
-        {
-            if (!IsEnabled) return s.HeaderActionButton.IconDisabled;
-            return IsHovered ? s.HeaderActionButton.IconHover : s.HeaderActionButton.IconIdle;
-        });
-
-        var background = new RectView
-        {
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children = { iconView },
-        };
-        background.BindThemedBackgroundColor(theme, s =>
-            IsEnabled && IsHovered ? s.HeaderActionButton.BackgroundHover : s.HeaderActionButton.Background);
-        SetBackground(background);
-    }
-
-    public void SetIcon(string icon) => _iconView.Text = icon;
+        Command = Command,
+        Icon = Icon,
+        IconSize = IconSize,
+        Width = ButtonSize,
+        Height = ButtonSize,
+        CornerRadius = BorderRadiusStyle.All(3),
+        Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+        Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+    }.WithTooltip(Tooltip).WithController<KbmController>();
 }

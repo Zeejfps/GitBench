@@ -7,7 +7,11 @@ public sealed record HeaderActionButtonStyles(
     uint BackgroundHover,
     uint IconIdle,
     uint IconHover,
-    uint IconDisabled);
+    uint IconDisabled)
+{
+    internal uint Surface(IInteractable s) => s.Enabled.Value && s.Hovered.Value ? BackgroundHover : Background;
+    internal uint Icon(IInteractable s) => !s.Enabled.Value ? IconDisabled : (s.Hovered.Value ? IconHover : IconIdle);
+}
 
 public sealed record RepoBarStyles(
     uint Background,

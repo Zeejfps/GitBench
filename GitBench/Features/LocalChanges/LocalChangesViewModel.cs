@@ -58,6 +58,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public Command StageAll { get; }
     public Command UnstageAll { get; }
     public Command DiscardAll { get; }
+    public Command ToggleViewMode { get; }
     public IReadable<string?> OpError { get; }
     public IReadable<bool> CommitEnabled { get; }
     public IReadable<bool> CommitBusy { get; }
@@ -125,6 +126,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         StageAll = new Command(DoStageAll, hasUnstaged);
         UnstageAll = new Command(DoUnstageAll, hasStaged);
         DiscardAll = new Command(DoDiscardAll, hasUnstaged);
+        ToggleViewMode = new Command(DoToggleViewMode);
         OpError = Slice(s => s.OpError);
         CommitEnabled = Slice(s => s.CommitEnabled);
         CommitBusy = Slice(s => s.CommitBusy);
@@ -409,7 +411,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     }
 
     /// <summary>Switches between flat and tree view; persists the choice globally.</summary>
-    public void ToggleViewMode()
+    private void DoToggleViewMode()
     {
         var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
         _preferences.SetFileViewMode(next);
