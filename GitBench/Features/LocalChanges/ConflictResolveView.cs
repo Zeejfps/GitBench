@@ -81,8 +81,10 @@ internal sealed class ConflictResolveView : ContainerView
         var theirsChecked = new State<bool>(false);
         var oursChecked = new State<bool>(false);
 
-        var theirsCard = new ConflictCard(_ctx, ctx.Theirs, theirsChecked);
-        var oursCard = new ConflictCard(_ctx, ctx.Ours, oursChecked);
+        var theirsCard = new ConflictCard { Side = ctx.Theirs, Checked = theirsChecked }
+            .WithController<KbmController>().BuildView(_ctx);
+        var oursCard = new ConflictCard { Side = ctx.Ours, Checked = oursChecked }
+            .WithController<KbmController>().BuildView(_ctx);
         var junction = new MergeJunctionView(_theme, theirsChecked, oursChecked);
 
         var canMerge = new Derived<bool>(() => theirsChecked.Value || oursChecked.Value);
@@ -265,94 +267,94 @@ internal sealed class ConflictResolveView : ContainerView
     // A clickable commit card representing one side of the conflict. Selection state is owned
     // by the parent and shared with the matching checkbox; clicking the card toggles it, and
     // the accent border reflects it.
-    private sealed class ConflictCard : HoverableButton
+    private sealed record ConflictCard : Widget<ButtonState>
     {
-        private readonly State<bool> _checked;
+        public required ConflictSideInfo Side { get; init; }
+        public required State<bool> Checked { get; init; }
 
-        public ConflictCard(Context ctx, ConflictSideInfo side, State<bool> checkedState) : base(ctx)
+        protected override ButtonState CreateState(Context ctx) =>
+            new(new Command(() => Checked.Value = !Checked.Value));
+
+        protected override IWidget Build(Context ctx, ButtonState state) => new Box
         {
-            _checked = checkedState;
-            Width = CardWidth;
-
-            var theme = ctx.Theme();
-            var branchIcon = new TextView(ctx.Canvas)
-            {
-                Text = LucideIcons.Branch,
-                FontFamily = LucideIcons.FontFamily,
-                FontSize = 13f,
-                VerticalTextAlignment = TextAlignment.Center,
-            };
-            branchIcon.BindThemedTextColor(theme, s => s.Palette.TextMedium);
-
-            var name = new TextView(ctx.Canvas)
-            {
-                Text = side.Label,
-                VerticalTextAlignment = TextAlignment.Center,
-                TextOverflow = TextOverflow.Ellipsis,
-            };
-            name.BindThemedTextColor(theme, s => s.Palette.TextStrong);
-
-            var header = new FlexRowView
-            {
-                Gap = 8f,
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-                Children =
+            Width = CardWidth,
+            BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(8),
+            Background = Theme.Color(s => state.Hovered.Value ? s.Palette.SurfaceHover : s.Palette.SurfaceRaised),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
+                Checked.Value ? s.Palette.Accent : s.Palette.Border)),
+            Children =
+            [
+                new Padding
                 {
-                    BuildCheckIndicator(ctx, _checked),
-                    branchIcon,
-                    new FlexItem { Grow = 1, Child = name },
-                    BuildChangeBadge(ctx, side.Change),
-                },
-            };
-
-            var divider = new RectView { Height = 1 };
-            divider.BindThemedBackgroundColor(theme, s => s.Palette.Border);
-
-            var commitText = new TextView(ctx.Canvas)
-            {
-                Text = side.ShortSha.Length > 0 ? $"{side.ShortSha}  {side.Subject}" : side.Subject,
-                VerticalTextAlignment = TextAlignment.Center,
-                TextOverflow = TextOverflow.Ellipsis,
-            };
-            commitText.BindThemedTextColor(theme, s => s.Palette.TextSecondary);
-
-            var date = new TextView(ctx.Canvas) { Text = FormatDate(side.When), VerticalTextAlignment = TextAlignment.Center };
-            date.BindThemedTextColor(theme, s => s.Palette.TextMuted);
-
-            var commitRow = new FlexRowView
-            {
-                Gap = 8f,
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-                Children =
-                {
-                    new FlexItem { Grow = 1, Child = commitText },
-                    date,
-                },
-            };
-
-            var card = new RectView
-            {
-                BorderSize = BorderSizeStyle.All(1),
-                BorderRadius = BorderRadiusStyle.All(8),
-                Children =
-                {
-                    new PaddingView
-                    {
-                        Padding = new PaddingStyle { Left = 14, Right = 14, Top = 12, Bottom = 12 },
-                        Children =
+                    Amount = new PaddingStyle { Left = 14, Right = 14, Top = 12, Bottom = 12 },
+                    Children =
+                    [
+                        new Column
                         {
-                            new ColumnView { Gap = 10, Children = { header, divider, commitRow } },
+                            Gap = 10,
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                new Row
+                                {
+                                    Gap = 8,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        new Raw { View = BuildCheckIndicator(ctx, Checked) },
+                                        new Text
+                                        {
+                                            Value = LucideIcons.Branch,
+                                            FontFamily = LucideIcons.FontFamily,
+                                            FontSize = 13f,
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.Palette.TextMedium),
+                                        },
+                                        new Grow
+                                        {
+                                            Child = new Text
+                                            {
+                                                Value = Side.Label,
+                                                VAlign = TextAlignment.Center,
+                                                Overflow = TextOverflow.Ellipsis,
+                                                Color = Theme.Color(s => s.Palette.TextStrong),
+                                            },
+                                        },
+                                        new Raw { View = BuildChangeBadge(ctx, Side.Change) },
+                                    ],
+                                },
+                                new Box { Height = 1, Background = Theme.Color(s => s.Palette.Border) },
+                                new Row
+                                {
+                                    Gap = 8,
+                                    CrossAxis = CrossAxisAlignment.Center,
+                                    Children =
+                                    [
+                                        new Grow
+                                        {
+                                            Child = new Text
+                                            {
+                                                Value = Side.ShortSha.Length > 0 ? $"{Side.ShortSha}  {Side.Subject}" : Side.Subject,
+                                                VAlign = TextAlignment.Center,
+                                                Overflow = TextOverflow.Ellipsis,
+                                                Color = Theme.Color(s => s.Palette.TextSecondary),
+                                            },
+                                        },
+                                        new Text
+                                        {
+                                            Value = FormatDate(Side.When),
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(s => s.Palette.TextMuted),
+                                        },
+                                    ],
+                                },
+                            ],
                         },
-                    },
+                    ],
                 },
-            };
-            card.BindThemedBackgroundColor(theme, s => IsHovered.Value ? s.Palette.SurfaceHover : s.Palette.SurfaceRaised);
-            card.BindThemedBorderColor(theme, s => BorderColorStyle.All(
-                _checked.Value ? s.Palette.Accent : s.Palette.Border));
-            SetBackground(card);
-        }
-
-        protected override void OnClicked() => _checked.Value = !_checked.Value;
+            ],
+        };
 
         // A non-interactive checkbox visual in the card's top-left corner. The whole card is
         // the click target (ConflictCard.OnClicked), so this is purely an indicator — making
