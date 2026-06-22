@@ -43,12 +43,10 @@ internal sealed record DropdownWidget : Widget<ButtonState>
             Visible = ShowChevron,
         };
 
-        return new Box
+        return new BorderedButtonSurface
         {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Background = Theme.Color(s => s.BorderedButton.Surface(state)),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.BorderedButton.Border(state))),
+            State = state,
+            Radius = 3,
             Children =
             [
                 new Padding

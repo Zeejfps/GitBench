@@ -80,7 +80,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(s => s.Palette.TextSecondary),
                                         },
-                                        new DialogButtonWidget
+                                        new ActionDialogButton
                                         {
                                             Label = "View on GitHub",
                                             Role = DialogButtonRole.Primary,

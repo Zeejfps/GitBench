@@ -57,7 +57,7 @@ internal sealed record CommitBarWidget : Widget
         };
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
-        var commitWidget = new DialogButtonWidget
+        var commitWidget = new SecondaryDialogButton
         {
             Label = Prop.Bind<string?>(() =>
             {

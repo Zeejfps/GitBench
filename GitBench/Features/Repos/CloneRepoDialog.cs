@@ -30,7 +30,7 @@ internal sealed record CloneRepoDialog : Widget
         // No fixed Width — the button sizes to its label (it carries its own 16px horizontal
         // padding), so pinning a width clips "Browse…". Height matches the field beside it and the
         // footer buttons so the dialog's chrome is one size.
-        var browseButton = new DialogButtonWidget
+        var browseButton = new SecondaryDialogButton
         {
             Label = "Browse…",
             Command = new Command(() =>

@@ -12,13 +12,10 @@ internal sealed record AddRepoButton : Widget<ButtonState>
 {
     protected override ButtonState CreateState(Context ctx) => new();
 
-    protected override IWidget Build(Context ctx, ButtonState state) => new Box
+    protected override IWidget Build(Context ctx, ButtonState state) => new BorderedButtonSurface
     {
+        State = state,
         Height = 30,
-        BorderSize = BorderSizeStyle.All(1),
-        BorderRadius = BorderRadiusStyle.All(6),
-        Background = Theme.Color(s => s.BorderedButton.Surface(state)),
-        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.BorderedButton.Border(state))),
         Children =
         [
             new Text

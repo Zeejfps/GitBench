@@ -66,7 +66,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                                     Children =
                                     [
                                         new Spacer(),
-                                        new DialogButtonWidget
+                                        new ActionDialogButton
                                         {
                                             Label = "OK",
                                             Role = DialogButtonRole.Primary,

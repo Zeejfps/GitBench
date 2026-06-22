@@ -89,7 +89,7 @@ internal sealed class ConflictResolveView : ContainerView
 
         // The button names the action it will take, so the pick is confirmable before clicking:
         // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
-        var mergeButton = new DialogButtonWidget
+        var mergeButton = new ActionDialogButton
         {
             Label = Prop.Bind<string?>(() => (theirsChecked.Value, oursChecked.Value) switch
             {
@@ -110,7 +110,7 @@ internal sealed class ConflictResolveView : ContainerView
             Height = ButtonHeight,
         }.WithController<KbmController>().BuildView(_ctx);
 
-        var openButton = new DialogButtonWidget
+        var openButton = new SecondaryDialogButton
         {
             Label = "Merge in editor",
             Icon = LucideIcons.ExternalLink,
@@ -120,7 +120,7 @@ internal sealed class ConflictResolveView : ContainerView
 
         // For conflicts already resolved outside the app: stages the file as-is so the path
         // clears the unmerged state, no side-pick needed.
-        var resolvedButton = new DialogButtonWidget
+        var resolvedButton = new SecondaryDialogButton
         {
             Label = "Mark as resolved",
             Icon = LucideIcons.CheckSquare,

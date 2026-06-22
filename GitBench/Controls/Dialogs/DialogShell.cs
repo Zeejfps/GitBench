@@ -127,14 +127,14 @@ internal sealed class DialogShell
 
         _errorView = DialogFrame.ErrorView(_ctx);
 
-        var cancelView = new DialogButtonWidget
+        var cancelView = new SecondaryDialogButton
         {
             Label = CancelLabel,
             Command = new Command(_onClose, _cancelEnabled),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>().BuildView(_ctx);
 
-        var actionView = new DialogButtonWidget
+        var actionView = new ActionDialogButton
         {
             Label = _actionLabel,
             Role = Action.Role,
