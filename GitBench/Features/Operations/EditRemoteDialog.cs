@@ -41,10 +41,6 @@ internal sealed record EditRemoteDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var schemeDropdown = new SchemeDropdown(ctx);
-        schemeDropdown.Bind(vm.Scheme, schemeDropdown.SetScheme);
-        schemeDropdown.SchemeSelected += vm.SetScheme;
-
         return new Dialog
         {
             ViewModel = vm,
@@ -69,7 +65,7 @@ internal sealed record EditRemoteDialog : Widget
                 {
                     Label = "Repository URL",
                     Value = vm.Url,
-                    Accessory = new Raw { View = schemeDropdown },
+                    Accessory = new SchemeDropdown { Scheme = vm.Scheme, OnSelect = vm.SetScheme },
                 },
             ],
         };
@@ -81,82 +77,38 @@ internal sealed record EditRemoteDialog : Widget
 /// <see cref="RemoteDropdown"/>: a bordered button that pops a <see cref="RepoBarContextMenu"/>
 /// with the two scheme choices and raises <see cref="SchemeSelected"/> on pick.
 /// </summary>
-internal sealed class SchemeDropdown : HoverableButton
+internal sealed record SchemeDropdown : Widget
 {
-    private readonly Context _ctx;
-    private readonly TextView _labelView;
-    private RemoteUrlScheme _scheme = RemoteUrlScheme.Other;
+    /// <summary>Read source for the current scheme (derived from the URL).</summary>
+    public required IReadable<RemoteUrlScheme> Scheme { get; init; }
 
-    public event Action<RemoteUrlScheme>? SchemeSelected;
+    /// <summary>Invoked when the user picks a scheme; the owner rewrites the URL.</summary>
+    public required Action<RemoteUrlScheme> OnSelect { get; init; }
 
-    public SchemeDropdown(Context ctx) : base(ctx)
+    protected override IWidget Build(Context ctx) => new DropdownWidget
     {
-        _ctx = ctx;
-        var theme = ctx.Theme();
-        Width = 84;
-        Height = 28;
-
-        _labelView = new TextView(ctx.Canvas)
-        {
-            Text = LabelFor(_scheme),
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        _labelView.BindTextColor(() => theme.Styles.Value.DialogFrame.TitleText);
-
-        var chevron = new TextView(ctx.Canvas)
-        {
-            Text = LucideIcons.ChevronDown,
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            VerticalTextAlignment = TextAlignment.Center,
-            HorizontalTextAlignment = TextAlignment.Center,
-            Width = 14,
-        };
-        chevron.BindTextColor(() => theme.Styles.Value.DialogBody.RowText);
-
-        var row = new FlexRowView
-        {
-            Gap = 4,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
+        Width = 84,
+        Height = 28,
+        Gap = 4,
+        Children =
+        [
+            new Grow
             {
-                new FlexItem { Grow = 1, Child = _labelView },
-                chevron,
-            },
-        };
-
-        var background = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
-            Children =
-            {
-                new PaddingView
+                Child = new Text
                 {
-                    Padding = new PaddingStyle { Left = 8, Right = 6, Top = 4, Bottom = 4 },
-                    Children = { row },
+                    VAlign = TextAlignment.Center,
+                    Value = Prop.Bind<string?>(() => LabelFor(Scheme.Value)),
+                    Color = Theme.Color(s => s.DialogFrame.TitleText),
                 },
             },
-        };
-        BorderedButtonChrome.Bind(background, theme, IsHovered);
-        SetBackground(background);
-    }
+        ],
+    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
 
-    public void SetScheme(RemoteUrlScheme scheme)
-    {
-        _scheme = scheme;
-        _labelView.Text = LabelFor(scheme);
-    }
-
-    protected override void OnClicked()
-    {
-        var items = new List<RepoBarContextMenu.Item>
-        {
-            new(LabelFor(RemoteUrlScheme.Https), () => SchemeSelected?.Invoke(RemoteUrlScheme.Https)),
-            new(LabelFor(RemoteUrlScheme.Ssh), () => SchemeSelected?.Invoke(RemoteUrlScheme.Ssh)),
-        };
-        RepoBarContextMenu.Show(_ctx, Position.BottomLeft, items);
-    }
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildItems() =>
+    [
+        new(LabelFor(RemoteUrlScheme.Https), () => OnSelect(RemoteUrlScheme.Https)),
+        new(LabelFor(RemoteUrlScheme.Ssh), () => OnSelect(RemoteUrlScheme.Ssh)),
+    ];
 
     private static string LabelFor(RemoteUrlScheme scheme) => scheme switch
     {
