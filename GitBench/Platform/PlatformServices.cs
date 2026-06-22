@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GitBench.App;
 using GitBench.Controls.Dialogs;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using ZGF.Gui;
@@ -59,6 +60,7 @@ internal static class PlatformServices
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 
             var bus = context.Require<IMessageBus>();
+            var locale = context.Require<State<Locale>>();
 
             void ToggleTheme() =>
                 themeMode.Value = themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
@@ -101,6 +103,9 @@ internal static class PlatformServices
                         Items =
                         {
                             new AppMenuItem { Title = "Toggle Light/Dark Theme", OnClick = ToggleTheme },
+                            AppMenuItem.Separator,
+                            new AppMenuItem { Title = "Language: English", OnClick = () => locale.Value = Locale.En },
+                            new AppMenuItem { Title = "Language: Pseudo (test)", OnClick = () => locale.Value = Locale.Pseudo },
                             AppMenuItem.Separator,
                             new AppMenuItem
                             {

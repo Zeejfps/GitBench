@@ -5,6 +5,22 @@ runtime** with no restart, by mirroring the existing theme stack. Translations
 live in **files** (translator-friendly); strongly-typed accessors are
 **auto-generated** from those files (compile-time safety, no runtime missing-key).
 
+## Status
+
+- **Phase 1 — DONE** (builds clean, 3 xUnit tests pass; GUI re-render not yet
+  eyeballed on macOS). Infra, source generator, preferences persistence, macOS
+  Language menu, and the About dialog conversion are in. See the Phase 1 section
+  for what shipped vs. deferred.
+- **Phases 2–4 — not started.**
+
+Key decision resolved during Phase 1: **the catalog bakes values into generated C#
+at compile time (no runtime JSON)**, rather than loading per-locale files at
+runtime. NativeAOT (Release) + the existing source-gen'd `System.Text.Json` made a
+baked model the clean choice — it mirrors `ThemeStyles.Dark`/`.Light` static
+instances exactly, has zero runtime parsing, and keeps files as the source of
+truth. Trade-off: changing a translation requires a recompile (fine for a shipped
+desktop binary). The runtime *language switch* is unaffected.
+
 ## Scope (phased, locked with user)
 
 1. **Phase 1–3 — Latin only** (e.g. en, fr, de, es). Needs the i18n infra +
@@ -39,15 +55,19 @@ engine already exist — this is mostly assembly, not invention.
 
 1. **Source of truth = per-language JSON files.** `en.json` is the canonical
    reference (defines the key set + parameter/plural shape). One file per locale.
-2. **Strongly-typed accessors are generated from `en.json`** (Roslyn source
-   generator; standalone tool as fallback — see Codegen). Values are loaded from
-   the active locale's file at runtime; the generated type is the *schema*, the
-   file is the *data*. This is the hybrid: type-safe keys + file-based translations.
-3. **Build-time key parity validation.** The generator diagnoses any locale file
-   that is missing/extra/param-mismatched vs `en.json`. This *is* the
-   "find untranslated strings" tooling — free, and it fails the build.
-4. **Runtime switch mirrors theme exactly:** `State<Locale>` → `LocalizationService`
-   (`Derived<Strings>`) → `L.T(...)` deferred `Prop` → bound into `Text.Value`.
+2. **Strongly-typed accessors are generated from the JSON** (Roslyn source
+   generator — DONE; the standalone-tool fallback proved unnecessary). Values are
+   **baked into generated C# at compile time** as static `Strings.En` instances
+   (and a derived `Strings.Pseudo`); the generated type is the *schema*, the file
+   is the *data*. No runtime JSON parsing → NativeAOT-clean. (See Status for why
+   baked beat the runtime-load model originally sketched below.)
+3. **Build-time key parity validation — PLANNED (Phase 2).** Once a second locale
+   exists, the generator will diagnose any file missing/extra/param-mismatched vs
+   `en.json` → free "find untranslated strings" tooling that fails the build. The
+   Phase 1 generator reads only `en.json`, so there's nothing to cross-check yet.
+4. **Runtime switch mirrors theme exactly — DONE:** `State<Locale>` →
+   `LocalizationService` (`Derived<Strings>`) → `L.T(...)` deferred `Prop` → bound
+   into `Text.Value`/`Label`.
 5. **Locale persisted in `Preferences`**, like `Theme`.
 6. **Non-translatable by policy:** git refs, branch/tag names, SHAs, file paths,
    raw git output. Only chrome/labels/messages are localized.
@@ -70,36 +90,41 @@ engine already exist — this is mostly assembly, not invention.
 }
 ```
 
-- **Plain string** → generated **property**.
+- **Plain string** → generated **property**. *(Phase 1: the only form the generator
+  currently supports.)*
 - **String with `{placeholders}`** → generated **method** with one param per
   placeholder (name from placeholder; type `object`/`string` by default, see Open
-  Questions for typed params).
+  Questions for typed params). *(Phase 2.)*
 - **Object keyed by plural categories** (`one`/`other`/… CLDR names) → generated
   **method** that selects a form via the locale's plural rule, then formats.
+  *(Phase 2.)*
 
-### Codegen (`GitBench.Localization.Generator`)
+### Codegen (`GitBench.Localization.Generator`) — DONE (Phase 1)
 
-Recommended: a **Roslyn incremental source generator** consuming the `*.json`
-files as `AdditionalFiles`. It emits:
+A **Roslyn incremental source generator** (netstandard2.0 analyzer, referenced with
+`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) consumes `en.json` as
+an `AdditionalFile` and emits `Strings.g.cs`. It reads the JSON at compile time with
+a tiny self-contained reader (`MiniJson`, flat string pairs only) — no JSON
+dependency inside the analyzer, no JSON at app runtime.
 
-- `partial class Strings` with a member per key
-  (`commit.button` → `string CommitButton`,
-  `files.stage_n` → `string StageN(int count)`).
-- `StringsLoader.Load(Locale)` — parses the active locale's JSON into a frozen
-  lookup and constructs a `Strings` bound to it.
-- Compile diagnostics for key parity / param mismatches across locales.
+It emits a `partial class Strings` with:
 
-Generated members are dict-backed lookups by constant key; because parity is
-validated at build time, runtime missing-key is impossible:
+- one `required string` member per key (`about.view_on_github` → `AboutViewOnGithub`),
+- a baked `static readonly Strings En` with the English literals,
+- a derived `static readonly Strings Pseudo` (accented + length-padded English),
+- `static Strings For(Locale locale)` switching over the baked instances.
 
 ```csharp
-public string CommitButton => _s["commit.button"];
-public string StageN(int count) => Plural(_culture, count, _s, "files.stage_n");
+public required string AboutViewOnGithub { get; init; }
+public static readonly Strings En = new() { AboutViewOnGithub = "View on GitHub", … };
+public static readonly Strings Pseudo = new() { AboutViewOnGithub = "[Víéw óñ GítHúb ····]", … };
+public static Strings For(Locale locale) => locale switch { Locale.Pseudo => Pseudo, _ => En };
 ```
 
-Fallback if source-generator friction is high: a tiny committed console tool
-(`dotnet run`) or a pre-build MSBuild target that writes `Strings.g.cs`. Same
-output, reviewable diff, slightly more manual. Start here if needed, promote later.
+This mirrors `ThemeStyles.Dark`/`.Light`: the `Derived<Strings>` in the service just
+calls `Strings.For(locale.Value)`. Referencing a key that isn't in `en.json` is a
+compile error. *(The standalone-tool fallback was not needed; the source generator
+wired up cleanly under net10.)*
 
 ## Runtime architecture (mirror the theme stack)
 
@@ -111,29 +136,31 @@ State<Locale>  (registered in AppServices, like State<ThemeMode>)
         │
         ▼
 LocalizationService : ILocalizationService
-    _strings = new Derived<Strings>(() => StringsLoader.Load(_locale.Value));
+    _strings = new Derived<Strings>(() => Strings.For(_locale.Value));
     IReadable<Strings> Strings => _strings;
         │
         ▼
-L.T(s => s.CommitButton)  ≡  Prop.Deferred(ctx => ctx.Localization().Strings.Bind(select))
+L.T(s => s.AboutViewOnGithub)  ≡  Prop.Deferred(ctx => ctx.Localization().Strings.Bind(select))
         │
         ▼
-new Text { Value = L.T(s => s.CommitButton) }   // re-renders on switch
+new Text { Value = L.T(s => s.AboutViewOnGithub) }   // re-renders on switch
 ```
 
-New files (app-side, alongside the theme equivalents):
+Files (app-side, alongside the theme equivalents):
 
-- `GitBench/Localization/Locale.cs` — `enum Locale { En, Fr, De, Es, Pseudo }`
-  + `Locale → CultureInfo` map (for number/date formatting).
-- `GitBench/Localization/ILocalizationService.cs` + `LocalizationService.cs`
-  — mirrors `IThemeService<T>` / `ThemeService`.
-- `GitBench/Localization/L.cs` — `L.T(...)` (mirror of `Widgets/Theme.cs`).
-- `GitBench/Localization/LocalizationWidgetExtensions.cs` —
-  `ctx.Localization()` (mirror of `ThemeWidgetExtensions.cs`).
-- `GitBench/Localization/Strings/*.json` + generated `Strings.g.cs`.
-- `GitBench/Localization/PluralRules.cs` + `Format.cs` (number/date/relative-time).
+- `GitBench/Localization/Locale.cs` — DONE. Currently `enum Locale { En, Pseudo }`;
+  grows as locales are added. A `Locale → CultureInfo` map arrives with formatting
+  in Phase 2.
+- `GitBench/Localization/ILocalizationService.cs` + `LocalizationService.cs` — DONE.
+  Mirrors `IThemeService<T>` / `ThemeService`.
+- `GitBench/Localization/L.cs` — DONE. `L.T(...)` mirror of `Widgets/Theme.cs`.
+- `GitBench/Localization/LocalizationWidgetExtensions.cs` — DONE. `ctx.Localization()`.
+- `GitBench/Localization/Strings/en.json` + generated `Strings.g.cs` — DONE.
+- `GitBench.Localization.Generator/` (separate analyzer project) — DONE.
+- `GitBench/Localization/PluralRules.cs` + `Format.cs` (number/date/relative-time)
+  — Phase 2, not yet created.
 
-Wiring in `AppServices.cs` (right next to the theme block at lines 31-34):
+Wiring in `AppServices.cs` (right after the theme block) — DONE:
 
 ```csharp
 var locale = new State<Locale>(preferences.Current.Language);
@@ -159,18 +186,11 @@ new Text { Value = L.T(s => s.StageN(fileCount)) }
 ```
 
 For a string that *also* depends on other reactive state (e.g. a `State<int>`
-count), compose with the existing compute form so both the count and the locale
-are tracked:
-
-```csharp
-new Text { Value = Prop.Deferred(ctx =>
-    Prop.Bind(() => ctx.Localization().Strings.Value.StageN(count.Value))) }
-```
-
-> Phase-1 verification: confirm `IReadable<T>.Bind(select)` runs `select` under
-> dependency tracking (so reads inside `select` register too). If yes, the simple
-> `L.T` form covers more dynamic cases; if not, use the compute form above.
-> (`.Select` in `ReadableExtensions.cs:12` is the `IReadable`-returning sibling.)
+count): **resolved** — `PropExtensions.Bind(select)` runs `select` inside a tracked
+`Prop.Bind(() => …)` compute (`Prop.cs:217-218`), so reads of other observables
+*inside* the selector register as dependencies too. That means the plain `L.T`
+form already covers dynamic cases — `L.T(s => s.StageN(count.Value))` re-fires on
+both a locale change and a `count` change. No special compute form needed.
 
 ### Formatters (`Format.cs`)
 
@@ -182,16 +202,28 @@ new Text { Value = Prop.Deferred(ctx =>
 
 ## Phased execution
 
-### Phase 1 — Infra + live switch, English only (prove the loop)
-- Add `Locale`, `State<Locale>`, `LocalizationService`, `L.T`, `ctx.Localization()`.
-- Add `Preferences.Language` + `SetLanguage` + wiring in `AppServices`.
-- Stand up the JSON catalog with `en.json` + codegen producing `Strings`.
-- Add a **language menu item** (mirror the existing theme toggle in
-  `Platform/PlatformServices.cs`); rebuild the **native macOS app menu** on switch
-  (it's built once at startup — needs a rebuild hook).
-- Convert **2 screens** (e.g. About dialog + one Features dialog) to `L.T`.
-- Ship the **Pseudo locale** and switch to it to confirm the loop end-to-end.
-- **Exit criteria:** switching language live re-renders the converted screens.
+### Phase 1 — Infra + live switch, English only (prove the loop) — DONE
+Shipped:
+- ✅ `Locale`, `State<Locale>`, `LocalizationService`, `L.T`, `ctx.Localization()`.
+- ✅ `Preferences.Language` + `SetLanguage` + persistence in `PreferencesStore`
+  (string-enum) + wiring in `AppServices`.
+- ✅ JSON catalog `en.json` + source generator producing `Strings` (En + Pseudo).
+- ✅ macOS **Language menu items** in the View menu (English / Pseudo) that flip
+  `State<Locale>`.
+- ✅ **Pseudo locale** for finding un-localized text / layout testing.
+- ✅ About dialog converted (`AboutViewOnGithub`, `AboutCopyright`).
+- ✅ 3 xUnit tests proving the reactive switch (`LocalizationServiceTests`).
+
+Deferred out of Phase 1 (rolled into later phases):
+- ⏳ **Native macOS menu rebuild on switch.** The menu *has* language items, but the
+  menu's own titles are still hardcoded English and don't re-render on switch
+  (native bar is built once at startup). Rebuild hook → Phase 3.
+- ⏳ **Second screen.** Only the About dialog was converted (kept the increment
+  small); the broader screen conversion is the Phase 3 sweep.
+
+- **Exit criteria — met (modulo eyeballing):** build is clean and the reactive
+  switch is proven by tests. The on-screen re-render (open About → View → "Language:
+  Pseudo (test)") still needs a manual run on macOS (`dotnet run --project GitBench`).
 
 ### Phase 2 — Second Latin language + formatting correctness
 - Add `fr.json` (or de). Implement `PluralRules` for targeted locales
@@ -228,11 +260,13 @@ new Text { Value = Prop.Deferred(ctx =>
 ## Testing & tooling
 
 - **Build-time key parity** (from the generator) is the primary safety net for
-  untranslated keys.
-- **Pseudo-localization** as the manual completeness + layout-expansion check.
+  untranslated keys. *(Phase 2 — needs a second locale to cross-check.)*
+- **Pseudo-localization** as the manual completeness + layout-expansion check. ✅
+  shipped (the `Pseudo` locale).
 - Unit tests: plural-rule selection per locale; `Format.RelativeTime` boundaries.
-- A switch test: render a converted screen, flip `State<Locale>`, assert text
-  changed (proves the reactive path, like a theme-swap test).
+  *(Phase 2.)*
+- A switch test: flip `State<Locale>`, assert the catalog value changed (proves the
+  reactive path, like a theme-swap test). ✅ done — `LocalizationServiceTests`.
 
 ## Open questions / risks
 
@@ -243,11 +277,17 @@ new Text { Value = Prop.Deferred(ctx =>
 2. **CLDR plural completeness.** .NET has no built-in CLDR plural rules. Hand-code
    selectors for the targeted locales now; consider a small lib if the language
    set grows.
-3. **Catalog packaging.** Embed locale JSON as embedded resources (precedent:
-   `EmbeddedAssets.LoadFontBytes`) vs. ship as content files (hot-reloadable). Lean
-   embedded for release, optionally content in dev.
-4. **`Bind` tracking semantics** — verify in Phase 1 (see Authoring API note).
+3. **Catalog packaging — RESOLVED.** Values are baked into generated C# at compile
+   time; there are no locale files at runtime to embed or ship. (Originally framed
+   as embedded-resource vs. content-file; the baked model makes it moot. The only
+   cost is recompile-to-change-a-translation, accepted in Status.)
+4. **`Bind` tracking semantics — RESOLVED.** `PropExtensions.Bind` runs the
+   selector inside a tracked compute (`Prop.cs:217-218`), so `L.T` tracks
+   observables read inside the selector. See Authoring API.
 5. **Section 4 rendering specifics** (surrogate bugs, fallback, BiDi) came from a
    sub-agent read of `RenderedCanvas`/`TextWrapper`; re-confirm exact locations when
    Phase 4 starts. The *directional* conclusion (shaping ✓, fallback ✗, RTL ✗) is
    solid; the reactive/Prop/Theme/Preferences findings above were verified directly.
+6. **Generator schema is flat-string-only today.** Plural/parameterized entry
+   support (object values, `{placeholders}` → methods) and cross-locale key-parity
+   diagnostics both land in Phase 2 when the second locale arrives.

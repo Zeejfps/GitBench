@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -82,7 +83,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         },
                                         new ActionDialogButton
                                         {
-                                            Label = "View on GitHub",
+                                            Label = L.T(s => s.AboutViewOnGithub),
                                             Role = DialogButtonRole.Primary,
                                             Command = new Command(() => ctx.Get<IPlatformShell>()?.OpenUrl(RepoUrl)),
                                             Height = DialogFrame.DefaultButtonHeight,
@@ -90,7 +91,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         }.WithController<KbmController>(),
                                         new Text
                                         {
-                                            Value = "© 2026 Zee Vasilyev",
+                                            Value = L.T(s => s.AboutCopyright),
                                             HAlign = TextAlignment.Center,
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(s => s.Palette.TextMuted),

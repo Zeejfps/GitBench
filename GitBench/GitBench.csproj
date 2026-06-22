@@ -66,6 +66,12 @@
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui.Desktop\ZGF.Gui.Desktop.csproj" />
+        <ProjectReference Include="..\GitBench.Localization.Generator\GitBench.Localization.Generator.csproj"
+                          OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <AdditionalFiles Include="Localization\Strings\*.json" />
     </ItemGroup>
 
     <!-- macOS .app bundling is handled by `vpk pack` in the release workflow (it builds the

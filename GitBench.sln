@@ -34,6 +34,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGF.Rendering.Metal", "fram
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZGF.Gui.Metal", "framework\ZGF.Gui.Metal\ZGF.Gui.Metal.csproj", "{0BB84019-3E8F-443D-960E-06568DEDFA46}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GitBench.Localization.Generator", "GitBench.Localization.Generator\GitBench.Localization.Generator.csproj", "{98512420-A105-4D65-8B2A-C436FA8E1EB6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -224,6 +226,18 @@ Global
 		{0BB84019-3E8F-443D-960E-06568DEDFA46}.Release|x64.Build.0 = Release|Any CPU
 		{0BB84019-3E8F-443D-960E-06568DEDFA46}.Release|x86.ActiveCfg = Release|Any CPU
 		{0BB84019-3E8F-443D-960E-06568DEDFA46}.Release|x86.Build.0 = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|x64.Build.0 = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Debug|x86.Build.0 = Debug|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|x64.ActiveCfg = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|x64.Build.0 = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|x86.ActiveCfg = Release|Any CPU
+		{98512420-A105-4D65-8B2A-C436FA8E1EB6}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GitBench.Features.LocalChanges;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Theming;
 
 namespace GitBench.App;
@@ -14,6 +15,7 @@ public static class PreferencesStore
     {
         public int? SchemaVersion { get; set; }
         public ThemeMode? Theme { get; set; } = ThemeMode.Dark;
+        public Locale? Language { get; set; } = Locale.En;
         public int? WindowWidth { get; set; } = 1400;
         public int? WindowHeight { get; set; } = 900;
         public float? RepoBarWidth { get; set; } = 220f;
@@ -38,6 +40,7 @@ public static class PreferencesStore
             return new Preferences
             {
                 Theme = file.Theme ?? defaults.Theme,
+                Language = file.Language ?? defaults.Language,
                 WindowWidth = file.WindowWidth is > 0 ? file.WindowWidth.Value : defaults.WindowWidth,
                 WindowHeight = file.WindowHeight is > 0 ? file.WindowHeight.Value : defaults.WindowHeight,
                 RepoBarWidth = file.RepoBarWidth is > 0 ? file.RepoBarWidth.Value : defaults.RepoBarWidth,
@@ -59,6 +62,7 @@ public static class PreferencesStore
         {
             SchemaVersion = CurrentSchemaVersion,
             Theme = preferences.Theme,
+            Language = preferences.Language,
             WindowWidth = preferences.WindowWidth,
             WindowHeight = preferences.WindowHeight,
             RepoBarWidth = preferences.RepoBarWidth,

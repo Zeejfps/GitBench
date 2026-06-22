@@ -1,0 +1,39 @@
+using GitBench.Localization;
+using Xunit;
+using ZGF.Observable;
+
+namespace GitBench.Tests;
+
+public class LocalizationServiceTests
+{
+    [Fact]
+    public void StringsReflectInitialLocale()
+    {
+        using var service = new LocalizationService(new State<Locale>(Locale.En));
+        Assert.Equal("View on GitHub", service.Strings.Value.AboutViewOnGithub);
+    }
+
+    [Fact]
+    public void ChangingLocalePushesNewCatalogToSubscribers()
+    {
+        var locale = new State<Locale>(Locale.En);
+        using var service = new LocalizationService(locale);
+
+        string? observed = null;
+        using var _ = service.Strings.Subscribe(s => observed = s.AboutViewOnGithub);
+        Assert.Equal("View on GitHub", observed);
+
+        locale.Value = Locale.Pseudo;
+
+        Assert.NotNull(observed);
+        Assert.NotEqual("View on GitHub", observed);
+        Assert.Equal(Strings.Pseudo.AboutViewOnGithub, observed);
+    }
+
+    [Fact]
+    public void PseudoLocaleDiffersFromEnglishForEveryKey()
+    {
+        Assert.NotEqual(Strings.En.AboutViewOnGithub, Strings.Pseudo.AboutViewOnGithub);
+        Assert.NotEqual(Strings.En.AboutCopyright, Strings.Pseudo.AboutCopyright);
+    }
+}

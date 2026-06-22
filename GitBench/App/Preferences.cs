@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Theming;
 
 namespace GitBench.App;
@@ -6,6 +7,7 @@ namespace GitBench.App;
 public sealed record Preferences
 {
     public ThemeMode Theme { get; init; } = ThemeMode.Dark;
+    public Locale Language { get; init; } = Locale.En;
     public int WindowWidth { get; init; } = 1400;
     public int WindowHeight { get; init; } = 900;
     public float RepoBarWidth { get; init; } = 220f;
