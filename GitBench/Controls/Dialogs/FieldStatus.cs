@@ -1,7 +1,7 @@
 namespace GitBench.Controls.Dialogs;
 
 /// <summary>
-/// Severity of a <see cref="FieldStatus"/> shown beneath a <see cref="LabeledInputField"/>.
+/// Severity of a <see cref="FieldStatus"/> shown beneath a <see cref="GitBench.Widgets.LabeledInput"/>.
 /// Drives the field's border + message color: <see cref="Error"/> reuses the dialog error
 /// token, <see cref="Warning"/> the dialog warning (amber) token.
 /// </summary>
