@@ -34,7 +34,8 @@ internal sealed record WorktreeChevron : Widget<ButtonState>
                     Color = Theme.Color(s => s.Palette.TextSecondary),
                     Value = Prop.Bind<string?>(() =>
                         !vm.HasChildren.Value ? string.Empty
-                        : vm.IsExpanded.Value ? LucideIcons.ChevronDown : LucideIcons.ChevronRight),
+                        : vm.IsExpanded.Value ? LucideIcons.ChevronDown
+                        : Direction.IsRtl(ctx) ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight),
                 },
             ],
         };

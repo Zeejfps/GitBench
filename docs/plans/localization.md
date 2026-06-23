@@ -516,7 +516,7 @@ baseline). Shipped:
 #### Phase 6b — Layout mirroring — IN PROGRESS (text + containers + custom-painted views DONE; controls remain)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
-running-app file lock); **116 ZGF.Gui.Tests pass** (+14 new across text+containers+inheritance) and **GitBench 113
+running-app file lock); **117 ZGF.Gui.Tests pass** (+15 new across text+containers+inheritance+padding) and **GitBench 113
 pass** (same 12 pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
 text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
 (Branches/Commits/Diff) at once, with no per-view edits. Shipped:
@@ -558,6 +558,13 @@ whole tree mirrors — no per-container wiring, no canvas side-channel. This rep
   *and* a Column's cross axis, reverses order, swaps Start/End/SpaceBetween — vertical coords untouched,
   composes through nesting. **`BorderLayoutView`** swaps West↔East. Both read the inherited property, so
   *directly-constructed* instances (in custom views) mirror too — no call-site wiring.
+- **`PaddingView`** treats `PaddingStyle.Left`/`Right` as inline start/end and **swaps them under `IsRtl`**,
+  so a nesting indent (a larger `Left`, e.g. the RepoBar's per-depth tree indent) insets from the right
+  and any asymmetric padding mirrors — the systemic fix for "foldout items / tabs not mirrored".
+- **Directional glyphs in composed widgets** (which have no `View` at build): a tiny `Direction.IsRtl(ctx)`
+  helper reads the locale culture inside a `Prop.Bind` so the **expand chevrons** in the RepoBar group
+  header and worktree/submodule fold toggles flip ChevronRight→ChevronLeft (the inherited `View.IsRtl`
+  drives *layout*; this is only glyph choice). The custom-painted views inline the same flip directly.
 - **`BranchesView`** (custom paint): a `Place(left, …)` helper reflects the chevron/icon/name/badge rects
   when `IsRtl`; in-box text right-aligns via the canvas text base; the collapsed chevron flips
   ChevronRight→ChevronLeft. Hit-testing is row-index based, so the draw mirror doesn't desync clicks.

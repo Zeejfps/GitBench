@@ -39,7 +39,7 @@ internal sealed record GroupHeaderRow : Widget
                             [
                                 new Text
                                 {
-                                    Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value)),
+                                    Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value, Direction.IsRtl(ctx))),
                                     FontFamily = LucideIcons.FontFamily,
                                     FontSize = 11f,
                                     HAlign = TextAlignment.Center,
@@ -99,5 +99,6 @@ internal sealed record GroupHeaderRow : Widget
         return items;
     }
 
-    private static string ChevronFor(bool isCollapsed) => isCollapsed ? LucideIcons.ChevronRight : LucideIcons.ChevronDown;
+    private static string ChevronFor(bool isCollapsed, bool rtl) =>
+        isCollapsed ? (rtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight) : LucideIcons.ChevronDown;
 }
