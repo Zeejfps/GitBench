@@ -604,7 +604,10 @@ Arabic input reads right-aligned, *regardless of locale*. Keying on **content** 
 direction is the crucial bit: a left-aligned-but-content-LTR field in an RTL locale keeps a correct
 caret. The caret x, selection rect, hit-test (`GetCaretIndexFromPoint`) and the text-draw box origin all
 mirror off that resolved direction; the scroll *calculation* is direction-identical (prefix width is
-"distance from the leading edge" either way) so only the draw origin/sign flips. **Limits:** per-cluster
+"distance from the leading edge" either way) so only the draw origin/sign flips. **Arrow keys move
+visually, not logically:** under an RTL field Left/Right flip to the opposite logical step (and the word
+variants with them), so Left always moves the caret toward the left of the screen — the controller picks
+the logical method from `TextInputView.IsContentRtl`; LTR is unchanged. **Limits:** per-cluster
 precision holds for a unidirectional line; mixed L+R *within one line* and multi-line (`Wrap`) RTL
 selection stay on the LTR path — a true fix needs logical-index→visual-x cluster mapping from the
 shaper (a separate effort). LTR is byte-identical. **This is the one core interaction not unit-testable
