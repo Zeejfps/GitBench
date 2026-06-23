@@ -105,6 +105,7 @@ internal static class PlatformServices
                             new AppMenuItem { Title = "Toggle Light/Dark Theme", OnClick = ToggleTheme },
                             AppMenuItem.Separator,
                             new AppMenuItem { Title = "Language: English", OnClick = () => locale.Value = Locale.En },
+                            new AppMenuItem { Title = "Language: Español", OnClick = () => locale.Value = Locale.Es },
                             new AppMenuItem { Title = "Language: Pseudo (test)", OnClick = () => locale.Value = Locale.Pseudo },
                             AppMenuItem.Separator,
                             new AppMenuItem

@@ -36,4 +36,24 @@ public class LocalizationServiceTests
         Assert.NotEqual(Strings.En.AboutViewOnGithub, Strings.Pseudo.AboutViewOnGithub);
         Assert.NotEqual(Strings.En.AboutCopyright, Strings.Pseudo.AboutCopyright);
     }
+
+    [Fact]
+    public void SpanishCatalogIsBakedFromEsJson()
+    {
+        Assert.Equal("Ver en GitHub", Strings.Es.AboutViewOnGithub);
+    }
+
+    [Fact]
+    public void SwitchingToSpanishPushesTheSpanishCatalog()
+    {
+        var locale = new State<Locale>(Locale.En);
+        using var service = new LocalizationService(locale);
+
+        string? observed = null;
+        using var _ = service.Strings.Subscribe(s => observed = s.AboutViewOnGithub);
+
+        locale.Value = Locale.Es;
+
+        Assert.Equal("Ver en GitHub", observed);
+    }
 }

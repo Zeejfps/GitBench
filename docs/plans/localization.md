@@ -61,12 +61,13 @@ engine already exist — this is mostly assembly, not invention.
    (and a derived `Strings.Pseudo`); the generated type is the *schema*, the file
    is the *data*. No runtime JSON parsing → NativeAOT-clean. (See Status for why
    baked beat the runtime-load model originally sketched below.)
-3. **Build-time validation — PARTIAL.** Cross-locale key *parity* is still Phase 2
-   (needs a second file to diff against `en.json`). But the Phase 1 generator already
-   fails the build on the two single-locale invariants: a `Locale` enum case with no
-   baked catalog (`LOC003`, drift guard) and a key that collides with another key or a
-   built-in member (`LOC002`, e.g. a `for`/`en`/`pseudo` key). Both surface as clear
-   diagnostics naming the offending key/case instead of cryptic `csc` errors.
+3. **Build-time validation — DONE (flat strings).** The generator fails the build on:
+   a `Locale` enum case with no baked catalog (`LOC003`, drift guard); a key that
+   collides with another key or a built-in member (`LOC002`, e.g. a `for`/`en`/`es`
+   key); and a translation missing a reference key (`LOC004`) or carrying an unknown
+   one (`LOC005`, warning) — the "find untranslated strings" net. All name the offending
+   key/locale instead of emitting cryptic `csc` errors. *(Param/plural-shape parity waits
+   on Phase 2, when those entry forms exist.)*
 4. **Runtime switch mirrors theme exactly — DONE:** `State<Locale>` →
    `LocalizationService` (`Derived<Strings>`) → `L.T(...)` deferred `Prop` → bound
    into `Text.Value`/`Label`.
@@ -104,15 +105,18 @@ engine already exist — this is mostly assembly, not invention.
 ### Codegen (`GitBench.Localization.Generator`) — DONE (Phase 1)
 
 A **Roslyn incremental source generator** (netstandard2.0 analyzer, referenced with
-`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) consumes `en.json` as
-an `AdditionalFile` and emits `Strings.g.cs`. It reads the JSON at compile time with
-a tiny self-contained reader (`MiniJson`, flat string pairs only) — no JSON
-dependency inside the analyzer, no JSON at app runtime.
+`OutputItemType="Analyzer" ReferenceOutputAssembly="false"`) consumes **every
+`Localization/Strings/*.json`** as `AdditionalFile`s and emits `Strings.g.cs`. It reads
+the JSON at compile time with a tiny self-contained reader (`MiniJson`, flat string pairs
+only) — no JSON dependency inside the analyzer, no JSON at app runtime. `en.json` is the
+**reference** (defines the key set, order, and member names); every other file is a
+translation baked into its own instance.
 
 It emits a `partial class Strings` with:
 
-- one `required string` member per key (`about.view_on_github` → `AboutViewOnGithub`),
-- a baked `static readonly Strings En` with the English literals,
+- one `required string` member per reference key (`about.view_on_github` → `AboutViewOnGithub`),
+- a baked `static readonly Strings En`/`Es`/… per locale file (literals from that file; a
+  key missing from a translation falls back to English and is flagged `LOC004`),
 - a derived `static readonly Strings Pseudo` (accented + length-padded English),
 - `static Strings For(Locale locale)` switching over the baked instances; its default
   arm **throws** (`ArgumentOutOfRangeException`) rather than silently returning English,
@@ -157,7 +161,7 @@ new Text { Value = L.T(s => s.AboutViewOnGithub) }   // re-renders on switch
 
 Files (app-side, alongside the theme equivalents):
 
-- `GitBench/Localization/Locale.cs` — DONE. Hand-authored `enum Locale { En, Pseudo }`
+- `GitBench/Localization/Locale.cs` — DONE. Hand-authored `enum Locale { En, Es, Pseudo }`
   (must stay hand-authored — the `System.Text.Json` source gen for `Preferences` can't
   see a generated enum); the localization generator reads it and `LOC003`-fails the build
   if a case has no catalog. Grows as locales are added. A `Locale → CultureInfo` map
@@ -166,7 +170,9 @@ Files (app-side, alongside the theme equivalents):
   Mirrors `IThemeService<T>` / `ThemeService`.
 - `GitBench/Localization/L.cs` — DONE. `L.T(...)` mirror of `Widgets/Theme.cs`.
 - `GitBench/Localization/LocalizationWidgetExtensions.cs` — DONE. `ctx.Localization()`.
-- `GitBench/Localization/Strings/en.json` + generated `Strings.g.cs` — DONE.
+- `GitBench/Localization/Strings/en.json` (+ `es.json`) + generated `Strings.g.cs` — DONE.
+  `es.json` was added as a multi-locale smoke test: it proves the generator bakes more than
+  one catalog, `For()` switches, and the runtime swap shows translated text (`Ver en GitHub`).
 - `GitBench.Localization.Generator/` (separate analyzer project) — DONE.
 - `GitBench/Localization/PluralRules.cs` + `Format.cs` (number/date/relative-time)
   — Phase 2, not yet created.
@@ -237,8 +243,12 @@ Deferred out of Phase 1 (rolled into later phases):
   Pseudo (test)") still needs a manual run on macOS (`dotnet run --project GitBench`).
 
 ### Phase 2 — Second Latin language + formatting correctness
-- Add `fr.json` (or de). Implement `PluralRules` for targeted locales
-  (Latin set is mostly one/other; fr folds 0,1→one).
+- ✅ **Multi-locale baking + key parity landed early** (via the Spanish smoke test): the
+  generator now reads every `*.json`, bakes one catalog per file with English fallback, and
+  fails the build on missing/extra keys (`LOC004`/`LOC005`). A real `es.json` (static keys
+  only) ships. *Remaining Phase 2 work is the formatting/plural surface below.*
+- Add a real translation set for `fr.json` (or de). Implement `PluralRules` for targeted
+  locales (Latin set is mostly one/other; fr folds 0,1→one).
 - Convert the relative-time formatter + a count/plural-heavy screen
   (`LocalChanges` context menus: `Stage N Files`, etc.).
 - Validate number/date formatting via `CultureInfo`.
@@ -299,6 +309,7 @@ Deferred out of Phase 1 (rolled into later phases):
    sub-agent read of `RenderedCanvas`/`TextWrapper`; re-confirm exact locations when
    Phase 4 starts. The *directional* conclusion (shaping ✓, fallback ✗, RTL ✗) is
    solid; the reactive/Prop/Theme/Preferences findings above were verified directly.
-6. **Generator schema is flat-string-only today.** Plural/parameterized entry
-   support (object values, `{placeholders}` → methods) and cross-locale key-parity
-   diagnostics both land in Phase 2 when the second locale arrives.
+6. **Generator schema is flat-string-only today.** Cross-locale key-parity diagnostics
+   are now in (`LOC004`/`LOC005`). Still pending: plural/parameterized entry support
+   (object values, `{placeholders}` → methods) and param/plural-shape parity, which land
+   in Phase 2 alongside the formatting work.
