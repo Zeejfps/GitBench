@@ -30,7 +30,7 @@ live in **files** (translator-friendly); strongly-typed accessors are
   `ILocalizationService`; menus rebuild on open. Bold menu-label segments (Merge/Rebase/
   Fast-forward) are preserved by re-bolding the interpolated values inside the *localized*
   label (`BoldSegments`). Error-dialog titles across all features are localized.
-- **Phase 4 — IN PROGRESS (font fallback + first CJK locale landed; macOS GUI eyeball pending).**
+- **Phase 4 — DONE (implementation; the macOS GUI eyeball is the only open verification).**
   Build clean, **119 tests pass** (6 new). Shipped:
   - **Surrogate-pair fix** in `TextView.Ellipsize` — the binary-search truncation now refuses to
     cut inside a surrogate pair, so a truncated CJK/emoji string never ends on an orphaned high
@@ -66,12 +66,14 @@ live in **files** (translator-friendly); strongly-typed accessors are
     splits across two font ids with non-`.notdef` glyphs, and that without the fallback `あ` stays
     glyph 0; plus the resolver finds a real font on macOS), Japanese catalog bake + live switch,
     Japanese plural/param/culture.
-  - **Still pending:** the macOS GUI eyeball (View → Language: 日本語 and confirm CJK renders via the
-    Hiragino fallback — the load+shape path is proven by `FontFallbackTests`, only the on-screen
-    render is unverified). **Color emoji** intentionally out of scope (the atlas/shader are
-    single-channel alpha; emoji `.ttc` is rejected by the `FT_PIXEL_MODE_GRAY` check → dropped, not
-    crashed). CJK **line-breaking** (no-space wrapping) deferred. zh/ko catalogs not added (ja is
-    the smoke-test); the resolver + plumbing already cover them.
+  - **Carried into Phase 5:** CJK **line-breaking** (no-space wrapping — `TextWrapper.WrapLine`
+    only inserts break opportunities at `' '`, so a spaceless CJK string never wraps) and the
+    `zh`/`ko` catalogs (the resolver + plumbing already cover them).
+  - **Open verification (Phase 5 exit gate):** the macOS GUI eyeball (View → Language: 日本語 and
+    confirm CJK renders via the Hiragino fallback — the load+shape path is proven by
+    `FontFallbackTests`, only the on-screen render is unverified).
+  - **Out of scope:** **color emoji** (the atlas/shader are single-channel alpha; emoji `.ttc` is
+    rejected by the `FT_PIXEL_MODE_GRAY` check → dropped, not crashed).
 
 ### Phase 3 remaining tail (small, self-contained follow-ups)
 These were either missed by the inventory sweep or deliberately deferred; none are
@@ -100,12 +102,14 @@ desktop binary). The runtime *language switch* is unaffected.
 
 ## Scope (phased, locked with user)
 
-1. **Phase 1–3 — Latin only** (e.g. en, fr, de, es). Needs the i18n infra +
-   string sweep + formatters. **No** font-fallback or RTL work.
-2. **Phase 4 — CJK** (zh/ja/ko). Adds a font-fallback chain so non-Latin glyphs
-   don't silently vanish. Architect for it now; build it later.
-3. **Deferred — RTL** (ar/he). Needs BiDi reordering + layout mirroring. Out of
-   scope until explicitly prioritized.
+1. **Phase 1–3 — Latin only** (en, es; fr/de plumbed). i18n infra + string sweep +
+   formatters. **No** font-fallback or RTL work. **DONE.**
+2. **Phase 4 — CJK pipeline** (font-fallback chain + first CJK locale, `ja`). Proves
+   non-Latin glyphs render instead of silently vanishing. **DONE** (modulo macOS eyeball).
+3. **Phase 5 — CJK completion** (line-breaking + `zh`/`ko` catalogs + the Phase 3 string
+   tail). Turns the CJK smoke-test into something production-usable.
+4. **Phase 6 — RTL** (ar/he). BiDi reordering + layout mirroring. The largest single
+   effort; out of scope until explicitly prioritized.
 
 ## Why this is tractable here
 
@@ -354,7 +358,7 @@ Deferred out of Phase 1 (rolled into later phases):
   views → `this.Bind(_loc.Strings, _ => { rebuild; SetDirty(); })`. The generator rejects
   `{new}`-style keyword placeholders — use `{old_name}`/`{new_name}` etc.
 
-### Phase 4 — CJK (IN PROGRESS — see Status for the detailed summary)
+### Phase 4 — CJK pipeline — DONE (implementation; see Status for the detailed summary)
 - ✅ **Surrogate-pair fix** — done in `TextView.Ellipsize` (the only true surrogate-slicing site;
   `TextWrapper`/`MeasureTextWidth` split on BMP delimiters and were never buggy).
 - ✅ **Font-fallback chain** at the shape layer (`FreeTypeFontBackend.ShapeText` cmap itemization +
@@ -363,14 +367,76 @@ Deferred out of Phase 1 (rolled into later phases):
 - ✅ **CJK font registration** — per-platform OS-font resolver (`SystemFonts`) + `RegisterFallbackFont`
   wired at startup (decision: system fonts, no bundling). macOS = Hiragino Kaku Gothic.
 - ✅ **First CJK catalog = `ja.json`** (449-key parity) + `Locale.Ja` + Language menu item.
-- ⏳ **macOS GUI eyeball** (live CJK render) — pending; load+shape proven by tests.
-- ⏳ `zh`/`ko` catalogs — deferred (ja is the smoke-test); plumbing/resolver already cover them.
+- → **macOS GUI eyeball**, **CJK line-breaking**, and the `zh`/`ko` catalogs all move to **Phase 5**.
 - ⏳ **Color emoji** — out of scope (single-channel alpha atlas/shader; color glyphs are dropped,
-  not crashed). CJK **line-breaking** (no-space wrap) deferred.
+  not crashed).
 
-### Deferred — RTL (ar/he)
-- BiDi reordering + right-origin line layout + alignment/scrollbar/icon mirroring.
-  Largest effort; not started until explicitly prioritized.
+### Phase 5 — CJK completion & robustness (make CJK production-ready, not a smoke test)
+Phase 4 proved the *pipeline* (fallback chain + one CJK locale). Phase 5 makes CJK
+actually usable and closes the leftover string tail.
+
+**1. CJK line-breaking** — the real rendering gap. `TextWrapper.WrapLine`
+(`framework/ZGF.Gui/TextWrapper.cs:46-78`) only inserts break opportunities at `' '`, so a
+spaceless CJK paragraph is kept whole and overflows / gets ellipsized instead of wrapping.
+Implement a break-opportunity model (UAX-14-lite):
+- iterate by **code point** (respect surrogate pairs — consistent with the Phase 4
+  `TextView.Ellipsize` fix; never break mid-pair);
+- allow a break *between* two CJK / "wide" code points (CJK Unified Ideographs, Hiragana,
+  Katakana, Hangul syllables, CJK symbols/punctuation, fullwidth forms) **in addition to**
+  the existing space breaks;
+- (nice-to-have) minimal kinsoku: don't break *before* closing punctuation （、。」』）] etc.)
+  or *after* opening punctuation.
+- **Perf:** breaking at every code point means many `canvas.MeasureTextWidth` calls per line —
+  measure incrementally / cache instead of re-measuring the whole candidate each step, since
+  bodies can be long (commit messages, diffs).
+
+**2. `zh-Hans` + `ko` catalogs.** Plumbing is already done (the `SystemFonts` resolver returns
+PingFang/YaHei and Apple SD Gothic/Malgun; fallback is cmap-driven). Work:
+- add `Locale.ZhHans`, `Locale.Ko` to the hand-authored enum (the generator `LOC003`-fails
+  until the catalogs exist — that's the intended forcing function);
+- author `zh-Hans.json` / `ko.json` at full key parity (currently 449);
+- `PluralRules`: Chinese & Korean have a single `other` form; the generic `n==1→one` rule
+  (same as `ja`) collapses cleanly — no rule change needed;
+- culture map `zh-Hans`/`ko` → `zh-Hans` / `ko-KR`.
+- **Han-unification caveat:** fallback order is fixed and cmap-driven, so a `zh` locale may pick
+  a Japanese regional glyph variant for shared ideographs. Acceptable for now; *locale-aware
+  fallback ordering* is a later refinement, not a blocker.
+
+**3. Close the Phase 3 string tail** (cross-cutting; finishes the sweep — see "Phase 3 remaining
+tail" above for the full notes):
+- `GitBench/Git/RefNameRules.cs` — ~5 field-validation messages, thread `Strings`/`loc` through.
+- `ResetCommitDialog.BuildDirtyHint` — nested-plural hint; needs dedicated plural keys.
+- bare `"Files"` header (count == 0) in `DiscardChangesViewModel`/`StashDialogViewModel`.
+
+**Exit gate:** macOS eyeball across en/es/ja/zh/ko — confirm (a) CJK renders via the fallback and
+(b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
+baked catalogs.
+
+### Phase 6 — RTL (ar/he) — deferred, the largest single effort
+Promotes the old "Deferred — RTL" note into a concrete plan; still gated behind explicit
+prioritization. The shaping layer is **less RTL-ready than earlier prose implied**: `ShapeText`
+(`framework/ZGF.Fonts/FreeTypeFontBackend.cs:315-352`) itemizes runs by **font coverage only**, and
+the sole direction handling is `GuessSegmentProperties()` *per run* (`:378`) — it fixes glyph order
+**within** a run but does **no** cross-run BiDi reorder and no line-level direction. Required:
+- **Shaping / BiDi:** itemize by Unicode BiDi level + script (not just font), shape each run, then
+  **reorder runs to visual order** and reverse RTL runs — new logic layered on the existing
+  per-glyph `ShapedGlyph.FontId` itemization.
+- **Layout mirroring:** right-origin line layout in the canvas draw loop; flip default horizontal
+  alignment; mirror scrollbars, disclosure/chevron icons, and caret/selection direction.
+- **Catalog:** real `ar.json` (and/or `he.json`). Arabic plural is the full CLDR six-form set
+  (`zero/one/two/few/many/other`) — `PluralRules`/`PluralForms` need the Arabic selector, the first
+  locale to exercise more than `one`/`other`.
+
+### Cross-cutting decisions (not phases — resolve when relevant)
+- **Translator workflow.** The catalog is **baked into C# at compile time**, so a translator can't
+  add or fix a language without a build. Resolved *as packaging*, open *as workflow*: keep
+  recompile-per-change (current), or add an **optional runtime-JSON override** (overlay `*.json`
+  from a known dir at startup onto the baked catalog) for translator iteration / community locales.
+  The override path reintroduces runtime parsing — keep it AOT-careful and off the default load path.
+- **Generator hardening** (open question #6): per-placeholder *param-set* parity across locales —
+  today a translation's stray placeholder is escaped to a literal rather than diagnosed.
+- **Latin breadth** (cheap, land anytime): `fr`/`de`/`pt` are translation-only — the plural rules
+  are already in place; no infra work.
 
 ## Testing & tooling
 
