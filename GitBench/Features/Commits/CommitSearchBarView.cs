@@ -34,7 +34,7 @@ internal sealed record CommitSearchBarView : Widget
         var inputSystem = ctx.Require<InputSystem>();
 
         var textInput = DialogFrame.TextInput(ctx);
-        textInput.PlaceholderText = ctx.Localization().Strings.Value.CommitsSearchPlaceholder;
+        textInput.Bind(ctx.Localization().Strings, s => textInput.PlaceholderText = s.CommitsSearchPlaceholder);
 
         void Clear()
         {

@@ -24,6 +24,8 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
     private readonly Action<string> _onStage;
     private readonly Action<string> _onReset;
 
+    private IReadOnlyList<SubmoduleInfo> _drift = Array.Empty<SubmoduleInfo>();
+
     public LocalChangesSubmoduleSection(Context ctx, Action<string> onStage, Action<string> onReset)
     {
         _ctx = ctx;
@@ -52,13 +54,23 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
                 },
             },
         });
+
+        // Header, drift-row labels, and the action tooltips are all localized; re-render the
+        // whole section on a live locale switch by replaying the current drift list.
+        this.Bind(_loc.Strings, _ => Render());
     }
 
     public void SetDrift(IReadOnlyList<SubmoduleInfo> drift)
     {
-        _headerText.Text = FileChangesUI.FormatHeader(_loc.Strings.Value.SubmodulesSectionHeader, drift.Count);
+        _drift = drift;
+        Render();
+    }
+
+    private void Render()
+    {
+        _headerText.Text = FileChangesUI.FormatHeader(_loc.Strings.Value.SubmodulesSectionHeader, _drift.Count);
         _rows.Children.Clear();
-        foreach (var info in drift)
+        foreach (var info in _drift)
             _rows.Children.Add(BuildRow(info));
     }
 
