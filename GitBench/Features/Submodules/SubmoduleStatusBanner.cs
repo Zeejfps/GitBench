@@ -51,8 +51,7 @@ internal sealed record SubmoduleStatusBanner : Widget
                             {
                                 Child = new Text
                                 {
-                                    Value = Prop.Bind<string?>(() =>
-                                        loc.Strings.Value.SubmodulesBannerOutdated(vm.OutdatedCount.Value)),
+                                    Value = L.T(s => s.SubmodulesBannerOutdated(vm.OutdatedCount.Value)),
                                     VAlign = TextAlignment.Center,
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Banner.Text),

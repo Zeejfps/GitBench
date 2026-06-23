@@ -50,13 +50,9 @@ internal sealed record OperationBannerWidget : Widget
                             {
                                 Child = new Text
                                 {
-                                    Value = Prop.Bind<string?>(() =>
-                                    {
-                                        var s = loc.Strings.Value;
-                                        return vm.IsBusy.Value
-                                            ? BusyMessageFor(s, vm.OperationState.Value)
-                                            : MessageFor(s, vm.OperationState.Value);
-                                    }),
+                                    Value = L.T(s => vm.IsBusy.Value
+                                        ? BusyMessageFor(s, vm.OperationState.Value)
+                                        : MessageFor(s, vm.OperationState.Value)),
                                     VAlign = TextAlignment.Center,
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Banner.Text),

@@ -16,7 +16,6 @@ public sealed record CommitsPanelWidget : Widget
     protected override IWidget Build(Context ctx)
     {
         var styles = ctx.Theme().Styles;
-        var loc = ctx.Localization();
         var truncated = new State<bool>(false);
 
         var commits = new CommitsView.Core(ctx);
@@ -39,7 +38,7 @@ public sealed record CommitsPanelWidget : Widget
                 [
                     new Text
                     {
-                        Value = Prop.Bind<string?>(() => truncated.Value ? loc.Strings.Value.CommitsTruncatedBanner : null),
+                        Value = L.T(s => s.CommitsTruncatedBanner),
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.Banner.Text),

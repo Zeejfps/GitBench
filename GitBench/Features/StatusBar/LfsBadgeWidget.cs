@@ -21,7 +21,6 @@ internal sealed record LfsBadgeWidget : Widget
     protected override IWidget Build(Context ctx)
     {
         var theme = ctx.Theme();
-        var loc = ctx.Localization();
         var status = Status.ToReadable(ctx);
 
         return new Box
@@ -44,15 +43,11 @@ internal sealed record LfsBadgeWidget : Widget
                             FontSize = 10f,
                             HAlign = TextAlignment.Center,
                             VAlign = TextAlignment.Center,
-                            Value = Prop.Bind<string?>(() =>
+                            Value = L.T(s => status.Value switch
                             {
-                                var strings = loc.Strings.Value;
-                                return status.Value switch
-                                {
-                                    LfsBadge.Tracked => strings.StatusbarLfsTracked,
-                                    LfsBadge.NotTracked => strings.StatusbarLfsNotTracked,
-                                    _ => string.Empty,
-                                };
+                                LfsBadge.Tracked => s.StatusbarLfsTracked,
+                                LfsBadge.NotTracked => s.StatusbarLfsNotTracked,
+                                _ => string.Empty,
                             }),
                             Color = Prop.Bind(() => status.Value == LfsBadge.Tracked
                                 ? theme.Styles.Value.DiffView.LfsBadgeTrackedText

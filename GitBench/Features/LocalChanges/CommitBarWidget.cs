@@ -59,9 +59,8 @@ internal sealed record CommitBarWidget : Widget
 
         var commitWidget = new SecondaryDialogButton
         {
-            Label = Prop.Bind<string?>(() =>
+            Label = L.T(s =>
             {
-                var s = loc.Strings.Value;
                 var merging = vm.IsMerging.Value;
                 if (vm.CommitBusy.Value) return merging ? s.LocalchangesCommitMergeButtonBusy : s.LocalchangesCommitButtonBusy;
                 return merging ? s.LocalchangesCommitMergeButton : s.LocalchangesCommitButton;

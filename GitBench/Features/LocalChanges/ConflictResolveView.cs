@@ -139,16 +139,12 @@ internal sealed record ConflictResolveView : Widget
         State<bool> theirsChecked, State<bool> oursChecked, IReadable<bool> canMerge) =>
         new ActionDialogButton
         {
-            Label = Prop.Bind<string?>(() =>
+            Label = L.T(s => (theirsChecked.Value, oursChecked.Value) switch
             {
-                var s = loc.Strings.Value;
-                return (theirsChecked.Value, oursChecked.Value) switch
-                {
-                    (true, true) => s.LocalchangesConflictMergeBoth,
-                    (true, false) => s.LocalchangesConflictChoose(conflict.Theirs.Label),
-                    (false, true) => s.LocalchangesConflictChoose(conflict.Ours.Label),
-                    _ => s.LocalchangesConflictMerge,
-                };
+                (true, true) => s.LocalchangesConflictMergeBoth,
+                (true, false) => s.LocalchangesConflictChoose(conflict.Theirs.Label),
+                (false, true) => s.LocalchangesConflictChoose(conflict.Ours.Label),
+                _ => s.LocalchangesConflictMerge,
             }),
             Role = DialogButtonRole.Primary,
             Command = new Command(() =>

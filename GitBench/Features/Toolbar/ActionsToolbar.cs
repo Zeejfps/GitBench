@@ -19,7 +19,6 @@ internal sealed record ActionsToolbar : Widget
     {
         var vm = ctx.Require<ActionsToolbarViewModel>();
         var styles = ctx.Theme().Styles;
-        var loc = ctx.Localization();
 
         return new Box
         {
@@ -52,7 +51,7 @@ internal sealed record ActionsToolbar : Widget
                                             Value = vm.IsFetching.Bind(string? (f) => f ? LucideIcons.Loader : LucideIcons.Fetch),
                                             Rotation = Prop.Bind(vm.FetchRotation),
                                         },
-                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsFetching.Value ? loc.Strings.Value.ToolbarFetching : loc.Strings.Value.ToolbarFetch) },
+                                        new ButtonLabel { Value = L.T(s => vm.IsFetching.Value ? s.ToolbarFetching : s.ToolbarFetch) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new ButtonWidget
@@ -67,7 +66,7 @@ internal sealed record ActionsToolbar : Widget
                                             Badge = Prop.Bind(vm.PullBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
                                         },
-                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsPulling.Value ? loc.Strings.Value.ToolbarPulling : loc.Strings.Value.ToolbarPull) },
+                                        new ButtonLabel { Value = L.T(s => vm.IsPulling.Value ? s.ToolbarPulling : s.ToolbarPull) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new ButtonWidget
@@ -82,7 +81,7 @@ internal sealed record ActionsToolbar : Widget
                                             Badge = Prop.Bind(vm.PushBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
                                         },
-                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsPushing.Value ? loc.Strings.Value.ToolbarPushing : loc.Strings.Value.ToolbarPush) },
+                                        new ButtonLabel { Value = L.T(s => vm.IsPushing.Value ? s.ToolbarPushing : s.ToolbarPush) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new SeparatorSpacer(),
