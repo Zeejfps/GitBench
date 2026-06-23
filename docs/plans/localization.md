@@ -516,7 +516,7 @@ baseline). Shipped:
 #### Phase 6b — Layout mirroring — DONE bar the eyeball (text + containers + custom views + scrollbars + caret/selection; mixed-bidi caret is the one documented limit)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
-running-app file lock); **119 ZGF.Gui.Tests pass** (+17 new across text+containers+inheritance+padding+scroll) and **GitBench 113
+running-app file lock); **120 ZGF.Gui.Tests pass** (+18 new across text+containers+inheritance+padding+scroll+caret) and **GitBench 113
 pass** (same 12 pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
 text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
 (Branches/Commits/Diff) at once, with no per-view edits. Shipped:
@@ -603,15 +603,33 @@ LTR identifier (branch name, path, URL — most fields) reads left-aligned with 
 Arabic input reads right-aligned, *regardless of locale*. Keying on **content** rather than the UI
 direction is the crucial bit: a left-aligned-but-content-LTR field in an RTL locale keeps a correct
 caret. The caret x, selection rect, hit-test (`GetCaretIndexFromPoint`) and the text-draw box origin all
-mirror off that resolved direction; the scroll *calculation* is direction-identical (prefix width is
-"distance from the leading edge" either way) so only the draw origin/sign flips. **Arrow keys move
-visually, not logically:** under an RTL field Left/Right flip to the opposite logical step (and the word
-variants with them), so Left always moves the caret toward the left of the screen — the controller picks
-the logical method from `TextInputView.IsContentRtl`; LTR is unchanged. **Limits:** per-cluster
-precision holds for a unidirectional line; mixed L+R *within one line* and multi-line (`Wrap`) RTL
-selection stay on the LTR path — a true fix needs logical-index→visual-x cluster mapping from the
-shaper (a separate effort). LTR is byte-identical. **This is the one core interaction not unit-testable
-headlessly (no font backend in tests) — needs a hands-on pass typing into RTL fields.**
+mirror off that resolved direction; the scroll *calculation* is direction-identical so only the draw
+origin/sign flips. **Arrow keys move visually, not logically:** under an RTL field Left/Right flip to the
+opposite logical step (and the word variants), so Left always moves the caret toward the screen's left —
+the controller picks the logical method from `TextInputView.IsContentRtl`; LTR is unchanged.
+
+**Cursive-correct caret (the fix for the `مرحبًا` report).** The first cut measured the caret prefix by
+re-measuring the substring `text[0..caret]`, which is **wrong for Arabic**: letters join (their advance
+depends on neighbors) and a combining mark has zero advance, so a detached-prefix measure drifts and can
+even go *backwards* (felt like reversed arrows near a mark/space). Replaced with
+`ICanvas.MeasureTextPrefix(text, prefixLength, style)` — it shapes the **whole line once** and sums the
+advances of the glyphs whose **logical cluster** precedes the caret. Because the glyphs are shaped in
+context, cursive joins, ligatures and zero-width marks are exact, and the result is monotonic (caret
+never regresses). `DrawCaret`, `UpdateScrollOffset`, `DrawSelectionBox` and `GetCaretIndexFromPoint` all
+use it for single-line fields (the common case); `BidiShapingTests` proves the prefixes are monotonic and
+the `ً` tanwin is zero-width on a real Arabic font.
+
+**Multi-line selection mirrors too:** `DrawSelectionBox` reflects every per-line segment rect within the
+field (`Left = pos.Left + pos.Right − segLeft − width`) under RTL — the wrap loop draws the first/middle
+lines and the final block the last line, so a selection spanning wrapped RTL lines highlights the
+right-aligned text correctly (first line from the left edge to the start caret, middle lines full width,
+last line hanging off the right). One unified reflection covers single-line and multi-line; wrapped lines
+still measure per-substring (cursive widths are slightly approximate, but placement is right).
+
+**Limits:** exact for a unidirectional line; **mixed L+R within one line** is the only remaining gap — a
+complete fix needs full logical↔visual cluster mapping (multiple selection rects per bidi run). LTR is
+byte-identical throughout. **The on-screen field interaction still wants a hands-on pass** (the caret math
+needs a font backend, absent in headless tests).
 
 **Still TODO:**
 - **Disclosure/chevron icons** — the tree/expander chevrons flip (Branches, file-changes folders,
