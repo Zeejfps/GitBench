@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using GitBench.Localization;
 using Xunit;
+using ZGF.Gui.Localization;
 
 namespace GitBench.Tests;
 

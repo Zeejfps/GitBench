@@ -66,7 +66,7 @@
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui.Desktop\ZGF.Gui.Desktop.csproj" />
-        <ProjectReference Include="..\GitBench.Localization.Generator\GitBench.Localization.Generator.csproj"
+        <ProjectReference Include="..\framework\ZGF.Gui.Generator\ZGF.Gui.Generator.csproj"
                           OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
