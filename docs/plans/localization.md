@@ -405,14 +405,24 @@ baseline — and untouched by this work.) Shipped:
   `ResetCommitDialog.BuildDirtyHint` now uses dedicated plural/param keys
   (`commits.reset_dirty_staged`/`_unstaged`/`_both`). Bare `"Files"` header (count == 0) in
   Discard/Stash VMs → `localchanges.files_header_empty`.
-- **Diff view CJK** — `DiffContentView` is a fixed monospace grid (`char × _monoAdvance`); CJK
-  glyphs render via the shared fallback backend but the grid mispositioned them. Fixed: the
-  horizontal extent now sizes by **East-Asian cell width** (`VisualCells`, wide = 2 cells) so long
-  CJK lines scroll fully into view instead of clipping at the right; syntax-highlighted runs now
-  position by **measured width** (running x), so colored runs abut where the shaper actually lays
-  wide glyphs instead of overlapping. Plain (unhighlighted) lines were already correct (one
-  `DrawText`). Latin output is pixel-identical. (Per-character *selection* over CJK columns is not
-  yet cell-aware — a possible follow-up.)
+- **Git output encoding (the real diff-CJK bug)** — CJK in the diff rendered as mojibake
+  (`언어` → `ì–¸ì–´`), which looked like a font/fallback gap but was an **encoding** bug:
+  `GitProcessRunner` read git's stdout/stderr without `StandardOutputEncoding`, so .NET decoded
+  git's UTF-8 with the OS default code page (CP1252 on Windows) — corrupting the text *before* it
+  reached the renderer. Fixed by forcing `StandardOutputEncoding`/`StandardErrorEncoding =
+  Encoding.UTF8` on both PSI builders, plus `StandardInputEncoding = UTF-8 (no BOM)` so hunk-stage/
+  discard patches touching CJK apply byte-for-byte. Every git read routes through this runner
+  (`GitService` is the `IGitRawConfigReader` too), so diff bodies, commit messages, and
+  branch/author names are all fixed at once. macOS/Linux already defaulted to UTF-8 — this is a
+  Windows fix.
+- **Diff view CJK layout** (complementary to the encoding fix) — `DiffContentView` is a fixed
+  monospace grid (`char × _monoAdvance`); once correct CJK flows through, the grid would still
+  misplace it. Fixed: the horizontal extent now sizes by **East-Asian cell width** (`VisualCells`,
+  wide = 2 cells) so long CJK lines scroll fully into view instead of clipping at the right;
+  syntax-highlighted runs now position by **measured width** (running x), so colored runs abut
+  where the shaper actually lays wide glyphs instead of overlapping. Plain (unhighlighted) lines
+  were already correct (one `DrawText`). Latin output is pixel-identical. (Per-character *selection*
+  over CJK columns is not yet cell-aware — a possible follow-up.)
 
 **Open verification (exit gate):** the macOS GUI eyeball across en/es/ja/zh/ko — confirm (a) CJK
 renders via the fallback and (b) CJK labels/bodies **wrap** instead of overflowing. The load+shape
@@ -523,3 +533,8 @@ the sole direction handling is `GuessSegmentProperties()` *per run* (`:378`) —
    `LOC006` (plural-vs-flat shape mismatch, warns + falls back to English) are in.
    Remaining nicety: per-placeholder *param-set* parity across locales (today a
    translation's stray placeholder is escaped to a literal rather than diagnosed).
+7. **Git output assumed UTF-8 (Phase 5).** `GitProcessRunner` now decodes git stdout/stderr
+   (and writes stdin) as UTF-8 — the fix for diff-content mojibake on Windows. Trade-off: a repo
+   whose files are genuinely *not* UTF-8 (legacy Shift-JIS/GBK/Latin-1 content) will now mojibake
+   in the diff instead. UTF-8 is the correct default (matches every modern git GUI); per-file
+   encoding detection / a `core` override is a possible later refinement, not a blocker.
