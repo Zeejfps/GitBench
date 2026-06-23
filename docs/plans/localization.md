@@ -7,11 +7,20 @@ live in **files** (translator-friendly); strongly-typed accessors are
 
 ## Status
 
-- **Phase 1 — DONE** (builds clean, 3 xUnit tests pass; GUI re-render not yet
-  eyeballed on macOS). Infra, source generator, preferences persistence, macOS
-  Language menu, and the About dialog conversion are in. See the Phase 1 section
-  for what shipped vs. deferred.
-- **Phases 2–4 — not started.**
+- **Phase 1 — DONE** (builds clean, tests pass; GUI re-render not yet eyeballed on
+  macOS). Infra, source generator, preferences persistence, macOS Language menu,
+  About dialog conversion.
+- **Phase 2 — DONE** (builds clean, 112 tests pass incl. 11 localization). Generator
+  now supports plural + parameterized entries; `PluralRules`/`PluralForms`/`Format`
+  added; real `es.json` (Spanish) translation set; relative-time formatter and the
+  LocalChanges plural context menus converted. `LOC004` parity verified to fail the
+  build on a missing translation. Caveat below on custom-painted views.
+- **Phases 3–4 — not started.**
+
+Phase 2 caveat: the LocalChanges menus reflect the active locale (rebuilt on each
+open), but `CommitsView`'s relative-time text is **custom-painted**, so a live locale
+switch won't repaint it immediately — it refreshes on the next repaint / its 30s
+timer. Making custom-painted views repaint on locale change is a Phase 3 item.
 
 Key decision resolved during Phase 1: **the catalog bakes values into generated C#
 at compile time (no runtime JSON)**, rather than loading per-locale files at
@@ -93,14 +102,13 @@ engine already exist — this is mostly assembly, not invention.
 }
 ```
 
-- **Plain string** → generated **property**. *(Phase 1: the only form the generator
-  currently supports.)*
-- **String with `{placeholders}`** → generated **method** with one param per
-  placeholder (name from placeholder; type `object`/`string` by default, see Open
-  Questions for typed params). *(Phase 2.)*
+- **Plain string** → generated **property**.
+- **String with `{placeholders}`** → generated **method**, one `object` param per
+  placeholder (in first-appearance order), formatted via `string.Format(Culture, …)`.
+  Placeholders become positional (`{count}` → `{0}`) at generation. *(Phase 2 — DONE.)*
 - **Object keyed by plural categories** (`one`/`other`/… CLDR names) → generated
-  **method** that selects a form via the locale's plural rule, then formats.
-  *(Phase 2.)*
+  **method** `Foo(int count)` that selects a form via `PluralRules.Select(Culture, …)`
+  then formats. *(Phase 2 — DONE.)* Plural entries currently key off `{count}` only.
 
 ### Codegen (`GitBench.Localization.Generator`) — DONE (Phase 1)
 
@@ -242,17 +250,25 @@ Deferred out of Phase 1 (rolled into later phases):
   switch is proven by tests. The on-screen re-render (open About → View → "Language:
   Pseudo (test)") still needs a manual run on macOS (`dotnet run --project GitBench`).
 
-### Phase 2 — Second Latin language + formatting correctness
-- ✅ **Multi-locale baking + key parity landed early** (via the Spanish smoke test): the
-  generator now reads every `*.json`, bakes one catalog per file with English fallback, and
-  fails the build on missing/extra keys (`LOC004`/`LOC005`). A real `es.json` (static keys
-  only) ships. *Remaining Phase 2 work is the formatting/plural surface below.*
-- Add a real translation set for `fr.json` (or de). Implement `PluralRules` for targeted
-  locales (Latin set is mostly one/other; fr folds 0,1→one).
-- Convert the relative-time formatter + a count/plural-heavy screen
-  (`LocalChanges` context menus: `Stage N Files`, etc.).
-- Validate number/date formatting via `CultureInfo`.
-- **Exit criteria:** plurals, interpolation, and dates correct in two languages.
+### Phase 2 — Second Latin language + formatting correctness — DONE
+- ✅ **Multi-locale baking + key parity** (`LOC004`/`LOC005`/`LOC006`): the generator reads
+  every `*.json`, bakes one catalog per file with English fallback, and fails the build on
+  missing/extra/shape-mismatched keys. Verified `LOC004` fails the build on a dropped key.
+- ✅ **Plural + parameterized entries** in the generator (positional `string.Format`; plural
+  via `PluralRules`). Per-instance `CultureInfo` baked + exposed as `Strings.Culture`.
+- ✅ **`PluralRules`/`PluralForms`** — `one`/`other` for en/es/de, `0,1→one` for fr/pt.
+  Expandable per language.
+- ✅ **`Format.RelativeTime`** (catalog-driven, culture-aware; deterministic `now` overload
+  for tests) — converted `CommitsView`'s relative-time formatter to it.
+- ✅ **Real `es.json`** (Spanish) incl. plural/parameterized translations.
+- ✅ **Converted the LocalChanges plural context menus** (`Stage`/`Unstage`/`Discard`/`Stash`/
+  `Mark Resolved`) to `Strings.FilesStage(n)` etc. via `ctx.Localization().Strings.Value`.
+- ✅ Tests: plural selection, parameterized substitution, relative-time unit selection +
+  localization, plural-rule category, per-catalog culture (11 localization tests total).
+- `fr.json` not added (es is the second language); the fr plural rule is in place if wanted.
+- Number/date display beyond relative-time/absolute-fallback is part of the Phase 3 sweep.
+- **Exit criteria — met:** plurals, parameterized strings, and relative-time dates are
+  correct in two languages (en/es), proven by tests.
 
 ### Phase 3 — Sweep the string surface (~190 static + ~86 interpolated, ~50–70 files)
 - Go feature-by-feature: `Features/**/*Dialog.cs` (~19 dialogs), the app menu,
@@ -281,11 +297,12 @@ Deferred out of Phase 1 (rolled into later phases):
 ## Testing & tooling
 
 - **Build-time key parity** (from the generator) is the primary safety net for
-  untranslated keys. *(Phase 2 — needs a second locale to cross-check.)*
+  untranslated keys. ✅ done (`LOC004`/`LOC005`/`LOC006`); verified a dropped key
+  fails the build.
 - **Pseudo-localization** as the manual completeness + layout-expansion check. ✅
   shipped (the `Pseudo` locale).
-- Unit tests: plural-rule selection per locale; `Format.RelativeTime` boundaries.
-  *(Phase 2.)*
+- Unit tests: plural-rule selection per locale; `Format.RelativeTime` boundaries. ✅
+  done — `LocalizationFormatTests`.
 - A switch test: flip `State<Locale>`, assert the catalog value changed (proves the
   reactive path, like a theme-swap test). ✅ done — `LocalizationServiceTests`.
 
@@ -309,7 +326,8 @@ Deferred out of Phase 1 (rolled into later phases):
    sub-agent read of `RenderedCanvas`/`TextWrapper`; re-confirm exact locations when
    Phase 4 starts. The *directional* conclusion (shaping ✓, fallback ✗, RTL ✗) is
    solid; the reactive/Prop/Theme/Preferences findings above were verified directly.
-6. **Generator schema is flat-string-only today.** Cross-locale key-parity diagnostics
-   are now in (`LOC004`/`LOC005`). Still pending: plural/parameterized entry support
-   (object values, `{placeholders}` → methods) and param/plural-shape parity, which land
-   in Phase 2 alongside the formatting work.
+6. **Generator entry forms — DONE.** Flat strings, parameterized strings, and plural
+   objects are all supported; parity diagnostics `LOC004`/`LOC005` (key parity) and
+   `LOC006` (plural-vs-flat shape mismatch, warns + falls back to English) are in.
+   Remaining nicety: per-placeholder *param-set* parity across locales (today a
+   translation's stray placeholder is escaped to a literal rather than diagnosed).

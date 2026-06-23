@@ -14,6 +14,10 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
 {
     private const string ReferenceStem = "en";
 
+    private enum Kind { Plain, Param, Plural }
+
+    private static readonly string[] PluralCategories = { "other", "zero", "one", "two", "few", "many" };
+
     private static readonly DiagnosticDescriptor ParseError = new(
         id: "LOC001",
         title: "Localization catalog parse error",
@@ -54,6 +58,14 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
         DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor ShapeMismatch = new(
+        id: "LOC006",
+        title: "Locale entry shape differs from the reference",
+        messageFormat: "Locale '{0}' key '{1}' is {2} but the reference (en.json) is {3}; falling back to English",
+        category: "Localization",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var files = context.AdditionalTextsProvider
@@ -68,9 +80,6 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
                 Text: t.GetText(ct)?.ToString()))
             .Collect();
 
-        // The Locale enum is hand-authored (the System.Text.Json generator that serializes
-        // Preferences references it and cannot see a generated enum). Read its cases so the catalog
-        // can verify that every declared locale actually has values baked for it.
         var localeCases = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is EnumDeclarationSyntax { Identifier.ValueText: "Locale" },
@@ -88,8 +97,7 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
         ImmutableArray<(string Path, string Stem, string? Text)> files,
         ImmutableArray<ImmutableArray<string>> declaredCases)
     {
-        // Parse every catalog file, reporting per-file parse errors but pressing on with the rest.
-        var locales = new List<(string Stem, string Name, List<KeyValuePair<string, string>> Entries)>();
+        var locales = new List<(string Stem, string Name, List<Entry> Entries)>();
         foreach (var f in files.OrderBy(static f => f.Stem, StringComparer.Ordinal))
         {
             if (string.IsNullOrWhiteSpace(f.Text))
@@ -97,7 +105,7 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
 
             try
             {
-                locales.Add((f.Stem, Identifier(f.Stem), MiniJson.ParseFlatObject(f.Text!)));
+                locales.Add((f.Stem, Identifier(f.Stem), MiniJson.Parse(f.Text!)));
             }
             catch (Exception ex)
             {
@@ -109,49 +117,55 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
         if (reference.Entries is null)
             return;
 
-        // Every catalog the For() switch can return: one per parsed file, plus the derived Pseudo. Any
-        // Locale enum case outside this set would hit For()'s throwing default at runtime, so flag it now.
         var withCatalog = new HashSet<string>(locales.Select(static l => l.Name)) { "Pseudo" };
         foreach (var declared in declaredCases.SelectMany(static c => c).Distinct())
             if (!withCatalog.Contains(declared))
                 spc.ReportDiagnostic(Diagnostic.Create(LocaleWithoutCatalog, Location.None, declared));
 
-        // en.json is the schema: it defines the key set, their order, and the member names. Bail on a
-        // collision rather than emit members csc would reject with a cryptic "already defined".
         if (!ValidateReference(spc, locales, reference.Entries))
             return;
 
         var referenceKeys = reference.Entries.Select(static e => e.Key).ToList();
         var referenceSet = new HashSet<string>(referenceKeys);
+        var referenceByKey = reference.Entries.ToDictionary(static e => e.Key);
 
-        // Each translation must cover exactly the reference keys: missing one is an untranslated string
-        // (build error); an extra one is a likely typo/stale key (warning).
         foreach (var locale in locales)
         {
             if (locale.Stem == ReferenceStem)
                 continue;
 
-            var keys = new HashSet<string>(locale.Entries.Select(static e => e.Key));
+            var byKey = ToLookup(locale.Entries);
             foreach (var key in referenceKeys)
-                if (!keys.Contains(key))
+            {
+                if (!byKey.TryGetValue(key, out var translated))
+                {
                     spc.ReportDiagnostic(Diagnostic.Create(MissingTranslation, Location.None, locale.Stem, key));
+                    continue;
+                }
+
+                if (translated.IsPlural != referenceByKey[key].IsPlural)
+                    spc.ReportDiagnostic(Diagnostic.Create(ShapeMismatch, Location.None,
+                        locale.Stem, key,
+                        translated.IsPlural ? "plural" : "a flat string",
+                        referenceByKey[key].IsPlural ? "plural" : "a flat string"));
+            }
+
             foreach (var entry in locale.Entries)
                 if (!referenceSet.Contains(entry.Key))
                     spc.ReportDiagnostic(Diagnostic.Create(UnexpectedKey, Location.None, locale.Stem, entry.Key));
         }
 
-        spc.AddSource("Strings.g.cs", SourceText.From(Emit(locales, reference.Entries, referenceKeys), Encoding.UTF8));
+        spc.AddSource("Strings.g.cs",
+            SourceText.From(Emit(locales, referenceByKey, referenceKeys), Encoding.UTF8));
     }
 
-    // The catalog reserves the static instance names and For(); a key generating one of them would
-    // shadow them with a cryptic "already defined" error from csc, so reject it with a clear diagnostic.
     private static bool ValidateReference(
         SourceProductionContext spc,
-        List<(string Stem, string Name, List<KeyValuePair<string, string>> Entries)> locales,
-        List<KeyValuePair<string, string>> reference)
+        List<(string Stem, string Name, List<Entry> Entries)> locales,
+        List<Entry> reference)
     {
         var ok = true;
-        var reserved = new HashSet<string>(locales.Select(static l => l.Name)) { "Pseudo", "For" };
+        var reserved = new HashSet<string>(locales.Select(static l => l.Name)) { "Pseudo", "For", "Culture" };
         var byIdentifier = new Dictionary<string, string>();
 
         foreach (var e in reference)
@@ -181,11 +195,13 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
     }
 
     private static string Emit(
-        List<(string Stem, string Name, List<KeyValuePair<string, string>> Entries)> locales,
-        List<KeyValuePair<string, string>> reference,
+        List<(string Stem, string Name, List<Entry> Entries)> locales,
+        Dictionary<string, Entry> referenceByKey,
         List<string> referenceKeys)
     {
-        var referenceValues = ToLookup(reference);
+        var kinds = new Dictionary<string, (Kind Kind, List<string> Params)>();
+        foreach (var key in referenceKeys)
+            kinds[key] = Classify(referenceByKey[key]);
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -194,20 +210,57 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("public sealed partial class Strings");
         sb.AppendLine("{");
+        sb.AppendLine("    private readonly System.Globalization.CultureInfo _culture;");
+        sb.AppendLine("    public System.Globalization.CultureInfo Culture => _culture;");
+        sb.AppendLine();
 
         foreach (var key in referenceKeys)
-            sb.AppendLine($"    public required string {Identifier(key)} {{ get; init; }}");
+        {
+            var id = Identifier(key);
+            var (kind, pnames) = kinds[key];
+            switch (kind)
+            {
+                case Kind.Plain:
+                    sb.AppendLine($"    public string {id} {{ get; }}");
+                    break;
+                case Kind.Param:
+                    sb.AppendLine($"    private readonly string {Field(id)};");
+                    sb.AppendLine($"    public string {id}({string.Join(", ", pnames.Select(p => $"object {p}"))}) => " +
+                                  $"string.Format(_culture, {Field(id)}, {string.Join(", ", pnames)});");
+                    break;
+                case Kind.Plural:
+                    sb.AppendLine($"    private readonly PluralForms {Field(id)};");
+                    sb.AppendLine($"    public string {id}(int count) => " +
+                                  $"string.Format(_culture, PluralRules.Select(_culture, {Field(id)}, count), count);");
+                    break;
+            }
+        }
+
+        sb.AppendLine();
+        sb.Append("    private Strings(System.Globalization.CultureInfo culture");
+        for (var i = 0; i < referenceKeys.Count; i++)
+        {
+            var type = kinds[referenceKeys[i]].Kind == Kind.Plural ? "PluralForms" : "string";
+            sb.Append($", {type} p{i}");
+        }
+        sb.AppendLine(")");
+        sb.AppendLine("    {");
+        sb.AppendLine("        _culture = culture;");
+        for (var i = 0; i < referenceKeys.Count; i++)
+        {
+            var id = Identifier(referenceKeys[i]);
+            var target = kinds[referenceKeys[i]].Kind == Kind.Plain ? id : Field(id);
+            sb.AppendLine($"        {target} = p{i};");
+        }
+        sb.AppendLine("    }");
 
         foreach (var locale in locales)
         {
-            var values = ToLookup(locale.Entries);
-            // Fall back to the English value for a key a translation is missing, so the instance still
-            // compiles; the missing key has already been flagged by LOC004.
-            EmitInstance(sb, locale.Name, referenceKeys,
-                key => values.TryGetValue(key, out var v) ? v : referenceValues[key]);
+            var byKey = ToLookup(locale.Entries);
+            EmitInstance(sb, locale.Name, locale.Stem, referenceKeys, kinds, referenceByKey, byKey, pseudo: false);
         }
 
-        EmitInstance(sb, "Pseudo", referenceKeys, key => Pseudoize(referenceValues[key]));
+        EmitInstance(sb, "Pseudo", ReferenceStem, referenceKeys, kinds, referenceByKey, null, pseudo: true);
 
         sb.AppendLine();
         sb.AppendLine("    public static Strings For(Locale locale) => locale switch");
@@ -222,23 +275,182 @@ public sealed class LocalizationGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
-    private static void EmitInstance(StringBuilder sb, string name, List<string> keys, Func<string, string> value)
+    private static void EmitInstance(
+        StringBuilder sb,
+        string name,
+        string cultureStem,
+        List<string> keys,
+        Dictionary<string, (Kind Kind, List<string> Params)> kinds,
+        Dictionary<string, Entry> referenceByKey,
+        Dictionary<string, Entry>? byKey,
+        bool pseudo)
     {
         sb.AppendLine();
-        sb.AppendLine($"    public static readonly Strings {name} = new()");
-        sb.AppendLine("    {");
+        sb.AppendLine($"    public static readonly Strings {name} = new(");
+        sb.Append($"        System.Globalization.CultureInfo.GetCultureInfo(\"{cultureStem}\")");
         foreach (var key in keys)
-            sb.AppendLine($"        {Identifier(key)} = \"{Escape(value(key))}\",");
-        sb.AppendLine("    };");
+        {
+            var (kind, pnames) = kinds[key];
+            var refEntry = referenceByKey[key];
+            var locEntry = byKey != null && byKey.TryGetValue(key, out var le) ? le : null;
+            if (locEntry != null && locEntry.IsPlural != refEntry.IsPlural)
+                locEntry = null;
+            sb.Append(",\n        " + ValueExpr(kind, pnames, refEntry, locEntry, pseudo));
+        }
+
+        sb.AppendLine(");");
     }
 
-    private static Dictionary<string, string> ToLookup(List<KeyValuePair<string, string>> entries)
+    private static (Kind, List<string>) Classify(Entry reference)
+    {
+        if (reference.IsPlural)
+            return (Kind.Plural, new List<string> { "count" });
+
+        var pnames = ExtractParams(reference.Text ?? "");
+        return pnames.Count == 0 ? (Kind.Plain, pnames) : (Kind.Param, pnames);
+    }
+
+    private static string ValueExpr(Kind kind, List<string> pnames, Entry refEntry, Entry? locEntry, bool pseudo)
+    {
+        switch (kind)
+        {
+            case Kind.Plain:
+            {
+                var text = pseudo ? Pseudoize(refEntry.Text ?? "") : (locEntry?.Text ?? refEntry.Text ?? "");
+                return $"\"{Escape(text)}\"";
+            }
+            case Kind.Param:
+            {
+                var raw = locEntry?.Text ?? refEntry.Text ?? "";
+                var pos = ToPositional(raw, pnames);
+                if (pseudo) pos = Pseudoize(ToPositional(refEntry.Text ?? "", pnames));
+                return $"\"{Escape(pos)}\"";
+            }
+            default:
+            {
+                var forms = locEntry?.Plural ?? refEntry.Plural!;
+                var refForms = ToDict(refEntry.Plural!);
+                var formDict = ToDict(forms);
+                var count = new List<string> { "count" };
+
+                var args = new List<string>();
+                foreach (var cat in PluralCategories)
+                {
+                    var template = formDict.TryGetValue(cat, out var v) ? v
+                        : refForms.TryGetValue(cat, out var rv) ? rv
+                        : null;
+                    if (template == null)
+                    {
+                        if (cat != "other") continue;
+                        template = refForms.TryGetValue("other", out var ro) ? ro : "";
+                    }
+
+                    var pos = ToPositional(template, count);
+                    if (pseudo)
+                        pos = Pseudoize(ToPositional(
+                            refForms.TryGetValue(cat, out var rp) ? rp : template, count));
+                    args.Add($"{cat}: \"{Escape(pos)}\"");
+                }
+
+                return $"new PluralForms({string.Join(", ", args)})";
+            }
+        }
+    }
+
+    private static List<string> ExtractParams(string template)
+    {
+        var names = new List<string>();
+        var i = 0;
+        while (i < template.Length)
+        {
+            if (template[i] == '{')
+            {
+                var close = template.IndexOf('}', i + 1);
+                if (close > i)
+                {
+                    var name = template.Substring(i + 1, close - i - 1);
+                    if (IsIdentifier(name) && !names.Contains(name))
+                        names.Add(name);
+                    i = close + 1;
+                    continue;
+                }
+            }
+
+            i++;
+        }
+
+        return names;
+    }
+
+    private static string ToPositional(string template, List<string> pnames)
+    {
+        var sb = new StringBuilder(template.Length);
+        var i = 0;
+        while (i < template.Length)
+        {
+            var c = template[i];
+            if (c == '{')
+            {
+                var close = template.IndexOf('}', i + 1);
+                if (close > i)
+                {
+                    var name = template.Substring(i + 1, close - i - 1);
+                    var idx = pnames.IndexOf(name);
+                    if (idx >= 0)
+                    {
+                        sb.Append('{').Append(idx).Append('}');
+                        i = close + 1;
+                        continue;
+                    }
+                }
+
+                sb.Append("{{");
+                i++;
+                continue;
+            }
+
+            if (c == '}')
+            {
+                sb.Append("}}");
+                i++;
+                continue;
+            }
+
+            sb.Append(c);
+            i++;
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool IsIdentifier(string s)
+    {
+        if (s.Length == 0 || char.IsDigit(s[0]))
+            return false;
+        foreach (var c in s)
+            if (!char.IsLetterOrDigit(c) && c != '_')
+                return false;
+        return true;
+    }
+
+    private static Dictionary<string, string> ToDict(List<KeyValuePair<string, string>> entries)
     {
         var lookup = new Dictionary<string, string>();
         foreach (var e in entries)
             lookup[e.Key] = e.Value;
         return lookup;
     }
+
+    private static Dictionary<string, Entry> ToLookup(List<Entry> entries)
+    {
+        var lookup = new Dictionary<string, Entry>();
+        foreach (var e in entries)
+            lookup[e.Key] = e;
+        return lookup;
+    }
+
+    private static string Field(string identifier) =>
+        "_" + char.ToLowerInvariant(identifier[0]) + identifier.Substring(1);
 
     private static string Normalize(string path) => path.Replace('\\', '/').ToLowerInvariant();
 

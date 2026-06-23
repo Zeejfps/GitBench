@@ -1,4 +1,18 @@
 {
   "about.view_on_github": "View on GitHub",
-  "about.copyright": "© 2026 Zee Vasilyev"
+  "about.copyright": "© 2026 Zee Vasilyev",
+
+  "files.stage": { "one": "Stage", "other": "Stage {count} Files" },
+  "files.unstage": { "one": "Unstage", "other": "Unstage {count} Files" },
+  "files.discard": { "one": "Discard…", "other": "Discard {count} Files…" },
+  "files.stash": { "one": "Stash", "other": "Stash {count} Files" },
+  "files.mark_resolved": { "one": "Mark as Resolved", "other": "Mark {count} as Resolved" },
+
+  "time.just_now": "just now",
+  "time.minutes_ago": "{count}m ago",
+  "time.hours_ago": "{count}h ago",
+  "time.days_ago": "{count}d ago",
+  "time.weeks_ago": "{count}w ago",
+  "time.months_ago": "{count}mo ago",
+  "time.years_ago": "{count}y ago"
 }

@@ -3,6 +3,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -39,10 +40,12 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly State<Selection> _selection = new(Selection.Empty);
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
+    private readonly ILocalizationService _loc;
 
     public LocalChangesContentView(Context ctx, LocalChangesViewModel vm)
     {
         _vm = vm;
+        _loc = ctx.Localization();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
 
@@ -327,28 +330,29 @@ internal sealed class LocalChangesContentView : ContainerView
         var items = new List<RepoBarContextMenu.Item>();
         if (target != null)
         {
+            var s = _loc.Strings.Value;
             var paths = ResolveTargetPaths(target);
             var n = paths.Count;
             var conflicted = _vm.ConflictedAmong(paths);
             if (conflicted.Count > 0)
             {
                 items.Add(new RepoBarContextMenu.Item(
-                    conflicted.Count > 1 ? $"Mark {conflicted.Count} as Resolved" : "Mark as Resolved",
+                    s.FilesMarkResolved(conflicted.Count),
                     () => _vm.MarkResolved(conflicted),
                     LucideIcons.CheckSquare));
             }
             items.Add(new RepoBarContextMenu.Item(
-                n > 1 ? $"Stage {n} Files" : "Stage",
+                s.FilesStage(n),
                 () => _vm.Stage(paths),
                 LucideIcons.ChevronRight,
                 Shortcut: "Enter"));
             items.Add(new RepoBarContextMenu.Item(
-                n > 1 ? $"Discard {n} Files…" : "Discard…",
+                s.FilesDiscard(n),
                 () => _vm.RequestDiscard(paths),
                 LucideIcons.Trash,
                 Shortcut: "Delete"));
             items.Add(new RepoBarContextMenu.Item(
-                n > 1 ? $"Stash {n} Files" : "Stash",
+                s.FilesStash(n),
                 () => _vm.StashSelected(paths),
                 LucideIcons.Stash));
             AppendFileUtilityItems(items, target);
@@ -388,7 +392,7 @@ internal sealed class LocalChangesContentView : ContainerView
             var paths = ResolveTargetPaths(target);
             var n = paths.Count;
             items.Add(new RepoBarContextMenu.Item(
-                n > 1 ? $"Unstage {n} Files" : "Unstage",
+                _loc.Strings.Value.FilesUnstage(n),
                 () => _vm.Unstage(paths),
                 LucideIcons.ChevronLeft,
                 Shortcut: "Enter"));

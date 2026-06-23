@@ -5,12 +5,20 @@ using System.Text;
 
 namespace GitBench.Localization.Generator;
 
+internal sealed class Entry
+{
+    public string Key = "";
+    public string? Text;
+    public List<KeyValuePair<string, string>>? Plural;
+    public bool IsPlural => Plural != null;
+}
+
 internal static class MiniJson
 {
-    public static List<KeyValuePair<string, string>> ParseFlatObject(string json)
+    public static List<Entry> Parse(string json)
     {
         var pos = 0;
-        var result = new List<KeyValuePair<string, string>>();
+        var result = new List<Entry>();
 
         SkipWhitespace(json, ref pos);
         Expect(json, ref pos, '{');
@@ -30,27 +38,77 @@ internal static class MiniJson
             Expect(json, ref pos, ':');
             SkipWhitespace(json, ref pos);
 
-            if (Peek(json, pos) != '"')
-                throw new FormatException($"Value for key '{key}' must be a string (nested/typed entries are not supported yet).");
+            var next = Peek(json, pos);
+            var entry = new Entry { Key = key };
+            if (next == '"')
+                entry.Text = ParseString(json, ref pos);
+            else if (next == '{')
+                entry.Plural = ParseStringObject(json, ref pos);
+            else
+                throw new FormatException($"Value for key '{key}' must be a string or a plural object.");
 
-            var value = ParseString(json, ref pos);
-            result.Add(new KeyValuePair<string, string>(key, value));
+            result.Add(entry);
 
             SkipWhitespace(json, ref pos);
-            var next = Peek(json, pos);
-            if (next == ',')
+            var after = Peek(json, pos);
+            if (after == ',')
             {
                 pos++;
                 continue;
             }
 
-            if (next == '}')
+            if (after == '}')
             {
                 pos++;
                 break;
             }
 
             throw new FormatException($"Expected ',' or '}}' after value for key '{key}'.");
+        }
+
+        return result;
+    }
+
+    private static List<KeyValuePair<string, string>> ParseStringObject(string json, ref int pos)
+    {
+        Expect(json, ref pos, '{');
+        var result = new List<KeyValuePair<string, string>>();
+        SkipWhitespace(json, ref pos);
+        if (Peek(json, pos) == '}')
+        {
+            pos++;
+            return result;
+        }
+
+        while (true)
+        {
+            SkipWhitespace(json, ref pos);
+            var key = ParseString(json, ref pos);
+            SkipWhitespace(json, ref pos);
+            Expect(json, ref pos, ':');
+            SkipWhitespace(json, ref pos);
+
+            if (Peek(json, pos) != '"')
+                throw new FormatException($"Plural form '{key}' must be a string.");
+
+            var value = ParseString(json, ref pos);
+            result.Add(new KeyValuePair<string, string>(key, value));
+
+            SkipWhitespace(json, ref pos);
+            var after = Peek(json, pos);
+            if (after == ',')
+            {
+                pos++;
+                continue;
+            }
+
+            if (after == '}')
+            {
+                pos++;
+                break;
+            }
+
+            throw new FormatException($"Expected ',' or '}}' in plural object for '{key}'.");
         }
 
         return result;

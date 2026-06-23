@@ -1,6 +1,7 @@
 using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -874,18 +875,7 @@ internal sealed record CommitsView : Widget
             new MenuLabelSegment(" to here"),
         ];
 
-        private static string FormatRelative(DateTimeOffset when)
-        {
-            var now = DateTimeOffset.UtcNow;
-            var delta = now - when;
-            if (delta.TotalSeconds < 0) return when.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-            if (delta.TotalMinutes < 1) return "just now";
-            if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
-            if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
-            if (delta.TotalDays < 7) return $"{(int)delta.TotalDays}d ago";
-            if (delta.TotalDays < 30) return $"{(int)(delta.TotalDays / 7)}w ago";
-            if (delta.TotalDays < 365) return $"{(int)(delta.TotalDays / 30)}mo ago";
-            return $"{(int)(delta.TotalDays / 365)}y ago";
-        }
+        private string FormatRelative(DateTimeOffset when) =>
+            Format.RelativeTime(_ctx.Localization().Strings.Value, when);
     }
 }
