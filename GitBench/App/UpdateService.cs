@@ -82,7 +82,7 @@ public sealed class UpdateService
             dispatcher.Post(() =>
             {
                 IsChecking.Value = false;
-                if (userInitiated) CheckFeedback.Value = "Update check failed";
+                if (userInitiated) CheckFeedback.Value = _loc.Strings.Value.AppUpdateCheckFailed;
             });
         }
     }
@@ -92,7 +92,7 @@ public sealed class UpdateService
     {
         _manager = manager;
         _update = update;
-        BannerMessage.Value = $"Version {update.TargetFullRelease.Version} is ready — click Restart to update.";
+        BannerMessage.Value = _loc.Strings.Value.AppUpdateReadyMessage(update.TargetFullRelease.Version);
     }
 
     /// <summary>

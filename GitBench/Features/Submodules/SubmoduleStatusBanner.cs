@@ -20,15 +20,16 @@ internal sealed record SubmoduleStatusBanner : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<SubmoduleStatusBannerViewModel>();
+        var loc = ctx.Localization();
 
         return new Show
         {
             When = vm.IsOutdated,
-            Then = () => Banner(vm),
+            Then = () => Banner(vm, loc),
         }.BindVm(vm);
     }
 
-    private static IWidget Banner(SubmoduleStatusBannerViewModel vm) => new Box
+    private static IWidget Banner(SubmoduleStatusBannerViewModel vm, ILocalizationService loc) => new Box
     {
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border }),
@@ -50,7 +51,8 @@ internal sealed record SubmoduleStatusBanner : Widget
                             {
                                 Child = new Text
                                 {
-                                    Value = vm.OutdatedCount.Bind(BannerText),
+                                    Value = Prop.Bind<string?>(() =>
+                                        loc.Strings.Value.SubmodulesBannerOutdated(vm.OutdatedCount.Value)),
                                     VAlign = TextAlignment.Center,
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Banner.Text),
@@ -63,9 +65,9 @@ internal sealed record SubmoduleStatusBanner : Widget
                                 Children =
                                 [
                                     new ButtonIcon { Value = LucideIcons.Package },
-                                    new ButtonLabel { Value = "Update submodules" },
+                                    new ButtonLabel { Value = L.T(s => s.SubmodulesBannerAction) },
                                 ],
-                            }.WithTooltip("Check submodules out to the commit the main repo records")
+                            }.WithTooltip(L.T(s => s.SubmodulesBannerActionTooltip))
                                 .WithController<KbmController>(),
                         ],
                     },
@@ -73,8 +75,4 @@ internal sealed record SubmoduleStatusBanner : Widget
             },
         ],
     };
-
-    private static string? BannerText(int n) => n == 1
-        ? "1 submodule is out of date — its working tree differs from the commit the main repo records."
-        : $"{n} submodules are out of date — their working trees differ from the commits the main repo records.";
 }
