@@ -110,7 +110,8 @@ desktop binary). The runtime *language switch* is unaffected.
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
 4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
    The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
-   catalog/plumbing (6c) are **DONE**; only layout mirroring (6b) remains.
+   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is partway — text base-direction +
+   alignment mirroring is done, container/scrollbar/caret/icon mirroring remains.
 
 ## Why this is tractable here
 
@@ -471,7 +472,7 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL — IN PROGRESS (engine done; mirroring + catalog remain)
+### Phase 6 — RTL — IN PROGRESS (engine + catalog + text-direction done; container/control mirroring remains)
 The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
 **engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
 `ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
@@ -510,15 +511,49 @@ baseline). Shipped:
   mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
   still BiDi-orders as `.notdef`).
 
-#### Phase 6b — Layout mirroring — TODO
-- **Base direction from locale:** expose the active locale's RTL-ness (e.g.
-  `Strings.Culture.TextInfo.IsRightToLeft`) and thread a `BidiDirection` into the text draw/measure
-  path so an empty-of-strong-chars or ambiguous label follows UI direction (today shaping
-  auto-detects per line via first-strong, which is correct for single-script labels but not for the
-  base of a mixed line).
-- **Right-origin line layout** in the canvas draw loop; **flip default horizontal alignment**
-  (currently only Left/Center exist — add trailing/RTL origin); mirror scrollbars, disclosure/chevron
-  icons, and caret/selection direction. Broadest UI surface.
+#### Phase 6b — Layout mirroring — IN PROGRESS (text direction + alignment DONE; container/control mirroring remains)
+
+**Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
+running-app file lock); **110 ZGF.Gui.Tests pass** (+8 new) and **GitBench 113 pass** (same 12
+pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
+text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
+(Branches/Commits/Diff) at once, with no per-view edits. Shipped:
+- **Base direction from locale → canvas.** `RenderedCanvasBase.DefaultBaseDirection` (default
+  `BidiDirection.Auto`) is the UI writing direction; `GuiApp.SetBaseDirection` sets it on the main
+  canvas (and `CopyFontsFrom` carries it to popups, so RTL menus/dialogs inherit). `Program.cs` wires
+  it reactively off `State<Locale>` — `Strings.For(l).Culture.TextInfo.IsRightToLeft ? Rtl : Auto` —
+  exactly mirroring the theme/title-bar toggle. Keeping the default `Auto` leaves every existing LTR
+  locale **byte-identical** (same shape-cache bucket, same first-strong heuristic, Start = left).
+- **Threaded into draw + measure.** `DrawText`/`ShapeAndDrawLine`/`MeasureTextWidth` resolve the
+  effective base (`TextStyle.BaseDirection` if set, else the canvas default) and pass it to the
+  6a `ShapeText(..., BidiDirection)` overload, so a neutral/ambiguous line follows the UI direction
+  instead of per-line first-strong. Width is order-independent, so measure is unaffected; passing the
+  same base keeps draw and measure in one cache bucket.
+- **Right-origin line layout + Start/End-vs-direction.** New `TextAlignment.End` is honored and
+  `Start`/`End` now resolve through `TextLayout.ResolveHorizontal(align, rtlBase)` to a physical
+  `TextPlacement` (Start = leading edge → right under RTL; End = trailing edge → left). Right
+  placement is just a starting pen position (`boxLeft + boxWidth - width`); the emit loop still
+  advances L→R over the already-visual-ordered glyphs, so center/right/left share one path.
+- **Per-text override.** `Text { BaseDir = … }` / `TextView.BaseDirection` pin direction-neutral
+  content (SHA, path, URL) LTR inside an RTL layout (not yet applied at call sites — see remaining).
+- **Tests:** `TextLayoutTests` (the Start/End/Center × LTR/RTL placement matrix, incl. the legacy
+  LTR invariant) and a `BidiShapingTests` case proving an explicit `Ltr` vs `Rtl` base flips the
+  visual run order of a mixed Latin+Arabic line (the contract the canvas now relies on).
+
+**Still TODO (the broader, visual-QA-dependent surface):**
+- **Container mirroring** — `FlexView` (Row main-axis packing), `BorderLayout` East↔West swap (so the
+  sidebar/scrollbar move sides), and default cross-axis origins. Blocked on giving framework *Views* a
+  build-time ambient direction (layout has no canvas), e.g. a framework-side `Provide<>`d direction
+  the app feeds from the locale and `Row`/`BorderLayout` read — the canvas-default trick only covers
+  draw, not layout.
+- **Scrollbars** — vertical bar to the left edge, horizontal scroll origin from the right
+  (`ScrollPane._distanceFromLeft`, the thumb views, `BorderLayoutView` East placement).
+- **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
+  left; mirror to the right for an RTL field.
+- **Disclosure/chevron icons** — flip ChevronRight↔ChevronLeft (and menu/expand affordances) by
+  direction; Down/Up stay as-is.
+- **Pin LTR on non-translatable content** — apply `BaseDir = Ltr` to SHA/path/URL/ref labels so they
+  don't get dragged RTL inside the mirrored UI.
 
 #### Phase 6c — Arabic catalog & completion — DONE
 Release build clean (the Debug build is blocked only by a file lock from the running app — the

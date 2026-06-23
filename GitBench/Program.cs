@@ -3,11 +3,13 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Identity;
+using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Theming;
 using Velopack;
 using ZGF.AppUtils;
 using ZGF.Desktop;
+using ZGF.Fonts;
 using ZGF.Gui.Desktop;
 using ZGF.Observable;
 using static GitBench.App.AppPaths;
@@ -45,6 +47,14 @@ services.CreateEagerSingletons();
 var themeMode = services.Require<State<ThemeMode>>();
 appHost.SetTitleBarDark(themeMode.Value == ThemeMode.Dark);
 themeMode.Changed += mode => appHost.SetTitleBarDark(mode == ThemeMode.Dark);
+
+// Drive the UI's base writing direction from the active locale's culture: an RTL locale (Arabic)
+// flips text alignment and the bidi base for direction-neutral lines. Mirrors the theme toggle.
+var localeState = services.Require<State<Locale>>();
+void ApplyBaseDirection(Locale l) => appHost.SetBaseDirection(
+    Strings.For(l).Culture.TextInfo.IsRightToLeft ? BidiDirection.Rtl : BidiDirection.Auto);
+ApplyBaseDirection(localeState.Value);
+localeState.Changed += ApplyBaseDirection;
 
 var fontAssembly = typeof(LucideIcons).Assembly;
 appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
