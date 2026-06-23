@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Branches;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -41,29 +42,30 @@ internal sealed record EditRemoteDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             ViewModel = vm,
-            Title = isAdd ? "Add Remote" : "Remote",
+            Title = isAdd ? s.OperationsRemoteTitleAdd : s.OperationsRemoteTitleEdit,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
-            Action = (isAdd ? "Add" : "Save", DialogButtonRole.Primary),
+            Action = (isAdd ? s.CommonAdd : s.CommonSave, DialogButtonRole.Primary),
             Command = vm.Save,
             Body =
             [
                 new Text
                 {
-                    Value = isAdd ? "Add a new remote repository" : "Edit URL of the remote repository",
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Value = isAdd ? s.OperationsRemoteDescAdd : s.OperationsRemoteDescEdit,
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {
-                    Label = "Remote",
+                    Label = s.OperationsRemoteNameLabel,
                     Value = vm.Name,
                 },
                 new LabeledInput
                 {
-                    Label = "Repository URL",
+                    Label = s.CommonRepositoryUrl,
                     Value = vm.Url,
                     Accessory = new SchemeDropdown { Scheme = vm.Scheme, OnSelect = vm.SetScheme },
                 },

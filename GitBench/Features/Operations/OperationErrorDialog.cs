@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -36,14 +37,15 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
 
     protected override IWidget Build(Context ctx, DialogState state)
     {
+        var s = ctx.Localization().Strings.Value;
         return new Box
         {
             Width = DialogFrame.WidthWide,
             Height = 360,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
-            Background = Theme.Color(s => s.DialogFrame.Background),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.DialogFrame.Border)),
+            Background = Theme.Color(t => t.DialogFrame.Background),
+            BorderColor = Theme.BorderColor(t => BorderColorStyle.All(t.DialogFrame.Border)),
             Children =
             [
                 new Padding
@@ -57,8 +59,8 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                BuildHeader(),
-                                new Box { Height = 1, Background = Theme.Color(s => s.DialogFrame.HeaderSeparator) },
+                                BuildHeader(s),
+                                new Box { Height = 1, Background = Theme.Color(t => t.DialogFrame.HeaderSeparator) },
                                 new Grow { Child = new Raw { View = BuildScrollHost(ctx) } },
                                 new Row
                                 {
@@ -68,7 +70,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                                         new Spacer(),
                                         new ActionDialogButton
                                         {
-                                            Label = "OK",
+                                            Label = s.CommonOk,
                                             Role = DialogButtonRole.Primary,
                                             Command = new Command(OnClose),
                                             Height = DialogFrame.DefaultButtonHeight,
@@ -86,7 +88,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
 
     // Symmetric left spacer keeps the title centered: it matches the combined width of the two
     // right-side buttons (close + copy), so the grown, center-aligned title lands in the middle.
-    private IWidget BuildHeader() => new Row
+    private IWidget BuildHeader(Strings s) => new Row
     {
         Height = 28,
         CrossAxis = CrossAxisAlignment.Center,
@@ -100,10 +102,10 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                     Value = Title,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.DialogFrame.TitleText),
+                    Color = Theme.Color(t => t.DialogFrame.TitleText),
                 },
             },
-            new DialogCopyButton { GetText = () => Message, Tooltip = "Copy error to clipboard" },
+            new DialogCopyButton { GetText = () => Message, Tooltip = s.OperationsErrorCopyTooltip },
             new DialogCloseButton { OnClose = OnClose },
         ],
     };

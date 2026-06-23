@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -31,10 +32,11 @@ internal sealed record ReconcilePullDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             ViewModel = vm,
-            Title = "Reconcile divergent branches",
+            Title = s.OperationsReconcileTitle,
             OnClose = OnClose,
             BodyGap = 10,
             Action = ("Pull", DialogButtonRole.Primary),
@@ -45,25 +47,23 @@ internal sealed record ReconcilePullDialog : Widget
             [
                 new Text
                 {
-                    Value = $"'{Repo.DisplayName}' and its upstream have both moved on. " +
-                            "Choose how to reconcile them, then pull.",
+                    Value = s.OperationsReconcileDesc(Repo.DisplayName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Text
                 {
-                    Value = "Strategy",
-                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
+                    Value = s.CommonStrategy,
+                    Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                StrategyCheckbox(ctx, vm, "Merge (--no-rebase)", PullStrategy.Merge),
-                StrategyCheckbox(ctx, vm, "Rebase (--rebase)", PullStrategy.Rebase),
-                StrategyCheckbox(ctx, vm, "Fast-forward only (--ff-only)", PullStrategy.FastForwardOnly),
+                StrategyCheckbox(ctx, vm, s.OperationsReconcileStrategyMerge, PullStrategy.Merge),
+                StrategyCheckbox(ctx, vm, s.OperationsReconcileStrategyRebase, PullStrategy.Rebase),
+                StrategyCheckbox(ctx, vm, s.OperationsReconcileStrategyFfOnly, PullStrategy.FastForwardOnly),
                 new Text
                 {
-                    Value = "Merge or rebase may stop on conflicts — the Operation banner will offer Abort. " +
-                            "Fast-forward only refuses unless your branch hasn't moved.",
+                    Value = s.OperationsReconcileNote,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
             ],
         };

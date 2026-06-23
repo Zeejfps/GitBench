@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;

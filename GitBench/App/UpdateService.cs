@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using GitBench.Localization;
 using Velopack;
 using Velopack.Sources;
 using ZGF.Observable;
@@ -16,8 +17,14 @@ namespace GitBench.App;
 /// </summary>
 public sealed class UpdateService
 {
+    private readonly ILocalizationService _loc;
     private UpdateManager? _manager;
     private UpdateInfo? _update;
+
+    public UpdateService(ILocalizationService loc)
+    {
+        _loc = loc;
+    }
 
     /// <summary>Non-null once an update is staged; drives the banner's text and visibility.</summary>
     public State<string?> BannerMessage { get; } = new(null);
@@ -57,7 +64,7 @@ public sealed class UpdateService
                 dispatcher.Post(() =>
                 {
                     IsChecking.Value = false;
-                    if (userInitiated) CheckFeedback.Value = "You're on the latest version";
+                    if (userInitiated) CheckFeedback.Value = _loc.Strings.Value.AppUpdateUpToDate;
                 });
                 return;
             }

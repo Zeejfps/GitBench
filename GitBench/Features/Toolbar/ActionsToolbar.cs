@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -18,6 +19,7 @@ internal sealed record ActionsToolbar : Widget
     {
         var vm = ctx.Require<ActionsToolbarViewModel>();
         var styles = ctx.Theme().Styles;
+        var loc = ctx.Localization();
 
         return new Box
         {
@@ -50,7 +52,7 @@ internal sealed record ActionsToolbar : Widget
                                             Value = vm.IsFetching.Bind(string? (f) => f ? LucideIcons.Loader : LucideIcons.Fetch),
                                             Rotation = Prop.Bind(vm.FetchRotation),
                                         },
-                                        new ButtonLabel { Value = vm.IsFetching.Bind(string? (f) => f ? "Fetching" : "Fetch") },
+                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsFetching.Value ? loc.Strings.Value.ToolbarFetching : loc.Strings.Value.ToolbarFetch) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new ButtonWidget
@@ -65,7 +67,7 @@ internal sealed record ActionsToolbar : Widget
                                             Badge = Prop.Bind(vm.PullBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
                                         },
-                                        new ButtonLabel { Value = vm.IsPulling.Bind(string? (p) => p ? "Pulling" : "Pull") },
+                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsPulling.Value ? loc.Strings.Value.ToolbarPulling : loc.Strings.Value.ToolbarPull) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new ButtonWidget
@@ -80,7 +82,7 @@ internal sealed record ActionsToolbar : Widget
                                             Badge = Prop.Bind(vm.PushBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
                                         },
-                                        new ButtonLabel { Value = vm.IsPushing.Bind(string? (p) => p ? "Pushing" : "Push") },
+                                        new ButtonLabel { Value = Prop.Bind<string?>(() => vm.IsPushing.Value ? loc.Strings.Value.ToolbarPushing : loc.Strings.Value.ToolbarPush) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new SeparatorSpacer(),
@@ -90,7 +92,7 @@ internal sealed record ActionsToolbar : Widget
                                     Children =
                                     [
                                         new ButtonIcon { Value = LucideIcons.Stash },
-                                        new ButtonLabel { Value = "Stash" },
+                                        new ButtonLabel { Value = L.T(s => s.ToolbarStash) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new ButtonWidget
@@ -99,7 +101,7 @@ internal sealed record ActionsToolbar : Widget
                                     Children =
                                     [
                                         new ButtonIcon { Value = LucideIcons.Branch },
-                                        new ButtonLabel { Value = "Branch" },
+                                        new ButtonLabel { Value = L.T(s => s.ToolbarBranch) },
                                     ],
                                 }.WithController<KbmController>(),
                                 new Spacer(),
@@ -108,14 +110,14 @@ internal sealed record ActionsToolbar : Widget
                                     Command = vm.OpenFolder,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
                                     Children = [new ButtonIcon { Value = LucideIcons.FolderOpen }],
-                                }.WithTooltip("Open in file explorer")
+                                }.WithTooltip(L.T(s => s.ToolbarOpenFolderTooltip))
                                     .WithController<KbmController>(),
                                 new ButtonWidget
                                 {
                                     Command = vm.OpenTerminal,
                                     ContentInset = ButtonStyle.Plain.IconOnlyInset,
                                     Children = [new ButtonIcon { Value = LucideIcons.SquareTerminal }],
-                                }.WithTooltip("Open in terminal")
+                                }.WithTooltip(L.T(s => s.ToolbarOpenTerminalTooltip))
                                     .WithController<KbmController>(),
                             ],
                         },

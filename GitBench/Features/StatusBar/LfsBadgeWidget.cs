@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -20,6 +21,7 @@ internal sealed record LfsBadgeWidget : Widget
     protected override IWidget Build(Context ctx)
     {
         var theme = ctx.Theme();
+        var loc = ctx.Localization();
         var status = Status.ToReadable(ctx);
 
         return new Box
@@ -42,11 +44,15 @@ internal sealed record LfsBadgeWidget : Widget
                             FontSize = 10f,
                             HAlign = TextAlignment.Center,
                             VAlign = TextAlignment.Center,
-                            Value = status.Bind(string? (s) => s switch
+                            Value = Prop.Bind<string?>(() =>
                             {
-                                LfsBadge.Tracked => "Git LFS",
-                                LfsBadge.NotTracked => "Not in LFS",
-                                _ => string.Empty,
+                                var strings = loc.Strings.Value;
+                                return status.Value switch
+                                {
+                                    LfsBadge.Tracked => strings.StatusbarLfsTracked,
+                                    LfsBadge.NotTracked => strings.StatusbarLfsNotTracked,
+                                    _ => string.Empty,
+                                };
                             }),
                             Color = Prop.Bind(() => status.Value == LfsBadge.Tracked
                                 ? theme.Styles.Value.DiffView.LfsBadgeTrackedText
