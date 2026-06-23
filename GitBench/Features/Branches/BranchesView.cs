@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -89,6 +90,7 @@ internal sealed record BranchesView : Widget
 
         private readonly Context _ctx;
         private readonly ICanvas _canvas;
+        private readonly ILocalizationService _loc;
         private readonly BranchesViewModel _vm;
         private readonly VirtualRowListView _list;
         private readonly VerticalScrollBarView _scrollBar;
@@ -116,6 +118,7 @@ internal sealed record BranchesView : Widget
         {
             _ctx = ctx;
             _canvas = ctx.Canvas;
+            _loc = ctx.Localization();
             var vm = ctx.Require<BranchesViewModel>();
             _vm = vm;
             var input = ctx.Require<InputSystem>();
@@ -176,11 +179,16 @@ internal sealed record BranchesView : Widget
             this.Bind(vm.LoadError, SetLoadError);
             this.Bind(vm.IsLoading, SetIsLoading);
             this.Bind(vm.WorktreeBranches, set => _worktreeBranches = set);
+
+            // Re-localize on a live language switch: section-header labels are baked into the
+            // rows, and the placeholder text is custom-painted, so both need an explicit rebuild
+            // + repaint (the theme bind above does the same for colors).
+            this.Bind(_loc.Strings, _ => { RebuildRows(); SetDirty(); });
         }
 
         private void RebuildRows()
         {
-            _rows = BranchTreeBuilder.BuildRows(_listing, _ui);
+            _rows = BranchTreeBuilder.BuildRows(_listing, _ui, _loc.Strings.Value);
             _list.ItemCount = _rows.Count;
             _list.NotifyItemsChanged();
         }
@@ -210,7 +218,7 @@ internal sealed record BranchesView : Widget
                 c.DrawText(new DrawTextInputs
                 {
                     Position = pos,
-                    Text = "Failed to load branches: " + _loadError,
+                    Text = _loc.Strings.Value.BranchesLoadError(_loadError),
                     Style = _placeholderStyle,
                     ZIndex = z + 1,
                 });
@@ -222,7 +230,7 @@ internal sealed record BranchesView : Widget
                 c.DrawText(new DrawTextInputs
                 {
                     Position = pos,
-                    Text = "Loading…",
+                    Text = _loc.Strings.Value.CommonLoading,
                     Style = _placeholderStyle,
                     ZIndex = z + 1,
                 });
