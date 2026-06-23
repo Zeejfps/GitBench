@@ -405,6 +405,14 @@ baseline — and untouched by this work.) Shipped:
   `ResetCommitDialog.BuildDirtyHint` now uses dedicated plural/param keys
   (`commits.reset_dirty_staged`/`_unstaged`/`_both`). Bare `"Files"` header (count == 0) in
   Discard/Stash VMs → `localchanges.files_header_empty`.
+- **Diff view CJK** — `DiffContentView` is a fixed monospace grid (`char × _monoAdvance`); CJK
+  glyphs render via the shared fallback backend but the grid mispositioned them. Fixed: the
+  horizontal extent now sizes by **East-Asian cell width** (`VisualCells`, wide = 2 cells) so long
+  CJK lines scroll fully into view instead of clipping at the right; syntax-highlighted runs now
+  position by **measured width** (running x), so colored runs abut where the shaper actually lays
+  wide glyphs instead of overlapping. Plain (unhighlighted) lines were already correct (one
+  `DrawText`). Latin output is pixel-identical. (Per-character *selection* over CJK columns is not
+  yet cell-aware — a possible follow-up.)
 
 **Open verification (exit gate):** the macOS GUI eyeball across en/es/ja/zh/ko — confirm (a) CJK
 renders via the fallback and (b) CJK labels/bodies **wrap** instead of overflowing. The load+shape

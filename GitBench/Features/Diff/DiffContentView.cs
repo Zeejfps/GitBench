@@ -88,7 +88,7 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     private DiffRenderState _renderState = new DiffRenderState.Placeholder("Select a file to view diff.");
     private readonly List<DiffRow> _rows = new();
-    private int _maxRowChars;
+    private int _maxRowCells;
     private float _gutterWidth;
     private float _lineHeight;
     private float _monoAdvance;
@@ -189,7 +189,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         _rows.Clear();
         _hunkRanges.Clear();
         _rowToHunk = Array.Empty<int>();
-        _maxRowChars = 0;
+        _maxRowCells = 0;
         _scrollX = 0;
         _hoveredHunkIndex = -1;
         _hoveredButton = HunkAction.None;
@@ -296,8 +296,8 @@ internal sealed class DiffContentView : View, IScrollableContent
             var separatorRowIndex = _rows.Count;
             var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
             _rows.Add(new DiffRow.HunkSeparator(range, string.IsNullOrEmpty(h.Header) ? null : h.Header));
-            var sepChars = range.Length + (h.Header?.Length ?? 0) + 2;
-            if (sepChars > _maxRowChars) _maxRowChars = sepChars;
+            var sepCells = VisualCells(range) + (h.Header != null ? VisualCells(h.Header) : 0) + 2;
+            if (sepCells > _maxRowCells) _maxRowCells = sepCells;
 
             foreach (var l in h.Lines)
             {
@@ -313,7 +313,8 @@ internal sealed class DiffContentView : View, IScrollableContent
                     text.Length,
                     spans);
                 _rows.Add(row);
-                if (text.Length > _maxRowChars) _maxRowChars = text.Length;
+                var cells = VisualCells(text);
+                if (cells > _maxRowCells) _maxRowCells = cells;
             }
             _hunkRanges.Add(new HunkRowRange(i, separatorRowIndex, _rows.Count - 1));
         }
@@ -350,7 +351,8 @@ internal sealed class DiffContentView : View, IScrollableContent
             var spans = ff.Highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
             if (spans != null && spans.Count == 0) spans = null;
             _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, text.Length, spans));
-            if (text.Length > _maxRowChars) _maxRowChars = text.Length;
+            var cells = VisualCells(text);
+            if (cells > _maxRowCells) _maxRowCells = cells;
         }
 
         if (ff.Truncated)
@@ -360,7 +362,8 @@ internal sealed class DiffContentView : View, IScrollableContent
     private void AddBanner(string text)
     {
         _rows.Add(new DiffRow.Banner(text));
-        if (text.Length > _maxRowChars) _maxRowChars = text.Length;
+        var cells = VisualCells(text);
+        if (cells > _maxRowCells) _maxRowCells = cells;
     }
 
     public void SetVerticalNormalizedScrollPosition(float normalized)
@@ -443,10 +446,51 @@ internal sealed class DiffContentView : View, IScrollableContent
         // Worst case across row kinds: line rows go gutter|gutter|glyph|text (one gutter in
         // full-file mode); banner rows are flush-left with horizontal padding. Take the max.
         var gutters = _singleGutter ? _gutterWidth : _gutterWidth + _gutterWidth;
-        var lineWidth = gutters + GlyphColumnWidth + _maxRowChars * _monoAdvance + BannerPaddingX;
-        var bannerWidth = BannerPaddingX * 2 + _maxRowChars * _monoAdvance;
+        var lineWidth = gutters + GlyphColumnWidth + _maxRowCells * _monoAdvance + BannerPaddingX;
+        var bannerWidth = BannerPaddingX * 2 + _maxRowCells * _monoAdvance;
         return Math.Max(lineWidth, bannerWidth);
     }
+
+    // East-Asian display width in monospace cells: wide/fullwidth code points take two cells,
+    // everything else one. The horizontal extent is sized from this so a spaceless CJK line —
+    // whose glyphs run about twice a Latin cell — can be scrolled fully into view instead of
+    // being cut off at the right edge. Two cells slightly over-estimates the fallback font's real
+    // advance, which only ever leaves a little slack — it never clips.
+    private static int VisualCells(string text)
+    {
+        var cells = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            int cp;
+            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+            {
+                cp = char.ConvertToUtf32(c, text[i + 1]);
+                i++;
+            }
+            else
+            {
+                cp = c;
+            }
+
+            cells += IsWideCodePoint(cp) ? 2 : 1;
+        }
+
+        return cells;
+    }
+
+    private static bool IsWideCodePoint(int cp) =>
+        (cp >= 0x1100 && cp <= 0x115F) ||   // Hangul Jamo
+        (cp >= 0x2E80 && cp <= 0x303E) ||   // CJK Radicals … CJK Symbols and Punctuation
+        (cp >= 0x3041 && cp <= 0x33FF) ||   // Hiragana … Enclosed CJK Letters and Months
+        (cp >= 0x3400 && cp <= 0x4DBF) ||   // CJK Unified Ideographs Extension A
+        (cp >= 0x4E00 && cp <= 0x9FFF) ||   // CJK Unified Ideographs
+        (cp >= 0xA960 && cp <= 0xA97F) ||   // Hangul Jamo Extended-A
+        (cp >= 0xAC00 && cp <= 0xD7A3) ||   // Hangul Syllables
+        (cp >= 0xF900 && cp <= 0xFAFF) ||   // CJK Compatibility Ideographs
+        (cp >= 0xFF00 && cp <= 0xFF60) ||   // Fullwidth Forms (halfwidth katakana 0xFF61+ stay narrow)
+        (cp >= 0xFFE0 && cp <= 0xFFE6) ||   // Fullwidth signs
+        (cp >= 0x20000 && cp <= 0x3FFFD);   // Supplementary ideographic plane (CJK Ext B+)
 
     private void ClampHorizontalScroll()
     {
@@ -836,28 +880,33 @@ internal sealed class DiffContentView : View, IScrollableContent
         var text = l.Text;
         var len = text.Length;
         var col = 0;
+        var x = textStart;
         foreach (var span in spans)
         {
             var start = Math.Clamp(span.Start, 0, len);
             var end = Math.Clamp(span.Start + span.Length, 0, len);
             if (start > col)
-                DrawTextRun(c, text, col, start, textStart, bottom, maxRight, _styles.LineText, z);
+                x = DrawTextRun(c, text, col, start, x, bottom, maxRight, _styles.LineText, z);
             if (end > start)
-                DrawTextRun(c, text, start, end, textStart, bottom, maxRight, SlotColor(span.Slot), z);
+                x = DrawTextRun(c, text, start, end, x, bottom, maxRight, SlotColor(span.Slot), z);
             if (end > col) col = end;
         }
         if (col < len)
-            DrawTextRun(c, text, col, len, textStart, bottom, maxRight, _styles.LineText, z);
+            DrawTextRun(c, text, col, len, x, bottom, maxRight, _styles.LineText, z);
     }
 
-    private void DrawTextRun(
-        ICanvas c, string text, int from, int to, float textStart, float bottom, float maxRight, uint color, int z)
+    // Draws text[from..to) at x and returns x advanced by the run's measured width, so colored
+    // runs abut exactly where the shaper lays glyphs — wide CJK glyphs included, not just the
+    // fixed monospace cell. Latin is pixel-identical, since its advance is the cell width.
+    private float DrawTextRun(
+        ICanvas c, string text, int from, int to, float x, float bottom, float maxRight, uint color, int z)
     {
-        if (to <= from) return;
-        var x = textStart + from * _monoAdvance;
-        var w = Math.Max(0f, maxRight - x);
-        if (w <= 0) return;
-        DrawMonoText(c, text.Substring(from, to - from), x, bottom, w, color, TextAlignment.Start, z);
+        if (to <= from) return x;
+        var run = text.Substring(from, to - from);
+        var w = c.MeasureTextWidth(run, MonoStartStyle);
+        if (x < maxRight)
+            DrawMonoText(c, run, x, bottom, Math.Max(0f, maxRight - x), color, TextAlignment.Start, z);
+        return x + w;
     }
 
     private uint SlotColor(TokenColorSlot slot) => slot switch

@@ -73,7 +73,12 @@ internal sealed class GitProcessRunner
         var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
         var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args, prefix) : BuildShellPsi(args, workingDir, prefix);
-        if (stdin != null) psi.RedirectStandardInput = true;
+        if (stdin != null)
+        {
+            psi.RedirectStandardInput = true;
+            // Write patches as UTF-8 (no BOM) so a hunk touching CJK lines applies byte-for-byte.
+            psi.StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        }
         configure?.Invoke(psi);
 
         using var proc = Process.Start(psi);
@@ -136,6 +141,10 @@ internal sealed class GitProcessRunner
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Git emits UTF-8 (diff bodies are the file's raw bytes); without this .NET decodes
+            // with the OS default code page (CP1252 on Windows), which turns CJK into mojibake.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -160,6 +169,10 @@ internal sealed class GitProcessRunner
             WorkingDirectory = workingDir,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            // Git emits UTF-8 (diff bodies are the file's raw bytes); without this .NET decodes
+            // with the OS default code page (CP1252 on Windows), which turns CJK into mojibake.
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
