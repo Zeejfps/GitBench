@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -31,13 +32,14 @@ internal sealed record DropStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = $"Drop {Label}?",
+            Title = s.StashDropTitle(Label),
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthCompact,
-            CancelLabel = "Keep",
+            CancelLabel = s.StashDropCancel,
             Action = ("Drop", DialogButtonRole.Destructive),
             Command = vm.Drop,
             ConfirmKeys = true,
@@ -45,9 +47,9 @@ internal sealed record DropStashDialog : Widget
             [
                 new Text
                 {
-                    Value = $"Applied: {Subject}\n\nDrop this stash now? This cannot be undone.",
+                    Value = s.StashDropBody(Subject),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
             ],
         };

@@ -55,7 +55,7 @@ internal sealed record CommitBarWidget : Widget
 
         var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight)
         {
-            PlaceholderText = "Commit description",
+            PlaceholderText = loc.Strings.Value.LocalchangesCommitDescriptionPlaceholder,
         };
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
@@ -63,9 +63,10 @@ internal sealed record CommitBarWidget : Widget
         {
             Label = Prop.Bind<string?>(() =>
             {
+                var s = loc.Strings.Value;
                 var merging = vm.IsMerging.Value;
-                if (vm.CommitBusy.Value) return merging ? "Committing merge" : "Committing";
-                return merging ? "Commit merge" : "Commit";
+                if (vm.CommitBusy.Value) return merging ? s.LocalchangesCommitMergeButtonBusy : s.LocalchangesCommitButtonBusy;
+                return merging ? s.LocalchangesCommitMergeButton : s.LocalchangesCommitButton;
             }),
             Icon = Prop.Bind<string?>(() => vm.CommitBusy.Value ? LucideIcons.Loader : null),
             IconRotation = Prop.Bind(vm.CommitRotation),
@@ -115,7 +116,7 @@ internal sealed record CommitBarWidget : Widget
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
-                                        new CheckboxWidget { Label = "Amend", Checked = amend }
+                                        new CheckboxWidget { Label = L.T(s => s.LocalchangesAmendCheckbox), Checked = amend }
                                             .WithController<KbmController>(),
                                         new Raw { View = commitButton },
                                     ],

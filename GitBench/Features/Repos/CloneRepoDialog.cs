@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
@@ -27,12 +28,14 @@ internal sealed record CloneRepoDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
+
         // No fixed Width — the button sizes to its label (it carries its own 16px horizontal
         // padding), so pinning a width clips "Browse…". Height matches the field beside it and the
         // footer buttons so the dialog's chrome is one size.
         var browseButton = new SecondaryDialogButton
         {
-            Label = "Browse…",
+            Label = s.CommonBrowse,
             Command = new Command(() =>
             {
                 var shell = ctx.Get<IPlatformShell>();
@@ -45,7 +48,7 @@ internal sealed record CloneRepoDialog : Widget
 
         return new Dialog
         {
-            Title = "Clone repository",
+            Title = s.ReposCloneTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Action = ("Clone", DialogButtonRole.Primary),
@@ -54,20 +57,20 @@ internal sealed record CloneRepoDialog : Widget
             [
                 new LabeledInput
                 {
-                    Label = "Repository URL",
+                    Label = s.CommonRepositoryUrl,
                     Value = vm.Url,
-                    Placeholder = "https://github.com/user/repo.git",
+                    Placeholder = s.ReposCloneUrlPlaceholder,
                 },
                 new LabeledInput
                 {
-                    Label = "Clone into",
+                    Label = s.ReposCloneParentDirLabel,
                     Value = vm.ParentDir,
-                    Hint = "Parent folder. The repository is cloned into a new subfolder here.",
+                    Hint = s.ReposCloneParentDirHint,
                     Accessory = browseButton,
                 },
                 new LabeledInput
                 {
-                    Label = "Folder name",
+                    Label = s.ReposCloneFolderNameLabel,
                     Value = vm.FolderName,
                 },
             ],

@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -24,10 +25,11 @@ internal sealed record DiscardHunkDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             ViewModel = vm,
-            Title = "Discard hunk",
+            Title = s.LocalchangesDiscardHunkTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
             Height = 200f,
@@ -40,9 +42,9 @@ internal sealed record DiscardHunkDialog : Widget
                 {
                     Child = new Text
                     {
-                        Value = $"Discard this hunk in {Path}? This cannot be undone.",
+                        Value = s.LocalchangesDiscardHunkBody(Path),
                         Wrap = TextWrap.Wrap,
-                        Color = Theme.Color(s => s.DialogBody.BodyText),
+                        Color = Theme.Color(t => t.DialogBody.BodyText),
                     },
                 },
             ],

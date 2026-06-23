@@ -105,17 +105,18 @@ internal sealed record RepoBar : Widget
         => ctx.Get<IMessageBus>()?.Broadcast(
             new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose }));
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(RepoBarViewModel vm)
+    private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(Context ctx, RepoBarViewModel vm)
     {
+        var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new("New group", () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
+            new(s.ReposMenuNewGroup, () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
         };
         if (vm.HasMultipleGroups)
         {
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(new RepoBarContextMenu.Item("Expand All", () => vm.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
-            items.Add(new RepoBarContextMenu.Item("Collapse All", () => vm.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
+            items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, () => vm.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, () => vm.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
         }
         return items;
     }

@@ -1,4 +1,5 @@
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -58,6 +59,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
     // Set in Start once the UI dispatcher exists. Null until then — ops are inert before startup.
     private IUiDispatcher? _dispatcher;
     private bool _disposed;
@@ -73,11 +75,12 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
 
     public IReadable<RepoOperations> Active => _active;
 
-    public RepoOperationsStore(IRepoRegistry registry, IGitService git, IMessageBus bus)
+    public RepoOperationsStore(IRepoRegistry registry, IGitService git, IMessageBus bus, ILocalizationService loc)
     {
         _registry = registry;
         _git = git;
         _bus = bus;
+        _loc = loc;
     }
 
     public void Start(IUiDispatcher dispatcher)
@@ -100,7 +103,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         var s = Get(repo.Id);
         if (s.Value.IsPushing) return;
         s.Value = s.Value with { IsPushing = true, PendingError = null };
-        Run(repo, "Push failed",
+        Run(repo, _loc.Strings.Value.ReposErrorPushFailed,
             () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsPushing = false });
     }
@@ -110,11 +113,12 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         var s = Get(repo.Id);
         if (s.Value.IsPulling) return;
         s.Value = s.Value with { IsPulling = true, PendingError = null };
-        Run(repo, "Pull failed",
+        var strings = _loc.Strings.Value;
+        Run(repo, strings.ReposErrorPullFailed,
             () => _git.Pull(repo, strategy) switch
             {
                 PullOutcome.Failed f => (false, f.Message, false),
-                PullOutcome.Diverged => (false, "Need to specify how to reconcile divergent branches.", true),
+                PullOutcome.Diverged => (false, strings.ReposErrorDivergentBranches, true),
                 _ => (true, null, false),
             },
             st => st with { IsPulling = false });
@@ -125,7 +129,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         var s = Get(repo.Id);
         if (s.Value.IsFetching) return;
         s.Value = s.Value with { IsFetching = true, PendingError = null };
-        Run(repo, "Fetch failed",
+        Run(repo, _loc.Strings.Value.ReposErrorFetchFailed,
             () => _git.Fetch(repo) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsFetching = false });
     }
@@ -218,11 +222,11 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         if (_registry.Active.Value?.Id == repo.Id)
         {
             s.Value = next;
-            _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error ?? "Unknown error."));
+            _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error ?? _loc.Strings.Value.CommonUnknownError));
         }
         else
         {
-            s.Value = next with { PendingError = new PendingOperationError(failureTitle, error ?? "Unknown error.") };
+            s.Value = next with { PendingError = new PendingOperationError(failureTitle, error ?? _loc.Strings.Value.CommonUnknownError) };
         }
     }
 

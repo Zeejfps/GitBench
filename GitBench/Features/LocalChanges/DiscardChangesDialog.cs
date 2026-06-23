@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Operations;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -36,10 +37,11 @@ internal sealed record DiscardChangesDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
             ViewModel = vm,
-            Title = "Discard changes",
+            Title = s.LocalchangesDiscardDialogTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
             Height = 480f,
@@ -51,14 +53,14 @@ internal sealed record DiscardChangesDialog : Widget
             [
                 new Text
                 {
-                    Value = "Discarding cannot be undone. Choose the changes to discard.",
+                    Value = s.LocalchangesDiscardDialogBody,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Text
                 {
                     Value = Prop.Bind(vm.FilesHeader),
-                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
+                    Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
             ],
@@ -75,7 +77,7 @@ internal sealed record DiscardChangesDialog : Widget
         {
             var empty = new TextView(ctx.Canvas)
             {
-                Text = "No unstaged changes.",
+                Text = ctx.Localization().Strings.Value.LocalchangesDiscardDialogNoChanges,
                 HorizontalTextAlignment = TextAlignment.Center,
                 VerticalTextAlignment = TextAlignment.Center,
             };

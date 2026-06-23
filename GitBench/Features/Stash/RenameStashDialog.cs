@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -29,24 +30,25 @@ internal sealed record RenameStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Rename stash",
+            Title = s.StashRenameTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Rename", DialogButtonRole.Primary),
+            Action = (s.CommonRename, DialogButtonRole.Primary),
             Command = vm.Rename,
             Body =
             [
                 new Text
                 {
-                    Value = $"Renaming '{CurrentMessage}'",
+                    Value = s.StashRenameContext(CurrentMessage),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {
-                    Label = "Description",
+                    Label = s.StashRenameDescriptionLabel,
                     Value = vm.Message,
                     SelectAllOnOpen = true,
                 },
