@@ -69,9 +69,9 @@
 
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",
-  "toolbar.pull": "Pull",
+  "toolbar.pull": "Extraer",
   "toolbar.pulling": "Extrayendo",
-  "toolbar.push": "Push",
+  "toolbar.push": "Enviar",
   "toolbar.pushing": "Enviando",
   "toolbar.stash": "Stash",
   "toolbar.branch": "Rama",
