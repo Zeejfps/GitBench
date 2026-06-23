@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -25,32 +26,33 @@ internal sealed record DeleteLocalBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         var body = new List<IWidget>
         {
             new Text
             {
-                Value = $"Delete local branch '{BranchName}'?",
+                Value = s.BranchesDeleteLocalTitle(BranchName),
                 Wrap = TextWrap.Wrap,
-                Color = Theme.Color(s => s.DialogBody.BodyText),
+                Color = Theme.Color(t => t.DialogBody.BodyText),
             },
             new CheckboxWidget
             {
-                Label = "Delete even if not merged",
+                Label = s.BranchesDeleteLocalForceLabel,
                 Checked = vm.Force,
                 Height = 22,
             }.WithController<KbmController>(),
             new Text
             {
-                Value = "Unchecked: refuses if the branch isn't fully merged into its upstream or HEAD.",
+                Value = s.BranchesDeleteLocalForceHint,
                 Wrap = TextWrap.Wrap,
-                Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                Color = Theme.Color(t => t.DialogBody.RowTextMissing),
             },
         };
         if (vm.HasUpstream)
         {
             body.Add(new CheckboxWidget
             {
-                Label = $"Also delete '{UpstreamBranch}' on '{UpstreamRemote}'",
+                Label = s.BranchesDeleteLocalRemoteLabel(UpstreamBranch!, UpstreamRemote!),
                 Checked = vm.DeleteRemote,
                 Height = 22,
             }.WithController<KbmController>());
@@ -58,10 +60,10 @@ internal sealed record DeleteLocalBranchDialog : Widget
 
         return new Dialog
         {
-            Title = "Delete branch",
+            Title = s.BranchesDeleteLocalDialogTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Delete", DialogButtonRole.Destructive),
+            Action = (s.CommonDelete, DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
             Body = body.ToArray(),
