@@ -124,6 +124,21 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             StartLoad();
         }));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
+
+        // A loaded diff draws its localized chrome at paint time (DiffContentView re-resolves the
+        // binary/no-changes/conflict labels each frame), but a placeholder bakes its text into the
+        // render state, so it would stay in the old language after a live locale switch. Reload to
+        // re-resolve it. Guarded to a placeholder so a shown diff isn't needlessly re-fetched.
+        if (_loc != null)
+        {
+            var first = true;
+            Subscriptions.Add(_loc.Strings.Subscribe(_ =>
+            {
+                if (first) { first = false; return; }
+                if (State.Value.Render is DiffRenderState.Placeholder)
+                    StartLoad();
+            }));
+        }
     }
 
     public void DeferReloadToWorkingTreeChange() => _deferReloadToWorkingTreeChange = true;
