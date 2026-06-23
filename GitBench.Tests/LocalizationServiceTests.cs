@@ -56,4 +56,24 @@ public class LocalizationServiceTests
 
         Assert.Equal("Ver en GitHub", observed);
     }
+
+    [Fact]
+    public void JapaneseCatalogIsBakedFromJaJson()
+    {
+        Assert.Equal("GitHubで表示", Strings.Ja.AboutViewOnGithub);
+    }
+
+    [Fact]
+    public void SwitchingToJapanesePushesTheJapaneseCatalog()
+    {
+        var locale = new State<Locale>(Locale.En);
+        using var service = new LocalizationService(locale);
+
+        string? observed = null;
+        using var _ = service.Strings.Subscribe(s => observed = s.AboutViewOnGithub);
+
+        locale.Value = Locale.Ja;
+
+        Assert.Equal("GitHubで表示", observed);
+    }
 }

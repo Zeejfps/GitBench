@@ -50,6 +50,13 @@ var fontAssembly = typeof(LucideIcons).Assembly;
 appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
 appHost.RegisterFont(DiffOptions.MonoFontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
 
+// Glyph fallback for non-Latin (CJK) text, from a system font so we don't bundle one.
+if (SystemFonts.CjkFallback() is { } cjk)
+{
+    try { appHost.RegisterFallbackFont(cjk.Path, 16, cjk.FaceIndex); }
+    catch (Exception ex) { Console.WriteLine($"[Fonts] CJK fallback load failed: {ex.Message}"); }
+}
+
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     appHost.SetIcon("Assets/commit_bench_icon.rgba");
 

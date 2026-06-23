@@ -51,6 +51,7 @@
   "menu.view.toggle_theme": "Toggle Light/Dark Theme",
   "menu.view.language_english": "Language: English",
   "menu.view.language_spanish": "Language: Español",
+  "menu.view.language_japanese": "Language: 日本語",
   "menu.view.language_pseudo": "Language: Pseudo (test)",
   "menu.view.fullscreen": "Enter Full Screen",
   "menu.window.title": "Window",

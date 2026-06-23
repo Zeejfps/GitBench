@@ -4,5 +4,6 @@ public enum Locale
 {
     En,
     Es,
+    Ja,
     Pseudo,
 }

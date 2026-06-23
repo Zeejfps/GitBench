@@ -28,6 +28,17 @@ public class LocalizationFormatTests
     {
         Assert.Equal("5m ago", Strings.En.TimeMinutesAgo(5));
         Assert.Equal("hace 5 min", Strings.Es.TimeMinutesAgo(5));
+        Assert.Equal("5分前", Strings.Ja.TimeMinutesAgo(5));
+    }
+
+    [Fact]
+    public void JapaneseHasNoPluralDistinctionButHonorsBareSingularForm()
+    {
+        // The generic rule maps count==1 to the "one" form (bare verb) and the rest to
+        // "other" (counted) — Japanese itself has no grammatical plural, so the counted
+        // "other" form reads naturally for every count > 1.
+        Assert.Equal("ステージ", Strings.Ja.FilesStage(1));
+        Assert.Equal("3個のファイルをステージ", Strings.Ja.FilesStage(3));
     }
 
     [Fact]
@@ -70,5 +81,6 @@ public class LocalizationFormatTests
     {
         Assert.Equal("en", Strings.En.Culture.TwoLetterISOLanguageName);
         Assert.Equal("es", Strings.Es.Culture.TwoLetterISOLanguageName);
+        Assert.Equal("ja", Strings.Ja.Culture.TwoLetterISOLanguageName);
     }
 }

@@ -30,7 +30,48 @@ live in **files** (translator-friendly); strongly-typed accessors are
   `ILocalizationService`; menus rebuild on open. Bold menu-label segments (Merge/Rebase/
   Fast-forward) are preserved by re-bolding the interpolated values inside the *localized*
   label (`BoldSegments`). Error-dialog titles across all features are localized.
-- **Phase 4 — not started.**
+- **Phase 4 — IN PROGRESS (font fallback + first CJK locale landed; macOS GUI eyeball pending).**
+  Build clean, **119 tests pass** (6 new). Shipped:
+  - **Surrogate-pair fix** in `TextView.Ellipsize` — the binary-search truncation now refuses to
+    cut inside a surrogate pair, so a truncated CJK/emoji string never ends on an orphaned high
+    surrogate (tofu). (Re-confirmed the other two suspected sites are *not* surrogate-buggy:
+    `TextWrapper.WrapLine` splits only on `' '` and `RenderedCanvasBase.MeasureTextWidth` only on
+    `'\n'` — both BMP code units that can't fall inside a surrogate pair. The plan's claim on those
+    two was over-stated. `TextWrapper`'s real CJK gap is *line-breaking*, not surrogates — deferred.)
+  - **Font-fallback chain at the shape layer.** `ShapedGlyph` gained a per-glyph `FontId`;
+    `FreeTypeFontBackend.ShapeText` now itemizes a line by **cmap coverage** across the primary
+    plus `RegisterFallbackFont`-registered fonts (`SelectFontIndex` → first font whose
+    `FT_Get_Char_Index` is non-zero, else primary), shapes each run with the font that covers it,
+    and tags every glyph with its source font. The canvas draw loop rasterizes each glyph from
+    `new FontHandle(sg.FontId)`. The glyph cache is already keyed `(fontId, glyphIndex)`, so no
+    collisions; the existing shape cache stores the merged multi-font result. Fallbacks are
+    resolved at the primary's pixel size / weight per call, so substituted glyphs match.
+  - **`.ttc` collection support** in the loader: `LoadFontFromFile/Memory` take a `faceIndex`,
+    stored on `FontEntry` and reused when deriving sized/emboldened variants (CJK system fonts
+    are TrueType Collections).
+  - **Per-platform OS-font resolution** (user decision: use system fonts, no bundling).
+    `GitBench/Platform/SystemFonts.cs` returns ordered CJK candidates per OS (macOS Hiragino Kaku
+    Gothic W3 → Hiragino GB → PingFang → Apple SD Gothic; Windows Yu Gothic/Meiryo/MS Gothic/
+    Malgun/YaHei; Linux Noto CJK). `GuiApp.RegisterFallbackFont(path, size, faceIndex)` loads it
+    onto the shared backend (so popups see it too); `Program.cs` wires it at startup (try/catch,
+    non-fatal if absent).
+  - **First CJK locale = Japanese** (smoke-test, mirroring how `es` proved the pipeline).
+    `Locale.Ja` + full **`ja.json` (449 keys, parity verified — no missing/extra/shape/placeholder
+    drift)** + the `View → Language: 日本語` menu item (rebuilds on switch like the others).
+    Culture auto-derives from the `ja` stem. **No `PluralRules` change needed**: Japanese keeps
+    `one`/`other` forms (bare-verb singular vs counted) and the generic `n==1→one` rule reproduces
+    the English UX; Japanese has no grammatical plural so the counted "other" reads fine for all
+    n>1. Persistence is automatic (`PreferencesStore` uses `UseStringEnumConverter`).
+  - **Tests:** `FontFallbackTests` (loads real Helvetica + Hiragino, proves a mixed `"Aあ"` line
+    splits across two font ids with non-`.notdef` glyphs, and that without the fallback `あ` stays
+    glyph 0; plus the resolver finds a real font on macOS), Japanese catalog bake + live switch,
+    Japanese plural/param/culture.
+  - **Still pending:** the macOS GUI eyeball (View → Language: 日本語 and confirm CJK renders via the
+    Hiragino fallback — the load+shape path is proven by `FontFallbackTests`, only the on-screen
+    render is unverified). **Color emoji** intentionally out of scope (the atlas/shader are
+    single-channel alpha; emoji `.ttc` is rejected by the `FT_PIXEL_MODE_GRAY` check → dropped, not
+    crashed). CJK **line-breaking** (no-space wrapping) deferred. zh/ko catalogs not added (ja is
+    the smoke-test); the resolver + plumbing already cover them.
 
 ### Phase 3 remaining tail (small, self-contained follow-ups)
 These were either missed by the inventory sweep or deliberately deferred; none are
@@ -313,15 +354,19 @@ Deferred out of Phase 1 (rolled into later phases):
   views → `this.Bind(_loc.Strings, _ => { rebuild; SetDirty(); })`. The generator rejects
   `{new}`-style keyword placeholders — use `{old_name}`/`{new_name}` etc.
 
-### Phase 4 — CJK (when prioritized)
-- Fix the **surrogate-pair bugs** first (cheap, also fixes emoji in English):
-  `TextWrapper` and `TextView.Ellipsize` iterate by UTF-16 `char` index → switch to
-  `Rune` enumeration.
-- Build a **font-fallback chain** at the shape/draw layer in
-  `framework/ZGF.Gui` (`RenderedCanvas`)/`framework/ZGF.Fonts` so a glyph missing
-  from the UI font resolves from a fallback (CJK/emoji) font instead of being
-  silently dropped.
-- Add CJK fonts to the registration step; add `zh`/`ja`/`ko` catalogs.
+### Phase 4 — CJK (IN PROGRESS — see Status for the detailed summary)
+- ✅ **Surrogate-pair fix** — done in `TextView.Ellipsize` (the only true surrogate-slicing site;
+  `TextWrapper`/`MeasureTextWidth` split on BMP delimiters and were never buggy).
+- ✅ **Font-fallback chain** at the shape layer (`FreeTypeFontBackend.ShapeText` cmap itemization +
+  per-glyph `ShapedGlyph.FontId`; draw loop rasterizes per source font). `.ttc` face-index support
+  added. Proven by `FontFallbackTests` against real system fonts.
+- ✅ **CJK font registration** — per-platform OS-font resolver (`SystemFonts`) + `RegisterFallbackFont`
+  wired at startup (decision: system fonts, no bundling). macOS = Hiragino Kaku Gothic.
+- ✅ **First CJK catalog = `ja.json`** (449-key parity) + `Locale.Ja` + Language menu item.
+- ⏳ **macOS GUI eyeball** (live CJK render) — pending; load+shape proven by tests.
+- ⏳ `zh`/`ko` catalogs — deferred (ja is the smoke-test); plumbing/resolver already cover them.
+- ⏳ **Color emoji** — out of scope (single-channel alpha atlas/shader; color glyphs are dropped,
+  not crashed). CJK **line-breaking** (no-space wrap) deferred.
 
 ### Deferred — RTL (ar/he)
 - BiDi reordering + right-origin line layout + alignment/scrollbar/icon mirroring.
