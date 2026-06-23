@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
@@ -31,7 +32,7 @@ internal sealed record AppView : Widget
             ],
         };
 
-        return new Stack
+        var content = new Stack
         {
             Children =
             [
@@ -42,5 +43,13 @@ internal sealed record AppView : Widget
             ],
         }
         .WithController<AppKeybindController>(ctx);
+
+        // Establish the UI writing direction for the whole tree from the active locale, so RTL
+        // locales (Arabic) mirror Row/Column and swap the BorderLayout sidebar to the right.
+        return new UiDirection
+        {
+            Rtl = Prop.Deferred(c => c.Localization().Strings.Bind(s => s.Culture.TextInfo.IsRightToLeft)),
+            Child = content,
+        };
     }
 }

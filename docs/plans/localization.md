@@ -111,7 +111,8 @@ desktop binary). The runtime *language switch* is unaffected.
 4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
    The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
    catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is partway — text base-direction +
-   alignment mirroring is done, container/scrollbar/caret/icon mirroring remains.
+   alignment and container mirroring (Row/Column/BorderLayout) are done; scrollbar/caret/icon
+   mirroring remains.
 
 ## Why this is tractable here
 
@@ -472,7 +473,7 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL — IN PROGRESS (engine + catalog + text-direction done; container/control mirroring remains)
+### Phase 6 — RTL — IN PROGRESS (engine + catalog + text-direction + container mirroring done; control mirroring remains)
 The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
 **engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
 `ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
@@ -511,11 +512,11 @@ baseline). Shipped:
   mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
   still BiDi-orders as `.notdef`).
 
-#### Phase 6b — Layout mirroring — IN PROGRESS (text direction + alignment DONE; container/control mirroring remains)
+#### Phase 6b — Layout mirroring — IN PROGRESS (text direction + containers DONE; controls remain)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
-running-app file lock); **110 ZGF.Gui.Tests pass** (+8 new) and **GitBench 113 pass** (same 12
-pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
+running-app file lock); **115 ZGF.Gui.Tests pass** (+13 new across text+containers) and **GitBench 113
+pass** (same 12 pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
 text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
 (Branches/Commits/Diff) at once, with no per-view edits. Shipped:
 - **Base direction from locale → canvas.** `RenderedCanvasBase.DefaultBaseDirection` (default
@@ -540,14 +541,30 @@ text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** cu
   LTR invariant) and a `BidiShapingTests` case proving an explicit `Ltr` vs `Rtl` base flips the
   visual run order of a mixed Latin+Arabic line (the contract the canvas now relies on).
 
+**Container mirroring — DONE.** Layout has no canvas, so the direction reaches *Views* a different way
+than text did: a build-time **ambient** the app feeds from the locale, mirroring the `Foreground`/theme
+pattern.
+- **`UiDirection` ambient** (`framework/ZGF.Gui/Widgets/UiDirection.cs`) — `Provide<>`s an RTL flag for
+  its subtree; `UiDirection.IsRtl` reads it via `Prop.Deferred` and falls back to LTR when unscoped.
+  The fallback needed a new `Context.GetRegistered<T>()` (resolve a registered ambient **without**
+  auto-constructing a transient — `Get<T>` would have tried to build the holder and thrown). `AppView`
+  wraps the whole tree in it, driven reactively by `Strings.Culture.TextInfo.IsRightToLeft`.
+- **`FlexView.IsRtl`** — `Row`/`Column` (via `FlexBase`) read the ambient. One transform does it: after
+  the LTR pass, each child's horizontal extent is **reflected within the container**
+  (`Left = pos.Left + pos.Right - Left - Width`), which flips a Row's main axis *and* a Column's cross
+  axis, reverses visual order, and swaps Start/End/SpaceBetween without special-casing each; vertical
+  coords are untouched, and the reflection composes correctly through nesting.
+- **`BorderLayoutView.IsRtl`** — the `BorderLayout` widget reads the ambient; West (leading) lays out on
+  the right and East (trailing) on the left, so the app's macro frame moves the repo sidebar to the
+  right under Arabic. (Custom views that construct `BorderLayoutView` *directly* — Branches/Commits/Diff
+  — don't auto-mirror yet; they'd set `IsRtl` at the call site, grouped with the scrollbar work below.)
+- **Tests:** `LayoutTests` — Row mirrors child order within the container, Column mirrors its cross
+  axis, BorderLayout swaps West/East, each paired with an LTR control proving no regression.
+
 **Still TODO (the broader, visual-QA-dependent surface):**
-- **Container mirroring** — `FlexView` (Row main-axis packing), `BorderLayout` East↔West swap (so the
-  sidebar/scrollbar move sides), and default cross-axis origins. Blocked on giving framework *Views* a
-  build-time ambient direction (layout has no canvas), e.g. a framework-side `Provide<>`d direction
-  the app feeds from the locale and `Row`/`BorderLayout` read — the canvas-default trick only covers
-  draw, not layout.
 - **Scrollbars** — vertical bar to the left edge, horizontal scroll origin from the right
-  (`ScrollPane._distanceFromLeft`, the thumb views, `BorderLayoutView` East placement).
+  (`ScrollPane._distanceFromLeft`, the thumb views), plus the direct-construction `BorderLayoutView`
+  sites in custom views (set `IsRtl` from the ambient).
 - **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
   left; mirror to the right for an RTL field.
 - **Disclosure/chevron icons** — flip ChevronRight↔ChevronLeft (and menu/expand affordances) by
