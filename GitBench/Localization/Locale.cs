@@ -7,5 +7,6 @@ public enum Locale
     Ja,
     ZhHans,
     Ko,
+    Ar,
     Pseudo,
 }

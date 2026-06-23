@@ -58,6 +58,13 @@ foreach (var cjk in SystemFonts.CjkFallbacks())
     catch (Exception ex) { Console.WriteLine($"[Fonts] CJK fallback load failed ({cjk.Path}): {ex.Message}"); }
 }
 
+// Glyph fallback for Arabic-script (RTL) text; the BiDi shape layer reorders it to visual order.
+foreach (var arabic in SystemFonts.ArabicFallbacks())
+{
+    try { appHost.RegisterFallbackFont(arabic.Path, 16, arabic.FaceIndex); }
+    catch (Exception ex) { Console.WriteLine($"[Fonts] Arabic fallback load failed ({arabic.Path}): {ex.Message}"); }
+}
+
 if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
     appHost.SetIcon("Assets/commit_bench_icon.rgba");
 

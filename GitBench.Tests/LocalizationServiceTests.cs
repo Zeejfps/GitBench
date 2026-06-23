@@ -99,4 +99,24 @@ public class LocalizationServiceTests
         locale.Value = Locale.Ko;
         Assert.Equal("GitHub에서 보기", observed);
     }
+
+    [Fact]
+    public void ArabicCatalogIsBakedFromArJson()
+    {
+        Assert.Equal("العرض على GitHub", Strings.Ar.AboutViewOnGithub);
+    }
+
+    [Fact]
+    public void SwitchingToArabicPushesThatCatalog()
+    {
+        var locale = new State<Locale>(Locale.En);
+        using var service = new LocalizationService(locale);
+
+        string? observed = null;
+        using var _ = service.Strings.Subscribe(s => observed = s.AboutViewOnGithub);
+
+        locale.Value = Locale.Ar;
+
+        Assert.Equal("العرض على GitHub", observed);
+    }
 }

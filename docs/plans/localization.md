@@ -108,9 +108,9 @@ desktop binary). The runtime *language switch* is unaffected.
    non-Latin glyphs render instead of silently vanishing. **DONE** (modulo macOS eyeball).
 3. **Phase 5 — CJK completion** (line-breaking + `zh`/`ko` catalogs + the Phase 3 string
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
-4. **Phase 6 — RTL** (ar, he later). BiDi reordering + layout mirroring + Arabic catalog.
-   The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) is **DONE**;
-   layout mirroring (6b) and the Arabic catalog (6c) remain.
+4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
+   The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
+   catalog/plumbing (6c) are **DONE**; only layout mirroring (6b) remains.
 
 ## Why this is tractable here
 
@@ -520,15 +520,28 @@ baseline). Shipped:
   (currently only Left/Center exist — add trailing/RTL origin); mirror scrollbars, disclosure/chevron
   icons, and caret/selection direction. Broadest UI surface.
 
-#### Phase 6c — Arabic catalog & completion — TODO (the proven es/ja/zh/ko recipe)
-- `Locale.Ar` (hand-authored enum) + full-parity `ar.json` (LOC003 forces it).
-- **Arabic CLDR plural selector** in `PluralRules.Category` — the full six-form set
-  (`zero` n=0, `one` n=1, `two` n=2, `few` n%100=3..10, `many` n%100=11..99, `other`); the
-  `PluralForms`/`PluralCategory` six-form machinery already exists, only the selector is missing.
-  First locale to exercise more than `one`/`other`.
-- **Arabic font fallback** in `SystemFonts` (alongside the CJK families; e.g. Windows
-  Arial/Tahoma/Segoe UI, macOS Geeza Pro, Linux Noto Naskh) + `Program.cs` registration.
-- `View → Language` Arabic menu item; culture auto-derives from the `ar` stem.
+#### Phase 6c — Arabic catalog & completion — DONE
+Release build clean (the Debug build is blocked only by a file lock from the running app — the
+generator + compile pass, so parity holds); GitBench tests **113 pass** (+4 Arabic methods; same
+12 pre-existing `GitIdentityServiceTests` red). Shipped:
+- **`Locale.Ar`** in the hand-authored enum + full-parity **`ar.json`** (449 keys; the generator's
+  LOC004/LOC005 validated parity — build is green). The new `menu.view.language_arabic` key was
+  added to **all six** catalogs (parity is build-enforced); native language names stay native, only
+  the "Language:" prefix is localized (`اللغة:`).
+- **Arabic CLDR plural selector** in `PluralRules.Category` — the full six-form set (`zero` n=0,
+  `one` n=1, `two` n=2, `few` n%100=3..10, `many` n%100=11..99, `other`). The first locale past
+  `one`/`other`; `ar.json` exercises it (the `files.*` and `time.*_ago` keys carry two/few/many
+  forms with proper noun agreement).
+- **Arabic font fallback** — `SystemFonts.ArabicFallbacks()` (Windows Segoe UI/Tahoma/Arial, macOS
+  Geeza Pro/Arial, Linux Noto Naskh/DejaVu) registered in `Program.cs`; the cmap-itemizing shape
+  layer resolves it and the 6a BiDi path reorders it to visual order.
+- **`View → Language: العربية`** menu item (rebuilds on switch like the others); culture
+  auto-derives from the `ar` stem (`GetCultureInfo("ar")`, neutral, `TwoLetterISOLanguageName` `ar`).
+- **Tests:** Arabic bake + live switch, the six-form plural-rule categories, the catalog selecting
+  the right form per category, and the `ar` culture assertion.
+- **Caveat:** the Arabic strings are AI-authored (as with es/ja/zh/ko) and warrant a native-speaker
+  review pass — Arabic morphology (six-form plural agreement, dual forms) is harder than the prior
+  locales. Functionally complete and parity-verified; quality is the open follow-up.
 - Hebrew (`he`) is a later follow-up (mirrors ja→zh/ko).
 
 **Exit gate (unchanged from prior phases):** the macOS GUI eyeball — flip `View → Language: العربية`

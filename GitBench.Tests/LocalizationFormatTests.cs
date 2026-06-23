@@ -85,5 +85,33 @@ public class LocalizationFormatTests
         Assert.Equal("ja", Strings.Ja.Culture.TwoLetterISOLanguageName);
         Assert.Equal("zh", Strings.ZhHans.Culture.TwoLetterISOLanguageName);
         Assert.Equal("ko", Strings.Ko.Culture.TwoLetterISOLanguageName);
+        Assert.Equal("ar", Strings.Ar.Culture.TwoLetterISOLanguageName);
+    }
+
+    [Fact]
+    public void ArabicPluralRuleCoversAllSixCategories()
+    {
+        Assert.Equal(PluralCategory.Zero, PluralRules.Category("ar", 0));
+        Assert.Equal(PluralCategory.One, PluralRules.Category("ar", 1));
+        Assert.Equal(PluralCategory.Two, PluralRules.Category("ar", 2));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ar", 3));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ar", 10));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ar", 103)); // n % 100 = 3
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ar", 11));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ar", 99));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ar", 111)); // n % 100 = 11
+        Assert.Equal(PluralCategory.Other, PluralRules.Category("ar", 100));
+        Assert.Equal(PluralCategory.Other, PluralRules.Category("ar", 101));
+    }
+
+    [Fact]
+    public void ArabicCatalogSelectsTheFormForEachCategory()
+    {
+        // one/two are countless bare forms (digit-shape-independent); few/many carry distinct
+        // noun inflections, so a substring check proves the right form was selected.
+        Assert.Equal("تجهيز", Strings.Ar.FilesStage(1));            // one
+        Assert.Equal("تجهيز ملفين", Strings.Ar.FilesStage(2));      // two (dual)
+        Assert.Contains("ملفات", Strings.Ar.FilesStage(3));         // few
+        Assert.Contains("ملفًا", Strings.Ar.FilesStage(11));        // many
     }
 }

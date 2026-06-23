@@ -26,6 +26,44 @@ public static class SystemFonts
         return result;
     }
 
+    /// <summary>
+    /// The first available Arabic-script font (RTL: Arabic, Persian, Urdu, …), or empty if none is
+    /// present. One font suffices — Arabic is a single script — and the cmap-itemizing shape layer
+    /// resolves it like any other fallback.
+    /// </summary>
+    public static IReadOnlyList<SystemFontSpec> ArabicFallbacks()
+    {
+        foreach (var spec in ArabicCandidates())
+            if (File.Exists(spec.Path))
+                return new[] { spec };
+
+        return Array.Empty<SystemFontSpec>();
+    }
+
+    private static IEnumerable<SystemFontSpec> ArabicCandidates()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            yield return new("/System/Library/Fonts/Supplemental/GeezaPro.ttc", 0);
+            yield return new("/Library/Fonts/GeezaPro.ttc", 0);
+            yield return new("/System/Library/Fonts/Supplemental/Arial.ttf", 0);
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            yield return new(Path.Combine(fonts, "segoeui.ttf"), 0); // Segoe UI (Arabic coverage)
+            yield return new(Path.Combine(fonts, "tahoma.ttf"), 0);
+            yield return new(Path.Combine(fonts, "arial.ttf"), 0);
+        }
+        else
+        {
+            yield return new("/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf", 0);
+            yield return new("/usr/share/fonts/opentype/noto/NotoNaskhArabic-Regular.ttf", 0);
+            yield return new("/usr/share/fonts/google-noto/NotoNaskhArabic-Regular.ttf", 0);
+            yield return new("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 0);
+        }
+    }
+
     // Ordered per OS; within a family the first candidate present on disk wins.
     private static IEnumerable<SystemFontSpec[]> CandidatesByFamily()
     {

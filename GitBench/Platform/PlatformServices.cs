@@ -114,6 +114,7 @@ internal static class PlatformServices
                                 new AppMenuItem { Title = s.MenuViewLanguageJapanese, OnClick = () => locale.Value = Locale.Ja },
                                 new AppMenuItem { Title = s.MenuViewLanguageChinese, OnClick = () => locale.Value = Locale.ZhHans },
                                 new AppMenuItem { Title = s.MenuViewLanguageKorean, OnClick = () => locale.Value = Locale.Ko },
+                                new AppMenuItem { Title = s.MenuViewLanguageArabic, OnClick = () => locale.Value = Locale.Ar },
                                 new AppMenuItem { Title = s.MenuViewLanguagePseudo, OnClick = () => locale.Value = Locale.Pseudo },
                                 AppMenuItem.Separator,
                                 new AppMenuItem
