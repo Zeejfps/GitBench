@@ -539,6 +539,12 @@ generator + compile pass, so parity holds); GitBench tests **113 pass** (+4 Arab
   auto-derives from the `ar` stem (`GetCultureInfo("ar")`, neutral, `TwoLetterISOLanguageName` `ar`).
 - **Tests:** Arabic bake + live switch, the six-form plural-rule categories, the catalog selecting
   the right form per category, and the `ar` culture assertion.
+- **Cross-platform language switcher** — the `View → Language` items live in the native macOS menu
+  bar only (`IAppMenu` is a `NoopAppMenu` off macOS), so Windows/Linux had no way to switch. Added a
+  status-bar **`LanguageChipButton`** (next to the theme toggle) showing the active locale's short
+  code; clicking it opens the same locale list via `RepoBarContextMenu` (checkmark on the active
+  one), driven by `StatusBarViewModel.BuildLanguageMenu()` over the injected `State<Locale>`. This is
+  how the locales are exercised on Windows.
 - **Caveat:** the Arabic strings are AI-authored (as with es/ja/zh/ko) and warrant a native-speaker
   review pass — Arabic morphology (six-form plural agreement, dual forms) is harder than the prior
   locales. Functionally complete and parity-verified; quality is the open follow-up.

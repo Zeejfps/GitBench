@@ -85,6 +85,11 @@ internal sealed record StatusBarView : Widget
                                             Command = vm.ToggleTheme,
                                         }.WithTooltip(L.T(s => s.StatusbarToggleThemeTooltip))
                                             .WithController<KbmController>(),
+                                        new LanguageChipButton
+                                        {
+                                            Label = vm.ActiveLocale.Bind(string? (l) => StatusBarViewModel.Code(l)),
+                                        }.WithMenuController(rect =>
+                                            RepoBarContextMenu.Show(ctx, rect.TopLeft, vm.BuildLanguageMenu(), MenuPlacement.Above)),
                                         new Grow { Child = left },
                                         new Text
                                         {

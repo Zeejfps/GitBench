@@ -31,6 +31,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
     private readonly ILocalizationService _loc;
+    private readonly State<Locale> _locale;
     private readonly SpinnerAnimation _updateSpinner;
     private readonly GenerationGuard _identityLane;
     private CancellationTokenSource? _feedbackCts;
@@ -49,6 +50,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
     public Command ToggleTheme { get; }
     public IReadable<ThemeMode> Theme => _themeMode;
+    public IReadable<Locale> ActiveLocale => _locale;
 
     public Command CheckForUpdates { get; }
     public IReadable<bool> IsCheckingUpdates => _updateService.IsChecking;
@@ -66,7 +68,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IMessageBus bus,
         State<ThemeMode> themeMode,
         UpdateService updateService,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        State<Locale> locale)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
@@ -77,6 +80,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _themeMode = themeMode;
         _updateService = updateService;
         _loc = loc;
+        _locale = locale;
         _updateSpinner = new SpinnerAnimation(ticker);
         _identityLane = CreateLane();
 
@@ -202,6 +206,51 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         => c.UserEmail != null
             ? (c.UserName != null ? $"{c.UserName} <{c.UserEmail}>" : c.UserEmail)
             : c.UserName;
+
+    // Each selectable locale paired with its endonym (the language's own name — script-neutral, so
+    // not itself localized). Pseudo is the dev/layout-test locale, kept here for parity with the
+    // native macOS Language menu.
+    private static readonly (Locale Locale, string Name)[] LanguageOptions =
+    {
+        (Locale.En, "English"),
+        (Locale.Es, "Español"),
+        (Locale.Ja, "日本語"),
+        (Locale.ZhHans, "简体中文"),
+        (Locale.Ko, "한국어"),
+        (Locale.Ar, "العربية"),
+        (Locale.Pseudo, "Pseudo"),
+    };
+
+    // Compact code shown on the status-bar chip (the menu carries the full endonyms).
+    public static string Code(Locale locale) => locale switch
+    {
+        Locale.En => "EN",
+        Locale.Es => "ES",
+        Locale.Ja => "JA",
+        Locale.ZhHans => "ZH",
+        Locale.Ko => "KO",
+        Locale.Ar => "AR",
+        Locale.Pseudo => "PS",
+        _ => "EN",
+    };
+
+    // The language picker — the cross-platform way to switch locale (the native macOS menu carries
+    // the same items but exists only on macOS). A checkmark marks the active locale.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildLanguageMenu()
+    {
+        var active = _locale.Value;
+        var items = new List<RepoBarContextMenu.Item>(LanguageOptions.Length);
+        foreach (var (locale, name) in LanguageOptions)
+        {
+            var target = locale;
+            items.Add(new RepoBarContextMenu.Item(
+                name,
+                () => _locale.Value = target,
+                Icon: active == locale ? LucideIcons.CheckSquare : null));
+        }
+
+        return items;
+    }
 
     // Built fresh on each chip click so it reflects the current profiles + resolution.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildIdentityMenu()
