@@ -110,10 +110,10 @@ desktop binary). The runtime *language switch* is unaffected.
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
 4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
    The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
-   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is nearly done — text base-direction +
-   alignment, container mirroring (inherited `View.IsRtl`: Row/Column/BorderLayout/Padding), the
-   custom-painted views (Branches/Commits/CommitDetails/History/file-changes) and scrollbars all mirror;
-   text-field caret/selection is the last piece.
+   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is done bar the on-screen eyeball — text
+   base-direction + alignment, container mirroring (inherited `View.IsRtl`: Row/Column/BorderLayout/
+   Padding), the custom-painted views (Branches/Commits/CommitDetails/History/file-changes), scrollbars,
+   and text-field caret/selection all mirror (mixed-bidi caret precision is the one documented limit).
 
 ## Why this is tractable here
 
@@ -474,7 +474,7 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL — IN PROGRESS (engine + catalog + text + container + custom-view + scrollbar mirroring done; caret/selection remains)
+### Phase 6 — RTL — IN PROGRESS (engine + catalog + all layout mirroring done; macOS/Windows eyeball + mixed-bidi caret are the open items)
 The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
 **engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
 `ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
@@ -513,7 +513,7 @@ baseline). Shipped:
   mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
   still BiDi-orders as `.notdef`).
 
-#### Phase 6b — Layout mirroring — IN PROGRESS (text + containers + custom views + scrollbars DONE; caret/selection remains)
+#### Phase 6b — Layout mirroring — DONE bar the eyeball (text + containers + custom views + scrollbars + caret/selection; mixed-bidi caret is the one documented limit)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
 running-app file lock); **119 ZGF.Gui.Tests pass** (+17 new across text+containers+inheritance+padding+scroll) and **GitBench 113
@@ -596,9 +596,21 @@ whole tree mirrors — no per-container wiring, no canvas side-channel. This rep
   normalized↔pixel mapping (and `ScrollToStart`) so the thumb's leading end is the right of the track.
   LTR is byte-identical (guarded on `IsRtl`). `LayoutTests` cover the RTL/LTR rest positions.
 
-**Still TODO (the broader, visual-QA-dependent surface):**
-- **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
-  left; mirror to the right for an RTL field.
+**Caret & selection — DONE (unidirectional; mixed-bidi is the documented limit).** `TextInputView`
+resolves its own writing direction **from the content's first strong character** (an empty field
+follows the UI direction), recomputed each draw, and sets the style's base direction from it — so an
+LTR identifier (branch name, path, URL — most fields) reads left-aligned with a left-origin caret, and
+Arabic input reads right-aligned, *regardless of locale*. Keying on **content** rather than the UI
+direction is the crucial bit: a left-aligned-but-content-LTR field in an RTL locale keeps a correct
+caret. The caret x, selection rect, hit-test (`GetCaretIndexFromPoint`) and the text-draw box origin all
+mirror off that resolved direction; the scroll *calculation* is direction-identical (prefix width is
+"distance from the leading edge" either way) so only the draw origin/sign flips. **Limits:** per-cluster
+precision holds for a unidirectional line; mixed L+R *within one line* and multi-line (`Wrap`) RTL
+selection stay on the LTR path — a true fix needs logical-index→visual-x cluster mapping from the
+shaper (a separate effort). LTR is byte-identical. **This is the one core interaction not unit-testable
+headlessly (no font backend in tests) — needs a hands-on pass typing into RTL fields.**
+
+**Still TODO:**
 - **Disclosure/chevron icons** — the tree/expander chevrons flip (Branches, file-changes folders,
   RepoBar group + worktree/submodule toggles); any remaining expander affordance would use the same flip.
 - **Pin LTR on non-translatable content** — the **diff code grid is done**: `DiffContentView`'s four
