@@ -61,10 +61,12 @@ engine already exist — this is mostly assembly, not invention.
    (and a derived `Strings.Pseudo`); the generated type is the *schema*, the file
    is the *data*. No runtime JSON parsing → NativeAOT-clean. (See Status for why
    baked beat the runtime-load model originally sketched below.)
-3. **Build-time key parity validation — PLANNED (Phase 2).** Once a second locale
-   exists, the generator will diagnose any file missing/extra/param-mismatched vs
-   `en.json` → free "find untranslated strings" tooling that fails the build. The
-   Phase 1 generator reads only `en.json`, so there's nothing to cross-check yet.
+3. **Build-time validation — PARTIAL.** Cross-locale key *parity* is still Phase 2
+   (needs a second file to diff against `en.json`). But the Phase 1 generator already
+   fails the build on the two single-locale invariants: a `Locale` enum case with no
+   baked catalog (`LOC003`, drift guard) and a key that collides with another key or a
+   built-in member (`LOC002`, e.g. a `for`/`en`/`pseudo` key). Both surface as clear
+   diagnostics naming the offending key/case instead of cryptic `csc` errors.
 4. **Runtime switch mirrors theme exactly — DONE:** `State<Locale>` →
    `LocalizationService` (`Derived<Strings>`) → `L.T(...)` deferred `Prop` → bound
    into `Text.Value`/`Label`.
@@ -112,7 +114,14 @@ It emits a `partial class Strings` with:
 - one `required string` member per key (`about.view_on_github` → `AboutViewOnGithub`),
 - a baked `static readonly Strings En` with the English literals,
 - a derived `static readonly Strings Pseudo` (accented + length-padded English),
-- `static Strings For(Locale locale)` switching over the baked instances.
+- `static Strings For(Locale locale)` switching over the baked instances; its default
+  arm **throws** (`ArgumentOutOfRangeException`) rather than silently returning English,
+  so an enum case the generator didn't bake a catalog for fails loudly.
+
+The generator also reads the hand-authored `Locale` enum (the `Strings` catalog isn't its
+only input) and emits `LOC003` for any case it has no catalog for — enum and catalog can't
+silently drift. (The enum stays hand-authored because the `System.Text.Json` generator that
+serializes `Preferences` references `Locale` and can't see a *generated* enum.)
 
 ```csharp
 public required string AboutViewOnGithub { get; init; }
@@ -148,9 +157,11 @@ new Text { Value = L.T(s => s.AboutViewOnGithub) }   // re-renders on switch
 
 Files (app-side, alongside the theme equivalents):
 
-- `GitBench/Localization/Locale.cs` — DONE. Currently `enum Locale { En, Pseudo }`;
-  grows as locales are added. A `Locale → CultureInfo` map arrives with formatting
-  in Phase 2.
+- `GitBench/Localization/Locale.cs` — DONE. Hand-authored `enum Locale { En, Pseudo }`
+  (must stay hand-authored — the `System.Text.Json` source gen for `Preferences` can't
+  see a generated enum); the localization generator reads it and `LOC003`-fails the build
+  if a case has no catalog. Grows as locales are added. A `Locale → CultureInfo` map
+  arrives with formatting in Phase 2.
 - `GitBench/Localization/ILocalizationService.cs` + `LocalizationService.cs` — DONE.
   Mirrors `IThemeService<T>` / `ThemeService`.
 - `GitBench/Localization/L.cs` — DONE. `L.T(...)` mirror of `Widgets/Theme.cs`.
