@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -25,30 +26,31 @@ internal sealed record RebaseBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Rebase",
+            Title = s.BranchesRebaseTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Action = ("Rebase", DialogButtonRole.Primary),
+            Action = (s.CommonRebase, DialogButtonRole.Primary),
             Command = vm.Rebase,
             ConfirmKeys = true,
-            FooterLead = PreviewChip(vm),
+            FooterLead = PreviewChip(vm, s),
             Body =
             [
                 new Text
                 {
-                    Value = "Copy commits from one branch to another",
+                    Value = s.BranchesRebaseDescription,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
-                BuildLabeledRow("Rebase:", BuildBranchChip(Request.SourceBranch)),
-                BuildLabeledRow("On:", BuildBranchChip(Request.TargetDisplay)),
+                BuildLabeledRow(s.BranchesRebaseSourceLabel, BuildBranchChip(Request.SourceBranch)),
+                BuildLabeledRow(s.BranchesRebaseTargetLabel, BuildBranchChip(Request.TargetDisplay)),
                 BuildLabeledRow("", new CheckboxWidget
                 {
-                    Label = "Stash and reapply local changes",
+                    Label = s.BranchesRebaseAutostashLabel,
                     Checked = vm.Autostash,
                     Height = 24,
                 }.WithController<KbmController>()),
@@ -56,11 +58,11 @@ internal sealed record RebaseBranchDialog : Widget
         };
     }
 
-    private static IWidget PreviewChip(RebaseBranchDialogViewModel vm)
+    private static IWidget PreviewChip(RebaseBranchDialogViewModel vm, Strings s)
     {
-        Func<ThemeStyles, uint> color = s => vm.PreviewState.Value == RebasePreviewState.Conflicts
-            ? s.BranchPreview.Conflict
-            : s.BranchPreview.Clean;
+        Func<ThemeStyles, uint> color = t => vm.PreviewState.Value == RebasePreviewState.Conflicts
+            ? t.BranchPreview.Conflict
+            : t.BranchPreview.Clean;
         return new Row
         {
             Gap = 6,
@@ -72,7 +74,7 @@ internal sealed record RebaseBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(s => s switch
+                    Value = vm.PreviewState.Bind(ps => ps switch
                     {
                         RebasePreviewState.Clean => LucideIcons.CheckSquare,
                         RebasePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -83,10 +85,10 @@ internal sealed record RebaseBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(s => s switch
+                    Value = vm.PreviewState.Bind(ps => ps switch
                     {
-                        RebasePreviewState.Clean => "Rebase can be done without conflicts",
-                        RebasePreviewState.Conflicts => "Rebase will produce conflicts",
+                        RebasePreviewState.Clean => s.BranchesRebasePreviewClean,
+                        RebasePreviewState.Conflicts => s.BranchesRebasePreviewConflicts,
                         _ => string.Empty,
                     }),
                     Color = Theme.Color(color),

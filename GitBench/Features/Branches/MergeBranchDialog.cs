@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -26,30 +27,31 @@ internal sealed record MergeBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Merge branch",
+            Title = s.BranchesMergeTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
-            Action = ("Merge", DialogButtonRole.Primary),
+            Action = (s.CommonMerge, DialogButtonRole.Primary),
             Command = vm.Merge,
             ConfirmKeys = true,
             ViewModel = vm,
-            FooterLead = PreviewChip(vm),
+            FooterLead = PreviewChip(vm, s),
             Body =
             [
-                BuildLabeledRow("Merge:", BuildBranchChip(Request.SourceDisplay)),
-                BuildLabeledRow("Into:", BuildBranchChip(Request.TargetBranch)),
-                BuildLabeledRow("Merge Option:", new MergeOptionDropdown { Selected = vm.Strategy }),
+                BuildLabeledRow(s.BranchesMergeSourceLabel, BuildBranchChip(Request.SourceDisplay)),
+                BuildLabeledRow(s.BranchesMergeTargetLabel, BuildBranchChip(Request.TargetBranch)),
+                BuildLabeledRow(s.BranchesMergeStrategyLabel, new MergeOptionDropdown { Selected = vm.Strategy }),
             ],
         };
     }
 
-    private static IWidget PreviewChip(MergeBranchDialogViewModel vm)
+    private static IWidget PreviewChip(MergeBranchDialogViewModel vm, Strings s)
     {
-        Func<ThemeStyles, uint> color = s => vm.PreviewState.Value == MergePreviewState.Conflicts
-            ? s.BranchPreview.Conflict
-            : s.BranchPreview.Clean;
+        Func<ThemeStyles, uint> color = t => vm.PreviewState.Value == MergePreviewState.Conflicts
+            ? t.BranchPreview.Conflict
+            : t.BranchPreview.Clean;
         return new Row
         {
             Gap = 6,
@@ -61,7 +63,7 @@ internal sealed record MergeBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = 14,
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(s => s switch
+                    Value = vm.PreviewState.Bind(ps => ps switch
                     {
                         MergePreviewState.Clean => LucideIcons.CheckSquare,
                         MergePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -72,10 +74,10 @@ internal sealed record MergeBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = vm.PreviewState.Bind(s => s switch
+                    Value = vm.PreviewState.Bind(ps => ps switch
                     {
-                        MergePreviewState.Clean => "Merge can be done without conflicts",
-                        MergePreviewState.Conflicts => "Merge will produce conflicts",
+                        MergePreviewState.Clean => s.BranchesMergePreviewClean,
+                        MergePreviewState.Conflicts => s.BranchesMergePreviewConflicts,
                         _ => string.Empty,
                     }),
                     Color = Theme.Color(color),
@@ -136,62 +138,66 @@ internal sealed record MergeBranchDialog : Widget
 
 internal sealed record MergeOptionDropdown : Widget
 {
-    private static readonly (MergeStrategy Strategy, string Label, string Detail)[] Options =
-    {
-        (MergeStrategy.Default, "Default", "Fast-forward if possible"),
-        (MergeStrategy.NoFastForward, "Create merge commit", "Always create a merge commit"),
-        (MergeStrategy.FastForwardOnly, "Fast-forward only", "Fail if not fast-forward"),
-        (MergeStrategy.Squash, "Squash", "Stage changes for a new commit"),
-    };
-
     public required State<MergeStrategy> Selected { get; init; }
 
-    protected override IWidget Build(Context ctx) => new DropdownWidget
+    protected override IWidget Build(Context ctx)
     {
-        Height = 30,
-        Gap = 10,
-        Children =
-        [
-            new Text
+        var s = ctx.Localization().Strings.Value;
+        (MergeStrategy Strategy, string Label, string Detail)[] options =
+        {
+            (MergeStrategy.Default, s.BranchesMergeStrategyDefault, s.BranchesMergeStrategyDefaultDetail),
+            (MergeStrategy.NoFastForward, s.BranchesMergeStrategyNoFf, s.BranchesMergeStrategyNoFfDetail),
+            (MergeStrategy.FastForwardOnly, s.BranchesMergeStrategyFfOnly, s.BranchesMergeStrategyFfOnlyDetail),
+            (MergeStrategy.Squash, s.BranchesMergeStrategySquash, s.BranchesMergeStrategySquashDetail),
+        };
+
+        string LookupLabel(MergeStrategy strategy)
+        {
+            foreach (var o in options) if (o.Strategy == strategy) return o.Label;
+            return string.Empty;
+        }
+
+        string LookupDetail(MergeStrategy strategy)
+        {
+            foreach (var o in options) if (o.Strategy == strategy) return o.Detail;
+            return string.Empty;
+        }
+
+        List<RepoBarContextMenu.Item> BuildItems()
+        {
+            var items = new List<RepoBarContextMenu.Item>(options.Length);
+            foreach (var opt in options)
             {
-                VAlign = TextAlignment.Center,
-                Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
-                Color = Theme.Color(s => s.DialogFrame.TitleText),
-            },
-            new Grow
-            {
-                Child = new Text
+                var strategy = opt.Strategy;
+                items.Add(new RepoBarContextMenu.Item(
+                    $"{opt.Label} — {opt.Detail}",
+                    () => Selected.Value = strategy));
+            }
+            return items;
+        }
+
+        return new DropdownWidget
+        {
+            Height = 30,
+            Gap = 10,
+            Children =
+            [
+                new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
+                    Color = Theme.Color(t => t.DialogFrame.TitleText),
                 },
-            },
-        ],
-    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
-
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildItems()
-    {
-        var items = new List<RepoBarContextMenu.Item>(Options.Length);
-        foreach (var opt in Options)
-        {
-            var strategy = opt.Strategy;
-            items.Add(new RepoBarContextMenu.Item(
-                $"{opt.Label} — {opt.Detail}",
-                () => Selected.Value = strategy));
-        }
-        return items;
-    }
-
-    private static string LookupLabel(MergeStrategy s)
-    {
-        foreach (var o in Options) if (o.Strategy == s) return o.Label;
-        return string.Empty;
-    }
-
-    private static string LookupDetail(MergeStrategy s)
-    {
-        foreach (var o in Options) if (o.Strategy == s) return o.Detail;
-        return string.Empty;
+                new Grow
+                {
+                    Child = new Text
+                    {
+                        VAlign = TextAlignment.Center,
+                        Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
+                        Color = Theme.Color(t => t.DialogBody.RowTextMissing),
+                    },
+                },
+            ],
+        }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
     }
 }

@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -32,22 +33,23 @@ internal sealed record MoveBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Reset branch to revision",
+            Title = s.BranchesMoveTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Action = ("Reset branch", DialogButtonRole.Destructive),
+            Action = (s.BranchesMoveAction, DialogButtonRole.Destructive),
             Command = vm.Move,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = $"Reset '{BranchName}' to the selected revision and check it out",
+                    Value = s.BranchesMoveDescription(BranchName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Clipped
                 {
@@ -55,14 +57,14 @@ internal sealed record MoveBranchDialog : Widget
                     {
                         Value = string.IsNullOrEmpty(Summary) ? ShortSha : $"{ShortSha}  {Summary}",
                         Wrap = TextWrap.NoWrap,
-                        Color = Theme.Color(s => s.DialogBody.BodyText),
+                        Color = Theme.Color(t => t.DialogBody.BodyText),
                     },
                 },
                 new Text
                 {
-                    Value = $"'{BranchName}' has commits that aren't in {ShortSha}. Resetting it here will leave those commits unreachable from any branch.",
+                    Value = s.BranchesMoveWarning(BranchName, ShortSha),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
             ],
         };

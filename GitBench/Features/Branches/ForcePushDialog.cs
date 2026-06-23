@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -24,26 +25,24 @@ internal sealed record ForcePushDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var displayBranch = string.IsNullOrEmpty(BranchName) ? "this branch" : $"'{BranchName}'";
+        var s = ctx.Localization().Strings.Value;
+        var displayBranch = string.IsNullOrEmpty(BranchName) ? s.BranchesForcePushThisBranch : $"'{BranchName}'";
 
         return new Dialog
         {
-            Title = "Force push?",
+            Title = s.BranchesForcePushTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Force push", DialogButtonRole.Destructive),
+            Action = (s.BranchesForcePushAction, DialogButtonRole.Destructive),
             Command = vm.ForcePush,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = $"{displayBranch} has diverged from its upstream — {Ahead} ahead, {Behind} behind. "
-                          + "A regular push will be rejected. Force-push (with lease) will overwrite the remote "
-                          + "branch with your local history; any commits on the remote that you haven't fetched "
-                          + "will be lost. The lease refuses the push if the remote moved since your last fetch.",
+                    Value = s.BranchesForcePushDescription(displayBranch, Ahead, Behind),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
             ],
         };
