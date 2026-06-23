@@ -561,14 +561,31 @@ pattern.
 - **Tests:** `LayoutTests` — Row mirrors child order within the container, Column mirrors its cross
   axis, BorderLayout swaps West/East, each paired with an LTR control proving no regression.
 
+**Custom-painted view mirroring — STARTED.** Composed widget trees mirror via the `UiDirection` ambient,
+but custom-painted views (`BranchesView`, `CommitsView`, …) hand-roll left-origin row layout. They
+capture RTL-ness the **same way they already capture theme and strings** — off the locale's culture,
+bound reactively at build time — *not* off the canvas (the canvas is a rendering surface; layout
+direction is not its concern). `BranchesView` reads `_isRtl = s.Culture.TextInfo.IsRightToLeft` inside
+the `_loc.Strings` bind it already has (alongside the row rebuild), so a locale switch repaints mirrored.
+- **`BranchesView` — DONE.** A `Place(left, …)` helper reflects the chevron/icon/name/badge rects when
+  `_isRtl`; in-box name/header text right-aligns on its own (those styles take the canvas's text base
+  direction). The collapsed chevron flips ChevronRight→ChevronLeft. Hit-testing is row-index based
+  (`OnRowClicked` ignores the pointer x), so mirroring the draw doesn't desync interaction.
+- **Still to do:** `CommitsView` / `CommitDetailsView` (same hand-rolled pattern: graph/sha/message/
+  author columns) — they already inject `_loc`, so they pick up `_isRtl` the same way.
+- *(Possible DRY later: the locale→`IsRightToLeft` projection now appears in `Program.cs` (canvas text
+  base), `AppView` (widget ambient) and `BranchesView` (custom paint). Could be one `IReadable<bool>`
+  on the localization service, but each consumer needs a different shape — imperative set / `Prop` /
+  bindable — so the one-line projection per layer is acceptable.)*
+
 **Still TODO (the broader, visual-QA-dependent surface):**
 - **Scrollbars** — vertical bar to the left edge, horizontal scroll origin from the right
   (`ScrollPane._distanceFromLeft`, the thumb views), plus the direct-construction `BorderLayoutView`
   sites in custom views (set `IsRtl` from the ambient).
 - **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
   left; mirror to the right for an RTL field.
-- **Disclosure/chevron icons** — flip ChevronRight↔ChevronLeft (and menu/expand affordances) by
-  direction; Down/Up stay as-is.
+- **Disclosure/chevron icons** — `BranchesView`'s chevron flip is done; the same flip is still needed
+  in any other tree/expander affordance (Down/Up stay as-is).
 - **Pin LTR on non-translatable content** — the **diff code grid is done**: `DiffContentView`'s four
   monospace styles set `BaseDirection = BidiDirection.Ltr`, so source lines and the line-number gutter
   stay a left-origin LTR grid and don't right-align / bidi-reorder under an RTL locale (the shared

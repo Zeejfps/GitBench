@@ -109,6 +109,7 @@ internal sealed record BranchesView : Widget
         private string? _pendingHead;
         private string? _loadError;
         private bool _isLoading;
+        private bool _isRtl;
         private IReadOnlySet<string> _worktreeBranches = new HashSet<string>();
 
         private BranchListing? _listing;
@@ -182,8 +183,14 @@ internal sealed record BranchesView : Widget
 
             // Re-localize on a live language switch: section-header labels are baked into the
             // rows, and the placeholder text is custom-painted, so both need an explicit rebuild
-            // + repaint (the theme bind above does the same for colors).
-            this.Bind(_loc.Strings, _ => { RebuildRows(); SetDirty(); });
+            // + repaint (the theme bind above does the same for colors). The UI writing direction
+            // also comes from the locale's culture, captured here like any other ambient state.
+            this.Bind(_loc.Strings, s =>
+            {
+                _isRtl = s.Culture.TextInfo.IsRightToLeft;
+                RebuildRows();
+                SetDirty();
+            });
         }
 
         private void RebuildRows()
@@ -236,6 +243,15 @@ internal sealed record BranchesView : Widget
                 });
             }
         }
+
+        // Reflects an element's horizontal extent within the row when the UI is right-to-left, so the
+        // hand-rolled left-origin row layout mirrors (chevron/icon to the right, badges to the left)
+        // without rewriting the cursor math. In-box text right-aligns on its own — those styles
+        // inherit the locale's RTL base. Rows span the view width, so Position is the row's extent.
+        private RectF Place(float left, float bottom, float width, float height) =>
+            _isRtl
+                ? new RectF(Position.Left + Position.Right - left - width, bottom, width, height)
+                : new RectF(left, bottom, width, height);
 
         private void DrawRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
         {
@@ -295,8 +311,10 @@ internal sealed record BranchesView : Widget
             {
                 c.DrawText(new DrawTextInputs
                 {
-                    Position = new RectF(contentLeft, rowBottom, ChevronWidth, RowHeight),
-                    Text = row.IsOpen ? LucideIcons.ChevronDown : LucideIcons.ChevronRight,
+                    Position = Place(contentLeft, rowBottom, ChevronWidth, RowHeight),
+                    Text = row.IsOpen
+                        ? LucideIcons.ChevronDown
+                        : _isRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
                     Style = _chevronStyle,
                     ZIndex = z,
                 });
@@ -328,7 +346,7 @@ internal sealed record BranchesView : Widget
 
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(contentLeft, rowBottom, nameBudget, RowHeight),
+                Position = Place(contentLeft, rowBottom, nameBudget, RowHeight),
                 Text = rendered,
                 Style = style,
                 ZIndex = z,
@@ -365,7 +383,7 @@ internal sealed record BranchesView : Widget
 
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(left, rowBottom, width, RowHeight),
+                Position = Place(left, rowBottom, width, RowHeight),
                 Text = glyph,
                 Style = style,
                 ZIndex = z,
@@ -458,14 +476,14 @@ internal sealed record BranchesView : Widget
 
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(leftX, rowBottom, iconWidth, RowHeight),
+                Position = Place(leftX, rowBottom, iconWidth, RowHeight),
                 Text = icon,
                 Style = iconStyle,
                 ZIndex = z,
             });
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(countLeft, rowBottom, countWidth, RowHeight),
+                Position = Place(countLeft, rowBottom, countWidth, RowHeight),
                 Text = count,
                 Style = countStyle,
                 ZIndex = z,
