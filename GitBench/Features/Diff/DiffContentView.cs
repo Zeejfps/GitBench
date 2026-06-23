@@ -2,6 +2,7 @@ using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
+using ZGF.Fonts;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -40,16 +41,21 @@ internal sealed class DiffContentView : View, IScrollableContent
     // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; we
     // mutate the few that need per-row recoloring (banner/glyph/line text in the row body)
     // on the UI thread between draw calls, so there's no aliasing concern.
+    // The code grid is pinned LTR (BaseDirection.Ltr): source lines and the line-number gutter are
+    // a fixed left-origin monospace grid, so they must not follow the UI direction or right-align /
+    // bidi-reorder when the locale is RTL — only the surrounding chrome mirrors.
     private static readonly TextStyle MonoMetricsStyle = new()
     {
         FontFamily = DiffOptions.MonoFontFamily,
         FontSize = AssumedFontSize,
+        BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle MonoStartStyle = new()
     {
         FontFamily = DiffOptions.MonoFontFamily,
         FontSize = AssumedFontSize,
         VerticalAlignment = TextAlignment.Center,
+        BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle MonoEndStyle = new()
     {
@@ -57,6 +63,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         FontSize = AssumedFontSize,
         HorizontalAlignment = TextAlignment.End,
         VerticalAlignment = TextAlignment.Center,
+        BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle MonoCenterStyle = new()
     {
@@ -64,6 +71,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         FontSize = AssumedFontSize,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
+        BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle PlaceholderStyle = new()
     {

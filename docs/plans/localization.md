@@ -569,8 +569,11 @@ pattern.
   left; mirror to the right for an RTL field.
 - **Disclosure/chevron icons** — flip ChevronRight↔ChevronLeft (and menu/expand affordances) by
   direction; Down/Up stay as-is.
-- **Pin LTR on non-translatable content** — apply `BaseDir = Ltr` to SHA/path/URL/ref labels so they
-  don't get dragged RTL inside the mirrored UI.
+- **Pin LTR on non-translatable content** — the **diff code grid is done**: `DiffContentView`'s four
+  monospace styles set `BaseDirection = BidiDirection.Ltr`, so source lines and the line-number gutter
+  stay a left-origin LTR grid and don't right-align / bidi-reorder under an RTL locale (the shared
+  painter covers inline + windowed diffs; the localized placeholder/hunk-button chrome still mirrors).
+  Still to do: SHA/path/URL/ref labels elsewhere.
 
 #### Phase 6c — Arabic catalog & completion — DONE
 Release build clean (the Debug build is blocked only by a file lock from the running app — the
