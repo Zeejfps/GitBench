@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
@@ -28,44 +29,45 @@ internal sealed record CreateWorktreeDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         var browseButton = new SecondaryDialogButton
         {
-            Label = "Browse…",
+            Label = s.CommonBrowse,
             Command = new Command(() => PickPath(ctx, vm)),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();
 
         return new Dialog
         {
-            Title = "New worktree",
+            Title = s.WorktreesCreateTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Create", DialogButtonRole.Primary),
+            Action = (s.CommonCreate, DialogButtonRole.Primary),
             Command = vm.Create,
             Body =
             [
                 new LabeledInput
                 {
-                    Label = "Worktree path",
+                    Label = s.WorktreesCreatePathLabel,
                     Value = vm.Path,
                     Accessory = browseButton,
                 },
                 new LabeledInput
                 {
-                    Label = "Start point",
+                    Label = s.WorktreesCreateStartPointLabel,
                     Value = vm.StartPoint,
-                    Hint = "Branch, tag, or commit SHA.",
+                    Hint = s.WorktreesCreateStartPointHint,
                 },
                 new LabeledInput
                 {
-                    Label = "New branch (optional)",
+                    Label = s.WorktreesCreateNewBranchLabel,
                     Value = vm.NewBranchName,
-                    Hint = "Leave blank to check out the start point as-is.",
+                    Hint = s.WorktreesCreateNewBranchHint,
                     Status = vm.NewBranchStatus,
                 },
                 new CheckboxWidget
                 {
-                    Label = "Force (allow non-empty path or re-used branch)",
+                    Label = s.WorktreesCreateForceLabel,
                     Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
@@ -76,7 +78,7 @@ internal sealed record CreateWorktreeDialog : Widget
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)
     {
         var shell = ctx.Get<IPlatformShell>();
-        var picked = shell?.PickFolder("Select worktree location");
+        var picked = shell?.PickFolder(ctx.Localization().Strings.Value.WorktreesCreatePickerTitle);
         if (!string.IsNullOrEmpty(picked))
         {
             vm.Path.Value = picked;
