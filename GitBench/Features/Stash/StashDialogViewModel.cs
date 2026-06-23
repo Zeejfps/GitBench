@@ -57,7 +57,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         Files = Slice(s => s.Files);
         CheckedPaths = Slice(s => s.CheckedPaths);
         FilesHeader = Slice(s => s.Files.Count == 0
-            ? "Files"
+            ? strings.LocalchangesFilesHeaderEmpty
             : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
         Message = Slice(s => s.Message);
         KeepStaged = Slice(s => s.KeepStaged);

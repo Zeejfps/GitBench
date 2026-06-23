@@ -52,6 +52,8 @@
   "menu.view.language_english": "Language: English",
   "menu.view.language_spanish": "Language: Español",
   "menu.view.language_japanese": "Language: 日本語",
+  "menu.view.language_chinese": "Language: 简体中文",
+  "menu.view.language_korean": "Language: 한국어",
   "menu.view.language_pseudo": "Language: Pseudo (test)",
   "menu.view.fullscreen": "Enter Full Screen",
   "menu.window.title": "Window",
@@ -478,5 +480,21 @@
 
   "repos.clone_action": "Clone",
   "repos.picker_choose_clone": "Choose where to clone",
-  "repos.picker_open_repository": "Open Repository"
+  "repos.picker_open_repository": "Open Repository",
+  "refname.noun_branch": "Branch",
+  "refname.noun_tag": "Tag",
+  "refname.no_spaces": "{noun} names can’t contain spaces.",
+  "refname.no_leading_dash": "{noun} names can’t start with “-”.",
+  "refname.no_double_dot": "{noun} names can’t contain “..”.",
+  "refname.no_trailing_slash": "{noun} names can’t end with “/”.",
+  "commits.reset_dirty_staged": {
+    "one": "You have {count} staged local change.",
+    "other": "You have {count} staged local changes."
+  },
+  "commits.reset_dirty_unstaged": {
+    "one": "You have {count} unstaged local change.",
+    "other": "You have {count} unstaged local changes."
+  },
+  "commits.reset_dirty_both": "You have {staged} staged and {unstaged} unstaged local changes.",
+  "localchanges.files_header_empty": "Files"
 }

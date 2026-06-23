@@ -52,6 +52,8 @@
   "menu.view.language_english": "Idioma: English",
   "menu.view.language_spanish": "Idioma: Español",
   "menu.view.language_japanese": "Idioma: 日本語",
+  "menu.view.language_chinese": "Idioma: 简体中文",
+  "menu.view.language_korean": "Idioma: 한국어",
   "menu.view.language_pseudo": "Idioma: Pseudo (prueba)",
   "menu.view.fullscreen": "Acceder a pantalla completa",
   "menu.window.title": "Ventana",
@@ -478,5 +480,21 @@
 
   "repos.clone_action": "Clonar",
   "repos.picker_choose_clone": "Elige dónde clonar",
-  "repos.picker_open_repository": "Abrir repositorio"
+  "repos.picker_open_repository": "Abrir repositorio",
+  "refname.noun_branch": "rama",
+  "refname.noun_tag": "etiqueta",
+  "refname.no_spaces": "Los nombres de {noun} no pueden contener espacios.",
+  "refname.no_leading_dash": "Los nombres de {noun} no pueden empezar con «-».",
+  "refname.no_double_dot": "Los nombres de {noun} no pueden contener «..».",
+  "refname.no_trailing_slash": "Los nombres de {noun} no pueden terminar con «/».",
+  "commits.reset_dirty_staged": {
+    "one": "Tienes {count} cambio local preparado.",
+    "other": "Tienes {count} cambios locales preparados."
+  },
+  "commits.reset_dirty_unstaged": {
+    "one": "Tienes {count} cambio local sin preparar.",
+    "other": "Tienes {count} cambios locales sin preparar."
+  },
+  "commits.reset_dirty_both": "Tienes {staged} cambios preparados y {unstaged} sin preparar.",
+  "localchanges.files_header_empty": "Archivos"
 }

@@ -52,6 +52,8 @@
   "menu.view.language_english": "言語: English",
   "menu.view.language_spanish": "言語: Español",
   "menu.view.language_japanese": "言語: 日本語",
+  "menu.view.language_chinese": "言語: 简体中文",
+  "menu.view.language_korean": "言語: 한국어",
   "menu.view.language_pseudo": "言語: Pseudo (テスト)",
   "menu.view.fullscreen": "フルスクリーンにする",
   "menu.window.title": "ウインドウ",
@@ -478,5 +480,21 @@
 
   "repos.clone_action": "クローン",
   "repos.picker_choose_clone": "クローン先を選択",
-  "repos.picker_open_repository": "リポジトリを開く"
+  "repos.picker_open_repository": "リポジトリを開く",
+  "refname.noun_branch": "ブランチ",
+  "refname.noun_tag": "タグ",
+  "refname.no_spaces": "{noun}名にスペースは使用できません。",
+  "refname.no_leading_dash": "{noun}名は「-」で始めることはできません。",
+  "refname.no_double_dot": "{noun}名に「..」を含めることはできません。",
+  "refname.no_trailing_slash": "{noun}名は「/」で終わることはできません。",
+  "commits.reset_dirty_staged": {
+    "one": "{count}個のステージされたローカル変更があります。",
+    "other": "{count}個のステージされたローカル変更があります。"
+  },
+  "commits.reset_dirty_unstaged": {
+    "one": "{count}個のステージされていないローカル変更があります。",
+    "other": "{count}個のステージされていないローカル変更があります。"
+  },
+  "commits.reset_dirty_both": "{staged}個のステージされた変更と{unstaged}個のステージされていない変更があります。",
+  "localchanges.files_header_empty": "ファイル"
 }

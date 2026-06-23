@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -25,16 +26,21 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
         CreateWorktreeRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         var primaryId = request.Primary.Id;
 
         // New branch is optional, so blank is valid (RefNameRules treats empty as neutral);
         // a non-blank name must still be a legal refname before Create enables.
-        NewBranchStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(NewBranchName.Value.Trim(), "Branch"));
+        NewBranchStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
+        });
         var gate = new Derived<bool>(() =>
             Path.Value.Trim().Length > 0 && StartPoint.Value.Trim().Length > 0
-            && RefNameRules.Validate(NewBranchName.Value.Trim(), "Branch") is null);
+            && RefNameRules.IsValid(NewBranchName.Value.Trim()));
 
         Create = AsyncCommand.ForOutcome(
             dispatcher,

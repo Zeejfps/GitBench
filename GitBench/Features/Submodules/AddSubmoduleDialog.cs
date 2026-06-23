@@ -26,7 +26,8 @@ internal sealed record AddSubmoduleDialog : Widget
             new AddSubmoduleViewRequest(Primary),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog

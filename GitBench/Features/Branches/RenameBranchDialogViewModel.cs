@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -22,16 +23,21 @@ internal sealed class RenameBranchDialogViewModel : IDialogViewModel
         RenameBranchRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         Name = new State<string>(request.CurrentName);
 
         var repoId = request.Repo.Id;
         var oldName = request.CurrentName;
 
-        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
+        NameStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(Name.Value, s, s.RefnameNounBranch);
+        });
         var gate = new Derived<bool>(() =>
-            Name.Value.Length > 0 && Name.Value != oldName && RefNameRules.Validate(Name.Value, "Branch") is null);
+            Name.Value.Length > 0 && Name.Value != oldName && RefNameRules.IsValid(Name.Value));
 
         Rename = AsyncCommand.ForOutcome(
             dispatcher,

@@ -9,14 +9,14 @@ namespace GitBench.Tests;
 public class FontFallbackTests
 {
     [Fact]
-    public void CjkFallbackResolverFindsAnExistingFontOnMacOs()
+    public void CjkFallbackResolverFindsExistingFontsOnMacOs()
     {
         if (!OperatingSystem.IsMacOS())
             return;
 
-        var spec = SystemFonts.CjkFallback();
-        Assert.NotNull(spec);
-        Assert.True(File.Exists(spec!.Value.Path), $"resolved font missing: {spec.Value.Path}");
+        var specs = SystemFonts.CjkFallbacks();
+        Assert.NotEmpty(specs);
+        Assert.All(specs, s => Assert.True(File.Exists(s.Path), $"resolved font missing: {s.Path}"));
     }
 
 

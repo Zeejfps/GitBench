@@ -83,5 +83,7 @@ public class LocalizationFormatTests
         Assert.Equal("en", Strings.En.Culture.TwoLetterISOLanguageName);
         Assert.Equal("es", Strings.Es.Culture.TwoLetterISOLanguageName);
         Assert.Equal("ja", Strings.Ja.Culture.TwoLetterISOLanguageName);
+        Assert.Equal("zh", Strings.ZhHans.Culture.TwoLetterISOLanguageName);
+        Assert.Equal("ko", Strings.Ko.Culture.TwoLetterISOLanguageName);
     }
 }

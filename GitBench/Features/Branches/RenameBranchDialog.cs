@@ -28,7 +28,8 @@ internal sealed record RenameBranchDialog : Widget
             new RenameBranchRequest(Repo, CurrentName),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog

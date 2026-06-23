@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -25,15 +26,20 @@ internal sealed class AddSubmoduleDialogViewModel : IDialogViewModel
         AddSubmoduleViewRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         var primaryId = request.Primary.Id;
 
         // Track branch is optional, so blank is valid; a non-blank name must be a legal refname.
-        BranchStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Branch.Value.Trim(), "Branch"));
+        BranchStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(Branch.Value.Trim(), s, s.RefnameNounBranch);
+        });
         var gate = new Derived<bool>(() =>
             Url.Value.Trim().Length > 0 && Path.Value.Trim().Length > 0
-            && RefNameRules.Validate(Branch.Value.Trim(), "Branch") is null);
+            && RefNameRules.IsValid(Branch.Value.Trim()));
 
         Add = AsyncCommand.ForOutcome(
             dispatcher,

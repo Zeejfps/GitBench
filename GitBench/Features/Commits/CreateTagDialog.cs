@@ -33,7 +33,8 @@ internal sealed record CreateTagDialog : Widget
             new CreateTagRequest(Repo, Sha),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;
 

@@ -48,7 +48,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         Files = Slice(s => s.Files);
         CheckedPaths = Slice(s => s.CheckedPaths);
         FilesHeader = Slice(s => s.Files.Count == 0
-            ? "Files"
+            ? strings.LocalchangesFilesHeaderEmpty
             : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
 
         var canDiscard = Slice(s => s.CheckedPaths.Count > 0);

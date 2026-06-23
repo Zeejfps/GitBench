@@ -107,7 +107,7 @@ desktop binary). The runtime *language switch* is unaffected.
 2. **Phase 4 — CJK pipeline** (font-fallback chain + first CJK locale, `ja`). Proves
    non-Latin glyphs render instead of silently vanishing. **DONE** (modulo macOS eyeball).
 3. **Phase 5 — CJK completion** (line-breaking + `zh`/`ko` catalogs + the Phase 3 string
-   tail). Turns the CJK smoke-test into something production-usable.
+   tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
 4. **Phase 6 — RTL** (ar/he). BiDi reordering + layout mirroring. The largest single
    effort; out of scope until explicitly prioritized.
 
@@ -371,9 +371,49 @@ Deferred out of Phase 1 (rolled into later phases):
 - ⏳ **Color emoji** — out of scope (single-channel alpha atlas/shader; color glyphs are dropped,
   not crashed).
 
-### Phase 5 — CJK completion & robustness (make CJK production-ready, not a smoke test)
+### Phase 5 — CJK completion & robustness — DONE (implementation; macOS GUI eyeball is the only open verification)
 Phase 4 proved the *pipeline* (fallback chain + one CJK locale). Phase 5 makes CJK
-actually usable and closes the leftover string tail.
+actually usable and closes the leftover string tail. Build clean; of **121 GitBench tests**
+109 pass (the 20 localization/font tests all green, +4 new) and **12 framework `TextWrapperTests`**
+pass. (The 12 red `GitIdentityServiceTests` are pre-existing — verified identical on a stashed
+baseline — and untouched by this work.) Shipped:
+
+- **CJK line-breaking** — `TextWrapper.WrapLine` rewritten as a break-opportunity model: it
+  tokenizes a line into atomic chunks at break opportunities (spaces **plus** boundaries
+  where either side is a wide/CJK code point), iterating by **code point** so a surrogate
+  pair is never split, then greedy-packs. **Minimal kinsoku** (`IsNoBreakBefore`/`IsNoBreakAfter`)
+  keeps closing punctuation off the start of a line and opening punctuation off the end. **Perf:**
+  widths accumulate per chunk (each chunk measured once) instead of re-measuring the whole
+  candidate per code point — O(n) measures, and the conservative sum only ever wraps *earlier*,
+  never overflows. `TextWrapperTests` (12) cover Latin word-wrap, long-word overflow, CJK
+  inter-ideograph breaks, mixed Latin/CJK, both kinsoku rules, and supplementary-plane safety.
+- **`zh-Hans` + `ko` catalogs** — `Locale.ZhHans`/`Locale.Ko` added; full-parity `zh-Hans.json`
+  / `ko.json` authored (generator validates parity — build green); `View → Language` gained
+  `简体中文` / `한국어` items (rebuild on switch like the others); culture auto-derives from the
+  file stem (`GetCultureInfo("zh-hans")` / `("ko")`, both neutral cultures — `TwoLetterISOLanguageName`
+  `zh`/`ko`, asserted in tests); no `PluralRules` change
+  (the generic `n==1→one` collapses cleanly, same as `ja`). Switch + culture tests added.
+- **Multi-script font fallback** — `SystemFonts.CjkFallback()` (returned only the *first*
+  present font, i.e. the Japanese one — Hangul/SC-only glyphs would still tofu) became
+  `CjkFallbacks()`, returning **one font per script family** (JP kana / Simplified Chinese /
+  Korean Hangul). `Program.cs` registers each; the cmap-itemizing shape layer then resolves
+  kana, Han, and Hangul. (Han-unification caveat from the plan stands: earliest-registered
+  covering font wins for shared ideographs.)
+- **Phase 3 string tail closed** — `RefNameRules` split into a locale-independent `IsValid`
+  (gates) and `Validate(name, Strings, noun)` (localized message via parameterized `{noun}`
+  keys); `loc` threaded through all 6 dialog VMs + construction sites, so messages live-switch.
+  `ResetCommitDialog.BuildDirtyHint` now uses dedicated plural/param keys
+  (`commits.reset_dirty_staged`/`_unstaged`/`_both`). Bare `"Files"` header (count == 0) in
+  Discard/Stash VMs → `localchanges.files_header_empty`.
+
+**Open verification (exit gate):** the macOS GUI eyeball across en/es/ja/zh/ko — confirm (a) CJK
+renders via the fallback and (b) CJK labels/bodies **wrap** instead of overflowing. The load+shape
+path is proven by `FontFallbackTests` and the wrap logic by `TextWrapperTests`; only the on-screen
+render is unverified (developing on Windows).
+
+---
+
+#### Original Phase 5 plan (for reference)
 
 **1. CJK line-breaking** — the real rendering gap. `TextWrapper.WrapLine`
 (`framework/ZGF.Gui/TextWrapper.cs:46-78`) only inserts break opportunities at `' '`, so a

@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -28,13 +29,18 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
         string suggestedStartPoint,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         StartPoint = new State<string>(suggestedStartPoint);
 
         var repoId = repo.Id;
-        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
-        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
+        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.IsValid(Name.Value));
+        NameStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(Name.Value, s, s.RefnameNounBranch);
+        });
 
         Create = AsyncCommand.ForOutcome(
             dispatcher,

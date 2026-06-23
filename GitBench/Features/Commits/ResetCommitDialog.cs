@@ -64,7 +64,7 @@ internal sealed record ResetCommitDialog : Widget
                 },
                 new Text
                 {
-                    Value = BuildDirtyHint(StagedCount, UnstagedCount),
+                    Value = BuildDirtyHint(s, StagedCount, UnstagedCount),
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
@@ -136,13 +136,12 @@ internal sealed record ResetCommitDialog : Widget
         ],
     };
 
-    private static string BuildDirtyHint(int staged, int unstaged)
+    private static string BuildDirtyHint(Strings s, int staged, int unstaged)
     {
-        var parts = new List<string>();
-        if (staged > 0) parts.Add($"{staged} staged");
-        if (unstaged > 0) parts.Add($"{unstaged} unstaged");
-        if (parts.Count == 0) return string.Empty;
-        return $"You have {string.Join(" and ", parts)} local change(s).";
+        if (staged > 0 && unstaged > 0) return s.CommitsResetDirtyBoth(staged, unstaged);
+        if (staged > 0) return s.CommitsResetDirtyStaged(staged);
+        if (unstaged > 0) return s.CommitsResetDirtyUnstaged(unstaged);
+        return string.Empty;
     }
 }
 

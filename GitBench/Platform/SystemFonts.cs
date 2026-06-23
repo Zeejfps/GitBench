@@ -5,42 +5,82 @@ public readonly record struct SystemFontSpec(string Path, int FaceIndex);
 // Locates OS-provided CJK fonts for glyph fallback, so no multi-MB font is bundled.
 public static class SystemFonts
 {
-    public static SystemFontSpec? CjkFallback()
+    /// <summary>
+    /// One available font per script family (Japanese kana, Simplified Chinese, Korean Hangul). The
+    /// shape layer itemizes a line by cmap coverage across every registered fallback, so registering
+    /// one font per family lets kana, Han, and Hangul all resolve. For Han ideographs shared across
+    /// the families, the earliest-registered font that covers the glyph wins — a regional-variant
+    /// caveat we accept until fallback ordering becomes locale-aware.
+    /// </summary>
+    public static IReadOnlyList<SystemFontSpec> CjkFallbacks()
     {
-        foreach (var spec in CjkCandidates())
-            if (File.Exists(spec.Path))
-                return spec;
-        return null;
+        var result = new List<SystemFontSpec>();
+        foreach (var family in CandidatesByFamily())
+            foreach (var spec in family)
+                if (File.Exists(spec.Path))
+                {
+                    result.Add(spec);
+                    break;
+                }
+
+        return result;
     }
 
-    // Ordered per OS; the first candidate present on disk wins.
-    private static IEnumerable<SystemFontSpec> CjkCandidates()
+    // Ordered per OS; within a family the first candidate present on disk wins.
+    private static IEnumerable<SystemFontSpec[]> CandidatesByFamily()
     {
         if (OperatingSystem.IsMacOS())
         {
-            // Hiragino Kaku Gothic W3 is the system Japanese sans (regular weight). The GB / PingFang
-            // variants and Apple SD Gothic Neo cover Chinese/Korean if Hiragino is ever absent.
-            yield return new("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 0);
-            yield return new("/System/Library/Fonts/Hiragino Sans GB.ttc", 0);
-            yield return new("/System/Library/Fonts/PingFang.ttc", 0);
-            yield return new("/System/Library/Fonts/AppleSDGothicNeo.ttc", 0);
+            // Japanese (kana + JIS kanji).
+            yield return new SystemFontSpec[]
+            {
+                new("/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc", 0),
+                new("/System/Library/Fonts/Hiragino Sans GB.ttc", 0),
+            };
+            // Simplified Chinese.
+            yield return new SystemFontSpec[]
+            {
+                new("/System/Library/Fonts/PingFang.ttc", 0),
+                new("/System/Library/Fonts/STHeiti Medium.ttc", 0),
+            };
+            // Korean Hangul.
+            yield return new SystemFontSpec[]
+            {
+                new("/System/Library/Fonts/AppleSDGothicNeo.ttc", 0),
+            };
         }
         else if (OperatingSystem.IsWindows())
         {
             var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-            yield return new(Path.Combine(fonts, "YuGothR.ttc"), 0);   // Yu Gothic (JP)
-            yield return new(Path.Combine(fonts, "YuGothM.ttc"), 0);
-            yield return new(Path.Combine(fonts, "meiryo.ttc"), 0);
-            yield return new(Path.Combine(fonts, "msgothic.ttc"), 0);
-            yield return new(Path.Combine(fonts, "malgun.ttf"), 0);    // Malgun Gothic (KR)
-            yield return new(Path.Combine(fonts, "msyh.ttc"), 0);      // Microsoft YaHei (zh)
+            // Japanese.
+            yield return new SystemFontSpec[]
+            {
+                new(Path.Combine(fonts, "YuGothR.ttc"), 0),   // Yu Gothic
+                new(Path.Combine(fonts, "meiryo.ttc"), 0),
+                new(Path.Combine(fonts, "msgothic.ttc"), 0),
+            };
+            // Simplified Chinese.
+            yield return new SystemFontSpec[]
+            {
+                new(Path.Combine(fonts, "msyh.ttc"), 0),      // Microsoft YaHei
+                new(Path.Combine(fonts, "simsun.ttc"), 0),
+            };
+            // Korean Hangul.
+            yield return new SystemFontSpec[]
+            {
+                new(Path.Combine(fonts, "malgun.ttf"), 0),    // Malgun Gothic
+            };
         }
         else
         {
-            yield return new("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0);
-            yield return new("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", 0);
-            yield return new("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0);
-            yield return new("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 0);
+            // Noto CJK is a single super-font covering JP/SC/KR, so one registration suffices.
+            yield return new SystemFontSpec[]
+            {
+                new("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 0),
+                new("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0),
+                new("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 0),
+                new("/usr/share/fonts/opentype/noto/NotoSansCJKjp-Regular.otf", 0),
+            };
         }
     }
 }

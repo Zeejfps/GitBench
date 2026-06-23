@@ -76,4 +76,27 @@ public class LocalizationServiceTests
 
         Assert.Equal("GitHubで表示", observed);
     }
+
+    [Fact]
+    public void ChineseAndKoreanCatalogsAreBakedFromTheirJson()
+    {
+        Assert.Equal("在 GitHub 上查看", Strings.ZhHans.AboutViewOnGithub);
+        Assert.Equal("GitHub에서 보기", Strings.Ko.AboutViewOnGithub);
+    }
+
+    [Fact]
+    public void SwitchingToChineseOrKoreanPushesThatCatalog()
+    {
+        var locale = new State<Locale>(Locale.En);
+        using var service = new LocalizationService(locale);
+
+        string? observed = null;
+        using var _ = service.Strings.Subscribe(s => observed = s.AboutViewOnGithub);
+
+        locale.Value = Locale.ZhHans;
+        Assert.Equal("在 GitHub 上查看", observed);
+
+        locale.Value = Locale.Ko;
+        Assert.Equal("GitHub에서 보기", observed);
+    }
 }

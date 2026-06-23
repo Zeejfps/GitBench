@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -23,14 +24,19 @@ internal sealed class CreateTagDialogViewModel : IDisposable
         CreateTagRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         var repoId = request.Repo.Id;
         // Validate the trimmed value: Create trims before handing the name to git, so a
         // surrounding space shouldn't read as an error the user can't see the cause of.
-        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value.Trim(), "Tag"));
+        NameStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(Name.Value.Trim(), s, s.RefnameNounTag);
+        });
         var gate = new Derived<bool>(() =>
-            Name.Value.Trim().Length > 0 && RefNameRules.Validate(Name.Value.Trim(), "Tag") is null);
+            Name.Value.Trim().Length > 0 && RefNameRules.IsValid(Name.Value.Trim()));
 
         Create = AsyncCommand.ForOutcome(
             dispatcher,

@@ -29,8 +29,12 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
         Name = new State<string>(request.SuggestedLocalName);
 
         var repoId = request.Repo.Id;
-        NameStatus = new Derived<FieldStatus?>(() => RefNameRules.Validate(Name.Value, "Branch"));
-        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.Validate(Name.Value, "Branch") is null);
+        NameStatus = new Derived<FieldStatus?>(() =>
+        {
+            var s = loc.Strings.Value;
+            return RefNameRules.Validate(Name.Value, s, s.RefnameNounBranch);
+        });
+        var gate = new Derived<bool>(() => Name.Value.Length > 0 && RefNameRules.IsValid(Name.Value));
 
         Checkout = AsyncCommand.ForOutcome(
             dispatcher,
