@@ -1,4 +1,5 @@
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -112,6 +113,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     public Action<int>? OnDiscardHunk { get; set; }
 
     private readonly VirtualRowListView _list;
+    private readonly ILocalizationService _loc;
 
     private float _scrollX;
     // A programmatic vertical scroll target that must be re-asserted across frames. Setting a
@@ -135,6 +137,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
+        _loc = ctx.Localization();
 
         _list = new VirtualRowListView
         {
@@ -154,6 +157,9 @@ internal sealed class DiffContentView : View, IScrollableContent
             _buttonStyles = s.DiffHunkButton;
             SetDirty();
         });
+
+        // Placeholder/conflict text is custom-painted, so repaint on a live language switch.
+        this.Bind(_loc.Strings, _ => SetDirty());
     }
 
     private void OnHorizontalWheel(float deltaX)
@@ -518,7 +524,7 @@ internal sealed class DiffContentView : View, IScrollableContent
             case DiffRenderState.Conflict:
                 // The embedded pane swaps in the rich resolution view; this fallback is only
                 // hit by the pop-out window, which has no resolution UI.
-                DrawPlaceholder(c, pos, "Resolve this conflict in the main window.", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffResolveInMain, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.ErrorMessage != null:
@@ -526,11 +532,11 @@ internal sealed class DiffContentView : View, IScrollableContent
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.IsBinary:
-                DrawPlaceholder(c, pos, "Binary file not shown", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffBinaryNotShown, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded when _rows.Count == 0:
-                DrawPlaceholder(c, pos, "No textual changes", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffNoChanges, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
         }

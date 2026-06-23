@@ -2,6 +2,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Observable;
@@ -44,6 +45,8 @@ internal sealed record DiffState(DiffRenderState Render, string? OpError, DiffVi
 
 internal sealed class DiffViewModel : ViewModelBase<DiffState>
 {
+    // Fallbacks used only when no localization service is supplied (some embedded panes are
+    // constructed before their owner injects one). When _loc is present these are localized.
     private const string EmptyPlaceholder = "Select a file to view diff.";
     private const string LoadingPlaceholder = "Loading…";
 
@@ -51,6 +54,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService? _loc;
+
+    private string EmptyText => _loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder;
+    private string LoadingText => _loc?.Strings.Value.CommonLoading ?? LoadingPlaceholder;
     // Used only for "Open in editor" on a conflict. Null in panes that never show conflicts
     // (commit details, and pop-out windows pinned to a commit diff).
     private readonly IPlatformShell? _shell;
@@ -85,14 +92,17 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        IPlatformShell? shell = null)
-        : base(dispatcher, new DiffState(new DiffRenderState.Placeholder(EmptyPlaceholder), null, DiffViewMode.Diff))
+        IPlatformShell? shell = null,
+        ILocalizationService? loc = null)
+        : base(dispatcher, new DiffState(
+            new DiffRenderState.Placeholder(loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder), null, DiffViewMode.Diff))
     {
         _target = target;
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
         _shell = shell;
+        _loc = loc;
         _highlightLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
@@ -285,7 +295,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
         else if (toSide.HasValue)
         {
-            Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingPlaceholder) });
+            Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
         }
 
         _bus.Broadcast(new HunkAppliedOptimisticMessage(repo.Id, diff.Path, fromSide, toSide, isLastHunk));
@@ -371,7 +381,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target == null)
         {
             Gen.Bump();
-            Update(s => s with { Render = new DiffRenderState.Placeholder(EmptyPlaceholder) });
+            Update(s => s with { Render = new DiffRenderState.Placeholder(EmptyText) });
             return;
         }
 
@@ -379,13 +389,17 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (repo == null) return;
 
         if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile))
-            Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingPlaceholder) });
+            Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
 
         var path = target.Path;
         var side = target.Side;
         var commitSha = target.CommitSha;
         var mode = State.Value.Mode;
         var git = _gitService;
+        // Capture localized placeholder text up front so the background worker doesn't touch the
+        // observable off the UI thread.
+        var binaryText = _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown";
+        var noVersionText = _loc?.Strings.Value.DiffNoCurrentVersion ?? "File has no current version";
         // Always load the diff: it supplies the added-line set for full-file tinting and drives the
         // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
         // file off the same worker thread.
@@ -406,7 +420,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 var diff = git.GetDiff(repo, path, side, commitSha);
                 if (mode == DiffViewMode.Diff)
                     return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
-                var render = BuildFullFile(git, repo, diff, path, side, commitSha);
+                var render = BuildFullFile(git, repo, diff, path, side, commitSha, binaryText, noVersionText);
                 return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
             },
             onResult: (result, error) =>
@@ -434,13 +448,14 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // and marks which lines were added. Returns a Placeholder for cases with no readable current
     // version (binary, diff error, or a deleted/absent file).
     private static DiffRenderState BuildFullFile(
-        IGitService git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha)
+        IGitService git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha,
+        string binaryText, string noVersionText)
     {
-        if (diff.IsBinary) return new DiffRenderState.Placeholder("Binary file not shown");
+        if (diff.IsBinary) return new DiffRenderState.Placeholder(binaryText);
         if (diff.ErrorMessage != null) return new DiffRenderState.Placeholder(diff.ErrorMessage);
 
         var text = git.GetFileText(repo, path, side, oldSide: false, commitSha);
-        if (text == null) return new DiffRenderState.Placeholder("File has no current version");
+        if (text == null) return new DiffRenderState.Placeholder(noVersionText);
 
         var lines = SplitLines(text);
         var truncated = false;

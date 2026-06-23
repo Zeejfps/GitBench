@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -69,7 +70,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                                 {
                                     Child = new Text
                                     {
-                                        Value = "Diff View",
+                                        Value = L.T(s => s.DiffHeaderTitle),
                                         FontSize = 12f,
                                         VAlign = TextAlignment.Center,
                                         Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
@@ -96,7 +97,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                 : t.DiffView.HeaderButtonColor(s))),
             Command = new Command(vm.ToggleFullFile),
             Children = [new ButtonIcon { Value = LucideIcons.FileText, FontSize = 12f }],
-        }.WithTooltip("Toggle full file")
+        }.WithTooltip(L.T(s => s.DiffFullfileToggleTooltip))
             .WithController<KbmController>();
 
     private static IWidget OpenInWindowButton(DiffViewModel vm) =>
@@ -105,6 +106,6 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             Style = ButtonStyle.Bare(s => Theme.Color(t => t.DiffView.HeaderButtonColor(s))),
             Command = new Command(vm.RequestOpenInWindow),
             Children = [new ButtonIcon { Value = LucideIcons.ExternalLink, FontSize = 12f }],
-        }.WithTooltip("Open in new window")
+        }.WithTooltip(L.T(s => s.DiffOpenWindowTooltip))
             .WithController<KbmController>();
 }

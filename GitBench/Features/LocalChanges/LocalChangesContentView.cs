@@ -41,6 +41,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
     private readonly ILocalizationService _loc;
+    private string? _rawPlaceholder;
 
     public LocalChangesContentView(Context ctx, LocalChangesViewModel vm)
     {
@@ -208,8 +209,15 @@ internal sealed class LocalChangesContentView : ContainerView
 
         this.Bind(vm.Placeholder, text =>
         {
+            _rawPlaceholder = text;
             if (text != null) ShowPlaceholder(text);
             else AttachSnapshot();
+        });
+        // Placeholder copy comes from the VM's state, which doesn't re-emit on a locale switch,
+        // so re-resolve the current sentinel against the new catalog when the language changes.
+        this.Bind(_loc.Strings, _ =>
+        {
+            if (_rawPlaceholder != null) ShowPlaceholder(_rawPlaceholder);
         });
         this.Bind(vm.Unstaged, list => _unstagedPanel.SetFiles(list));
         this.Bind(vm.Staged, list => _stagedPanel.SetFiles(list));
@@ -253,9 +261,18 @@ internal sealed class LocalChangesContentView : ContainerView
         if (_vm.Selection.Value.Count == 0) _vm.MoveSelection(+1, false);
     }
 
+    // Maps the VM's placeholder sentinels (English-keyed consts on LocalChangesState) to the
+    // active catalog. A hard load error carries raw git output, which is passed through verbatim.
+    private string Localize(string text) => text switch
+    {
+        LocalChangesState.OpenRepoPlaceholder => _loc.Strings.Value.LocalchangesNoRepo,
+        LocalChangesState.LoadingPlaceholder => _loc.Strings.Value.CommonLoading,
+        _ => text,
+    };
+
     private void ShowPlaceholder(string text)
     {
-        _placeholder.Text = text;
+        _placeholder.Text = Localize(text);
 
         // Read the detail straight off the VM rather than a cached field: LoadError and
         // LoadErrorDetail land in the same atomic Update, so the value is always current here

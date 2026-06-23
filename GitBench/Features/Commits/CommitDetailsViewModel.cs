@@ -55,7 +55,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         SelectedPath = Slice(s => s.SelectedPath);
         SelectedTarget = Slice(s => s.SelectedTarget);
 
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus);
+        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, loc: loc);
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
     }
 
