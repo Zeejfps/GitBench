@@ -13,6 +13,6 @@
   "time.hours_ago": "hace {count} h",
   "time.days_ago": "hace {count} d",
   "time.weeks_ago": "hace {count} sem",
-  "time.months_ago": "hace {count} meses",
-  "time.years_ago": "hace {count} años"
+  "time.months_ago": { "one": "hace {count} mes", "other": "hace {count} meses" },
+  "time.years_ago": { "one": "hace {count} año", "other": "hace {count} años" }
 }

@@ -13,6 +13,6 @@
   "time.hours_ago": "{count}h ago",
   "time.days_ago": "{count}d ago",
   "time.weeks_ago": "{count}w ago",
-  "time.months_ago": "{count}mo ago",
-  "time.years_ago": "{count}y ago"
+  "time.months_ago": { "one": "{count}mo ago", "other": "{count}mo ago" },
+  "time.years_ago": { "one": "{count}y ago", "other": "{count}y ago" }
 }

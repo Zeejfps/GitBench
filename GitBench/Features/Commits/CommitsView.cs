@@ -150,6 +150,8 @@ internal sealed record CommitsView : Widget
                 SetDirty();
             });
 
+            this.Bind(ctx.Localization().Strings, _ => SetDirty());
+
             this.UseController(input, () => new CommitsViewController(this, ctx));
 
             // Up/Down arrow navigation over the commit list, mirroring the commit-details and

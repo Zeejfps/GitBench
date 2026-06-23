@@ -45,6 +45,17 @@ public class LocalizationFormatTests
     }
 
     [Fact]
+    public void RelativeTimeUsesSpanishSingularForMonthsAndYears()
+    {
+        var now = new DateTimeOffset(2026, 6, 22, 12, 0, 0, TimeSpan.Zero);
+
+        Assert.Equal("hace 1 mes", Format.RelativeTime(Strings.Es, now.AddDays(-40), now));
+        Assert.Equal("hace 2 meses", Format.RelativeTime(Strings.Es, now.AddDays(-70), now));
+        Assert.Equal("hace 1 año", Format.RelativeTime(Strings.Es, now.AddDays(-400), now));
+        Assert.Equal("hace 2 años", Format.RelativeTime(Strings.Es, now.AddDays(-800), now));
+    }
+
+    [Fact]
     public void PluralRuleCategoryMatchesLanguage()
     {
         Assert.Equal(PluralCategory.One, PluralRules.Category("en", 1));
