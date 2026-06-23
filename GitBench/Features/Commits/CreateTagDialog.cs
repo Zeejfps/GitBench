@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -34,32 +35,34 @@ internal sealed record CreateTagDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
-        var messageField = new GrowingDescriptionField(ctx, 72f, 200f) { PlaceholderText = "optional" };
+        var s = ctx.Localization().Strings.Value;
+
+        var messageField = new GrowingDescriptionField(ctx, 72f, 200f) { PlaceholderText = s.CommitsCreateTagMessagePlaceholder };
         messageField.BindTwoWay(vm.Message, vm.SetMessage);
 
-        var shell = new DialogShell(ctx, "Create tag", OnClose)
+        var shell = new DialogShell(ctx, s.CommitsCreateTagTitle, OnClose)
         {
             Width = DialogFrame.WidthWide,
-            Action = ("Create", DialogButtonRole.Primary),
+            Action = (s.CommonCreate, DialogButtonRole.Primary),
         };
 
         IWidget[] body =
         [
             new Text
             {
-                Value = "Create annotated tag",
+                Value = s.CommitsCreateTagDesc,
                 Wrap = TextWrap.Wrap,
-                Color = Theme.Color(s => s.DialogBody.BodyText),
+                Color = Theme.Color(t => t.DialogBody.BodyText),
             },
-            new LabeledRow { Label = "Create tag at:", Value = CommitValue(ctx, ShortSha, Summary) },
+            new LabeledRow { Label = s.CommitsCreateTagLocationLabel, Value = CommitValue(ctx, ShortSha, Summary) },
             // Each label sits tight against its field (small intra-group gap); the column's
             // larger Gap separates one section from the next so labels read as attached to
             // their inputs rather than floating midway between them.
             new LabeledInput
             {
-                Label = "Tag name",
+                Label = s.CommitsCreateTagNameLabel,
                 Value = vm.Name,
-                Placeholder = "Enter Tag Name",
+                Placeholder = s.CommitsCreateTagNamePlaceholder,
                 Status = vm.NameStatus,
             },
             new Column
@@ -70,13 +73,13 @@ internal sealed record CreateTagDialog : Widget
                 [
                     new Text
                     {
-                        Value = "Message",
-                        Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
+                        Value = s.CommonMessage,
+                        Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                     },
                     new Raw { View = messageField },
                 ],
             },
-            new CheckboxWidget { Label = "Push to all remotes", Checked = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
+            new CheckboxWidget { Label = s.CommitsCreateTagPushCheckbox, Checked = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
         ];
 
         var inputs = new DialogInputRegistry();
@@ -97,7 +100,7 @@ internal sealed record CreateTagDialog : Widget
         shell.SubmitFrom(inputs.Entries.Select(e => e.Input).ToArray());
 
         // Reflect the toggle in the primary button's label, like Fork ("Create and Push").
-        root.Bind(vm.PushToAllRemotes, push => shell.SetActionLabel(push ? "Create and Push" : "Create"));
+        root.Bind(vm.PushToAllRemotes, push => shell.SetActionLabel(push ? s.CommitsCreateTagPushAction : s.CommonCreate));
 
         root.UseViewModel(() => vm, v =>
         {

@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
@@ -73,25 +74,31 @@ internal sealed record RepoBar : Widget
         };
 
         return bar
-            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)))
+            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm)))
             .BindVm(vm);
     }
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx) =>
-    [
-        new("Open from Folder…", () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
-        new("Clone Repository…", () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
-    ];
+    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx)
+    {
+        var s = ctx.Localization().Strings.Value;
+        return
+        [
+            new(s.ReposMenuOpenFromFolder, () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
+            new(s.ReposMenuCloneRepository, () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
+        ];
+    }
 
     private static void OpenFromFolder(Context ctx)
     {
         var path = ctx.Get<IPlatformShell>()?.PickFolder("Open Repository");
         if (string.IsNullOrEmpty(path)) return;
         if (ctx.Get<IRepoRegistry>()?.Open(path) == OpenRepoOutcome.NotAGitRepo)
+        {
+            var s = ctx.Localization().Strings.Value;
             ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
-                "Not a Git Repository",
-                $"{path}\n\nThis folder isn't a Git repository — it has no .git directory. " +
-                "Pick the repository's root folder, or clone a repository instead."));
+                s.ReposErrorNotAGitRepoTitle,
+                s.ReposErrorNotAGitRepoMessage(path)));
+        }
     }
 
     private static void ShowCloneDialog(Context ctx)

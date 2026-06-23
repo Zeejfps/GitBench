@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -31,26 +32,27 @@ internal sealed record DeleteTagDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Delete tag",
+            Title = s.CommitsDeleteTagTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Delete Tag", DialogButtonRole.Destructive),
+            Action = (s.CommitsDeleteTagAction, DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = "Delete tag from your repository",
+                    Value = s.CommitsDeleteTagDesc,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
-                new LabeledRow { Label = "Tag:", Value = TagValue(TagName) },
+                new LabeledRow { Label = s.CommitsDeleteTagLabel, Value = TagValue(TagName) },
                 new CheckboxWidget
                 {
-                    Label = "Delete tag from remote repositories",
+                    Label = s.CommitsDeleteTagRemoteCheckbox,
                     Checked = vm.DeleteFromRemotes,
                     Height = 22,
                 }.WithController<KbmController>(),

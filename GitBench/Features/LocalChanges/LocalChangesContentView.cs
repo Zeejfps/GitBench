@@ -54,42 +54,42 @@ internal sealed class LocalChangesContentView : ContainerView
 
         var discardButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.Trash, Command = vm.Discard, Tooltip = "Discard selected changes",
+            Icon = LucideIcons.Trash, Command = vm.Discard, Tooltip = L.T(s => s.LocalchangesDiscardSelectedTooltip),
         }.BuildView(ctx);
         var stageSelectedButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronRight, Command = vm.StageSelected, Tooltip = "Stage selected",
+            Icon = LucideIcons.ChevronRight, Command = vm.StageSelected, Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
         }.BuildView(ctx);
         var stageAllButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronsRight, Command = vm.StageAll, Tooltip = "Stage all",
+            Icon = LucideIcons.ChevronsRight, Command = vm.StageAll, Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
         }.BuildView(ctx);
         var unstageAllButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronsLeft, Command = vm.UnstageAll, Tooltip = "Unstage all",
+            Icon = LucideIcons.ChevronsLeft, Command = vm.UnstageAll, Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
         }.BuildView(ctx);
         var unstageSelectedButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronLeft, Command = vm.UnstageSelected, Tooltip = "Unstage selected",
+            Icon = LucideIcons.ChevronLeft, Command = vm.UnstageSelected, Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
         }.BuildView(ctx);
         var viewModeButtonUnstaged = new LocalChangesHeaderActionButton
         {
-            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = "Toggle list / tree view",
+            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
         }.BuildView(ctx);
         var viewModeButtonStaged = new LocalChangesHeaderActionButton
         {
-            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = "Toggle list / tree view",
+            Icon = viewModeIcon, Command = vm.ToggleViewMode, Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
         }.BuildView(ctx);
 
         _unstagedPanel = new LocalChangesPanel(
             ctx,
-            "Unstaged",
+            _loc.Strings.Value.LocalchangesUnstagedPanelTitle,
             DiffSide.Unstaged,
             FileChangesUI.CreateEmptyState(
                 ctx,
                 LucideIcons.CircleCheck,
-                "Working tree clean",
-                "Changes you make will appear here."),
+                _loc.Strings.Value.LocalchangesUnstagedEmptyTitle,
+                _loc.Strings.Value.LocalchangesUnstagedEmptyHint),
             _selection,
             OnRowClick,
             [viewModeButtonUnstaged, discardButton, stageSelectedButton, stageAllButton],
@@ -99,13 +99,13 @@ internal sealed class LocalChangesContentView : ContainerView
             buildContextMenu: BuildUnstagedMenu);
         _stagedPanel = new LocalChangesPanel(
             ctx,
-            "Staged",
+            _loc.Strings.Value.LocalchangesStagedPanelTitle,
             DiffSide.Staged,
             FileChangesUI.CreateEmptyState(
                 ctx,
                 LucideIcons.Inbox,
-                "Nothing staged yet",
-                "Stage changes to include them in your commit."),
+                _loc.Strings.Value.LocalchangesStagedEmptyTitle,
+                _loc.Strings.Value.LocalchangesStagedEmptyHint),
             _selection,
             OnRowClick,
             [viewModeButtonStaged, unstageAllButton, unstageSelectedButton],
@@ -132,9 +132,9 @@ internal sealed class LocalChangesContentView : ContainerView
             Children =
             [
                 new ButtonIcon { Value = LucideIcons.TriangleAlert },
-                new ButtonLabel { Value = "Show full error" },
+                new ButtonLabel { Value = L.T(s => s.LocalchangesShowErrorButton) },
             ],
-        }.WithTooltip("Open the full git error")
+        }.WithTooltip(L.T(s => s.LocalchangesShowErrorTooltip))
             .WithController<KbmController>()
             .BuildView(ctx);
 
@@ -327,10 +327,10 @@ internal sealed class LocalChangesContentView : ContainerView
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildUnstagedMenu(FileRow? target)
     {
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>();
         if (target != null)
         {
-            var s = _loc.Strings.Value;
             var paths = ResolveTargetPaths(target);
             var n = paths.Count;
             var conflicted = _vm.ConflictedAmong(paths);
@@ -359,12 +359,12 @@ internal sealed class LocalChangesContentView : ContainerView
             items.Add(RepoBarContextMenu.Separator);
         }
         items.Add(new RepoBarContextMenu.Item(
-            "Stage All",
+            s.LocalchangesStageAllMenu,
             () => _vm.StageAll.Execute(),
             LucideIcons.ChevronsRight,
             Enabled: _vm.StageAll.CanExecute.Value));
         items.Add(new RepoBarContextMenu.Item(
-            "Discard All…",
+            s.LocalchangesDiscardAllMenu,
             () => _vm.DiscardAll.Execute(),
             LucideIcons.Trash,
             Enabled: _vm.DiscardAll.CanExecute.Value));
@@ -377,11 +377,12 @@ internal sealed class LocalChangesContentView : ContainerView
     private void AppendExpandCollapseItems(List<RepoBarContextMenu.Item> items, DiffSide side)
     {
         if (_vm.ViewMode.Value != FileViewMode.Tree) return;
+        var s = _loc.Strings.Value;
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
-            "Expand All", () => _vm.ExpandAllFolders(side), LucideIcons.ChevronDown));
+            s.CommonExpandAll, () => _vm.ExpandAllFolders(side), LucideIcons.ChevronDown));
         items.Add(new RepoBarContextMenu.Item(
-            "Collapse All", () => _vm.CollapseAllFolders(side), LucideIcons.ChevronRight));
+            s.CommonCollapseAll, () => _vm.CollapseAllFolders(side), LucideIcons.ChevronRight));
     }
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildStagedMenu(FileRow? target)
@@ -400,7 +401,7 @@ internal sealed class LocalChangesContentView : ContainerView
             items.Add(RepoBarContextMenu.Separator);
         }
         items.Add(new RepoBarContextMenu.Item(
-            "Unstage All",
+            _loc.Strings.Value.LocalchangesUnstageAllMenu,
             () => _vm.UnstageAll.Execute(),
             LucideIcons.ChevronsLeft,
             Enabled: _vm.UnstageAll.CanExecute.Value));
@@ -412,20 +413,21 @@ internal sealed class LocalChangesContentView : ContainerView
     // (the folder itself for a folder row, otherwise the file).
     private void AppendFileUtilityItems(List<RepoBarContextMenu.Item> items, FileRow target)
     {
+        var s = _loc.Strings.Value;
         var paths = ResolveTargetPaths(target);
         var representative = target.Kind == FileRowKind.Folder ? target.FullPath : target.File!.Path;
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
-            "Copy Path", () => _vm.CopyPaths(paths), LucideIcons.Copy));
+            s.LocalchangesCopyPathMenu, () => _vm.CopyPaths(paths), LucideIcons.Copy));
         items.Add(new RepoBarContextMenu.Item(
-            "Copy Full Path", () => _vm.CopyAbsolutePaths(paths), LucideIcons.Copy));
+            s.LocalchangesCopyFullPathMenu, () => _vm.CopyAbsolutePaths(paths), LucideIcons.Copy));
         items.Add(new RepoBarContextMenu.Item(
-            "Copy File Name", () => _vm.CopyFileNames(paths), LucideIcons.Copy));
+            s.LocalchangesCopyFileNameMenu, () => _vm.CopyFileNames(paths), LucideIcons.Copy));
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
-            "Open Containing Folder", () => _vm.OpenContainingFolder(representative), LucideIcons.FolderOpen));
+            s.LocalchangesOpenContainingFolderMenu, () => _vm.OpenContainingFolder(representative), LucideIcons.FolderOpen));
         items.Add(new RepoBarContextMenu.Item(
-            "Open in Terminal", () => _vm.OpenInTerminal(representative), LucideIcons.SquareTerminal));
+            s.LocalchangesOpenInTerminalMenu, () => _vm.OpenInTerminal(representative), LucideIcons.SquareTerminal));
     }
 
     // Right-clicking a row that's part of the current selection acts on the whole

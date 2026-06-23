@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -33,7 +34,7 @@ internal sealed record CommitSearchBarView : Widget
         var inputSystem = ctx.Require<InputSystem>();
 
         var textInput = DialogFrame.TextInput(ctx);
-        textInput.PlaceholderText = "Filter commits…";
+        textInput.PlaceholderText = ctx.Localization().Strings.Value.CommitsSearchPlaceholder;
 
         void Clear()
         {
@@ -55,7 +56,7 @@ internal sealed record CommitSearchBarView : Widget
             IconSize = 12,
             Visible = textInput.TextValue.Bind(t => t.Length > 0),
         }
-            .WithTooltip("Clear filter")
+            .WithTooltip(L.T(s => s.CommitsSearchClearTooltip))
             .WithController<KbmController>();
 
         return new Box

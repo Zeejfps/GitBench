@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -33,11 +34,12 @@ internal sealed record CommitBarWidget : Widget
         var vm = ctx.Require<LocalChangesViewModel>();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
+        var loc = ctx.Localization();
 
         var titleInput = new TextInputView(ctx.Canvas)
         {
             TextWrap = TextWrap.NoWrap,
-            PlaceholderText = "Commit title",
+            PlaceholderText = loc.Strings.Value.LocalchangesCommitTitlePlaceholder,
         };
         titleInput.BindThemed(theme, s =>
         {

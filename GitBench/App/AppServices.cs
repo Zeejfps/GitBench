@@ -64,7 +64,8 @@ internal static class AppServices
             ctx.Require<IRepoStatusStore>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IGitService>(),
-            ctx.Get<IPlatformShell>()));
+            ctx.Get<IPlatformShell>(),
+            ctx.Require<ILocalizationService>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<UpdateService>();
 
