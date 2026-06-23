@@ -208,10 +208,12 @@ Public surface:
     `var e = new MouseMoveEvent { Mouse = mouse, Phase = EventPhase.Capturing }; input.SendMouseMovedEvent(ref e);`
     (this builds the hover `_focusQueue` dispatch path via `RefreshHover`/`BuildPath`,
     `InputSystem.cs:307,359,534`).
-  - `Press(button = MouseButton.Left)` / `Release(...)` — `mouse.Press/Release(button)` then
-    `var e = new MouseButtonEvent { Mouse = mouse, Button = button, State = InputState.Pressed (or Released),
+  - `Press(MouseButton? button = null)` / `Release(...)` — resolve `var b = button ?? MouseButton.Left;`
+    (a default `button = MouseButton.Left` does **not** compile — `MouseButton.Left` is a
+    `static readonly` field, not a compile-time constant → CS1736), then `mouse.Press/Release(b)` and
+    `var e = new MouseButtonEvent { Mouse = mouse, Button = b, State = InputState.Pressed (or Released),
     Modifiers = InputModifiers.None, Phase = EventPhase.Capturing }; input.SendMouseButtonEvent(ref e);`
-  - `Click(x,y,button = Left)` — `MoveTo` **then** `Press` **then** `Release` (hover-first is
+  - `Click(x, y, MouseButton? button = null)` — `MoveTo` **then** `Press` **then** `Release` (hover-first is
     required: `SendMouseButtonEvent` dispatches through the `_focusQueue` that only a prior move
     builds; without the move the click goes nowhere — see Verification #3).
   - `ClickOn(View)` / `ClickOn(string id)` — click the center of `view.Position`
