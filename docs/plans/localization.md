@@ -110,10 +110,10 @@ desktop binary). The runtime *language switch* is unaffected.
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
 4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
    The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
-   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is mostly done — text base-direction +
-   alignment, container mirroring (inherited `View.IsRtl`: Row/Column/BorderLayout) and the
-   custom-painted views (Branches/Commits/CommitDetails/History) all mirror; scrollbar internals and
-   text-field caret/selection remain.
+   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is nearly done — text base-direction +
+   alignment, container mirroring (inherited `View.IsRtl`: Row/Column/BorderLayout/Padding), the
+   custom-painted views (Branches/Commits/CommitDetails/History/file-changes) and scrollbars all mirror;
+   text-field caret/selection is the last piece.
 
 ## Why this is tractable here
 
@@ -474,7 +474,7 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL — IN PROGRESS (engine + catalog + text + container + custom-view mirroring done; scrollbars/caret remain)
+### Phase 6 — RTL — IN PROGRESS (engine + catalog + text + container + custom-view + scrollbar mirroring done; caret/selection remains)
 The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
 **engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
 `ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
@@ -513,10 +513,10 @@ baseline). Shipped:
   mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
   still BiDi-orders as `.notdef`).
 
-#### Phase 6b — Layout mirroring — IN PROGRESS (text + containers + custom-painted views DONE; controls remain)
+#### Phase 6b — Layout mirroring — IN PROGRESS (text + containers + custom views + scrollbars DONE; caret/selection remains)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
-running-app file lock); **117 ZGF.Gui.Tests pass** (+15 new across text+containers+inheritance+padding) and **GitBench 113
+running-app file lock); **119 ZGF.Gui.Tests pass** (+17 new across text+containers+inheritance+padding+scroll) and **GitBench 113
 pass** (same 12 pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
 text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
 (Branches/Commits/Diff) at once, with no per-view edits. Shipped:
@@ -585,14 +585,22 @@ whole tree mirrors — no per-container wiring, no canvas side-channel. This rep
 - **Tests:** `LayoutTests` — Row mirrors child order, Column mirrors its cross axis, BorderLayout swaps
   West/East, **a nested FlexView inherits IsRtl from an ancestor**, each paired with an LTR control.
 
+**Scrollbars — DONE.**
+- **Vertical** is the common case (every list) and was already handled by the inherited-direction
+  container work: the bar is placed `East` in a `BorderLayoutView`, which swaps it to the **left** edge
+  under RTL. The bar/thumb are vertical-only (`VerticalScrollPane` forces children to viewport width), so
+  there's nothing horizontal to mirror inside them.
+- **Horizontal scroll origin** now mirrors: `ScrollPane` rests its content **right-aligned** under
+  `IsRtl` (`LeftConstraint = Right - contentWidth + _distanceFromLeft`, so distance-0 = leading = right;
+  scrolling reveals the trailing/left content), and `HorizontalScrollBarThumbView` inverts the
+  normalized↔pixel mapping (and `ScrollToStart`) so the thumb's leading end is the right of the track.
+  LTR is byte-identical (guarded on `IsRtl`). `LayoutTests` cover the RTL/LTR rest positions.
+
 **Still TODO (the broader, visual-QA-dependent surface):**
-- **Scrollbars** — the vertical bar now moves to the left (BorderLayout swap), but the bar's *internals*
-  and **horizontal scroll origin** still start from the left (`ScrollPane._distanceFromLeft`, the thumb
-  views) — mirror to the right for RTL.
 - **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
   left; mirror to the right for an RTL field.
-- **Disclosure/chevron icons** — `BranchesView`'s chevron flip is done; the same flip is still needed
-  in any other tree/expander affordance (Down/Up stay as-is).
+- **Disclosure/chevron icons** — the tree/expander chevrons flip (Branches, file-changes folders,
+  RepoBar group + worktree/submodule toggles); any remaining expander affordance would use the same flip.
 - **Pin LTR on non-translatable content** — the **diff code grid is done**: `DiffContentView`'s four
   monospace styles set `BaseDirection = BidiDirection.Ltr`, so source lines and the line-number gutter
   stay a left-origin LTR grid and don't right-align / bidi-reorder under an RTL locale (the shared
