@@ -108,8 +108,9 @@ desktop binary). The runtime *language switch* is unaffected.
    non-Latin glyphs render instead of silently vanishing. **DONE** (modulo macOS eyeball).
 3. **Phase 5 — CJK completion** (line-breaking + `zh`/`ko` catalogs + the Phase 3 string
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
-4. **Phase 6 — RTL** (ar/he). BiDi reordering + layout mirroring. The largest single
-   effort; out of scope until explicitly prioritized.
+4. **Phase 6 — RTL** (ar, he later). BiDi reordering + layout mirroring + Arabic catalog.
+   The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) is **DONE**;
+   layout mirroring (6b) and the Arabic catalog (6c) remain.
 
 ## Why this is tractable here
 
@@ -470,20 +471,70 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL (ar/he) — deferred, the largest single effort
-Promotes the old "Deferred — RTL" note into a concrete plan; still gated behind explicit
-prioritization. The shaping layer is **less RTL-ready than earlier prose implied**: `ShapeText`
-(`framework/ZGF.Fonts/FreeTypeFontBackend.cs:315-352`) itemizes runs by **font coverage only**, and
-the sole direction handling is `GuessSegmentProperties()` *per run* (`:378`) — it fixes glyph order
-**within** a run but does **no** cross-run BiDi reorder and no line-level direction. Required:
-- **Shaping / BiDi:** itemize by Unicode BiDi level + script (not just font), shape each run, then
-  **reorder runs to visual order** and reverse RTL runs — new logic layered on the existing
-  per-glyph `ShapedGlyph.FontId` itemization.
-- **Layout mirroring:** right-origin line layout in the canvas draw loop; flip default horizontal
-  alignment; mirror scrollbars, disclosure/chevron icons, and caret/selection direction.
-- **Catalog:** real `ar.json` (and/or `he.json`). Arabic plural is the full CLDR six-form set
-  (`zero/one/two/few/many/other`) — `PluralRules`/`PluralForms` need the Arabic selector, the first
-  locale to exercise more than `one`/`other`.
+### Phase 6 — RTL — IN PROGRESS (engine done; mirroring + catalog remain)
+The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
+**engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
+`ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
+order, and the sole direction handling was `GuessSegmentProperties()` *per run* — fixing glyph
+order **within** a run but doing **no** cross-run BiDi reorder and no line-level direction.
+
+#### Phase 6a — BiDi / RTL shaping engine — DONE
+Build clean, **102 ZGF.Gui.Tests pass** (+17 new: 14 headless BiDi + 3 font-integration, was 85);
+GitBench suite unchanged (109 pass; the 12 red `GitIdentityServiceTests` are the same pre-existing
+baseline). Shipped:
+- **`framework/ZGF.Fonts/Bidi.cs`** — a pragmatic subset of UAX #9: first-strong (or explicit)
+  paragraph level (P2/P3), the weak rules (W1–W7), neutral rules (N1/N2; N0 bracket-pairing
+  omitted), implicit levels (I1/I2), the L1 trailing-whitespace reset, and the L2 run reorder.
+  Explicit embeddings/overrides/isolates are treated as boundary-neutral (they don't occur in app
+  UI strings). The classifier resolves the bidi class without any BCL bidi API (.NET exposes only
+  general category): a single ordered **`RtlRanges` table** maps every modern RTL block to R or AL
+  (Arabic family → AL; Hebrew/N'Ko/Samaritan/Mandaic/Adlam/… → R), a handful of explicit number/
+  separator overrides cover EN/AN/ES/ET/CS, and `UnicodeCategory` handles marks→NSM, format/control
+  →BN, letters→L. Adding an RTL script is one table row; a historic block (Phoenician, Kharoshthi,
+  …) is the same. Surrogate pairs share a level. Public API: `ContainsRtl`,
+  `ResolveLevels(text, baseDir, out paragraphLevel)`, `ComputeVisualOrder(runLevels, order)`.
+- **`FreeTypeFontBackend.ShapeBidi`** — gated behind `Bidi.ContainsRtl` so the **LTR hot path stays
+  byte-identical** (no perf/render regression; the frame-diff optimization and existing shaping
+  tests are untouched). It itemizes a line into `(level, font)` runs, shapes each with an **explicit
+  HarfBuzz direction** from the run's level parity (script/language still come from
+  `GuessSegmentProperties`; only `Direction` is overridden), then reorders the runs to visual order
+  via `ComputeVisualOrder` and emits glyphs left-to-right. **Key contract:** `ShapeText` now returns
+  glyphs in **visual L→R order**, so the canvas draw loop and `MeasureTextWidth` work unchanged
+  (advances sum order-independently). Cluster ids stay **logical**, so selection mapping is
+  unaffected. A new `ShapeText(..., BidiDirection)` overload (default `Auto`) and a `baseDir`-folded
+  cache bucket let 6b later pass the locale direction without an API churn; `ShapeRun` gained an
+  optional `Direction`.
+- **Tests:** `BidiTests` (level resolution for pure/ mixed/ number/ surrogate cases, explicit vs
+  auto base, L2 reorder permutations) and `BidiShapingTests` (real Inter primary + OS Arabic
+  fallback: pure-Arabic renders from the fallback in visual order with non-increasing clusters;
+  mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
+  still BiDi-orders as `.notdef`).
+
+#### Phase 6b — Layout mirroring — TODO
+- **Base direction from locale:** expose the active locale's RTL-ness (e.g.
+  `Strings.Culture.TextInfo.IsRightToLeft`) and thread a `BidiDirection` into the text draw/measure
+  path so an empty-of-strong-chars or ambiguous label follows UI direction (today shaping
+  auto-detects per line via first-strong, which is correct for single-script labels but not for the
+  base of a mixed line).
+- **Right-origin line layout** in the canvas draw loop; **flip default horizontal alignment**
+  (currently only Left/Center exist — add trailing/RTL origin); mirror scrollbars, disclosure/chevron
+  icons, and caret/selection direction. Broadest UI surface.
+
+#### Phase 6c — Arabic catalog & completion — TODO (the proven es/ja/zh/ko recipe)
+- `Locale.Ar` (hand-authored enum) + full-parity `ar.json` (LOC003 forces it).
+- **Arabic CLDR plural selector** in `PluralRules.Category` — the full six-form set
+  (`zero` n=0, `one` n=1, `two` n=2, `few` n%100=3..10, `many` n%100=11..99, `other`); the
+  `PluralForms`/`PluralCategory` six-form machinery already exists, only the selector is missing.
+  First locale to exercise more than `one`/`other`.
+- **Arabic font fallback** in `SystemFonts` (alongside the CJK families; e.g. Windows
+  Arial/Tahoma/Segoe UI, macOS Geeza Pro, Linux Noto Naskh) + `Program.cs` registration.
+- `View → Language` Arabic menu item; culture auto-derives from the `ar` stem.
+- Hebrew (`he`) is a later follow-up (mirrors ja→zh/ko).
+
+**Exit gate (unchanged from prior phases):** the macOS GUI eyeball — flip `View → Language: العربية`
+and confirm Arabic renders via the fallback **and** lays out right-to-left, with mixed
+Latin/numbers ordered correctly. The shape+reorder path is proven headlessly by `BidiTests` /
+`BidiShapingTests`; only the on-screen render is unverified (developing on Windows).
 
 ### Cross-cutting decisions (not phases — resolve when relevant)
 - **Translator workflow.** The catalog is **baked into C# at compile time**, so a translator can't
