@@ -69,13 +69,14 @@ internal sealed class HistoryView : ContainerView
         }
         _detailsWidth = detailsWidth;
 
-        _commits.LeftConstraint = pos.Left;
+        // Under RTL the details panel moves to the left and the commits list to the right.
+        _commits.LeftConstraint = IsRtl ? pos.Left + detailsWidth : pos.Left;
         _commits.BottomConstraint = pos.Bottom;
         _commits.WidthConstraint = centerWidth;
         _commits.HeightConstraint = pos.Height;
         _commits.LayoutSelf();
 
-        _details.LeftConstraint = pos.Right - detailsWidth;
+        _details.LeftConstraint = IsRtl ? pos.Left : pos.Right - detailsWidth;
         _details.BottomConstraint = pos.Bottom;
         _details.Width = detailsWidth;
         _details.WidthConstraint = detailsWidth;
@@ -87,7 +88,8 @@ internal sealed class HistoryView : ContainerView
     {
         if (!_dividerHovered) return;
         var pos = Position;
-        var dividerX = pos.Right - Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
         var z = GetDrawZIndex();
         c.DrawRect(new DrawRectInputs
         {
@@ -107,7 +109,8 @@ internal sealed class HistoryView : ContainerView
     {
         var pos = Position;
         if (point.Y < pos.Bottom || point.Y > pos.Top) return false;
-        var dividerX = pos.Right - Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
         return Math.Abs(point.X - dividerX) <= DividerHitWidth * 0.5f;
     }
 
@@ -120,7 +123,9 @@ internal sealed class HistoryView : ContainerView
 
     internal void ResizeDetails(float mouseDeltaX)
     {
-        // Dragging right (positive delta) shrinks the right panel and grows the center.
+        // Dragging right (positive delta) shrinks the right panel and grows the center; under RTL the
+        // details panel is on the left, so the drag direction flips.
+        if (IsRtl) mouseDeltaX = -mouseDeltaX;
         var pos = Position;
         var maxByCenter = pos.Width - MinCenterWidth;
         var newWidth = Math.Clamp(_detailsWidth - mouseDeltaX, MinDetailsWidth, Math.Min(MaxDetailsWidth, maxByCenter));

@@ -110,9 +110,10 @@ desktop binary). The runtime *language switch* is unaffected.
    tail). Turns the CJK smoke-test into something production-usable. **DONE** (modulo macOS eyeball).
 4. **Phase 6 — RTL** (ar, he later). BiDi reordering + Arabic catalog + layout mirroring.
    The largest single effort. **IN PROGRESS:** the BiDi/shaping engine (6a) and the Arabic
-   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is partway — text base-direction +
-   alignment and container mirroring (Row/Column/BorderLayout) are done; scrollbar/caret/icon
-   mirroring remains.
+   catalog/plumbing (6c) are **DONE**; layout mirroring (6b) is mostly done — text base-direction +
+   alignment, container mirroring (inherited `View.IsRtl`: Row/Column/BorderLayout) and the
+   custom-painted views (Branches/Commits/CommitDetails/History) all mirror; scrollbar internals and
+   text-field caret/selection remain.
 
 ## Why this is tractable here
 
@@ -473,7 +474,7 @@ tail" above for the full notes):
 (b) CJK labels/bodies **wrap** instead of overflowing. Build stays green on key parity for all five
 baked catalogs.
 
-### Phase 6 — RTL — IN PROGRESS (engine + catalog + text-direction + container mirroring done; control mirroring remains)
+### Phase 6 — RTL — IN PROGRESS (engine + catalog + text + container + custom-view mirroring done; scrollbars/caret remain)
 The largest single effort, split into three sub-phases (locked with user: **Arabic first**,
 **engine first**). The shaping layer was **less RTL-ready than earlier prose implied**: the old
 `ShapeWithFallback` itemized runs by **font coverage only** and concatenated them in *logical*
@@ -512,10 +513,10 @@ baseline). Shipped:
   mixed Latin+Arabic splits across fonts and orders the RTL island correctly; no-fallback Arabic
   still BiDi-orders as `.notdef`).
 
-#### Phase 6b — Layout mirroring — IN PROGRESS (text direction + containers DONE; controls remain)
+#### Phase 6b — Layout mirroring — IN PROGRESS (text + containers + custom-painted views DONE; controls remain)
 
 **Text base-direction + alignment mirroring — DONE.** Release build clean (Debug blocked only by the
-running-app file lock); **115 ZGF.Gui.Tests pass** (+13 new across text+containers) and **GitBench 113
+running-app file lock); **116 ZGF.Gui.Tests pass** (+14 new across text+containers+inheritance) and **GitBench 113
 pass** (same 12 pre-existing `GitIdentityServiceTests` red). The fix routes a UI base direction through the single
 text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** custom-painted views
 (Branches/Commits/Diff) at once, with no per-view edits. Shipped:
@@ -541,47 +542,41 @@ text chokepoint — `RenderedCanvasBase` — so it covers widget text **and** cu
   LTR invariant) and a `BidiShapingTests` case proving an explicit `Ltr` vs `Rtl` base flips the
   visual run order of a mixed Latin+Arabic line (the contract the canvas now relies on).
 
-**Container mirroring — DONE.** Layout has no canvas, so the direction reaches *Views* a different way
-than text did: a build-time **ambient** the app feeds from the locale, mirroring the `Foreground`/theme
-pattern.
-- **`UiDirection` ambient** (`framework/ZGF.Gui/Widgets/UiDirection.cs`) — `Provide<>`s an RTL flag for
-  its subtree; `UiDirection.IsRtl` reads it via `Prop.Deferred` and falls back to LTR when unscoped.
-  The fallback needed a new `Context.GetRegistered<T>()` (resolve a registered ambient **without**
-  auto-constructing a transient — `Get<T>` would have tried to build the holder and thrown). `AppView`
-  wraps the whole tree in it, driven reactively by `Strings.Culture.TextInfo.IsRightToLeft`.
-- **`FlexView.IsRtl`** — `Row`/`Column` (via `FlexBase`) read the ambient. One transform does it: after
-  the LTR pass, each child's horizontal extent is **reflected within the container**
-  (`Left = pos.Left + pos.Right - Left - Width`), which flips a Row's main axis *and* a Column's cross
-  axis, reverses visual order, and swaps Start/End/SpaceBetween without special-casing each; vertical
-  coords are untouched, and the reflection composes correctly through nesting.
-- **`BorderLayoutView.IsRtl`** — the `BorderLayout` widget reads the ambient; West (leading) lays out on
-  the right and East (trailing) on the left, so the app's macro frame moves the repo sidebar to the
-  right under Arabic. (Custom views that construct `BorderLayoutView` *directly* — Branches/Commits/Diff
-  — don't auto-mirror yet; they'd set `IsRtl` at the call site, grouped with the scrollbar work below.)
-- **Tests:** `LayoutTests` — Row mirrors child order within the container, Column mirrors its cross
-  axis, BorderLayout swaps West/East, each paired with an LTR control proving no regression.
-
-**Custom-painted view mirroring — STARTED.** Composed widget trees mirror via the `UiDirection` ambient,
-but custom-painted views (`BranchesView`, `CommitsView`, …) hand-roll left-origin row layout. They
-capture RTL-ness the **same way they already capture theme and strings** — off the locale's culture,
-bound reactively at build time — *not* off the canvas (the canvas is a rendering surface; layout
-direction is not its concern). `BranchesView` reads `_isRtl = s.Culture.TextInfo.IsRightToLeft` inside
-the `_loc.Strings` bind it already has (alongside the row rebuild), so a locale switch repaints mirrored.
-- **`BranchesView` — DONE.** A `Place(left, …)` helper reflects the chevron/icon/name/badge rects when
-  `_isRtl`; in-box name/header text right-aligns on its own (those styles take the canvas's text base
-  direction). The collapsed chevron flips ChevronRight→ChevronLeft. Hit-testing is row-index based
-  (`OnRowClicked` ignores the pointer x), so mirroring the draw doesn't desync interaction.
-- **Still to do:** `CommitsView` / `CommitDetailsView` (same hand-rolled pattern: graph/sha/message/
-  author columns) — they already inject `_loc`, so they pick up `_isRtl` the same way.
-- *(Possible DRY later: the locale→`IsRightToLeft` projection now appears in `Program.cs` (canvas text
-  base), `AppView` (widget ambient) and `BranchesView` (custom paint). Could be one `IReadable<bool>`
-  on the localization service, but each consumer needs a different shape — imperative set / `Prop` /
-  bindable — so the one-line projection per layer is acceptable.)*
+**Container + custom-painted mirroring — DONE via inherited `View.IsRtl`.** Layout has no canvas, so the
+direction reaches *Views* as an **inherited property**, like CSS `direction`: `View.IsRtl` returns its
+own override or, failing that, `Parent?.IsRtl` (LTR at the root). Set it **once** near the root and the
+whole tree mirrors — no per-container wiring, no canvas side-channel. This replaced the earlier
+`UiDirection` *ambient* (Provide/`GetRegistered`) and the per-view `_loc` reads, which are gone.
+- **Source:** `UiDirection` (`framework/ZGF.Gui/Widgets/UiDirection.cs`) now just sets its child view's
+  `IsRtl` from a `Prop<bool>`; `AppView` wraps the tree in it, driven by
+  `Strings.Culture.TextInfo.IsRightToLeft`. The `IsRtl` setter calls `InvalidateSubtree()` (recursive
+  `SetDirty`) because the dirty system only propagates *up* — a direction flip must re-layout/repaint
+  every descendant that inherits it. Rare (locale switch), so the recursive walk is fine.
+- **`FlexView`** (and its `Row`/`Column`/`ColumnView`/`FlexRowView`/… subclasses): after the LTR pass,
+  each child's horizontal extent is **reflected within the container**
+  (`Left = pos.Left + pos.Right - Left - Width`) when `IsRtl`. One transform flips a Row's main axis
+  *and* a Column's cross axis, reverses order, swaps Start/End/SpaceBetween — vertical coords untouched,
+  composes through nesting. **`BorderLayoutView`** swaps West↔East. Both read the inherited property, so
+  *directly-constructed* instances (in custom views) mirror too — no call-site wiring.
+- **`BranchesView`** (custom paint): a `Place(left, …)` helper reflects the chevron/icon/name/badge rects
+  when `IsRtl`; in-box text right-aligns via the canvas text base; the collapsed chevron flips
+  ChevronRight→ChevronLeft. Hit-testing is row-index based, so the draw mirror doesn't desync clicks.
+- **`CommitsView`** (custom paint, hardest): same `Place` helper for the header/columns/dividers/badges;
+  the **commit graph** mirrors by reflecting the four `LaneCenterX` results in `CommitGraphRenderer.DrawCell`
+  (all graph x's flow through it, so segments/curves/dots follow — `SummaryStartX` stays LTR and is
+  `Place`d like the columns); the resizable-column **divider hit-test** reflects `point.X` back to LTR
+  space; the column-resize **drag delta** flips sign. `CommitHistory`'s `HistoryView` (commits-left /
+  details-right split) mirrors its `OnLayoutChildren`, divider draw, hit-test and drag the same way.
+- **`CommitDetailsView`** — **no changes needed**: it's composed from `FlexView` subclasses +
+  `BorderLayoutView` + `TextView`, so it mirrors purely by inheritance (avatar row flips, the vertical
+  scrollbar's `BorderLayout` swaps it to the left, text right-aligns, the embedded diff stays LTR-pinned).
+- **Tests:** `LayoutTests` — Row mirrors child order, Column mirrors its cross axis, BorderLayout swaps
+  West/East, **a nested FlexView inherits IsRtl from an ancestor**, each paired with an LTR control.
 
 **Still TODO (the broader, visual-QA-dependent surface):**
-- **Scrollbars** — vertical bar to the left edge, horizontal scroll origin from the right
-  (`ScrollPane._distanceFromLeft`, the thumb views), plus the direct-construction `BorderLayoutView`
-  sites in custom views (set `IsRtl` from the ambient).
+- **Scrollbars** — the vertical bar now moves to the left (BorderLayout swap), but the bar's *internals*
+  and **horizontal scroll origin** still start from the left (`ScrollPane._distanceFromLeft`, the thumb
+  views) — mirror to the right for RTL.
 - **Caret & selection** — `TextInputView` computes caret x / selection rects / scroll offset from the
   left; mirror to the right for an RTL field.
 - **Disclosure/chevron icons** — `BranchesView`'s chevron flip is done; the same flip is still needed

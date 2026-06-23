@@ -431,7 +431,7 @@ internal sealed record CommitsView : Widget
             _fillStyle.BackgroundColor = color;
             c.DrawRect(new DrawRectInputs
             {
-                Position = new RectF(left, bottom, width, RowHeight),
+                Position = Place(left, bottom, width, RowHeight),
                 Style = _fillStyle,
                 ZIndex = z,
             });
@@ -445,7 +445,7 @@ internal sealed record CommitsView : Widget
                 _fillStyle.BackgroundColor = _styles.ColumnDividerHoverFill;
                 c.DrawRect(new DrawRectInputs
                 {
-                    Position = new RectF(centerX - DividerHitWidth * 0.5f, bottom, DividerHitWidth, height),
+                    Position = Place(centerX - DividerHitWidth * 0.5f, bottom, DividerHitWidth, height),
                     Style = _fillStyle,
                     ZIndex = z,
                 });
@@ -453,7 +453,7 @@ internal sealed record CommitsView : Widget
             _fillStyle.BackgroundColor = hovered ? _styles.ColumnDividerHoverLine : _styles.ColumnDividerIdle;
             c.DrawRect(new DrawRectInputs
             {
-                Position = new RectF(centerX - DividerThickness * 0.5f, bottom, DividerThickness, height),
+                Position = Place(centerX - DividerThickness * 0.5f, bottom, DividerThickness, height),
                 Style = _fillStyle,
                 ZIndex = z + 1,
             });
@@ -464,7 +464,7 @@ internal sealed record CommitsView : Widget
             if (width <= 0) return;
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(left, bottom, width, HeaderHeight),
+                Position = Place(left, bottom, width, HeaderHeight),
                 Text = text,
                 Style = _headerTextStyle,
                 ZIndex = z,
@@ -476,7 +476,7 @@ internal sealed record CommitsView : Widget
             if (rect.Width <= 0 || rect.Height <= 0) return;
             c.DrawText(new DrawTextInputs
             {
-                Position = rect,
+                Position = Place(rect.Left, rect.Bottom, rect.Width, rect.Height),
                 Text = text,
                 Style = _placeholderStyle,
                 ZIndex = z,
@@ -528,6 +528,15 @@ internal sealed record CommitsView : Widget
             return new RectF(body.Left, body.Bottom, width, body.Height);
         }
 
+        // Reflects an element's horizontal extent within the view when the UI is right-to-left, so the
+        // hand-rolled multi-column layout mirrors (graph on the right, date column on the left) without
+        // rewriting the column math. In-box text right-aligns on its own via the canvas text base.
+        // The list spans the full width, so Position is the shared bound for header, dividers and rows.
+        private RectF Place(float left, float bottom, float width, float height) =>
+            IsRtl
+                ? new RectF(Position.Left + Position.Right - left - width, bottom, width, height)
+                : new RectF(left, bottom, width, height);
+
         private void DrawCommitRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
         {
             var snap = _snapshot;
@@ -564,7 +573,8 @@ internal sealed record CommitsView : Widget
             if (!_filtering)
             {
                 var rowBackground = isHighlighted ? _styles.RowSelectedBackground : _styles.Background;
-                CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground);
+                CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground,
+                    IsRtl, Position.Left + Position.Right);
             }
 
             var textTop = rowBottom;
@@ -629,7 +639,7 @@ internal sealed record CommitsView : Widget
                 _badgeRectStyle.BackgroundColor = bg;
                 c.DrawRect(new DrawRectInputs
                 {
-                    Position = new RectF(x, badgeY, badgeW, BadgeHeight),
+                    Position = Place(x, badgeY, badgeW, BadgeHeight),
                     Style = _badgeRectStyle,
                     ZIndex = z,
                 });
@@ -638,7 +648,7 @@ internal sealed record CommitsView : Widget
                 {
                     c.DrawText(new DrawTextInputs
                     {
-                        Position = new RectF(contentX, badgeY, iconWidth, BadgeHeight),
+                        Position = Place(contentX, badgeY, iconWidth, BadgeHeight),
                         Text = icon,
                         Style = iconStyle,
                         ZIndex = z + 1,
@@ -647,7 +657,7 @@ internal sealed record CommitsView : Widget
                 }
                 c.DrawText(new DrawTextInputs
                 {
-                    Position = new RectF(contentX, badgeY, textWidth, BadgeHeight),
+                    Position = Place(contentX, badgeY, textWidth, BadgeHeight),
                     Text = badge.Name,
                     Style = nameStyle,
                     ZIndex = z + 1,
@@ -662,7 +672,7 @@ internal sealed record CommitsView : Widget
             if (width <= 0 || string.IsNullOrEmpty(text)) return;
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(left, rowBottom, width, RowHeight),
+                Position = Place(left, rowBottom, width, RowHeight),
                 Text = text,
                 Style = active ? _rowTextActiveStyle : _rowTextStyle,
                 ZIndex = z,
@@ -674,7 +684,7 @@ internal sealed record CommitsView : Widget
             if (width <= 0 || string.IsNullOrEmpty(text)) return;
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(left, rowBottom, width, RowHeight),
+                Position = Place(left, rowBottom, width, RowHeight),
                 Text = text,
                 Style = active ? _hashTextActiveStyle : _hashTextStyle,
                 ZIndex = z,
@@ -690,6 +700,10 @@ internal sealed record CommitsView : Widget
             if (point.X < pos.Left || point.X > pos.Right) return DividerKind.None;
             if (point.Y < pos.Bottom || point.Y > pos.Top) return DividerKind.None;
 
+            // Dividers are computed in LTR and reflected on draw, so reflect the pointer back to LTR
+            // space to test against the same math.
+            var px = IsRtl ? pos.Left + pos.Right - point.X : point.X;
+
             GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
             var dateX = pos.Right - dateW - ColumnGap;
             var hashX = dateX - hashW - ColumnGap;
@@ -698,24 +712,28 @@ internal sealed record CommitsView : Widget
             var hashDividerX = hashX - ColumnGap;
             var dateDividerX = dateX - ColumnGap;
 
-            if (Math.Abs(point.X - dateDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Date;
-            if (Math.Abs(point.X - hashDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
-            if (Math.Abs(point.X - authorDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Author;
+            if (Math.Abs(px - dateDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Date;
+            if (Math.Abs(px - hashDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Hash;
+            if (Math.Abs(px - authorDividerX) <= DividerHitWidth * 0.5f) return DividerKind.Author;
             return DividerKind.None;
         }
 
         internal void ResizeAuthorColumn(float mouseDeltaX)
         {
+            // Columns are mirrored under RTL, so a rightward drag moves the boundary the other way.
+            if (IsRtl) mouseDeltaX = -mouseDeltaX;
             _authorColumnWidth = Math.Clamp(_authorColumnWidth - mouseDeltaX, MinColumnWidth, MaxColumnWidth);
         }
 
         internal void ResizeHashColumn(float mouseDeltaX)
         {
+            if (IsRtl) mouseDeltaX = -mouseDeltaX;
             TradeWidths(ref _hashColumnWidth, ref _authorColumnWidth, mouseDeltaX);
         }
 
         internal void ResizeDateColumn(float mouseDeltaX)
         {
+            if (IsRtl) mouseDeltaX = -mouseDeltaX;
             TradeWidths(ref _dateColumnWidth, ref _hashColumnWidth, mouseDeltaX);
         }
 

@@ -70,12 +70,17 @@ internal static class CommitGraphRenderer
         return LaneCenterX(graphStartX, maxLane, laneCount) + DotRadius + PaddingRight;
     }
 
-    public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z, uint rowBackground)
+    public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z, uint rowBackground, bool isRtl = false, float mirrorBound = 0f)
     {
+        // Under RTL the graph mirrors with the rest of the row: every lane x reflects within the
+        // row, so lanes run right-to-left and edges/dots follow. All x's flow from LaneCenterX, so
+        // reflecting its four results here mirrors the whole cell — segments/curves/dots are untouched.
+        float Mx(float x) => isRtl ? mirrorBound - x : x;
+
         var rowTop = rowBottom + rowHeight;
         var rowCenterY = rowBottom + rowHeight * 0.5f;
         var commitColor = LaneColor(node.Lane);
-        var commitCx = LaneCenterX(graphStartX, node.Lane, laneCount);
+        var commitCx = Mx(LaneCenterX(graphStartX, node.Lane, laneCount));
         // Stash and remote-only commits sit outside local mainline history; dash their
         // edges so they read as auxiliary. Stash also gets a hollow dot.
         var stash = IsStash(node);
@@ -85,7 +90,7 @@ internal static class CommitGraphRenderer
         // they belong to whatever lane is passing, not to this (possibly dashed) commit.
         foreach (var ptLane in node.PassThroughLanes)
         {
-            var x = LaneCenterX(graphStartX, ptLane, laneCount);
+            var x = Mx(LaneCenterX(graphStartX, ptLane, laneCount));
             DrawSegment(c, x, rowBottom, x, rowTop, LaneColor(ptLane), z);
         }
 
@@ -101,14 +106,14 @@ internal static class CommitGraphRenderer
         // source lane's color into this commit's.
         foreach (var inLane in node.IncomingLanes)
         {
-            var inCx = LaneCenterX(graphStartX, inLane, laneCount);
+            var inCx = Mx(LaneCenterX(graphStartX, inLane, laneCount));
             DrawCurve(c, inCx, rowTop, inCx, rowCenterY, commitCx, rowCenterY, LaneColor(inLane), z, commitColor, dashed);
         }
 
         // Outgoing edges to parents (continuation + branches).
         foreach (var pl in node.InWalkParentLanes)
         {
-            var pCx = LaneCenterX(graphStartX, pl.Lane, laneCount);
+            var pCx = Mx(LaneCenterX(graphStartX, pl.Lane, laneCount));
             var pColor = LaneColor(pl.Lane);
             if (pl.Lane == node.Lane)
             {

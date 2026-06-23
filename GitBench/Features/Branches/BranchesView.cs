@@ -109,7 +109,6 @@ internal sealed record BranchesView : Widget
         private string? _pendingHead;
         private string? _loadError;
         private bool _isLoading;
-        private bool _isRtl;
         private IReadOnlySet<string> _worktreeBranches = new HashSet<string>();
 
         private BranchListing? _listing;
@@ -183,14 +182,8 @@ internal sealed record BranchesView : Widget
 
             // Re-localize on a live language switch: section-header labels are baked into the
             // rows, and the placeholder text is custom-painted, so both need an explicit rebuild
-            // + repaint (the theme bind above does the same for colors). The UI writing direction
-            // also comes from the locale's culture, captured here like any other ambient state.
-            this.Bind(_loc.Strings, s =>
-            {
-                _isRtl = s.Culture.TextInfo.IsRightToLeft;
-                RebuildRows();
-                SetDirty();
-            });
+            // + repaint (the theme bind above does the same for colors).
+            this.Bind(_loc.Strings, _ => { RebuildRows(); SetDirty(); });
         }
 
         private void RebuildRows()
@@ -246,10 +239,10 @@ internal sealed record BranchesView : Widget
 
         // Reflects an element's horizontal extent within the row when the UI is right-to-left, so the
         // hand-rolled left-origin row layout mirrors (chevron/icon to the right, badges to the left)
-        // without rewriting the cursor math. In-box text right-aligns on its own — those styles
-        // inherit the locale's RTL base. Rows span the view width, so Position is the row's extent.
+        // without rewriting the cursor math. In-box text right-aligns on its own — those styles take
+        // the canvas's RTL text base. Rows span the view width, so Position is the row's extent.
         private RectF Place(float left, float bottom, float width, float height) =>
-            _isRtl
+            IsRtl
                 ? new RectF(Position.Left + Position.Right - left - width, bottom, width, height)
                 : new RectF(left, bottom, width, height);
 
@@ -314,7 +307,7 @@ internal sealed record BranchesView : Widget
                     Position = Place(contentLeft, rowBottom, ChevronWidth, RowHeight),
                     Text = row.IsOpen
                         ? LucideIcons.ChevronDown
-                        : _isRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
+                        : IsRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
                     Style = _chevronStyle,
                     ZIndex = z,
                 });
