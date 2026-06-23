@@ -84,13 +84,14 @@ internal sealed class LocalChangesContentView : ContainerView
 
         _unstagedPanel = new LocalChangesPanel(
             ctx,
-            _loc.Strings.Value.LocalchangesUnstagedPanelTitle,
+            s => s.LocalchangesUnstagedPanelTitle,
             DiffSide.Unstaged,
             FileChangesUI.CreateEmptyState(
                 ctx,
                 LucideIcons.CircleCheck,
-                _loc.Strings.Value.LocalchangesUnstagedEmptyTitle,
-                _loc.Strings.Value.LocalchangesUnstagedEmptyHint),
+                _loc.Strings,
+                s => s.LocalchangesUnstagedEmptyTitle,
+                s => s.LocalchangesUnstagedEmptyHint),
             _selection,
             OnRowClick,
             [viewModeButtonUnstaged, discardButton, stageSelectedButton, stageAllButton],
@@ -100,13 +101,14 @@ internal sealed class LocalChangesContentView : ContainerView
             buildContextMenu: BuildUnstagedMenu);
         _stagedPanel = new LocalChangesPanel(
             ctx,
-            _loc.Strings.Value.LocalchangesStagedPanelTitle,
+            s => s.LocalchangesStagedPanelTitle,
             DiffSide.Staged,
             FileChangesUI.CreateEmptyState(
                 ctx,
                 LucideIcons.Inbox,
-                _loc.Strings.Value.LocalchangesStagedEmptyTitle,
-                _loc.Strings.Value.LocalchangesStagedEmptyHint),
+                _loc.Strings,
+                s => s.LocalchangesStagedEmptyTitle,
+                s => s.LocalchangesStagedEmptyHint),
             _selection,
             OnRowClick,
             [viewModeButtonStaged, unstageAllButton, unstageSelectedButton],

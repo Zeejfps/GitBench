@@ -1,11 +1,13 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
+using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
@@ -41,8 +43,17 @@ internal static class FileChangesUI
         return view;
     }
 
-    /// <summary>Centered icon / title / hint stack shown when a panel has no rows.</summary>
-    public static View CreateEmptyState(Context ctx, string icon, string title, string hint)
+    /// <summary>
+    /// Centered icon / title / hint stack shown when a panel has no rows. Title and hint are
+    /// bound to the active locale (selectors off <see cref="Strings"/>) so they re-localize on a
+    /// live language switch rather than freezing at construction.
+    /// </summary>
+    public static View CreateEmptyState(
+        Context ctx,
+        string icon,
+        IReadable<Strings> strings,
+        Func<Strings, string> title,
+        Func<Strings, string> hint)
     {
         var theme = ctx.Theme();
         var iconView = new TextView(ctx.Canvas)
@@ -56,18 +67,18 @@ internal static class FileChangesUI
 
         var titleView = new TextView(ctx.Canvas)
         {
-            Text = title,
             HorizontalTextAlignment = TextAlignment.Center,
         };
+        titleView.Bind(strings, s => titleView.Text = title(s));
         titleView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyPlaceholderText);
 
         var hintView = new TextView(ctx.Canvas)
         {
-            Text = hint,
             FontSize = 11f,
             HorizontalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };
+        hintView.Bind(strings, s => hintView.Text = hint(s));
         hintView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyStateHint);
 
         return new PaddingView

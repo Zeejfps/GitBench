@@ -12,7 +12,7 @@ internal sealed record Segment : Widget<ButtonState>
 {
     private const float SegmentHeight = 28f;
 
-    public required string Label { get; init; }
+    public required Prop<string?> Label { get; init; }
     public required BorderRadiusStyle Radius { get; init; }
     public required SegmentViewModel Model { get; init; }
 

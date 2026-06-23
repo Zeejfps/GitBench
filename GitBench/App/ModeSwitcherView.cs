@@ -17,7 +17,6 @@ internal sealed record ModeSwitcherView : Widget
     {
         var vm = ctx.Require<ModeSwitcherViewModel>();
         var theme = ctx.Theme();
-        var s = ctx.Localization().Strings.Value;
 
         const float innerRadius = PillCornerRadius - 1f;
         return new Box
@@ -40,7 +39,7 @@ internal sealed record ModeSwitcherView : Widget
                             [
                                 new Segment
                                 {
-                                    Label = s.AppModeChanges,
+                                    Label = L.T(s => s.AppModeChanges),
                                     Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
                                     Model = vm.LocalChangesSegment,
                                 }.WithController<KbmController>(),
@@ -51,7 +50,7 @@ internal sealed record ModeSwitcherView : Widget
                                 },
                                 new Segment
                                 {
-                                    Label = s.AppModeHistory,
+                                    Label = L.T(s => s.AppModeHistory),
                                     Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
                                     Model = vm.HistorySegment,
                                 }.WithController<KbmController>(),

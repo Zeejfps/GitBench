@@ -39,8 +39,8 @@ internal sealed record CommitBarWidget : Widget
         var titleInput = new TextInputView(ctx.Canvas)
         {
             TextWrap = TextWrap.NoWrap,
-            PlaceholderText = loc.Strings.Value.LocalchangesCommitTitlePlaceholder,
         };
+        titleInput.Bind(loc.Strings, s => titleInput.PlaceholderText = s.LocalchangesCommitTitlePlaceholder);
         titleInput.BindThemed(theme, s =>
         {
             titleInput.BackgroundColor = s.TextInput.Background;
@@ -53,10 +53,8 @@ internal sealed record CommitBarWidget : Widget
         titleInput.UseController(input, titleController);
         titleInput.BindTwoWay(vm.Title, vm.SetTitle);
 
-        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight)
-        {
-            PlaceholderText = loc.Strings.Value.LocalchangesCommitDescriptionPlaceholder,
-        };
+        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight);
+        descriptionField.Bind(loc.Strings, s => descriptionField.PlaceholderText = s.LocalchangesCommitDescriptionPlaceholder);
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
         var commitWidget = new SecondaryDialogButton
