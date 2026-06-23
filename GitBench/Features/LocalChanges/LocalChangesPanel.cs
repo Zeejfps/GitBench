@@ -322,7 +322,10 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     {
         var chevronRight = _list.Position.Left + FileChangesUI.RowPaddingLeft
             + row.Indent + FileChangesUI.ChevronWidth + FileChangesUI.ChevronGap;
-        return point.X <= chevronRight;
+        // The chevron column mirrors to the right edge under RTL, so the hit region flips with it.
+        return IsRtl
+            ? point.X >= _list.Position.Left + _list.Position.Right - chevronRight
+            : point.X <= chevronRight;
     }
 
     private void OnRowActivated(int rowIndex)
@@ -374,7 +377,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
                 _folderIconStyle,
                 _pathTextStyle,
                 _pathTextActiveStyle,
-                z);
+                z,
+                isRtl: IsRtl);
             return;
         }
 
@@ -392,7 +396,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             z,
             row.DisplayName,
             row.Indent,
-            reserveChevronColumn: _viewMode == FileViewMode.Tree);
+            reserveChevronColumn: _viewMode == FileViewMode.Tree,
+            isRtl: IsRtl);
     }
 
     // ---- IScrollableContent ----

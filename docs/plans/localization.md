@@ -570,6 +570,11 @@ whole tree mirrors — no per-container wiring, no canvas side-channel. This rep
 - **`CommitDetailsView`** — **no changes needed**: it's composed from `FlexView` subclasses +
   `BorderLayoutView` + `TextView`, so it mirrors purely by inheritance (avatar row flips, the vertical
   scrollbar's `BorderLayout` swaps it to the left, text right-aligns, the embedded diff stays LTR-pinned).
+- **File-changes list** (`FileChangesUI.DrawFileRow`/`DrawFolderRow`, the shared painter for
+  `FileChangesSection` + `LocalChangesPanel`): the static helpers gained an `isRtl` param and a `Place`
+  reflection (status/chevron/folder icon to the right, path text flowing left); the collapsed chevron
+  flips; callers pass their inherited `IsRtl`. `LocalChangesPanel`'s x-based **chevron hit-test**
+  (`IsChevronHit`) mirrors its region to the right edge so folder-toggle clicks stay aligned.
 - **Tests:** `LayoutTests` — Row mirrors child order, Column mirrors its cross axis, BorderLayout swaps
   West/East, **a nested FlexView inherits IsRtl from an ancestor**, each paired with an LTR control.
 

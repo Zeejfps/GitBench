@@ -147,7 +147,8 @@ internal static class FileChangesUI
         int z,
         string? displayText = null,
         float indent = 0f,
-        bool reserveChevronColumn = false)
+        bool reserveChevronColumn = false,
+        bool isRtl = false)
     {
         var bg = isSelected
             ? styles.RowActive
@@ -173,7 +174,7 @@ internal static class FileChangesUI
         statusIconStyle.TextColor = styles.StatusColor(file.Status);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = new RectF(iconLeft, rowRect.Bottom, BadgeSize, RowHeight),
+            Position = Place(rowRect, iconLeft, BadgeSize, isRtl),
             Text = FileChangeFormatting.StatusIcon(file.Status),
             Style = statusIconStyle,
             ZIndex = z + 1,
@@ -189,12 +190,20 @@ internal static class FileChangesUI
         var rendered = TextMeasure.TruncateToFit(pathText, renderStyle, textWidth, canvas);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = new RectF(textLeft, rowRect.Bottom, textWidth, RowHeight),
+            Position = Place(rowRect, textLeft, textWidth, isRtl),
             Text = rendered,
             Style = renderStyle,
             ZIndex = z + 2,
         });
     }
+
+    // Reflects an element's horizontal extent within the row when the UI is right-to-left, so these
+    // shared left-origin row painters mirror (status/chevron/icon to the right, path text flowing
+    // left) without rewriting their layout. In-box text right-aligns via the canvas text base.
+    private static RectF Place(in RectF rowRect, float left, float width, bool isRtl) =>
+        isRtl
+            ? new RectF(rowRect.Left + rowRect.Right - left - width, rowRect.Bottom, width, RowHeight)
+            : new RectF(left, rowRect.Bottom, width, RowHeight);
 
     public const float ChevronWidth = 12f;
     public const float ChevronGap = 4f;
@@ -218,7 +227,8 @@ internal static class FileChangesUI
         TextStyle folderIconStyle,
         TextStyle textStyle,
         TextStyle textActiveStyle,
-        int z)
+        int z,
+        bool isRtl = false)
     {
         var bg = isSelected
             ? styles.RowActive
@@ -237,8 +247,10 @@ internal static class FileChangesUI
 
         canvas.DrawText(new DrawTextInputs
         {
-            Position = new RectF(left, rowRect.Bottom, ChevronWidth, RowHeight),
-            Text = isOpen ? LucideIcons.ChevronDown : LucideIcons.ChevronRight,
+            Position = Place(rowRect, left, ChevronWidth, isRtl),
+            Text = isOpen
+                ? LucideIcons.ChevronDown
+                : isRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
             Style = chevronStyle,
             ZIndex = z + 1,
         });
@@ -248,7 +260,7 @@ internal static class FileChangesUI
         var iconWidth = canvas.MeasureTextWidth(folderGlyph, folderIconStyle);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = new RectF(left, rowRect.Bottom, iconWidth, RowHeight),
+            Position = Place(rowRect, left, iconWidth, isRtl),
             Text = folderGlyph,
             Style = folderIconStyle,
             ZIndex = z + 1,
@@ -263,7 +275,7 @@ internal static class FileChangesUI
         var rendered = TextMeasure.TruncateToFit(displayName, style, textWidth, canvas);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = new RectF(left, rowRect.Bottom, textWidth, RowHeight),
+            Position = Place(rowRect, left, textWidth, isRtl),
             Text = rendered,
             Style = style,
             ZIndex = z + 1,

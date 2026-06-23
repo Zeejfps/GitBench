@@ -192,7 +192,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             _pathTextStyle,
             _pathTextActiveStyle,
             _statusIconStyle,
-            z);
+            z,
+            isRtl: IsRtl);
     }
 
     private void OnRowClicked(int rowIndex, InputModifiers _, PointF __)
