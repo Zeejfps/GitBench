@@ -40,7 +40,7 @@ internal sealed record DropStashDialog : Widget
             ViewModel = vm,
             Width = DialogFrame.WidthCompact,
             CancelLabel = s.StashDropCancel,
-            Action = ("Drop", DialogButtonRole.Destructive),
+            Action = (s.StashDropAction, DialogButtonRole.Destructive),
             Command = vm.Drop,
             ConfirmKeys = true,
             Body =

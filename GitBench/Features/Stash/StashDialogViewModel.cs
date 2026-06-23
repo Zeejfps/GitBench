@@ -2,6 +2,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -33,12 +34,14 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        LocalChangesSelectionStore selectionStore)
+        LocalChangesSelectionStore selectionStore,
+        ILocalizationService loc)
         : base(dispatcher, StashDialogState.Initial)
     {
         _repo = request.Repo;
         _gitService = gitService;
         _bus = bus;
+        var strings = loc.Strings.Value;
 
         var snapshot = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
             ? ok.Value
@@ -55,7 +58,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         CheckedPaths = Slice(s => s.CheckedPaths);
         FilesHeader = Slice(s => s.Files.Count == 0
             ? "Files"
-            : $"Files ({s.CheckedPaths.Count}/{s.Files.Count})");
+            : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
         Message = Slice(s => s.Message);
         KeepStaged = Slice(s => s.KeepStaged);
 

@@ -14,13 +14,40 @@ live in **files** (translator-friendly); strongly-typed accessors are
   now supports plural + parameterized entries; `PluralRules`/`PluralForms`/`Format`
   added; real `es.json` (Spanish) translation set; relative-time formatter and the
   LocalChanges plural context menus converted. `LOC004` parity verified to fail the
-  build on a missing translation. Caveat below on custom-painted views.
-- **Phases 3–4 — not started.**
+  build on a missing translation.
+- **Phase 3 — DONE (modulo a small documented tail + macOS eyeball).** Build clean,
+  113 tests pass. The full string surface was swept feature-by-feature: catalog grew
+  from ~19 to **448 keys** (`en.json` + `es.json`, full parity, no identifier
+  collisions). Converted: the native macOS menu (now **rebuilds on locale switch** —
+  the Phase 1 deferral), every Branches/Commits/Diff/LocalChanges/Stash/Repos/
+  Operations/Submodules/Worktrees/Identity/StatusBar/Toolbar/App surface (~55 files),
+  and the shared dialog widgets (`Dialog`/`DialogShell` Cancel, copy/close tooltips now
+  resolve `Common*` while honoring call-site overrides). Custom-painted views
+  (`BranchesView`, `CommitsView`, `CommitDetailsView`, `DiffContentView`,
+  `DiffWindowToolbar`) now **rebind `loc.Strings` → rebuild row data + `SetDirty()`**, so
+  the Phase 2 custom-paint caveat is resolved. Context-menu VMs
+  (`BranchesViewModel`, `RepoNodeViewModel`, `StatusBarViewModel`, …) take an injected
+  `ILocalizationService`; menus rebuild on open. Bold menu-label segments (Merge/Rebase/
+  Fast-forward) are preserved by re-bolding the interpolated values inside the *localized*
+  label (`BoldSegments`). Error-dialog titles across all features are localized.
+- **Phase 4 — not started.**
 
-Phase 2 caveat: the LocalChanges menus reflect the active locale (rebuilt on each
-open), but `CommitsView`'s relative-time text is **custom-painted**, so a live locale
-switch won't repaint it immediately — it refreshes on the next repaint / its 30s
-timer. Making custom-painted views repaint on locale change is a Phase 3 item.
+### Phase 3 remaining tail (small, self-contained follow-ups)
+These were either missed by the inventory sweep or deliberately deferred; none are
+load-bearing and the build/tests are green without them:
+- **`GitBench/Git/RefNameRules.cs`** — ~5 field-validation messages (`"{noun} names
+  can't contain spaces."`, etc.) shown under name inputs. A shared static helper called
+  inside `Derived<FieldStatus?>` computations; needs a `Strings`/`loc` thread-through to
+  localize + live-switch. Not in any inventory.
+- **`ResetCommitDialog` dirty-state hint** (`BuildDirtyHint`) — an assembled nested-plural
+  string ("You have N staged and M unstaged local change(s)."); needs dedicated plural keys.
+- **Bare `"Files"` header (count == 0)** in `DiscardChangesViewModel`/`StashDialogViewModel`
+  — the `Files ({shown}/{total})` form is localized; the empty-list "Files" label has no key.
+- **Persisted default group names** (`RepoRegistry` "New Group", `RepoStateStore`
+  "Repositories") — intentionally left English: they become stored data, not live chrome.
+- **Protocol names** HTTPS/SSH/URL and the brand "GitBench" — intentionally not translated.
+- **macOS eyeball** still pending: flip View → Language and confirm the live re-render
+  (the reactive path + custom-paint rebinds are proven by build + the switch tests).
 
 Key decision resolved during Phase 1: **the catalog bakes values into generated C#
 at compile time (no runtime JSON)**, rather than loading per-locale files at
@@ -270,15 +297,21 @@ Deferred out of Phase 1 (rolled into later phases):
 - **Exit criteria — met:** plurals, parameterized strings, and relative-time dates are
   correct in two languages (en/es), proven by tests.
 
-### Phase 3 — Sweep the string surface (~190 static + ~86 interpolated, ~50–70 files)
-- Go feature-by-feature: `Features/**/*Dialog.cs` (~19 dialogs), the app menu,
-  `Controls` labels/tooltips/placeholders, error messages (centralize as you go).
-- Refactor inline-ternary plurals and `string.Join(" and ", …)` into catalog
-  methods.
-- Use the Pseudo locale repeatedly to surface stragglers (un-wrapped strings render
-  in plain ASCII; wrapped ones look accented/padded).
-- **Exit criteria:** Pseudo locale shows no plain-ASCII UI strings; build passes
-  key parity.
+### Phase 3 — Sweep the string surface — DONE (see Status for the summary + tail)
+- Went feature-by-feature: all `Features/**/*Dialog.cs`, the app menu, `Controls`/
+  `Widgets` shared dialog defaults, banners, custom-painted views, and context-menu VMs.
+- Inline-ternary plurals (e.g. submodule "N out of date") and state ternaries (Fetch/
+  Fetching, Commit/Committing) were converted to plural keys / state keys.
+- A static straggler sweep (the offline stand-in for the Pseudo eyeball) returns no
+  plain-ASCII UI-string assignments outside the intentional brand/sentinel set.
+- **Exit criteria — met (modulo the documented tail + a macOS eyeball):** build passes
+  key parity (448 keys, en/es in sync, no collisions); the static sweep is clean.
+- **Authoring recipe** (for the tail + future locales): plain `Prop<string?>` UI →
+  `L.T(s => s.Key)`; modal dialogs → read-once `var s = ctx.Localization().Strings.Value;`
+  (rename any same-scope `Theme.Color(s=>…)` lambda to `t` to avoid CS0136); menu/error
+  VMs → inject `ILocalizationService`, read `_loc.Strings.Value` per build; custom-painted
+  views → `this.Bind(_loc.Strings, _ => { rebuild; SetDirty(); })`. The generator rejects
+  `{new}`-style keyword placeholders — use `{old_name}`/`{new_name}` etc.
 
 ### Phase 4 — CJK (when prioritized)
 - Fix the **surrogate-pair bugs** first (cheap, also fixes emoji in English):

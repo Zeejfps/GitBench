@@ -39,7 +39,7 @@ internal sealed record ReconcilePullDialog : Widget
             Title = s.OperationsReconcileTitle,
             OnClose = OnClose,
             BodyGap = 10,
-            Action = ("Pull", DialogButtonRole.Primary),
+            Action = (s.CommonPull, DialogButtonRole.Primary),
             Command = vm.Pull,
             Error = vm.Error,
             ConfirmKeys = true,

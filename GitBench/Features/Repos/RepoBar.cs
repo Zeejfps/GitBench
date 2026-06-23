@@ -90,11 +90,11 @@ internal sealed record RepoBar : Widget
 
     private static void OpenFromFolder(Context ctx)
     {
-        var path = ctx.Get<IPlatformShell>()?.PickFolder("Open Repository");
+        var s = ctx.Localization().Strings.Value;
+        var path = ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository);
         if (string.IsNullOrEmpty(path)) return;
         if (ctx.Get<IRepoRegistry>()?.Open(path) == OpenRepoOutcome.NotAGitRepo)
         {
-            var s = ctx.Localization().Strings.Value;
             ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
                 s.ReposErrorNotAGitRepoTitle,
                 s.ReposErrorNotAGitRepoMessage(path)));

@@ -38,7 +38,7 @@ internal sealed record UpdateSubmodulesDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             BodyGap = 10,
-            Action = ("Update", DialogButtonRole.Primary),
+            Action = (s.SubmodulesUpdateAction, DialogButtonRole.Primary),
             Command = vm.Update,
             Error = vm.Error,
             ConfirmKeys = true,

@@ -123,16 +123,16 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
     {
         SubmoduleStatus.NotInitialized => strings.SubmodulesStatusNotInitialized,
         SubmoduleStatus.MergeConflict  => strings.SubmodulesStatusMergeConflict,
-        SubmoduleStatus.Modified       => ShortShaSummary(info),
-        _                              => "up to date",
+        SubmoduleStatus.Modified       => ShortShaSummary(strings, info),
+        _                              => strings.SubmodulesStatusUpToDate,
     };
 
-    private static string ShortShaSummary(SubmoduleInfo info)
+    private static string ShortShaSummary(Strings strings, SubmoduleInfo info)
     {
         var recorded = ShortSha(info.RecordedSha);
         var current = ShortSha(info.CurrentSha);
         if (string.IsNullOrEmpty(recorded) || string.IsNullOrEmpty(current))
-            return "modified";
+            return strings.SubmodulesStatusModified;
         return $"{recorded} → {current}";
     }
 

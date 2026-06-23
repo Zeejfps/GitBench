@@ -33,7 +33,7 @@ internal sealed record DiscardHunkDialog : Widget
             OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
             Height = 200f,
-            Action = ("Discard", DialogButtonRole.Destructive),
+            Action = (s.CommonDiscard, DialogButtonRole.Destructive),
             Command = vm.Discard,
             ConfirmKeys = true,
             Body =

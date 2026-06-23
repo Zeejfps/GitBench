@@ -269,6 +269,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         if (profile == null) return;
         var config = LocalIdentityConfig.For(profile);
         var dispatcher = Dispatcher;
+        var strings = _loc.Strings.Value;
         Task.Run(() =>
         {
             var outcome = _git.PinLocalIdentity(repo, config);
@@ -280,7 +281,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
                 if (outcome is GitOutcome.Success) _registry.SetIdentityOverride(repo.Id, null);
                 _identity.FlushAll();
                 if (outcome is GitOutcome.Failed failed)
-                    _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", failed.Message));
+                    _bus.Broadcast(new ShowOperationErrorMessage(strings.StatusbarErrorPinIdentity, failed.Message));
             });
         });
     }

@@ -33,7 +33,8 @@ internal sealed record StashDialog : Widget
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<LocalChangesSelectionStore>());
+            ctx.Require<LocalChangesSelectionStore>(),
+            ctx.Localization());
 
         var message = new State<string>(vm.Message.Value);
         message.Changed += vm.SetMessage;
@@ -50,7 +51,7 @@ internal sealed record StashDialog : Widget
             Width = DialogFrame.WidthWide,
             Height = 520f,
             BodyGap = 10,
-            Action = ("Stash", DialogButtonRole.Primary),
+            Action = (s.StashAction, DialogButtonRole.Primary),
             Command = vm.Stash,
             Body =
             [

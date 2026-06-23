@@ -50,27 +50,27 @@ internal sealed record IdentityProfileEditDialog : Widget
                 {
                     Label = s.IdentityAuthorEmailLabel,
                     Value = vm.AuthorEmail,
-                    Placeholder = "jane@company.com",
+                    Placeholder = s.IdentityAuthorEmailPlaceholder,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentitySshKeyLabel,
                     Value = vm.SshKeyPath,
-                    Placeholder = "~/.ssh/id_work",
+                    Placeholder = s.IdentitySshKeyPlaceholder,
                     Hint = s.IdentitySshKeyHint,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentityMatchHostLabel,
                     Value = vm.MatchHost,
-                    Placeholder = "github.com",
+                    Placeholder = s.IdentityMatchHostPlaceholder,
                     Hint = s.IdentityMatchHostHint,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentityMatchOwnerLabel,
                     Value = vm.MatchOwner,
-                    Placeholder = "your-org",
+                    Placeholder = s.IdentityMatchOwnerPlaceholder,
                     Hint = s.IdentityMatchOwnerHint,
                 },
             ],

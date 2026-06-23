@@ -34,7 +34,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
             Title = s.SubmodulesDeinitTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Deinit", DialogButtonRole.Destructive),
+            Action = (s.SubmodulesDeinitAction, DialogButtonRole.Destructive),
             Command = vm.Deinit,
             ConfirmKeys = true,
             Body =

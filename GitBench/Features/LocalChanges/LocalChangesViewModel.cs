@@ -6,6 +6,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
@@ -37,6 +38,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     private readonly IPlatformShell _shell;
     private readonly IClipboard _clipboard;
     private readonly PreferencesService _preferences;
+    private readonly ILocalizationService _loc;
 
     public IReadable<string> Title { get; }
     public IReadable<string> Description { get; }
@@ -89,7 +91,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         IPlatformShell shell,
         IClipboard clipboard,
         PreferencesService preferences,
-        IRepoSnapshotStore store)
+        IRepoSnapshotStore store,
+        ILocalizationService loc)
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
@@ -99,6 +102,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         _shell = shell;
         _clipboard = clipboard;
         _preferences = preferences;
+        _loc = loc;
         _opGen = CreateLane();
         _commitGen = CreateLane();
 
@@ -132,7 +136,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         CommitBusy = Slice(s => s.CommitBusy);
 
         _commitSpinner = new SpinnerAnimation(ticker);
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, shell);
+        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, shell, loc: loc);
 
         Update(s => s with { ViewMode = preferences.Current.FileViewMode });
 
@@ -225,7 +229,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     {
         var detail = State.Value.LoadErrorDetail;
         if (string.IsNullOrEmpty(detail)) return;
-        _bus.Broadcast(new ShowOperationErrorMessage("Status failed", detail));
+        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, detail));
     }
 
     public void SetTitle(string value)

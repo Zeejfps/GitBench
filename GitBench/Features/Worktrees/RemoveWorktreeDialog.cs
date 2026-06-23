@@ -90,7 +90,7 @@ internal sealed record RemoveWorktreeDialog : Widget
             Title = s.WorktreesRemoveTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Remove", DialogButtonRole.Destructive),
+            Action = (s.WorktreesRemoveAction, DialogButtonRole.Destructive),
             Command = vm.Remove,
             ConfirmKeys = true,
             Body =

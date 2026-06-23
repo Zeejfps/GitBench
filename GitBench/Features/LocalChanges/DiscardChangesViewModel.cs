@@ -1,6 +1,7 @@
 using GitBench.Features.Commits;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -25,12 +26,14 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         DiscardChangesRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
         : base(dispatcher, DiscardChangesState.Initial)
     {
         _repo = request.Repo;
         _gitService = gitService;
         _bus = bus;
+        var strings = loc.Strings.Value;
 
         var rows = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
             ? BuildRows(ok.Value)
@@ -46,7 +49,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         CheckedPaths = Slice(s => s.CheckedPaths);
         FilesHeader = Slice(s => s.Files.Count == 0
             ? "Files"
-            : $"Files ({s.CheckedPaths.Count}/{s.Files.Count})");
+            : strings.LocalchangesFilesHeader(s.CheckedPaths.Count, s.Files.Count));
 
         var canDiscard = Slice(s => s.CheckedPaths.Count > 0);
         Discard = AsyncCommand.ForOutcome(dispatcher, DoDiscard, OnDiscardSucceeded, canDiscard);

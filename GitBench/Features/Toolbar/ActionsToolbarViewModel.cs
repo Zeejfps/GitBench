@@ -4,6 +4,7 @@ using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
@@ -17,6 +18,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     private readonly IPlatformShell _shell;
     private readonly IMessageBus _bus;
     private readonly IRepoOperationsStore _ops;
+    private readonly ILocalizationService _loc;
 
     private readonly SpinnerAnimation _pushSpinner;
     private readonly SpinnerAnimation _pullSpinner;
@@ -47,13 +49,15 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IFrameTicker ticker,
         IMessageBus bus,
         IRepoStatusStore status,
-        IRepoOperationsStore ops)
+        IRepoOperationsStore ops,
+        ILocalizationService loc)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
         _registry = registry;
         _shell = shell;
         _bus = bus;
         _ops = ops;
+        _loc = loc;
 
         _pushSpinner = new SpinnerAnimation(ticker);
         _pullSpinner = new SpinnerAnimation(ticker);
@@ -150,7 +154,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenFolder(repo.Path); }
-        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage("Open folder failed", ex.Message)); }
+        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.ToolbarErrorOpenFolderFailed, ex.Message)); }
     }
 
     private void DoOpenTerminal()
@@ -158,7 +162,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         try { _shell.OpenTerminal(repo.Path); }
-        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage("Open terminal failed", ex.Message)); }
+        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.ToolbarErrorOpenTerminalFailed, ex.Message)); }
     }
 
     private void DoBranch()

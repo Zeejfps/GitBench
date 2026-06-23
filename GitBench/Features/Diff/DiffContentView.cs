@@ -159,7 +159,9 @@ internal sealed class DiffContentView : View, IScrollableContent
         });
 
         // Placeholder/conflict text is custom-painted, so repaint on a live language switch.
-        this.Bind(_loc.Strings, _ => SetDirty());
+        // Hunk-button labels are measured and cached; drop the cache so they re-measure in the
+        // new language on the next draw.
+        this.Bind(_loc.Strings, _ => { _buttonMetricsResolved = false; SetDirty(); });
     }
 
     private void OnHorizontalWheel(float deltaX)
@@ -268,10 +270,11 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (r.IsBinary) return;
         if (r.Hunks.Count == 0 && !r.IsModeOnly && r.OldPath == null) return;
 
+        var s = _loc.Strings.Value;
         if (r.OldPath != null)
-            AddBanner($"Renamed: {r.OldPath} → {r.Path}");
+            AddBanner(s.DiffRenamed(r.OldPath, r.Path));
         if (r.IsModeOnly)
-            AddBanner($"Mode: {FormatMode(r.OldMode)} → {FormatMode(r.NewMode)}");
+            AddBanner(s.DiffModeChanged(FormatMode(r.OldMode), FormatMode(r.NewMode)));
 
         int maxOld = 0, maxNew = 0, totalLines = 0;
         foreach (var h in r.Hunks)
@@ -316,7 +319,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
 
         if (r.Truncated)
-            AddBanner($"Diff truncated — only the first {totalLines} lines are shown.");
+            AddBanner(s.DiffDiffTruncated(totalLines));
 
         _rowToHunk = new int[_rows.Count];
         Array.Fill(_rowToHunk, -1);
@@ -351,7 +354,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
 
         if (ff.Truncated)
-            AddBanner($"File truncated — only the first {ff.Lines.Count} lines are shown.");
+            AddBanner(_loc.Strings.Value.DiffFileTruncated(ff.Lines.Count));
     }
 
     private void AddBanner(string text)
@@ -456,9 +459,10 @@ internal sealed class DiffContentView : View, IScrollableContent
     {
         if (!_buttonMetricsResolved)
         {
-            _stageBtnTextWidth = c.MeasureTextWidth("Stage", HunkButtonTextStyle);
-            _unstageBtnTextWidth = c.MeasureTextWidth("Unstage", HunkButtonTextStyle);
-            _discardBtnTextWidth = c.MeasureTextWidth("Discard", HunkButtonTextStyle);
+            var s = _loc.Strings.Value;
+            _stageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkStage, HunkButtonTextStyle);
+            _unstageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkUnstage, HunkButtonTextStyle);
+            _discardBtnTextWidth = c.MeasureTextWidth(s.DiffHunkDiscard, HunkButtonTextStyle);
             _buttonMetricsResolved = _stageBtnTextWidth > 0;
         }
 
@@ -642,13 +646,17 @@ internal sealed class DiffContentView : View, IScrollableContent
         _ => Array.Empty<HunkAction>(),
     };
 
-    private static string ButtonLabel(HunkAction action) => action switch
+    private string ButtonLabel(HunkAction action)
     {
-        HunkAction.Stage => "Stage",
-        HunkAction.Unstage => "Unstage",
-        HunkAction.Discard => "Discard",
-        _ => string.Empty,
-    };
+        var s = _loc.Strings.Value;
+        return action switch
+        {
+            HunkAction.Stage => s.DiffHunkStage,
+            HunkAction.Unstage => s.DiffHunkUnstage,
+            HunkAction.Discard => s.DiffHunkDiscard,
+            _ => string.Empty,
+        };
+    }
 
     private void DrawHunkButtons(ICanvas c, RectF rowRect, int hunkIndex, int z)
     {

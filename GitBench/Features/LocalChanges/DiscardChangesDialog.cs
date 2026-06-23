@@ -35,7 +35,8 @@ internal sealed record DiscardChangesDialog : Widget
             new DiscardChangesRequest(Repo, Paths),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
@@ -46,7 +47,7 @@ internal sealed record DiscardChangesDialog : Widget
             Width = DialogFrame.WidthWide,
             Height = 480f,
             BodyGap = 10,
-            Action = ("Discard", DialogButtonRole.Destructive),
+            Action = (s.CommonDiscard, DialogButtonRole.Destructive),
             Command = vm.Discard,
             ConfirmKeys = true,
             Body =

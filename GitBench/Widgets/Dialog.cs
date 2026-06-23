@@ -25,7 +25,7 @@ internal sealed record Dialog : Widget
     public required DialogShell.ActionSpec Action { get; init; }
     public IWidget[] Body { get; init; } = [];
     public float BodyGap { get; init; } = 12f;
-    public string CancelLabel { get; init; } = "Cancel";
+    public string? CancelLabel { get; init; }
     public IWidget? FooterLead { get; init; }
 
     /// <summary>Busy spinner + disable + error row follow this command while it runs.</summary>

@@ -472,7 +472,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 switch (outcome)
                 {
                     case MergeLikeOutcome.Failed failed:
-                        _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", failed.Message));
+                        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorStashApplyFailed, failed.Message));
                         return;
                     case MergeLikeOutcome.Conflicted:
                         _bus.Broadcast(new RefsChangedMessage(repo.Id));
@@ -519,7 +519,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                 if (failed != null)
-                    _bus.Broadcast(new ShowOperationErrorMessage("Checkout failed", failed.Message));
+                    _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
             },
             lane: _branchOpGen);
     }
@@ -540,7 +540,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             {
                 Update(s => s with { BusyBranch = null });
                 if (outcome is GitOutcome.Failed failed)
-                    bus.Broadcast(new ShowOperationErrorMessage("Fast-forward failed", failed.Message));
+                    bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorFastForwardFailed, failed.Message));
                 else
                     bus.Broadcast(new RefsChangedMessage(repo.Id));
             },

@@ -183,6 +183,9 @@
   "branches.detached_head_message": "HEAD desacoplado — tus últimos commits no están en ninguna rama.",
   "branches.detached_head_create_button": "Crear rama",
   "branches.detached_head_tooltip": "Crea una rama aquí para que estos commits no se pierdan",
+  "branches.error_checkout_failed": "Error al hacer checkout",
+  "branches.error_stash_apply_failed": "Error al aplicar el stash",
+  "branches.error_fast_forward_failed": "Error en el fast-forward",
 
   "commits.no_repo_selected": "Selecciona un repositorio para ver su historial.",
   "commits.no_commits": "Sin commits.",
@@ -426,5 +429,53 @@
   "worktrees.remove_title": "Quitar árbol de trabajo",
   "worktrees.remove_confirm": "¿Quitar el árbol de trabajo '{name}'?",
   "worktrees.remove_force_label": "Quitar aunque tenga cambios",
-  "worktrees.remove_note": "git rechaza la operación si el árbol de trabajo tiene cambios sin confirmar. Marca la casilla para quitarlo de todos modos."
+  "worktrees.remove_note": "git rechaza la operación si el árbol de trabajo tiene cambios sin confirmar. Marca la casilla para quitarlo de todos modos.",
+  "worktrees.remove_action": "Eliminar",
+
+  "common.clone": "Clonar",
+  "common.pull": "Pull",
+  "common.update": "Actualizar",
+  "common.remove": "Eliminar",
+  "common.discard": "Descartar",
+
+  "stash.action": "Stash",
+  "stash.drop_action": "Descartar",
+
+  "submodules.deinit_action": "Desinicializar",
+  "submodules.update_action": "Actualizar",
+  "submodules.status_up_to_date": "actualizado",
+  "submodules.status_modified": "modificado",
+
+  "diff.hunk_stage": "Preparar",
+  "diff.hunk_unstage": "Quitar de preparados",
+  "diff.hunk_discard": "Descartar",
+  "diff.renamed": "Renombrado: {old_name} → {new_name}",
+  "diff.mode_changed": "Modo: {old_mode} → {new_mode}",
+  "diff.diff_truncated": "Diferencia truncada: solo se muestran las primeras {count} líneas.",
+  "diff.file_truncated": "Archivo truncado: solo se muestran las primeras {count} líneas.",
+
+  "identity.author_email_placeholder": "jane@company.com",
+  "identity.ssh_key_placeholder": "~/.ssh/id_work",
+  "identity.match_host_placeholder": "github.com",
+  "identity.match_owner_placeholder": "tu-organizacion",
+
+  "commits.error_reset_failed": "Error al restablecer",
+  "commits.error_reset_branch_failed": "Error al restablecer la rama",
+  "commits.error_cherry_pick_failed": "Error en el cherry-pick",
+  "commits.error_revert_failed": "Error al revertir",
+
+  "localchanges.error_status_failed": "Error al obtener el estado",
+  "localchanges.files_header": "Archivos ({shown}/{total})",
+
+  "operations.error_resolve_remaining": "Resuelve los conflictos restantes",
+  "operations.error_continue_failed": "Error al continuar",
+
+  "statusbar.error_pin_identity": "Fijar identidad",
+
+  "toolbar.error_open_folder_failed": "Error al abrir la carpeta",
+  "toolbar.error_open_terminal_failed": "Error al abrir la terminal",
+
+  "repos.clone_action": "Clonar",
+  "repos.picker_choose_clone": "Elige dónde clonar",
+  "repos.picker_open_repository": "Abrir repositorio"
 }

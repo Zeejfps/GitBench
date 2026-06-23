@@ -39,7 +39,7 @@ internal sealed record CloneRepoDialog : Widget
             Command = new Command(() =>
             {
                 var shell = ctx.Get<IPlatformShell>();
-                var picked = shell?.PickFolder("Choose where to clone");
+                var picked = shell?.PickFolder(s.ReposPickerChooseClone);
                 if (!string.IsNullOrEmpty(picked))
                     vm.ParentDir.Value = picked;
             }),
@@ -51,7 +51,7 @@ internal sealed record CloneRepoDialog : Widget
             Title = s.ReposCloneTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Clone", DialogButtonRole.Primary),
+            Action = (s.ReposCloneAction, DialogButtonRole.Primary),
             Command = vm.Clone,
             Body =
             [

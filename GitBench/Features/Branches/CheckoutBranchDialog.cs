@@ -29,7 +29,8 @@ internal sealed record CheckoutBranchDialog : Widget
             new CheckoutRequest(Repo, RemoteName, RemoteBranchName, SuggestedLocalName),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog

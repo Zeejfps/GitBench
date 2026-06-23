@@ -183,6 +183,9 @@
   "branches.detached_head_message": "Detached HEAD — your latest commits aren't on any branch.",
   "branches.detached_head_create_button": "Create branch",
   "branches.detached_head_tooltip": "Create a branch here so these commits aren't lost",
+  "branches.error_checkout_failed": "Checkout failed",
+  "branches.error_stash_apply_failed": "Stash apply failed",
+  "branches.error_fast_forward_failed": "Fast-forward failed",
 
   "commits.no_repo_selected": "Select a repository to view its history.",
   "commits.no_commits": "No commits.",
@@ -426,5 +429,53 @@
   "worktrees.remove_title": "Remove worktree",
   "worktrees.remove_confirm": "Remove worktree '{name}'?",
   "worktrees.remove_force_label": "Remove even if dirty",
-  "worktrees.remove_note": "git refuses if the worktree has uncommitted changes. Check the box to remove anyway."
+  "worktrees.remove_note": "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
+  "worktrees.remove_action": "Remove",
+
+  "common.clone": "Clone",
+  "common.pull": "Pull",
+  "common.update": "Update",
+  "common.remove": "Remove",
+  "common.discard": "Discard",
+
+  "stash.action": "Stash",
+  "stash.drop_action": "Drop",
+
+  "submodules.deinit_action": "Deinit",
+  "submodules.update_action": "Update",
+  "submodules.status_up_to_date": "up to date",
+  "submodules.status_modified": "modified",
+
+  "diff.hunk_stage": "Stage",
+  "diff.hunk_unstage": "Unstage",
+  "diff.hunk_discard": "Discard",
+  "diff.renamed": "Renamed: {old_name} → {new_name}",
+  "diff.mode_changed": "Mode: {old_mode} → {new_mode}",
+  "diff.diff_truncated": "Diff truncated — only the first {count} lines are shown.",
+  "diff.file_truncated": "File truncated — only the first {count} lines are shown.",
+
+  "identity.author_email_placeholder": "jane@company.com",
+  "identity.ssh_key_placeholder": "~/.ssh/id_work",
+  "identity.match_host_placeholder": "github.com",
+  "identity.match_owner_placeholder": "your-org",
+
+  "commits.error_reset_failed": "Reset failed",
+  "commits.error_reset_branch_failed": "Reset branch failed",
+  "commits.error_cherry_pick_failed": "Cherry-pick failed",
+  "commits.error_revert_failed": "Revert failed",
+
+  "localchanges.error_status_failed": "Status failed",
+  "localchanges.files_header": "Files ({shown}/{total})",
+
+  "operations.error_resolve_remaining": "Resolve remaining conflicts",
+  "operations.error_continue_failed": "Continue failed",
+
+  "statusbar.error_pin_identity": "Pin identity",
+
+  "toolbar.error_open_folder_failed": "Open folder failed",
+  "toolbar.error_open_terminal_failed": "Open terminal failed",
+
+  "repos.clone_action": "Clone",
+  "repos.picker_choose_clone": "Choose where to clone",
+  "repos.picker_open_repository": "Open Repository"
 }
