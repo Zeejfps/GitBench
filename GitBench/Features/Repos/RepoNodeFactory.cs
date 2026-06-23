@@ -1,4 +1,5 @@
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 
@@ -16,21 +17,24 @@ internal sealed class RepoNodeFactory
     private readonly IMessageBus _bus;
     private readonly IGitService _git;
     private readonly IPlatformShell? _shell;
+    private readonly ILocalizationService _loc;
 
     public RepoNodeFactory(
         IRepoRegistry registry,
         IRepoStatusStore status,
         IMessageBus bus,
         IGitService git,
-        IPlatformShell? shell)
+        IPlatformShell? shell,
+        ILocalizationService loc)
     {
         _registry = registry;
         _status = status;
         _bus = bus;
         _git = git;
         _shell = shell;
+        _loc = loc;
     }
 
     public RepoNodeViewModel Create(Repo repo, int depth) =>
-        new(repo, depth, _registry, _status, _bus, _git, _shell, this);
+        new(repo, depth, _registry, _status, _bus, _git, _shell, _loc, this);
 }

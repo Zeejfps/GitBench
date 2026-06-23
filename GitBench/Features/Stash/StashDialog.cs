@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Operations;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -32,7 +33,8 @@ internal sealed record StashDialog : Widget
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<LocalChangesSelectionStore>());
+            ctx.Require<LocalChangesSelectionStore>(),
+            ctx.Localization());
 
         var message = new State<string>(vm.Message.Value);
         message.Changed += vm.SetMessage;
@@ -40,32 +42,33 @@ internal sealed record StashDialog : Widget
         var keepStaged = new State<bool>(vm.KeepStaged.Value);
         keepStaged.Changed += vm.SetKeepStaged;
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Stash changes",
+            Title = s.StashTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
             Height = 520f,
             BodyGap = 10,
-            Action = ("Stash", DialogButtonRole.Primary),
+            Action = (s.StashAction, DialogButtonRole.Primary),
             Command = vm.Stash,
             Body =
             [
                 new LabeledInput
                 {
-                    Label = "Message",
+                    Label = s.CommonMessage,
                     Value = message,
                 },
                 new Text
                 {
                     Value = Prop.Bind(vm.FilesHeader),
-                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
+                    Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
                 new CheckboxWidget
                 {
-                    Label = "Keep staged changes in index",
+                    Label = s.StashKeepStagedCheckbox,
                     Checked = keepStaged,
                     Height = 22,
                 }.WithController<KbmController>(),
@@ -83,7 +86,7 @@ internal sealed record StashDialog : Widget
         {
             var empty = new TextView(ctx.Canvas)
             {
-                Text = "No local changes.",
+                Text = ctx.Localization().Strings.Value.StashDialogNoChanges,
                 HorizontalTextAlignment = TextAlignment.Center,
                 VerticalTextAlignment = TextAlignment.Center,
             };

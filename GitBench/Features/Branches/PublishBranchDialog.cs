@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -25,14 +26,16 @@ internal sealed record PublishBranchDialog : Widget
             new PublishBranchRequest(Repo, LocalBranch),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Publish branch",
+            Title = s.BranchesPublishTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
-            Action = ("Publish", DialogButtonRole.Primary),
+            Action = (s.BranchesPublishAction, DialogButtonRole.Primary),
             Command = vm.Publish,
             Error = vm.ErrorMessage,
             ConfirmKeys = true,
@@ -41,16 +44,16 @@ internal sealed record PublishBranchDialog : Widget
             [
                 new Text
                 {
-                    Value = "First push — choose a remote and set the upstream",
+                    Value = s.BranchesPublishDescription,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
-                new LabeledRow { Label = "Branch:", Value = BranchChip(LocalBranch) },
-                new LabeledRow { Label = "To:", Value = new RemoteDropdown { Selected = vm.SelectedRemote, Remotes = vm.Remotes } },
+                new LabeledRow { Label = s.BranchesPublishBranchLabel, Value = BranchChip(LocalBranch) },
+                new LabeledRow { Label = s.BranchesPublishRemoteLabel, Value = new RemoteDropdown { Selected = vm.SelectedRemote, Remotes = vm.Remotes } },
                 new CheckboxWidget
                 {
-                    Label = "Track this remote branch (set upstream)",
+                    Label = s.BranchesPublishTrackLabel,
                     Checked = vm.SetUpstream,
                     Height = 24,
                 }.WithController<KbmController>(),
@@ -89,47 +92,51 @@ internal sealed record RemoteDropdown : Widget
     public required State<string> Selected { get; init; }
     public required IReadable<IReadOnlyList<string>> Remotes { get; init; }
 
-    protected override IWidget Build(Context ctx) => new DropdownWidget
+    protected override IWidget Build(Context ctx)
     {
-        Height = 30,
-        Gap = 6,
-        // Hover-enabled once there's at least one remote; the chevron and the menu only appear when
-        // there's an actual choice (more than one).
-        Enabled = new Derived<bool>(() => Remotes.Value.Count > 0),
-        ShowChevron = Prop.Bind(() => Remotes.Value.Count > 1),
-        Children =
-        [
-            new Text
-            {
-                Value = LucideIcons.Branch,
-                FontFamily = LucideIcons.FontFamily,
-                FontSize = 14,
-                VAlign = TextAlignment.Center,
-                Color = Theme.Color(s => s.DialogBody.BodyText),
-            },
-            new Grow
-            {
-                Child = new Text
-                {
-                    VAlign = TextAlignment.Center,
-                    Value = Prop.Bind<string?>(() =>
-                        string.IsNullOrEmpty(Selected.Value) ? "(no remotes)" : Selected.Value),
-                    Color = Theme.Color(s => string.IsNullOrEmpty(Selected.Value)
-                        ? s.DialogBody.RowTextMissing
-                        : s.DialogFrame.TitleText),
-                },
-            },
-        ],
-    }.WithMenuController(rect =>
-    {
-        var remotes = Remotes.Value;
-        if (remotes.Count <= 1) return;
-        var items = new List<RepoBarContextMenu.Item>(remotes.Count);
-        foreach (var remote in remotes)
+        var s = ctx.Localization().Strings.Value;
+        return new DropdownWidget
         {
-            var captured = remote;
-            items.Add(new RepoBarContextMenu.Item(captured, () => Selected.Value = captured));
-        }
-        RepoBarContextMenu.Show(ctx, rect.BottomLeft, items);
-    });
+            Height = 30,
+            Gap = 6,
+            // Hover-enabled once there's at least one remote; the chevron and the menu only appear when
+            // there's an actual choice (more than one).
+            Enabled = new Derived<bool>(() => Remotes.Value.Count > 0),
+            ShowChevron = Prop.Bind(() => Remotes.Value.Count > 1),
+            Children =
+            [
+                new Text
+                {
+                    Value = LucideIcons.Branch,
+                    FontFamily = LucideIcons.FontFamily,
+                    FontSize = 14,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
+                },
+                new Grow
+                {
+                    Child = new Text
+                    {
+                        VAlign = TextAlignment.Center,
+                        Value = Prop.Bind<string?>(() =>
+                            string.IsNullOrEmpty(Selected.Value) ? s.BranchesPublishNoRemotes : Selected.Value),
+                        Color = Theme.Color(t => string.IsNullOrEmpty(Selected.Value)
+                            ? t.DialogBody.RowTextMissing
+                            : t.DialogFrame.TitleText),
+                    },
+                },
+            ],
+        }.WithMenuController(rect =>
+        {
+            var remotes = Remotes.Value;
+            if (remotes.Count <= 1) return;
+            var items = new List<RepoBarContextMenu.Item>(remotes.Count);
+            foreach (var remote in remotes)
+            {
+                var captured = remote;
+                items.Add(new RepoBarContextMenu.Item(captured, () => Selected.Value = captured));
+            }
+            RepoBarContextMenu.Show(ctx, rect.BottomLeft, items);
+        });
+    }
 }

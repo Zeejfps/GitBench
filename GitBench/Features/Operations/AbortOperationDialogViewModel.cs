@@ -1,5 +1,6 @@
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -25,10 +26,12 @@ internal sealed class AbortOperationDialogViewModel : IDialogViewModel
         AbortOperationRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
-        var defaultLabel = DefaultConfirmLabel(request.State);
-        ConfirmButtonLabel = new Derived<string>(() => _forceQuitMode.Value ? "Force clear" : defaultLabel);
+        var s = loc.Strings.Value;
+        var defaultLabel = DefaultConfirmLabel(s, request.State);
+        ConfirmButtonLabel = new Derived<string>(() => _forceQuitMode.Value ? s.OperationsAbortForceClear : defaultLabel);
 
         var repoId = request.Repo.Id;
         var gate = new Derived<bool>(() => request.State != RepoOperationState.None);
@@ -66,16 +69,16 @@ internal sealed class AbortOperationDialogViewModel : IDialogViewModel
 
     // Single source of truth for the confirm-button label. The dialog seeds its button from
     // this too, so the label map isn't duplicated across the view and view model.
-    internal static string DefaultConfirmLabel(RepoOperationState state) => state switch
+    internal static string DefaultConfirmLabel(Strings s, RepoOperationState state) => state switch
     {
-        RepoOperationState.Merge => "Abort merge",
-        RepoOperationState.Rebase => "Abort rebase",
-        RepoOperationState.CherryPick => "Abort cherry-pick",
-        RepoOperationState.Revert => "Abort revert",
-        RepoOperationState.ApplyMailbox => "Abort apply",
-        RepoOperationState.Bisect => "Reset bisect",
-        RepoOperationState.UnmergedPaths => "Reset",
-        _ => "Abort",
+        RepoOperationState.Merge => s.OperationsAbortMerge,
+        RepoOperationState.Rebase => s.OperationsAbortRebase,
+        RepoOperationState.CherryPick => s.OperationsAbortCherryPick,
+        RepoOperationState.Revert => s.OperationsAbortRevert,
+        RepoOperationState.ApplyMailbox => s.OperationsAbortApply,
+        RepoOperationState.Bisect => s.OperationsAbortBisect,
+        RepoOperationState.UnmergedPaths => s.OperationsAbortUnmerged,
+        _ => s.CommonAbort,
     };
 }
 

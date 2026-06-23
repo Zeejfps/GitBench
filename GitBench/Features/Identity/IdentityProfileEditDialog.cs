@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
@@ -22,54 +23,55 @@ internal sealed record IdentityProfileEditDialog : Widget
             ctx.Require<IUiDispatcher>());
 
         var add = Existing == null;
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = add ? "New identity" : "Edit identity",
+            Title = add ? s.IdentityTitleNew : s.IdentityTitleEdit,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Action = (add ? "Add" : "Save", DialogButtonRole.Primary),
+            Action = (add ? s.CommonAdd : s.CommonSave, DialogButtonRole.Primary),
             Command = vm.Save,
             Body =
             [
                 new LabeledInput
                 {
-                    Label = "Profile name",
+                    Label = s.IdentityProfileNameLabel,
                     Value = vm.DisplayName,
-                    Placeholder = "Work",
+                    Placeholder = s.IdentityProfileNamePlaceholder,
                 },
                 new LabeledInput
                 {
-                    Label = "Author name",
+                    Label = s.IdentityAuthorNameLabel,
                     Value = vm.AuthorName,
-                    Placeholder = "Jane Dev",
+                    Placeholder = s.IdentityAuthorNamePlaceholder,
                 },
                 new LabeledInput
                 {
-                    Label = "Author email",
+                    Label = s.IdentityAuthorEmailLabel,
                     Value = vm.AuthorEmail,
-                    Placeholder = "jane@company.com",
+                    Placeholder = s.IdentityAuthorEmailPlaceholder,
                 },
                 new LabeledInput
                 {
-                    Label = "SSH key (optional)",
+                    Label = s.IdentitySshKeyLabel,
                     Value = vm.SshKeyPath,
-                    Placeholder = "~/.ssh/id_work",
-                    Hint = "Used for fetch/push from repos matched by this profile.",
+                    Placeholder = s.IdentitySshKeyPlaceholder,
+                    Hint = s.IdentitySshKeyHint,
                 },
                 new LabeledInput
                 {
-                    Label = "Match: host",
+                    Label = s.IdentityMatchHostLabel,
                     Value = vm.MatchHost,
-                    Placeholder = "github.com",
-                    Hint = "Repos whose remote is on this host use this profile.",
+                    Placeholder = s.IdentityMatchHostPlaceholder,
+                    Hint = s.IdentityMatchHostHint,
                 },
                 new LabeledInput
                 {
-                    Label = "Match: owner (optional)",
+                    Label = s.IdentityMatchOwnerLabel,
                     Value = vm.MatchOwner,
-                    Placeholder = "your-org",
-                    Hint = "Limit to one org/user. Leave blank to match any repo on the host.",
+                    Placeholder = s.IdentityMatchOwnerPlaceholder,
+                    Hint = s.IdentityMatchOwnerHint,
                 },
             ],
         };

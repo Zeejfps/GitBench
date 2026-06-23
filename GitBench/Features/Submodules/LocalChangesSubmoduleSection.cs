@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -17,18 +18,22 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
     private const int ContentPadding = 10;
 
     private readonly Context _ctx;
+    private readonly ILocalizationService _loc;
     private readonly TextView _headerText;
     private readonly ColumnView _rows;
     private readonly Action<string> _onStage;
     private readonly Action<string> _onReset;
 
+    private IReadOnlyList<SubmoduleInfo> _drift = Array.Empty<SubmoduleInfo>();
+
     public LocalChangesSubmoduleSection(Context ctx, Action<string> onStage, Action<string> onReset)
     {
         _ctx = ctx;
+        _loc = ctx.Localization();
         _onStage = onStage;
         _onReset = onReset;
 
-        _headerText = FileChangesUI.CreateHeaderText(ctx, "Submodules");
+        _headerText = FileChangesUI.CreateHeaderText(ctx, _loc.Strings.Value.SubmodulesSectionHeader);
         _rows = new ColumnView { Gap = FileChangesUI.RowGap };
 
         AddChildToSelf(new ColumnView
@@ -49,13 +54,23 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
                 },
             },
         });
+
+        // Header, drift-row labels, and the action tooltips are all localized; re-render the
+        // whole section on a live locale switch by replaying the current drift list.
+        this.Bind(_loc.Strings, _ => Render());
     }
 
     public void SetDrift(IReadOnlyList<SubmoduleInfo> drift)
     {
-        _headerText.Text = FileChangesUI.FormatHeader("Submodules", drift.Count);
+        _drift = drift;
+        Render();
+    }
+
+    private void Render()
+    {
+        _headerText.Text = FileChangesUI.FormatHeader(_loc.Strings.Value.SubmodulesSectionHeader, _drift.Count);
         _rows.Children.Clear();
-        foreach (var info in drift)
+        foreach (var info in _drift)
             _rows.Children.Add(BuildRow(info));
     }
 
@@ -82,7 +97,7 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
 
         var label = new TextView(_ctx.Canvas)
         {
-            Text = $"{info.Path}  ·  {DriftLabel(info)}",
+            Text = $"{info.Path}  ·  {DriftLabel(_loc.Strings.Value, info)}",
         };
         label.BindThemedTextColor(theme, s => s.SubmoduleSection.RowText);
 
@@ -92,14 +107,14 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         {
             Icon = LucideIcons.ChevronRight,
             Command = new Command(() => _onStage(info.Path), new State<bool>(info.Status == SubmoduleStatus.Modified)),
-            Tooltip = "Stage pointer update",
+            Tooltip = _loc.Strings.Value.SubmodulesActionStage,
         }.BuildView(_ctx);
 
         var resetButton = new LocalChangesHeaderActionButton
         {
             Icon = LucideIcons.X,
             Command = new Command(() => _onReset(info.Path), new State<bool>(info.Status != SubmoduleStatus.NotInitialized)),
-            Tooltip = "Reset to recorded SHA",
+            Tooltip = _loc.Strings.Value.SubmodulesActionReset,
         }.BuildView(_ctx);
 
         return new FlexRowView
@@ -116,20 +131,20 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         };
     }
 
-    private static string DriftLabel(SubmoduleInfo info) => info.Status switch
+    private static string DriftLabel(Strings strings, SubmoduleInfo info) => info.Status switch
     {
-        SubmoduleStatus.NotInitialized => "not initialized",
-        SubmoduleStatus.MergeConflict  => "merge conflict",
-        SubmoduleStatus.Modified       => ShortShaSummary(info),
-        _                              => "up to date",
+        SubmoduleStatus.NotInitialized => strings.SubmodulesStatusNotInitialized,
+        SubmoduleStatus.MergeConflict  => strings.SubmodulesStatusMergeConflict,
+        SubmoduleStatus.Modified       => ShortShaSummary(strings, info),
+        _                              => strings.SubmodulesStatusUpToDate,
     };
 
-    private static string ShortShaSummary(SubmoduleInfo info)
+    private static string ShortShaSummary(Strings strings, SubmoduleInfo info)
     {
         var recorded = ShortSha(info.RecordedSha);
         var current = ShortSha(info.CurrentSha);
         if (string.IsNullOrEmpty(recorded) || string.IsNullOrEmpty(current))
-            return "modified";
+            return strings.SubmodulesStatusModified;
         return $"{recorded} → {current}";
     }
 

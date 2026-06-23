@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -29,22 +30,23 @@ internal sealed record DeleteStashDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Delete stash?",
+            Title = s.StashDeleteTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthCompact,
-            Action = ("Delete", DialogButtonRole.Destructive),
+            Action = (s.CommonDelete, DialogButtonRole.Destructive),
             Command = vm.Drop,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = $"{Subject}\n\nThis stash will be permanently deleted. This cannot be undone.",
+                    Value = s.StashDeleteBody(Subject),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
             ],
         };

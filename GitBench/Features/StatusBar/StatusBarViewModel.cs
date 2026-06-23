@@ -4,6 +4,7 @@ using GitBench.Features.Identity;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using ZGF.Gui;
@@ -29,6 +30,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly IMessageBus _bus;
     private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
+    private readonly ILocalizationService _loc;
     private readonly SpinnerAnimation _updateSpinner;
     private readonly GenerationGuard _identityLane;
     private CancellationTokenSource? _feedbackCts;
@@ -63,7 +65,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IGitService git,
         IMessageBus bus,
         State<ThemeMode> themeMode,
-        UpdateService updateService)
+        UpdateService updateService,
+        ILocalizationService loc)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
@@ -73,6 +76,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _bus = bus;
         _themeMode = themeMode;
         _updateService = updateService;
+        _loc = loc;
         _updateSpinner = new SpinnerAnimation(ticker);
         _identityLane = CreateLane();
 
@@ -186,11 +190,11 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             },
             _identityLane);
 
-    private static (string? Text, bool Warning) LabelFor(Identity.Identity id) => id switch
+    private (string? Text, bool Warning) LabelFor(Identity.Identity id) => id switch
     {
         Identity.Identity.FromProfile p => (p.Profile.DisplayName, false),
         Identity.Identity.FromConfig c => (FormatLocal(c), false),
-        Identity.Identity.Unmatched => ("No identity", true),
+        Identity.Identity.Unmatched => (_loc.Strings.Value.StatusbarIdentityNone, true),
         _ => (null, false), // NoRemote / Pending: nothing to show
     };
 
@@ -209,6 +213,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         // thread on git during the click. Null until the first resolve lands.
         var resolved = _identity.Cached(repo.Path);
         var activeProfileId = (resolved as Identity.Identity.FromProfile)?.Profile.Id;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>();
 
         foreach (var p in _profiles.Profiles)
@@ -223,25 +228,25 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         if (_profiles.Profiles.Count > 0) items.Add(RepoBarContextMenu.Separator);
 
         items.Add(new RepoBarContextMenu.Item(
-            "Auto-detect by remote",
+            s.StatusbarIdentityAutoDetect,
             () => ApplyOverride(repo, null),
             Enabled: _registry.GetIdentityOverride(repo.Id) != null));
 
         if (resolved is Identity.Identity.FromProfile pinned)
-            items.Add(new RepoBarContextMenu.Item("Pin to repo (write git config)", () => Pin(repo, pinned.Profile.Id)));
+            items.Add(new RepoBarContextMenu.Item(s.StatusbarIdentityPinToRepo, () => Pin(repo, pinned.Profile.Id)));
 
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
-            "Add profile…",
+            s.StatusbarIdentityAddProfile,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog { Existing = null, OnClose = onClose }))));
 
         if (activeProfileId is { } editId && _profiles.Find(editId) is { } editable)
         {
             items.Add(new RepoBarContextMenu.Item(
-                $"Edit “{editable.DisplayName}”…",
+                s.StatusbarIdentityEditProfile(editable.DisplayName),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new IdentityProfileEditDialog { Existing = editable, OnClose = onClose }))));
             items.Add(new RepoBarContextMenu.Item(
-                $"Delete “{editable.DisplayName}”",
+                s.StatusbarIdentityDeleteProfile(editable.DisplayName),
                 () => _profiles.Remove(editable.Id)));
         }
 
@@ -264,6 +269,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         if (profile == null) return;
         var config = LocalIdentityConfig.For(profile);
         var dispatcher = Dispatcher;
+        var strings = _loc.Strings.Value;
         Task.Run(() =>
         {
             var outcome = _git.PinLocalIdentity(repo, config);
@@ -275,7 +281,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
                 if (outcome is GitOutcome.Success) _registry.SetIdentityOverride(repo.Id, null);
                 _identity.FlushAll();
                 if (outcome is GitOutcome.Failed failed)
-                    _bus.Broadcast(new ShowOperationErrorMessage("Pin identity", failed.Message));
+                    _bus.Broadcast(new ShowOperationErrorMessage(strings.StatusbarErrorPinIdentity, failed.Message));
             });
         });
     }

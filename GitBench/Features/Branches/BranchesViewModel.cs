@@ -5,6 +5,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Stash;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -34,6 +35,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private readonly State<MainViewMode> _mode;
+    private readonly ILocalizationService _loc;
 
     public IReadable<BranchListing?> Listing { get; }
     public IReadable<BranchesUiState> Ui { get; }
@@ -60,13 +62,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         State<MainViewMode> mode,
-        IRepoSnapshotStore store)
+        IRepoSnapshotStore store,
+        ILocalizationService loc)
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
         _mode = mode;
+        _loc = loc;
 
         _branchOpGen = CreateLane();
         _stashGen = CreateLane();
@@ -468,7 +472,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 switch (outcome)
                 {
                     case MergeLikeOutcome.Failed failed:
-                        _bus.Broadcast(new ShowOperationErrorMessage("Stash apply failed", failed.Message));
+                        _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorStashApplyFailed, failed.Message));
                         return;
                     case MergeLikeOutcome.Conflicted:
                         _bus.Broadcast(new RefsChangedMessage(repo.Id));
@@ -515,7 +519,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 _bus.Broadcast(new RefsChangedMessage(repo.Id));
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                 if (failed != null)
-                    _bus.Broadcast(new ShowOperationErrorMessage("Checkout failed", failed.Message));
+                    _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
             },
             lane: _branchOpGen);
     }
@@ -536,7 +540,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             {
                 Update(s => s with { BusyBranch = null });
                 if (outcome is GitOutcome.Failed failed)
-                    bus.Broadcast(new ShowOperationErrorMessage("Fast-forward failed", failed.Message));
+                    bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorFastForwardFailed, failed.Message));
                 else
                     bus.Broadcast(new RefsChangedMessage(repo.Id));
             },
@@ -550,10 +554,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
-                "New branch…",
+                s.BranchesContextNewBranch,
                 CreateBranch,
                 LucideIcons.Branch),
         };
@@ -564,11 +569,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     // Appends a separator followed by Expand All / Collapse All. Shared by every parent
     // row's menu so the wording, icons, and ordering stay consistent across the tree.
-    private static void AppendExpandCollapseItems(List<RepoBarContextMenu.Item> items, Action expandAll, Action collapseAll)
+    private void AppendExpandCollapseItems(List<RepoBarContextMenu.Item> items, Action expandAll, Action collapseAll)
     {
+        var s = _loc.Strings.Value;
         items.Add(RepoBarContextMenu.Separator);
-        items.Add(new RepoBarContextMenu.Item("Expand All", expandAll, LucideIcons.ChevronDown));
-        items.Add(new RepoBarContextMenu.Item("Collapse All", collapseAll, LucideIcons.ChevronRight));
+        items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, expandAll, LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, collapseAll, LucideIcons.ChevronRight));
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderMenuItems(string? remoteName, string folderPath)
@@ -576,9 +582,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (State.Value.Listing == null) return Array.Empty<RepoBarContextMenu.Item>();
         if (!FolderHasSubFolders(remoteName, folderPath)) return Array.Empty<RepoBarContextMenu.Item>();
 
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>();
-        items.Add(new RepoBarContextMenu.Item("Expand All", () => SetFolderDescendantsOpen(remoteName, folderPath, true), LucideIcons.ChevronDown));
-        items.Add(new RepoBarContextMenu.Item("Collapse All", () => SetFolderDescendantsOpen(remoteName, folderPath, false), LucideIcons.ChevronRight));
+        items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, () => SetFolderDescendantsOpen(remoteName, folderPath, true), LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, () => SetFolderDescendantsOpen(remoteName, folderPath, false), LucideIcons.ChevronRight));
         return items;
     }
 
@@ -602,6 +609,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
+        var s = _loc.Strings.Value;
         var state = State.Value;
         var thisRowBusy = state.BusyBranch == fullPath;
         var checkedOutElsewhere = state.WorktreeBranches.Contains(fullPath);
@@ -618,13 +626,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (checkedOutElsewhere)
         {
             items.Add(new RepoBarContextMenu.Item(
-                "Switch to worktree",
+                s.BranchesContextSwitchWorktree,
                 () => SwitchToSiblingHoldingBranch(capturedName),
                 LucideIcons.Branch));
         }
 
         items.Add(new RepoBarContextMenu.Item(
-            "Checkout",
+            s.CommonCheckout,
             () => StartCheckoutLocal(capturedName),
             LucideIcons.Branch,
             Enabled: !checkoutDisabled));
@@ -642,18 +650,18 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 || state.IsBranchOpInFlight
                 || (entry.BehindBy ?? 0) == 0;
             items.Add(new RepoBarContextMenu.Item(
-                $"Fast-forward to '{ffRemote}/{ffBranch}'",
+                s.BranchesContextFastForward(ffRemote, ffBranch),
                 () => StartFastForwardLocal(capturedName, ffRemote, ffBranch),
                 LucideIcons.Pull,
                 Enabled: !ffDisabled,
-                LabelSegments: BuildFastForwardSegments(ffRemote, ffBranch)));
+                LabelSegments: BoldSegments(s.BranchesContextFastForward(ffRemote, ffBranch), $"{ffRemote}/{ffBranch}")));
         }
 
         if (headBranch != null && !isHead)
         {
             var capturedHead = headBranch;
             items.Add(new RepoBarContextMenu.Item(
-                $"Merge {capturedName} into {capturedHead}…",
+                s.BranchesContextMerge(capturedName, capturedHead),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog
                 {
                     Request = new MergeBranchRequest(capturedRepo, capturedName, capturedName, capturedHead),
@@ -661,9 +669,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 })),
                 LucideIcons.Merge,
                 Enabled: canMerge,
-                LabelSegments: BuildMergeSegments(capturedName, capturedHead)));
+                LabelSegments: BoldSegments(s.BranchesContextMerge(capturedName, capturedHead), capturedName, capturedHead)));
             items.Add(new RepoBarContextMenu.Item(
-                $"Rebase {capturedHead} onto {capturedName}…",
+                s.BranchesContextRebase(capturedHead, capturedName),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog
                 {
                     Request = new RebaseBranchRequest(capturedRepo, capturedHead, capturedName, capturedName),
@@ -671,10 +679,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 })),
                 LucideIcons.Merge,
                 Enabled: canMerge,
-                LabelSegments: BuildRebaseSegments(capturedHead, capturedName)));
+                LabelSegments: BoldSegments(s.BranchesContextRebase(capturedHead, capturedName), capturedHead, capturedName)));
         }
         items.Add(new RepoBarContextMenu.Item(
-            "Rename…",
+            s.BranchesContextRename,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameBranchDialog
             {
                 Repo = capturedRepo,
@@ -686,7 +694,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var upstreamRemote = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamRemote : null;
         var upstreamBranch = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamBranch : null;
         items.Add(new RepoBarContextMenu.Item(
-            "Delete…",
+            s.BranchesContextDelete,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteLocalBranchDialog
             {
                 Repo = capturedRepo,
@@ -707,10 +715,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var capturedRepo = repo;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
-                "Add remote…",
+                s.BranchesContextAddRemote,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog
                 {
                     Repo = capturedRepo,
@@ -729,10 +738,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var capturedRemote = remoteName;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
-                $"Edit {capturedRemote}…",
+                s.BranchesContextEditRemote(capturedRemote),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new EditRemoteDialog
                 {
                     Repo = repo,
@@ -758,10 +768,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var capturedRepo = repo;
         var capturedRemote = remoteName;
         var capturedName = fullPath;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
-                "Checkout",
+                s.CommonCheckout,
                 () => ActivateRemoteBranch(capturedRemote, capturedName),
                 LucideIcons.Branch,
                 Enabled: !checkoutDisabled),
@@ -773,7 +784,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             var display = $"{capturedRemote}/{capturedName}";
             var sourceRef = display;
             items.Add(new RepoBarContextMenu.Item(
-                $"Merge {display} into {capturedHead}…",
+                s.BranchesContextMerge(display, capturedHead),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog
                 {
                     Request = new MergeBranchRequest(capturedRepo, sourceRef, display, capturedHead),
@@ -781,9 +792,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 })),
                 LucideIcons.Merge,
                 Enabled: !state.IsBranchOpInFlight,
-                LabelSegments: BuildMergeSegments(display, capturedHead)));
+                LabelSegments: BoldSegments(s.BranchesContextMerge(display, capturedHead), display, capturedHead)));
             items.Add(new RepoBarContextMenu.Item(
-                $"Rebase {capturedHead} onto {display}…",
+                s.BranchesContextRebase(capturedHead, display),
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new RebaseBranchDialog
                 {
                     Request = new RebaseBranchRequest(capturedRepo, capturedHead, sourceRef, display),
@@ -791,11 +802,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 })),
                 LucideIcons.Merge,
                 Enabled: !state.IsBranchOpInFlight,
-                LabelSegments: BuildRebaseSegments(capturedHead, display)));
+                LabelSegments: BoldSegments(s.BranchesContextRebase(capturedHead, display), capturedHead, display)));
         }
 
         items.Add(new RepoBarContextMenu.Item(
-            "Delete remote branch…",
+            s.BranchesContextDeleteRemoteBranch,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteRemoteBranchDialog
             {
                 Repo = capturedRepo,
@@ -813,15 +824,16 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var capturedRepo = repo;
+        var s = _loc.Strings.Value;
         return new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
-                "Apply",
+                s.BranchesContextStashApply,
                 () => ApplyStash(index, label, subject),
                 LucideIcons.Stash,
                 Enabled: !_stashGen.InFlight),
             new RepoBarContextMenu.Item(
-                "Rename…",
+                s.BranchesContextRename,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new RenameStashDialog
                 {
                     Repo = capturedRepo,
@@ -831,7 +843,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 })),
                 LucideIcons.PencilLine),
             new RepoBarContextMenu.Item(
-                "Delete…",
+                s.BranchesContextDelete,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteStashDialog
                 {
                     Repo = capturedRepo,
@@ -861,30 +873,43 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return null;
     }
 
-    private static IReadOnlyList<MenuLabelSegment> BuildMergeSegments(string source, string target) =>
-    [
-        new MenuLabelSegment("Merge "),
-        new MenuLabelSegment(source, Bold: true),
-        new MenuLabelSegment(" into "),
-        new MenuLabelSegment(target, Bold: true),
-        new MenuLabelSegment("…"),
-    ];
+    // Renders a localized, already-formatted menu label with the interpolated values bolded:
+    // the catalog owns the wording ("Merge {source} into {target}…") and word order, and we
+    // re-find the substituted values in the result to re-create the bold segments. Keeps the
+    // emphasis on branch names while letting the surrounding text translate freely.
+    private static IReadOnlyList<MenuLabelSegment> BoldSegments(string text, params string[] bold)
+    {
+        var segments = new List<MenuLabelSegment>();
+        var i = 0;
+        while (i < text.Length)
+        {
+            var bestIdx = -1;
+            var bestLen = 0;
+            foreach (var b in bold)
+            {
+                if (string.IsNullOrEmpty(b)) continue;
+                var idx = text.IndexOf(b, i, StringComparison.Ordinal);
+                if (idx >= 0 && (bestIdx < 0 || idx < bestIdx))
+                {
+                    bestIdx = idx;
+                    bestLen = b.Length;
+                }
+            }
 
-    private static IReadOnlyList<MenuLabelSegment> BuildRebaseSegments(string source, string target) =>
-    [
-        new MenuLabelSegment("Rebase "),
-        new MenuLabelSegment(source, Bold: true),
-        new MenuLabelSegment(" onto "),
-        new MenuLabelSegment(target, Bold: true),
-        new MenuLabelSegment("…"),
-    ];
+            if (bestIdx < 0)
+            {
+                segments.Add(new MenuLabelSegment(text.Substring(i)));
+                break;
+            }
 
-    private static IReadOnlyList<MenuLabelSegment> BuildFastForwardSegments(string remote, string branch) =>
-    [
-        new MenuLabelSegment("Fast-forward to '"),
-        new MenuLabelSegment($"{remote}/{branch}", Bold: true),
-        new MenuLabelSegment("'"),
-    ];
+            if (bestIdx > i)
+                segments.Add(new MenuLabelSegment(text.Substring(i, bestIdx - i)));
+            segments.Add(new MenuLabelSegment(text.Substring(bestIdx, bestLen), Bold: true));
+            i = bestIdx + bestLen;
+        }
+
+        return segments;
+    }
 }
 
 internal sealed record BranchesState(

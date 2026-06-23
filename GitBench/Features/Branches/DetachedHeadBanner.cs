@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -52,7 +53,7 @@ internal sealed record DetachedHeadBanner : Widget
                             {
                                 Child = new Text
                                 {
-                                    Value = "Detached HEAD — your latest commits aren't on any branch.",
+                                    Value = L.T(s => s.BranchesDetachedHeadMessage),
                                     VAlign = TextAlignment.Center,
                                     Wrap = TextWrap.Wrap,
                                     Color = Theme.Color(s => s.Banner.Text),
@@ -65,9 +66,9 @@ internal sealed record DetachedHeadBanner : Widget
                                 Children =
                                 [
                                     new ButtonIcon { Value = LucideIcons.Branch },
-                                    new ButtonLabel { Value = "Create branch" },
+                                    new ButtonLabel { Value = L.T(s => s.BranchesDetachedHeadCreateButton) },
                                 ],
-                            }.WithTooltip("Create a branch here so these commits aren't lost")
+                            }.WithTooltip(L.T(s => s.BranchesDetachedHeadTooltip))
                                 .WithController<KbmController>(),
                         ],
                     },

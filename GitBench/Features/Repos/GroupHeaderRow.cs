@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -58,7 +59,7 @@ internal sealed record GroupHeaderRow : Widget
             view, ctx,
             vm.Group,
             h => isHovered.Value = h,
-            _ => BuildMenuItems(vm),
+            _ => BuildMenuItems(ctx, vm),
             () => vm.IsRenaming.Value,
             vm.ToggleCollapsed.Execute));
     }
@@ -76,23 +77,24 @@ internal sealed record GroupHeaderRow : Widget
         },
     };
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(GroupHeaderRowViewModel vm)
+    private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Context ctx, GroupHeaderRowViewModel vm)
     {
+        var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new("Rename group", vm.BeginRename.Execute, LucideIcons.PencilLine),
+            new(s.ReposGroupRename, vm.BeginRename.Execute, LucideIcons.PencilLine),
         };
 
         if (vm.CanDelete)
-            items.Add(new RepoBarContextMenu.Item("Delete group", vm.Delete.Execute, LucideIcons.Trash));
+            items.Add(new RepoBarContextMenu.Item(s.ReposGroupDelete, vm.Delete.Execute, LucideIcons.Trash));
 
-        items.Add(new RepoBarContextMenu.Item("New group", vm.NewGroup.Execute, LucideIcons.FolderPlus));
+        items.Add(new RepoBarContextMenu.Item(s.CommonNewGroup, vm.NewGroup.Execute, LucideIcons.FolderPlus));
 
         if (vm.HasMultipleGroups)
         {
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(new RepoBarContextMenu.Item("Expand All", vm.ExpandAllGroups.Execute, LucideIcons.ChevronDown));
-            items.Add(new RepoBarContextMenu.Item("Collapse All", vm.CollapseAllGroups.Execute, LucideIcons.ChevronRight));
+            items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, vm.ExpandAllGroups.Execute, LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, vm.CollapseAllGroups.Execute, LucideIcons.ChevronRight));
         }
         return items;
     }

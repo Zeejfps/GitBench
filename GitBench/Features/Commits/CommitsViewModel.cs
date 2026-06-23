@@ -4,6 +4,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -32,6 +33,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
 
     public IReadable<CommitsRenderState> Render { get; }
     public IReadable<string?> SelectedSha { get; }
@@ -65,12 +67,14 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        IRepoSnapshotStore store)
+        IRepoSnapshotStore store,
+        ILocalizationService loc)
         : base(dispatcher, CommitsState.Initial)
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _loc = loc;
 
         _resetGen = CreateLane();
         _moveGen = CreateLane();
@@ -167,18 +171,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             },
             onResult: (probe, error) =>
             {
+                var strings = _loc.Strings.Value;
                 if (error != null)
                 {
-                    _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", error));
+                    _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, error));
                     return;
                 }
                 switch (probe)
                 {
                     case ResetProbe.Failed f:
-                        _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", f.Message));
+                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, f.Message));
                         break;
                     case ResetProbe.CleanReset { Outcome: GitOutcome.Failed failed }:
-                        _bus.Broadcast(new ShowOperationErrorMessage("Reset failed", failed.Message));
+                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, failed.Message));
                         break;
                     case ResetProbe.CleanReset:
                         _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
@@ -277,15 +282,16 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             },
             onResult: (probe, error) =>
             {
+                var strings = _loc.Strings.Value;
                 if (error != null)
                 {
-                    _bus.Broadcast(new ShowOperationErrorMessage("Reset branch failed", error));
+                    _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, error));
                     return;
                 }
                 switch (probe)
                 {
                     case MoveBranchProbe.Moved { Outcome: GitOutcome.Failed failed }:
-                        _bus.Broadcast(new ShowOperationErrorMessage("Reset branch failed", failed.Message));
+                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, failed.Message));
                         break;
                     case MoveBranchProbe.Moved:
                         _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
@@ -344,12 +350,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // same and lets the banner (which detects CHERRY_PICK_HEAD) drive resolve/continue/abort; a
     // hard failure (dirty tree, bad ref, …) surfaces an error.
     public void RequestCherryPick(string sha) =>
-        RunCommitApply(sha, "Cherry-pick failed", (repo, s) => _gitService.CherryPick(repo, s));
+        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorCherryPickFailed, (repo, s) => _gitService.CherryPick(repo, s));
 
     // Creates a new commit that undoes the named commit. Same off-thread flow as cherry-pick;
     // its conflict sentinel is REVERT_HEAD, also handled by the operation banner.
     public void RequestRevert(string sha) =>
-        RunCommitApply(sha, "Revert failed", (repo, s) => _gitService.RevertCommit(repo, s));
+        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorRevertFailed, (repo, s) => _gitService.RevertCommit(repo, s));
 
     // Shared driver for the cherry-pick / revert one-shot ops: gate re-entry, run the git op
     // off-thread on the apply lane, then either refresh (success, incl. Conflicted — the

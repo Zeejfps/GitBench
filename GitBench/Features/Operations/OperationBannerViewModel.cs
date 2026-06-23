@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Observable;
@@ -13,6 +14,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
     private readonly SpinnerAnimation _spinner;
     // Exclusive lane for `git X --continue`. Deliberately off the default Gen lane: Reload()
     // runs there, and a reload landing mid-continue must not drop the continue's result.
@@ -30,12 +32,14 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
         IGitService gitService,
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
         : base(dispatcher, OperationBannerState.Initial)
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _loc = loc;
         _spinner = new SpinnerAnimation(ticker);
         _continueLane = CreateLane();
 
@@ -76,13 +80,14 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
             outcome =>
             {
                 _spinner.Stop();
+                var strings = _loc.Strings.Value;
                 switch (outcome)
                 {
                     case ContinueOutcome.MoreConflicts more:
-                        bus.Broadcast(new ShowOperationErrorMessage("Resolve remaining conflicts", more.Message));
+                        bus.Broadcast(new ShowOperationErrorMessage(strings.OperationsErrorResolveRemaining, more.Message));
                         break;
                     case ContinueOutcome.Failed failed:
-                        bus.Broadcast(new ShowOperationErrorMessage("Continue failed", failed.Message));
+                        bus.Broadcast(new ShowOperationErrorMessage(strings.OperationsErrorContinueFailed, failed.Message));
                         break;
                     default:
                         bus.Broadcast(new RefsChangedMessage(repo.Id));

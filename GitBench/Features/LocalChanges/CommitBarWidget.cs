@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -33,12 +34,13 @@ internal sealed record CommitBarWidget : Widget
         var vm = ctx.Require<LocalChangesViewModel>();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
+        var loc = ctx.Localization();
 
         var titleInput = new TextInputView(ctx.Canvas)
         {
             TextWrap = TextWrap.NoWrap,
-            PlaceholderText = "Commit title",
         };
+        titleInput.Bind(loc.Strings, s => titleInput.PlaceholderText = s.LocalchangesCommitTitlePlaceholder);
         titleInput.BindThemed(theme, s =>
         {
             titleInput.BackgroundColor = s.TextInput.Background;
@@ -51,19 +53,17 @@ internal sealed record CommitBarWidget : Widget
         titleInput.UseController(input, titleController);
         titleInput.BindTwoWay(vm.Title, vm.SetTitle);
 
-        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight)
-        {
-            PlaceholderText = "Commit description",
-        };
+        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight);
+        descriptionField.Bind(loc.Strings, s => descriptionField.PlaceholderText = s.LocalchangesCommitDescriptionPlaceholder);
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 
         var commitWidget = new SecondaryDialogButton
         {
-            Label = Prop.Bind<string?>(() =>
+            Label = L.T(s =>
             {
                 var merging = vm.IsMerging.Value;
-                if (vm.CommitBusy.Value) return merging ? "Committing merge" : "Committing";
-                return merging ? "Commit merge" : "Commit";
+                if (vm.CommitBusy.Value) return merging ? s.LocalchangesCommitMergeButtonBusy : s.LocalchangesCommitButtonBusy;
+                return merging ? s.LocalchangesCommitMergeButton : s.LocalchangesCommitButton;
             }),
             Icon = Prop.Bind<string?>(() => vm.CommitBusy.Value ? LucideIcons.Loader : null),
             IconRotation = Prop.Bind(vm.CommitRotation),
@@ -113,7 +113,7 @@ internal sealed record CommitBarWidget : Widget
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
-                                        new CheckboxWidget { Label = "Amend", Checked = amend }
+                                        new CheckboxWidget { Label = L.T(s => s.LocalchangesAmendCheckbox), Checked = amend }
                                             .WithController<KbmController>(),
                                         new Raw { View = commitButton },
                                     ],

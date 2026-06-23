@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Theming;
 
 namespace GitBench.App;
@@ -31,6 +32,8 @@ public sealed class PreferencesService : IDisposable
     }
 
     public void SetTheme(ThemeMode mode) => Mutate(p => p with { Theme = mode });
+
+    public void SetLanguage(Locale language) => Mutate(p => p with { Language = language });
 
     public void SetWindowSize(int width, int height)
     {

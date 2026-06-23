@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GitBench.App;
 using GitBench.Controls.Dialogs;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
 using ZGF.Gui;
@@ -59,6 +60,9 @@ internal static class PlatformServices
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 
             var bus = context.Require<IMessageBus>();
+            var locale = context.Require<State<Locale>>();
+            var loc = context.Require<ILocalizationService>();
+            var appMenu = context.Require<IAppMenu>();
 
             void ToggleTheme() =>
                 themeMode.Value = themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
@@ -68,65 +72,80 @@ internal static class PlatformServices
                 bus.Broadcast(new ShowDialogMessage(onClose =>
                     new AboutDialog { OnClose = onClose }.WithController<DialogKbmController>()));
 
-            context.Require<IAppMenu>().Install(new AppMenuBar
+            AppMenuBar BuildMenuBar()
             {
-                Menus =
+                var s = loc.Strings.Value;
+                return new AppMenuBar
                 {
-                    new AppMenu
+                    Menus =
                     {
-                        Title = "GitBench",
-                        Role = AppMenuRole.Application,
-                        Items =
+                        new AppMenu
                         {
-                            new AppMenuItem { Title = "About GitBench", OnClick = ShowAbout },
-                            AppMenuItem.Separator,
-                            new AppMenuItem { Title = "Check for Updates…", OnClick = CheckForUpdates },
-                            AppMenuItem.Separator,
-                            new AppMenuItem { Title = "Hide GitBench", Standard = AppMenuStandardAction.Hide, KeyEquivalent = "h" },
-                            new AppMenuItem
+                            Title = "GitBench",
+                            Role = AppMenuRole.Application,
+                            Items =
                             {
-                                Title = "Hide Others",
-                                Standard = AppMenuStandardAction.HideOthers,
-                                KeyEquivalent = "h",
-                                Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Option,
-                            },
-                            new AppMenuItem { Title = "Show All", Standard = AppMenuStandardAction.ShowAll },
-                            AppMenuItem.Separator,
-                            new AppMenuItem { Title = "Quit GitBench", Standard = AppMenuStandardAction.Quit, KeyEquivalent = "q" },
-                        },
-                    },
-                    new AppMenu
-                    {
-                        Title = "View",
-                        Items =
-                        {
-                            new AppMenuItem { Title = "Toggle Light/Dark Theme", OnClick = ToggleTheme },
-                            AppMenuItem.Separator,
-                            new AppMenuItem
-                            {
-                                Title = "Enter Full Screen",
-                                Standard = AppMenuStandardAction.ToggleFullScreen,
-                                KeyEquivalent = "f",
-                                Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Control,
+                                new AppMenuItem { Title = s.MenuAppAbout, OnClick = ShowAbout },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuAppCheckUpdates, OnClick = CheckForUpdates },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuAppHide, Standard = AppMenuStandardAction.Hide, KeyEquivalent = "h" },
+                                new AppMenuItem
+                                {
+                                    Title = s.MenuAppHideOthers,
+                                    Standard = AppMenuStandardAction.HideOthers,
+                                    KeyEquivalent = "h",
+                                    Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Option,
+                                },
+                                new AppMenuItem { Title = s.MenuAppShowAll, Standard = AppMenuStandardAction.ShowAll },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuAppQuit, Standard = AppMenuStandardAction.Quit, KeyEquivalent = "q" },
                             },
                         },
-                    },
-                    new AppMenu
-                    {
-                        Title = "Window",
-                        Role = AppMenuRole.Window,
-                        Items =
+                        new AppMenu
                         {
-                            new AppMenuItem { Title = "Minimize", Standard = AppMenuStandardAction.Minimize, KeyEquivalent = "m" },
-                            new AppMenuItem { Title = "Zoom", Standard = AppMenuStandardAction.Zoom },
-                            AppMenuItem.Separator,
-                            new AppMenuItem { Title = "Close Window", Standard = AppMenuStandardAction.Close, KeyEquivalent = "w" },
-                            AppMenuItem.Separator,
-                            new AppMenuItem { Title = "Bring All to Front", Standard = AppMenuStandardAction.BringAllToFront },
+                            Title = s.MenuViewTitle,
+                            Items =
+                            {
+                                new AppMenuItem { Title = s.MenuViewToggleTheme, OnClick = ToggleTheme },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuViewLanguageEnglish, OnClick = () => locale.Value = Locale.En },
+                                new AppMenuItem { Title = s.MenuViewLanguageSpanish, OnClick = () => locale.Value = Locale.Es },
+                                new AppMenuItem { Title = s.MenuViewLanguagePseudo, OnClick = () => locale.Value = Locale.Pseudo },
+                                AppMenuItem.Separator,
+                                new AppMenuItem
+                                {
+                                    Title = s.MenuViewFullscreen,
+                                    Standard = AppMenuStandardAction.ToggleFullScreen,
+                                    KeyEquivalent = "f",
+                                    Modifiers = AppMenuModifiers.Command | AppMenuModifiers.Control,
+                                },
+                            },
+                        },
+                        new AppMenu
+                        {
+                            Title = s.MenuWindowTitle,
+                            Role = AppMenuRole.Window,
+                            Items =
+                            {
+                                new AppMenuItem { Title = s.MenuWindowMinimize, Standard = AppMenuStandardAction.Minimize, KeyEquivalent = "m" },
+                                new AppMenuItem { Title = s.MenuWindowZoom, Standard = AppMenuStandardAction.Zoom },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuWindowClose, Standard = AppMenuStandardAction.Close, KeyEquivalent = "w" },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuWindowBringAllToFront, Standard = AppMenuStandardAction.BringAllToFront },
+                            },
                         },
                     },
-                },
-            });
+                };
+            }
+
+            appMenu.Install(BuildMenuBar());
+
+            // The native bar is built once at startup; rebuild it when the locale changes so the
+            // menu titles follow the active language like the rest of the UI. locale.Changed fires
+            // on the UI thread (the menu items that flip it run there), so the AppKit calls are safe.
+            locale.Changed += _ => appMenu.Install(BuildMenuBar());
         }
     }
 }

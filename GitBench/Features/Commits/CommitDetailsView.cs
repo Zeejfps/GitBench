@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -41,6 +42,7 @@ internal sealed class CommitDetailsView : ContainerView
 
     private readonly ICanvas _canvas;
     private readonly IThemeService<ThemeStyles> _theme;
+    private readonly ILocalizationService _loc;
     private readonly ColumnView _headerInfo;
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
@@ -50,12 +52,14 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly State<string?> _selectedPath = new(null);
     private readonly ListArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
+    private CommitDetailsRenderState? _lastRenderState;
 
     public CommitDetailsView(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
         _canvas = ctx.Canvas;
         _theme = ctx.Theme();
+        _loc = ctx.Localization();
         var vm = ctx.Require<CommitDetailsViewModel>();
 
         _headerInfo = new ColumnView { Gap = 8 };
@@ -153,6 +157,13 @@ internal sealed class CommitDetailsView : ContainerView
         this.UseController(input, _arrowController);
 
         this.UseViewModel(() => vm, Bind);
+
+        // The header labels ("Commit:", "Parents:") are baked into TextViews when a commit loads,
+        // so a live language switch needs an explicit re-render of the current state.
+        this.Bind(_loc.Strings, _ =>
+        {
+            if (_lastRenderState != null) SetRenderState(_lastRenderState);
+        });
     }
 
     private void Bind(CommitDetailsViewModel vm)
@@ -171,6 +182,7 @@ internal sealed class CommitDetailsView : ContainerView
 
     private void SetRenderState(CommitDetailsRenderState state)
     {
+        _lastRenderState = state;
         switch (state)
         {
             case CommitDetailsRenderState.Placeholder p:
@@ -219,15 +231,16 @@ internal sealed class CommitDetailsView : ContainerView
             topColumn.Children.Add(bodyText);
         }
 
-        var commitLine = new TextView(_canvas) { Text = $"Commit:  {d.Sha}" };
+        var strings = _loc.Strings.Value;
+        var commitLine = new TextView(_canvas) { Text = $"{strings.CommitsDetailsCommitLabel}  {d.Sha}" };
         commitLine.BindThemedTextColor(_theme, s => s.CommitDetailsView.MutedText);
         topColumn.Children.Add(commitLine);
 
         var parentLine = new TextView(_canvas)
         {
             Text = d.ParentShas.Count == 0
-                ? "Parents: (none)"
-                : "Parents: " + string.Join(", ", d.ParentShas.Select(ShortSha)),
+                ? $"{strings.CommitsDetailsParentsLabel} {strings.CommitsDetailsParentsNone}"
+                : $"{strings.CommitsDetailsParentsLabel} " + string.Join(", ", d.ParentShas.Select(ShortSha)),
         };
         parentLine.BindThemedTextColor(_theme, s => s.CommitDetailsView.MutedText);
         topColumn.Children.Add(parentLine);

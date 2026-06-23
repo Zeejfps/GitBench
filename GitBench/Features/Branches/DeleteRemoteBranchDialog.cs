@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -28,27 +29,28 @@ internal sealed record DeleteRemoteBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Delete remote branch",
+            Title = s.BranchesDeleteRemoteTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Delete", DialogButtonRole.Destructive),
+            Action = (s.CommonDelete, DialogButtonRole.Destructive),
             Command = vm.Delete,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = $"Delete '{BranchName}' from remote '{RemoteName}'?",
+                    Value = s.BranchesDeleteRemoteDescription(BranchName, RemoteName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Text
                 {
-                    Value = "This is a network operation. Your local branches are not affected.",
+                    Value = s.BranchesDeleteRemoteInfo,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
             ],
         };

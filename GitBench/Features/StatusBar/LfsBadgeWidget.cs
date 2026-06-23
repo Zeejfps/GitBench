@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -42,10 +43,10 @@ internal sealed record LfsBadgeWidget : Widget
                             FontSize = 10f,
                             HAlign = TextAlignment.Center,
                             VAlign = TextAlignment.Center,
-                            Value = status.Bind(string? (s) => s switch
+                            Value = L.T(s => status.Value switch
                             {
-                                LfsBadge.Tracked => "Git LFS",
-                                LfsBadge.NotTracked => "Not in LFS",
+                                LfsBadge.Tracked => s.StatusbarLfsTracked,
+                                LfsBadge.NotTracked => s.StatusbarLfsNotTracked,
                                 _ => string.Empty,
                             }),
                             Color = Prop.Bind(() => status.Value == LfsBadge.Tracked

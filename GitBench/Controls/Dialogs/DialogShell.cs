@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -73,8 +74,8 @@ internal sealed class DialogShell
     /// <summary>Vertical gap between body rows (and the footer).</summary>
     public float BodyGap { get; init; } = 12f;
 
-    /// <summary>Label of the secondary (left) button. Defaults to "Cancel".</summary>
-    public string CancelLabel { get; init; } = "Cancel";
+    /// <summary>Label of the secondary (left) button. Defaults to the localized "Cancel".</summary>
+    public string? CancelLabel { get; init; }
 
     /// <summary>The action (right) button. Required.</summary>
     public ActionSpec Action { get; init; }
@@ -129,7 +130,7 @@ internal sealed class DialogShell
 
         var cancelView = new SecondaryDialogButton
         {
-            Label = CancelLabel,
+            Label = CancelLabel ?? _ctx.Localization().Strings.Value.CommonCancel,
             Command = new Command(_onClose, _cancelEnabled),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>().BuildView(_ctx);

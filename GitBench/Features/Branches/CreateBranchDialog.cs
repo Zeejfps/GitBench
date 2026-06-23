@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -30,30 +31,31 @@ internal sealed record CreateBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Create branch",
+            Title = s.BranchesCreateTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Create", DialogButtonRole.Primary),
+            Action = (s.CommonCreate, DialogButtonRole.Primary),
             Command = vm.Create,
             Body =
             [
                 new LabeledInput
                 {
-                    Label = "Branch name",
+                    Label = s.BranchesCreateNameLabel,
                     Value = vm.Name,
                     Status = vm.NameStatus,
                 },
                 new LabeledInput
                 {
-                    Label = "Starting point",
+                    Label = s.BranchesCreateStartPointLabel,
                     Value = vm.StartPoint,
-                    Hint = "Branch, tag, or commit SHA. Leave blank for HEAD.",
+                    Hint = s.BranchesCreateStartPointHint,
                 },
                 new CheckboxWidget
                 {
-                    Label = "Check out after create",
+                    Label = s.BranchesCreateCheckoutLabel,
                     Checked = vm.Checkout,
                     Height = 22,
                 }.WithController<KbmController>(),

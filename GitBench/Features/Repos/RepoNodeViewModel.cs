@@ -3,6 +3,7 @@ using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Observable;
@@ -32,6 +33,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly IMessageBus _bus;
     private readonly IGitService _git;
     private readonly IPlatformShell? _shell;
+    private readonly ILocalizationService _loc;
 
     private readonly Derived<Repo?> _currentRepo;
     private readonly Derived<string> _displayName;
@@ -76,6 +78,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         IMessageBus bus,
         IGitService git,
         IPlatformShell? shell,
+        ILocalizationService loc,
         RepoNodeFactory factory)
     {
         _initial = repo;
@@ -85,6 +88,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _bus = bus;
         _git = git;
         _shell = shell;
+        _loc = loc;
 
         IsExpanded = registry.WatchWorktreeExpanded(repo.Id);
 
@@ -146,22 +150,23 @@ internal sealed class RepoNodeViewModel : IDisposable
     {
         var repo = Repo;
         var sourceGroup = _registry.FindGroupContaining(repo.Id);
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new("New worktree…",
+            new(s.ReposRepoNewWorktree,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog { Primary = repo, OnClose = onClose })),
                 LucideIcons.Branch),
-            new("Prune worktrees",
+            new(s.ReposRepoPruneWorktrees,
                 () =>
                 {
                     Task.Run(() => _git.PruneWorktrees(repo));
                     _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
                 },
                 LucideIcons.Trash),
-            new("Add submodule…",
+            new(s.ReposRepoAddSubmodule,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog { Primary = repo, OnClose = onClose })),
                 LucideIcons.Package),
-            new("Update all submodules…",
+            new(s.ReposRepoUpdateAllSubmodules,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose })),
                 LucideIcons.Pull),
         };
@@ -171,17 +176,17 @@ internal sealed class RepoNodeViewModel : IDisposable
             if (sourceGroup != null && group.Id == sourceGroup.Id) continue;
             var captured = group;
             items.Add(new RepoBarContextMenu.Item(
-                $"Move to: {captured.Name.Value}",
+                s.ReposRepoMoveToGroup(captured.Name.Value),
                 () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
                 LucideIcons.FolderInput));
         }
 
-        items.Add(new RepoBarContextMenu.Item("Remove repo", () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
         items.Add(new RepoBarContextMenu.Item(
-            "New group",
+            s.CommonNewGroup,
             () =>
             {
-                var id = _registry.CreateGroup("New Group");
+                var id = _registry.CreateGroup(s.ReposGroupNewDefault);
                 _registry.BeginRenameGroup(id);
             },
             LucideIcons.FolderPlus));
@@ -192,18 +197,19 @@ internal sealed class RepoNodeViewModel : IDisposable
     private IReadOnlyList<RepoBarContextMenu.Item> BuildWorktreeMenu()
     {
         var worktree = Repo;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new("Switch to worktree", () => _registry.SetActive(worktree.Id), LucideIcons.Branch),
+            new(s.ReposWorktreeSwitchTo, () => _registry.SetActive(worktree.Id), LucideIcons.Branch),
         };
 
         if (_shell is not null)
-            items.Add(new RepoBarContextMenu.Item("Open folder", () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
+            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
 
         if (worktree.ParentRepoId is { } parentId && FindRepo(parentId) is { } primary)
         {
             items.Add(new RepoBarContextMenu.Item(
-                "Remove worktree…",
+                s.ReposWorktreeRemove,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new RemoveWorktreeDialog { Primary = primary, Worktree = worktree, OnClose = onClose })),
                 LucideIcons.Trash));
         }
@@ -214,22 +220,23 @@ internal sealed class RepoNodeViewModel : IDisposable
     private IReadOnlyList<RepoBarContextMenu.Item> BuildSubmoduleMenu()
     {
         var submodule = Repo;
+        var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>();
 
         if (!submodule.IsMissing)
-            items.Add(new RepoBarContextMenu.Item("Switch to submodule", () => _registry.SetActive(submodule.Id), LucideIcons.Package));
+            items.Add(new RepoBarContextMenu.Item(s.ReposSubmoduleSwitchTo, () => _registry.SetActive(submodule.Id), LucideIcons.Package));
 
         if (_shell is not null)
-            items.Add(new RepoBarContextMenu.Item("Open folder", () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
+            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
 
         if (submodule.ParentRepoId is { } parentId && FindRepo(parentId) is { } primary)
         {
             items.Add(new RepoBarContextMenu.Item(
-                "Update submodule…",
+                s.ReposSubmoduleUpdate,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = primary, Target = submodule, OnClose = onClose })),
                 LucideIcons.Pull));
             items.Add(new RepoBarContextMenu.Item(
-                "Deinit submodule…",
+                s.ReposSubmoduleDeinit,
                 () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeinitSubmoduleDialog { Primary = primary, Submodule = submodule, OnClose = onClose })),
                 LucideIcons.Trash));
         }

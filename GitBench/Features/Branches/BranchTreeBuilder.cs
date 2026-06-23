@@ -1,5 +1,6 @@
 using GitBench.Features.LocalChanges;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 
 namespace GitBench.Features.Branches;
 
@@ -23,19 +24,19 @@ internal static class BranchTreeBuilder
     private const float IndentRemoteTreeBase = IndentLevel * 2; // remote branches: under section → remote
     private const float IndentStashBase = IndentLevel;       // stashes: one level under their section
 
-    public static IReadOnlyList<BranchRow> BuildRows(BranchListing? listing, BranchesUiState ui)
+    public static IReadOnlyList<BranchRow> BuildRows(BranchListing? listing, BranchesUiState ui, Strings strings)
     {
         var rows = new List<BranchRow>();
         if (listing == null) return rows;
 
-        rows.Add(new BranchRow(BranchRowKind.LocalHeader, "Local", IndentSection, ui.LocalOpen));
+        rows.Add(new BranchRow(BranchRowKind.LocalHeader, strings.BranchesSectionLocal, IndentSection, ui.LocalOpen));
         if (ui.LocalOpen)
         {
             var localTree = PathTree.Build(listing.LocalBranches, b => b.Name);
             EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, IndentLocalTreeBase, depth: 0);
         }
 
-        rows.Add(new BranchRow(BranchRowKind.RemotesHeader, "Remote", IndentSection, ui.RemotesOpen));
+        rows.Add(new BranchRow(BranchRowKind.RemotesHeader, strings.BranchesSectionRemote, IndentSection, ui.RemotesOpen));
         if (ui.RemotesOpen)
         {
             foreach (var rg in listing.Remotes)
@@ -53,7 +54,7 @@ internal static class BranchTreeBuilder
 
         if (listing.Stashes.Count > 0)
         {
-            rows.Add(new BranchRow(BranchRowKind.StashesHeader, "Stashes", IndentSection, ui.StashesOpen));
+            rows.Add(new BranchRow(BranchRowKind.StashesHeader, strings.BranchesSectionStashes, IndentSection, ui.StashesOpen));
             if (ui.StashesOpen)
             {
                 foreach (var s in listing.Stashes)

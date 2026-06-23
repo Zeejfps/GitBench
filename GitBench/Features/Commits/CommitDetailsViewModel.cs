@@ -4,6 +4,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -22,13 +23,14 @@ internal sealed record CommitDetailsState(
 
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 {
-    private const string DefaultPlaceholder = "Select a commit to view details.";
-    private const string LoadingPlaceholder = "Loading…";
-
     private readonly IGitService _gitService;
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
     private string? _currentSha;
+
+    private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
+    private string LoadingPlaceholder => _loc.Strings.Value.CommonLoading;
 
     public IReadable<CommitDetailsRenderState> RenderState { get; }
     public IReadable<string?> SelectedPath { get; }
@@ -39,19 +41,21 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IGitService gitService,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
         : base(dispatcher, new CommitDetailsState(
-            new CommitDetailsRenderState.Placeholder(DefaultPlaceholder), null, null))
+            new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection), null, null))
     {
         _gitService = gitService;
         _registry = registry;
         _bus = bus;
+        _loc = loc;
 
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
         SelectedTarget = Slice(s => s.SelectedTarget);
 
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus);
+        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, loc: loc);
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
     }
 

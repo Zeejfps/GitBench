@@ -5,6 +5,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Theming;
@@ -33,6 +34,11 @@ internal static class AppServices
         context.AddService(themeMode);
         context.AddSingleton<IThemeService<ThemeStyles>, ThemeService>();
 
+        var locale = new State<Locale>(preferences.Current.Language);
+        locale.Changed += preferences.SetLanguage;
+        context.AddService(locale);
+        context.AddSingleton<ILocalizationService, LocalizationService>();
+
         context.AddPlatformServices();
 
         context.AddSingleton<IRepoRegistry>(_ =>
@@ -58,7 +64,8 @@ internal static class AppServices
             ctx.Require<IRepoStatusStore>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IGitService>(),
-            ctx.Get<IPlatformShell>()));
+            ctx.Get<IPlatformShell>(),
+            ctx.Require<ILocalizationService>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<UpdateService>();
 

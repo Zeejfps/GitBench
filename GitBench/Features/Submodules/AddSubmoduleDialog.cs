@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -27,36 +28,37 @@ internal sealed record AddSubmoduleDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Add submodule",
+            Title = s.SubmodulesAddTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Add", DialogButtonRole.Primary),
+            Action = (s.CommonAdd, DialogButtonRole.Primary),
             Command = vm.Add,
             Body =
             [
                 new LabeledInput
                 {
-                    Label = "Repository URL",
+                    Label = s.CommonRepositoryUrl,
                     Value = vm.Url,
                 },
                 new LabeledInput
                 {
-                    Label = "Path inside parent",
+                    Label = s.SubmodulesAddPathLabel,
                     Value = vm.Path,
-                    Hint = "Where to clone the submodule, relative to the parent root.",
+                    Hint = s.SubmodulesAddPathHint,
                 },
                 new LabeledInput
                 {
-                    Label = "Track branch (optional)",
+                    Label = s.SubmodulesAddBranchLabel,
                     Value = vm.Branch,
-                    Hint = "Leave blank to pin to the upstream HEAD at clone time.",
+                    Hint = s.SubmodulesAddBranchHint,
                     Status = vm.BranchStatus,
                 },
                 new CheckboxWidget
                 {
-                    Label = "Force (allow paths previously used)",
+                    Label = s.SubmodulesAddForceLabel,
                     Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),

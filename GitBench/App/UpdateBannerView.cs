@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -65,9 +66,9 @@ internal sealed record UpdateBannerView : Widget
                                     Children =
                                     [
                                         new ButtonIcon { Value = LucideIcons.Package },
-                                        new ButtonLabel { Value = "Restart" },
+                                        new ButtonLabel { Value = L.T(s => s.AppUpdateRestart) },
                                     ],
-                                }.WithTooltip("Restart to finish updating")
+                                }.WithTooltip(L.T(s => s.AppUpdateRestartTooltip))
                                     .WithController<KbmController>(),
                             ],
                         },

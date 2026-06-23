@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -28,33 +29,35 @@ internal sealed record CheckoutBranchDialog : Widget
             new CheckoutRequest(Repo, RemoteName, RemoteBranchName, SuggestedLocalName),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Checkout branch",
+            Title = s.BranchesCheckoutTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Checkout", DialogButtonRole.Primary),
+            Action = (s.CommonCheckout, DialogButtonRole.Primary),
             Command = vm.Checkout,
             Body =
             [
                 new Text
                 {
-                    Value = $"Create a local branch from {RemoteName}/{RemoteBranchName}",
+                    Value = s.BranchesCheckoutDescription(RemoteName, RemoteBranchName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new LabeledInput
                 {
-                    Label = "Local branch name",
+                    Label = s.BranchesCheckoutLocalNameLabel,
                     Value = vm.Name,
                     Status = vm.NameStatus,
                     SelectAllOnOpen = true,
                 },
                 new CheckboxWidget
                 {
-                    Label = "Track this remote branch",
+                    Label = s.BranchesCheckoutTrackLabel,
                     Checked = vm.Track,
                     Height = 22,
                 }.WithController<KbmController>(),

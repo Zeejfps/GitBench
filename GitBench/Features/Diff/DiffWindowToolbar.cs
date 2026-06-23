@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.StatusBar;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -26,6 +27,7 @@ internal sealed class DiffWindowToolbar : ContainerView
     private readonly State<bool> _fullFileActive = new(false);
     private readonly State<LfsBadge> _lfsStatus = new(LfsBadge.None);
     private readonly TextView _title;
+    private readonly ILocalizationService _loc;
 
     private DiffViewModel? _vm;
     private Action? _onStageFile;
@@ -36,6 +38,7 @@ internal sealed class DiffWindowToolbar : ContainerView
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
+        _loc = ctx.Localization();
 
         _title = new TextView(ctx.Canvas)
         {
@@ -136,7 +139,12 @@ internal sealed class DiffWindowToolbar : ContainerView
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
         };
-        label.BindText(_side, s => s == DiffSide.Staged ? "Unstage" : "Stage");
+        void UpdateStageLabel() =>
+            label.Text = _side.Value == DiffSide.Staged
+                ? _loc.Strings.Value.DiffToolbarUnstage
+                : _loc.Strings.Value.DiffToolbarStage;
+        label.Bind(_side, _ => UpdateStageLabel());
+        label.Bind(_loc.Strings, _ => UpdateStageLabel());
         label.BindTextColor(() => state.Hovered.Value
             ? theme.Styles.Value.DiffView.HeaderTitleHover
             : theme.Styles.Value.DiffView.HeaderTitleIdle);

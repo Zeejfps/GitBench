@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -41,13 +42,14 @@ internal sealed record ResetCommitDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = "Reset to revision",
+            Title = s.CommitsResetTitle,
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Action = ("Reset", DialogButtonRole.Destructive),
+            Action = (s.CommitsResetAction, DialogButtonRole.Destructive),
             Command = vm.Reset,
             ConfirmKeys = true,
             Body =
@@ -55,25 +57,25 @@ internal sealed record ResetCommitDialog : Widget
                 new Text
                 {
                     Value = BranchName != null
-                        ? $"Move the '{BranchName}' branch HEAD to the selected revision"
-                        : "Move HEAD to the selected revision",
+                        ? s.CommitsResetDescWithBranch(BranchName)
+                        : s.CommitsResetDescDetached,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Text
                 {
                     Value = BuildDirtyHint(StagedCount, UnstagedCount),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
-                new LabeledRow { Label = "Branch:", Value = BranchValue(BranchName) },
-                new LabeledRow { Label = "Move to:", Value = CommitValue(ShortSha, Summary) },
-                new LabeledRow { Label = "Reset type:", Value = new ResetModeDropdown { Selected = vm.Mode } },
+                new LabeledRow { Label = s.CommitsResetBranchLabel, Value = BranchValue(BranchName, s) },
+                new LabeledRow { Label = s.CommitsResetMoveToLabel, Value = CommitValue(ShortSha, Summary) },
+                new LabeledRow { Label = s.CommitsResetModeLabel, Value = new ResetModeDropdown { Selected = vm.Mode } },
             ],
         };
     }
 
-    private static IWidget BranchValue(string? branchName) => new Row
+    private static IWidget BranchValue(string? branchName, Strings s) => new Row
     {
         Gap = 6,
         CrossAxis = CrossAxisAlignment.Center,
@@ -86,13 +88,13 @@ internal sealed record ResetCommitDialog : Widget
                 FontSize = 14,
                 Width = 16,
                 VAlign = TextAlignment.Center,
-                Color = Theme.Color(s => s.DialogBody.BodyText),
+                Color = Theme.Color(t => t.DialogBody.BodyText),
             },
             new Text
             {
-                Value = branchName ?? "(detached HEAD)",
+                Value = branchName ?? s.CommitsResetDetachedLabel,
                 VAlign = TextAlignment.Center,
-                Color = Theme.Color(s => s.DialogFrame.TitleText),
+                Color = Theme.Color(t => t.DialogFrame.TitleText),
             },
         ],
     };
@@ -146,86 +148,90 @@ internal sealed record ResetCommitDialog : Widget
 
 internal sealed record ResetModeDropdown : Widget
 {
-    // Order: safest → most destructive (Fork uses Soft / Mixed / Hard top-to-bottom).
-    private static readonly (ResetMode Mode, string Label, string Detail, uint Color)[] Options =
-    {
-        (ResetMode.Soft, "Soft", "Keep all changes. Stage differences", ResetCommitDialog.SoftColor),
-        (ResetMode.Mixed, "Mixed", "Keep all changes. Unstage differences", ResetCommitDialog.MixedColor),
-        (ResetMode.Hard, "Hard", "Discard all local changes", ResetCommitDialog.HardColor),
-    };
-
     public required State<ResetMode> Selected { get; init; }
 
-    protected override IWidget Build(Context ctx) => new DropdownWidget
+    protected override IWidget Build(Context ctx)
     {
-        Height = 30,
-        Gap = 8,
-        Children =
-        [
-            new Text
+        var s = ctx.Localization().Strings.Value;
+        // Order: safest → most destructive (Fork uses Soft / Mixed / Hard top-to-bottom).
+        (ResetMode Mode, string Label, string Detail, uint Color)[] options =
+        {
+            (ResetMode.Soft, s.CommitsResetModeSoft, s.CommitsResetModeSoftDesc, ResetCommitDialog.SoftColor),
+            (ResetMode.Mixed, s.CommitsResetModeMixed, s.CommitsResetModeMixedDesc, ResetCommitDialog.MixedColor),
+            (ResetMode.Hard, s.CommitsResetModeHard, s.CommitsResetModeHardDesc, ResetCommitDialog.HardColor),
+        };
+
+        string LookupLabel(ResetMode m)
+        {
+            foreach (var o in options) if (o.Mode == m) return o.Label;
+            return string.Empty;
+        }
+
+        string LookupDetail(ResetMode m)
+        {
+            foreach (var o in options) if (o.Mode == m) return o.Detail;
+            return string.Empty;
+        }
+
+        uint LookupColor(ResetMode m)
+        {
+            foreach (var o in options) if (o.Mode == m) return o.Color;
+            return ResetCommitDialog.MixedColor;
+        }
+
+        List<RepoBarContextMenu.Item> BuildItems()
+        {
+            var items = new List<RepoBarContextMenu.Item>(options.Length);
+            foreach (var opt in options)
             {
-                Value = "●",
-                FontSize = 12,
-                Width = 14,
-                HAlign = TextAlignment.Center,
-                VAlign = TextAlignment.Center,
-                Color = Prop.Bind(() => LookupColor(Selected.Value)),
-            },
-            new Text
-            {
-                VAlign = TextAlignment.Center,
-                Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
-                Color = Theme.Color(s => s.DialogFrame.TitleText),
-            },
-            // Detail fills the middle and ellipsizes rather than overflowing past the chevron.
-            new Grow
-            {
-                Child = new Text
+                var mode = opt.Mode;
+                items.Add(new RepoBarContextMenu.Item(
+                    $"{opt.Label} — {opt.Detail}",
+                    () => Selected.Value = mode,
+                    LabelSegments: new[]
+                    {
+                        new MenuLabelSegment("● ", opt.Color),
+                        new MenuLabelSegment(opt.Label, Bold: true),
+                        new MenuLabelSegment("  " + opt.Detail),
+                    }));
+            }
+            return items;
+        }
+
+        return new DropdownWidget
+        {
+            Height = 30,
+            Gap = 8,
+            Children =
+            [
+                new Text
+                {
+                    Value = "●",
+                    FontSize = 12,
+                    Width = 14,
+                    HAlign = TextAlignment.Center,
+                    VAlign = TextAlignment.Center,
+                    Color = Prop.Bind(() => LookupColor(Selected.Value)),
+                },
+                new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Wrap = TextWrap.NoWrap,
-                    Overflow = TextOverflow.Ellipsis,
-                    Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Value = Prop.Bind<string?>(() => LookupLabel(Selected.Value)),
+                    Color = Theme.Color(t => t.DialogFrame.TitleText),
                 },
-            },
-        ],
-    }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
-
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildItems()
-    {
-        var items = new List<RepoBarContextMenu.Item>(Options.Length);
-        foreach (var opt in Options)
-        {
-            var mode = opt.Mode;
-            items.Add(new RepoBarContextMenu.Item(
-                $"{opt.Label} — {opt.Detail}",
-                () => Selected.Value = mode,
-                LabelSegments: new[]
+                // Detail fills the middle and ellipsizes rather than overflowing past the chevron.
+                new Grow
                 {
-                    new MenuLabelSegment("● ", opt.Color),
-                    new MenuLabelSegment(opt.Label, Bold: true),
-                    new MenuLabelSegment("  " + opt.Detail),
-                }));
-        }
-        return items;
-    }
-
-    private static string LookupLabel(ResetMode m)
-    {
-        foreach (var o in Options) if (o.Mode == m) return o.Label;
-        return string.Empty;
-    }
-
-    private static string LookupDetail(ResetMode m)
-    {
-        foreach (var o in Options) if (o.Mode == m) return o.Detail;
-        return string.Empty;
-    }
-
-    private static uint LookupColor(ResetMode m)
-    {
-        foreach (var o in Options) if (o.Mode == m) return o.Color;
-        return ResetCommitDialog.MixedColor;
+                    Child = new Text
+                    {
+                        VAlign = TextAlignment.Center,
+                        Wrap = TextWrap.NoWrap,
+                        Overflow = TextOverflow.Ellipsis,
+                        Value = Prop.Bind<string?>(() => LookupDetail(Selected.Value)),
+                        Color = Theme.Color(t => t.DialogBody.RowTextMissing),
+                    },
+                },
+            ],
+        }.WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, BuildItems()));
     }
 }

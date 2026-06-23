@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -20,7 +21,7 @@ internal sealed record AddRepoButton : Widget<ButtonState>
         [
             new Text
             {
-                Value = "+  Add Repository",
+                Value = L.T(s => s.ReposAddButton),
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.Palette.TextSecondary),

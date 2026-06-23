@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
@@ -37,7 +38,7 @@ public sealed record CommitsPanelWidget : Widget
                 [
                     new Text
                     {
-                        Value = truncated.Bind(t => t ? "History truncated." : null),
+                        Value = L.T(s => s.CommitsTruncatedBanner),
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.Banner.Text),

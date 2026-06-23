@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -30,15 +31,17 @@ internal sealed record AbortOperationDialog : Widget
             new AbortOperationRequest(Repo, State),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
-        var (titleText, bodyText) = CopyFor(State);
+        var s = ctx.Localization().Strings.Value;
+        var (titleText, bodyText) = CopyFor(s, State);
 
         return new Dialog
         {
             Title = titleText,
             OnClose = OnClose,
-            Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(State), DialogButtonRole.Destructive),
+            Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(s, State), DialogButtonRole.Destructive),
             Command = vm.Abort,
             Error = vm.Error,
             BindActionLabel = vm.ConfirmButtonLabel,
@@ -50,35 +53,35 @@ internal sealed record AbortOperationDialog : Widget
                 {
                     Value = bodyText,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
             ],
         };
     }
 
-    private static (string Title, string Body) CopyFor(RepoOperationState state) => state switch
+    private static (string Title, string Body) CopyFor(Strings s, RepoOperationState state) => state switch
     {
         RepoOperationState.Merge => (
-            "Abort merge?",
-            "Aborts the in-progress merge and restores the working tree to the pre-merge state. Any conflict resolutions you've made will be lost."),
+            s.OperationsAbortDialogTitleMerge,
+            s.OperationsAbortDialogBodyMerge),
         RepoOperationState.Rebase => (
-            "Abort rebase?",
-            "Aborts the in-progress rebase and returns HEAD to the branch's original tip. Any conflict resolutions you've made will be lost."),
+            s.OperationsAbortDialogTitleRebase,
+            s.OperationsAbortDialogBodyRebase),
         RepoOperationState.CherryPick => (
-            "Abort cherry-pick?",
-            "Aborts the in-progress cherry-pick and restores the working tree to the pre-cherry-pick state."),
+            s.OperationsAbortDialogTitleCherryPick,
+            s.OperationsAbortDialogBodyCherryPick),
         RepoOperationState.Revert => (
-            "Abort revert?",
-            "Aborts the in-progress revert and restores the working tree to the pre-revert state."),
+            s.OperationsAbortDialogTitleRevert,
+            s.OperationsAbortDialogBodyRevert),
         RepoOperationState.ApplyMailbox => (
-            "Abort patch apply?",
-            "Aborts the in-progress `git am` and restores the working tree to the pre-apply state. The mailbox queue is discarded."),
+            s.OperationsAbortDialogTitleApply,
+            s.OperationsAbortDialogBodyApply),
         RepoOperationState.Bisect => (
-            "Reset bisect?",
-            "Ends the bisect session and returns HEAD to where it was when bisect started."),
+            s.OperationsAbortDialogTitleBisect,
+            s.OperationsAbortDialogBodyBisect),
         RepoOperationState.UnmergedPaths => (
-            "Reset unmerged paths?",
-            "Discards conflicting worktree changes and clears the unmerged index entries, returning the conflicted files to HEAD. Clean local changes are kept; in-progress conflict resolutions are lost."),
-        _ => ("Abort?", "Cancel the in-progress operation."),
+            s.OperationsAbortDialogTitleUnmerged,
+            s.OperationsAbortDialogBodyUnmerged),
+        _ => (s.OperationsAbortDialogTitleDefault, s.OperationsAbortDialogBodyDefault),
     };
 }

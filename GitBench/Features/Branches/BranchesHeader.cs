@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -73,7 +74,7 @@ internal sealed record BranchLabel : Widget
                     },
                     new Text
                     {
-                        Value = IsDetached.Bind(d => d ? "at" : "on"),
+                        Value = L.T(s => IsDetached.Value ? s.BranchesHeaderAt : s.BranchesHeaderOn),
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.BranchesHeader.PrefixText),
                     },

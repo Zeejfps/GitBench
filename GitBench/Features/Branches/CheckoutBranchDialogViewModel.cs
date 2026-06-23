@@ -1,6 +1,7 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -22,7 +23,8 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
         CheckoutRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         Name = new State<string>(request.SuggestedLocalName);
 
@@ -55,7 +57,7 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
             onError: error =>
             {
                 CloseRequested?.Invoke();
-                bus.Broadcast(new ShowOperationErrorMessage("Checkout failed", error));
+                bus.Broadcast(new ShowOperationErrorMessage(loc.Strings.Value.BranchesErrorCheckoutFailed, error));
             });
     }
 

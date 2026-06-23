@@ -1,5 +1,6 @@
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -11,6 +12,7 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
     private readonly IGitService _gitService;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
 
     private readonly State<IReadOnlyList<string>> _remotes = new(Array.Empty<string>());
     private readonly State<string?> _loadError = new(null);
@@ -28,12 +30,14 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
         PublishBranchRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         _request = request;
         _gitService = gitService;
         _dispatcher = dispatcher;
         _bus = bus;
+        _loc = loc;
 
         var repoId = request.Repo.Id;
 
@@ -78,7 +82,7 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
                 _remotes.Value = remotes;
                 if (remotes.Count == 0)
                 {
-                    _loadError.Value = "No remotes configured. Add one with: git remote add origin <url>";
+                    _loadError.Value = _loc.Strings.Value.BranchesPublishErrorNoRemotes;
                 }
                 else
                 {

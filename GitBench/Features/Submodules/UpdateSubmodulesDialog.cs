@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -30,13 +31,14 @@ internal sealed record UpdateSubmodulesDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
         return new Dialog
         {
-            Title = Target is null ? "Update all submodules" : "Update submodule",
+            Title = Target is null ? s.SubmodulesUpdateTitleAll : s.SubmodulesUpdateTitleSingle,
             OnClose = OnClose,
             ViewModel = vm,
             BodyGap = 10,
-            Action = ("Update", DialogButtonRole.Primary),
+            Action = (s.SubmodulesUpdateAction, DialogButtonRole.Primary),
             Command = vm.Update,
             Error = vm.Error,
             ConfirmKeys = true,
@@ -45,27 +47,26 @@ internal sealed record UpdateSubmodulesDialog : Widget
                 new Text
                 {
                     Value = Target is null
-                        ? $"Run `git submodule update` on every submodule under '{Primary.DisplayName}'."
-                        : $"Run `git submodule update` on '{Target.DisplayName}'.",
+                        ? s.SubmodulesUpdateDescAll(Primary.DisplayName)
+                        : s.SubmodulesUpdateDescSingle(Target.DisplayName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
-                new CheckboxWidget { Label = "Init missing submodules (--init)", Checked = vm.Init, Height = 22 }.WithController<KbmController>(),
-                new CheckboxWidget { Label = "Recurse into nested submodules (--recursive)", Checked = vm.Recursive, Height = 22 }.WithController<KbmController>(),
+                new CheckboxWidget { Label = s.SubmodulesUpdateInitLabel, Checked = vm.Init, Height = 22 }.WithController<KbmController>(),
+                new CheckboxWidget { Label = s.SubmodulesUpdateRecursiveLabel, Checked = vm.Recursive, Height = 22 }.WithController<KbmController>(),
                 new Text
                 {
-                    Value = "Strategy",
-                    Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
+                    Value = s.CommonStrategy,
+                    Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                ModeCheckbox(ctx, vm, "Checkout (default — reset to recorded SHA)", SubmoduleUpdateMode.Checkout),
-                ModeCheckbox(ctx, vm, "Merge (--merge)", SubmoduleUpdateMode.Merge),
-                ModeCheckbox(ctx, vm, "Rebase (--rebase)", SubmoduleUpdateMode.Rebase),
+                ModeCheckbox(ctx, vm, s.SubmodulesUpdateStrategyCheckout, SubmoduleUpdateMode.Checkout),
+                ModeCheckbox(ctx, vm, s.SubmodulesUpdateStrategyMerge, SubmoduleUpdateMode.Merge),
+                ModeCheckbox(ctx, vm, s.SubmodulesUpdateStrategyRebase, SubmoduleUpdateMode.Rebase),
                 new Text
                 {
-                    Value = "Merge/rebase strategies may leave the submodule mid-merge on conflict — " +
-                            "the Operation banner will offer Abort.",
+                    Value = s.SubmodulesUpdateNote,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
             ],
         };

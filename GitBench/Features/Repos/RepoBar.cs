@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Widgets;
@@ -73,42 +74,49 @@ internal sealed record RepoBar : Widget
         };
 
         return bar
-            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(vm)))
+            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm)))
             .BindVm(vm);
     }
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx) =>
-    [
-        new("Open from Folder…", () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
-        new("Clone Repository…", () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
-    ];
+    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx)
+    {
+        var s = ctx.Localization().Strings.Value;
+        return
+        [
+            new(s.ReposMenuOpenFromFolder, () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
+            new(s.ReposMenuCloneRepository, () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
+        ];
+    }
 
     private static void OpenFromFolder(Context ctx)
     {
-        var path = ctx.Get<IPlatformShell>()?.PickFolder("Open Repository");
+        var s = ctx.Localization().Strings.Value;
+        var path = ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository);
         if (string.IsNullOrEmpty(path)) return;
         if (ctx.Get<IRepoRegistry>()?.Open(path) == OpenRepoOutcome.NotAGitRepo)
+        {
             ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
-                "Not a Git Repository",
-                $"{path}\n\nThis folder isn't a Git repository — it has no .git directory. " +
-                "Pick the repository's root folder, or clone a repository instead."));
+                s.ReposErrorNotAGitRepoTitle,
+                s.ReposErrorNotAGitRepoMessage(path)));
+        }
     }
 
     private static void ShowCloneDialog(Context ctx)
         => ctx.Get<IMessageBus>()?.Broadcast(
             new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose }));
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(RepoBarViewModel vm)
+    private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(Context ctx, RepoBarViewModel vm)
     {
+        var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new("New group", () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
+            new(s.ReposMenuNewGroup, () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
         };
         if (vm.HasMultipleGroups)
         {
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(new RepoBarContextMenu.Item("Expand All", () => vm.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
-            items.Add(new RepoBarContextMenu.Item("Collapse All", () => vm.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
+            items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, () => vm.ExpandAllGroups.Execute(), LucideIcons.ChevronDown));
+            items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, () => vm.CollapseAllGroups.Execute(), LucideIcons.ChevronRight));
         }
         return items;
     }

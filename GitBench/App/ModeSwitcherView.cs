@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -28,7 +29,7 @@ internal sealed record ModeSwitcherView : Widget
                     Background = 0x00000000u,
                     BorderSize = BorderSizeStyle.All(1),
                     BorderRadius = BorderRadiusStyle.All(PillCornerRadius),
-                    BorderColor = theme.Styles.Bind(s => BorderColorStyle.All(s.ModeSwitcher.PillBorder)),
+                    BorderColor = theme.Styles.Bind(t => BorderColorStyle.All(t.ModeSwitcher.PillBorder)),
                     Children =
                     [
                         new Row
@@ -38,18 +39,18 @@ internal sealed record ModeSwitcherView : Widget
                             [
                                 new Segment
                                 {
-                                    Label = "Changes",
+                                    Label = L.T(s => s.AppModeChanges),
                                     Radius = new BorderRadiusStyle { TopLeft = innerRadius, BottomLeft = innerRadius },
                                     Model = vm.LocalChangesSegment,
                                 }.WithController<KbmController>(),
                                 new Box
                                 {
                                     Width = 1f,
-                                    Background = theme.Styles.Bind(s => s.ModeSwitcher.SegmentSeparator),
+                                    Background = theme.Styles.Bind(t => t.ModeSwitcher.SegmentSeparator),
                                 },
                                 new Segment
                                 {
-                                    Label = "History",
+                                    Label = L.T(s => s.AppModeHistory),
                                     Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
                                     Model = vm.HistorySegment,
                                 }.WithController<KbmController>(),

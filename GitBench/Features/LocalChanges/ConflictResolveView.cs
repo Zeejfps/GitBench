@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -64,6 +65,8 @@ internal sealed record ConflictResolveView : Widget
 
     private static IWidget BuildPanel(Context ctx, DiffViewModel vm, string path, ConflictContext conflict)
     {
+        var loc = ctx.Localization();
+
         // The two sides' selection state, shared between each card and its checkbox so clicking
         // either toggles the same flag. Theirs is the incoming side (left), ours the current (right).
         var theirsChecked = new State<bool>(false);
@@ -105,10 +108,10 @@ internal sealed record ConflictResolveView : Widget
                         CrossAxis = CrossAxisAlignment.Stretch,
                         Children =
                         [
-                            MergeButton(vm, conflict, theirsChecked, oursChecked, canMerge),
+                            MergeButton(loc, vm, conflict, theirsChecked, oursChecked, canMerge),
                             new SecondaryDialogButton
                             {
-                                Label = "Merge in editor",
+                                Label = L.T(s => s.LocalchangesConflictMergeInEditor),
                                 Icon = LucideIcons.ExternalLink,
                                 Command = new Command(vm.OpenConflictInEditor),
                                 Height = ButtonHeight,
@@ -117,7 +120,7 @@ internal sealed record ConflictResolveView : Widget
                             // the path clears the unmerged state, no side-pick needed.
                             new SecondaryDialogButton
                             {
-                                Label = "Mark as resolved",
+                                Label = L.T(s => s.LocalchangesConflictMarkResolved),
                                 Icon = LucideIcons.CheckSquare,
                                 Command = new Command(vm.ResolveMarkResolved),
                                 Height = ButtonHeight,
@@ -132,16 +135,16 @@ internal sealed record ConflictResolveView : Widget
     // The button names the action it will take, so the pick is confirmable before clicking:
     // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
     private static IWidget MergeButton(
-        DiffViewModel vm, ConflictContext conflict,
+        ILocalizationService loc, DiffViewModel vm, ConflictContext conflict,
         State<bool> theirsChecked, State<bool> oursChecked, IReadable<bool> canMerge) =>
         new ActionDialogButton
         {
-            Label = Prop.Bind<string?>(() => (theirsChecked.Value, oursChecked.Value) switch
+            Label = L.T(s => (theirsChecked.Value, oursChecked.Value) switch
             {
-                (true, true) => "Merge both",
-                (true, false) => $"Choose {conflict.Theirs.Label}",
-                (false, true) => $"Choose {conflict.Ours.Label}",
-                _ => "Merge",
+                (true, true) => s.LocalchangesConflictMergeBoth,
+                (true, false) => s.LocalchangesConflictChoose(conflict.Theirs.Label),
+                (false, true) => s.LocalchangesConflictChoose(conflict.Ours.Label),
+                _ => s.LocalchangesConflictMerge,
             }),
             Role = DialogButtonRole.Primary,
             Command = new Command(() =>
@@ -179,7 +182,7 @@ internal sealed record ConflictResolveView : Widget
                         },
                         new Text
                         {
-                            Value = "Merge conflict",
+                            Value = L.T(s => s.LocalchangesConflictTitle),
                             FontSize = 16f,
                             VAlign = TextAlignment.Center,
                             Color = Theme.Color(s => s.Palette.TextStrong),
@@ -191,7 +194,7 @@ internal sealed record ConflictResolveView : Widget
             {
                 Child = new Text
                 {
-                    Value = "Select the changes or merge them manually",
+                    Value = L.T(s => s.LocalchangesConflictSubtitle),
                     HAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.Palette.TextMuted),
                 },
@@ -232,9 +235,9 @@ internal sealed record ConflictResolveView : Widget
         };
         var text = kind switch
         {
-            ConflictChangeKind.Added => "added",
-            ConflictChangeKind.Deleted => "deleted",
-            _ => "modified",
+            ConflictChangeKind.Added => L.T(s => s.LocalchangesConflictBadgeAdded),
+            ConflictChangeKind.Deleted => L.T(s => s.LocalchangesConflictBadgeDeleted),
+            _ => L.T(s => s.LocalchangesConflictBadgeModified),
         };
 
         // The same tinted Lucide status glyph the unstaged/history file rows draw, paired with the

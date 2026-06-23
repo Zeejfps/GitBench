@@ -1,4 +1,5 @@
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -112,6 +113,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     public Action<int>? OnDiscardHunk { get; set; }
 
     private readonly VirtualRowListView _list;
+    private readonly ILocalizationService _loc;
 
     private float _scrollX;
     // A programmatic vertical scroll target that must be re-asserted across frames. Setting a
@@ -135,6 +137,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
+        _loc = ctx.Localization();
 
         _list = new VirtualRowListView
         {
@@ -154,6 +157,11 @@ internal sealed class DiffContentView : View, IScrollableContent
             _buttonStyles = s.DiffHunkButton;
             SetDirty();
         });
+
+        // Placeholder/conflict text is custom-painted, so repaint on a live language switch.
+        // Hunk-button labels are measured and cached; drop the cache so they re-measure in the
+        // new language on the next draw.
+        this.Bind(_loc.Strings, _ => { _buttonMetricsResolved = false; SetDirty(); });
     }
 
     private void OnHorizontalWheel(float deltaX)
@@ -262,10 +270,11 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (r.IsBinary) return;
         if (r.Hunks.Count == 0 && !r.IsModeOnly && r.OldPath == null) return;
 
+        var s = _loc.Strings.Value;
         if (r.OldPath != null)
-            AddBanner($"Renamed: {r.OldPath} → {r.Path}");
+            AddBanner(s.DiffRenamed(r.OldPath, r.Path));
         if (r.IsModeOnly)
-            AddBanner($"Mode: {FormatMode(r.OldMode)} → {FormatMode(r.NewMode)}");
+            AddBanner(s.DiffModeChanged(FormatMode(r.OldMode), FormatMode(r.NewMode)));
 
         int maxOld = 0, maxNew = 0, totalLines = 0;
         foreach (var h in r.Hunks)
@@ -310,7 +319,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
 
         if (r.Truncated)
-            AddBanner($"Diff truncated — only the first {totalLines} lines are shown.");
+            AddBanner(s.DiffDiffTruncated(totalLines));
 
         _rowToHunk = new int[_rows.Count];
         Array.Fill(_rowToHunk, -1);
@@ -345,7 +354,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
 
         if (ff.Truncated)
-            AddBanner($"File truncated — only the first {ff.Lines.Count} lines are shown.");
+            AddBanner(_loc.Strings.Value.DiffFileTruncated(ff.Lines.Count));
     }
 
     private void AddBanner(string text)
@@ -450,9 +459,10 @@ internal sealed class DiffContentView : View, IScrollableContent
     {
         if (!_buttonMetricsResolved)
         {
-            _stageBtnTextWidth = c.MeasureTextWidth("Stage", HunkButtonTextStyle);
-            _unstageBtnTextWidth = c.MeasureTextWidth("Unstage", HunkButtonTextStyle);
-            _discardBtnTextWidth = c.MeasureTextWidth("Discard", HunkButtonTextStyle);
+            var s = _loc.Strings.Value;
+            _stageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkStage, HunkButtonTextStyle);
+            _unstageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkUnstage, HunkButtonTextStyle);
+            _discardBtnTextWidth = c.MeasureTextWidth(s.DiffHunkDiscard, HunkButtonTextStyle);
             _buttonMetricsResolved = _stageBtnTextWidth > 0;
         }
 
@@ -518,7 +528,7 @@ internal sealed class DiffContentView : View, IScrollableContent
             case DiffRenderState.Conflict:
                 // The embedded pane swaps in the rich resolution view; this fallback is only
                 // hit by the pop-out window, which has no resolution UI.
-                DrawPlaceholder(c, pos, "Resolve this conflict in the main window.", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffResolveInMain, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.ErrorMessage != null:
@@ -526,11 +536,11 @@ internal sealed class DiffContentView : View, IScrollableContent
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.IsBinary:
-                DrawPlaceholder(c, pos, "Binary file not shown", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffBinaryNotShown, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
             case DiffRenderState.Loaded when _rows.Count == 0:
-                DrawPlaceholder(c, pos, "No textual changes", _styles.PlaceholderText, z + 1);
+                DrawPlaceholder(c, pos, _loc.Strings.Value.DiffNoChanges, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
         }
@@ -636,13 +646,17 @@ internal sealed class DiffContentView : View, IScrollableContent
         _ => Array.Empty<HunkAction>(),
     };
 
-    private static string ButtonLabel(HunkAction action) => action switch
+    private string ButtonLabel(HunkAction action)
     {
-        HunkAction.Stage => "Stage",
-        HunkAction.Unstage => "Unstage",
-        HunkAction.Discard => "Discard",
-        _ => string.Empty,
-    };
+        var s = _loc.Strings.Value;
+        return action switch
+        {
+            HunkAction.Stage => s.DiffHunkStage,
+            HunkAction.Unstage => s.DiffHunkUnstage,
+            HunkAction.Discard => s.DiffHunkDiscard,
+            _ => string.Empty,
+        };
+    }
 
     private void DrawHunkButtons(ICanvas c, RectF rowRect, int hunkIndex, int z)
     {

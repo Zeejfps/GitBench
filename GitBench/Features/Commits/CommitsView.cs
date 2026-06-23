@@ -1,6 +1,7 @@
 using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -54,6 +55,7 @@ internal sealed record CommitsView : Widget
 
         private readonly Context _ctx;
         private readonly ICanvas _canvas;
+        private readonly ILocalizationService _loc;
         private readonly CommitsViewModel _vm;
         private readonly VirtualRowListView _list;
         private readonly ListArrowKbmController _arrowController;
@@ -113,6 +115,7 @@ internal sealed record CommitsView : Widget
         {
             _ctx = ctx;
             _canvas = ctx.Canvas;
+            _loc = ctx.Localization();
             var vm = ctx.Require<CommitsViewModel>();
             _vm = vm;
             var input = ctx.Require<InputSystem>();
@@ -148,6 +151,8 @@ internal sealed record CommitsView : Widget
                 _headerRectStyle.BorderColor = new BorderColorStyle { Bottom = _styles.HeaderBorderBottom };
                 SetDirty();
             });
+
+            this.Bind(_loc.Strings, _ => SetDirty());
 
             this.UseController(input, () => new CommitsViewController(this, ctx));
 
@@ -367,20 +372,21 @@ internal sealed record CommitsView : Widget
 
             // Placeholder text lives in the parent because the widget is row-only.
             // When ItemCount = 0 the widget no-ops; this text shows through.
+            var strings = _loc.Strings.Value;
             switch (_renderState)
             {
                 case CommitsRenderState.NoRepo:
-                    DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), "Select a repository to view its history.", z + 2);
+                    DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), strings.CommitsNoRepoSelected, z + 2);
                     break;
                 case CommitsRenderState.Loading:
-                    DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), "Loading…", z + 2);
+                    DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), strings.CommonLoading, z + 2);
                     break;
                 case CommitsRenderState.Error err:
                     DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), err.Message, z + 2);
                     break;
                 case CommitsRenderState.Loaded:
                     if (_snapshot == null || _snapshot.Commits.Count == 0)
-                        DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), "No commits.", z + 2);
+                        DrawPlaceholder(c, ComputeCommitsColumnRect(bodyRect), strings.CommitsNoCommits, z + 2);
                     break;
             }
 
@@ -412,10 +418,11 @@ internal sealed record CommitsView : Widget
             var hashX = dateX - hashW - ColumnGap;
             var authorX = hashX - authorW - ColumnGap;
 
-            DrawHeaderText(c, "Commit", pos.Left + CommitGraphRenderer.PaddingLeft, pos.Top - HeaderHeight, graphWidth, z + 1);
-            DrawHeaderText(c, "Author", authorX, pos.Top - HeaderHeight, authorW, z + 1);
-            DrawHeaderText(c, "Hash", hashX, pos.Top - HeaderHeight, hashW, z + 1);
-            DrawHeaderText(c, "Date", dateX, pos.Top - HeaderHeight, dateW, z + 1);
+            var strings = _loc.Strings.Value;
+            DrawHeaderText(c, strings.CommitsHeaderCommit, pos.Left + CommitGraphRenderer.PaddingLeft, pos.Top - HeaderHeight, graphWidth, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderAuthor, authorX, pos.Top - HeaderHeight, authorW, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderHash, hashX, pos.Top - HeaderHeight, hashW, z + 1);
+            DrawHeaderText(c, strings.CommitsHeaderDate, dateX, pos.Top - HeaderHeight, dateW, z + 1);
         }
 
         private void DrawColumnOverlay(ICanvas c, float left, float bottom, float width, uint color, int z)
@@ -759,6 +766,7 @@ internal sealed record CommitsView : Widget
         {
             var capturedSha = node.Sha;
             var head = _snapshot?.HeadBranchName;
+            var s = _loc.Strings.Value;
             var items = new List<RepoBarContextMenu.Item>();
 
             // Per-tag entries at the top: each tag on this commit opens a submenu (hover) that
@@ -776,7 +784,7 @@ internal sealed record CommitsView : Widget
                     Submenu:
                     [
                         new RepoBarContextMenu.Item(
-                            "Delete Tag…",
+                            s.CommitsContextDeleteTag,
                             () => _vm.RequestDeleteTag(tagName),
                             LucideIcons.Trash),
                     ]));
@@ -786,10 +794,10 @@ internal sealed record CommitsView : Widget
             if (head != null)
             {
                 items.Add(new RepoBarContextMenu.Item(
-                    $"Reset {head} to here",
+                    s.CommitsContextResetBranch(head),
                     () => _vm.RequestReset(capturedSha),
                     LucideIcons.Branch,
-                    LabelSegments: BuildResetSegments(head)));
+                    LabelSegments: BuildResetSegments(s.CommitsContextResetBranch(head), head)));
             }
             else
             {
@@ -809,7 +817,7 @@ internal sealed record CommitsView : Widget
                             LucideIcons.Branch));
                     }
                     items.Add(new RepoBarContextMenu.Item(
-                        "Reset branch to here",
+                        s.CommitsContextResetBranchDetached,
                         () => { },
                         LucideIcons.Branch,
                         Submenu: submenu));
@@ -817,19 +825,19 @@ internal sealed record CommitsView : Widget
                 else
                 {
                     items.Add(new RepoBarContextMenu.Item(
-                        "Reset to this commit",
+                        s.CommitsContextResetDetached,
                         () => _vm.RequestReset(capturedSha),
                         LucideIcons.Branch));
                 }
             }
 
             items.Add(new RepoBarContextMenu.Item(
-                "Create branch here…",
+                s.CommitsContextCreateBranch,
                 () => _vm.RequestCreateBranch(capturedSha),
                 LucideIcons.Branch));
 
             items.Add(new RepoBarContextMenu.Item(
-                "Create Tag…",
+                s.CommitsContextCreateTag,
                 () => _vm.RequestCreateTag(capturedSha),
                 LucideIcons.Tag));
 
@@ -837,11 +845,11 @@ internal sealed record CommitsView : Widget
             // and any conflict is recoverable via the operation banner, so no "…" suffix.
             items.Add(RepoBarContextMenu.Separator);
             items.Add(new RepoBarContextMenu.Item(
-                "Cherry-pick",
+                s.CommitsContextCherryPick,
                 () => _vm.RequestCherryPick(capturedSha),
                 LucideIcons.Copy));
             items.Add(new RepoBarContextMenu.Item(
-                "Revert",
+                s.CommitsContextRevert,
                 () => _vm.RequestRevert(capturedSha),
                 LucideIcons.Undo));
 
@@ -867,25 +875,26 @@ internal sealed record CommitsView : Widget
             return names.Count == 0 ? Array.Empty<string>() : new List<string>(names);
         }
 
-        private static IReadOnlyList<MenuLabelSegment> BuildResetSegments(string branch) =>
-        [
-            new MenuLabelSegment("Reset "),
-            new MenuLabelSegment(branch, Bold: true),
-            new MenuLabelSegment(" to here"),
-        ];
-
-        private static string FormatRelative(DateTimeOffset when)
+        // Bolds the branch name inside the already-localized "Reset <branch> to here" label by
+        // re-finding the interpolated value in the formatted string, so the wording translates
+        // freely while the emphasis stays on the branch name.
+        private static IReadOnlyList<MenuLabelSegment> BuildResetSegments(string text, string branch)
         {
-            var now = DateTimeOffset.UtcNow;
-            var delta = now - when;
-            if (delta.TotalSeconds < 0) return when.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
-            if (delta.TotalMinutes < 1) return "just now";
-            if (delta.TotalMinutes < 60) return $"{(int)delta.TotalMinutes}m ago";
-            if (delta.TotalHours < 24) return $"{(int)delta.TotalHours}h ago";
-            if (delta.TotalDays < 7) return $"{(int)delta.TotalDays}d ago";
-            if (delta.TotalDays < 30) return $"{(int)(delta.TotalDays / 7)}w ago";
-            if (delta.TotalDays < 365) return $"{(int)(delta.TotalDays / 30)}mo ago";
-            return $"{(int)(delta.TotalDays / 365)}y ago";
+            var idx = string.IsNullOrEmpty(branch) ? -1 : text.IndexOf(branch, StringComparison.Ordinal);
+            if (idx < 0)
+                return [new MenuLabelSegment(text)];
+
+            var segments = new List<MenuLabelSegment>();
+            if (idx > 0)
+                segments.Add(new MenuLabelSegment(text.Substring(0, idx)));
+            segments.Add(new MenuLabelSegment(branch, Bold: true));
+            var tail = idx + branch.Length;
+            if (tail < text.Length)
+                segments.Add(new MenuLabelSegment(text.Substring(tail)));
+            return segments;
         }
+
+        private string FormatRelative(DateTimeOffset when) =>
+            Format.RelativeTime(_ctx.Localization().Strings.Value, when);
     }
 }

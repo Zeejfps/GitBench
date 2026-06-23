@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -17,7 +18,7 @@ public sealed record DialogCopyButton : Widget
     private const int FeedbackMs = 1200;
 
     public required Func<string> GetText { get; init; }
-    public Prop<string?> Tooltip { get; init; } = "Copy";
+    public Prop<string?> Tooltip { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -47,6 +48,6 @@ public sealed record DialogCopyButton : Widget
             Height = DialogFrame.CloseButtonSize,
             Surface = s => Theme.Color(t => t.DialogIconButton.Surface(s)),
             Foreground = s => Theme.Color(t => t.DialogIconButton.Foreground(s)),
-        }.WithTooltip(Tooltip).WithController<KbmController>();
+        }.WithTooltip(Tooltip.IsSet ? Tooltip : L.T(s => s.CommonCopy)).WithController<KbmController>();
     }
 }

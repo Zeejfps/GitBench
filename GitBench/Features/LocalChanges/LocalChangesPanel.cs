@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -32,7 +33,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 {
     private readonly Context _ctx;
     private readonly ICanvas _canvas;
-    private readonly string _title;
+    private readonly ILocalizationService _loc;
+    private readonly Func<Strings, string> _titleSelector;
     private readonly DiffSide _side;
     private readonly IReadable<Selection> _selection;
     private readonly Action<FileRow, InputModifiers> _onRowClick;
@@ -105,7 +107,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
     public LocalChangesPanel(
         Context ctx,
-        string title,
+        Func<Strings, string> title,
         DiffSide side,
         View emptyPlaceholder,
         IReadable<Selection> selection,
@@ -118,7 +120,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     {
         _ctx = ctx;
         _canvas = ctx.Canvas;
-        _title = title;
+        _loc = ctx.Localization();
+        _titleSelector = title;
         _side = side;
         _selection = selection;
         _onRowClick = onRowClick;
@@ -128,7 +131,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _buildContextMenu = buildContextMenu;
         var input = ctx.Require<InputSystem>();
 
-        _headerText = FileChangesUI.CreateHeaderText(ctx, title);
+        _headerText = FileChangesUI.CreateHeaderText(ctx, _titleSelector(_loc.Strings.Value));
         _emptyPlaceholder = emptyPlaceholder;
 
         View headerContent;
@@ -203,12 +206,19 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         });
 
         this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+
+        // The header reads "Title (count)"; the title is localized, so re-render it on a live
+        // locale switch (the count is preserved from the current file list).
+        this.Bind(_loc.Strings, _ => UpdateHeaderText());
     }
+
+    private void UpdateHeaderText() =>
+        _headerText.Text = FileChangesUI.FormatHeader(_titleSelector(_loc.Strings.Value), _files.Count);
 
     public void SetFiles(IReadOnlyList<FileChange> files)
     {
         _files = files;
-        _headerText.Text = FileChangesUI.FormatHeader(_title, files.Count);
+        UpdateHeaderText();
         RebuildRows();
         // New data: jump back to the top rather than preserving a now-meaningless offset.
         _list.SetScrollY(0f);

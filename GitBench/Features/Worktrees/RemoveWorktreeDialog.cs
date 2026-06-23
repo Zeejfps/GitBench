@@ -2,6 +2,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -35,6 +36,8 @@ internal sealed record RemoveWorktreeDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
+        var s = ctx.Localization().Strings.Value;
+
         // Path strings have no whitespace, so the framework's word-wrap engine can't break
         // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
         // block stays inside the dialog's content width.
@@ -57,7 +60,7 @@ internal sealed record RemoveWorktreeDialog : Widget
             FontFamily = DiffOptions.MonoFontFamily,
             FontSize = 12f,
             Wrap = TextWrap.Wrap,
-            Color = Theme.Color(s => s.DialogBody.BodyText),
+            Color = Theme.Color(t => t.DialogBody.BodyText),
         }.BuildView(ctx);
 
         var pathBox = new RectView
@@ -84,32 +87,32 @@ internal sealed record RemoveWorktreeDialog : Widget
 
         return new Dialog
         {
-            Title = "Remove worktree",
+            Title = s.WorktreesRemoveTitle,
             OnClose = OnClose,
             ViewModel = vm,
-            Action = ("Remove", DialogButtonRole.Destructive),
+            Action = (s.WorktreesRemoveAction, DialogButtonRole.Destructive),
             Command = vm.Remove,
             ConfirmKeys = true,
             Body =
             [
                 new Text
                 {
-                    Value = $"Remove worktree '{Worktree.DisplayName}'?",
+                    Value = s.WorktreesRemoveConfirm(Worktree.DisplayName),
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.BodyText),
+                    Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
                 new Raw { View = pathBox },
                 new CheckboxWidget
                 {
-                    Label = "Remove even if dirty",
+                    Label = s.WorktreesRemoveForceLabel,
                     Checked = vm.Force,
                     Height = 22,
                 }.WithController<KbmController>(),
                 new Text
                 {
-                    Value = "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
+                    Value = s.WorktreesRemoveNote,
                     Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                    Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                 },
             ],
         };

@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
+using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -82,7 +83,7 @@ internal sealed record StatusBarView : Widget
                                         {
                                             Icon = Prop.Bind<string?>(() => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon),
                                             Command = vm.ToggleTheme,
-                                        }.WithTooltip("Toggle theme")
+                                        }.WithTooltip(L.T(s => s.StatusbarToggleThemeTooltip))
                                             .WithController<KbmController>(),
                                         new Grow { Child = left },
                                         new Text
@@ -100,7 +101,7 @@ internal sealed record StatusBarView : Widget
                                             Icon = Prop.Bind<string?>(() => vm.IsCheckingUpdates.Value ? LucideIcons.Loader : LucideIcons.Fetch),
                                             Rotation = Prop.Bind(vm.UpdateIconRotation),
                                             Command = vm.CheckForUpdates,
-                                        }.WithTooltip("Check for updates")
+                                        }.WithTooltip(L.T(s => s.StatusbarCheckUpdatesTooltip))
                                             .WithController<KbmController>(),
                                         new Text
                                         {
