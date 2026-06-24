@@ -42,6 +42,16 @@ internal sealed class Tween : IDisposable
     public void Play() => Run(+1);
     public void Reverse() => Run(-1);
 
+    /// <summary>Snaps progress back to 0 and plays forward — re-triggers a one-shot animation
+    /// (e.g. a selection bar that should slide from a freshly captured start each time the target
+    /// changes), whether or not it is currently running.</summary>
+    public void Restart()
+    {
+        _linear.Value = 0f;
+        _progress.Value = _ease(0f);
+        Run(+1);
+    }
+
     private void Run(int direction)
     {
         _direction = direction;

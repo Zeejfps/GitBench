@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using Xunit;
 using ZGF.Gui;
 
 namespace GitBench.Tests;

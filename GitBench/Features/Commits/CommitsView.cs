@@ -64,6 +64,13 @@ internal sealed record CommitsView : Widget
         private float _lastNormalizedScroll;
         private float _lastScale = 1f;
         private string? _selectedSha;
+        // Selection is painted once as a floating bar that slides between rows. _selectedIndex is
+        // the resolved target row (-1 = none); the bar is drawn at CurrentSelectionIndex(), which
+        // lerps _animFromIndex → _animToIndex by the tween so navigation animates.
+        private int _selectedIndex = -1;
+        private float _animFromIndex;
+        private float _animToIndex;
+        private readonly Tween _selectionTween;
         private bool _truncated;
         // When a search filter is active the graph column is dropped (lanes don't apply to a subset).
         private bool _filtering;
@@ -123,10 +130,15 @@ internal sealed record CommitsView : Widget
             var input = ctx.Require<InputSystem>();
             var theme = ctx.Theme();
 
+            // Drives the selection bar's slide between rows; parks itself when settled so it adds
+            // no idle repaints. EaseOutCubic = quick start, gentle landing.
+            _selectionTween = new Tween(ctx.Require<IFrameTicker>(), 0.18f, Easings.EaseOutCubic);
+
             _list = new VirtualRowListView
             {
                 RowHeight = RowHeight,
                 ItemBuilder = DrawCommitRowAt,
+                SelectionOverlayBuilder = DrawSelectionOverlay,
             };
             _list.RowClicked += OnRowClicked;
             _list.RowContextRequested += OnRowContextRequested;
@@ -179,6 +191,11 @@ internal sealed record CommitsView : Widget
 
             this.Bind(vm.Render, SetRenderState);
             this.Bind(vm.SelectedSha, SetSelectedSha);
+
+            // Repaint each tick while the selection bar is sliding; the tween stops ticking once
+            // it lands, so this goes quiet at rest.
+            this.Bind(_selectionTween.Progress, _ => SetDirty());
+            this.Use(() => _selectionTween);
             this.Bind(vm.IsFiltering, f =>
             {
                 if (_filtering == f) return;
@@ -265,6 +282,10 @@ internal sealed record CommitsView : Widget
             _list.NotifyItemsChanged();
             if (!preserveScroll) _list.SetScrollY(0f);
 
+            // Row indices shifted under the selection: re-resolve and snap the bar there without
+            // sliding (the contents moved, not the user).
+            SnapSelectionToSha();
+
             NotifyScrollChanged();
 
             var newTruncated = newSnap?.Truncated == true;
@@ -281,23 +302,56 @@ internal sealed record CommitsView : Widget
         {
             if (_selectedSha == sha) return;
             _selectedSha = sha;
+            MoveSelectionTo(IndexOfSha(sha));
             ScrollShaIntoView(sha);
             SetDirty();
         }
 
+        // Retargets the selection bar. Slides only between two real rows; first-select and clear
+        // snap in place (sliding in from nowhere reads as a glitch).
+        private void MoveSelectionTo(int newIndex)
+        {
+            if (newIndex == _selectedIndex) return;
+            if (_selectedIndex >= 0 && newIndex >= 0)
+            {
+                _animFromIndex = CurrentSelectionIndex();
+                _animToIndex = newIndex;
+                _selectedIndex = newIndex;
+                _selectionTween.Restart();
+            }
+            else
+            {
+                _selectedIndex = newIndex;
+                _animFromIndex = newIndex < 0 ? 0f : newIndex;
+                _animToIndex = _animFromIndex;
+            }
+        }
+
+        // Re-resolves the selected row from the current SHA and parks the bar on it without animating.
+        private void SnapSelectionToSha()
+        {
+            _selectedIndex = IndexOfSha(_selectedSha);
+            _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
+            _animToIndex = _animFromIndex;
+        }
+
+        private float CurrentSelectionIndex()
+            => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
+
         private void ScrollShaIntoView(string? sha)
         {
-            if (string.IsNullOrEmpty(sha)) return;
-            var snap = _snapshot;
-            if (snap == null) return;
-
-            var idx = -1;
-            for (var i = 0; i < snap.Commits.Count; i++)
-            {
-                if (snap.Commits[i].Sha == sha) { idx = i; break; }
-            }
+            var idx = IndexOfSha(sha);
             if (idx < 0) return;
             _list.EnsureRowVisible(idx);
+        }
+
+        private int IndexOfSha(string? sha)
+        {
+            var snap = _snapshot;
+            if (snap == null || string.IsNullOrEmpty(sha)) return -1;
+            for (var i = 0; i < snap.Commits.Count; i++)
+                if (snap.Commits[i].Sha == sha) return i;
+            return -1;
         }
 
         public bool Truncated => _truncated;
@@ -431,18 +485,6 @@ internal sealed record CommitsView : Widget
             DrawHeaderText(c, strings.CommitsHeaderDate, dateX, pos.Top - HeaderHeight, dateW, z + 1);
         }
 
-        private void DrawColumnOverlay(ICanvas c, float left, float bottom, float width, uint color, int z)
-        {
-            if (width <= 0) return;
-            _fillStyle.BackgroundColor = color;
-            c.DrawRect(new DrawRectInputs
-            {
-                Position = Place(left, bottom, width, RowHeight),
-                Style = _fillStyle,
-                ZIndex = z,
-            });
-        }
-
         private void DrawColumnDivider(ICanvas c, float centerX, float bottom, float height, DividerKind kind, int z)
         {
             var hovered = _hoveredDivider == kind;
@@ -558,44 +600,51 @@ internal sealed record CommitsView : Widget
             var hashX = dateX - hashW - ColumnGap;
             var authorX = hashX - authorW - ColumnGap;
             var authorPanelLeft = authorX - ColumnGap;
-            var hashPanelLeft = hashX - ColumnGap;
-            var datePanelLeft = dateX - ColumnGap;
 
             var isSelected = node.Sha == _selectedSha;
+            var hovered = state.IsHovered || state.IsContextHighlighted;
             var isHighlighted = isSelected || state.IsContextHighlighted;
 
-            if (isHighlighted)
-            {
-                _fillStyle.BackgroundColor = _rowSelection.Fill;
-                c.DrawRect(new DrawRectInputs
-                {
-                    Position = rowRect,
-                    Style = _fillStyle,
-                    ZIndex = z,
-                });
-            }
+            // The selected row's bar is painted once as a floating overlay (DrawSelectionOverlay).
+            // Here we only paint the hover / context-menu background for other rows, through the
+            // same shared painter the branches sidebar and repo bar use.
+            if (!isSelected && hovered)
+                RowSelection.DrawBackground(c, rowRect, isSelected: false, isHovered: true, _rowSelection, z, isRtl: IsRtl);
+
+            // Effective background behind the graph, only used to knock out the connector inside a
+            // hollow (stash / remote-only) dot so it reads cleanly against whatever fills the row.
+            var rowBackground = isSelected ? _rowSelection.Fill
+                : hovered ? _rowSelection.FillHover
+                : _styles.Background;
 
             // Filtered list is flat: skip the graph cell and start the summary at the graph origin.
             if (!_filtering)
-            {
-                var rowBackground = isHighlighted ? _rowSelection.Fill : _styles.Background;
                 CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground,
                     IsRtl, Position.Left + Position.Right);
-            }
 
             var textTop = rowBottom;
             var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
             var refsEndX = DrawBadges(c, node, summaryStartX, textTop, z + 2);
-            var summaryDraw = Math.Max(0, body.Right - refsEndX);
+            // Clip the message at the metadata edge (DrawText clips to its box) instead of masking
+            // the overflow with opaque column rects, so the selection bar shows through uniformly.
+            var summaryDraw = Math.Max(0, authorPanelLeft - refsEndX);
             DrawText(c, node.Summary, refsEndX, textTop, summaryDraw, isHighlighted, z + 2);
 
-            var rowOverlayColor = isHighlighted ? _rowSelection.Fill : _styles.Background;
-            DrawColumnOverlay(c, authorPanelLeft, rowBottom, hashPanelLeft - authorPanelLeft, rowOverlayColor, z + 3);
-            DrawText(c, node.Author, authorX, textTop, authorW, isHighlighted, z + 4);
-            DrawColumnOverlay(c, hashPanelLeft, rowBottom, datePanelLeft - hashPanelLeft, rowOverlayColor, z + 5);
-            DrawHashText(c, ShortSha(node.Sha), hashX, textTop, hashW, isHighlighted, z + 6);
-            DrawColumnOverlay(c, datePanelLeft, rowBottom, body.Right - datePanelLeft, rowOverlayColor, z + 7);
-            DrawText(c, FormatRelative(node.When), dateX, textTop, dateW, isHighlighted, z + 8);
+            DrawText(c, node.Author, authorX, textTop, authorW, isHighlighted, z + 2);
+            DrawHashText(c, ShortSha(node.Sha), hashX, textTop, hashW, isHighlighted, z + 2);
+            DrawText(c, FormatRelative(node.When), dateX, textTop, dateW, isHighlighted, z + 2);
+        }
+
+        // One selection bar for the whole list, floated below row content by VirtualRowListView so
+        // it rides scroll and slides between rows (CurrentSelectionIndex is tweened). Shares the
+        // RowSelection painter so its look matches the branches sidebar / repo bar exactly.
+        private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
+        {
+            if (_selectedIndex < 0) return;
+            var index = CurrentSelectionIndex();
+            var rowTop = viewport.Top + _list.ScrollY - index * RowHeight;
+            var rowRect = new RectF(viewport.Left, rowTop - RowHeight, viewport.Width, RowHeight);
+            RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
         }
 
         private float DrawBadges(ICanvas c, CommitNode node, float left, float rowBottom, int z)
@@ -676,25 +725,33 @@ internal sealed record CommitsView : Widget
         private void DrawText(ICanvas c, string text, float left, float rowBottom, float width, bool active, int z)
         {
             if (width <= 0 || string.IsNullOrEmpty(text)) return;
+            var box = Place(left, rowBottom, width, RowHeight);
+            // Clip to the cell so a long message/author is cut at the column edge (glyphs aren't
+            // bounded by Position) — replaces the old opaque column masks.
+            c.PushClip(box);
             c.DrawText(new DrawTextInputs
             {
-                Position = Place(left, rowBottom, width, RowHeight),
+                Position = box,
                 Text = text,
                 Style = active ? _rowTextActiveStyle : _rowTextStyle,
                 ZIndex = z,
             });
+            c.PopClip();
         }
 
         private void DrawHashText(ICanvas c, string text, float left, float rowBottom, float width, bool active, int z)
         {
             if (width <= 0 || string.IsNullOrEmpty(text)) return;
+            var box = Place(left, rowBottom, width, RowHeight);
+            c.PushClip(box);
             c.DrawText(new DrawTextInputs
             {
-                Position = Place(left, rowBottom, width, RowHeight),
+                Position = box,
                 Text = text,
                 Style = active ? _hashTextActiveStyle : _hashTextStyle,
                 ZIndex = z,
             });
+            c.PopClip();
         }
 
         private static string ShortSha(string sha)
