@@ -6,9 +6,10 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Controls;
 
 /// <summary>
-/// The icon segment of an <see cref="ButtonWidget"/>: a Lucide glyph whose color tracks the ambient
-/// <see cref="Foreground"/>, optionally with a count badge hugging it. The badge is null/0-hidden and
-/// sits tight against the glyph; the glyph renders correctly inside any <see cref="Foreground"/> scope.
+/// The icon segment of an <see cref="ButtonWidget"/>: a Lucide glyph colored by <see cref="GlyphColor"/>
+/// (the ambient <see cref="Foreground"/> by default), optionally with a count badge hugging it. The badge
+/// is null/0-hidden and sits tight against the glyph; the glyph renders correctly inside any
+/// <see cref="Foreground"/> scope.
 /// </summary>
 internal sealed record ButtonIcon : Widget
 {
@@ -20,6 +21,9 @@ internal sealed record ButtonIcon : Widget
 
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
     public Prop<float> Rotation { get; init; }
+
+    /// <summary>Glyph color; defaults to the ambient <see cref="Foreground"/>.</summary>
+    public Prop<uint> GlyphColor { get; init; } = Foreground.Color;
 
     /// <summary>Count shown in a badge next to the icon; null or 0 hides it.</summary>
     public Prop<int?> Badge { get; init; }
@@ -40,7 +44,7 @@ internal sealed record ButtonIcon : Widget
                 VAlign = TextAlignment.Center,
                 Value = Value,
                 Rotation = Rotation,
-                Color = Foreground.Color,
+                Color = GlyphColor,
             },
             new Text
             {

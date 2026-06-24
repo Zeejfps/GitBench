@@ -1,11 +1,13 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Localization;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Toolbar;
 
@@ -65,6 +67,7 @@ internal sealed record ActionsToolbar : Widget
                                             Rotation = Prop.Bind(vm.PullRotation),
                                             Badge = Prop.Bind(vm.PullBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeBehind),
+                                            GlyphColor = TintWhenPending(vm.PullBadge, s => s.ActionsToolbar.BadgeBehind),
                                         },
                                         new ButtonLabel { Value = L.T(s => vm.IsPulling.Value ? s.ToolbarPulling : s.ToolbarPull) },
                                     ],
@@ -80,6 +83,7 @@ internal sealed record ActionsToolbar : Widget
                                             Rotation = Prop.Bind(vm.PushRotation),
                                             Badge = Prop.Bind(vm.PushBadge),
                                             BadgeColor = Theme.Color(s => s.ActionsToolbar.BadgeAhead),
+                                            GlyphColor = TintWhenPending(vm.PushBadge, s => s.ActionsToolbar.BadgeAhead),
                                         },
                                         new ButtonLabel { Value = L.T(s => vm.IsPushing.Value ? s.ToolbarPushing : s.ToolbarPush) },
                                     ],
@@ -125,4 +129,14 @@ internal sealed record ActionsToolbar : Widget
             ],
         }.BindVm(vm);
     }
+
+    // With commits pending the glyph takes its badge color, so arrow and count read as one unit;
+    // with nothing pending it falls back to the ambient foreground.
+    private static Prop<uint> TintWhenPending(IReadable<int?> badge, Func<ThemeStyles, uint> accent) =>
+        Prop.Deferred<uint>(ctx =>
+        {
+            var tint = Theme.Color(accent).ToReadable(ctx);
+            var foreground = Foreground.Color.ToReadable(ctx);
+            return Prop.Bind(() => badge.Value is > 0 ? tint.Value : foreground.Value);
+        });
 }
