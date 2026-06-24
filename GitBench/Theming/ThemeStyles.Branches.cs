@@ -33,6 +33,7 @@ public sealed record RepoBarRowStyles(
     uint TextIdle,
     uint TextActive,
     uint TextMissing,
+    uint IconAccentPrimary,
     uint IconAccentWorktree,
     uint IconAccentSubmodule,
     uint BadgeError,
@@ -44,11 +45,12 @@ public sealed record RepoBarRowStyles(
     public uint Text(bool active, bool missing)
         => missing ? TextMissing : active ? TextActive : TextIdle;
 
-    // Row icon: primaries follow the label ramp; nested icons use the kind accent, muted to the
-    // missing color when the checkout is gone.
+    // Row icon: each kind carries its own accent at rest; on the active fill or a missing checkout
+    // the icon follows the label ramp so it stays legible.
     public uint Icon(RepoKind kind, bool active, bool missing)
     {
-        if (kind == RepoKind.Primary) return Text(active, missing);
+        if (kind == RepoKind.Primary)
+            return active || missing ? Text(active, missing) : IconAccentPrimary;
         if (missing) return TextMissing;
         return kind == RepoKind.Worktree ? IconAccentWorktree : IconAccentSubmodule;
     }
@@ -104,6 +106,7 @@ public partial record ThemeStyles
             TextIdle: p.TextSecondary,
             TextActive: p.RowSubtleText,
             TextMissing: p.TextDisabled,
+            IconAccentPrimary: p.Accent,
             IconAccentWorktree: status.Info,
             IconAccentSubmodule: status.Purple,
             BadgeError: status.Danger,

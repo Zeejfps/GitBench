@@ -47,12 +47,19 @@ internal sealed record RepoBar : Widget
                                 AutoHide = true,
                                 Children =
                                 [
-                                    new Each<GroupSectionViewModel>
+                                    new Padding
                                     {
-                                        Items = vm.GroupSections,
-                                        Template = new GroupSection(),
-                                        Gap = 12,
-                                        CrossAxis = CrossAxisAlignment.Stretch,
+                                        Amount = new PaddingStyle { Left = 8, Top = 8, Bottom = 8 },
+                                        Children =
+                                        [
+                                            new Each<GroupSectionViewModel>
+                                            {
+                                                Items = vm.GroupSections,
+                                                Template = new GroupSection(),
+                                                Gap = 12,
+                                                CrossAxis = CrossAxisAlignment.Stretch,
+                                            },
+                                        ],
                                     },
                                 ],
                             },
