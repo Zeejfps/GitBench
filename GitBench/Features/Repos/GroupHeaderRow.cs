@@ -22,7 +22,6 @@ internal sealed record GroupHeaderRow : Widget
         var root = new Box
         {
             Height = Sizes.RowHeight,
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => s.GroupHeaderRow.Background(isHovered.Value)),
             Children =
             [

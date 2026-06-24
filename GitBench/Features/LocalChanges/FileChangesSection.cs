@@ -42,7 +42,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly IMessageBus? _bus;
     private readonly TextView _headerText;
     private readonly TextView _emptyPlaceholder;
-    private readonly RectView _bodyContainer;
+    private readonly PaddingView _bodyContainer;
     private readonly VirtualRowListView _list;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly HorizontalScrollBarView _hScrollBar;
@@ -130,7 +130,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _list.RowClicked += OnRowClicked;
         _list.ScrollChanged += NotifyScrollChanged;
 
-        _bodyContainer = new RectView();
+        _bodyContainer = new PaddingView
+        {
+            Padding = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Sm },
+        };
         _bodyContainer.Children.Add(_emptyPlaceholder);
         _currentBody = _emptyPlaceholder;
 

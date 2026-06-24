@@ -44,7 +44,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private readonly Func<FileRow?, IReadOnlyList<RepoBarContextMenu.Item>>? _buildContextMenu;
     private readonly TextView _headerText;
     private readonly View _emptyPlaceholder;
-    private readonly RectView _bodyContainer;
+    private readonly PaddingView _bodyContainer;
     private readonly VirtualRowListView _list;
     private readonly VerticalScrollBarView _scrollBar;
     private readonly HorizontalScrollBarView _hScrollBar;
@@ -175,7 +175,10 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
         // Empty placeholder swaps in as the body when there are no files; the widget swaps
         // back in when files arrive. Keeps the layout (header / center / scrollbars) intact.
-        _bodyContainer = new RectView();
+        _bodyContainer = new PaddingView
+        {
+            Padding = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Sm },
+        };
         _bodyContainer.Children.Add(_emptyPlaceholder);
         _currentBody = _emptyPlaceholder;
 

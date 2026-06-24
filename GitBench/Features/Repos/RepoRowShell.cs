@@ -28,7 +28,6 @@ internal sealed record RepoRowShell : Widget
         return new Box
         {
             Height = RowHeight,
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => vm.IsActive.Value
                 ? s.RowSelection.Fill
                 : Hovered.Value ? s.RowSelection.FillHover : 0u),
