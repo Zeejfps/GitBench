@@ -39,6 +39,7 @@ public sealed record CommitsPanelWidget : Widget
                     new Text
                     {
                         Value = L.T(s => s.CommitsTruncatedBanner),
+                        Visible = truncated.Bind(t => t),
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.Banner.Text),
