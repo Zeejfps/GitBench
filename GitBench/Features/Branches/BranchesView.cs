@@ -285,27 +285,17 @@ internal sealed record BranchesView : Widget
             });
         }
 
-        private static bool HasChevron(BranchRow row) =>
-            row.Kind is BranchRowKind.LocalHeader
-                or BranchRowKind.RemotesHeader
-                or BranchRowKind.RemoteHeader
-                or BranchRowKind.StashesHeader
-                or BranchRowKind.Folder;
-
         private static bool IsTreeRow(BranchRow row) =>
-            row.Kind is BranchRowKind.Folder
-                or BranchRowKind.LocalBranch
-                or BranchRowKind.RemoteBranch
-                or BranchRowKind.Stash;
+            row is FolderRow or LocalBranchRow or RemoteBranchRow or StashRow;
 
         private float DrawChevronOrReserveColumn(ICanvas c, BranchRow row, float contentLeft, float rowBottom, int z)
         {
-            if (HasChevron(row))
+            if (row is ICollapsibleRow collapsible)
             {
                 c.DrawText(new DrawTextInputs
                 {
                     Position = Place(contentLeft, rowBottom, ChevronWidth, RowHeight),
-                    Text = row.IsOpen
+                    Text = collapsible.IsOpen
                         ? LucideIcons.ChevronDown
                         : IsRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
                     Style = _chevronStyle,
@@ -325,9 +315,8 @@ internal sealed record BranchesView : Widget
         private void DrawRowNameAndBadge(ICanvas c, BranchRow row, bool isSelected, float contentLeft, float rightEdge, float rowBottom, int z)
         {
             const float nameBadgeGap = 8f;
-            var badgeWidth = row.Kind == BranchRowKind.LocalBranch
-                ? MeasureAheadBehindBadge(c, row)
-                : 0f;
+            var localRow = row as LocalBranchRow;
+            var badgeWidth = localRow != null ? MeasureAheadBehindBadge(c, localRow) : 0f;
 
             var nameBudget = Math.Max(0f,
                 rightEdge - contentLeft
@@ -348,25 +337,28 @@ internal sealed record BranchesView : Widget
             if (badgeWidth > 0)
             {
                 var nameWidth = _canvas.MeasureTextWidth(rendered, style);
-                DrawAheadBehindBadgeAt(c, row, contentLeft + nameWidth + nameBadgeGap, rowBottom, z);
+                DrawAheadBehindBadgeAt(c, localRow!, contentLeft + nameWidth + nameBadgeGap, rowBottom, z);
             }
         }
 
         private (string text, TextStyle style) SelectNameTextAndStyle(BranchRow row, bool isSelected)
         {
-            var isCheckedOutElsewhere = row.Kind == BranchRowKind.LocalBranch
-                && row.FullPath != null
-                && _worktreeBranches.Contains(row.FullPath);
-            var isBusy = IsBusyRow(row);
-
-            return row.Kind switch
+            switch (row)
             {
-                BranchRowKind.LocalHeader or BranchRowKind.RemotesHeader or BranchRowKind.RemoteHeader or BranchRowKind.StashesHeader => (row.DisplayName, _headerTextStyle),
-                BranchRowKind.LocalBranch when EffectiveIsHead(row) => (row.DisplayName, isSelected ? _headTextSelectedStyle : _headTextStyle),
-                BranchRowKind.LocalBranch when isBusy => (row.DisplayName, _branchTextBusyStyle),
-                BranchRowKind.LocalBranch when isCheckedOutElsewhere => (row.DisplayName, _branchTextBusyStyle),
-                _ => (row.DisplayName, isSelected ? _branchTextSelectedStyle : _branchTextStyle),
-            };
+                case LocalHeaderRow:
+                case RemotesHeaderRow:
+                case RemoteHeaderRow:
+                case StashesHeaderRow:
+                    return (row.DisplayName, _headerTextStyle);
+                case LocalBranchRow lb when EffectiveIsHead(lb):
+                    return (lb.DisplayName, isSelected ? _headTextSelectedStyle : _headTextStyle);
+                case LocalBranchRow lb when IsBusyRow(lb):
+                    return (lb.DisplayName, _branchTextBusyStyle);
+                case LocalBranchRow lb when _worktreeBranches.Contains(lb.Name):
+                    return (lb.DisplayName, _branchTextBusyStyle);
+                default:
+                    return (row.DisplayName, isSelected ? _branchTextSelectedStyle : _branchTextStyle);
+            }
         }
 
         private float DrawRowIcon(ICanvas c, BranchRow row, bool isSelected, float left, float rowBottom, int z)
@@ -386,12 +378,12 @@ internal sealed record BranchesView : Widget
 
         private (string glyph, TextStyle style) SelectRowIcon(BranchRow row, bool isSelected)
         {
-            return row.Kind switch
+            return row switch
             {
-                BranchRowKind.Folder => (
-                    row.IsOpen ? LucideIcons.FolderOpen : LucideIcons.Folder,
+                FolderRow f => (
+                    f.IsOpen ? LucideIcons.FolderOpen : LucideIcons.Folder,
                     _folderIconStyle),
-                BranchRowKind.Stash => (
+                StashRow => (
                     LucideIcons.Stash,
                     isSelected ? _branchIconActiveStyle : _branchIconStyle),
                 _ => SelectBranchIcon(row, isSelected),
@@ -403,9 +395,9 @@ internal sealed record BranchesView : Widget
             if (IsBusyRow(row) && !EffectiveIsHead(row))
                 return (LucideIcons.Branch, _branchIconBusyStyle);
 
-            if (row.Kind == BranchRowKind.LocalBranch)
+            if (row is LocalBranchRow lb)
             {
-                return row.UpstreamState switch
+                return lb.UpstreamState switch
                 {
                     BranchUpstreamState.Tracked => (LucideIcons.Branch, _upstreamLinkedIconStyle),
                     BranchUpstreamState.Gone => (LucideIcons.CloudOff, _upstreamGoneIconStyle),
@@ -413,14 +405,14 @@ internal sealed record BranchesView : Widget
                 };
             }
 
-            var style = (row.IsHead || isSelected) ? _branchIconActiveStyle : _branchIconStyle;
+            var style = isSelected ? _branchIconActiveStyle : _branchIconStyle;
             return (LucideIcons.Branch, style);
         }
 
         private const float BadgeGap = 8f;
         private const float BadgeNumIconGap = 0f;
 
-        private float MeasureAheadBehindBadge(ICanvas canvas, BranchRow row)
+        private float MeasureAheadBehindBadge(ICanvas canvas, LocalBranchRow row)
         {
             var ahead = row.AheadBy.GetValueOrDefault();
             var behind = row.BehindBy.GetValueOrDefault();
@@ -443,7 +435,7 @@ internal sealed record BranchesView : Widget
             return width;
         }
 
-        private void DrawAheadBehindBadgeAt(ICanvas c, BranchRow row, float leftX, float rowBottom, int z)
+        private void DrawAheadBehindBadgeAt(ICanvas c, LocalBranchRow row, float leftX, float rowBottom, int z)
         {
             var ahead = row.AheadBy.GetValueOrDefault();
             var behind = row.BehindBy.GetValueOrDefault();
@@ -486,14 +478,12 @@ internal sealed record BranchesView : Widget
 
         private bool IsBusyRow(BranchRow row) =>
             _busyBranch != null
-            && row.Kind == BranchRowKind.LocalBranch
-            && row.FullPath != null
-            && row.FullPath == _busyBranch;
+            && row is LocalBranchRow lb
+            && lb.Name == _busyBranch;
 
         private bool EffectiveIsHead(BranchRow row) =>
-            _pendingHead != null
-                ? row.Kind == BranchRowKind.LocalBranch && row.FullPath == _pendingHead
-                : row.IsHead;
+            row is LocalBranchRow lb
+            && (_pendingHead != null ? lb.Name == _pendingHead : lb.IsHead);
 
         private string TruncateToFit(string text, TextStyle style, float available)
         {
@@ -532,84 +522,66 @@ internal sealed record BranchesView : Widget
 
         private static void DispatchClick(BranchesViewModel vm, BranchRow? row)
         {
-            if (row == null)
+            switch (row)
             {
-                vm.ClearSelection();
-                return;
-            }
-
-            switch (row.Kind)
-            {
-                case BranchRowKind.LocalHeader:
+                case null:
+                    vm.ClearSelection();
+                    return;
+                case LocalHeaderRow:
                     vm.ToggleLocalSection();
                     return;
-                case BranchRowKind.RemotesHeader:
+                case RemotesHeaderRow:
                     vm.ToggleRemotesSection();
                     return;
-                case BranchRowKind.StashesHeader:
+                case StashesHeaderRow:
                     vm.ToggleStashesSection();
                     return;
-                case BranchRowKind.RemoteHeader:
-                    if (row.RemoteName != null) vm.ToggleRemote(row.RemoteName);
+                case RemoteHeaderRow r:
+                    vm.ToggleRemote(r.RemoteName);
                     return;
-                case BranchRowKind.Folder:
-                    if (row.FolderKey != null) vm.ToggleFolder(row.FolderKey);
+                case FolderRow f:
+                    vm.ToggleFolder(f.Folder.Key);
                     return;
-                case BranchRowKind.LocalBranch:
-                    if (row.TipSha != null && row.FullPath != null)
-                        vm.SelectLocalBranch(row.FullPath, row.TipSha);
+                case LocalBranchRow b:
+                    vm.SelectLocalBranch(b.Name, b.TipSha);
                     return;
-                case BranchRowKind.RemoteBranch:
-                    if (row.TipSha != null && row.RemoteName != null && row.FullPath != null)
-                        vm.SelectRemoteBranch(row.RemoteName, row.FullPath, row.TipSha);
+                case RemoteBranchRow b:
+                    vm.SelectRemoteBranch(b.RemoteName, b.Name, b.TipSha);
                     return;
-                case BranchRowKind.Stash:
-                    if (row.TipSha != null && row.FullPath != null)
-                        vm.SelectStash(row.FullPath, row.TipSha);
+                case StashRow s:
+                    vm.SelectStash(s.Label, s.TipSha);
                     return;
             }
         }
 
         private static void DispatchActivate(BranchesViewModel vm, BranchRow row)
         {
-            switch (row.Kind)
+            switch (row)
             {
-                case BranchRowKind.LocalBranch:
-                    if (row.FullPath != null) vm.ActivateLocalBranch(row.FullPath, row.IsHead);
+                case LocalBranchRow b:
+                    vm.ActivateLocalBranch(b.Name, b.IsHead);
                     return;
-                case BranchRowKind.RemoteBranch:
-                    if (row.RemoteName != null && row.FullPath != null)
-                        vm.ActivateRemoteBranch(row.RemoteName, row.FullPath);
+                case RemoteBranchRow b:
+                    vm.ActivateRemoteBranch(b.RemoteName, b.Name);
                     return;
-                case BranchRowKind.Stash:
-                    if (row.StashIndex is int idx && row.FullPath != null)
-                        vm.ActivateStash(idx, row.FullPath, row.DisplayName);
+                case StashRow s:
+                    vm.ActivateStash(s.Index, s.Label, s.DisplayName);
                     return;
             }
         }
 
-        private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItemsFor(BranchesViewModel vm, BranchRow row)
-        {
-            switch (row.Kind)
+        private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItemsFor(BranchesViewModel vm, BranchRow row) =>
+            row switch
             {
-                case BranchRowKind.LocalHeader:
-                    return vm.BuildLocalHeaderMenuItems();
-                case BranchRowKind.RemotesHeader:
-                    return vm.BuildRemotesHeaderMenuItems();
-                case BranchRowKind.RemoteHeader when row.RemoteName != null:
-                    return vm.BuildRemoteHeaderMenuItems(row.RemoteName);
-                case BranchRowKind.Folder when row.FullPath != null:
-                    return vm.BuildFolderMenuItems(row.RemoteName, row.FullPath);
-                case BranchRowKind.LocalBranch when row.FullPath != null:
-                    return vm.BuildLocalBranchMenuItems(row.FullPath, row.IsHead);
-                case BranchRowKind.RemoteBranch when row.RemoteName != null && row.FullPath != null:
-                    return vm.BuildRemoteBranchMenuItems(row.RemoteName, row.FullPath);
-                case BranchRowKind.Stash when row.StashIndex is int idx && row.FullPath != null:
-                    return vm.BuildStashMenuItems(idx, row.FullPath, row.DisplayName);
-                default:
-                    return [];
-            }
-        }
+                LocalHeaderRow => vm.BuildLocalHeaderMenuItems(),
+                RemotesHeaderRow => vm.BuildRemotesHeaderMenuItems(),
+                RemoteHeaderRow r => vm.BuildRemoteHeaderMenuItems(r.RemoteName),
+                FolderRow f => vm.BuildFolderMenuItems(f.Folder.Scope.RemoteName, f.Folder.Path),
+                LocalBranchRow b => vm.BuildLocalBranchMenuItems(b.Name, b.IsHead),
+                RemoteBranchRow b => vm.BuildRemoteBranchMenuItems(b.RemoteName, b.Name),
+                StashRow s => vm.BuildStashMenuItems(s.Index, s.Label, s.DisplayName),
+                _ => [],
+            };
 
         public void SetVerticalNormalizedScrollPosition(float normalized)
         {

@@ -29,23 +29,20 @@ internal static class BranchTreeBuilder
         var rows = new List<BranchRow>();
         if (listing == null) return rows;
 
-        rows.Add(new BranchRow(BranchRowKind.LocalHeader, strings.BranchesSectionLocal, IndentSection, ui.LocalOpen));
+        rows.Add(new LocalHeaderRow(ui.LocalOpen, IndentSection, strings.BranchesSectionLocal));
         if (ui.LocalOpen)
         {
             var localTree = PathTree.Build(listing.LocalBranches, b => b.Name);
             EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, IndentLocalTreeBase, depth: 0);
         }
 
-        rows.Add(new BranchRow(BranchRowKind.RemotesHeader, strings.BranchesSectionRemote, IndentSection, ui.RemotesOpen));
+        rows.Add(new RemotesHeaderRow(ui.RemotesOpen, IndentSection, strings.BranchesSectionRemote));
         if (ui.RemotesOpen)
         {
             foreach (var rg in listing.Remotes)
             {
                 var isOpen = ui.RemoteOpen.TryGetValue(rg.Name, out var v) ? v : true;
-                rows.Add(new BranchRow(BranchRowKind.RemoteHeader, rg.Name, IndentRemoteHeader, isOpen)
-                {
-                    RemoteName = rg.Name,
-                });
+                rows.Add(new RemoteHeaderRow(rg.Name, isOpen, IndentRemoteHeader, rg.Name));
                 if (!isOpen) continue;
                 var remoteTree = PathTree.Build(rg.Branches, b => b.Name);
                 EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, IndentRemoteTreeBase, depth: 0);
@@ -54,18 +51,13 @@ internal static class BranchTreeBuilder
 
         if (listing.Stashes.Count > 0)
         {
-            rows.Add(new BranchRow(BranchRowKind.StashesHeader, strings.BranchesSectionStashes, IndentSection, ui.StashesOpen));
+            rows.Add(new StashesHeaderRow(ui.StashesOpen, IndentSection, strings.BranchesSectionStashes));
             if (ui.StashesOpen)
             {
                 foreach (var s in listing.Stashes)
                 {
                     var label = $"stash@{{{s.Index}}}";
-                    rows.Add(new BranchRow(BranchRowKind.Stash, s.Subject, IndentStashBase, isOpen: false)
-                    {
-                        TipSha = s.Sha,
-                        FullPath = label,
-                        StashIndex = s.Index,
-                    });
+                    rows.Add(new StashRow(s.Index, label, s.Sha, IndentStashBase, s.Subject));
                 }
             }
         }
@@ -75,38 +67,27 @@ internal static class BranchTreeBuilder
     private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, float treeBase, int depth)
     {
         var indent = treeBase + depth * IndentLevel;
+        var scope = isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local;
         foreach (var node in nodes)
         {
             if (node.Leaf is { } entry)
             {
-                rows.Add(new BranchRow(isRemote ? BranchRowKind.RemoteBranch : BranchRowKind.LocalBranch, node.Segment, indent, isOpen: false)
-                {
-                    TipSha = entry.TipSha,
-                    IsHead = entry.IsHead,
-                    RemoteName = remoteName,
-                    FullPath = entry.Name,
-                    AheadBy = entry.AheadBy,
-                    BehindBy = entry.BehindBy,
-                    UpstreamState = entry.UpstreamState,
-                });
+                rows.Add(isRemote
+                    ? new RemoteBranchRow(remoteName!, entry.Name, entry.TipSha, indent, node.Segment)
+                    : new LocalBranchRow(entry.Name, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState, indent, node.Segment));
             }
             else
             {
-                var key = MakeFolderKey(isRemote, remoteName, node.FullPath);
-                var open = ui.FolderOpen.TryGetValue(key, out var v) ? v : true;
-                rows.Add(new BranchRow(BranchRowKind.Folder, node.Segment, indent, open)
-                {
-                    RemoteName = remoteName,
-                    FullPath = node.FullPath,
-                    FolderKey = key,
-                });
+                var folder = new BranchFolder(scope, node.FullPath);
+                var open = ui.FolderOpen.TryGetValue(folder.Key, out var v) ? v : true;
+                rows.Add(new FolderRow(folder, open, indent, node.Segment));
                 if (open) EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBase, depth + 1);
             }
         }
     }
 
     internal static string MakeFolderKey(bool isRemote, string? remoteName, string path) =>
-        isRemote ? $"remote:{remoteName}:{path}" : $"local:{path}";
+        new BranchFolder(isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local, path).Key;
 
     /// Every folder path implied by a set of slash-separated branch names. A branch
     /// "feature/admin/login" contributes the folders "feature" and "feature/admin" (the
