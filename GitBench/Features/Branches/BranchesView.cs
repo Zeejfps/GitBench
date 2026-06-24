@@ -27,7 +27,8 @@ namespace GitBench.Features.Branches;
 /// (Checkout / Rename / Delete); right-click a stash row for Apply / Rename / Delete;
 /// right-click the "Local" section header or any local folder to create a new branch —
 /// from a folder the dialog's name is prefilled with that folder's path (e.g. "feature/")
-/// so the branch is created inside it; right-click the "Remotes" section
+/// so the branch is created inside it — or to "Clean…" the stale branches (deleted or
+/// never-set upstream) under it; right-click the "Remotes" section
 /// header to add a new remote; right-click a remote header (e.g.
 /// "origin") to edit that remote's URL. Every parent row — the "Local"/"Remotes"/"Stashes"
 /// section headers, remote headers, and folders — also offers "Expand All" / "Collapse All"

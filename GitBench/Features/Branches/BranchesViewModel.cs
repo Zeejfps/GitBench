@@ -331,10 +331,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var names = BranchNamesIn(folder.Scope);
         if (names == null) return false;
         foreach (var name in names)
-            if (folder.Path.Length == 0 || name.StartsWith(folder.Path + "/", StringComparison.Ordinal))
-                return true;
+            if (BranchIsUnder(folder.Path, name)) return true;
         return false;
     }
+
+    // A branch lives under a folder when the folder is the root (empty path) or the branch name
+    // sits below that path. Shared by the has-children check and the cleanup-candidate scan.
+    private static bool BranchIsUnder(string folderPath, string branchName)
+        => folderPath.Length == 0 || branchName.StartsWith(folderPath + "/", StringComparison.Ordinal);
 
     // basePath and everything beneath it. The root (empty basePath) covers every folder in
     // its scope (it has no row of its own); a named folder covers itself and its descendants,
@@ -560,10 +564,73 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 () => CreateBranch(namePrefix),
                 LucideIcons.Branch),
         };
+        // "Clean…" only when there's something to clean under this folder, so the menu doesn't
+        // open a dialog with an empty branch list.
+        if (FolderHasCleanCandidates(folder))
+            items.Add(new RepoBarContextMenu.Item(
+                s.BranchesContextClean,
+                () => OpenCleanDialog(folder),
+                LucideIcons.Trash));
         if (FolderHasChildren(folder))
             AppendExpandCollapseItems(items, () => SetFolderSubtreeOpen(folder, true), () => SetFolderSubtreeOpen(folder, false));
         return items;
     }
+
+    // ---- branch cleanup ----
+    //
+    // "Clean…" gathers the stale local branches under a folder — those whose upstream was
+    // deleted (Gone) or that never had one (NeverLinked) — and hands them to a dialog that
+    // confirms and deletes the chosen set. Scoped to the folder's path, so cleaning a sub-folder
+    // only touches branches beneath it. The current HEAD and branches checked out in a sibling
+    // worktree are excluded — git refuses to delete those.
+
+    public void OpenCleanDialog(BranchFolder folder)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var candidates = BuildCleanCandidates(folder);
+        if (candidates.Count == 0) return;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new CleanBranchesDialog
+        {
+            Repo = repo,
+            FolderPath = folder.Path,
+            Candidates = candidates,
+            OnClose = onClose,
+        }));
+    }
+
+    private bool FolderHasCleanCandidates(BranchFolder folder)
+    {
+        var listing = State.Value.Listing;
+        if (listing == null) return false;
+        var worktree = State.Value.WorktreeBranches;
+        foreach (var b in listing.LocalBranches)
+            if (IsCleanCandidate(b, folder, worktree)) return true;
+        return false;
+    }
+
+    private IReadOnlyList<CleanBranchCandidate> BuildCleanCandidates(BranchFolder folder)
+    {
+        var listing = State.Value.Listing;
+        if (listing == null) return Array.Empty<CleanBranchCandidate>();
+        var worktree = State.Value.WorktreeBranches;
+        var result = new List<CleanBranchCandidate>();
+        foreach (var b in listing.LocalBranches)
+        {
+            if (!IsCleanCandidate(b, folder, worktree)) continue;
+            var kind = b.UpstreamState == BranchUpstreamState.Gone
+                ? BranchCleanupKind.Disconnected
+                : BranchCleanupKind.NeverPushed;
+            result.Add(new CleanBranchCandidate(b.Name, kind));
+        }
+        return result;
+    }
+
+    private static bool IsCleanCandidate(BranchEntry b, BranchFolder folder, IReadOnlySet<string> worktree)
+        => !b.IsHead
+           && !worktree.Contains(b.Name)
+           && BranchIsUnder(folder.Path, b.Name)
+           && b.UpstreamState is BranchUpstreamState.Gone or BranchUpstreamState.NeverLinked;
 
     // Appends a separator followed by Expand All / Collapse All, for menus that already carry
     // actions above the pair (e.g. "New branch", "Edit remote").
