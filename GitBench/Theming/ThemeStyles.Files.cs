@@ -24,9 +24,6 @@ public sealed record FileChangesSectionStyles(
 
 public sealed record FileChangeRowStyles(
     uint RowText,
-    uint RowTextActive,
-    uint RowHover,
-    uint RowActive,
     uint BadgeText,
     uint StatusAdded,
     uint StatusModified,
@@ -76,9 +73,6 @@ public partial record ThemeStyles
     private static FileChangeRowStyles BuildFileChangeRow(ThemePalette p, StatusPalette status) =>
         new(
             RowText: p.TextSecondary,
-            RowTextActive: p.TextOnAccent,
-            RowHover: p.SurfaceHover,
-            RowActive: p.SurfaceSelected,
             BadgeText: p.OnStatusText,
             StatusAdded: status.Success,
             StatusModified: status.Warning,

@@ -91,6 +91,7 @@ internal sealed record BranchesView : Widget
         private readonly TextStyle _branchIconLocalOnlyStyle = TextStyles.Icon(0u);
 
         private BranchesViewStyles _styles = ThemeStyles.Dark.BranchesView;
+        private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
 
         private readonly Context _ctx;
         private readonly ICanvas _canvas;
@@ -150,12 +151,13 @@ internal sealed record BranchesView : Widget
             this.BindThemed(theme, s =>
             {
                 _styles = s.BranchesView;
+                _rowSelection = s.RowSelection;
                 _branchTextStyle.TextColor = _styles.RowText;
-                _branchTextSelectedStyle.TextColor = _styles.RowTextActive;
+                _branchTextSelectedStyle.TextColor = _rowSelection.Text;
                 _branchTextBusyStyle.TextColor = _styles.RowTextDim;
                 _branchIconBusyStyle.TextColor = _styles.RowTextDim;
                 _headTextStyle.TextColor = _styles.HeadIdleText;
-                _headTextSelectedStyle.TextColor = _styles.RowTextActive;
+                _headTextSelectedStyle.TextColor = _rowSelection.Text;
                 _headerTextStyle.TextColor = _styles.SectionHeaderText;
                 _chevronStyle.TextColor = _styles.SectionHeaderText;
                 _placeholderStyle.TextColor = _styles.SectionHeaderText;
@@ -167,7 +169,7 @@ internal sealed record BranchesView : Widget
                 _upstreamGoneIconStyle.TextColor = _styles.BehindColor;
                 _folderIconStyle.TextColor = _styles.SectionHeaderText;
                 _branchIconStyle.TextColor = _styles.RowText;
-                _branchIconActiveStyle.TextColor = _styles.RowTextActive;
+                _branchIconActiveStyle.TextColor = _rowSelection.Text;
                 _branchIconLocalOnlyStyle.TextColor = _styles.RowTextDim;
                 SetDirty();
             });
@@ -273,20 +275,10 @@ internal sealed record BranchesView : Widget
 
         private void DrawRowBackground(ICanvas c, RectF rowRect, bool isSelected, RowRenderState state, int z)
         {
-            var bg = isSelected
-                ? _styles.RowSelectedBackground
-                : state.IsHovered || state.IsContextHighlighted
-                    ? _styles.RowHoverBackground
-                    : (uint?)null;
-
-            if (bg == null) return;
-
-            c.DrawRect(new DrawRectInputs
-            {
-                Position = rowRect,
-                Style = new RectStyle { BackgroundColor = bg.Value },
-                ZIndex = z,
-            });
+            RowSelection.DrawBackground(
+                c, rowRect, isSelected,
+                state.IsHovered || state.IsContextHighlighted,
+                _rowSelection, z, isRtl: IsRtl);
         }
 
         private static bool IsTreeRow(BranchRow row) =>

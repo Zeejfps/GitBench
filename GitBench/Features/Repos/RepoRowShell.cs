@@ -29,8 +29,10 @@ internal sealed record RepoRowShell : Widget
         {
             Height = RowHeight,
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Background = Theme.Color(s => s.RepoBarRow.Background(vm.IsActive.Value, Hovered.Value)),
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Left = s.RepoBarRow.AccentBar }),
+            Background = Theme.Color(s => vm.IsActive.Value
+                ? s.RowSelection.Fill
+                : Hovered.Value ? s.RowSelection.FillHover : 0u),
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Left = s.RowSelection.AccentBar }),
             BorderSize = Prop.Bind(() => new BorderSizeStyle { Left = vm.IsActive.Value ? 2f : 0f }),
             Children =
             [

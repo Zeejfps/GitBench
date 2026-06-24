@@ -90,6 +90,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     };
 
     private FileChangeRowStyles _rowStyles = ThemeStyles.Dark.FileChangeRow;
+    private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
 
     // Sentinel start so the first NotifyScrollChanged fires even when the computed scale
     // equals 1 — otherwise the scrollbar thumb's built-in 0.5 default sticks until a real
@@ -198,8 +199,9 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         this.BindThemed(ctx.Theme(), s =>
         {
             _rowStyles = s.FileChangeRow;
+            _rowSelection = s.RowSelection;
             _pathTextStyle.TextColor = _rowStyles.RowText;
-            _pathTextActiveStyle.TextColor = _rowStyles.RowTextActive;
+            _pathTextActiveStyle.TextColor = _rowSelection.Text;
             _chevronStyle.TextColor = _rowStyles.RowText;
             _folderIconStyle.TextColor = _rowStyles.RowText;
             SetDirty();
@@ -372,7 +374,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
                 row.IsOpen,
                 isSelected,
                 state.IsHovered || state.IsContextHighlighted,
-                _rowStyles,
+                _rowSelection,
                 _chevronStyle,
                 _folderIconStyle,
                 _pathTextStyle,
@@ -389,6 +391,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             file,
             isSelected,
             state.IsHovered || state.IsContextHighlighted,
+            _rowSelection,
             _rowStyles,
             _pathTextStyle,
             _pathTextActiveStyle,

@@ -26,10 +26,6 @@ public sealed record GroupRenameFieldStyles(
     uint Selection);
 
 public sealed record RepoBarRowStyles(
-    uint BackgroundIdle,
-    uint BackgroundHover,
-    uint BackgroundActive,
-    uint AccentBar,
     uint TextIdle,
     uint TextActive,
     uint TextMissing,
@@ -39,9 +35,6 @@ public sealed record RepoBarRowStyles(
     uint BadgeError,
     uint BadgeDirty)
 {
-    public uint Background(bool active, bool hovered)
-        => active ? BackgroundActive : hovered ? BackgroundHover : BackgroundIdle;
-
     public uint Text(bool active, bool missing)
         => missing ? TextMissing : active ? TextActive : TextIdle;
 
@@ -58,10 +51,7 @@ public sealed record RepoBarRowStyles(
 
 public sealed record BranchesViewStyles(
     uint ViewBackground,
-    uint RowSelectedBackground,
-    uint RowHoverBackground,
     uint RowText,
-    uint RowTextActive,
     uint HeadIdleText,
     uint RowTextDim,
     uint SectionHeaderText,
@@ -99,10 +89,6 @@ public partial record ThemeStyles
 
     private static RepoBarRowStyles BuildRepoBarRow(ThemePalette p, StatusPalette status) =>
         new(
-            BackgroundIdle: 0u,
-            BackgroundHover: p.SurfaceHover,
-            BackgroundActive: WithAlpha(p.Accent, 0x40),
-            AccentBar: p.Accent,
             TextIdle: p.TextSecondary,
             TextActive: p.RowSubtleText,
             TextMissing: p.TextDisabled,
@@ -115,10 +101,7 @@ public partial record ThemeStyles
     private static BranchesViewStyles BuildBranchesView(ThemePalette p, StatusPalette status) =>
         new(
             ViewBackground: p.Surface,
-            RowSelectedBackground: p.SurfaceSelectedSubtle,
-            RowHoverBackground: p.SurfaceHover,
             RowText: p.TextSecondary,
-            RowTextActive: p.RowSubtleText,
             HeadIdleText: p.TextStrong,
             RowTextDim: p.TextDisabled,
             SectionHeaderText: p.TextMuted,

@@ -111,6 +111,7 @@ internal sealed record CommitsView : Widget
         };
 
         private CommitsViewStyles _styles = ThemeStyles.Dark.CommitsView;
+        private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
 
         public Core(Context ctx)
         {
@@ -137,8 +138,9 @@ internal sealed record CommitsView : Widget
             this.BindThemed(theme, s =>
             {
                 _styles = s.CommitsView;
+                _rowSelection = s.RowSelection;
                 _rowTextStyle.TextColor = _styles.RowText;
-                _rowTextActiveStyle.TextColor = _styles.RowTextActive;
+                _rowTextActiveStyle.TextColor = _rowSelection.Text;
                 _headerTextStyle.TextColor = _styles.HeaderText;
                 _placeholderStyle.TextColor = _styles.PlaceholderText;
                 _badgeTextStyle.TextColor = _styles.BadgeText;
@@ -148,7 +150,7 @@ internal sealed record CommitsView : Widget
                 _badgeIconUntrackedStyle.TextColor = _styles.BadgeBranchUntrackedIcon;
                 _badgeTextBoldStyle.TextColor = _styles.BadgeText;
                 _hashTextStyle.TextColor = _styles.RowTextDim;
-                _hashTextActiveStyle.TextColor = _styles.RowTextActive;
+                _hashTextActiveStyle.TextColor = _rowSelection.Text;
                 _headerRectStyle.BorderColor = new BorderColorStyle { Bottom = _styles.HeaderBorderBottom };
                 SetDirty();
             });
@@ -564,7 +566,7 @@ internal sealed record CommitsView : Widget
 
             if (isHighlighted)
             {
-                _fillStyle.BackgroundColor = _styles.RowSelectedBackground;
+                _fillStyle.BackgroundColor = _rowSelection.Fill;
                 c.DrawRect(new DrawRectInputs
                 {
                     Position = rowRect,
@@ -576,7 +578,7 @@ internal sealed record CommitsView : Widget
             // Filtered list is flat: skip the graph cell and start the summary at the graph origin.
             if (!_filtering)
             {
-                var rowBackground = isHighlighted ? _styles.RowSelectedBackground : _styles.Background;
+                var rowBackground = isHighlighted ? _rowSelection.Fill : _styles.Background;
                 CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground,
                     IsRtl, Position.Left + Position.Right);
             }
@@ -587,7 +589,7 @@ internal sealed record CommitsView : Widget
             var summaryDraw = Math.Max(0, body.Right - refsEndX);
             DrawText(c, node.Summary, refsEndX, textTop, summaryDraw, isHighlighted, z + 2);
 
-            var rowOverlayColor = isHighlighted ? _styles.RowSelectedBackground : _styles.Background;
+            var rowOverlayColor = isHighlighted ? _rowSelection.Fill : _styles.Background;
             DrawColumnOverlay(c, authorPanelLeft, rowBottom, hashPanelLeft - authorPanelLeft, rowOverlayColor, z + 3);
             DrawText(c, node.Author, authorX, textTop, authorW, isHighlighted, z + 4);
             DrawColumnOverlay(c, hashPanelLeft, rowBottom, datePanelLeft - hashPanelLeft, rowOverlayColor, z + 5);

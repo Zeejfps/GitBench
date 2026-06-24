@@ -140,6 +140,7 @@ internal static class FileChangesUI
         FileChange file,
         bool isSelected,
         bool isHovered,
+        RowSelectionStyles selection,
         FileChangeRowStyles styles,
         TextStyle pathStyle,
         TextStyle pathActiveStyle,
@@ -150,22 +151,7 @@ internal static class FileChangesUI
         bool reserveChevronColumn = false,
         bool isRtl = false)
     {
-        var bg = isSelected
-            ? styles.RowActive
-            : (isHovered ? styles.RowHover : (uint?)null);
-        if (bg != null)
-        {
-            canvas.DrawRect(new DrawRectInputs
-            {
-                Position = rowRect,
-                Style = new RectStyle
-                {
-                    BackgroundColor = bg.Value,
-                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                },
-                ZIndex = z,
-            });
-        }
+        RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
 
         // In tree mode, reserve the same chevron column folder rows draw into so a file's
         // icon lines up under sibling folder icons (and one level right of its parent's).
@@ -222,7 +208,7 @@ internal static class FileChangesUI
         bool isOpen,
         bool isSelected,
         bool isHovered,
-        FileChangeRowStyles styles,
+        RowSelectionStyles selection,
         TextStyle chevronStyle,
         TextStyle folderIconStyle,
         TextStyle textStyle,
@@ -230,18 +216,7 @@ internal static class FileChangesUI
         int z,
         bool isRtl = false)
     {
-        var bg = isSelected
-            ? styles.RowActive
-            : (isHovered ? styles.RowHover : (uint?)null);
-        if (bg != null)
-        {
-            canvas.DrawRect(new DrawRectInputs
-            {
-                Position = rowRect,
-                Style = new RectStyle { BackgroundColor = bg.Value, BorderRadius = BorderRadiusStyle.All(Radius.Sm) },
-                ZIndex = z,
-            });
-        }
+        RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
 
         var left = rowRect.Left + RowPaddingLeft + indent;
 

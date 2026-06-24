@@ -49,5 +49,6 @@ public partial record ThemeStyles
             BranchPreview = BuildBranchPreview(status),
             ContextMenu = BuildContextMenu(p),
             CommitsView = BuildCommitsView(p, commitBadge),
+            RowSelection = BuildRowSelection(p),
         };
 }
