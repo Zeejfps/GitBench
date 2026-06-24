@@ -31,7 +31,7 @@ public sealed record TooltipView : Widget
                     new Text
                     {
                         Value = Text,
-                        FontSize = 12,
+                        FontSize = FontSize.Body,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.Tooltip.Text),
                     },

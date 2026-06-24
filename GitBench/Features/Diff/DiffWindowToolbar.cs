@@ -42,7 +42,7 @@ internal sealed class DiffWindowToolbar : ContainerView
 
         _title = new TextView(ctx.Canvas)
         {
-            FontSize = 12f,
+            FontSize = FontSize.Body,
             VerticalTextAlignment = TextAlignment.Center,
         };
         _title.BindThemedTextColor(theme, s => s.DiffView.HeaderTitleIdle);
@@ -106,7 +106,7 @@ internal sealed class DiffWindowToolbar : ContainerView
         var icon = new TextView(ctx.Canvas)
         {
             FontFamily = LucideIcons.FontFamily,
-            FontSize = 12f,
+            FontSize = FontSize.Body,
             Text = LucideIcons.FileText,
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
@@ -135,7 +135,7 @@ internal sealed class DiffWindowToolbar : ContainerView
 
         var label = new TextView(ctx.Canvas)
         {
-            FontSize = 11f,
+            FontSize = FontSize.Caption,
             VerticalTextAlignment = TextAlignment.Center,
             HorizontalTextAlignment = TextAlignment.Center,
         };

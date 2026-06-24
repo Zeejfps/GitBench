@@ -68,7 +68,7 @@ internal sealed record BranchLabel : Widget
                     {
                         Value = LucideIcons.Branch,
                         FontFamily = LucideIcons.FontFamily,
-                        FontSize = 15f,
+                        FontSize = FontSize.Heading,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
                     },
@@ -81,7 +81,7 @@ internal sealed record BranchLabel : Widget
                     new Text
                     {
                         Value = Prop.Bind(BranchName),
-                        FontSize = 18f,
+                        FontSize = FontSize.Heading,
                         Weight = FontWeight.Bold,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),

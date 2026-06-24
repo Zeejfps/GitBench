@@ -44,7 +44,7 @@ internal sealed record RemoveWorktreeDialog : Widget
         var pathTextStyle = new TextStyle
         {
             FontFamily = DiffOptions.MonoFontFamily,
-            FontSize = 12f,
+            FontSize = FontSize.Body,
             TextWrap = TextWrap.Wrap,
         };
         var available = DialogWidth
@@ -58,7 +58,7 @@ internal sealed record RemoveWorktreeDialog : Widget
         {
             Value = wrappedPath,
             FontFamily = DiffOptions.MonoFontFamily,
-            FontSize = 12f,
+            FontSize = FontSize.Body,
             Wrap = TextWrap.Wrap,
             Color = Theme.Color(t => t.DialogBody.BodyText),
         }.BuildView(ctx);
@@ -106,7 +106,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                 {
                     Label = s.WorktreesRemoveForceLabel,
                     Checked = vm.Force,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
                 new Text
                 {

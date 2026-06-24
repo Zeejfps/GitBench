@@ -30,7 +30,7 @@ internal sealed record LanguageChipButton : Widget<ButtonState>
                 [
                     new Text
                     {
-                        FontSize = 11f,
+                        FontSize = FontSize.Caption,
                         VAlign = TextAlignment.Center,
                         Value = Label,
                         Color = Theme.Color(s => s.StatusBar.Text),

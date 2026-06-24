@@ -18,7 +18,7 @@ public sealed record LabeledRow : Widget
     {
         Gap = Gap,
         CrossAxis = CrossAxisAlignment.Center,
-        Height = 28,
+        Height = Sizes.ControlHeight,
         Children =
         [
             new Text

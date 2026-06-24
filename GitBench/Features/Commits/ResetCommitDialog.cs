@@ -81,8 +81,8 @@ internal sealed record ResetCommitDialog : Widget
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 14,
-                Width = 16,
+                FontSize = FontSize.Default,
+                Width = Sizes.Icon,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(t => t.DialogBody.BodyText),
             },
@@ -104,8 +104,8 @@ internal sealed record ResetCommitDialog : Widget
             new Text
             {
                 Value = "●",
-                FontSize = 10,
-                Width = 16,
+                FontSize = FontSize.Caption,
+                Width = Sizes.Icon,
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.DialogBody.BodyText),
@@ -203,7 +203,7 @@ internal sealed record ResetModeDropdown : Widget
                 new Text
                 {
                     Value = "●",
-                    FontSize = 12,
+                    FontSize = FontSize.Body,
                     Width = 14,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,

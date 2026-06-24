@@ -70,7 +70,7 @@ internal sealed record BranchesView : Widget
         private readonly TextStyle _chevronStyle = new()
         {
             FontFamily = LucideIcons.FontFamily,
-            FontSize = 11f,
+            FontSize = FontSize.Caption,
             VerticalAlignment = TextAlignment.Center,
             HorizontalAlignment = TextAlignment.Center,
         };

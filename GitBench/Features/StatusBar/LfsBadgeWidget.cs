@@ -40,7 +40,7 @@ internal sealed record LfsBadgeWidget : Widget
                     [
                         new Text
                         {
-                            FontSize = 10f,
+                            FontSize = FontSize.Caption,
                             HAlign = TextAlignment.Center,
                             VAlign = TextAlignment.Center,
                             Value = L.T(s => status.Value switch

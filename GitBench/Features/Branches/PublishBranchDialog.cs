@@ -71,7 +71,7 @@ internal sealed record PublishBranchDialog : Widget
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 14,
+                FontSize = FontSize.Default,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.DialogBody.BodyText),
             },
@@ -109,7 +109,7 @@ internal sealed record RemoteDropdown : Widget
                 {
                     Value = LucideIcons.Branch,
                     FontFamily = LucideIcons.FontFamily,
-                    FontSize = 14,
+                    FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },

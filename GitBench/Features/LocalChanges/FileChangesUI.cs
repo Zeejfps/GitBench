@@ -60,7 +60,7 @@ internal static class FileChangesUI
         {
             Text = icon,
             FontFamily = LucideIcons.FontFamily,
-            FontSize = 28f,
+            FontSize = FontSize.Display,
             HorizontalTextAlignment = TextAlignment.Center,
         };
         iconView.BindThemedTextColor(theme, s => s.FileChangesSection.EmptyStateIcon);
@@ -74,7 +74,7 @@ internal static class FileChangesUI
 
         var hintView = new TextView(ctx.Canvas)
         {
-            FontSize = 11f,
+            FontSize = FontSize.Caption,
             HorizontalTextAlignment = TextAlignment.Center,
             TextWrap = TextWrap.Wrap,
         };

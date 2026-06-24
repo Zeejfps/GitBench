@@ -72,7 +72,7 @@ internal sealed record ReconcilePullDialog : Widget
     private static IWidget StrategyCheckbox(Context ctx, ReconcilePullDialogViewModel vm, string label, PullStrategy strategy)
     {
         var selected = new State<bool>(vm.Strategy.Value == strategy);
-        var view = new CheckboxWidget { Label = label, Checked = selected, Height = 22 }.WithController<KbmController>().BuildView(ctx);
+        var view = new CheckboxWidget { Label = label, Checked = selected, Height = Sizes.RowHeight }.WithController<KbmController>().BuildView(ctx);
         view.Bind(vm.Strategy, m => selected.Value = m == strategy);
         selected.Changed += isCheckedNow =>
         {

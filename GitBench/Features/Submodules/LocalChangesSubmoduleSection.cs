@@ -80,7 +80,7 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         var badgeText = new TextView(_ctx.Canvas)
         {
             Text = "S",
-            FontSize = 11f,
+            FontSize = FontSize.Caption,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };

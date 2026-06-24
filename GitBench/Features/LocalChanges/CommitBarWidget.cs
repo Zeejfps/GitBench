@@ -71,7 +71,7 @@ internal sealed record CommitBarWidget : Widget
             // MinWidth, not a fixed Width: the busy label ("Committing") is wider than "Commit", so a
             // fixed width would clip it; MinWidth keeps the resting size but lets it grow to fit.
             MinWidth = CommitButtonWidth,
-            Height = 28,
+            Height = Sizes.ControlHeight,
         };
         var commitButton = commitWidget.BuildView(ctx);
         var commitController = new KbmController(commitWidget.State);

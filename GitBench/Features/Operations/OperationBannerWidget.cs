@@ -77,7 +77,7 @@ internal sealed record OperationBannerWidget : Widget
     {
         Value = LucideIcons.Loader,
         FontFamily = LucideIcons.FontFamily,
-        FontSize = 16,
+        FontSize = FontSize.Heading,
         VAlign = TextAlignment.Center,
         HAlign = TextAlignment.Center,
         Width = 20,

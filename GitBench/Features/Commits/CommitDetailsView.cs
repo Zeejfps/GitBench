@@ -264,7 +264,7 @@ internal sealed class CommitDetailsView : ContainerView
         var initials = new TextView(_canvas)
         {
             Text = Initials(d.AuthorName, d.AuthorEmail),
-            FontSize = 16f,
+            FontSize = FontSize.Heading,
             HorizontalTextAlignment = TextAlignment.Center,
             VerticalTextAlignment = TextAlignment.Center,
         };

@@ -157,7 +157,7 @@ internal sealed record DiscardChangesDialog : Widget
         {
             Content = new Raw { View = rowContent },
             Checked = isChecked,
-            Height = 22,
+            Height = Sizes.RowHeight,
         }.WithController<KbmController>().BuildView(ctx);
     }
 }

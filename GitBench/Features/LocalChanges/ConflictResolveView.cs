@@ -176,14 +176,14 @@ internal sealed record ConflictResolveView : Widget
                         {
                             Value = LucideIcons.TriangleAlert,
                             FontFamily = LucideIcons.FontFamily,
-                            FontSize = 18f,
+                            FontSize = FontSize.Heading,
                             VAlign = TextAlignment.Center,
                             Color = Theme.Color(s => s.FileChangeRow.StatusModified),
                         },
                         new Text
                         {
                             Value = L.T(s => s.LocalchangesConflictTitle),
-                            FontSize = 16f,
+                            FontSize = FontSize.Heading,
                             VAlign = TextAlignment.Center,
                             Color = Theme.Color(s => s.Palette.TextStrong),
                         },
@@ -212,7 +212,7 @@ internal sealed record ConflictResolveView : Widget
             {
                 Value = LucideIcons.File,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 15f,
+                FontSize = FontSize.Heading,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.Palette.TextSecondary),
             },
@@ -252,14 +252,14 @@ internal sealed record ConflictResolveView : Widget
                 {
                     Value = FileChangeFormatting.StatusIcon(status),
                     FontFamily = LucideIcons.FontFamily,
-                    FontSize = 14f,
+                    FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.FileChangeRow.StatusColor(status)),
                 },
                 new Text
                 {
                     Value = text,
-                    FontSize = 11f,
+                    FontSize = FontSize.Caption,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.FileChangeRow.StatusColor(status)),
                 },
@@ -319,7 +319,7 @@ internal sealed record ConflictResolveView : Widget
                                         {
                                             Value = LucideIcons.Branch,
                                             FontFamily = LucideIcons.FontFamily,
-                                            FontSize = 13f,
+                                            FontSize = FontSize.Body,
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(s => s.Palette.TextSecondary),
                                         },
@@ -385,7 +385,7 @@ internal sealed record ConflictResolveView : Widget
                 new Text
                 {
                     Value = checkedState.Bind(string? (c) => c ? "✓" : string.Empty),
-                    FontSize = 12f,
+                    FontSize = FontSize.Body,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.Checkbox.CheckGlyph),

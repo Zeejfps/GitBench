@@ -60,7 +60,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private readonly TextStyle _statusIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
-        FontSize = 14f,
+        FontSize = FontSize.Default,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
@@ -77,14 +77,14 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private readonly TextStyle _chevronStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
-        FontSize = 11f,
+        FontSize = FontSize.Caption,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
     private readonly TextStyle _folderIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
-        FontSize = 13f,
+        FontSize = FontSize.Body,
         HorizontalAlignment = TextAlignment.Start,
         VerticalAlignment = TextAlignment.Center,
     };

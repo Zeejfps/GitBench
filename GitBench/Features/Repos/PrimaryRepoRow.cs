@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
+using GitBench.Widgets;
 
 namespace GitBench.Features.Repos;
 
@@ -13,7 +14,7 @@ internal sealed record PrimaryRepoRow : Widget<RepoRowState>
     protected override IWidget Build(Context ctx, RepoRowState state) => new RepoRowShell
     {
         Glyph = LucideIcons.FolderGit2,
-        RowHeight = 28,
+        RowHeight = Sizes.ControlHeight,
         GlyphSize = 14f,
         Hovered = state.Hovered,
     };

@@ -54,7 +54,7 @@ internal sealed record DeleteTagDialog : Widget
                 {
                     Label = s.CommitsDeleteTagRemoteCheckbox,
                     Checked = vm.DeleteFromRemotes,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };
@@ -70,8 +70,8 @@ internal sealed record DeleteTagDialog : Widget
             {
                 Value = LucideIcons.Tag,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 14,
-                Width = 16,
+                FontSize = FontSize.Default,
+                Width = Sizes.Icon,
                 HAlign = TextAlignment.Center,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.DialogBody.BodyText),

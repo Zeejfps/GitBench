@@ -1,8 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Localization;
-using GitBench.Messages;
-using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.ContextMenu;
@@ -18,7 +16,7 @@ internal sealed record RepoBar : Widget
 {
     internal const int RowPaddingLeft = (int)TreeMetrics.BaseIndent;
     internal const int RowChevronWidth = 12;
-    internal const int RowIconWidth = 16;
+    internal const int RowIconWidth = Sizes.Icon;
     internal const int RowIconGap = 6;
 
     protected override IWidget Build(Context ctx)
@@ -98,7 +96,7 @@ internal sealed record RepoBar : Widget
                             new Text
                             {
                                 Value = L.T(s => s.ReposPanelTitle),
-                                FontSize = 13f,
+                                FontSize = FontSize.Body,
                                 Weight = FontWeight.Bold,
                                 VAlign = TextAlignment.Center,
                                 Color = Theme.Color(s => s.Palette.TextStrong),
@@ -114,40 +112,13 @@ internal sealed record RepoBar : Widget
                             }
                                 .WithTooltip(L.T(s => s.ReposAddButton))
                                 .WithMenuController(rect =>
-                                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenuItems(ctx), MenuPlacement.Below)),
+                                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenu.Items(ctx), MenuPlacement.Below)),
                         ],
                     },
                 ],
             },
         ],
     };
-
-    private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx)
-    {
-        var s = ctx.Localization().Strings.Value;
-        return
-        [
-            new(s.ReposMenuOpenFromFolder, () => OpenFromFolder(ctx), Icon: LucideIcons.FolderOpen),
-            new(s.ReposMenuCloneRepository, () => ShowCloneDialog(ctx), Icon: LucideIcons.FolderGit2),
-        ];
-    }
-
-    private static void OpenFromFolder(Context ctx)
-    {
-        var s = ctx.Localization().Strings.Value;
-        var path = ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository);
-        if (string.IsNullOrEmpty(path)) return;
-        if (ctx.Get<IRepoRegistry>()?.Open(path) == OpenRepoOutcome.NotAGitRepo)
-        {
-            ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
-                s.ReposErrorNotAGitRepoTitle,
-                s.ReposErrorNotAGitRepoMessage(path)));
-        }
-    }
-
-    private static void ShowCloneDialog(Context ctx)
-        => ctx.Get<IMessageBus>()?.Broadcast(
-            new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose }));
 
     private static IReadOnlyList<RepoBarContextMenu.Item> BuildBackgroundMenuItems(Context ctx, RepoBarViewModel vm)
     {

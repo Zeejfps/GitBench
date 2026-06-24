@@ -21,7 +21,7 @@ internal sealed record GroupHeaderRow : Widget
 
         var root = new Box
         {
-            Height = 22,
+            Height = Sizes.RowHeight,
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => s.GroupHeaderRow.Background(isHovered.Value)),
             Children =
@@ -41,13 +41,14 @@ internal sealed record GroupHeaderRow : Widget
                                 {
                                     Value = Prop.Bind(() => ChevronFor(vm.Group.IsCollapsed.Value, Direction.IsRtl(ctx))),
                                     FontFamily = LucideIcons.FontFamily,
-                                    FontSize = 11f,
+                                    FontSize = FontSize.Caption,
                                     HAlign = TextAlignment.Center,
                                     VAlign = TextAlignment.Center,
-                                    Width = 16,
+                                    Width = Sizes.Icon,
                                     Color = Theme.Color(s => s.GroupHeaderRow.ChevronText),
                                 },
                                 new Grow { Child = NameSlot(vm) },
+                                AddRepoButton(ctx, vm, isHovered),
                             ],
                         },
                     ],
@@ -64,6 +65,23 @@ internal sealed record GroupHeaderRow : Widget
             vm.ToggleCollapsed.Execute));
     }
 
+    // Visible-toggled rather than Show-wrapped so the button stays mounted (and its controller
+    // registered) while hidden — otherwise it would unmount itself the instant the cursor reaches it.
+    private static IWidget AddRepoButton(Context ctx, GroupHeaderRowViewModel vm, State<bool> isHovered) =>
+        new IconButtonWidget
+        {
+            Icon = LucideIcons.FolderPlus,
+            IconSize = 13f,
+            Width = 18,
+            Height = 18,
+            Visible = Prop.Bind(() => isHovered.Value),
+            Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+            Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+        }
+            .WithTooltip(L.T(s => s.ReposAddButton))
+            .WithMenuController(rect =>
+                RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenu.Items(ctx, vm.Group.Id)));
+
     private static IWidget NameSlot(GroupHeaderRowViewModel vm) => new Show
     {
         When = vm.IsRenaming,
@@ -71,7 +89,7 @@ internal sealed record GroupHeaderRow : Widget
         Else = () => new Text
         {
             Value = Prop.Bind<string?>(() => vm.Group.Name.Value?.ToUpperInvariant()),
-            FontSize = 11f,
+            FontSize = FontSize.Caption,
             HAlign = TextAlignment.Start,
             VAlign = TextAlignment.Center,
             Overflow = TextOverflow.Ellipsis,

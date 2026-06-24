@@ -58,7 +58,7 @@ internal sealed record RenameBranchDialog : Widget
                 {
                     Label = s.BranchesRenameForceLabel,
                     Checked = vm.Force,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };

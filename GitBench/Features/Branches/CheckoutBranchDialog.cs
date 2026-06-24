@@ -59,7 +59,7 @@ internal sealed record CheckoutBranchDialog : Widget
                 {
                     Label = s.BranchesCheckoutTrackLabel,
                     Checked = vm.Track,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };

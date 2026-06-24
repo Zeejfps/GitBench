@@ -58,7 +58,7 @@ internal sealed record CreateBranchDialog : Widget
                 {
                     Label = s.BranchesCreateCheckoutLabel,
                     Checked = vm.Checkout,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };

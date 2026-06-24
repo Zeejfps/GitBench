@@ -80,7 +80,7 @@ internal sealed record CreateTagDialog : Widget
                     new Raw { View = messageField },
                 ],
             },
-            new CheckboxWidget { Label = s.CommitsCreateTagPushCheckbox, Checked = vm.PushToAllRemotes, Height = 22 }.WithController<KbmController>(),
+            new CheckboxWidget { Label = s.CommitsCreateTagPushCheckbox, Checked = vm.PushToAllRemotes, Height = Sizes.RowHeight }.WithController<KbmController>(),
         ];
 
         var inputs = new DialogInputRegistry();
@@ -134,8 +134,8 @@ internal sealed record CreateTagDialog : Widget
                 new Text
                 {
                     Value = "●",
-                    FontSize = 10,
-                    Width = 16,
+                    FontSize = FontSize.Caption,
+                    Width = Sizes.Icon,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.DialogBody.BodyText),

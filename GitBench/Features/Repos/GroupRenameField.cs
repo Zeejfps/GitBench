@@ -46,7 +46,7 @@ internal sealed record GroupRenameField : Widget
         box.BindBackgroundColor(() => theme.Styles.Value.GroupRenameField.Background);
         box.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.GroupRenameField.Border));
 
-        var root = new ContainerView { Height = 22 };
+        var root = new ContainerView { Height = Sizes.RowHeight };
         root.Children.Add(box);
 
         root.UseController(inputSystem, () => new GroupRenameKbmController(input, inputSystem, ctx.Get<IClipboard>(), Group.Id, registry));

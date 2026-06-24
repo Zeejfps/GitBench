@@ -22,7 +22,7 @@ internal sealed record FileStatusBadge : Widget
                 new Text
                 {
                     Value = FileChangeFormatting.StatusGlyph(Status),
-                    FontSize = 11f,
+                    FontSize = FontSize.Caption,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.FileChangeRow.BadgeText),

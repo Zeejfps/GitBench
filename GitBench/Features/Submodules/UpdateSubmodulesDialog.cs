@@ -52,8 +52,8 @@ internal sealed record UpdateSubmodulesDialog : Widget
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
-                new CheckboxWidget { Label = s.SubmodulesUpdateInitLabel, Checked = vm.Init, Height = 22 }.WithController<KbmController>(),
-                new CheckboxWidget { Label = s.SubmodulesUpdateRecursiveLabel, Checked = vm.Recursive, Height = 22 }.WithController<KbmController>(),
+                new CheckboxWidget { Label = s.SubmodulesUpdateInitLabel, Checked = vm.Init, Height = Sizes.RowHeight }.WithController<KbmController>(),
+                new CheckboxWidget { Label = s.SubmodulesUpdateRecursiveLabel, Checked = vm.Recursive, Height = Sizes.RowHeight }.WithController<KbmController>(),
                 new Text
                 {
                     Value = s.CommonStrategy,
@@ -75,7 +75,7 @@ internal sealed record UpdateSubmodulesDialog : Widget
     private static IWidget ModeCheckbox(Context ctx, UpdateSubmodulesDialogViewModel vm, string label, SubmoduleUpdateMode mode)
     {
         var selected = new State<bool>(vm.Mode.Value == mode);
-        var view = new CheckboxWidget { Label = label, Checked = selected, Height = 22 }.WithController<KbmController>().BuildView(ctx);
+        var view = new CheckboxWidget { Label = label, Checked = selected, Height = Sizes.RowHeight }.WithController<KbmController>().BuildView(ctx);
         view.Bind(vm.Mode, m => selected.Value = m == mode);
         selected.Changed += isCheckedNow =>
         {

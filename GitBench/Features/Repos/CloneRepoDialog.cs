@@ -20,13 +20,16 @@ internal sealed record CloneRepoDialog : Widget
 {
     public required Action OnClose { get; init; }
 
+    public Guid? TargetGroupId { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var vm = new CloneRepoDialogViewModel(
             ctx.Require<IGitService>(),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            TargetGroupId);
 
         var s = ctx.Localization().Strings.Value;
 

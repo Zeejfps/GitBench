@@ -24,7 +24,7 @@ public interface IRepoRegistry
     // markers for branches a sibling worktree has checked out. (Row expand/collapse is its own
     // per-row observable — see WatchWorktreeExpanded — and no longer rides this counter.)
     State<int> WorktreesChanged { get; }
-    OpenRepoOutcome Open(string path);
+    OpenRepoOutcome Open(string path, Guid? groupId = null);
     void SetActive(Guid id);
     void ToggleGroupCollapsed(Guid groupId);
     // Collapses or expands every group at once (RepoBar's "Collapse All" / "Expand All").

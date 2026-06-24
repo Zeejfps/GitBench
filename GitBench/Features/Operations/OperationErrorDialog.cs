@@ -90,7 +90,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
     // right-side buttons (close + copy), so the grown, center-aligned title lands in the middle.
     private IWidget BuildHeader(Strings s) => new Row
     {
-        Height = 28,
+        Height = Sizes.ControlHeight,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [

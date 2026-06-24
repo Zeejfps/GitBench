@@ -26,7 +26,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     private const float GlyphColumnWidth = 18f;
     private const float BannerPaddingX = 8f;
     private const float HunkHeaderGap = 12f;
-    private const float AssumedFontSize = 13f;
+    private const float AssumedFontSize = FontSize.Body;
     // Fallback mono advance ratio if the canvas isn't available yet to measure a glyph.
     private const float FallbackMonoAdvanceRatio = 0.6f;
 
@@ -35,7 +35,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     private const float HunkButtonGap = 6f;
     private const float HunkButtonsMarginRight = 8f;
     private const float HunkButtonsTopInset = 4f;
-    private const float HunkButtonFontSize = 11f;
+    private const float HunkButtonFontSize = FontSize.Caption;
     private const float HunkOutlineThickness = 1f;
 
     // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; we

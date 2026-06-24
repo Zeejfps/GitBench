@@ -54,7 +54,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                             [
                                 new Row
                                 {
-                                    Height = 28,
+                                    Height = Sizes.ControlHeight,
                                     MainAxis = MainAxisAlignment.End,
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children = [new DialogCloseButton { OnClose = OnClose }],
@@ -69,7 +69,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         new Text
                                         {
                                             Value = "GitBench",
-                                            FontSize = 22,
+                                            FontSize = FontSize.Title,
                                             HAlign = TextAlignment.Center,
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(s => s.DialogFrame.TitleText),
@@ -121,7 +121,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                 {
                     Value = LucideIcons.FolderGit2,
                     FontFamily = LucideIcons.FontFamily,
-                    FontSize = 60,
+                    FontSize = FontSize.Hero,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => s.Palette.Accent),

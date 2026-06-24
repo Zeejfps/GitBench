@@ -27,7 +27,7 @@ internal sealed record WorktreeChevron : Widget<ButtonState>
                 new Text
                 {
                     FontFamily = LucideIcons.FontFamily,
-                    FontSize = 11f,
+                    FontSize = FontSize.Caption,
                     HAlign = TextAlignment.Center,
                     VAlign = TextAlignment.Center,
                     Width = RepoBar.RowChevronWidth,

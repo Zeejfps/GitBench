@@ -24,3 +24,36 @@ public static class Radius
     public const int Md = 6;
     public const int Lg = 8;
 }
+
+/// <summary>
+/// Type scale in pixels — one ladder of named steps so text size reads consistently instead of
+/// scattering magic numbers. Plain ints (type sizes don't vary by theme); they implicitly widen
+/// to the float FontSize the text styles expect.
+/// </summary>
+public static class FontSize
+{
+    public const int Caption = 11;
+    public const int Body = 13;
+    public const int Default = 14;
+    public const int Heading = 16;
+    public const int Title = 22;
+    public const int Display = 28;
+    public const int Hero = 60;
+}
+
+/// <summary>
+/// Standard control and icon dimensions in pixels — the recurring layout sizes shared across
+/// widgets so they stay uniform instead of being retyped as magic numbers. Bespoke one-off
+/// dimensions (dialog widths, component-specific heights) stay as plain literals.
+/// </summary>
+public static class Sizes
+{
+    /// <summary>Compact row / checkbox height.</summary>
+    public const int RowHeight = 22;
+
+    /// <summary>Standard button, input, and primary-row height.</summary>
+    public const int ControlHeight = 28;
+
+    /// <summary>Standard icon glyph box.</summary>
+    public const int Icon = 16;
+}

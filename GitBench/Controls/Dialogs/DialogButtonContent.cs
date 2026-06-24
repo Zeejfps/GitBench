@@ -41,7 +41,7 @@ internal sealed record DialogButtonContent : Widget
         var icon = new Text
         {
             FontFamily = LucideIcons.FontFamily,
-            FontSize = 14,
+            FontSize = FontSize.Default,
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
             Value = Icon,

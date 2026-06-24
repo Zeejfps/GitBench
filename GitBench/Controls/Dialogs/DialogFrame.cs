@@ -64,7 +64,7 @@ internal static class DialogFrame
         return new FlexRowView
         {
             CrossAxisAlignment = CrossAxisAlignment.Center,
-            Height = 28,
+            Height = Sizes.ControlHeight,
             Children =
             {
                 new ContainerView { Width = CloseButtonSize },
@@ -151,7 +151,7 @@ internal static class DialogFrame
         {
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(ControlBorderRadius),
-            Height = 28,
+            Height = Sizes.ControlHeight,
             Children =
             {
                 new PaddingView

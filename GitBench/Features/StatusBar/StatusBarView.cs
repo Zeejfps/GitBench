@@ -21,7 +21,7 @@ namespace GitBench.Features.StatusBar;
 /// </summary>
 internal sealed record StatusBarView : Widget
 {
-    private const int BarHeight = 22;
+    private const int BarHeight = Sizes.RowHeight;
     private const int HorizontalPadding = 8;
 
     protected override IWidget Build(Context ctx)
@@ -93,7 +93,7 @@ internal sealed record StatusBarView : Widget
                                         new Grow { Child = left },
                                         new Text
                                         {
-                                            FontSize = 11f,
+                                            FontSize = FontSize.Caption,
                                             VAlign = TextAlignment.Center,
                                             HAlign = TextAlignment.End,
                                             Color = Theme.Color(s => s.StatusBar.Text),
@@ -111,7 +111,7 @@ internal sealed record StatusBarView : Widget
                                         new Text
                                         {
                                             Value = $"v{AppVersion.Display}",
-                                            FontSize = 11f,
+                                            FontSize = FontSize.Caption,
                                             VAlign = TextAlignment.Center,
                                             HAlign = TextAlignment.End,
                                             Color = Theme.Color(s => s.StatusBar.Text),
@@ -139,14 +139,14 @@ internal sealed record StatusBarView : Widget
             {
                 Value = glyph,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 12f,
+                FontSize = FontSize.Body,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.StatusBar.Text),
             },
             new Text
             {
                 Value = label,
-                FontSize = 11f,
+                FontSize = FontSize.Caption,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.StatusBar.Text),
             },

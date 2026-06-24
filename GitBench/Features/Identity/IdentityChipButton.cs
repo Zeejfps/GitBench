@@ -38,14 +38,14 @@ internal sealed record IdentityChipButton : Widget<ButtonState>
                             new Text
                             {
                                 FontFamily = LucideIcons.FontFamily,
-                                FontSize = 12f,
+                                FontSize = FontSize.Body,
                                 VAlign = TextAlignment.Center,
                                 Value = Icon,
                                 Color = Theme.Color(s => s.StatusBar.Text),
                             },
                             new Text
                             {
-                                FontSize = 11f,
+                                FontSize = FontSize.Caption,
                                 VAlign = TextAlignment.Center,
                                 Value = Label,
                                 Color = Theme.Color(s => s.StatusBar.Text),

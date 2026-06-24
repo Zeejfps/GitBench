@@ -24,13 +24,17 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
     // overwrite the field while it still matches what we last derived from the URL.
     private string _lastAutoName = string.Empty;
     private string? _clonedPath;
+    private readonly Guid? _targetGroupId;
 
     public CloneRepoDialogViewModel(
         IGitService gitService,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        Guid? targetGroupId = null)
     {
+        _targetGroupId = targetGroupId;
+
         Url.Subscribe(url =>
         {
             if (FolderName.Value != _lastAutoName) return; // user took over the field
@@ -62,7 +66,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
             onSuccess: () =>
             {
                 if (!string.IsNullOrEmpty(_clonedPath))
-                    registry.Open(_clonedPath);
+                    registry.Open(_clonedPath, _targetGroupId);
                 CloseRequested?.Invoke();
             },
             gate: gate);

@@ -53,7 +53,7 @@ internal sealed record ButtonWidget : Widget<ButtonState>
 
         return new Box
         {
-            Height = 28,
+            Height = Sizes.ControlHeight,
             BorderRadius = Style.Radius,
             Background = Style.Surface(state),
             Children =

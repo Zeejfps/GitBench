@@ -94,7 +94,7 @@ internal sealed record CommitSearchBarView : Widget
                                                 new Text
                                                 {
                                                     FontFamily = LucideIcons.FontFamily,
-                                                    FontSize = 14,
+                                                    FontSize = FontSize.Default,
                                                     Value = LucideIcons.Search,
                                                     HAlign = TextAlignment.Center,
                                                     VAlign = TextAlignment.Center,

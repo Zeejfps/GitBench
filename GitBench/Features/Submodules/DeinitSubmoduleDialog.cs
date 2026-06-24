@@ -55,7 +55,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
                 {
                     Label = s.SubmodulesDeinitForceLabel,
                     Checked = vm.Force,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };

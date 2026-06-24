@@ -58,7 +58,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     public State<Guid?> RenamingGroupId { get; }
     public State<int> WorktreesChanged { get; }
 
-    public OpenRepoOutcome Open(string path)
+    public OpenRepoOutcome Open(string path, Guid? groupId = null)
     {
         if (string.IsNullOrWhiteSpace(path))
             return OpenRepoOutcome.NotAGitRepo;
@@ -77,7 +77,8 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         var repo = new Repo(Guid.NewGuid(), normalized, Path.GetFileName(normalized));
         Repos.Add(repo);
 
-        Groups[0].RepoIds.Add(repo.Id);
+        var target = (groupId is { } gid ? FindGroup(gid) : null) ?? Groups[0];
+        target.RepoIds.Add(repo.Id);
 
         Active.Value = repo;
         Save();

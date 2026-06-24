@@ -70,7 +70,7 @@ internal sealed record CreateWorktreeDialog : Widget
                 {
                     Label = s.WorktreesCreateForceLabel,
                     Checked = vm.Force,
-                    Height = 22,
+                    Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],
         };

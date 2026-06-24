@@ -58,7 +58,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                                 new Text
                                 {
                                     FontFamily = LucideIcons.FontFamily,
-                                    FontSize = 12f,
+                                    FontSize = FontSize.Body,
                                     Width = 16f,
                                     HAlign = TextAlignment.Center,
                                     VAlign = TextAlignment.Center,
@@ -71,7 +71,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                                     Child = new Text
                                     {
                                         Value = L.T(s => s.DiffHeaderTitle),
-                                        FontSize = 12f,
+                                        FontSize = FontSize.Body,
                                         VAlign = TextAlignment.Center,
                                         Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
                                     },
@@ -96,7 +96,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                 ? t.DiffView.HeaderToggleActive
                 : t.DiffView.HeaderButtonColor(s))),
             Command = new Command(vm.ToggleFullFile),
-            Children = [new ButtonIcon { Value = LucideIcons.FileText, FontSize = 12f }],
+            Children = [new ButtonIcon { Value = LucideIcons.FileText, FontSize = FontSize.Body }],
         }.WithTooltip(L.T(s => s.DiffFullfileToggleTooltip))
             .WithController<KbmController>();
 
@@ -105,7 +105,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
         {
             Style = ButtonStyle.Bare(s => Theme.Color(t => t.DiffView.HeaderButtonColor(s))),
             Command = new Command(vm.RequestOpenInWindow),
-            Children = [new ButtonIcon { Value = LucideIcons.ExternalLink, FontSize = 12f }],
+            Children = [new ButtonIcon { Value = LucideIcons.ExternalLink, FontSize = FontSize.Body }],
         }.WithTooltip(L.T(s => s.DiffOpenWindowTooltip))
             .WithController<KbmController>();
 }

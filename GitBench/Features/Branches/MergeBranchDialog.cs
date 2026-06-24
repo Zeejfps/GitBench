@@ -61,7 +61,7 @@ internal sealed record MergeBranchDialog : Widget
                 new Text
                 {
                     FontFamily = LucideIcons.FontFamily,
-                    FontSize = 14,
+                    FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
                     Value = vm.PreviewState.Bind(ps => ps switch
                     {
@@ -90,7 +90,7 @@ internal sealed record MergeBranchDialog : Widget
     {
         Gap = Spacing.Lg,
         CrossAxis = CrossAxisAlignment.Center,
-        Height = 28,
+        Height = Sizes.ControlHeight,
         Children =
         [
             new Row
@@ -122,7 +122,7 @@ internal sealed record MergeBranchDialog : Widget
             {
                 Value = LucideIcons.Branch,
                 FontFamily = LucideIcons.FontFamily,
-                FontSize = 14,
+                FontSize = FontSize.Default,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.DialogBody.BodyText),
             },

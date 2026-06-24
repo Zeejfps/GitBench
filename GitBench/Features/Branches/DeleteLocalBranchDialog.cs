@@ -39,7 +39,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
             {
                 Label = s.BranchesDeleteLocalForceLabel,
                 Checked = vm.Force,
-                Height = 22,
+                Height = Sizes.RowHeight,
             }.WithController<KbmController>(),
             new Text
             {
@@ -54,7 +54,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
             {
                 Label = s.BranchesDeleteLocalRemoteLabel(UpstreamBranch!, UpstreamRemote!),
                 Checked = vm.DeleteRemote,
-                Height = 22,
+                Height = Sizes.RowHeight,
             }.WithController<KbmController>());
         }
 

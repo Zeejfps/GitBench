@@ -35,8 +35,8 @@ internal sealed record DropdownWidget : Widget<ButtonState>
         {
             Value = LucideIcons.ChevronDown,
             FontFamily = LucideIcons.FontFamily,
-            FontSize = 12,
-            Width = 16,
+            FontSize = FontSize.Body,
+            Width = Sizes.Icon,
             HAlign = TextAlignment.Center,
             VAlign = TextAlignment.Center,
             Color = Theme.Color(s => s.DialogBody.RowText),
