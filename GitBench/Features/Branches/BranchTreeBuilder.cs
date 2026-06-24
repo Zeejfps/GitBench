@@ -86,9 +86,6 @@ internal static class BranchTreeBuilder
         }
     }
 
-    internal static string MakeFolderKey(bool isRemote, string? remoteName, string path) =>
-        new BranchFolder(isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local, path).Key;
-
     /// Every folder path implied by a set of slash-separated branch names. A branch
     /// "feature/admin/login" contributes the folders "feature" and "feature/admin" (the
     /// final segment is the leaf branch, not a folder). The order is unspecified — callers

@@ -248,8 +248,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public void ToggleRemote(string remoteName) =>
         MutateUi(ui => ui.RemoteOpen[remoteName] = !ui.RemoteOpen.GetValueOrDefault(remoteName, true));
 
-    public void ToggleFolder(string key) =>
+    public void ToggleFolder(BranchFolder folder)
+    {
+        var key = folder.Key;
         MutateUi(ui => ui.FolderOpen[key] = !ui.FolderOpen.GetValueOrDefault(key, true));
+    }
 
     // ---- expand-all / collapse-all (scoped to a parent's descendants) ----
     //
@@ -265,7 +268,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         MutateUi(ui =>
         {
             foreach (var path in BranchTreeBuilder.FolderPaths(listing.LocalBranches.Select(b => b.Name)))
-                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: false, null, path)] = open;
+                ui.FolderOpen[new BranchFolder(BranchScope.Local, path).Key] = open;
         });
     }
 
@@ -279,7 +282,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             {
                 ui.RemoteOpen[rg.Name] = open;
                 foreach (var path in BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)))
-                    ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: true, rg.Name, path)] = open;
+                    ui.FolderOpen[new BranchFolder(BranchScope.Remote(rg.Name), path).Key] = open;
             }
         });
     }
@@ -291,22 +294,21 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         MutateUi(ui =>
         {
             foreach (var path in BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)))
-                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote: true, remoteName, path)] = open;
+                ui.FolderOpen[new BranchFolder(BranchScope.Remote(remoteName), path).Key] = open;
         });
     }
 
-    public void SetFolderDescendantsOpen(string? remoteName, string basePath, bool open)
+    public void SetFolderDescendantsOpen(BranchFolder folder, bool open)
     {
-        var names = BranchNamesIn(remoteName);
+        var names = BranchNamesIn(folder.Scope);
         if (names == null) return;
-        var prefix = basePath + "/";
-        var isRemote = remoteName != null;
+        var prefix = folder.Path + "/";
         MutateUi(ui =>
         {
             foreach (var path in BranchTreeBuilder.FolderPaths(names))
             {
                 if (!path.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                ui.FolderOpen[BranchTreeBuilder.MakeFolderKey(isRemote, remoteName, path)] = open;
+                ui.FolderOpen[new BranchFolder(folder.Scope, path).Key] = open;
             }
         });
     }
@@ -320,11 +322,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return null;
     }
 
-    private IEnumerable<string>? BranchNamesIn(string? remoteName)
+    private IEnumerable<string>? BranchNamesIn(BranchScope scope)
     {
-        if (remoteName == null)
+        if (!scope.IsRemote)
             return State.Value.Listing?.LocalBranches.Select(b => b.Name);
-        return FindRemote(remoteName)?.Branches.Select(b => b.Name);
+        return FindRemote(scope.RemoteName!)?.Branches.Select(b => b.Name);
     }
 
     // True when the subtree holds at least one collapsible node, so the menu can hide the
@@ -342,11 +344,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return rg != null && BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)).Any();
     }
 
-    private bool FolderHasSubFolders(string? remoteName, string basePath)
+    private bool FolderHasSubFolders(BranchFolder folder)
     {
-        var names = BranchNamesIn(remoteName);
+        var names = BranchNamesIn(folder.Scope);
         if (names == null) return false;
-        var prefix = basePath + "/";
+        var prefix = folder.Path + "/";
         foreach (var path in BranchTreeBuilder.FolderPaths(names))
             if (path.StartsWith(prefix, StringComparison.Ordinal)) return true;
         return false;
@@ -577,15 +579,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, collapseAll, LucideIcons.ChevronRight));
     }
 
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderMenuItems(string? remoteName, string folderPath)
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderMenuItems(BranchFolder folder)
     {
         if (State.Value.Listing == null) return Array.Empty<RepoBarContextMenu.Item>();
-        if (!FolderHasSubFolders(remoteName, folderPath)) return Array.Empty<RepoBarContextMenu.Item>();
+        if (!FolderHasSubFolders(folder)) return Array.Empty<RepoBarContextMenu.Item>();
 
         var s = _loc.Strings.Value;
         var items = new List<RepoBarContextMenu.Item>();
-        items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, () => SetFolderDescendantsOpen(remoteName, folderPath, true), LucideIcons.ChevronDown));
-        items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, () => SetFolderDescendantsOpen(remoteName, folderPath, false), LucideIcons.ChevronRight));
+        items.Add(new RepoBarContextMenu.Item(s.CommonExpandAll, () => SetFolderDescendantsOpen(folder, true), LucideIcons.ChevronDown));
+        items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, () => SetFolderDescendantsOpen(folder, false), LucideIcons.ChevronRight));
         return items;
     }
 

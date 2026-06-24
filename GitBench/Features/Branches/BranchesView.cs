@@ -540,7 +540,7 @@ internal sealed record BranchesView : Widget
                     vm.ToggleRemote(r.RemoteName);
                     return;
                 case FolderRow f:
-                    vm.ToggleFolder(f.Folder.Key);
+                    vm.ToggleFolder(f.Folder);
                     return;
                 case LocalBranchRow b:
                     vm.SelectLocalBranch(b.Name, b.TipSha);
@@ -576,7 +576,7 @@ internal sealed record BranchesView : Widget
                 LocalHeaderRow => vm.BuildLocalHeaderMenuItems(),
                 RemotesHeaderRow => vm.BuildRemotesHeaderMenuItems(),
                 RemoteHeaderRow r => vm.BuildRemoteHeaderMenuItems(r.RemoteName),
-                FolderRow f => vm.BuildFolderMenuItems(f.Folder.Scope.RemoteName, f.Folder.Path),
+                FolderRow f => vm.BuildFolderMenuItems(f.Folder),
                 LocalBranchRow b => vm.BuildLocalBranchMenuItems(b.Name, b.IsHead),
                 RemoteBranchRow b => vm.BuildRemoteBranchMenuItems(b.RemoteName, b.Name),
                 StashRow s => vm.BuildStashMenuItems(s.Index, s.Label, s.DisplayName),
