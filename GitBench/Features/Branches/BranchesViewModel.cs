@@ -162,9 +162,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 Update(s => s with { Listing = null, IsLoading = true, LoadError = null });
                 return;
             case Fetched<BranchListing>.Failed failed:
+            {
+                var hadSelection = State.Value.Selection != null;
                 Update(s => s with { Listing = null, IsLoading = false, LoadError = failed.Message, Selection = null });
-                _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, null));
+                if (hadSelection)
+                    _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, null));
                 return;
+            }
             case Fetched<BranchListing>.Ok ok:
                 ApplyListing(ok.Value);
                 return;
@@ -182,6 +186,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private void ApplyListing(BranchListing listing)
     {
+        var hadSelection = State.Value.Selection != null;
         Update(s =>
         {
             // Drop selection if it points at a ref that no longer exists (covers
@@ -205,7 +210,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             };
         });
 
-        if (State.Value.Selection == null)
+        // Tell the commits panel to drop its tip highlight only when a branch selection we were
+        // holding just disappeared (its ref vanished in this reload). Broadcasting whenever no
+        // branch is selected would also wipe an independent commit selection on every refresh —
+        // e.g. tagging or fetching reloads the branch listing while a commit is selected.
+        if (hadSelection && State.Value.Selection == null)
             _bus.Broadcast(new CommitSelectedMessage(listing.RepoId, null));
     }
 
