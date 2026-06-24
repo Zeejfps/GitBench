@@ -261,17 +261,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // while keeping the folder you clicked visible. Missing keys default to open, so
     // collapsing writes explicit `false` entries and expanding writes explicit `true`.
 
-    public void SetLocalDescendantsOpen(bool open)
-    {
-        var listing = State.Value.Listing;
-        if (listing == null) return;
-        MutateUi(ui =>
-        {
-            foreach (var path in BranchTreeBuilder.FolderPaths(listing.LocalBranches.Select(b => b.Name)))
-                ui.FolderOpen[new BranchFolder(BranchScope.Local, path).Key] = open;
-        });
-    }
-
     public void SetRemotesDescendantsOpen(bool open)
     {
         var listing = State.Value.Listing;
@@ -302,12 +291,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     {
         var names = BranchNamesIn(folder.Scope);
         if (names == null) return;
-        var prefix = folder.Path + "/";
         MutateUi(ui =>
         {
             foreach (var path in BranchTreeBuilder.FolderPaths(names))
             {
-                if (!path.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                if (!IsWithinFolder(folder.Path, path)) continue;
                 ui.FolderOpen[new BranchFolder(folder.Scope, path).Key] = open;
             }
         });
@@ -329,12 +317,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return FindRemote(scope.RemoteName!)?.Branches.Select(b => b.Name);
     }
 
-    // True when the subtree holds at least one collapsible node, so the menu can hide the
-    // Expand/Collapse-All items where they'd be no-ops (e.g. a flat local branch list).
-    private bool LocalHasFolders()
-        => State.Value.Listing != null
-           && BranchTreeBuilder.FolderPaths(State.Value.Listing!.LocalBranches.Select(b => b.Name)).Any();
-
+    // True when the Remotes section has at least one remote, so its menu can hide the
+    // Expand/Collapse-All items where they'd be no-ops.
     private bool RemotesHaveCollapsibles()
         => State.Value.Listing != null && State.Value.Listing!.Remotes.Count > 0;
 
@@ -344,15 +328,23 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return rg != null && BranchTreeBuilder.FolderPaths(rg.Branches.Select(b => b.Name)).Any();
     }
 
+    // True when the folder contains at least one sub-folder (for the root, at least one
+    // folder anywhere in its scope), so the menu hides the Expand/Collapse-All items where
+    // they'd be no-ops (e.g. a flat local branch list).
     private bool FolderHasSubFolders(BranchFolder folder)
     {
         var names = BranchNamesIn(folder.Scope);
         if (names == null) return false;
-        var prefix = folder.Path + "/";
         foreach (var path in BranchTreeBuilder.FolderPaths(names))
-            if (path.StartsWith(prefix, StringComparison.Ordinal)) return true;
+            if (IsWithinFolder(folder.Path, path)) return true;
         return false;
     }
+
+    // True when candidate is a folder inside basePath. The root (empty basePath) contains
+    // every folder in its scope; a named folder contains only strictly deeper paths, never
+    // itself — so "Collapse All" on a folder leaves that folder's own row open.
+    private static bool IsWithinFolder(string basePath, string candidate)
+        => basePath.Length == 0 || candidate.StartsWith(basePath + "/", StringComparison.Ordinal);
 
     private void MutateUi(Action<BranchesUiState> mutate)
     {
@@ -551,21 +543,26 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     // ---- context menu items (semantic, keyed on the row's identity) ----
 
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalHeaderMenuItems()
+    // Menu for the "Local" section header and any local folder, which are the same concept:
+    // the header is the root local folder (empty path). "New branch" seeds the dialog's name
+    // with the folder's path so the branch is created inside it (empty for the root); the
+    // Expand/Collapse-All items flip the folder's descendants when it has any.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalFolderMenu(BranchFolder folder)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
         var s = _loc.Strings.Value;
+        var namePrefix = folder.Path.Length == 0 ? string.Empty : folder.Path + "/";
         var items = new List<RepoBarContextMenu.Item>
         {
             new RepoBarContextMenu.Item(
                 s.BranchesContextNewBranch,
-                CreateBranch,
+                () => CreateBranch(namePrefix),
                 LucideIcons.Branch),
         };
-        if (LocalHasFolders())
-            AppendExpandCollapseItems(items, () => SetLocalDescendantsOpen(true), () => SetLocalDescendantsOpen(false));
+        if (FolderHasSubFolders(folder))
+            AppendExpandCollapseItems(items, () => SetFolderDescendantsOpen(folder, true), () => SetFolderDescendantsOpen(folder, false));
         return items;
     }
 
@@ -579,7 +576,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         items.Add(new RepoBarContextMenu.Item(s.CommonCollapseAll, collapseAll, LucideIcons.ChevronRight));
     }
 
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderMenuItems(BranchFolder folder)
+    // Menu for a remote folder: Expand/Collapse-All only (no "New branch" — a remote folder
+    // groups remote-tracking refs, where seeding a local branch name has no meaning).
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildRemoteFolderMenu(BranchFolder folder)
     {
         if (State.Value.Listing == null) return Array.Empty<RepoBarContextMenu.Item>();
         if (!FolderHasSubFolders(folder)) return Array.Empty<RepoBarContextMenu.Item>();
@@ -591,7 +590,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return items;
     }
 
-    public void CreateBranch()
+    // namePrefix pre-fills the dialog's branch-name field (e.g. "feature/admin/" when invoked
+    // from a folder), so the new branch is created inside that folder; empty for a plain
+    // "New branch".
+    public void CreateBranch(string namePrefix = "")
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
@@ -602,6 +604,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         {
             Repo = repo,
             SuggestedStartPoint = suggested,
+            InitialName = namePrefix,
             OnClose = onClose,
         }));
     }

@@ -20,6 +20,11 @@ internal sealed record CreateBranchDialog : Widget
 {
     public required Repo Repo { get; init; }
     public required string SuggestedStartPoint { get; init; }
+
+    /// Pre-fills the branch-name field (e.g. "feature/admin/" to create inside a folder).
+    /// Empty for a plain create. Editable — the user can change or clear it.
+    public string InitialName { get; init; } = "";
+
     public required Action OnClose { get; init; }
 
     protected override IWidget Build(Context ctx)
@@ -27,6 +32,7 @@ internal sealed record CreateBranchDialog : Widget
         var vm = new CreateBranchDialogViewModel(
             Repo,
             SuggestedStartPoint,
+            InitialName,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),

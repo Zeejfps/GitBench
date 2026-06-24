@@ -9,10 +9,12 @@ namespace GitBench.Git;
 /// the git invocation on submit is still the source of truth for the full rule set.
 ///
 /// <paramref name="noun"/> is the localized ref kind named in the message ("Branch", "Tag"). Empty
-/// input is reported as neutral (<c>null</c>) rather than as an error — callers gate their submit
-/// button on emptiness (and dialog-specific conditions like "same as current name") separately, and
-/// optional name fields simply stay quiet when left blank. <see cref="IsValid"/> is the
-/// locale-independent gate; <see cref="Validate"/> produces the localized message for display.
+/// input — and a trailing slash, which marks a still-incomplete path (e.g. a name pre-filled with a
+/// folder prefix like "feature/") — are reported as neutral (<c>null</c>) rather than as an error:
+/// callers gate their submit button on emptiness and <see cref="IsValid"/> (which still rejects the
+/// trailing slash) separately, so the button stays disabled without a red message while the user is
+/// mid-type. <see cref="IsValid"/> is the locale-independent gate; <see cref="Validate"/> produces
+/// the localized message for display.
 /// </summary>
 internal static class RefNameRules
 {
@@ -25,7 +27,9 @@ internal static class RefNameRules
         Violation.Spaces => new FieldStatus(FieldSeverity.Error, s.RefnameNoSpaces(noun)),
         Violation.LeadingDash => new FieldStatus(FieldSeverity.Error, s.RefnameNoLeadingDash(noun)),
         Violation.DoubleDot => new FieldStatus(FieldSeverity.Error, s.RefnameNoDoubleDot(noun)),
-        Violation.TrailingSlash => new FieldStatus(FieldSeverity.Error, s.RefnameNoTrailingSlash(noun)),
+        // A trailing slash means the path isn't finished yet (e.g. a folder-prefilled name);
+        // treat it as incomplete/neutral. IsValid still rejects it, so submit stays gated.
+        Violation.TrailingSlash => null,
         _ => null,
     };
 

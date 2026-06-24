@@ -25,8 +25,9 @@ namespace GitBench.Features.Branches;
 /// a matching local check that local out; remote branches with no matching local pop the
 /// CheckoutBranchDialog. Right-click a local/remote branch row to open a context menu
 /// (Checkout / Rename / Delete); right-click a stash row for Apply / Rename / Delete;
-/// right-click the "Local" section header to create a new
-/// branch (same as the toolbar's Branch button); right-click the "Remotes" section
+/// right-click the "Local" section header or any local folder to create a new branch —
+/// from a folder the dialog's name is prefilled with that folder's path (e.g. "feature/")
+/// so the branch is created inside it; right-click the "Remotes" section
 /// header to add a new remote; right-click a remote header (e.g.
 /// "origin") to edit that remote's URL. Section headers, remote headers, and folder rows
 /// also offer "Expand All" / "Collapse All", which flip every collapsible descendant
@@ -573,10 +574,11 @@ internal sealed record BranchesView : Widget
         private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItemsFor(BranchesViewModel vm, BranchRow row) =>
             row switch
             {
-                LocalHeaderRow => vm.BuildLocalHeaderMenuItems(),
+                LocalHeaderRow => vm.BuildLocalFolderMenu(new BranchFolder(BranchScope.Local, string.Empty)),
                 RemotesHeaderRow => vm.BuildRemotesHeaderMenuItems(),
                 RemoteHeaderRow r => vm.BuildRemoteHeaderMenuItems(r.RemoteName),
-                FolderRow f => vm.BuildFolderMenuItems(f.Folder),
+                FolderRow { Folder.Scope.IsRemote: true } f => vm.BuildRemoteFolderMenu(f.Folder),
+                FolderRow f => vm.BuildLocalFolderMenu(f.Folder),
                 LocalBranchRow b => vm.BuildLocalBranchMenuItems(b.Name, b.IsHead),
                 RemoteBranchRow b => vm.BuildRemoteBranchMenuItems(b.RemoteName, b.Name),
                 StashRow s => vm.BuildStashMenuItems(s.Index, s.Label, s.DisplayName),

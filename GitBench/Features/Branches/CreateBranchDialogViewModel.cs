@@ -9,7 +9,7 @@ namespace GitBench.Features.Branches;
 
 internal sealed class CreateBranchDialogViewModel : IDialogViewModel
 {
-    public State<string> Name { get; } = new(string.Empty);
+    public State<string> Name { get; }
     public State<string> StartPoint { get; }
     public State<bool> Checkout { get; } = new(true);
 
@@ -27,11 +27,13 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
     public CreateBranchDialogViewModel(
         Repo repo,
         string suggestedStartPoint,
+        string initialName,
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)
     {
+        Name = new State<string>(initialName);
         StartPoint = new State<string>(suggestedStartPoint);
 
         var repoId = repo.Id;
