@@ -51,7 +51,7 @@ internal sealed record RepoBar : Widget
                                     {
                                         Items = vm.GroupSections,
                                         Template = new GroupSection(),
-                                        Gap = 2,
+                                        Gap = 12,
                                         CrossAxis = CrossAxisAlignment.Stretch,
                                     },
                                 ],

@@ -70,9 +70,11 @@ internal sealed record GroupHeaderRow : Widget
         Then = () => new GroupRenameField { Group = vm.Group },
         Else = () => new Text
         {
-            Value = vm.Group.Name,
+            Value = Prop.Bind<string?>(() => vm.Group.Name.Value?.ToUpperInvariant()),
+            FontSize = 11f,
             HAlign = TextAlignment.Start,
             VAlign = TextAlignment.Center,
+            Overflow = TextOverflow.Ellipsis,
             Color = Theme.Color(s => s.GroupHeaderRow.NameText),
         },
     };
