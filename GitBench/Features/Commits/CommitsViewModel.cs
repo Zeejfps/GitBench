@@ -499,6 +499,15 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             var selected = State.Value.SelectedSha;
             if (selected != null && !SnapshotContainsSha(snap, selected))
                 ClearSelectionAndBroadcast(snap.RepoId);
+
+            // With nothing selected (fresh load, repo switch, or the prior selection just
+            // pruned), default to the commit HEAD points at so the details panel opens on
+            // something instead of the empty "select a commit" placeholder.
+            if (State.Value.SelectedSha == null)
+            {
+                var headSha = FindHeadSha(snap);
+                if (headSha != null) SelectCommit(headSha);
+            }
         }
 
         _bus.Broadcast(new CommitsLoadedMessage(activeId ?? Guid.Empty));
@@ -527,6 +536,21 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         for (var i = 0; i < snap.Commits.Count; i++)
         {
             if (snap.Commits[i].Sha == sha) return snap.Commits[i].Summary;
+        }
+        return null;
+    }
+
+    // The commit HEAD points at: the tip of the checked-out branch (its IsCurrent badge) or,
+    // when detached, the commit carrying the standalone HEAD badge. Null if HEAD isn't in the
+    // loaded window — shouldn't happen, since the walk is always seeded from HEAD.
+    private static string? FindHeadSha(CommitSnapshot snap)
+    {
+        foreach (var commit in snap.Commits)
+        {
+            foreach (var badge in commit.Refs)
+            {
+                if (badge.IsCurrent || badge.Kind == RefKind.Head) return commit.Sha;
+            }
         }
         return null;
     }

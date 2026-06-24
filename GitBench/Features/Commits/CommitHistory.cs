@@ -41,8 +41,12 @@ internal sealed class HistoryView : ContainerView
     {
         var input = ctx.Require<InputSystem>();
 
-        _commits = new CommitsPanelWidget().BuildView(ctx);
+        // Build the details panel first so its CommitDetailsViewModel subscribes to
+        // CommitSelectedMessage before the commits panel's CommitsViewModel is constructed: the
+        // latter auto-selects HEAD on its initial (synchronous) snapshot load and broadcasts that
+        // selection, which the details panel must already be listening for to open on it.
         _details = new CommitDetailsView(ctx);
+        _commits = new CommitsPanelWidget().BuildView(ctx);
         AddChildToSelf(_commits);
         AddChildToSelf(_details);
         this.UseController(input, () => new HistoryViewController(this, input));
