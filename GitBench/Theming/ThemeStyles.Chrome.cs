@@ -75,9 +75,9 @@ public partial record ThemeStyles
         new(
             Background: 0u,
             BackgroundHover: p.SurfaceHoverStrong,
-            IconIdle: p.TextMedium,
+            IconIdle: p.TextSecondary,
             IconHover: p.TextStrong,
-            IconDisabled: WithAlpha(p.TextMedium, 0x66));
+            IconDisabled: WithAlpha(p.TextSecondary, 0x66));
 
     private static RepoBarStyles BuildRepoBar(ThemePalette p) =>
         new(
@@ -86,10 +86,10 @@ public partial record ThemeStyles
 
     private static StatusBarStyles BuildStatusBar(ThemePalette p) =>
         new(
-            Background: p.BarSurface,
+            Background: p.SurfaceMuted,
             TopBorder: p.Border,
             Text: p.TextMuted,
-            Icon: p.TextMedium,
+            Icon: p.TextSecondary,
             IconHover: p.TextStrong,
             IconHoverBackground: p.SurfaceHoverStrong);
 

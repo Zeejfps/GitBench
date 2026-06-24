@@ -19,25 +19,12 @@ internal sealed class CommitDetailsView : ContainerView
     private const int Padding = 14;
     private const float AvatarSize = 36f;
 
-    private static readonly uint[] AvatarPalette =
-    {
-        0xFF5865F2,
-        0xFFEB459E,
-        0xFF57F287,
-        0xFFFEE75C,
-        0xFFED4245,
-        0xFF9B59B6,
-        0xFFE67E22,
-        0xFF1ABC9C,
-    };
-
     private static uint AvatarColor(string seed)
     {
-        if (string.IsNullOrEmpty(seed)) return AvatarPalette[0];
+        if (string.IsNullOrEmpty(seed)) return CategoricalPalette.Avatar(0);
         var h = 0;
         foreach (var ch in seed) h = unchecked(h * 31 + char.ToLowerInvariant(ch));
-        var idx = ((h % AvatarPalette.Length) + AvatarPalette.Length) % AvatarPalette.Length;
-        return AvatarPalette[idx];
+        return CategoricalPalette.Avatar(h);
     }
 
     private readonly ICanvas _canvas;
@@ -259,6 +246,15 @@ internal sealed class CommitDetailsView : ContainerView
     private View BuildAuthorHeader(CommitDetails d)
     {
         var avatarSeed = !string.IsNullOrEmpty(d.AuthorEmail) ? d.AuthorEmail : d.AuthorName;
+        var initials = new TextView(_canvas)
+        {
+            Text = Initials(d.AuthorName, d.AuthorEmail),
+            FontSize = 16f,
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center,
+        };
+        initials.BindThemedTextColor(_theme, s => s.Palette.TextOnAccent);
+
         var avatar = new RectView
         {
             Width = AvatarSize,
@@ -267,14 +263,7 @@ internal sealed class CommitDetailsView : ContainerView
             BorderRadius = BorderRadiusStyle.All(AvatarSize * 0.5f),
             Children =
             {
-                new TextView(_canvas)
-                {
-                    Text = Initials(d.AuthorName, d.AuthorEmail),
-                    TextColor = 0xFFFFFFFF,
-                    FontSize = 16f,
-                    HorizontalTextAlignment = TextAlignment.Center,
-                    VerticalTextAlignment = TextAlignment.Center,
-                },
+                initials,
             },
         };
 

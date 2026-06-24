@@ -309,7 +309,8 @@
   "stash.rename_context": "'{name}' の名前を変更",
   "stash.rename_description_label": "説明",
 
-  "repos.add_button": "+  リポジトリを追加",
+  "repos.add_button": "リポジトリを追加",
+  "repos.panel_title": "リポジトリ",
   "repos.clone_title": "リポジトリをクローン",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "クローン先",

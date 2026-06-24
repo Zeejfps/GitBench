@@ -61,7 +61,7 @@ internal sealed record UpdateBannerView : Widget
                                 },
                                 new ButtonWidget
                                 {
-                                    Style = ButtonStyle.Filled(0xFF4E8B3D),
+                                    Style = ButtonStyle.Filled(s => s.Status.SuccessBar),
                                     Command = new Command(updateService.ApplyAndRestart),
                                     Children =
                                     [

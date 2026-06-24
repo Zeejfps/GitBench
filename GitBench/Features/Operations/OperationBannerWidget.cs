@@ -87,8 +87,8 @@ internal sealed record OperationBannerWidget : Widget
 
     private static IWidget Actions(OperationBannerViewModel vm)
     {
-        var continueStyle = ButtonStyle.Filled(0xFF4E8B3D);
-        var abortStyle = ButtonStyle.Filled(0xFFB3514B);
+        var continueStyle = ButtonStyle.Filled(s => s.Status.SuccessBar);
+        var abortStyle = ButtonStyle.Filled(s => s.Status.DangerBar);
         return new Row
         {
             Gap = 4,

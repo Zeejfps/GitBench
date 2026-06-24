@@ -214,7 +214,7 @@ internal sealed record ConflictResolveView : Widget
                 FontFamily = LucideIcons.FontFamily,
                 FontSize = 15f,
                 VAlign = TextAlignment.Center,
-                Color = Theme.Color(s => s.Palette.TextMedium),
+                Color = Theme.Color(s => s.Palette.TextSecondary),
             },
             new Text
             {
@@ -321,7 +321,7 @@ internal sealed record ConflictResolveView : Widget
                                             FontFamily = LucideIcons.FontFamily,
                                             FontSize = 13f,
                                             VAlign = TextAlignment.Center,
-                                            Color = Theme.Color(s => s.Palette.TextMedium),
+                                            Color = Theme.Color(s => s.Palette.TextSecondary),
                                         },
                                         new Grow
                                         {

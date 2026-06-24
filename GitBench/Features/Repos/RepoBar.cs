@@ -16,7 +16,6 @@ namespace GitBench.Features.Repos;
 
 internal sealed record RepoBar : Widget
 {
-    private const int HorizontalPadding = 8;
     internal const int RowPaddingLeft = (int)TreeMetrics.BaseIndent;
     internal const int RowChevronWidth = 12;
     internal const int RowIconWidth = 16;
@@ -39,6 +38,7 @@ internal sealed record RepoBar : Widget
                     CrossAxis = CrossAxisAlignment.Stretch,
                     Children =
                     [
+                        BuildHeader(ctx),
                         new Grow
                         {
                             Child = new ScrollArea
@@ -64,17 +64,6 @@ internal sealed record RepoBar : Widget
                                 ],
                             },
                         },
-                        new Padding
-                        {
-                            Amount = PaddingStyle.All(HorizontalPadding),
-                            // Anchor the menu at the button's top edge and grow upward — it sits at the
-                            // very bottom of the sidebar, so a downward menu would spill off-screen.
-                            Children =
-                            [
-                                new AddRepoButton().WithMenuController(rect =>
-                                    RepoBarContextMenu.Show(ctx, rect.TopLeft, AddRepoMenuItems(ctx), MenuPlacement.Above)),
-                            ],
-                        },
                     ],
                 },
             ],
@@ -84,6 +73,54 @@ internal sealed record RepoBar : Widget
             .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm)))
             .BindVm(vm);
     }
+
+    // Sticky panel header: the "Repositories" title plus the add-repo menu trigger. Distinct from the
+    // group-section headers below (Title case, heavier, divider underneath) so it reads as the panel's
+    // title, not another group.
+    private static IWidget BuildHeader(Context ctx) => new Box
+    {
+        Height = 44,
+        BorderSize = new BorderSizeStyle { Bottom = 1 },
+        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.RepoBar.RightBorder }),
+        Children =
+        [
+            new Padding
+            {
+                Amount = new PaddingStyle { Left = 12, Right = 6 },
+                Children =
+                [
+                    new Row
+                    {
+                        CrossAxis = CrossAxisAlignment.Center,
+                        MainAxis = MainAxisAlignment.SpaceBetween,
+                        Children =
+                        [
+                            new Text
+                            {
+                                Value = L.T(s => s.ReposPanelTitle),
+                                FontSize = 13f,
+                                Weight = FontWeight.Bold,
+                                VAlign = TextAlignment.Center,
+                                Color = Theme.Color(s => s.Palette.TextStrong),
+                            },
+                            new IconButtonWidget
+                            {
+                                Icon = LucideIcons.FolderPlus,
+                                IconSize = 15f,
+                                Width = 24,
+                                Height = 24,
+                                Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+                                Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+                            }
+                                .WithTooltip(L.T(s => s.ReposAddButton))
+                                .WithMenuController(rect =>
+                                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenuItems(ctx), MenuPlacement.Below)),
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
 
     private static IReadOnlyList<RepoBarContextMenu.Item> AddRepoMenuItems(Context ctx)
     {

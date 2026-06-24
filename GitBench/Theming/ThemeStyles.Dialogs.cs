@@ -49,7 +49,8 @@ public sealed record ActionButtonStyles(
     uint BackgroundHover,
     uint TextIdle,
     uint TextHover,
-    uint TextDisabled)
+    uint TextDisabled,
+    uint FilledText)
 {
     // Plain glyph/label color: the themed idle/hover/disabled ramp.
     internal uint Foreground(IInteractable s)
@@ -62,9 +63,9 @@ public sealed record ActionButtonStyles(
     internal uint Surface(IInteractable s) =>
         s.Enabled.Value && s.Hovered.Value ? BackgroundHover : BackgroundIdle;
 
-    // Filled chip glyph/label color: white while enabled, the themed disabled text otherwise.
+    // Filled chip glyph/label color: the on-accent text while enabled, the themed disabled text otherwise.
     internal uint FilledForeground(IInteractable s) =>
-        s.Enabled.Value ? 0xFFFFFFFFu : TextDisabled;
+        s.Enabled.Value ? FilledText : TextDisabled;
 
     // Filled chip fill, from the caller's base color: lightens on hover, darkens when disabled.
     internal uint FilledSurface(uint color, IInteractable s)
@@ -174,7 +175,7 @@ public partial record ThemeStyles
         new(
             Background: p.Surface,
             Border: p.Border,
-            TitleText: p.TextEmphasis,
+            TitleText: p.TextPrimary,
             HeaderSeparator: p.DialogHeaderSeparator,
             ErrorText: status.DialogError,
             WarningText: status.DialogWarning,
@@ -185,8 +186,8 @@ public partial record ThemeStyles
         new(
             Background: p.InputSurface,
             Border: p.BorderStrong,
-            Text: p.TextEmphasis,
-            Caret: p.TextEmphasis,
+            Text: p.TextPrimary,
+            Caret: p.TextPrimary,
             Selection: p.Selection,
             PlaceholderText: p.Placeholder);
 
@@ -206,7 +207,7 @@ public partial record ThemeStyles
             PrimaryText: p.TextOnAccent,
             DestructiveFill: status.Danger,
             DestructiveFillHover: Lighten(status.Danger, 0x18),
-            DestructiveText: 0xFFFFFFFFu,
+            DestructiveText: p.TextOnAccent,
             DisabledFill: p.InputSurface,
             DisabledText: p.TextDisabled);
 
@@ -214,16 +215,17 @@ public partial record ThemeStyles
         new(
             BackgroundIdle: 0u,
             BackgroundHover: p.SurfaceHoverStrong,
-            TextIdle: p.TextSubtle,
+            TextIdle: p.TextSecondary,
             TextHover: p.TextStrong);
 
     private static ActionButtonStyles BuildActionButton(ThemePalette p) =>
         new(
             BackgroundIdle: 0u,
             BackgroundHover: p.SurfaceHoverStrong,
-            TextIdle: p.TextSubtle,
+            TextIdle: p.TextSecondary,
             TextHover: p.TextStrong,
-            TextDisabled: p.TextDisabled);
+            TextDisabled: p.TextDisabled,
+            FilledText: p.TextOnAccent);
 
     private static CheckboxStyles BuildCheckbox(ThemePalette p) =>
         new(

@@ -73,7 +73,7 @@ public partial record ThemeStyles
             HeaderBackgroundHover: p.SurfaceHoverStrong,
             HeaderBorderTop: p.Border,
             HeaderBorderBottom: p.Border,
-            HeaderTitleIdle: p.TextSubtle,
+            HeaderTitleIdle: p.TextSecondary,
             HeaderTitleHover: p.TextStrong,
             HeaderToggleActive: p.Accent,
             // Tracked: a filled "info" pill — LFS storage is the expected/healthy state for a
@@ -93,8 +93,8 @@ public partial record ThemeStyles
             Background: p.Surface,
             PlaceholderText: p.TextMuted,
             ErrorText: status.DiffError,
-            LineText: p.TextEmphasis,
-            LineNumberText: p.TextFaint,
+            LineText: p.TextPrimary,
+            LineNumberText: p.TextDim,
             // Dial the add/remove row tints back to ~50% so syntax-highlighted code reads
             // clearly through them; the full-strength +/- glyphs still signal the line kind.
             // Lower the alpha (e.g. 0x66) for a fainter tint, raise it (e.g. 0xB3) for a bolder one.

@@ -3,6 +3,7 @@ namespace GitBench.Theming;
 public sealed partial record ThemeStyles
 {
     public required ThemePalette Palette { get; init; }
+    public required StatusPalette Status { get; init; }
     public required BannerStyles Banner { get; init; }
     public required HeaderActionButtonStyles HeaderActionButton { get; init; }
     public required LocalChangesContentStyles LocalChangesContent { get; init; }

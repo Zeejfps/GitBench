@@ -21,18 +21,13 @@ public sealed record ThemePalette(
     uint TextPrimary,
     uint TextBody,
     uint TextSecondary,
-    uint TextMedium,
     uint TextMuted,
     uint TextDim,
     uint TextDisabled,
     uint TextOnAccent,
     uint Shadow,
-    uint BarSurface,
     uint InputSurface,
     uint InputSurfaceHover,
-    uint TextEmphasis,
-    uint TextSubtle,
-    uint TextFaint,
     uint OnStatusText,
     uint RowSubtleText,
     uint HunkOutline,
@@ -41,11 +36,8 @@ public sealed record ThemePalette(
     uint DialogHeaderSeparator,
     uint CheckboxBorderIdle,
     uint CheckboxDisabledFill,
-    uint SegmentActiveBg,
     uint ScrollBarTrackBg,
-    uint ScrollBarThumbBorder,
-    uint CommitRowSelectedBg,
-    uint CommitRowSelectedText);
+    uint ScrollBarThumbBorder);
 
 public sealed record StatusPalette(
     uint Success,

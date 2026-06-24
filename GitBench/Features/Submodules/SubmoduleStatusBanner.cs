@@ -59,7 +59,7 @@ internal sealed record SubmoduleStatusBanner : Widget
                             },
                             new ButtonWidget
                             {
-                                Style = ButtonStyle.Filled(0xFF4E8B3D),
+                                Style = ButtonStyle.Filled(s => s.Status.SuccessBar),
                                 Command = vm.UpdateSubmodules,
                                 Children =
                                 [

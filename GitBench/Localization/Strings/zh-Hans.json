@@ -309,7 +309,8 @@
   "stash.rename_context": "正在重命名 '{name}'",
   "stash.rename_description_label": "描述",
 
-  "repos.add_button": "+  添加仓库",
+  "repos.add_button": "添加仓库",
+  "repos.panel_title": "仓库",
   "repos.clone_title": "克隆仓库",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "克隆到",

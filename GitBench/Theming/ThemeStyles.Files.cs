@@ -62,7 +62,7 @@ public partial record ThemeStyles
         new(
             BadgeBackground: status.Purple,
             BadgeText: p.OnStatusText,
-            RowText: p.TextMedium);
+            RowText: p.TextSecondary);
 
     private static FileChangesSectionStyles BuildFileChangesSection(ThemePalette p) =>
         new(

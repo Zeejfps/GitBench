@@ -57,7 +57,7 @@ public partial record ThemeStyles
 {
     private static CommitBarStyles BuildCommitBar(ThemePalette p) =>
         new(
-            Background: p.BarSurface,
+            Background: p.SurfaceMuted,
             TopBorder: p.Border);
 
     private static ModeSwitcherStyles BuildModeSwitcher(ThemePalette p) =>
@@ -66,7 +66,7 @@ public partial record ThemeStyles
             SegmentSeparator: p.BorderStrong,
             SegmentIdleBackground: 0u,
             SegmentHoverBackground: p.InputSurfaceHover,
-            SegmentActiveBackground: p.SegmentActiveBg,
+            SegmentActiveBackground: p.SurfaceSelected,
             SegmentIdleText: p.TextSecondary,
             SegmentHoverText: p.TextStrong,
             SegmentActiveText: p.TextOnAccent);
@@ -75,9 +75,9 @@ public partial record ThemeStyles
         new(
             Background: p.SurfaceSunken,
             BorderLeft: p.Border,
-            PrimaryText: p.TextEmphasis,
+            PrimaryText: p.TextPrimary,
             SecondaryText: p.TextSecondary,
-            MutedText: p.TextFaint,
+            MutedText: p.TextDim,
             PlaceholderText: p.TextMuted,
             SplitterIdle: p.Border,
             SplitterHover: p.BorderHoverFill);
@@ -85,13 +85,13 @@ public partial record ThemeStyles
     private static CommitsViewStyles BuildCommitsView(ThemePalette p, CommitBadgePalette badge) =>
         new(
             Background: p.Surface,
-            HeaderBackground: p.BarSurface,
+            HeaderBackground: p.SurfaceMuted,
             HeaderBorderBottom: p.Border,
             HeaderText: p.TextMuted,
             RowText: p.TextSecondary,
-            RowTextActive: p.CommitRowSelectedText,
+            RowTextActive: p.TextStrong,
             RowTextDim: p.TextDim,
-            RowSelectedBackground: p.CommitRowSelectedBg,
+            RowSelectedBackground: p.SurfaceSelectedSubtle,
             PlaceholderText: p.TextMuted,
             ColumnDividerIdle: p.Border,
             ColumnDividerHoverFill: p.BorderHoverFill,

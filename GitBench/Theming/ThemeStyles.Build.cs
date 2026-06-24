@@ -13,6 +13,7 @@ public partial record ThemeStyles
         new()
         {
             Palette = p,
+            Status = status,
             Banner = banner,
             HeaderActionButton = BuildHeaderActionButton(p),
             LocalChangesContent = BuildLocalChangesContent(p),

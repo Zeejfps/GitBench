@@ -93,8 +93,8 @@ public partial record ThemeStyles
         new(
             Background: p.InputSurface,
             Border: p.Accent,
-            Text: p.TextEmphasis,
-            Caret: p.TextEmphasis,
+            Text: p.TextPrimary,
+            Caret: p.TextPrimary,
             Selection: p.Selection);
 
     private static RepoBarRowStyles BuildRepoBarRow(ThemePalette p, StatusPalette status) =>

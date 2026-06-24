@@ -27,18 +27,13 @@ public partial record ThemeStyles
             TextPrimary: 0xFF111827u,
             TextBody: 0xFF1F2937u,
             TextSecondary: 0xFF374151u,
-            TextMedium: 0xFF4B5563u,
             TextMuted: textMutedLight,
             TextDim: 0xFF9CA3AFu,
             TextDisabled: 0x80374151u,
             TextOnAccent: 0xFFFFFFFFu,
             Shadow: 0x40000000u,
-            BarSurface: 0xFFF3F4F6u,
             InputSurface: 0xFFFFFFFFu,
             InputSurfaceHover: 0xFFF3F4F6u,
-            TextEmphasis: 0xFF111827u,
-            TextSubtle: textMutedLight,
-            TextFaint: textMutedLight,
             OnStatusText: 0xFFFFFFFFu,
             RowSubtleText: 0xFF1E1B4Bu,
             HunkOutline: 0xFF3B82F6u,
@@ -47,11 +42,8 @@ public partial record ThemeStyles
             DialogHeaderSeparator: 0xFFE5E7EBu,
             CheckboxBorderIdle: 0xFFD1D5DBu,
             CheckboxDisabledFill: 0xFFE5E7EBu,
-            SegmentActiveBg: 0xFF4F46E5u,
             ScrollBarTrackBg: 0xFFF3F4F6u,
-            ScrollBarThumbBorder: 0xFFE5E7EBu,
-            CommitRowSelectedBg: 0xFFE0E7FFu,
-            CommitRowSelectedText: 0xFF111827u);
+            ScrollBarThumbBorder: 0xFFE5E7EBu);
 
         var status = new StatusPalette(
             Success: 0xFF16A34Au,

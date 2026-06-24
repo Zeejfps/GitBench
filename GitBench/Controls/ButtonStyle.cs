@@ -1,3 +1,4 @@
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -15,11 +16,13 @@ namespace GitBench.Controls;
 internal sealed record ButtonStyle
 {
     private readonly uint? _fill;
+    private readonly Func<ThemeStyles, uint>? _fillSelect;
     private readonly Func<IInteractable, Prop<uint>>? _bareForeground;
 
-    private ButtonStyle(uint? fill, Func<IInteractable, Prop<uint>>? bareForeground = null)
+    private ButtonStyle(uint? fill, Func<ThemeStyles, uint>? fillSelect = null, Func<IInteractable, Prop<uint>>? bareForeground = null)
     {
         _fill = fill;
+        _fillSelect = fillSelect;
         _bareForeground = bareForeground;
     }
 
@@ -29,6 +32,10 @@ internal sealed record ButtonStyle
     /// <summary>A solid rounded chip in <paramref name="color"/>, lightening on hover / darkening when disabled.</summary>
     public static ButtonStyle Filled(uint color) => new(color);
 
+    /// <summary>A solid rounded chip whose fill is read from the active theme via <paramref name="select"/>,
+    /// so it tracks light/dark instead of baking in a constant.</summary>
+    public static ButtonStyle Filled(Func<ThemeStyles, uint> select) => new(fill: null, fillSelect: select);
+
     /// <summary>No surface or padding — just the content, tinted by <paramref name="foreground"/> (resolved from
     /// the button's interaction state). For inline icon buttons in a toolbar/header that own no chrome.</summary>
     public static ButtonStyle Bare(Func<IInteractable, Prop<uint>> foreground) => new(fill: null, bareForeground: foreground);
@@ -37,7 +44,9 @@ internal sealed record ButtonStyle
     /// surface box; false for <see cref="Bare"/>, which renders content directly.</summary>
     public bool HasSurface => _bareForeground is null;
 
-    public BorderRadiusStyle Radius => _fill is null ? default : BorderRadiusStyle.All(6);
+    private bool IsFilled => _fill is not null || _fillSelect is not null;
+
+    public BorderRadiusStyle Radius => IsFilled ? BorderRadiusStyle.All(6) : default;
 
     /// <summary>Horizontal inset for an icon-only button: tighter for the plain toolbar look, chunkier
     /// for the filled chip. Labeled buttons use <see cref="ButtonWidget.ContentInset"/>'s default.</summary>
@@ -45,17 +54,18 @@ internal sealed record ButtonStyle
     {
         get
         {
-            var pad = _fill is null ? 6 : 10;
+            var pad = IsFilled ? 10 : 6;
             return new PaddingStyle { Left = pad, Right = pad };
         }
     }
 
-    public Prop<uint> Surface(IInteractable state) => _fill is uint color
-        ? Theme.Color(s => s.ActionButton.FilledSurface(color, state))
+    public Prop<uint> Surface(IInteractable state) =>
+        _fillSelect is { } select ? Theme.Color(s => s.ActionButton.FilledSurface(select(s), state))
+        : _fill is uint color ? Theme.Color(s => s.ActionButton.FilledSurface(color, state))
         : Theme.Color(s => s.ActionButton.Surface(state));
 
     public Prop<uint> Foreground(IInteractable state) =>
         _bareForeground is { } bare ? bare(state)
-        : _fill is null ? Theme.Color(s => s.ActionButton.Foreground(state))
-        : Theme.Color(s => s.ActionButton.FilledForeground(state));
+        : IsFilled ? Theme.Color(s => s.ActionButton.FilledForeground(state))
+        : Theme.Color(s => s.ActionButton.Foreground(state));
 }

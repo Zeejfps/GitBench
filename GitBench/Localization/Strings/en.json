@@ -309,7 +309,8 @@
   "stash.rename_context": "Renaming '{name}'",
   "stash.rename_description_label": "Description",
 
-  "repos.add_button": "+  Add Repository",
+  "repos.add_button": "Add Repository",
+  "repos.panel_title": "Repositories",
   "repos.clone_title": "Clone repository",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "Clone into",

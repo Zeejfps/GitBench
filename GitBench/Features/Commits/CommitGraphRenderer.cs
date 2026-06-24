@@ -1,3 +1,4 @@
+using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
 
@@ -5,7 +6,7 @@ namespace GitBench.Features.Commits;
 
 /// <summary>
 /// Stateless renderer for the lane/edge/dot commit graph that occupies the left column of
-/// <see cref="CommitsView"/>. Owns all lane geometry and the lane color palette; given a
+/// <see cref="CommitsView"/>. Owns all lane geometry; given a
 /// <see cref="CommitNode"/> and the graph's left edge it draws one row's cell. Pure draw:
 /// every output is a function of its arguments, so it carries no per-view state.
 /// </summary>
@@ -28,23 +29,7 @@ internal static class CommitGraphRenderer
     private const float GapLength = 3f;
     private const float RingThickness = 1.75f;
 
-    private static readonly uint[] LanePalette =
-    {
-        0xFF5865F2,
-        0xFFEB459E,
-        0xFF57F287,
-        0xFFFEE75C,
-        0xFFED4245,
-        0xFF9B59B6,
-        0xFFE67E22,
-        0xFF1ABC9C,
-        0xFF3498DB,
-        0xFFE91E63,
-        0xFF2ECC71,
-        0xFFF1C40F,
-    };
-
-    private static uint LaneColor(int lane) => LanePalette[((lane % LanePalette.Length) + LanePalette.Length) % LanePalette.Length];
+    private static uint LaneColor(int lane) => CategoricalPalette.Lane(lane);
 
     // Horizontal distance between adjacent lane centers. Up to MaxColumnLanes the column grows at
     // full LaneWidth; beyond that the same fixed column width is shared across every lane so they

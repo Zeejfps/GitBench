@@ -21,10 +21,6 @@ namespace GitBench.Features.Commits;
 /// </summary>
 internal sealed record ResetCommitDialog : Widget
 {
-    internal const uint SoftColor = 0xFF57F287;
-    internal const uint MixedColor = 0xFFE6A85C;
-    internal const uint HardColor = 0xFFED4245;
-
     public required Repo Repo { get; init; }
     public required string Sha { get; init; }
     public required string ShortSha { get; init; }
@@ -152,12 +148,13 @@ internal sealed record ResetModeDropdown : Widget
     protected override IWidget Build(Context ctx)
     {
         var s = ctx.Localization().Strings.Value;
+        var status = ctx.Theme().Styles.Value.Status;
         // Order: safest → most destructive (Fork uses Soft / Mixed / Hard top-to-bottom).
         (ResetMode Mode, string Label, string Detail, uint Color)[] options =
         {
-            (ResetMode.Soft, s.CommitsResetModeSoft, s.CommitsResetModeSoftDesc, ResetCommitDialog.SoftColor),
-            (ResetMode.Mixed, s.CommitsResetModeMixed, s.CommitsResetModeMixedDesc, ResetCommitDialog.MixedColor),
-            (ResetMode.Hard, s.CommitsResetModeHard, s.CommitsResetModeHardDesc, ResetCommitDialog.HardColor),
+            (ResetMode.Soft, s.CommitsResetModeSoft, s.CommitsResetModeSoftDesc, status.Success),
+            (ResetMode.Mixed, s.CommitsResetModeMixed, s.CommitsResetModeMixedDesc, status.WarningSoft),
+            (ResetMode.Hard, s.CommitsResetModeHard, s.CommitsResetModeHardDesc, status.Danger),
         };
 
         string LookupLabel(ResetMode m)
@@ -175,7 +172,7 @@ internal sealed record ResetModeDropdown : Widget
         uint LookupColor(ResetMode m)
         {
             foreach (var o in options) if (o.Mode == m) return o.Color;
-            return ResetCommitDialog.MixedColor;
+            return status.WarningSoft;
         }
 
         List<RepoBarContextMenu.Item> BuildItems()

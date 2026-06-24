@@ -8,8 +8,10 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 4;
-    private const string DefaultGroupName = "Repositories";
+    private const int CurrentSchemaVersion = 5;
+    private const string DefaultGroupName = "Ungrouped";
+    // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
+    private const string LegacyDefaultGroupName = "Repositories";
 
     public sealed record State(
         List<Repo> Repos,
@@ -88,6 +90,10 @@ public static class RepoStateStore
             else
             {
                 groups = ReconcileGroups(groups, repos);
+                if (file.SchemaVersion < 5)
+                    groups = groups
+                        .Select(g => g.Name == LegacyDefaultGroupName ? g with { Name = DefaultGroupName } : g)
+                        .ToList();
             }
 
             return new State(
