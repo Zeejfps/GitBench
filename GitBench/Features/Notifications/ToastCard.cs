@@ -7,19 +7,28 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Notifications;
 
 /// <summary>
-/// One toast: a raised card with a severity-colored accent edge and icon, the message, an optional
-/// action button, and a dismiss button. Severity maps to icon + accent here (a view concern); the
+/// One toast: a compact, content-sized card with a severity-colored icon, the message, an optional
+/// action, and — only for sticky toasts — a dismiss button. Fades and rises in on appear; transient
+/// toasts also show a thin countdown bar. Severity maps to icon + accent here (a view concern); the
 /// view model carries only the data.
 /// </summary>
-internal sealed record ToastCard : Widget
+internal sealed record ToastCard : Widget<ToastCardState>
 {
-    private const float CardWidth = 340f;
+    private const float MinCardWidth = 160f;
+    private const float SlideUp = 10f;
 
-    protected override IWidget Build(Context ctx)
+    protected override ToastCardState CreateState(Context ctx)
+    {
+        var vm = ctx.Require<ToastItemViewModel>();
+        return new ToastCardState(ctx.Require<IFrameTicker>(), vm.DurationSeconds, vm.Exiting);
+    }
+
+    protected override IWidget Build(Context ctx, ToastCardState state)
     {
         var vm = ctx.Require<ToastItemViewModel>();
         var accent = AccentFor(vm.Severity);
@@ -46,38 +55,35 @@ internal sealed record ToastCard : Widget
             },
         };
 
-        var close = new StatusBarIconButton
-        {
-            Icon = LucideIcons.X,
-            Command = vm.Dismiss,
-            BoxWidth = 18,
-            BoxHeight = 18,
-            IconSize = 12,
-        }.WithTooltip(L.T(s => s.ToastDismiss)).WithController<KbmController>();
+        var row = new List<IWidget> { icon, message };
+        if (vm.HasAction) row.Add(ActionButton(vm));
+        if (vm.ShowDismiss) row.Add(DismissButton(vm));
 
-        IWidget[] rowChildren = vm.HasAction
-            ? [icon, message, ActionButton(vm), close]
-            : [icon, message, close];
+        var content = new List<IWidget>
+        {
+            new Row { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Center, Children = row.ToArray() },
+        };
+        if (state.Countdown is { } countdown)
+            content.Add(CountdownBar(countdown, accent));
 
         return new Box
         {
-            Width = CardWidth,
+            MinWidth = MinCardWidth,
             Background = Theme.Color(s => s.Palette.SurfaceRaised),
             BorderRadius = BorderRadiusStyle.All(Radius.Md),
-            BorderSize = new BorderSizeStyle { Left = 3, Top = 1, Right = 1, Bottom = 1 },
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle
-            {
-                Left = accent(s),
-                Top = s.Palette.Border,
-                Right = s.Palette.Border,
-                Bottom = s.Palette.Border,
-            }),
+            BorderSize = BorderSizeStyle.All(1),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.Border)),
             Shadow = Theme.Color(s => s.Palette.Shadow).Select(c => new BoxShadowStyle
             {
                 Color = c,
-                OffsetY = 2f,
-                Blur = 12f,
+                OffsetY = 4f,
+                Blur = 16f,
             }),
+            // Fade and rise into place; both are render-only, so this never re-lays-out. Opacity
+            // rides the raw linear progress (an even fade); the slide rides the eased progress
+            // (decelerates into place).
+            Opacity = Prop.Bind(state.Enter.LinearProgress),
+            TranslationY = state.Enter.Progress.Bind(p => -SlideUp * (1f - p)),
             Children =
             [
                 new Padding
@@ -85,23 +91,56 @@ internal sealed record ToastCard : Widget
                     Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Sm, Bottom = Spacing.Sm },
                     Children =
                     [
-                        new Row
-                        {
-                            Gap = Spacing.Sm,
-                            CrossAxis = CrossAxisAlignment.Center,
-                            Children = rowChildren,
-                        },
+                        new Column { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Stretch, Children = content.ToArray() },
                     ],
                 },
             ],
         };
     }
 
+    // A thin bar whose accent fill depletes left-to-right over the toast's lifetime. Proportional
+    // fill via two flex weights, so it needs no pixel width — works with the content-sized card.
+    private static IWidget CountdownBar(Tween countdown, Func<ThemeStyles, uint> accent) => new Box
+    {
+        Height = 2,
+        BorderRadius = BorderRadiusStyle.All(1),
+        Background = Theme.Color(s => s.Palette.BorderSubtle),
+        Children =
+        [
+            new Row
+            {
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    new Grow
+                    {
+                        Factor = countdown.Progress.Bind(p => 1f - p),
+                        Child = new Box { BorderRadius = BorderRadiusStyle.All(1), Background = Theme.Color(accent) },
+                    },
+                    new Grow
+                    {
+                        Factor = Prop.Bind(countdown.Progress),
+                        Child = new Box(),
+                    },
+                ],
+            },
+        ],
+    };
+
     private static IWidget ActionButton(ToastItemViewModel vm) => new ButtonWidget
     {
         Command = vm.InvokeAction,
         Children = [new ButtonLabel { Value = vm.ActionLabel }],
     }.WithController<KbmController>();
+
+    private static IWidget DismissButton(ToastItemViewModel vm) => new StatusBarIconButton
+    {
+        Icon = LucideIcons.X,
+        Command = vm.Dismiss,
+        BoxWidth = 18,
+        BoxHeight = 18,
+        IconSize = 12,
+    }.WithTooltip(L.T(s => s.ToastDismiss)).WithController<KbmController>();
 
     // Info reuses the success glyph (no dedicated info glyph in the icon subset); the accent color
     // carries the distinction. Warning and Error share the alert glyph.
@@ -122,4 +161,38 @@ internal sealed record ToastCard : Widget
         ToastSeverity.Error => static s => s.Status.Danger,
         _ => static s => s.Status.Info,
     };
+}
+
+/// <summary>
+/// Per-card animation state (auto-disposed on unmount): the enter fade/slide, and — for transient
+/// toasts — a countdown that drives the depleting bar. Both stop ticking once finished.
+/// </summary>
+internal sealed class ToastCardState : IDisposable
+{
+    public Tween Enter { get; }
+    public Tween? Countdown { get; }
+    private readonly IDisposable _exitSub;
+
+    public ToastCardState(IFrameTicker ticker, float lifetimeSeconds, IReadable<bool> exiting)
+    {
+        Enter = new Tween(ticker, 0.3f, Easings.EaseOutCubic);
+        Enter.Play();
+
+        if (lifetimeSeconds > 0f)
+        {
+            Countdown = new Tween(ticker, lifetimeSeconds, Easings.Linear);
+            Countdown.Play();
+        }
+
+        // Run the enter tween backwards (fade + slide out) once the toast is dismissed. Subscribe
+        // fires immediately with the current value (false → no-op), then again when it flips true.
+        _exitSub = exiting.Subscribe(v => { if (v) Enter.Reverse(); });
+    }
+
+    public void Dispose()
+    {
+        _exitSub.Dispose();
+        Enter.Dispose();
+        Countdown?.Dispose();
+    }
 }

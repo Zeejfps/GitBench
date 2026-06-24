@@ -24,7 +24,7 @@ internal sealed record ToastHostView : Widget
             [
                 new Padding
                 {
-                    Amount = PaddingStyle.All(Spacing.Lg),
+                    Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Lg, Bottom = Spacing.Xl },
                     Children =
                     [
                         new Each<ToastItemViewModel>
