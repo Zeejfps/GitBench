@@ -30,7 +30,7 @@ internal sealed record StatusBarView : Widget
 
         var left = new Row
         {
-            Gap = 10,
+            Gap = Spacing.Lg,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
@@ -75,7 +75,7 @@ internal sealed record StatusBarView : Widget
                             [
                                 new Row
                                 {
-                                    Gap = 8,
+                                    Gap = Spacing.Md,
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
@@ -130,7 +130,7 @@ internal sealed record StatusBarView : Widget
     // its data is absent.
     private static IWidget Segment(string glyph, Prop<bool> visible, Prop<string?> label) => new Row
     {
-        Gap = 4,
+        Gap = Spacing.Xs,
         CrossAxis = CrossAxisAlignment.Center,
         Visible = visible,
         Children =

@@ -15,7 +15,7 @@ internal sealed record FileStatusBadge : Widget
         {
             Width = FileChangesUI.BadgeSize,
             Height = FileChangesUI.BadgeSize,
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => s.FileChangeRow.StatusColor(Status)),
             Children =
             [

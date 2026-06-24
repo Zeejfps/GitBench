@@ -145,7 +145,7 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             MainAxisAlignment = MainAxisAlignment.Center,
             CrossAxisAlignment = CrossAxisAlignment.Center,
-            Gap = 12,
+            Gap = Spacing.Lg,
             Children = { _placeholder },
         };
 

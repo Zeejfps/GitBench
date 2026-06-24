@@ -71,7 +71,7 @@ internal sealed record DiscardChangesDialog : Widget
     private static View BuildFileList(Context ctx, DiscardChangesViewModel vm)
     {
         var theme = ctx.Theme();
-        var column = new ColumnView { Gap = 1 };
+        var column = new ColumnView { Gap = Spacing.Hair };
 
         var files = vm.Files.Value;
         if (files.Count == 0)
@@ -101,12 +101,12 @@ internal sealed record DiscardChangesDialog : Widget
         var fileScrollHost = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(4),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
             {
                 new PaddingView
                 {
-                    Padding = PaddingStyle.All(6),
+                    Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
                         new BorderLayoutView
@@ -139,7 +139,7 @@ internal sealed record DiscardChangesDialog : Widget
 
         var rowContent = new FlexRowView
         {
-            Gap = 8f,
+            Gap = Spacing.Md,
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {

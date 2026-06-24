@@ -54,13 +54,13 @@ internal sealed record BranchLabel : Widget
 
     protected override IWidget Build(Context ctx) => new Padding
     {
-        Amount = new PaddingStyle { Left = 6, Right = 6 },
+        Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm },
         Visible = BranchName.Bind(n => !string.IsNullOrEmpty(n)),
         Children =
         [
             new Row
             {
-                Gap = 6,
+                Gap = Spacing.Sm,
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [

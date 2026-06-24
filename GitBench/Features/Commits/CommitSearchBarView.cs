@@ -69,26 +69,26 @@ internal sealed record CommitSearchBarView : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 8, Right = 8, Top = 5, Bottom = 5 },
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
                     Children =
                     [
                         new Box
                         {
                             BorderSize = BorderSizeStyle.All(1),
-                            BorderRadius = BorderRadiusStyle.All(4),
+                            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
                             Background = Theme.Color(s => s.TextInput.Background),
                             BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
                             Children =
                             [
                                 new Padding
                                 {
-                                    Amount = new PaddingStyle { Left = 8, Right = 6, Top = 2, Bottom = 2 },
+                                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
                                     Children =
                                     [
                                         new Row
                                         {
                                             CrossAxis = CrossAxisAlignment.Center,
-                                            Gap = 8,
+                                            Gap = Spacing.Md,
                                             Children =
                                             [
                                                 new Text

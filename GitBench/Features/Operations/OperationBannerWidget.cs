@@ -37,12 +37,12 @@ internal sealed record OperationBannerWidget : Widget
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
+                Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Sm, Bottom = Spacing.Sm },
                 Children =
                 [
                     new Row
                     {
-                        Gap = 4,
+                        Gap = Spacing.Xs,
                         CrossAxis = CrossAxisAlignment.Center,
                         Children =
                         [
@@ -91,7 +91,7 @@ internal sealed record OperationBannerWidget : Widget
         var abortStyle = ButtonStyle.Filled(s => s.Status.DangerBar);
         return new Row
         {
-            Gap = 4,
+            Gap = Spacing.Xs,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [

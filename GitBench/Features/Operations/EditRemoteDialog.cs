@@ -91,7 +91,7 @@ internal sealed record SchemeDropdown : Widget
     {
         Width = 84,
         Height = 28,
-        Gap = 4,
+        Gap = Spacing.Xs,
         Children =
         [
             new Grow

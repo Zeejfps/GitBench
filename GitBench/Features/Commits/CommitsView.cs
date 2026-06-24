@@ -106,7 +106,7 @@ internal sealed record CommitsView : Widget
         };
         private readonly RectStyle _badgeRectStyle = new()
         {
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         };
 
         private CommitsViewStyles _styles = ThemeStyles.Dark.CommitsView;

@@ -19,13 +19,13 @@ internal sealed record LanguageChipButton : Widget<ButtonState>
 
     protected override IWidget Build(Context ctx, ButtonState state) => new Box
     {
-        BorderRadius = BorderRadiusStyle.All(4),
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Background = Theme.Color(s => s.StatusBar.IconButtonBackground(state)),
         Children =
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 5, Right = 5 },
+                Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm },
                 Children =
                 [
                     new Text

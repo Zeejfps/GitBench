@@ -57,7 +57,7 @@ public static class RepoBarContextMenu
         var menu = new ContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
-            Padding = PaddingStyle.All(4),
+            Padding = PaddingStyle.All(Spacing.Xs),
         };
         menu.BindThemed(theme, s =>
         {
@@ -129,7 +129,7 @@ public static class RepoBarContextMenu
         var theme = ctx.Theme();
         var row = new FlexRowView
         {
-            Gap = 0,
+            Gap = Spacing.None,
             CrossAxisAlignment = CrossAxisAlignment.Center,
         };
         foreach (var seg in segments)

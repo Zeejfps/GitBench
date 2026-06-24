@@ -33,12 +33,12 @@ internal sealed record GroupRenameField : Widget
         var box = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
             {
                 new PaddingView
                 {
-                    Padding = new PaddingStyle { Left = 4, Right = 4 },
+                    Padding = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
                     Children = { input },
                 },
             },

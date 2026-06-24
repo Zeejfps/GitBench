@@ -22,19 +22,19 @@ internal sealed record GroupHeaderRow : Widget
         var root = new Box
         {
             Height = 22,
-            BorderRadius = BorderRadiusStyle.All(4),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => s.GroupHeaderRow.Background(isHovered.Value)),
             Children =
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 2, Right = 8 },
+                    Amount = new PaddingStyle { Left = Spacing.Hair, Right = Spacing.Md },
                     Children =
                     [
                         new Row
                         {
                             CrossAxis = CrossAxisAlignment.Center,
-                            Gap = 8,
+                            Gap = Spacing.Md,
                             Children =
                             [
                                 new Text

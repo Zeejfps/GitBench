@@ -27,7 +27,7 @@ internal sealed record IconButtonWidget : Widget<ButtonState>
     /// <summary>Glyph angle (radians); drive from a spinner animation while an op runs.</summary>
     public Prop<float> Rotation { get; init; }
 
-    public Prop<BorderRadiusStyle> CornerRadius { get; init; } = BorderRadiusStyle.All(4);
+    public Prop<BorderRadiusStyle> CornerRadius { get; init; } = BorderRadiusStyle.All(Radius.Sm);
 
     /// <summary>Box fill, resolved against the button's interaction state.</summary>
     public required Func<IInteractable, Prop<uint>> Surface { get; init; }

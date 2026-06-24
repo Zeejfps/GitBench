@@ -25,7 +25,7 @@ internal sealed record ButtonWidget : Widget<ButtonState>
 
     /// <summary>Horizontal padding around the content; defaults to the labeled inset. Icon-only
     /// buttons pass <see cref="ButtonStyle.IconOnlyInset"/>.</summary>
-    public Prop<PaddingStyle> ContentInset { get; init; } = new PaddingStyle { Left = 8, Right = 8 };
+    public Prop<PaddingStyle> ContentInset { get; init; } = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md };
 
     /// <summary>Content laid out in a row inside the button — a <see cref="ButtonIcon"/> and an
     /// optional <see cref="ButtonLabel"/>.</summary>
@@ -40,7 +40,7 @@ internal sealed record ButtonWidget : Widget<ButtonState>
             Value = Style.Foreground(state),
             Child = new Row
             {
-                Gap = 6,
+                Gap = Spacing.Sm,
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children = Children,
             },

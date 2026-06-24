@@ -48,7 +48,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                     [
                         new Column
                         {
-                            Gap = 12,
+                            Gap = Spacing.Lg,
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
@@ -61,7 +61,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                 },
                                 new Column
                                 {
-                                    Gap = 10,
+                                    Gap = Spacing.Lg,
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [

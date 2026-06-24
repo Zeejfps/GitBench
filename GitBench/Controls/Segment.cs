@@ -27,7 +27,7 @@ internal sealed record Segment : Widget<ButtonState>
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 12, Right = 12 },
+                Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg },
                 Children =
                 [
                     new Text

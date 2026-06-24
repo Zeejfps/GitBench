@@ -46,7 +46,7 @@ internal sealed record ButtonStyle
 
     private bool IsFilled => _fill is not null || _fillSelect is not null;
 
-    public BorderRadiusStyle Radius => IsFilled ? BorderRadiusStyle.All(6) : default;
+    public BorderRadiusStyle Radius => IsFilled ? BorderRadiusStyle.All(GitBench.Widgets.Radius.Md) : default;
 
     /// <summary>Horizontal inset for an icon-only button: tighter for the plain toolbar look, chunkier
     /// for the filled chip. Labeled buttons use <see cref="ButtonWidget.ContentInset"/>'s default.</summary>

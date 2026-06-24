@@ -46,12 +46,12 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 8, Right = 6 },
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm },
                     Children =
                     [
                         new Row
                         {
-                            Gap = 6f,
+                            Gap = Spacing.Sm,
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [

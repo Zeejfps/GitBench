@@ -35,7 +35,7 @@ public sealed record CheckboxWidget : Widget<CheckboxState>
     protected override IWidget Build(Context ctx, CheckboxState state) =>
         new Row
         {
-            Gap = 8f,
+            Gap = Spacing.Md,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [

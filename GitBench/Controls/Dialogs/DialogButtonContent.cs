@@ -54,7 +54,7 @@ internal sealed record DialogButtonContent : Widget
         // (clamped up by MinWidth in DialogFrame.ButtonsRow).
         return new Padding
         {
-            Amount = new PaddingStyle { Left = 16, Right = 16 },
+            Amount = new PaddingStyle { Left = Spacing.Xl, Right = Spacing.Xl },
             Children =
             [
                 new Foreground
@@ -62,7 +62,7 @@ internal sealed record DialogButtonContent : Widget
                     Value = Tint,
                     Child = new Row
                     {
-                        Gap = 6,
+                        Gap = Spacing.Sm,
                         MainAxis = MainAxisAlignment.Center,
                         CrossAxis = CrossAxisAlignment.Center,
                         Children = [icon, label],

@@ -735,7 +735,7 @@ internal sealed class DiffContentView : View, IScrollableContent
                     BackgroundColor = bg,
                     BorderColor = BorderColorStyle.All(_buttonStyles.Border),
                     BorderSize = BorderSizeStyle.All(1),
-                    BorderRadius = BorderRadiusStyle.All(3),
+                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
                 },
                 ZIndex = z,
             });

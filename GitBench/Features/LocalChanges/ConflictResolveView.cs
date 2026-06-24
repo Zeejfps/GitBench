@@ -42,7 +42,7 @@ internal sealed record ConflictResolveView : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 24, Right = 24, Top = 24, Bottom = 24 },
+                    Amount = new PaddingStyle { Left = Spacing.Xxl, Right = Spacing.Xxl, Top = Spacing.Xxl, Bottom = Spacing.Xxl },
                     Children =
                     [
                         // The panel is rebuilt per conflict (fresh selection state, cards, commands).
@@ -75,7 +75,7 @@ internal sealed record ConflictResolveView : Widget
 
         return new Column
         {
-            Gap = 14,
+            Gap = Spacing.Lg,
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
@@ -87,7 +87,7 @@ internal sealed record ConflictResolveView : Widget
                     {
                         // Cards sit flush against the inner junction edges; the junction supplies its
                         // own inset, so no inter-item gap here.
-                        Gap = 0f,
+                        Gap = Spacing.None,
                         CrossAxis = CrossAxisAlignment.Stretch,
                         Children =
                         [
@@ -103,7 +103,7 @@ internal sealed record ConflictResolveView : Widget
                 {
                     Child = new Column
                     {
-                        Gap = 8,
+                        Gap = Spacing.Md,
                         Width = ButtonStackWidth,
                         CrossAxis = CrossAxisAlignment.Stretch,
                         Children =
@@ -160,7 +160,7 @@ internal sealed record ConflictResolveView : Widget
 
     private static IWidget BuildTitleRow() => new Column
     {
-        Gap = 4,
+        Gap = Spacing.Xs,
         CrossAxis = CrossAxisAlignment.Stretch,
         Children =
         [
@@ -168,7 +168,7 @@ internal sealed record ConflictResolveView : Widget
             {
                 Child = new Row
                 {
-                    Gap = 8f,
+                    Gap = Spacing.Md,
                     CrossAxis = CrossAxisAlignment.Center,
                     Children =
                     [
@@ -204,7 +204,7 @@ internal sealed record ConflictResolveView : Widget
 
     private static IWidget BuildFileNameRow(string path) => new Row
     {
-        Gap = 8f,
+        Gap = Spacing.Md,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
@@ -244,7 +244,7 @@ internal sealed record ConflictResolveView : Widget
         // spelled-out label in the matching status color.
         return new Row
         {
-            Gap = 6f,
+            Gap = Spacing.Sm,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
@@ -291,7 +291,7 @@ internal sealed record ConflictResolveView : Widget
         {
             Width = CardWidth,
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(8),
+            BorderRadius = BorderRadiusStyle.All(Radius.Lg),
             Background = Theme.Color(s => state.Hovered.Value ? s.Palette.SurfaceHover : s.Palette.SurfaceRaised),
             BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
                 Checked.Value ? s.Palette.Accent : s.Palette.Border)),
@@ -299,18 +299,18 @@ internal sealed record ConflictResolveView : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 14, Right = 14, Top = 12, Bottom = 12 },
+                    Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Lg, Bottom = Spacing.Lg },
                     Children =
                     [
                         new Column
                         {
-                            Gap = 10,
+                            Gap = Spacing.Lg,
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
                                 new Row
                                 {
-                                    Gap = 8,
+                                    Gap = Spacing.Md,
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
@@ -339,7 +339,7 @@ internal sealed record ConflictResolveView : Widget
                                 new Box { Height = 1, Background = Theme.Color(s => s.Palette.Border) },
                                 new Row
                                 {
-                                    Gap = 8,
+                                    Gap = Spacing.Md,
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
@@ -376,7 +376,7 @@ internal sealed record ConflictResolveView : Widget
             Width = 16f,
             Height = 16f,
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => checkedState.Value ? s.Checkbox.BoxFillChecked : 0x00000000u),
             BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
                 checkedState.Value ? s.Checkbox.BoxFillChecked : s.Checkbox.BoxBorderIdle)),

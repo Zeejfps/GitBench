@@ -40,12 +40,12 @@ internal sealed record DetachedHeadBanner : Widget
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 12, Right = 12, Top = 6, Bottom = 6 },
+                Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Sm, Bottom = Spacing.Sm },
                 Children =
                 [
                     new Row
                     {
-                        Gap = 8,
+                        Gap = Spacing.Md,
                         CrossAxis = CrossAxisAlignment.Center,
                         Children =
                         [

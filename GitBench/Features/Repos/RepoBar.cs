@@ -49,14 +49,14 @@ internal sealed record RepoBar : Widget
                                 [
                                     new Padding
                                     {
-                                        Amount = new PaddingStyle { Left = 8, Top = 8, Bottom = 8 },
+                                        Amount = new PaddingStyle { Left = Spacing.Md, Top = Spacing.Md, Bottom = Spacing.Md },
                                         Children =
                                         [
                                             new Each<GroupSectionViewModel>
                                             {
                                                 Items = vm.GroupSections,
                                                 Template = new GroupSection(),
-                                                Gap = 12,
+                                                Gap = Spacing.Lg,
                                                 CrossAxis = CrossAxisAlignment.Stretch,
                                             },
                                         ],
@@ -86,7 +86,7 @@ internal sealed record RepoBar : Widget
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 12, Right = 6 },
+                Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Sm },
                 Children =
                 [
                     new Row

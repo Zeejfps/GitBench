@@ -62,7 +62,7 @@ internal sealed record DeleteTagDialog : Widget
 
     private static IWidget TagValue(string tagName) => new Row
     {
-        Gap = 8,
+        Gap = Spacing.Md,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [

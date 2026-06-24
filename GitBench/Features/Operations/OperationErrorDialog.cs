@@ -55,7 +55,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                     [
                         new Column
                         {
-                            Gap = 12,
+                            Gap = Spacing.Lg,
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
@@ -130,7 +130,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
         var scrollPane = new VerticalScrollPane();
         scrollPane.Children.Add(new PaddingView
         {
-            Padding = new PaddingStyle { Left = 8, Right = 8, Top = 6, Bottom = 6 },
+            Padding = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
             Children = { messageView },
         });
         scrollPane.UseController(ctx.Require<InputSystem>(),

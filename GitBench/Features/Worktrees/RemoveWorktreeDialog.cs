@@ -66,7 +66,7 @@ internal sealed record RemoveWorktreeDialog : Widget
         var pathBox = new RectView
         {
             BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(4),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
             {
                 new PaddingView
@@ -75,8 +75,8 @@ internal sealed record RemoveWorktreeDialog : Widget
                     {
                         Left = (int)CodeBlockInnerPadding,
                         Right = (int)CodeBlockInnerPadding,
-                        Top = 6,
-                        Bottom = 6,
+                        Top = Spacing.Sm,
+                        Bottom = Spacing.Sm,
                     },
                     Children = { pathTextView },
                 },

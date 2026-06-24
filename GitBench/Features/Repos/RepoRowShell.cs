@@ -28,7 +28,7 @@ internal sealed record RepoRowShell : Widget
         return new Box
         {
             Height = RowHeight,
-            BorderRadius = BorderRadiusStyle.All(4),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Background = Theme.Color(s => s.RepoBarRow.Background(vm.IsActive.Value, Hovered.Value)),
             BorderColor = Theme.BorderColor(s => new BorderColorStyle { Left = s.RepoBarRow.AccentBar }),
             BorderSize = Prop.Bind(() => new BorderSizeStyle { Left = vm.IsActive.Value ? 2f : 0f }),
@@ -36,7 +36,7 @@ internal sealed record RepoRowShell : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = leftPad, Right = 12 },
+                    Amount = new PaddingStyle { Left = leftPad, Right = Spacing.Lg },
                     Children =
                     [
                         new Row
@@ -71,7 +71,7 @@ internal sealed record RepoRowShell : Widget
                                 {
                                     Width = 8,
                                     Height = 8,
-                                    BorderRadius = BorderRadiusStyle.All(4),
+                                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
                                     Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
                                         ? s.RepoBarRow.BadgeError
                                         : s.RepoBarRow.BadgeDirty),

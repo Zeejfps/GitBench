@@ -54,7 +54,7 @@ internal sealed record MergeBranchDialog : Widget
             : t.BranchPreview.Clean;
         return new Row
         {
-            Gap = 6,
+            Gap = Spacing.Sm,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [
@@ -88,7 +88,7 @@ internal sealed record MergeBranchDialog : Widget
 
     private static IWidget BuildLabeledRow(string label, IWidget value) => new Row
     {
-        Gap = 10,
+        Gap = Spacing.Lg,
         CrossAxis = CrossAxisAlignment.Center,
         Height = 28,
         Children =
@@ -114,7 +114,7 @@ internal sealed record MergeBranchDialog : Widget
 
     private static IWidget BuildBranchChip(string name) => new Row
     {
-        Gap = 6,
+        Gap = Spacing.Sm,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
@@ -179,7 +179,7 @@ internal sealed record MergeOptionDropdown : Widget
         return new DropdownWidget
         {
             Height = 30,
-            Gap = 10,
+            Gap = Spacing.Lg,
             Children =
             [
                 new Text

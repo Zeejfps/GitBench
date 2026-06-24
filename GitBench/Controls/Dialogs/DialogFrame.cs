@@ -37,7 +37,7 @@ internal static class DialogFrame
     {
         var column = new FlexColumnView
         {
-            Gap = 12,
+            Gap = Spacing.Lg,
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
@@ -156,7 +156,7 @@ internal static class DialogFrame
             {
                 new PaddingView
                 {
-                    Padding = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                    Padding = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs },
                     Children = { input },
                 },
             },

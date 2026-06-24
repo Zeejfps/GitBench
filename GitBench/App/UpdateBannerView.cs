@@ -36,16 +36,16 @@ internal sealed record UpdateBannerView : Widget
                 {
                     Amount = new PaddingStyle
                     {
-                        Left = 12,
-                        Right = 12,
-                        Top = 6,
-                        Bottom = 6,
+                        Left = Spacing.Lg,
+                        Right = Spacing.Lg,
+                        Top = Spacing.Sm,
+                        Bottom = Spacing.Sm,
                     },
                     Children =
                     [
                         new Row
                         {
-                            Gap = 4,
+                            Gap = Spacing.Xs,
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [

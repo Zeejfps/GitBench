@@ -100,7 +100,7 @@ internal sealed record CommitBarWidget : Widget
                     [
                         new Column
                         {
-                            Gap = 8,
+                            Gap = Spacing.Md,
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
@@ -155,12 +155,12 @@ internal sealed record CommitBarWidget : Widget
         Background = Theme.Color(s => s.TextInput.Background),
         BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
         BorderSize = BorderSizeStyle.All(1),
-        BorderRadius = BorderRadiusStyle.All(3),
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Children =
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs },
                 Children = [new Raw { View = titleInput }],
             },
         ],

@@ -63,7 +63,7 @@ internal sealed record PublishBranchDialog : Widget
 
     private static IWidget BranchChip(string name) => new Row
     {
-        Gap = 6,
+        Gap = Spacing.Sm,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
@@ -98,7 +98,7 @@ internal sealed record RemoteDropdown : Widget
         return new DropdownWidget
         {
             Height = 30,
-            Gap = 6,
+            Gap = Spacing.Sm,
             // Hover-enabled once there's at least one remote; the chevron and the menu only appear when
             // there's an actual choice (more than one).
             Enabled = new Derived<bool>(() => Remotes.Value.Count > 0),

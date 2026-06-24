@@ -63,7 +63,7 @@ internal sealed record LabeledInput : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 6, Right = 6, Top = 4, Bottom = 4 },
+                    Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Xs, Bottom = Spacing.Xs },
                     Children = [new Raw { View = input }],
                 },
             ],
@@ -81,7 +81,7 @@ internal sealed record LabeledInput : Widget
             },
             new Row
             {
-                Gap = 8,
+                Gap = Spacing.Md,
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Height = BoxHeight,
                 Children = [.. boxRow],
@@ -113,7 +113,7 @@ internal sealed record LabeledInput : Widget
 
         return new Column
         {
-            Gap = 4,
+            Gap = Spacing.Xs,
             CrossAxis = CrossAxisAlignment.Stretch,
             Children = [.. children],
         };

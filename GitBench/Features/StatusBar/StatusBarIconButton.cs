@@ -39,7 +39,7 @@ internal sealed record StatusBarIconButton : Widget<ButtonState>
     {
         Width = BoxWidth,
         Height = BoxHeight,
-        BorderRadius = BorderRadiusStyle.All(4),
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Background = Theme.Color(s => s.StatusBar.IconButtonBackground(state)),
         Children =
         [

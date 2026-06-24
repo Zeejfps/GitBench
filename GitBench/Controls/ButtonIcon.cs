@@ -33,7 +33,7 @@ internal sealed record ButtonIcon : Widget
 
     protected override IWidget Build(Context ctx) => new Row
     {
-        Gap = 0,
+        Gap = Spacing.None,
         CrossAxis = CrossAxisAlignment.Stretch,
         Children =
         [

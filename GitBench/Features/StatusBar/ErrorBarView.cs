@@ -27,12 +27,12 @@ internal sealed record ErrorBarView : Widget
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Banner.Border)),
         BorderSize = BorderSizeStyle.All(1),
-        BorderRadius = BorderRadiusStyle.All(3),
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Children =
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 8, Right = 8, Top = verticalPadding, Bottom = verticalPadding },
+                Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = verticalPadding, Bottom = verticalPadding },
                 Children =
                 [
                     new Text

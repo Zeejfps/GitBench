@@ -68,7 +68,7 @@ internal sealed record CreateTagDialog : Widget
             },
             new Column
             {
-                Gap = 4,
+                Gap = Spacing.Xs,
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [
@@ -127,7 +127,7 @@ internal sealed record CreateTagDialog : Widget
 
         return new Row
         {
-            Gap = 8,
+            Gap = Spacing.Md,
             CrossAxis = CrossAxisAlignment.Center,
             Children =
             [

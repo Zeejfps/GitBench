@@ -139,7 +139,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         {
             var actionRow = new FlexRowView
             {
-                Gap = 2f,
+                Gap = Spacing.Hair,
                 CrossAxisAlignment = CrossAxisAlignment.Center,
             };
             foreach (var action in headerActions)

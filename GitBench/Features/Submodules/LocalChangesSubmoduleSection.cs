@@ -90,7 +90,7 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         {
             Width = FileChangesUI.BadgeSize,
             Height = FileChangesUI.BadgeSize,
-            BorderRadius = BorderRadiusStyle.All(3),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children = { badgeText },
         };
         badge.BindThemedBackgroundColor(theme, s => s.SubmoduleSection.BadgeBackground);
@@ -119,7 +119,7 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
 
         return new FlexRowView
         {
-            Gap = 8f,
+            Gap = Spacing.Md,
             CrossAxisAlignment = CrossAxisAlignment.Center,
             Children =
             {

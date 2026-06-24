@@ -49,7 +49,7 @@ internal sealed class CommitDetailsView : ContainerView
         _loc = ctx.Localization();
         var vm = ctx.Require<CommitDetailsViewModel>();
 
-        _headerInfo = new ColumnView { Gap = 8 };
+        _headerInfo = new ColumnView { Gap = Spacing.Md };
 
         _headerScrollPane = new ScrollPane();
         _headerScrollPane.Children.Add(_headerInfo);
@@ -200,7 +200,7 @@ internal sealed class CommitDetailsView : ContainerView
     {
         _headerInfo.Children.Clear();
 
-        var topColumn = new ColumnView { Gap = 8 };
+        var topColumn = new ColumnView { Gap = Spacing.Md };
         topColumn.Children.Add(BuildAuthorHeader(d));
 
         if (!string.IsNullOrEmpty(d.MessageShort))
@@ -275,13 +275,13 @@ internal sealed class CommitDetailsView : ContainerView
 
         var info = new ColumnView
         {
-            Gap = 2,
+            Gap = Spacing.Hair,
             Children = { authorName, date },
         };
 
         return new FlexRowView
         {
-            Gap = 12f,
+            Gap = Spacing.Lg,
             CrossAxisAlignment = CrossAxisAlignment.Start,
             Children =
             {

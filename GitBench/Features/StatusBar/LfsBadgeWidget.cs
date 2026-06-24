@@ -26,7 +26,7 @@ internal sealed record LfsBadgeWidget : Widget
         return new Box
         {
             Height = 16f,
-            BorderRadius = BorderRadiusStyle.All(8),
+            BorderRadius = BorderRadiusStyle.All(Radius.Lg),
             Visible = status.Bind(s => s != LfsBadge.None),
             Background = Prop.Bind(() => status.Value == LfsBadge.Tracked
                 ? theme.Styles.Value.DiffView.LfsBadgeTrackedBackground
@@ -35,7 +35,7 @@ internal sealed record LfsBadgeWidget : Widget
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 7, Right = 7 },
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md },
                     Children =
                     [
                         new Text

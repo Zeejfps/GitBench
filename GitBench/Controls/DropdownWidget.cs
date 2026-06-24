@@ -17,7 +17,7 @@ internal sealed record DropdownWidget : Widget<ButtonState>
     /// <summary>Row content shown before the chevron.</summary>
     public required IWidget[] Children { get; init; }
 
-    public float Gap { get; init; } = 8f;
+    public float Gap { get; init; } = Spacing.Md;
 
     /// <summary>When set and false, the control reads disabled (no hover) — for "nothing to pick".</summary>
     public IReadable<bool>? Enabled { get; init; }
@@ -51,7 +51,7 @@ internal sealed record DropdownWidget : Widget<ButtonState>
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = 8, Right = 8, Top = 4, Bottom = 4 },
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Xs, Bottom = Spacing.Xs },
                     Children =
                     [
                         new Row { Gap = Gap, CrossAxis = CrossAxisAlignment.Center, Children = content },

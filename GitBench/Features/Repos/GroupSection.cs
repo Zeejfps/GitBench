@@ -1,3 +1,4 @@
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -14,7 +15,7 @@ internal sealed record GroupSection : Widget
 
         return new Column
         {
-            Gap = 2,
+            Gap = Spacing.Hair,
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
@@ -23,7 +24,7 @@ internal sealed record GroupSection : Widget
                 {
                     Items = vm.VisiblePrimaries,
                     Template = new RepoNode(),
-                    Gap = 2,
+                    Gap = Spacing.Hair,
                     CrossAxis = CrossAxisAlignment.Stretch,
                 },
             ],

@@ -20,18 +20,18 @@ internal sealed record IdentityChipButton : Widget<ButtonState>
 
     protected override IWidget Build(Context ctx, ButtonState state) => new Box
     {
-        BorderRadius = BorderRadiusStyle.All(4),
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
         Background = Theme.Color(s => s.StatusBar.IconButtonBackground(state)),
         Children =
         [
             new Padding
             {
-                Amount = new PaddingStyle { Left = 4, Right = 4 },
+                Amount = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
                 Children =
                 [
                     new Row
                     {
-                        Gap = 4,
+                        Gap = Spacing.Xs,
                         CrossAxis = CrossAxisAlignment.Center,
                         Children =
                         [

@@ -28,7 +28,7 @@ internal sealed record LocalChangesHeaderActionButton : Widget
         IconSize = IconSize,
         Width = ButtonSize,
         Height = ButtonSize,
-        CornerRadius = BorderRadiusStyle.All(3),
+        CornerRadius = BorderRadiusStyle.All(Radius.Sm),
         Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
         Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
     }.WithTooltip(Tooltip).WithController<KbmController>();

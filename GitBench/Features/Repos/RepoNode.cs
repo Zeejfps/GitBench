@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Git;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -16,7 +17,7 @@ internal sealed record RepoNode : Widget
         var vm = ctx.Require<RepoNodeViewModel>();
         return new Column
         {
-            Gap = 2,
+            Gap = Spacing.Hair,
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
@@ -27,7 +28,7 @@ internal sealed record RepoNode : Widget
                 {
                     Items = vm.Children,
                     Template = new RepoNode(),
-                    Gap = 2,
+                    Gap = Spacing.Hair,
                     CrossAxis = CrossAxisAlignment.Stretch,
                 },
             ],

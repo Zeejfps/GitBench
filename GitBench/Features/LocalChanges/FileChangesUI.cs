@@ -83,14 +83,14 @@ internal static class FileChangesUI
 
         return new PaddingView
         {
-            Padding = new PaddingStyle { Left = 16, Right = 16 },
+            Padding = new PaddingStyle { Left = Spacing.Xl, Right = Spacing.Xl },
             Children =
             {
                 new FlexColumnView
                 {
                     MainAxisAlignment = MainAxisAlignment.Center,
                     CrossAxisAlignment = CrossAxisAlignment.Stretch,
-                    Gap = 8f,
+                    Gap = Spacing.Md,
                     Children = { iconView, titleView, hintView },
                 },
             },
@@ -161,7 +161,7 @@ internal static class FileChangesUI
                 Style = new RectStyle
                 {
                     BackgroundColor = bg.Value,
-                    BorderRadius = BorderRadiusStyle.All(3),
+                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
                 },
                 ZIndex = z,
             });
@@ -238,7 +238,7 @@ internal static class FileChangesUI
             canvas.DrawRect(new DrawRectInputs
             {
                 Position = rowRect,
-                Style = new RectStyle { BackgroundColor = bg.Value, BorderRadius = BorderRadiusStyle.All(3) },
+                Style = new RectStyle { BackgroundColor = bg.Value, BorderRadius = BorderRadiusStyle.All(Radius.Sm) },
                 ZIndex = z,
             });
         }

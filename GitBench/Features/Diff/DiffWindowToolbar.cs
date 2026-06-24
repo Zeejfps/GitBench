@@ -55,12 +55,12 @@ internal sealed class DiffWindowToolbar : ContainerView
             {
                 new PaddingView
                 {
-                    Padding = new PaddingStyle { Left = 10, Right = 8 },
+                    Padding = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Md },
                     Children =
                     {
                         new FlexRowView
                         {
-                            Gap = 8f,
+                            Gap = Spacing.Md,
                             CrossAxisAlignment = CrossAxisAlignment.Center,
                             Children =
                             {
@@ -152,7 +152,7 @@ internal sealed class DiffWindowToolbar : ContainerView
         var btn = new PaddingView
         {
             Height = 18f,
-            Padding = new PaddingStyle { Left = 8, Right = 8 },
+            Padding = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md },
             Children = { label },
         };
         btn.BindIsVisible(_side, s => s is DiffSide.Unstaged or DiffSide.Staged);

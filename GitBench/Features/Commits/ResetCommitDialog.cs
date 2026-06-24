@@ -73,7 +73,7 @@ internal sealed record ResetCommitDialog : Widget
 
     private static IWidget BranchValue(string? branchName, Strings s) => new Row
     {
-        Gap = 6,
+        Gap = Spacing.Sm,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
@@ -97,7 +97,7 @@ internal sealed record ResetCommitDialog : Widget
 
     private static IWidget CommitValue(string shortSha, string summary) => new Row
     {
-        Gap = 8,
+        Gap = Spacing.Md,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
@@ -197,7 +197,7 @@ internal sealed record ResetModeDropdown : Widget
         return new DropdownWidget
         {
             Height = 30,
-            Gap = 8,
+            Gap = Spacing.Md,
             Children =
             [
                 new Text

@@ -21,7 +21,7 @@ internal sealed class MacOsPopupDecorator : IPopupNativeDecorator
     private IntPtr _capturedNsWindow;
     private Action<PointI>? _activeCallback;
 
-    public void DecoratePopup(IntPtr glfwHandle, bool mousePassThrough)
+    public void DecoratePopup(IntPtr glfwHandle)
     {
         var nsWindow = NsWindowFromGlfw(glfwHandle);
         if (nsWindow == IntPtr.Zero) return;
@@ -33,8 +33,13 @@ internal sealed class MacOsPopupDecorator : IPopupNativeDecorator
             NSWindowCollectionBehaviorTransient
             | NSWindowCollectionBehaviorIgnoresCycle
             | NSWindowCollectionBehaviorCanJoinAllSpaces);
-        if (mousePassThrough)
-            msg_Void_Bool(nsWindow, Sel("setIgnoresMouseEvents:"), true);
+    }
+
+    public void SetMousePassThrough(IntPtr glfwHandle, bool passThrough)
+    {
+        var nsWindow = NsWindowFromGlfw(glfwHandle);
+        if (nsWindow == IntPtr.Zero) return;
+        msg_Void_Bool(nsWindow, Sel("setIgnoresMouseEvents:"), passThrough);
     }
 
     public void BeginCapture(IntPtr glfwHandle, Action<PointI> onOutsideClick)

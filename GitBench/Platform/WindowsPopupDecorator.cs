@@ -41,7 +41,7 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
     private readonly Dictionary<IntPtr, Subclass> _subclasses = new();
     private IntPtr _capturedHwnd = IntPtr.Zero;
 
-    public void DecoratePopup(IntPtr glfwHandle, bool mousePassThrough)
+    public void DecoratePopup(IntPtr glfwHandle)
     {
         var hwnd = GetHwnd(glfwHandle);
         if (hwnd == IntPtr.Zero) return;
@@ -50,8 +50,20 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
         ex |= WS_EX_TOOLWINDOW;
         ex |= WS_EX_NOACTIVATE;
         ex |= WS_EX_TOPMOST;
-        if (mousePassThrough) ex |= WS_EX_TRANSPARENT;
         SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(ex));
+        SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
+    }
+
+    public void SetMousePassThrough(IntPtr glfwHandle, bool passThrough)
+    {
+        var hwnd = GetHwnd(glfwHandle);
+        if (hwnd == IntPtr.Zero) return;
+
+        var ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        var updated = passThrough ? ex | WS_EX_TRANSPARENT : ex & ~WS_EX_TRANSPARENT;
+        if (updated == ex) return;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new IntPtr(updated));
         SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED | SWP_NOACTIVATE);
     }
