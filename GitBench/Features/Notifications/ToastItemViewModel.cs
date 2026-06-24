@@ -21,10 +21,6 @@ internal sealed class ToastItemViewModel : IDisposable
     // the user must acknowledge do.
     public bool ShowDismiss => _toast.Intent.Lifetime is ToastLifetime.Sticky;
 
-    // Seconds the toast stays up, for the countdown bar; 0 for sticky toasts (no countdown).
-    public float DurationSeconds =>
-        _toast.Intent.Lifetime is ToastLifetime.Timed timed ? (float)timed.Duration.TotalSeconds : 0f;
-
     // True while the toast is animating out; the card reverses its enter tween off this.
     public IReadable<bool> Exiting { get; }
 

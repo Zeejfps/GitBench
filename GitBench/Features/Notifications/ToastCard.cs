@@ -13,9 +13,9 @@ namespace GitBench.Features.Notifications;
 
 /// <summary>
 /// One toast: a compact, content-sized card with a severity-colored icon, the message, an optional
-/// action, and — only for sticky toasts — a dismiss button. Fades and rises in on appear; transient
-/// toasts also show a thin countdown bar. Severity maps to icon + accent here (a view concern); the
-/// view model carries only the data.
+/// action, and — only for sticky toasts — a dismiss button. Fades and rises in on appear, fades and
+/// sinks out on dismiss. Severity maps to icon + accent here (a view concern); the view model
+/// carries only the data.
 /// </summary>
 internal sealed record ToastCard : Widget<ToastCardState>
 {
@@ -25,7 +25,7 @@ internal sealed record ToastCard : Widget<ToastCardState>
     protected override ToastCardState CreateState(Context ctx)
     {
         var vm = ctx.Require<ToastItemViewModel>();
-        return new ToastCardState(ctx.Require<IFrameTicker>(), vm.DurationSeconds, vm.Exiting);
+        return new ToastCardState(ctx.Require<IFrameTicker>(), vm.Exiting);
     }
 
     protected override IWidget Build(Context ctx, ToastCardState state)
@@ -59,13 +59,6 @@ internal sealed record ToastCard : Widget<ToastCardState>
         if (vm.HasAction) row.Add(ActionButton(vm));
         if (vm.ShowDismiss) row.Add(DismissButton(vm));
 
-        var content = new List<IWidget>
-        {
-            new Row { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Center, Children = row.ToArray() },
-        };
-        if (state.Countdown is { } countdown)
-            content.Add(CountdownBar(countdown, accent));
-
         return new Box
         {
             MinWidth = MinCardWidth,
@@ -91,41 +84,12 @@ internal sealed record ToastCard : Widget<ToastCardState>
                     Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Sm, Bottom = Spacing.Sm },
                     Children =
                     [
-                        new Column { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Stretch, Children = content.ToArray() },
+                        new Row { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Center, Children = row.ToArray() },
                     ],
                 },
             ],
         };
     }
-
-    // A thin bar whose accent fill depletes left-to-right over the toast's lifetime. Proportional
-    // fill via two flex weights, so it needs no pixel width — works with the content-sized card.
-    private static IWidget CountdownBar(Tween countdown, Func<ThemeStyles, uint> accent) => new Box
-    {
-        Height = 2,
-        BorderRadius = BorderRadiusStyle.All(1),
-        Background = Theme.Color(s => s.Palette.BorderSubtle),
-        Children =
-        [
-            new Row
-            {
-                CrossAxis = CrossAxisAlignment.Stretch,
-                Children =
-                [
-                    new Grow
-                    {
-                        Factor = countdown.Progress.Bind(p => 1f - p),
-                        Child = new Box { BorderRadius = BorderRadiusStyle.All(1), Background = Theme.Color(accent) },
-                    },
-                    new Grow
-                    {
-                        Factor = Prop.Bind(countdown.Progress),
-                        Child = new Box(),
-                    },
-                ],
-            },
-        ],
-    };
 
     private static IWidget ActionButton(ToastItemViewModel vm) => new ButtonWidget
     {
@@ -164,25 +128,18 @@ internal sealed record ToastCard : Widget<ToastCardState>
 }
 
 /// <summary>
-/// Per-card animation state (auto-disposed on unmount): the enter fade/slide, and — for transient
-/// toasts — a countdown that drives the depleting bar. Both stop ticking once finished.
+/// Per-card animation state (auto-disposed on unmount): the enter fade/slide tween, reversed on
+/// dismiss to fade/slide out. Stops ticking once finished.
 /// </summary>
 internal sealed class ToastCardState : IDisposable
 {
     public Tween Enter { get; }
-    public Tween? Countdown { get; }
     private readonly IDisposable _exitSub;
 
-    public ToastCardState(IFrameTicker ticker, float lifetimeSeconds, IReadable<bool> exiting)
+    public ToastCardState(IFrameTicker ticker, IReadable<bool> exiting)
     {
         Enter = new Tween(ticker, 0.3f, Easings.EaseOutCubic);
         Enter.Play();
-
-        if (lifetimeSeconds > 0f)
-        {
-            Countdown = new Tween(ticker, lifetimeSeconds, Easings.Linear);
-            Countdown.Play();
-        }
 
         // Run the enter tween backwards (fade + slide out) once the toast is dismissed. Subscribe
         // fires immediately with the current value (false → no-op), then again when it flips true.
@@ -193,6 +150,5 @@ internal sealed class ToastCardState : IDisposable
     {
         _exitSub.Dispose();
         Enter.Dispose();
-        Countdown?.Dispose();
     }
 }
