@@ -121,20 +121,30 @@ internal sealed record CleanBranchesDialog : Widget
         };
     }
 
+    // A checkable row per branch in the preview, so the user can spare individual branches that
+    // meet the category criteria. The local State seeds from the VM before Changed is wired, so the
+    // initial paint doesn't fire a phantom toggle.
+    private static IWidget BuildBranchRow(CleanBranchesDialogViewModel vm, CleanBranchCandidate candidate)
+    {
+        var isChecked = new State<bool>(vm.IsBranchChecked(candidate.Name));
+        isChecked.Changed += _ => vm.ToggleBranch(candidate.Name);
+        return new CheckboxWidget
+        {
+            Label = candidate.Name,
+            Checked = isChecked,
+            Height = Sizes.RowHeight,
+        }.WithController<KbmController>();
+    }
+
     private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm)
     {
         var theme = ctx.Theme();
 
-        var column = new Column<string>
+        var column = new Column<CleanBranchCandidate>
         {
             Gap = Spacing.Hair,
-            Items = Prop.Bind(vm.SelectedNames),
-            Template = name => new Text
-            {
-                Value = name,
-                VAlign = TextAlignment.Center,
-                Color = Theme.Color(t => t.FileChangeRow.RowText),
-            },
+            Items = Prop.Bind(vm.VisibleCandidates),
+            Template = candidate => BuildBranchRow(vm, candidate),
         }.BuildView(ctx);
 
         var scrollPane = new VerticalScrollPane();

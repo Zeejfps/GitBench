@@ -31,12 +31,18 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
     public State<bool> CleanNeverPushed { get; } = new(false);
     public State<bool> Force { get; } = new(true);
 
+    // Branch names the user has individually unchecked while their category is still enabled.
+    private readonly State<IReadOnlySet<string>> _unchecked = new(new HashSet<string>());
+
+    private readonly Derived<IReadOnlyList<CleanBranchCandidate>> _visibleCandidates;
     private readonly Derived<IReadOnlyList<string>> _selectedNames;
     private readonly Derived<string> _selectedHeader;
     private readonly Derived<string> _actionLabel;
     private readonly Derived<bool> _canClean;
 
-    public IReadable<IReadOnlyList<string>> SelectedNames => _selectedNames;
+    // The rows shown in the dialog — candidates whose category is enabled. Kept independent of the
+    // per-branch unchecks so toggling one branch doesn't rebuild (and re-seed) the whole list.
+    public IReadable<IReadOnlyList<CleanBranchCandidate>> VisibleCandidates => _visibleCandidates;
     public IReadable<string> SelectedHeader => _selectedHeader;
     public IReadable<string> ActionLabel => _actionLabel;
 
@@ -65,8 +71,17 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
         // PR, so default them on; never-pushed branches may be only-local work, so default off.
         CleanDisconnected = new State<bool>(DisconnectedCount > 0);
 
+        _visibleCandidates = new Derived<IReadOnlyList<CleanBranchCandidate>>(() =>
+            _candidates.Where(c => IsKindSelected(c.Kind)).ToList());
+
         _selectedNames = new Derived<IReadOnlyList<string>>(() =>
-            _candidates.Where(c => IsKindSelected(c.Kind)).Select(c => c.Name).ToList());
+        {
+            var excluded = _unchecked.Value;
+            return _visibleCandidates.Value
+                .Where(c => !excluded.Contains(c.Name))
+                .Select(c => c.Name)
+                .ToList();
+        });
 
         _selectedHeader = new Derived<string>(() =>
         {
@@ -90,6 +105,17 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
         _ => false,
     };
 
+    public bool IsBranchChecked(string name) => !_unchecked.Value.Contains(name);
+
+    public void ToggleBranch(string name)
+    {
+        var next = new HashSet<string>(_unchecked.Value);
+        if (!next.Add(name)) next.Remove(name);
+        _unchecked.Value = next;
+    }
+
+    private bool IsSelected(CleanBranchCandidate c) => IsKindSelected(c.Kind) && !_unchecked.Value.Contains(c.Name);
+
     private string? DoClean()
     {
         var force = Force.Value;
@@ -98,7 +124,7 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
 
         foreach (var c in _candidates)
         {
-            if (!IsKindSelected(c.Kind)) continue;
+            if (!IsSelected(c)) continue;
             GitOutcome outcome;
             try { outcome = _gitService.DeleteBranch(_repo, c.Name, force); }
             catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
@@ -132,6 +158,8 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
         _actionLabel.Dispose();
         _selectedHeader.Dispose();
         _selectedNames.Dispose();
+        _visibleCandidates.Dispose();
+        _unchecked.Dispose();
         CleanDisconnected.Dispose();
         CleanNeverPushed.Dispose();
         Force.Dispose();
