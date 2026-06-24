@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
@@ -771,6 +772,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                         s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, Empty),
                 });
                 _bus.Broadcast(new CommitCreatedMessage(repo.Id));
+                _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCommitCreated)));
             },
             lane: _commitGen);
     }

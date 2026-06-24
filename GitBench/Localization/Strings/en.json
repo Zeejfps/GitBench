@@ -2,6 +2,17 @@
   "about.view_on_github": "View on GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "Pushed",
+  "toast.pulled": "Pulled",
+  "toast.fetched": "Fetched",
+  "toast.commit_created": "Commit created",
+  "toast.branch_deleted": "Branch deleted",
+  "toast.branch_reset": "Branch reset",
+  "toast.changes_discarded": "Changes discarded",
+  "toast.changes_stashed": "Changes stashed",
+  "toast.tag_created": "Tag created",
+  "toast.dismiss": "Dismiss",
+
   "files.stage": { "one": "Stage", "other": "Stage {count} Files" },
   "files.unstage": { "one": "Unstage", "other": "Unstage {count} Files" },
   "files.discard": { "one": "Discard…", "other": "Discard {count} Files…" },

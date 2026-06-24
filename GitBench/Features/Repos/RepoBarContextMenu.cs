@@ -27,6 +27,17 @@ public static class RepoBarContextMenu
 
     public static readonly Item Separator = new(string.Empty, static () => { }, IsSeparator: true);
 
+    /// <summary>
+    /// Projects a <see cref="RowAction"/> into a menu item, deriving the shortcut hint from the
+    /// action's gesture so the menu and the keyboard never disagree about a key.
+    /// </summary>
+    public static Item ToItem(RowAction action) => new(
+        action.Label,
+        action.Invoke,
+        action.Icon,
+        action.Enabled,
+        Shortcut: action.Gesture?.Display);
+
     public static IOpenedContextMenu? Show(Context context, PointF anchor, IReadOnlyList<Item> items, MenuPlacement placement = MenuPlacement.Below)
     {
         if (items.Count == 0) return null;

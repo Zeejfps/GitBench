@@ -2,6 +2,17 @@
   "about.view_on_github": "العرض على GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "تم الدفع",
+  "toast.pulled": "تم السحب",
+  "toast.fetched": "تم الجلب",
+  "toast.commit_created": "تم إنشاء الإيداع",
+  "toast.branch_deleted": "تم حذف الفرع",
+  "toast.branch_reset": "تمت إعادة تعيين الفرع",
+  "toast.changes_discarded": "تم تجاهل التغييرات",
+  "toast.changes_stashed": "تم إخفاء التغييرات",
+  "toast.tag_created": "تم إنشاء الوسم",
+  "toast.dismiss": "إغلاق",
+
   "files.stage": {
     "one": "تجهيز",
     "two": "تجهيز ملفين",

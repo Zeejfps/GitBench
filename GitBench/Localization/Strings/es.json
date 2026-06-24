@@ -2,6 +2,17 @@
   "about.view_on_github": "Ver en GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "Enviado",
+  "toast.pulled": "Extraído",
+  "toast.fetched": "Obtenido",
+  "toast.commit_created": "Confirmación creada",
+  "toast.branch_deleted": "Rama eliminada",
+  "toast.branch_reset": "Rama restablecida",
+  "toast.changes_discarded": "Cambios descartados",
+  "toast.changes_stashed": "Cambios guardados en stash",
+  "toast.tag_created": "Etiqueta creada",
+  "toast.dismiss": "Cerrar",
+
   "files.stage": { "one": "Preparar", "other": "Preparar {count} archivos" },
   "files.unstage": { "one": "Quitar de preparados", "other": "Quitar {count} archivos de preparados" },
   "files.discard": { "one": "Descartar…", "other": "Descartar {count} archivos…" },

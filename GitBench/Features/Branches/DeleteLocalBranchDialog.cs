@@ -24,7 +24,8 @@ internal sealed record DeleteLocalBranchDialog : Widget
             new DeleteLocalBranchRequest(Repo, BranchName, UpstreamRemote, UpstreamBranch),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;
         var body = new List<IWidget>

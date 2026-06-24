@@ -1,5 +1,7 @@
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -17,7 +19,8 @@ internal sealed class ResetCommitDialogViewModel : IDialogViewModel
         ResetCommitRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         Reset = AsyncCommand.ForOutcome(
             dispatcher,
@@ -30,6 +33,7 @@ internal sealed class ResetCommitDialogViewModel : IDialogViewModel
             {
                 bus.Broadcast(new RefsChangedMessage(request.Repo.Id));
                 bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(loc.Strings.Value.ToastBranchReset)));
                 CloseRequested?.Invoke();
             });
     }

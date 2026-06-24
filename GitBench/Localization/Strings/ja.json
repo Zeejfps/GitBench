@@ -2,6 +2,17 @@
   "about.view_on_github": "GitHubで表示",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "プッシュしました",
+  "toast.pulled": "プルしました",
+  "toast.fetched": "フェッチしました",
+  "toast.commit_created": "コミットを作成しました",
+  "toast.branch_deleted": "ブランチを削除しました",
+  "toast.branch_reset": "ブランチをリセットしました",
+  "toast.changes_discarded": "変更を破棄しました",
+  "toast.changes_stashed": "変更をスタッシュしました",
+  "toast.tag_created": "タグを作成しました",
+  "toast.dismiss": "閉じる",
+
   "files.stage": { "one": "ステージ", "other": "{count}個のファイルをステージ" },
   "files.unstage": { "one": "ステージ解除", "other": "{count}個のファイルをステージ解除" },
   "files.discard": { "one": "破棄…", "other": "{count}個のファイルを破棄…" },

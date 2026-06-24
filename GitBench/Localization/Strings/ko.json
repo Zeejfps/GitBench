@@ -2,6 +2,17 @@
   "about.view_on_github": "GitHub에서 보기",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "푸시 완료",
+  "toast.pulled": "풀 완료",
+  "toast.fetched": "가져오기 완료",
+  "toast.commit_created": "커밋 생성됨",
+  "toast.branch_deleted": "브랜치 삭제됨",
+  "toast.branch_reset": "브랜치 재설정됨",
+  "toast.changes_discarded": "변경 사항 폐기됨",
+  "toast.changes_stashed": "변경 사항 스태시됨",
+  "toast.tag_created": "태그 생성됨",
+  "toast.dismiss": "닫기",
+
   "files.stage": { "one": "스테이징", "other": "파일 {count}개 스테이징" },
   "files.unstage": { "one": "스테이징 해제", "other": "파일 {count}개 스테이징 해제" },
   "files.discard": { "one": "폐기…", "other": "파일 {count}개 폐기…" },

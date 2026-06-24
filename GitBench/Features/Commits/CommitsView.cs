@@ -11,6 +11,7 @@ using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Widgets;
+using ZGF.KeyboardModule;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -167,6 +168,9 @@ internal sealed record CommitsView : Widget
                 _ => { },
                 () => { },
                 () => { });
+            // Keyboard shortcuts for the selected commit (cherry-pick, revert, create branch/tag),
+            // sharing one definition with the context menu so the keys and hints can't drift.
+            _arrowController.RowActions = SelectedCommitActions;
             this.UseController(input, _arrowController);
 
             this.UseViewModel(() => vm, _ => { });
@@ -849,29 +853,40 @@ internal sealed record CommitsView : Widget
                 }
             }
 
-            items.Add(new RepoBarContextMenu.Item(
-                s.CommitsContextCreateBranch,
-                () => _vm.RequestCreateBranch(capturedSha),
-                LucideIcons.Branch));
-
-            items.Add(new RepoBarContextMenu.Item(
-                s.CommitsContextCreateTag,
-                () => _vm.RequestCreateTag(capturedSha),
-                LucideIcons.Tag));
+            // Create / apply actions share one definition with the keyboard (see CommitActionsFor),
+            // so their menu shortcut hints derive from the same gestures the list dispatches on.
+            var actions = CommitActionsFor(capturedSha);
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateBranch));
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateTag));
 
             // Apply-this-commit actions. Both run immediately (no dialog): they're non-destructive
             // and any conflict is recoverable via the operation banner, so no "…" suffix.
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(new RepoBarContextMenu.Item(
-                s.CommitsContextCherryPick,
-                () => _vm.RequestCherryPick(capturedSha),
-                LucideIcons.Copy));
-            items.Add(new RepoBarContextMenu.Item(
-                s.CommitsContextRevert,
-                () => _vm.RequestRevert(capturedSha),
-                LucideIcons.Undo));
+            items.Add(RepoBarContextMenu.ToItem(actions.CherryPick));
+            items.Add(RepoBarContextMenu.ToItem(actions.Revert));
 
             return items;
+        }
+
+        // The shortcut-bearing commit actions, defined once for both the context menu (per row under
+        // the cursor) and the keyboard (for the selected row). Reset/move-branch stay menu-only: they
+        // can act destructively, so they don't get a bare-letter key. Plain letters, active only while
+        // the focused list owns the keyboard.
+        private (RowAction CreateBranch, RowAction CreateTag, RowAction CherryPick, RowAction Revert) CommitActionsFor(string sha)
+        {
+            var s = _loc.Strings.Value;
+            return (
+                new RowAction(s.CommitsContextCreateBranch, () => _vm.RequestCreateBranch(sha), LucideIcons.Branch, new KeyGesture(KeyboardKey.B)),
+                new RowAction(s.CommitsContextCreateTag, () => _vm.RequestCreateTag(sha), LucideIcons.Tag, new KeyGesture(KeyboardKey.T)),
+                new RowAction(s.CommitsContextCherryPick, () => _vm.RequestCherryPick(sha), LucideIcons.Copy, new KeyGesture(KeyboardKey.C)),
+                new RowAction(s.CommitsContextRevert, () => _vm.RequestRevert(sha), LucideIcons.Undo, new KeyGesture(KeyboardKey.V)));
+        }
+
+        private IReadOnlyList<RowAction> SelectedCommitActions()
+        {
+            if (_selectedSha is not { } sha) return Array.Empty<RowAction>();
+            var a = CommitActionsFor(sha);
+            return [a.CreateBranch, a.CreateTag, a.CherryPick, a.Revert];
         }
 
         // Distinct local-branch names across the snapshot, sorted for a stable submenu order.

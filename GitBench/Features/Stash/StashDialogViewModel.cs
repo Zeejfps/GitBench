@@ -1,5 +1,6 @@
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -18,6 +19,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private readonly HashSet<string> _untrackedPaths = new();
+    private readonly string _doneToast;
 
     public IReadable<IReadOnlyList<StashFileRow>> Files { get; }
     public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
@@ -42,6 +44,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         _gitService = gitService;
         _bus = bus;
         var strings = loc.Strings.Value;
+        _doneToast = strings.ToastChangesStashed;
 
         var snapshot = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
             ? ok.Value
@@ -101,6 +104,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
     {
         _bus.Broadcast(new RefsChangedMessage(_repo.Id));
         _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
         CloseRequested?.Invoke();
     }
 

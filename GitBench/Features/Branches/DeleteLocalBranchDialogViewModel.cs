@@ -1,5 +1,7 @@
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -10,6 +12,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
     private readonly DeleteLocalBranchRequest _request;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly ILocalizationService _loc;
     // Plain field, not a State<T>: it carries the remote-delete outcome out of the background
     // work lambda into the UI-thread OnDeleteSucceeded callback. The work runs on a worker
     // thread and completes before AsyncCommand posts the callback, so the read sees the write —
@@ -28,11 +31,13 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
         DeleteLocalBranchRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        ILocalizationService loc)
     {
         _request = request;
         _gitService = gitService;
         _bus = bus;
+        _loc = loc;
 
         HasUpstream = !string.IsNullOrEmpty(request.UpstreamRemote)
                       && !string.IsNullOrEmpty(request.UpstreamBranch);
@@ -71,7 +76,10 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
             _bus.Broadcast(new ShowOperationErrorMessage(
                 "Remote delete failed",
                 failed.Message));
+            return;
         }
+
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastBranchDeleted)));
     }
 
     public void Dispose() { }

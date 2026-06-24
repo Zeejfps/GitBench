@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -51,6 +52,7 @@ internal sealed class CreateTagDialogViewModel : IDisposable
             onSuccess: () =>
             {
                 bus.Broadcast(new RefsChangedMessage(repoId));
+                bus.Broadcast(new ShowToastMessage(ToastIntent.Success(loc.Strings.Value.ToastTagCreated)));
                 CloseRequested?.Invoke();
             },
             gate: gate);

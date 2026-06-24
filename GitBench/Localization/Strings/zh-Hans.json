@@ -2,6 +2,17 @@
   "about.view_on_github": "在 GitHub 上查看",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "toast.pushed": "已推送",
+  "toast.pulled": "已拉取",
+  "toast.fetched": "已获取",
+  "toast.commit_created": "已创建提交",
+  "toast.branch_deleted": "已删除分支",
+  "toast.branch_reset": "已重置分支",
+  "toast.changes_discarded": "已丢弃更改",
+  "toast.changes_stashed": "已贮藏更改",
+  "toast.tag_created": "已创建标签",
+  "toast.dismiss": "关闭",
+
   "files.stage": { "one": "暂存", "other": "暂存 {count} 个文件" },
   "files.unstage": { "one": "取消暂存", "other": "取消暂存 {count} 个文件" },
   "files.discard": { "one": "丢弃…", "other": "丢弃 {count} 个文件…" },

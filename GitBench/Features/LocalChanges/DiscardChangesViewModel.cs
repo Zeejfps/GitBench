@@ -1,4 +1,5 @@
 using GitBench.Features.Commits;
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -14,6 +15,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
     private readonly Repo _repo;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly string _doneToast;
 
     public IReadable<IReadOnlyList<DiscardFileRow>> Files { get; }
     public IReadable<IReadOnlySet<string>> CheckedPaths { get; }
@@ -34,6 +36,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         _gitService = gitService;
         _bus = bus;
         var strings = loc.Strings.Value;
+        _doneToast = strings.ToastChangesDiscarded;
 
         var rows = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
             ? BuildRows(ok.Value)
@@ -76,6 +79,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
     private void OnDiscardSucceeded()
     {
         _bus.Broadcast(new WorkingTreeChangedMessage(_repo.Id));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_doneToast)));
         CloseRequested?.Invoke();
     }
 

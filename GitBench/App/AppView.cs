@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
+using GitBench.Features.Notifications;
 using GitBench.Features.StatusBar;
 using GitBench.Localization;
 using ZGF.Gui;
@@ -37,6 +38,7 @@ internal sealed record AppView : Widget
             Children =
             [
                 frame,
+                new ToastHostView(),
                 new DragOverlay(),
                 new DialogSurface(),
                 new DiffWindowsView(),

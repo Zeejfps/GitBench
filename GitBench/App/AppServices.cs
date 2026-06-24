@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
@@ -86,6 +87,13 @@ internal static class AppServices
             var store = ctx.Require<RepoStatusStore>();
             store.Start(ctx.Require<IUiDispatcher>());
             return store;
+        }, eager: true);
+
+        context.AddSingleton<IToastService>(ctx =>
+        {
+            var toasts = ctx.Require<ToastService>();
+            toasts.Start(ctx.Require<IUiDispatcher>());
+            return toasts;
         }, eager: true);
 
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(

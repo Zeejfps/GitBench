@@ -1,3 +1,4 @@
+using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -103,7 +104,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         var s = Get(repo.Id);
         if (s.Value.IsPushing) return;
         s.Value = s.Value with { IsPushing = true, PendingError = null };
-        Run(repo, _loc.Strings.Value.ReposErrorPushFailed,
+        Run(repo, _loc.Strings.Value.ReposErrorPushFailed, _loc.Strings.Value.ToastPushed,
             () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsPushing = false });
     }
@@ -114,7 +115,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         if (s.Value.IsPulling) return;
         s.Value = s.Value with { IsPulling = true, PendingError = null };
         var strings = _loc.Strings.Value;
-        Run(repo, strings.ReposErrorPullFailed,
+        Run(repo, strings.ReposErrorPullFailed, strings.ToastPulled,
             () => _git.Pull(repo, strategy) switch
             {
                 PullOutcome.Failed f => (false, f.Message, false),
@@ -129,7 +130,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         var s = Get(repo.Id);
         if (s.Value.IsFetching) return;
         s.Value = s.Value with { IsFetching = true, PendingError = null };
-        Run(repo, _loc.Strings.Value.ReposErrorFetchFailed,
+        Run(repo, _loc.Strings.Value.ReposErrorFetchFailed, _loc.Strings.Value.ToastFetched,
             () => _git.Fetch(repo) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
             st => st with { IsFetching = false });
     }
@@ -172,6 +173,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
     private void Run(
         Repo repo,
         string failureTitle,
+        string successMessage,
         Func<(bool Success, string? Error, bool Diverged)> work,
         Func<RepoOperations, RepoOperations> clearInFlight)
     {
@@ -184,13 +186,14 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
             bool diverged = false;
             try { (success, error, diverged) = work(); }
             catch (Exception ex) { error = ex.Message; }
-            dispatcher.Post(() => Complete(repo, failureTitle, clearInFlight, success, error, diverged));
+            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, success, error, diverged));
         });
     }
 
     private void Complete(
         Repo repo,
         string failureTitle,
+        string successMessage,
         Func<RepoOperations, RepoOperations> clearInFlight,
         bool success,
         string? error,
@@ -204,6 +207,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         {
             s.Value = next with { PendingError = null };
             _bus.Broadcast(new RefsChangedMessage(repo.Id));
+            _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(successMessage)));
             return;
         }
 
