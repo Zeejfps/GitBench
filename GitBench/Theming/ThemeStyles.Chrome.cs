@@ -106,7 +106,7 @@ public partial record ThemeStyles
             TrackBorder: p.Border,
             ThumbIdleBackground: p.BorderMuted,
             ThumbHoverBackground: p.BorderMutedHover,
-            ThumbBorder: p.ScrollBarThumbBorder);
+            ThumbBorder: p.BorderSubtle);
 
     private static SidebarSplitterStyles BuildSidebarSplitter(ThemePalette p) =>
         new(

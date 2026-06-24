@@ -16,6 +16,7 @@ public partial record ThemeStyles
             SurfaceSelected: 0xFF4F46E5u,
             SurfaceSelectedSubtle: 0xFFE0E7FFu,
             Border: 0xFFE5E7EBu,
+            BorderSubtle: 0xFFE5E7EBu,
             BorderStrong: 0xFFD1D5DBu,
             BorderMuted: 0xFFC1C5CBu,
             BorderMutedHover: 0xFF9CA3AFu,
@@ -39,11 +40,9 @@ public partial record ThemeStyles
             HunkOutline: 0xFF3B82F6u,
             Selection: 0xFFCBD5E1u,
             Placeholder: WithAlpha(textMutedLight, 0x80),
-            DialogHeaderSeparator: 0xFFE5E7EBu,
             CheckboxBorderIdle: 0xFFD1D5DBu,
             CheckboxDisabledFill: 0xFFE5E7EBu,
-            ScrollBarTrackBg: 0xFFF3F4F6u,
-            ScrollBarThumbBorder: 0xFFE5E7EBu);
+            ScrollBarTrackBg: 0xFFF3F4F6u);
 
         var status = new StatusPalette(
             Success: 0xFF16A34Au,

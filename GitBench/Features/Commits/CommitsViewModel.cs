@@ -102,8 +102,8 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // Up/Down arrow navigation through the loaded commit list. Moves the single selection
     // by <paramref name="delta"/> rows, clamped to the snapshot bounds. With nothing
     // selected yet, a Down lands on the first commit and an Up on the last so the cursor
-    // has a visible start. Mirrors CommitDetailsViewModel.MoveSelection; the view scrolls
-    // the new selection into view via its SelectedSha subscription.
+    // has a visible start. The view scrolls the new selection into view via its SelectedSha
+    // subscription.
     public void MoveSelection(int delta)
     {
         // Navigate the rendered list so arrows step through visible (filtered) rows only.

@@ -176,7 +176,7 @@ public partial record ThemeStyles
             Background: p.Surface,
             Border: p.Border,
             TitleText: p.TextPrimary,
-            HeaderSeparator: p.DialogHeaderSeparator,
+            HeaderSeparator: p.BorderSubtle,
             ErrorText: status.DialogError,
             WarningText: status.DialogWarning,
             InsetBackground: p.SurfaceSunken,

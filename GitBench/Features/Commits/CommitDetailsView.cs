@@ -64,6 +64,15 @@ internal sealed class CommitDetailsView : ContainerView
             South = headerHScrollBar,
         };
 
+        var viewModeIcon = Prop.Bind<string?>(() =>
+            vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
+        var viewModeButton = new LocalChangesHeaderActionButton
+        {
+            Icon = viewModeIcon,
+            Command = vm.ToggleViewMode,
+            Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
+        }.BuildView(ctx);
+
         _changesSection = new FileChangesSection(
             ctx,
             "Changes",
@@ -72,7 +81,8 @@ internal sealed class CommitDetailsView : ContainerView
             {
                 _vm?.SelectFile(f.Path);
                 _arrowController.TakeFocus();
-            });
+            },
+            headerActions: [viewModeButton]);
 
         var innerSplitterHovered = new State<bool>(false);
         var innerSplitter = new RectView();
@@ -131,12 +141,16 @@ internal sealed class CommitDetailsView : ContainerView
         this.Use(() => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
 
         // Up/Down arrow navigation over the Changes list, mirroring the local-changes panels.
-        // The list is a flat single-select list, so there are no folders to expand and no
-        // stage/discard actions — only row movement is wired.
+        // Single-select with no stage/discard actions; arrows step through the visible file
+        // rows only (folder rows are toggled by mouse, skipped by the keyboard).
         _arrowController = new ListArrowKbmController(
             this,
             input,
-            (delta, _) => _vm?.MoveSelection(delta),
+            (delta, _) =>
+            {
+                var next = _changesSection.NextFilePath(_selectedPath.Value, delta);
+                if (next != null) _vm?.SelectFile(next);
+            },
             _ => { },
             () => { },
             () => { });
@@ -158,6 +172,7 @@ internal sealed class CommitDetailsView : ContainerView
         if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
         this.Bind(vm.RenderState, SetRenderState);
+        this.Bind(vm.ViewMode, _changesSection.SetViewMode);
         this.Bind(vm.SelectedPath, path =>
         {
             _selectedPath.Value = path;

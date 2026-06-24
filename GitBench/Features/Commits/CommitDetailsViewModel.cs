@@ -1,5 +1,7 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
@@ -19,7 +21,8 @@ public abstract record CommitDetailsRenderState
 internal sealed record CommitDetailsState(
     CommitDetailsRenderState Render,
     string? SelectedPath,
-    DiffTarget? SelectedTarget);
+    DiffTarget? SelectedTarget,
+    FileViewMode ViewMode);
 
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 {
@@ -27,6 +30,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
+    private readonly PreferencesService _preferences;
     private string? _currentSha;
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
@@ -35,6 +39,8 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public IReadable<CommitDetailsRenderState> RenderState { get; }
     public IReadable<string?> SelectedPath { get; }
     public IReadable<DiffTarget?> SelectedTarget { get; }
+    public IReadable<FileViewMode> ViewMode { get; }
+    public Command ToggleViewMode { get; }
     public DiffViewModel DiffVm { get; }
 
     public CommitDetailsViewModel(
@@ -42,21 +48,35 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        PreferencesService preferences)
         : base(dispatcher, new CommitDetailsState(
-            new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection), null, null))
+            new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
+            null, null, preferences.Current.FileViewMode))
     {
         _gitService = gitService;
         _registry = registry;
         _bus = bus;
         _loc = loc;
+        _preferences = preferences;
 
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
         SelectedTarget = Slice(s => s.SelectedTarget);
+        ViewMode = Slice(s => s.ViewMode);
+        ToggleViewMode = new Command(DoToggleViewMode);
 
         DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, loc: loc);
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
+    }
+
+    // Shares the global tree/flat preference with the Local Changes panels so the choice is
+    // consistent app-wide and persists across launches.
+    private void DoToggleViewMode()
+    {
+        var next = State.Value.ViewMode == FileViewMode.Flat ? FileViewMode.Tree : FileViewMode.Flat;
+        _preferences.SetFileViewMode(next);
+        Update(s => s with { ViewMode = next });
     }
 
     public override void Dispose()
@@ -73,28 +93,6 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             SelectedPath = path,
             SelectedTarget = new DiffTarget(path, DiffSide.Commit, _currentSha),
         });
-    }
-
-    // Up/Down arrow navigation through the loaded file list. Moves the single selection by
-    // <paramref name="delta"/> rows, clamped to the list bounds. With nothing selected yet, a
-    // Down lands on the first row and an Up on the last so the cursor has a visible start.
-    public void MoveSelection(int delta)
-    {
-        if (State.Value.Render is not CommitDetailsRenderState.Loaded loaded) return;
-        var files = loaded.Details.Files;
-        if (files.Count == 0) return;
-
-        var current = State.Value.SelectedPath;
-        var index = current == null ? -1 : IndexOfPath(files, current);
-        var next = ListNavigation.NextIndex(files.Count, index, delta);
-        SelectFile(files[next].Path);
-    }
-
-    private static int IndexOfPath(IReadOnlyList<FileChange> files, string path)
-    {
-        for (var i = 0; i < files.Count; i++)
-            if (files[i].Path == path) return i;
-        return -1;
     }
 
     private void OnCommitSelected(CommitSelectedMessage msg)

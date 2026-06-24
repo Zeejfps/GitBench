@@ -10,6 +10,7 @@ public sealed record ThemePalette(
     uint SurfaceSelected,
     uint SurfaceSelectedSubtle,
     uint Border,
+    uint BorderSubtle,
     uint BorderStrong,
     uint BorderMuted,
     uint BorderMutedHover,
@@ -33,11 +34,9 @@ public sealed record ThemePalette(
     uint HunkOutline,
     uint Selection,
     uint Placeholder,
-    uint DialogHeaderSeparator,
     uint CheckboxBorderIdle,
     uint CheckboxDisabledFill,
-    uint ScrollBarTrackBg,
-    uint ScrollBarThumbBorder);
+    uint ScrollBarTrackBg);
 
 public sealed record StatusPalette(
     uint Success,

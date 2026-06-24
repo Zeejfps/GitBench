@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
+using GitBench.Git;
 using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -24,6 +25,10 @@ namespace GitBench.Features.LocalChanges;
 /// below. Row drawing is delegated to <see cref="FileChangesUI.DrawFileRow"/> so the visual
 /// stays in lockstep with the staged/unstaged panels in <c>LocalChangesView</c>.
 ///
+/// Renders either a flat list or a collapsible folder tree (see <see cref="SetViewMode"/>);
+/// the row sequence is produced by the shared <see cref="FileTreeBuilder"/> so both flavors
+/// match the local-changes panels. Collapse state is kept locally on the view.
+///
 /// Optionally selectable: pass <paramref name="selectedPath"/> + <paramref name="onRowClicked"/>
 /// to make rows highlight against an external selection and dispatch clicks back. Submodule
 /// pointer rows handle their own click (activate the submodule + broadcast
@@ -45,6 +50,12 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly Action<FileChange>? _onRowClicked;
 
     private IReadOnlyList<FileChange> _files = Array.Empty<FileChange>();
+    private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
+    private FileViewMode _viewMode = FileViewMode.Flat;
+    private readonly HashSet<string> _collapsed = new();
+    private View _currentBody = null!;
+    private string? _lastChevronTogglePath;
+    private int _lastChevronToggleTick;
 
     private readonly TextStyle _statusIconStyle = new()
     {
@@ -62,6 +73,20 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     {
         VerticalAlignment = TextAlignment.Center,
         HorizontalAlignment = TextAlignment.Start,
+    };
+    private readonly TextStyle _chevronStyle = new()
+    {
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = 11f,
+        HorizontalAlignment = TextAlignment.Center,
+        VerticalAlignment = TextAlignment.Center,
+    };
+    private readonly TextStyle _folderIconStyle = new()
+    {
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = 13f,
+        HorizontalAlignment = TextAlignment.Start,
+        VerticalAlignment = TextAlignment.Center,
     };
 
     private FileChangeRowStyles _rowStyles = ThemeStyles.Dark.FileChangeRow;
@@ -83,7 +108,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         string title,
         string emptyText = "(none)",
         IReadable<string?>? selectedPath = null,
-        Action<FileChange>? onRowClicked = null)
+        Action<FileChange>? onRowClicked = null,
+        IReadOnlyList<View>? headerActions = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -105,13 +131,40 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
         _bodyContainer = new RectView();
         _bodyContainer.Children.Add(_emptyPlaceholder);
+        _currentBody = _emptyPlaceholder;
 
         _scrollBar = ScrollBars.CreateVertical(ctx);
         _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
+        View headerContent;
+        if (headerActions is { Count: > 0 })
+        {
+            var actionRow = new FlexRowView
+            {
+                Gap = Spacing.Hair,
+                CrossAxisAlignment = CrossAxisAlignment.Center,
+            };
+            foreach (var action in headerActions)
+                actionRow.Children.Add(action);
+
+            headerContent = new FlexRowView
+            {
+                CrossAxisAlignment = CrossAxisAlignment.Center,
+                Children =
+                {
+                    new FlexItem { Grow = 1, Child = _headerText },
+                    actionRow,
+                },
+            };
+        }
+        else
+        {
+            headerContent = _headerText;
+        }
+
         AddChildToSelf(new BorderLayoutView
         {
-            North = FileChangesUI.CreateHeaderBar(ctx, _headerText),
+            North = FileChangesUI.CreateHeaderBar(ctx, headerContent),
             Center = _bodyContainer,
             East = _scrollBar,
             South = _hScrollBar,
@@ -128,6 +181,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             _rowStyles = s.FileChangeRow;
             _pathTextStyle.TextColor = _rowStyles.RowText;
             _pathTextActiveStyle.TextColor = _rowStyles.RowTextActive;
+            _chevronStyle.TextColor = _rowStyles.RowText;
+            _folderIconStyle.TextColor = _rowStyles.RowText;
             SetDirty();
         });
 
@@ -138,35 +193,64 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     {
         _files = files;
         _headerText.Text = FileChangesUI.FormatHeader(_title, files.Count);
-
-        _bodyContainer.Children.Clear();
-        if (files.Count == 0)
-        {
-            _bodyContainer.Children.Add(_emptyPlaceholder);
-            _list.ItemCount = 0;
-        }
-        else
-        {
-            _bodyContainer.Children.Add(_list);
-            _list.ItemCount = files.Count;
-        }
+        RebuildRows();
         _list.SetScrollY(0f);
-        _list.NotifyItemsChanged();
         NotifyScrollChanged();
+    }
+
+    public void SetViewMode(FileViewMode mode)
+    {
+        if (_viewMode == mode) return;
+        _viewMode = mode;
+        RebuildRows();
+        NotifyScrollChanged();
+    }
+
+    private void RebuildRows()
+    {
+        _rows = FileTreeBuilder.BuildRows(_files, DiffSide.Commit, _viewMode, _collapsed);
+        // Only swap the body on a real empty↔non-empty transition. Re-adding the list view
+        // churns its InputSystem controller registration and drops the hover path, so clicks
+        // stop landing until the cursor physically re-enters — keep it mounted across collapses.
+        SetBody(_rows.Count == 0 ? _emptyPlaceholder : _list);
+        _list.ItemCount = _rows.Count;
+        _list.NotifyItemsChanged();
+    }
+
+    private void SetBody(View body)
+    {
+        if (ReferenceEquals(_currentBody, body)) return;
+        _bodyContainer.Children.Clear();
+        _bodyContainer.Children.Add(body);
+        _currentBody = body;
     }
 
     // Scrolls just enough to bring the row for <paramref name="path"/> into view, so arrow-key
     // navigation that moves the selection past the viewport edge follows the cursor.
     public void EnsureRowVisible(string path)
     {
-        for (var i = 0; i < _files.Count; i++)
+        for (var i = 0; i < _rows.Count; i++)
         {
-            if (_files[i].Path == path)
+            var row = _rows[i];
+            if (row.Kind == FileRowKind.File && row.FullPath == path)
             {
                 _list.EnsureRowVisible(i);
                 return;
             }
         }
+    }
+
+    // Next file path for an Up/Down press, over the visible file rows only (so a file hidden
+    // under a collapsed folder is skipped). Null when there are no file rows.
+    public string? NextFilePath(string? current, int delta)
+    {
+        var paths = new List<string>(_rows.Count);
+        foreach (var row in _rows)
+            if (row.Kind == FileRowKind.File) paths.Add(row.FullPath);
+        if (paths.Count == 0) return null;
+
+        var index = current == null ? -1 : paths.IndexOf(current);
+        return paths[ListNavigation.NextIndex(paths.Count, index, delta)];
     }
 
     protected override void OnDrawSelf(ICanvas c)
@@ -178,9 +262,30 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
-        if (rowIndex < 0 || rowIndex >= _files.Count) return;
+        if (rowIndex < 0 || rowIndex >= _rows.Count) return;
 
-        var file = _files[rowIndex];
+        var row = _rows[rowIndex];
+        if (row.Kind == FileRowKind.Folder)
+        {
+            FileChangesUI.DrawFolderRow(
+                _canvas,
+                rowRect,
+                row.DisplayName,
+                row.Indent,
+                row.IsOpen,
+                isSelected: false,
+                state.IsHovered,
+                _rowStyles,
+                _chevronStyle,
+                _folderIconStyle,
+                _pathTextStyle,
+                _pathTextActiveStyle,
+                z,
+                isRtl: IsRtl);
+            return;
+        }
+
+        var file = row.File!;
         var isSelected = _selectedPath?.Value == file.Path;
         FileChangesUI.DrawFileRow(
             _canvas,
@@ -193,19 +298,65 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             _pathTextActiveStyle,
             _statusIconStyle,
             z,
+            row.DisplayName,
+            row.Indent,
+            reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl);
     }
 
-    private void OnRowClicked(int rowIndex, InputModifiers _, PointF __)
+    private void OnRowClicked(int rowIndex, InputModifiers _, PointF point)
     {
-        if (rowIndex < 0 || rowIndex >= _files.Count) return;
-        var file = _files[rowIndex];
+        if (rowIndex < 0 || rowIndex >= _rows.Count) return;
+        var row = _rows[rowIndex];
+
+        if (row.Kind == FileRowKind.Folder)
+        {
+            // A chevron hit and a click anywhere else on the folder row both toggle it — folders
+            // aren't a diff target, so there's nothing else a folder click could mean here.
+            if (IsChevronHit(row, point))
+            {
+                // RowClicked fires on every physical click, so a double-click would toggle twice
+                // (a net no-op). Swallow the second click of a double on the same chevron.
+                var now = Environment.TickCount;
+                if (_lastChevronTogglePath == row.FullPath
+                    && unchecked(now - _lastChevronToggleTick) <= _list.DoubleClickThresholdMs)
+                {
+                    _lastChevronTogglePath = null;
+                    return;
+                }
+                _lastChevronTogglePath = row.FullPath;
+                _lastChevronToggleTick = now;
+            }
+            ToggleFolder(row);
+            return;
+        }
+
+        var file = row.File!;
         if (file.Status == FileChangeStatus.Submodule && file.PointerChange is { } pc)
         {
             ActivateSubmoduleAndJump(file.Path, pc);
             return;
         }
         _onRowClicked?.Invoke(file);
+    }
+
+    private void ToggleFolder(FileRow row)
+    {
+        if (!_collapsed.Remove(row.FullPath)) _collapsed.Add(row.FullPath);
+        RebuildRows();
+        NotifyScrollChanged();
+    }
+
+    // The chevron occupies the indent + chevron column at the left of a folder row; a hit
+    // anywhere from the row's left edge through the chevron toggles (so the small triangle
+    // isn't a pixel-perfect target).
+    private bool IsChevronHit(FileRow row, PointF point)
+    {
+        var chevronRight = _list.Position.Left + FileChangesUI.RowPaddingLeft
+            + row.Indent + FileChangesUI.ChevronWidth + FileChangesUI.ChevronGap;
+        return IsRtl
+            ? point.X >= _list.Position.Left + _list.Position.Right - chevronRight
+            : point.X <= chevronRight;
     }
 
     // Compare-by-relative-path: a submodule's absolute path can vary across worktrees, so
@@ -247,7 +398,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     public void SetVerticalNormalizedScrollPosition(float normalized)
     {
-        var contentHeight = _files.Count * FileChangesUI.RowHeight;
+        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
         var bodyHeight = _list.Position.Height;
         var range = contentHeight - bodyHeight;
         _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
@@ -257,7 +408,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     private void NotifyScrollChanged()
     {
-        var contentHeight = _files.Count * FileChangesUI.RowHeight;
+        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
         var bodyHeight = _list.Position.Height;
 
         float vScale, normalizedY;
