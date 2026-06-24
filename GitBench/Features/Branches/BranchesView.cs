@@ -29,9 +29,11 @@ namespace GitBench.Features.Branches;
 /// from a folder the dialog's name is prefilled with that folder's path (e.g. "feature/")
 /// so the branch is created inside it; right-click the "Remotes" section
 /// header to add a new remote; right-click a remote header (e.g.
-/// "origin") to edit that remote's URL. Section headers, remote headers, and folder rows
-/// also offer "Expand All" / "Collapse All", which flip every collapsible descendant
-/// within that subtree. Collapse state is persisted per-repo via IRepoRegistry.
+/// "origin") to edit that remote's URL. Every parent row — the "Local"/"Remotes"/"Stashes"
+/// section headers, remote headers, and folders — also offers "Expand All" / "Collapse All"
+/// whenever it has any children, flipping that row and every collapsible beneath it (so
+/// "Collapse All" on a section closes the section and all folders within it). Collapse state
+/// is persisted per-repo via IRepoRegistry.
 ///
 /// Scroll/hit-test/hover/double-click plumbing lives in <see cref="VirtualRowListView"/>;
 /// row flattening lives in <see cref="BranchTreeBuilder"/>. The view owns the row
@@ -576,6 +578,7 @@ internal sealed record BranchesView : Widget
             {
                 LocalHeaderRow => vm.BuildLocalFolderMenu(new BranchFolder(BranchScope.Local, string.Empty)),
                 RemotesHeaderRow => vm.BuildRemotesHeaderMenuItems(),
+                StashesHeaderRow => vm.BuildStashesHeaderMenuItems(),
                 RemoteHeaderRow r => vm.BuildRemoteHeaderMenuItems(r.RemoteName),
                 FolderRow { Folder.Scope.IsRemote: true } f => vm.BuildRemoteFolderMenu(f.Folder),
                 FolderRow f => vm.BuildLocalFolderMenu(f.Folder),
