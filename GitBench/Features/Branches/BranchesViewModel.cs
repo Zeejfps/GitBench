@@ -51,9 +51,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // only mounts/unmounts the affected subtree.
     public ObservableList<BranchRow> Rows => _rows.Items;
 
-    // A centered placeholder ("Loading…" / error) shown in place of the list; null when the list shows.
+    // The error message shown in place of the list (null unless a load failed); paired with
+    // ContentKind, which selects list vs. loading skeleton vs. this message.
     public IReadable<string?> PlaceholderText => _placeholderText;
-    public IReadable<bool> HasPlaceholder => _hasPlaceholder;
+    public IReadable<BranchesContentKind> ContentKind => _contentKind;
 
     private Guid _activeRepoId;
 
@@ -68,7 +69,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly Derived<IReadOnlyList<BranchRow>> _rowModels;
     private readonly KeyedViewModelList<BranchRow, BranchRow, BranchRow> _rows;
     private readonly Derived<string?> _placeholderText;
-    private readonly Derived<bool> _hasPlaceholder;
+    private readonly Derived<BranchesContentKind> _contentKind;
 
     public BranchesViewModel(
         IRepoRegistry registry,
@@ -101,10 +102,13 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _rowModels = new Derived<IReadOnlyList<BranchRow>>(() => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value));
         _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
         _placeholderText = new Derived<string?>(() =>
-            LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err)
-            : Listing.Value == null && IsLoading.Value ? _loc.Strings.Value.CommonLoading
-            : null);
-        _hasPlaceholder = new Derived<bool>(() => _placeholderText.Value != null);
+            LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err) : null);
+        // Loading shows the skeleton (no text); a failure shows the message; otherwise — listed, or no
+        // repo yet — the tree (empty when there's nothing to list), matching the prior behavior.
+        _contentKind = new Derived<BranchesContentKind>(() =>
+            LoadError.Value != null ? BranchesContentKind.Message
+            : Listing.Value == null && IsLoading.Value ? BranchesContentKind.Loading
+            : BranchesContentKind.List);
 
         // The listing is projected from the store (which owns loading + caching). OnActiveRepoChanged
         // handles only the per-repo UI bits (fold state, worktree set, selection reset).
@@ -1038,9 +1042,17 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _rows.Dispose();
         _rowModels.Dispose();
         _placeholderText.Dispose();
-        _hasPlaceholder.Dispose();
+        _contentKind.Dispose();
         base.Dispose();
     }
+}
+
+// What the sidebar body shows: the branch tree, the loading skeleton, or an error message.
+internal enum BranchesContentKind
+{
+    List,
+    Loading,
+    Message,
 }
 
 internal sealed record BranchesState(

@@ -44,14 +44,19 @@ internal sealed record BranchesView : Widget
                 new TreeSelectionOverlay<BranchRowKey>
                 {
                     Bar = bar,
-                    Child = new Switch<bool>
+                    Child = new Switch<BranchesContentKind>
                     {
-                        Value = vm.HasPlaceholder,
-                        // The list fades up as a repo's branches arrive; the placeholder blooms (ease-in)
-                        // so a fast load swaps it out before "Loading…" visibly registers.
-                        Case = showPlaceholder => showPlaceholder
-                            ? new FadeIn { Child = Placeholder(vm), Bloom = true, Rise = 0f }
-                            : new FadeIn { Child = BranchList(vm, input) },
+                        Value = vm.ContentKind,
+                        // The list fades up as a repo's branches arrive; the loading skeleton echoes the
+                        // tree's shape so content resolves in place rather than popping in over emptiness;
+                        // an error blooms in (ease-in) so a fast load never flashes it. The skeleton also
+                        // blooms so a quick load swaps it out before it visibly registers.
+                        Case = kind => kind switch
+                        {
+                            BranchesContentKind.Loading => new FadeIn { Child = new BranchesSkeleton(), Bloom = true, Rise = 0f },
+                            BranchesContentKind.Message => new FadeIn { Child = Placeholder(vm), Bloom = true, Rise = 0f },
+                            _ => new FadeIn { Child = BranchList(vm, input) },
+                        },
                     },
                 },
             ],

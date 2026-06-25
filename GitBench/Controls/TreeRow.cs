@@ -44,6 +44,13 @@ internal sealed record TreeRow : Widget
     // headers pass a caption size so they match the repo bar's group headers.
     public Prop<float> NameSize { get; init; }
 
+    // Widget overrides for the icon and name slots — e.g. a loading skeleton's dot and bar — sitting in
+    // the same columns as the glyph/name they replace. GlyphSlot takes the place of the kind glyph (size
+    // it to the icon column yourself); NameSlot is placed raw, without the grow that fills the name area,
+    // so the caller owns its width. Each takes precedence over its text counterpart.
+    public IWidget? GlyphSlot { get; init; }
+    public IWidget? NameSlot { get; init; }
+
     // Fill behind the row (hover tint, or 0 when the floating selection bar owns this row's fill).
     public Prop<uint> Background { get; init; }
 
@@ -58,7 +65,9 @@ internal sealed record TreeRow : Widget
         var leftPad = IndentOverride ?? ((int)TreeMetrics.BaseIndent + (int)TreeMetrics.IndentLevel * Depth);
 
         var row = new List<IWidget>(4) { Chevron ?? new Box { Width = TreeMetrics.ChevronWidth } };
-        if (Glyph is { } glyph)
+        if (GlyphSlot is { } glyphSlot)
+            row.Add(glyphSlot);
+        else if (Glyph is { } glyph)
             row.Add(new Text
             {
                 Value = glyph,
@@ -69,19 +78,22 @@ internal sealed record TreeRow : Widget
                 VAlign = TextAlignment.Center,
                 Color = IconColor,
             });
-        row.Add(new Grow
-        {
-            Child = new Text
+        if (NameSlot is { } nameSlot)
+            row.Add(nameSlot);
+        else
+            row.Add(new Grow
             {
-                Value = Name,
-                FontSize = NameSize,
-                HAlign = TextAlignment.Start,
-                VAlign = TextAlignment.Center,
-                Overflow = TextOverflow.Ellipsis,
-                Color = NameColor,
-                Weight = NameWeight,
-            },
-        });
+                Child = new Text
+                {
+                    Value = Name,
+                    FontSize = NameSize,
+                    HAlign = TextAlignment.Start,
+                    VAlign = TextAlignment.Center,
+                    Overflow = TextOverflow.Ellipsis,
+                    Color = NameColor,
+                    Weight = NameWeight,
+                },
+            });
         if (Trailing is { } trailing)
             row.Add(trailing);
 
