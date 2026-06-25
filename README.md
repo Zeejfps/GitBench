@@ -77,6 +77,12 @@ Releases.
 Issues and pull requests are welcome — head to the
 [issue tracker](https://github.com/Zeejfps/GitBench/issues) to report a bug or suggest a feature.
 
+## Support
+
+If GitBench is useful to you, you can support its development:
+
+<a href="https://buymeacoffee.com/zeejfps"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000" alt="Buy Me a Coffee"></a>
+
 ## License
 
 GitBench's own source is open source under the [MIT License](LICENSE). The bundled UI
