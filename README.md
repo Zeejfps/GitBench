@@ -9,6 +9,7 @@ A fast, cross-platform desktop Git client.
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![.NET](https://img.shields.io/badge/.NET-10-512BD4)
 ![AI-assisted](https://img.shields.io/badge/AI--assisted-Claude%20Code-8A2BE2)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 GitBench is a lightweight Git GUI built on .NET 10 with a custom GPU-accelerated UI and
 compiled to a native executable (Native AOT) — no runtime to install, quick to launch.
@@ -75,3 +76,9 @@ Releases.
 
 Issues and pull requests are welcome — head to the
 [issue tracker](https://github.com/Zeejfps/GitBench/issues) to report a bug or suggest a feature.
+
+## License
+
+GitBench's own source is open source under the [MIT License](LICENSE). The bundled UI
+framework ([ENV Game Framework](https://github.com/Zeejfps/ENV-Game-Framework)) is a separate
+dependency and is not yet covered by this license.
