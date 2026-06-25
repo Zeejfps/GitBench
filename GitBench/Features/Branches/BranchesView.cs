@@ -47,7 +47,11 @@ internal sealed record BranchesView : Widget
                     Child = new Switch<bool>
                     {
                         Value = vm.HasPlaceholder,
-                        Case = showPlaceholder => showPlaceholder ? Placeholder(vm) : BranchList(vm, input),
+                        // The list fades up as a repo's branches arrive; the placeholder blooms (ease-in)
+                        // so a fast load swaps it out before "Loading…" visibly registers.
+                        Case = showPlaceholder => showPlaceholder
+                            ? new FadeIn { Child = Placeholder(vm), Bloom = true, Rise = 0f }
+                            : new FadeIn { Child = BranchList(vm, input) },
                     },
                 },
             ],

@@ -74,6 +74,15 @@ internal sealed record CommitsView : Widget
         private float _animFromIndex;
         private float _animToIndex;
         private readonly Tween _selectionTween;
+        // Content (rows) fade up as a repo's commits arrive from a placeholder; the placeholder text
+        // blooms in (ease-in) so a fast load swaps it out before "Loading…" registers. Both park when
+        // settled, and neither replays on an in-place refresh of already-shown content.
+        private readonly Tween _enterTween;
+        private readonly Tween _placeholderTween;
+        private float _placeholderAlpha;
+        private uint _placeholderBaseColor;
+        private bool _contentVisible;
+        private bool _placeholderShown;
         private bool _truncated;
         // When a search filter is active the graph column is dropped (lanes don't apply to a subset).
         private bool _filtering;
@@ -135,7 +144,10 @@ internal sealed record CommitsView : Widget
 
             // Drives the selection bar's slide between rows; parks itself when settled so it adds
             // no idle repaints. EaseOutCubic = quick start, gentle landing.
-            _selectionTween = new Tween(ctx.Require<IFrameTicker>(), 0.18f, Easings.EaseOutCubic);
+            var ticker = ctx.Require<IFrameTicker>();
+            _selectionTween = new Tween(ticker, 0.18f, Easings.EaseOutCubic);
+            _enterTween = new Tween(ticker, Transitions.ContentEnterSeconds, Easings.EaseOutCubic);
+            _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
 
             _list = new VirtualRowListView
             {
@@ -158,6 +170,7 @@ internal sealed record CommitsView : Widget
                 _rowTextActiveStyle.TextColor = _rowSelection.Text;
                 _headerTextStyle.TextColor = _styles.HeaderText;
                 _placeholderStyle.TextColor = _styles.PlaceholderText;
+                _placeholderBaseColor = _styles.PlaceholderText;
                 _badgeTextStyle.TextColor = _styles.BadgeText;
                 _badgeIconStyle.TextColor = _styles.BadgeText;
                 _badgeIconInSyncStyle.TextColor = _styles.BadgeBranchInSyncIcon;
@@ -191,6 +204,17 @@ internal sealed record CommitsView : Widget
             this.UseController(input, _arrowController);
 
             this.UseViewModel(() => vm, _ => { });
+
+            // Attached before the Render bind so on mount the opacity/translation are already driven
+            // to their start before the first SetRenderState — a warm repo restored at launch never
+            // shows a frame of full-opacity rows ahead of the fade. The rows live in _list (so its
+            // Opacity fades them and the floating selection bar together); the placeholder text is
+            // drawn by this view, faded via _placeholderAlpha.
+            this.Bind(_enterTween.LinearProgress, p => { _list.Opacity = p; SetDirty(); });
+            this.Bind(_enterTween.Progress, p => { _list.TranslationY = Transitions.ContentRise * (1f - p); SetDirty(); });
+            this.Bind(_placeholderTween.Progress, p => { _placeholderAlpha = p; SetDirty(); });
+            this.Use(() => _enterTween);
+            this.Use(() => _placeholderTween);
 
             this.Bind(vm.Render, SetRenderState);
             this.Bind(vm.SelectedSha, SetSelectedSha);
@@ -284,6 +308,21 @@ internal sealed record CommitsView : Widget
 
             _renderState = vm;
             _snapshot = newSnap;
+
+            // Fade the rows up only when content emerges from a placeholder (cold / first load);
+            // bloom the placeholder only when it emerges from content. A warm switch (content →
+            // content) and an in-place refresh both stay instant.
+            var showsContent = newSnap != null && newSnap.Commits.Count > 0;
+            if (showsContent)
+            {
+                if (!_contentVisible) _enterTween.Restart();
+            }
+            else if (_contentVisible || !_placeholderShown)
+            {
+                _placeholderTween.Restart();
+            }
+            _contentVisible = showsContent;
+            _placeholderShown = !showsContent;
 
             _list.ItemCount = newSnap?.Commits.Count ?? 0;
             _list.NotifyItemsChanged();
@@ -543,6 +582,7 @@ internal sealed record CommitsView : Widget
         private void DrawPlaceholder(ICanvas c, RectF rect, string text, int z)
         {
             if (rect.Width <= 0 || rect.Height <= 0) return;
+            _placeholderStyle.TextColor = FadeColor(_placeholderBaseColor, _placeholderAlpha);
             c.DrawText(new DrawTextInputs
             {
                 Position = Place(rect.Left, rect.Bottom, rect.Width, rect.Height),
@@ -550,6 +590,13 @@ internal sealed record CommitsView : Widget
                 Style = _placeholderStyle,
                 ZIndex = z,
             });
+        }
+
+        // Scales a color's alpha channel (the bloom rides _placeholderAlpha 0→1), leaving RGB intact.
+        private static uint FadeColor(uint argb, float alpha)
+        {
+            var a = (uint)(((argb >> 24) & 0xFF) * Math.Clamp(alpha, 0f, 1f));
+            return (argb & 0x00FFFFFFu) | (a << 24);
         }
 
         private float ComputeGraphColumnWidth()

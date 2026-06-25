@@ -43,12 +43,20 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly ILocalizationService _loc;
     private string? _rawPlaceholder;
 
+    // The snapshot panels fade up as a repo's working tree arrives from a placeholder; the
+    // placeholder host blooms in (ease-in) so a fast load swaps it out before "Loading…" registers.
+    private readonly Tween _enterTween;
+    private readonly Tween _placeholderTween;
+
     public LocalChangesContentView(Context ctx, LocalChangesViewModel vm)
     {
         _vm = vm;
         _loc = ctx.Localization();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
+        var ticker = ctx.Require<IFrameTicker>();
+        _enterTween = new Tween(ticker, Transitions.ContentEnterSeconds, Easings.EaseOutCubic);
+        _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
 
         var viewModeIcon = Prop.Bind<string?>(() =>
             vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
@@ -209,11 +217,19 @@ internal sealed class LocalChangesContentView : ContainerView
         _arrowController.OnToggleFullFile = () => _vm.DiffVm.ToggleFullFile();
         this.UseController(input, _arrowController);
 
+        this.Bind(_enterTween.LinearProgress, p => _snapshotContainer.Opacity = p);
+        this.Bind(_enterTween.Progress, p => _snapshotContainer.TranslationY = Transitions.ContentRise * (1f - p));
+        this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
+        this.Use(() => _enterTween);
+        this.Use(() => _placeholderTween);
+
         this.Bind(vm.Placeholder, text =>
         {
             _rawPlaceholder = text;
-            if (text != null) ShowPlaceholder(text);
-            else AttachSnapshot();
+            // Restart here (not inside ShowPlaceholder, which also runs on a locale switch) so the
+            // bloom/enter plays only on an actual placeholder↔content transition.
+            if (text != null) { ShowPlaceholder(text); _placeholderTween.Restart(); }
+            else { AttachSnapshot(); _enterTween.Restart(); }
         });
         // Placeholder copy comes from the VM's state, which doesn't re-emit on a locale switch,
         // so re-resolve the current sentinel against the new catalog when the language changes.
