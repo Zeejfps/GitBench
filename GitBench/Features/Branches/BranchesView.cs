@@ -110,6 +110,13 @@ internal sealed record BranchesView : Widget
 
         private IReadOnlyList<BranchRow> _rows = Array.Empty<BranchRow>();
         private BranchSelection? _selection;
+        // Selection is painted once as a floating bar that slides between rows. _selectedIndex is
+        // the resolved target row (-1 = none); the bar draws at CurrentSelectionIndex(), which
+        // lerps _animFromIndex → _animToIndex by the tween.
+        private readonly Tween _selectionTween;
+        private int _selectedIndex = -1;
+        private float _animFromIndex;
+        private float _animToIndex;
         private string? _busyBranch;
         private string? _pendingHead;
         private string? _loadError;
@@ -129,10 +136,15 @@ internal sealed record BranchesView : Widget
             var input = ctx.Require<InputSystem>();
             var theme = ctx.Theme();
 
+            // Drives the selection bar's slide between rows; parks itself when settled so it adds
+            // no idle repaints. EaseOutCubic = quick start, gentle landing.
+            _selectionTween = new Tween(ctx.Require<IFrameTicker>(), 0.18f, Easings.EaseOutCubic);
+
             _list = new VirtualRowListView
             {
                 RowHeight = RowHeight,
                 ItemBuilder = DrawRowAt,
+                SelectionOverlayBuilder = DrawSelectionOverlay,
             };
             _list.RowClicked += OnRowClicked;
             _list.RowActivated += OnRowActivated;
@@ -180,6 +192,11 @@ internal sealed record BranchesView : Widget
             this.Bind(vm.Listing, listing => { _listing = listing; RebuildRows(); });
             this.Bind(vm.Ui, ui => { _ui = ui; RebuildRows(); });
             this.Bind(vm.Selection, SetSelection);
+
+            // Repaint each tick while the selection bar is sliding; the tween stops ticking once it
+            // lands, so this goes quiet at rest.
+            this.Bind(_selectionTween.Progress, _ => SetDirty());
+            this.Use(() => _selectionTween);
             this.Bind(vm.BusyBranch, SetBusyBranch);
             this.Bind(vm.PendingHead, SetPendingHead);
             this.Bind(vm.LoadError, SetLoadError);
@@ -197,9 +214,70 @@ internal sealed record BranchesView : Widget
             _rows = BranchTreeBuilder.BuildRows(_listing, _ui, _loc.Strings.Value);
             _list.ItemCount = _rows.Count;
             _list.NotifyItemsChanged();
+
+            // Rows shifted under the selection (collapse, reload): re-resolve and park the bar
+            // there without sliding — the contents moved, not the user.
+            SnapSelectionToCurrent();
         }
 
-        private void SetSelection(BranchSelection? selection) => _selection = selection;
+        private void SetSelection(BranchSelection? selection)
+        {
+            _selection = selection;
+            MoveSelectionTo(IndexOfSelection());
+            SetDirty();
+        }
+
+        // Retargets the floating selection bar. Slides only between two real rows; first-select and
+        // clear snap in place (sliding in from nowhere reads as a glitch).
+        private void MoveSelectionTo(int newIndex)
+        {
+            if (newIndex == _selectedIndex) return;
+            if (_selectedIndex >= 0 && newIndex >= 0)
+            {
+                _animFromIndex = CurrentSelectionIndex();
+                _animToIndex = newIndex;
+                _selectedIndex = newIndex;
+                _selectionTween.Restart();
+            }
+            else
+            {
+                _selectedIndex = newIndex;
+                _animFromIndex = newIndex < 0 ? 0f : newIndex;
+                _animToIndex = _animFromIndex;
+            }
+        }
+
+        // Re-resolves the selected row from the current selection and parks the bar without animating.
+        private void SnapSelectionToCurrent()
+        {
+            _selectedIndex = IndexOfSelection();
+            _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
+            _animToIndex = _animFromIndex;
+        }
+
+        private int IndexOfSelection()
+        {
+            if (!_selection.HasValue) return -1;
+            var sel = _selection.Value;
+            for (var i = 0; i < _rows.Count; i++)
+                if (sel.Matches(_rows[i])) return i;
+            return -1;
+        }
+
+        private float CurrentSelectionIndex()
+            => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
+
+        // One selection bar for the whole list, floated below row content by VirtualRowListView so
+        // it rides scroll and slides between rows. Shares the RowSelection painter so its look stays
+        // identical to the static fill.
+        private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
+        {
+            if (_selectedIndex < 0) return;
+            var index = CurrentSelectionIndex();
+            var rowTop = viewport.Top + _list.ScrollY - index * RowHeight;
+            var rowRect = new RectF(viewport.Left, rowTop - RowHeight, viewport.Width, RowHeight);
+            RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
+        }
         private void SetBusyBranch(string? fullPath) => _busyBranch = fullPath;
         private void SetPendingHead(string? fullPath) => _pendingHead = fullPath;
         private void SetLoadError(string? error) => _loadError = error;
@@ -262,7 +340,10 @@ internal sealed record BranchesView : Widget
             var rowBottom = rowRect.Bottom;
             var rightEdge = rowRect.Right - 14f;
 
-            DrawRowBackground(c, rowRect, isSelected, state, z);
+            // The floating bar owns the selected row's fill; suppress the static one there so the
+            // two don't double-paint.
+            var floatsBar = _selectedIndex >= 0 && rowIndex == _selectedIndex;
+            DrawRowBackground(c, rowRect, isSelected, state, z, floatsBar);
 
             var contentLeft = rowRect.Left + BaseIndent + row.Indent;
             contentLeft = DrawChevronOrReserveColumn(c, row, contentLeft, rowBottom, z + 1);
@@ -273,8 +354,9 @@ internal sealed record BranchesView : Widget
             DrawRowNameAndBadge(c, row, isSelected, contentLeft, rightEdge, rowBottom, z + 1);
         }
 
-        private void DrawRowBackground(ICanvas c, RectF rowRect, bool isSelected, RowRenderState state, int z)
+        private void DrawRowBackground(ICanvas c, RectF rowRect, bool isSelected, RowRenderState state, int z, bool floatsBar)
         {
+            if (floatsBar) return;
             RowSelection.DrawBackground(
                 c, rowRect, isSelected,
                 state.IsHovered || state.IsContextHighlighted,
