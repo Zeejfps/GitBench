@@ -36,6 +36,15 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly View _diffView;
     private readonly VerticalSplitContainer _splitContainer;
     private readonly VerticalSplitContainer _innerSplit;
+    private readonly RectView _panel;
+    private readonly FlexColumnView _placeholderHost;
+    private readonly TextView _placeholder;
+    // Details fade up as a commit's data arrives from a placeholder; the placeholder blooms in. Both
+    // park when settled, and neither replays on a commit-to-commit change of already-shown details.
+    private readonly Tween _enterTween;
+    private readonly Tween _placeholderTween;
+    private bool _contentVisible;
+    private bool _placeholderShown;
     private readonly State<string?> _selectedPath = new(null);
     private readonly ListArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
@@ -129,14 +138,38 @@ internal sealed class CommitDetailsView : ContainerView
             _splitContainer.AdjustBottomFractionByPixels,
             h => splitterHovered.Value = h));
 
-        var panel = new RectView
+        _placeholder = new TextView(_canvas)
+        {
+            HorizontalTextAlignment = TextAlignment.Center,
+            VerticalTextAlignment = TextAlignment.Center,
+        };
+        _placeholder.BindThemedTextColor(_theme, s => s.CommitDetailsView.PlaceholderText);
+        _placeholderHost = new FlexColumnView
+        {
+            MainAxisAlignment = MainAxisAlignment.Center,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Children = { _placeholder },
+        };
+
+        _panel = new RectView
         {
             BorderSize = new BorderSizeStyle { Left = 1 },
             Children = { _splitContainer },
         };
-        panel.BindThemedBackgroundColor(_theme, s => s.CommitDetailsView.Background);
-        panel.BindThemedBorderColor(_theme, s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
-        AddChildToSelf(panel);
+        _panel.BindThemedBackgroundColor(_theme, s => s.CommitDetailsView.Background);
+        _panel.BindThemedBorderColor(_theme, s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
+        AddChildToSelf(_panel);
+
+        var ticker = ctx.Require<IFrameTicker>();
+        _enterTween = new Tween(ticker, Transitions.ContentEnterSeconds, Easings.EaseOutCubic);
+        _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
+        // Bound before the view model (which drives the first SetRenderState) so the opacities start at
+        // zero before the first show, rather than flashing fully opaque for a frame.
+        this.Bind(_enterTween.LinearProgress, p => _splitContainer.Opacity = p);
+        this.Bind(_enterTween.Progress, p => _splitContainer.TranslationY = Transitions.ContentRise * (1f - p));
+        this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
+        this.Use(() => _enterTween);
+        this.Use(() => _placeholderTween);
 
         this.Use(() => new ScrollSyncController(_headerScrollPane, headerVScrollBar, headerHScrollBar));
 
@@ -198,21 +231,36 @@ internal sealed class CommitDetailsView : ContainerView
 
     private void ShowPlaceholder(string text)
     {
-        _headerInfo.Children.Clear();
-        var placeholder = new TextView(_canvas)
+        // Centered in the whole details panel, so it swaps in over the split container rather than
+        // sitting at the top of the (content-height) header scroll column.
+        _placeholder.Text = text;
+        if (!_panel.Children.Contains(_placeholderHost))
         {
-            Text = text,
-            HorizontalTextAlignment = TextAlignment.Center,
-        };
-        placeholder.BindThemedTextColor(_theme, s => s.CommitDetailsView.PlaceholderText);
-        _headerInfo.Children.Add(placeholder);
-        _headerScrollPane.ScrollToOrigin();
+            _panel.Children.Clear();
+            _panel.Children.Add(_placeholderHost);
+        }
+        // Bloom only when the placeholder emerges from details (or on first show), not on a
+        // placeholder re-render (e.g. a locale switch) while it's already up.
+        if (_contentVisible || !_placeholderShown) _placeholderTween.Restart();
+        _contentVisible = false;
+        _placeholderShown = true;
+        _headerInfo.Children.Clear();
         _changesSection.SetFiles(Array.Empty<FileChange>());
         _innerSplit.BottomVisible = false;
     }
 
     private void ShowDetails(CommitDetails d)
     {
+        if (!_panel.Children.Contains(_splitContainer))
+        {
+            _panel.Children.Clear();
+            _panel.Children.Add(_splitContainer);
+        }
+        // Fade up only when details emerge from a placeholder; a commit-to-commit change of already-
+        // shown details swaps instantly, matching how the other panels skip the fade on refresh.
+        if (!_contentVisible) _enterTween.Restart();
+        _contentVisible = true;
+        _placeholderShown = false;
         _headerInfo.Children.Clear();
 
         var topColumn = new ColumnView { Gap = Spacing.Md };
