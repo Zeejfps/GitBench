@@ -218,9 +218,11 @@ internal static class FileChangesUI
         TextStyle textStyle,
         TextStyle textActiveStyle,
         int z,
-        bool isRtl = false)
+        bool isRtl = false,
+        bool drawSelectionBackground = true)
     {
-        RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
+        if (drawSelectionBackground || !isSelected)
+            RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
 
         var left = rowRect.Left + RowPaddingLeft + indent;
 

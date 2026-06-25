@@ -53,6 +53,14 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
     private FileViewMode _viewMode = FileViewMode.Flat;
     private IReadOnlySet<string> _collapsed = new HashSet<string>();
+
+    // A single floating selection bar that slides between rows — but only while exactly one row
+    // is selected. Multi-select falls back to static per-row fills (_selectedIndex = -1 hides the
+    // bar); the bar draws at CurrentSelectionIndex(), lerping _animFromIndex → _animToIndex.
+    private readonly Tween _selectionTween;
+    private int _selectedIndex = -1;
+    private float _animFromIndex;
+    private float _animToIndex;
     private View _currentBody = null!;
     private string? _lastChevronTogglePath;
     private int _lastChevronToggleTick;
@@ -163,10 +171,15 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
         var headerBar = FileChangesUI.CreateHeaderBar(ctx, headerContent);
 
+        // Parks itself when settled so it adds no idle repaints. EaseOutCubic = quick start,
+        // gentle landing.
+        _selectionTween = new Tween(ctx.Require<IFrameTicker>(), 0.18f, Easings.EaseOutCubic);
+
         _list = new VirtualRowListView
         {
             RowHeight = FileChangesUI.RowHeight,
             ItemBuilder = DrawFileRowAt,
+            SelectionOverlayBuilder = DrawSelectionOverlay,
         };
         _list.RowClicked += OnRowClicked;
         if (onRowActivated != null) _list.RowActivated += OnRowActivated;
@@ -195,9 +208,11 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
 
         _list.UseController(input, () => new VirtualRowListController(_list));
 
-        // Selection changes only affect row visuals; a SetDirty is enough — every frame
-        // redraws and the ItemBuilder reads the current selection on demand.
-        this.Bind(selection, _ => SetDirty());
+        // Retarget the floating bar on selection change (slides only for single-select; multi
+        // snaps the bar away), then repaint each tick while it slides.
+        this.Bind(selection, sel => { UpdateSelectionAnimation(sel); SetDirty(); });
+        this.Bind(_selectionTween.Progress, _ => SetDirty());
+        this.Use(() => _selectionTween);
 
         this.BindThemed(ctx.Theme(), s =>
         {
@@ -272,6 +287,10 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         SetBody(_rows.Count == 0 ? _emptyPlaceholder : _list);
         _list.ItemCount = _rows.Count;
         _list.NotifyItemsChanged();
+
+        // Rows shifted under the selection (collapse, reload): re-resolve and park the bar there
+        // without sliding — the contents moved, not the user.
+        SnapSelectionToCurrent();
     }
 
     private void SetBody(View body)
@@ -367,6 +386,10 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         var selection = _selection.Value;
         var isSelected = selection.ContainsRow(row.Ref);
 
+        // The floating bar (single-select only) owns its target row's fill; suppress the static
+        // one there so they don't double-paint. -1 (multi/none) leaves every row drawing statically.
+        var floatsBar = _selectedIndex >= 0 && rowIndex == _selectedIndex;
+
         if (row.Kind == FileRowKind.Folder)
         {
             FileChangesUI.DrawFolderRow(
@@ -383,7 +406,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
                 _pathTextStyle,
                 _pathTextActiveStyle,
                 z,
-                isRtl: IsRtl);
+                isRtl: IsRtl,
+                drawSelectionBackground: !floatsBar);
             return;
         }
 
@@ -403,7 +427,64 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             row.DisplayName,
             row.Indent,
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
-            isRtl: IsRtl);
+            isRtl: IsRtl,
+            drawSelectionBackground: !floatsBar);
+    }
+
+    // Retargets the floating bar from the current selection: the lone selected row's index when
+    // exactly one is selected, else -1 (multi/none → no bar).
+    private void UpdateSelectionAnimation(Selection sel)
+        => MoveSelectionTo(sel.Count == 1 ? IndexOfRow(sel.Rows[0]) : -1);
+
+    // Slides only between two real rows (single → single); first-select, clear, and any
+    // transition through multi-select snap in place (sliding in from nowhere reads as a glitch).
+    private void MoveSelectionTo(int newIndex)
+    {
+        if (newIndex == _selectedIndex) return;
+        if (_selectedIndex >= 0 && newIndex >= 0)
+        {
+            _animFromIndex = CurrentSelectionIndex();
+            _animToIndex = newIndex;
+            _selectedIndex = newIndex;
+            _selectionTween.Restart();
+        }
+        else
+        {
+            _selectedIndex = newIndex;
+            _animFromIndex = newIndex < 0 ? 0f : newIndex;
+            _animToIndex = _animFromIndex;
+        }
+    }
+
+    // Re-resolves the bar's row from the current selection and parks it there without animating.
+    private void SnapSelectionToCurrent()
+    {
+        var sel = _selection.Value;
+        _selectedIndex = sel.Count == 1 ? IndexOfRow(sel.Rows[0]) : -1;
+        _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
+        _animToIndex = _animFromIndex;
+    }
+
+    private int IndexOfRow(FileRowRef target)
+    {
+        for (var i = 0; i < _rows.Count; i++)
+            if (_rows[i].Ref.Equals(target)) return i;
+        return -1;
+    }
+
+    private float CurrentSelectionIndex()
+        => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
+
+    // One selection bar for the whole list, floated below row content by VirtualRowListView so it
+    // rides scroll and slides between rows. Shares the RowSelection painter so its look matches the
+    // static fills multi-select draws.
+    private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
+    {
+        if (_selectedIndex < 0) return;
+        var index = CurrentSelectionIndex();
+        var rowTop = viewport.Top + _list.ScrollY - index * FileChangesUI.RowHeight;
+        var rowRect = new RectF(viewport.Left, rowTop - FileChangesUI.RowHeight, viewport.Width, FileChangesUI.RowHeight);
+        RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
     }
 
     // ---- IScrollableContent ----
