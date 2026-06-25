@@ -1,706 +1,93 @@
 using GitBench.Controls;
-using GitBench.Features.LocalChanges;
-using GitBench.Features.Repos;
-using GitBench.Localization;
-using GitBench.Theming;
 using GitBench.Widgets;
-using ZGF.Geometry;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
-using ZGF.Gui.Desktop.Components.VirtualRowList;
+using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
 /// <summary>
-/// Sidebar listing local branches and remote branches (grouped per remote) as a tree —
-/// branch names containing "/" are split into folder nodes (e.g. "feature/login" lives
-/// inside a "feature" folder). Click a branch row to scroll/select its tip commit in the
-/// history view; click a section/remote/folder row to toggle collapse. Double-click a
-/// branch to check it out: local branches check out directly; remote branches that have
-/// a matching local check that local out; remote branches with no matching local pop the
-/// CheckoutBranchDialog. Right-click a local/remote branch row to open a context menu
-/// (Checkout / Rename / Delete); right-click a stash row for Apply / Rename / Delete;
-/// right-click the "Local" section header or any local folder to create a new branch —
-/// from a folder the dialog's name is prefilled with that folder's path (e.g. "feature/")
-/// so the branch is created inside it — or to "Clean…" the stale branches (deleted or
-/// never-set upstream) under it; right-click the "Remotes" section
-/// header to add a new remote; right-click a remote header (e.g.
-/// "origin") to edit that remote's URL. Every parent row — the "Local"/"Remotes"/"Stashes"
-/// section headers, remote headers, and folders — also offers "Expand All" / "Collapse All"
-/// whenever it has any children, flipping that row and every collapsible beneath it (so
-/// "Collapse All" on a section closes the section and all folders within it). Collapse state
-/// is persisted per-repo via IRepoRegistry.
+/// Sidebar listing local branches and remote branches (grouped per remote) and stashes as a tree —
+/// branch names containing "/" split into folder nodes (e.g. "feature/login" lives inside a "feature"
+/// folder). Click a branch row to select its tip commit in the history view; click a section / remote /
+/// folder row to toggle collapse; double-click a branch to check it out (local branches directly;
+/// remote branches with a matching local check that out, otherwise the CheckoutBranchDialog opens);
+/// double-click a stash to apply it. Right-click any row for its context menu. Collapse state is
+/// persisted per-repo via IRepoRegistry.
 ///
-/// Scroll/hit-test/hover/double-click plumbing lives in <see cref="VirtualRowListView"/>;
-/// row flattening lives in <see cref="BranchTreeBuilder"/>. The view owns the row
-/// visuals (icons, ahead/behind badges, busy/head/worktree styling) and the dispatch
-/// from row indices to <see cref="BranchesViewModel"/> calls.
+/// Built as a declarative tree — the same shape as the repo bar — over <see cref="BranchesViewModel"/>:
+/// the VM flattens (listing, collapse-state) into <see cref="BranchesViewModel.Rows"/>, an
+/// <c>Each</c> renders each row through the shared <see cref="TreeRow"/>, and the active selection
+/// slides via the shared <see cref="TreeSelectionBar{TKey}"/>.
 /// </summary>
 internal sealed record BranchesView : Widget
 {
-    protected override View CreateView(Context ctx) => new Core(ctx);
-
-    private sealed class Core : ContainerView, IScrollableContent
+    protected override IWidget Build(Context ctx)
     {
-        private const float RowHeight = 22f;
-        private const float BaseIndent = TreeMetrics.BaseIndent;
-        private const float ChevronWidth = 14f;
-        private const float ChevronGap = 2f;
-        private const float ChevronColumn = ChevronWidth + ChevronGap;
-        private const float IconGap = 4f;
+        var vm = ctx.Require<BranchesViewModel>();
+        var input = ctx.Require<InputSystem>();
 
-        private readonly TextStyle _branchTextStyle = TextStyles.Row(0u);
-        private readonly TextStyle _branchTextSelectedStyle = TextStyles.Row(0u);
-        private readonly TextStyle _branchTextBusyStyle = TextStyles.Row(0u);
-        private readonly TextStyle _branchIconBusyStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _headTextStyle = new()
+        // The selection bar keys on the active branch/stash row; it owns the subscription, this widget
+        // owns the Derived.
+        var activeKey = new Derived<BranchRowKey?>(() => BranchRowKey.From(vm.Selection.Value));
+        var bar = new TreeSelectionBar<BranchRowKey>(ctx.Require<IFrameTicker>(), activeKey);
+
+        var content = new Box
         {
-            FontWeight = FontWeight.Bold,
-            VerticalAlignment = TextAlignment.Center,
-            HorizontalAlignment = TextAlignment.Start,
+            Background = Theme.Color(s => s.BranchesView.ViewBackground),
+            Children =
+            [
+                new TreeSelectionOverlay<BranchRowKey>
+                {
+                    Bar = bar,
+                    Child = new Switch<bool>
+                    {
+                        Value = vm.HasPlaceholder,
+                        Case = showPlaceholder => showPlaceholder ? Placeholder(vm) : BranchList(vm, input),
+                    },
+                },
+            ],
         };
-        private readonly TextStyle _headTextSelectedStyle = new()
-        {
-            FontWeight = FontWeight.Bold,
-            VerticalAlignment = TextAlignment.Center,
-            HorizontalAlignment = TextAlignment.Start,
-        };
-        private readonly TextStyle _headerTextStyle = TextStyles.Row(0u);
-        private readonly TextStyle _chevronStyle = new()
-        {
-            FontFamily = LucideIcons.FontFamily,
-            FontSize = FontSize.Caption,
-            VerticalAlignment = TextAlignment.Center,
-            HorizontalAlignment = TextAlignment.Center,
-        };
-        private readonly TextStyle _placeholderStyle = TextStyles.Centered(0u);
-        private readonly TextStyle _aheadNumStyle = TextStyles.Row(0u);
-        private readonly TextStyle _behindNumStyle = TextStyles.Row(0u);
-        private readonly TextStyle _aheadIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _behindIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _upstreamLinkedIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _upstreamGoneIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _folderIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _branchIconStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _branchIconActiveStyle = TextStyles.Icon(0u);
-        private readonly TextStyle _branchIconLocalOnlyStyle = TextStyles.Icon(0u);
 
-        private BranchesViewStyles _styles = ThemeStyles.Dark.BranchesView;
-        private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
-
-        private readonly Context _ctx;
-        private readonly ICanvas _canvas;
-        private readonly ILocalizationService _loc;
-        private readonly BranchesViewModel _vm;
-        private readonly VirtualRowListView _list;
-        private readonly VerticalScrollBarView _scrollBar;
-
-        private float _lastVerticalScale = -1f;
-        private float _lastNormalizedY;
-
-        public event Action<float>? VerticalScrollPositionChanged;
-        public event Action<float>? HorizontalScrollPositionChanged;
-        public float VerticalScale { get; private set; } = 1f;
-        public float HorizontalScale { get; private set; } = 1f;
-
-        private IReadOnlyList<BranchRow> _rows = Array.Empty<BranchRow>();
-        private BranchSelection? _selection;
-        // Selection is painted once as a floating bar that slides between rows. _selectedIndex is
-        // the resolved target row (-1 = none); the bar draws at CurrentSelectionIndex(), which
-        // lerps _animFromIndex → _animToIndex by the tween.
-        private readonly Tween _selectionTween;
-        private int _selectedIndex = -1;
-        private float _animFromIndex;
-        private float _animToIndex;
-        private string? _busyBranch;
-        private string? _pendingHead;
-        private string? _loadError;
-        private bool _isLoading;
-        private IReadOnlySet<string> _worktreeBranches = new HashSet<string>();
-
-        private BranchListing? _listing;
-        private BranchesUiState _ui = new();
-
-        public Core(Context ctx)
-        {
-            _ctx = ctx;
-            _canvas = ctx.Canvas;
-            _loc = ctx.Localization();
-            var vm = ctx.Require<BranchesViewModel>();
-            _vm = vm;
-            var input = ctx.Require<InputSystem>();
-            var theme = ctx.Theme();
-
-            // Drives the selection bar's slide between rows; parks itself when settled so it adds
-            // no idle repaints. EaseOutCubic = quick start, gentle landing.
-            _selectionTween = new Tween(ctx.Require<IFrameTicker>(), 0.18f, Easings.EaseOutCubic);
-
-            _list = new VirtualRowListView
-            {
-                RowHeight = RowHeight,
-                ItemBuilder = DrawRowAt,
-                SelectionOverlayBuilder = DrawSelectionOverlay,
-            };
-            _list.RowClicked += OnRowClicked;
-            _list.RowActivated += OnRowActivated;
-            _list.RowContextRequested += OnRowContextRequested;
-            _list.ScrollChanged += NotifyScrollChanged;
-
-            _scrollBar = ScrollBars.CreateVertical(ctx);
-
-            AddChildToSelf(new BorderLayoutView
-            {
-                Center = _list,
-                East = _scrollBar,
-            });
-            _list.UseController(input, () => new VirtualRowListController(_list));
-
-            this.BindThemed(theme, s =>
-            {
-                _styles = s.BranchesView;
-                _rowSelection = s.RowSelection;
-                _branchTextStyle.TextColor = _styles.RowText;
-                _branchTextSelectedStyle.TextColor = _rowSelection.Text;
-                _branchTextBusyStyle.TextColor = _styles.RowTextDim;
-                _branchIconBusyStyle.TextColor = _styles.RowTextDim;
-                _headTextStyle.TextColor = _styles.HeadIdleText;
-                _headTextSelectedStyle.TextColor = _rowSelection.Text;
-                _headerTextStyle.TextColor = _styles.SectionHeaderText;
-                _chevronStyle.TextColor = _styles.SectionHeaderText;
-                _placeholderStyle.TextColor = _styles.SectionHeaderText;
-                _aheadNumStyle.TextColor = _styles.AheadColor;
-                _behindNumStyle.TextColor = _styles.BehindColor;
-                _aheadIconStyle.TextColor = _styles.AheadColor;
-                _behindIconStyle.TextColor = _styles.BehindColor;
-                _upstreamLinkedIconStyle.TextColor = _styles.AheadColor;
-                _upstreamGoneIconStyle.TextColor = _styles.BehindColor;
-                _folderIconStyle.TextColor = _styles.SectionHeaderText;
-                _branchIconStyle.TextColor = _styles.RowText;
-                _branchIconActiveStyle.TextColor = _rowSelection.Text;
-                _branchIconLocalOnlyStyle.TextColor = _styles.RowTextDim;
-                SetDirty();
-            });
-
-            this.Use(() => new ScrollSyncController(this, _scrollBar));
-            this.UseViewModel(() => vm, _ => { });
-
-            this.Bind(vm.Listing, listing => { _listing = listing; RebuildRows(); });
-            this.Bind(vm.Ui, ui => { _ui = ui; RebuildRows(); });
-            this.Bind(vm.Selection, SetSelection);
-
-            // Repaint each tick while the selection bar is sliding; the tween stops ticking once it
-            // lands, so this goes quiet at rest.
-            this.Bind(_selectionTween.Progress, _ => SetDirty());
-            this.Use(() => _selectionTween);
-            this.Bind(vm.BusyBranch, SetBusyBranch);
-            this.Bind(vm.PendingHead, SetPendingHead);
-            this.Bind(vm.LoadError, SetLoadError);
-            this.Bind(vm.IsLoading, SetIsLoading);
-            this.Bind(vm.WorktreeBranches, set => _worktreeBranches = set);
-
-            // Re-localize on a live language switch: section-header labels are baked into the
-            // rows, and the placeholder text is custom-painted, so both need an explicit rebuild
-            // + repaint (the theme bind above does the same for colors).
-            this.Bind(_loc.Strings, _ => { RebuildRows(); SetDirty(); });
-        }
-
-        private void RebuildRows()
-        {
-            _rows = BranchTreeBuilder.BuildRows(_listing, _ui, _loc.Strings.Value);
-            _list.ItemCount = _rows.Count;
-            _list.NotifyItemsChanged();
-
-            // Rows shifted under the selection (collapse, reload): re-resolve and park the bar
-            // there without sliding — the contents moved, not the user.
-            SnapSelectionToCurrent();
-        }
-
-        private void SetSelection(BranchSelection? selection)
-        {
-            _selection = selection;
-            MoveSelectionTo(IndexOfSelection());
-            SetDirty();
-        }
-
-        // Retargets the floating selection bar. Slides only between two real rows; first-select and
-        // clear snap in place (sliding in from nowhere reads as a glitch).
-        private void MoveSelectionTo(int newIndex)
-        {
-            if (newIndex == _selectedIndex) return;
-            if (_selectedIndex >= 0 && newIndex >= 0)
-            {
-                _animFromIndex = CurrentSelectionIndex();
-                _animToIndex = newIndex;
-                _selectedIndex = newIndex;
-                _selectionTween.Restart();
-            }
-            else
-            {
-                _selectedIndex = newIndex;
-                _animFromIndex = newIndex < 0 ? 0f : newIndex;
-                _animToIndex = _animFromIndex;
-            }
-        }
-
-        // Re-resolves the selected row from the current selection and parks the bar without animating.
-        private void SnapSelectionToCurrent()
-        {
-            _selectedIndex = IndexOfSelection();
-            _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
-            _animToIndex = _animFromIndex;
-        }
-
-        private int IndexOfSelection()
-        {
-            if (!_selection.HasValue) return -1;
-            var sel = _selection.Value;
-            for (var i = 0; i < _rows.Count; i++)
-                if (sel.Matches(_rows[i])) return i;
-            return -1;
-        }
-
-        private float CurrentSelectionIndex()
-            => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
-
-        // One selection bar for the whole list, floated below row content by VirtualRowListView so
-        // it rides scroll and slides between rows. Shares the RowSelection painter so its look stays
-        // identical to the static fill.
-        private void DrawSelectionOverlay(ICanvas c, RectF viewport, int z)
-        {
-            if (_selectedIndex < 0) return;
-            var index = CurrentSelectionIndex();
-            var rowTop = viewport.Top + _list.ScrollY - index * RowHeight;
-            var rowRect = new RectF(viewport.Left, rowTop - RowHeight, viewport.Width, RowHeight);
-            RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
-        }
-        private void SetBusyBranch(string? fullPath) => _busyBranch = fullPath;
-        private void SetPendingHead(string? fullPath) => _pendingHead = fullPath;
-        private void SetLoadError(string? error) => _loadError = error;
-        private void SetIsLoading(bool isLoading) => _isLoading = isLoading;
-
-        protected override void OnDrawSelf(ICanvas c)
-        {
-            NotifyScrollChanged();
-
-            var pos = Position;
-            var z = GetDrawZIndex();
-
-            c.DrawRect(new DrawRectInputs
-            {
-                Position = pos,
-                Style = new RectStyle { BackgroundColor = _styles.ViewBackground },
-                ZIndex = z,
-            });
-
-            if (_loadError != null)
-            {
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = pos,
-                    Text = _loc.Strings.Value.BranchesLoadError(_loadError),
-                    Style = _placeholderStyle,
-                    ZIndex = z + 1,
-                });
-                return;
-            }
-
-            if (_rows.Count == 0 && _isLoading)
-            {
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = pos,
-                    Text = _loc.Strings.Value.CommonLoading,
-                    Style = _placeholderStyle,
-                    ZIndex = z + 1,
-                });
-            }
-        }
-
-        // Reflects an element's horizontal extent within the row when the UI is right-to-left, so the
-        // hand-rolled left-origin row layout mirrors (chevron/icon to the right, badges to the left)
-        // without rewriting the cursor math. In-box text right-aligns on its own — those styles take
-        // the canvas's RTL text base. Rows span the view width, so Position is the row's extent.
-        private RectF Place(float left, float bottom, float width, float height) =>
-            IsRtl
-                ? new RectF(Position.Left + Position.Right - left - width, bottom, width, height)
-                : new RectF(left, bottom, width, height);
-
-        private void DrawRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
-        {
-            if (rowIndex < 0 || rowIndex >= _rows.Count) return;
-            if (_loadError != null) return;
-
-            var row = _rows[rowIndex];
-            var isSelected = _selection.HasValue && _selection.Value.Matches(row);
-            var rowBottom = rowRect.Bottom;
-            var rightEdge = rowRect.Right - 14f;
-
-            // The floating bar owns the selected row's fill; suppress the static one there so the
-            // two don't double-paint.
-            var floatsBar = _selectedIndex >= 0 && rowIndex == _selectedIndex;
-            DrawRowBackground(c, rowRect, isSelected, state, z, floatsBar);
-
-            var contentLeft = rowRect.Left + BaseIndent + row.Indent;
-            contentLeft = DrawChevronOrReserveColumn(c, row, contentLeft, rowBottom, z + 1);
-
-            if (IsTreeRow(row))
-                contentLeft = DrawRowIcon(c, row, isSelected, contentLeft, rowBottom, z + 1);
-
-            DrawRowNameAndBadge(c, row, isSelected, contentLeft, rightEdge, rowBottom, z + 1);
-        }
-
-        private void DrawRowBackground(ICanvas c, RectF rowRect, bool isSelected, RowRenderState state, int z, bool floatsBar)
-        {
-            if (floatsBar) return;
-            RowSelection.DrawBackground(
-                c, rowRect, isSelected,
-                state.IsHovered || state.IsContextHighlighted,
-                _rowSelection, z, isRtl: IsRtl);
-        }
-
-        private static bool IsTreeRow(BranchRow row) =>
-            row is FolderRow or LocalBranchRow or RemoteBranchRow or StashRow;
-
-        private float DrawChevronOrReserveColumn(ICanvas c, BranchRow row, float contentLeft, float rowBottom, int z)
-        {
-            if (row is ICollapsibleRow collapsible)
-            {
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = Place(contentLeft, rowBottom, ChevronWidth, RowHeight),
-                    Text = collapsible.IsOpen
-                        ? LucideIcons.ChevronDown
-                        : IsRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight,
-                    Style = _chevronStyle,
-                    ZIndex = z,
-                });
-                return contentLeft + ChevronColumn;
-            }
-
-            // Branch rows reserve the chevron column so their icons sit in the same x
-            // position as a sibling folder's icon.
-            if (IsTreeRow(row))
-                return contentLeft + ChevronColumn;
-
-            return contentLeft;
-        }
-
-        private void DrawRowNameAndBadge(ICanvas c, BranchRow row, bool isSelected, float contentLeft, float rightEdge, float rowBottom, int z)
-        {
-            const float nameBadgeGap = 8f;
-            var localRow = row as LocalBranchRow;
-            var badgeWidth = localRow != null ? MeasureAheadBehindBadge(c, localRow) : 0f;
-
-            var nameBudget = Math.Max(0f,
-                rightEdge - contentLeft
-                - (badgeWidth > 0 ? badgeWidth + nameBadgeGap : 0f));
-            if (nameBudget <= 0f) return;
-
-            var (text, style) = SelectNameTextAndStyle(row, isSelected);
-            var rendered = TruncateToFit(text, style, nameBudget);
-
-            c.DrawText(new DrawTextInputs
-            {
-                Position = Place(contentLeft, rowBottom, nameBudget, RowHeight),
-                Text = rendered,
-                Style = style,
-                ZIndex = z,
-            });
-
-            if (badgeWidth > 0)
-            {
-                var nameWidth = _canvas.MeasureTextWidth(rendered, style);
-                DrawAheadBehindBadgeAt(c, localRow!, contentLeft + nameWidth + nameBadgeGap, rowBottom, z);
-            }
-        }
-
-        private (string text, TextStyle style) SelectNameTextAndStyle(BranchRow row, bool isSelected)
-        {
-            switch (row)
-            {
-                case LocalHeaderRow:
-                case RemotesHeaderRow:
-                case RemoteHeaderRow:
-                case StashesHeaderRow:
-                    return (row.DisplayName, _headerTextStyle);
-                case LocalBranchRow lb when EffectiveIsHead(lb):
-                    return (lb.DisplayName, isSelected ? _headTextSelectedStyle : _headTextStyle);
-                case LocalBranchRow lb when IsBusyRow(lb):
-                    return (lb.DisplayName, _branchTextBusyStyle);
-                case LocalBranchRow lb when _worktreeBranches.Contains(lb.Name):
-                    return (lb.DisplayName, _branchTextBusyStyle);
-                default:
-                    return (row.DisplayName, isSelected ? _branchTextSelectedStyle : _branchTextStyle);
-            }
-        }
-
-        private float DrawRowIcon(ICanvas c, BranchRow row, bool isSelected, float left, float rowBottom, int z)
-        {
-            var (glyph, style) = SelectRowIcon(row, isSelected);
-            var width = c.MeasureTextWidth(glyph, style);
-
-            c.DrawText(new DrawTextInputs
-            {
-                Position = Place(left, rowBottom, width, RowHeight),
-                Text = glyph,
-                Style = style,
-                ZIndex = z,
-            });
-            return left + width + IconGap;
-        }
-
-        private (string glyph, TextStyle style) SelectRowIcon(BranchRow row, bool isSelected)
-        {
-            return row switch
-            {
-                FolderRow f => (
-                    f.IsOpen ? LucideIcons.FolderOpen : LucideIcons.Folder,
-                    _folderIconStyle),
-                StashRow => (
-                    LucideIcons.Stash,
-                    isSelected ? _branchIconActiveStyle : _branchIconStyle),
-                _ => SelectBranchIcon(row, isSelected),
-            };
-        }
-
-        private (string glyph, TextStyle style) SelectBranchIcon(BranchRow row, bool isSelected)
-        {
-            if (IsBusyRow(row) && !EffectiveIsHead(row))
-                return (LucideIcons.Branch, _branchIconBusyStyle);
-
-            if (row is LocalBranchRow lb)
-            {
-                return lb.UpstreamState switch
-                {
-                    BranchUpstreamState.Tracked => (LucideIcons.Branch, _upstreamLinkedIconStyle),
-                    BranchUpstreamState.Gone => (LucideIcons.CloudOff, _upstreamGoneIconStyle),
-                    _ => (LucideIcons.Branch, _branchIconLocalOnlyStyle),
-                };
-            }
-
-            var style = isSelected ? _branchIconActiveStyle : _branchIconStyle;
-            return (LucideIcons.Branch, style);
-        }
-
-        private const float BadgeGap = 8f;
-        private const float BadgeNumIconGap = 0f;
-
-        private float MeasureAheadBehindBadge(ICanvas canvas, LocalBranchRow row)
-        {
-            var ahead = row.AheadBy.GetValueOrDefault();
-            var behind = row.BehindBy.GetValueOrDefault();
-            if (ahead == 0 && behind == 0) return 0f;
-
-            var width = 0f;
-            if (ahead > 0)
-            {
-                width += canvas.MeasureTextWidth(LucideIcons.Push, _aheadIconStyle)
-                       + BadgeNumIconGap
-                       + canvas.MeasureTextWidth(ahead.ToString(), _aheadNumStyle);
-            }
-            if (behind > 0)
-            {
-                if (width > 0) width += BadgeGap;
-                width += canvas.MeasureTextWidth(LucideIcons.Pull, _behindIconStyle)
-                       + BadgeNumIconGap
-                       + canvas.MeasureTextWidth(behind.ToString(), _behindNumStyle);
-            }
-            return width;
-        }
-
-        private void DrawAheadBehindBadgeAt(ICanvas c, LocalBranchRow row, float leftX, float rowBottom, int z)
-        {
-            var ahead = row.AheadBy.GetValueOrDefault();
-            var behind = row.BehindBy.GetValueOrDefault();
-            if (ahead == 0 && behind == 0) return;
-
-            var cursor = leftX;
-            if (ahead > 0)
-                cursor = DrawIconAndCount(c, ahead.ToString(), LucideIcons.Push, _aheadNumStyle, _aheadIconStyle, cursor, rowBottom, BadgeNumIconGap, z) + BadgeGap;
-            if (behind > 0)
-                DrawIconAndCount(c, behind.ToString(), LucideIcons.Pull, _behindNumStyle, _behindIconStyle, cursor, rowBottom, BadgeNumIconGap, z);
-        }
-
-        // Draws "<icon><gap><count>" left-aligned at <leftX>. Returns the right edge of the
-        // drawn pair so callers can chain badges rightward.
-        private float DrawIconAndCount(
-            ICanvas c, string count, string icon,
-            TextStyle countStyle, TextStyle iconStyle,
-            float leftX, float rowBottom, float gap, int z)
-        {
-            var iconWidth = _canvas.MeasureTextWidth(icon, iconStyle);
-            var countWidth = _canvas.MeasureTextWidth(count, countStyle);
-            var countLeft = leftX + iconWidth + gap;
-
-            c.DrawText(new DrawTextInputs
-            {
-                Position = Place(leftX, rowBottom, iconWidth, RowHeight),
-                Text = icon,
-                Style = iconStyle,
-                ZIndex = z,
-            });
-            c.DrawText(new DrawTextInputs
-            {
-                Position = Place(countLeft, rowBottom, countWidth, RowHeight),
-                Text = count,
-                Style = countStyle,
-                ZIndex = z,
-            });
-            return countLeft + countWidth;
-        }
-
-        private bool IsBusyRow(BranchRow row) =>
-            _busyBranch != null
-            && row is LocalBranchRow lb
-            && lb.Name == _busyBranch;
-
-        private bool EffectiveIsHead(BranchRow row) =>
-            row is LocalBranchRow lb
-            && (_pendingHead != null ? lb.Name == _pendingHead : lb.IsHead);
-
-        private string TruncateToFit(string text, TextStyle style, float available)
-        {
-            return TextMeasure.TruncateToFit(text, style, available, _canvas);
-        }
-
-        private void OnRowClicked(int rowIndex, InputModifiers _, PointF __)
-        {
-            var row = (rowIndex >= 0 && rowIndex < _rows.Count) ? _rows[rowIndex] : null;
-            DispatchClick(_vm, row);
-        }
-
-        private void OnRowActivated(int rowIndex)
-        {
-            if (rowIndex < 0 || rowIndex >= _rows.Count) return;
-            DispatchActivate(_vm, _rows[rowIndex]);
-        }
-
-        private void OnRowContextRequested(int rowIndex, PointF point)
-        {
-            if (rowIndex < 0 || rowIndex >= _rows.Count) return;
-            var row = _rows[rowIndex];
-
-            var items = BuildMenuItemsFor(_vm, row);
-            if (items.Count == 0) return;
-
-            _list.SetContextHighlight(rowIndex);
-            var opened = RepoBarContextMenu.Show(_ctx, point, items);
-            if (opened == null)
-            {
-                _list.SetContextHighlight(null);
-                return;
-            }
-            opened.Closed += () => _list.SetContextHighlight(null);
-        }
-
-        private static void DispatchClick(BranchesViewModel vm, BranchRow? row)
-        {
-            switch (row)
-            {
-                case null:
-                    vm.ClearSelection();
-                    return;
-                case LocalHeaderRow:
-                    vm.ToggleLocalSection();
-                    return;
-                case RemotesHeaderRow:
-                    vm.ToggleRemotesSection();
-                    return;
-                case StashesHeaderRow:
-                    vm.ToggleStashesSection();
-                    return;
-                case RemoteHeaderRow r:
-                    vm.ToggleRemote(r.RemoteName);
-                    return;
-                case FolderRow f:
-                    vm.ToggleFolder(f.Folder);
-                    return;
-                case LocalBranchRow b:
-                    vm.SelectLocalBranch(b.Name, b.TipSha);
-                    return;
-                case RemoteBranchRow b:
-                    vm.SelectRemoteBranch(b.RemoteName, b.Name, b.TipSha);
-                    return;
-                case StashRow s:
-                    vm.SelectStash(s.Label, s.TipSha);
-                    return;
-            }
-        }
-
-        private static void DispatchActivate(BranchesViewModel vm, BranchRow row)
-        {
-            switch (row)
-            {
-                case LocalBranchRow b:
-                    vm.ActivateLocalBranch(b.Name, b.IsHead);
-                    return;
-                case RemoteBranchRow b:
-                    vm.ActivateRemoteBranch(b.RemoteName, b.Name);
-                    return;
-                case StashRow s:
-                    vm.ActivateStash(s.Index, s.Label, s.DisplayName);
-                    return;
-            }
-        }
-
-        private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItemsFor(BranchesViewModel vm, BranchRow row) =>
-            row switch
-            {
-                LocalHeaderRow => vm.BuildLocalFolderMenu(new BranchFolder(BranchScope.Local, string.Empty)),
-                RemotesHeaderRow => vm.BuildRemotesHeaderMenuItems(),
-                StashesHeaderRow => vm.BuildStashesHeaderMenuItems(),
-                RemoteHeaderRow r => vm.BuildRemoteHeaderMenuItems(r.RemoteName),
-                FolderRow { Folder.Scope.IsRemote: true } f => vm.BuildRemoteFolderMenu(f.Folder),
-                FolderRow f => vm.BuildLocalFolderMenu(f.Folder),
-                LocalBranchRow b => vm.BuildLocalBranchMenuItems(b.Name, b.IsHead),
-                RemoteBranchRow b => vm.BuildRemoteBranchMenuItems(b.RemoteName, b.Name),
-                StashRow s => vm.BuildStashMenuItems(s.Index, s.Label, s.DisplayName),
-                _ => [],
-            };
-
-        public void SetVerticalNormalizedScrollPosition(float normalized)
-        {
-            var contentHeight = _rows.Count * RowHeight;
-            var bodyHeight = _list.Position.Height;
-            var range = contentHeight - bodyHeight;
-            _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
-        }
-
-        public void SetHorizontalNormalizedScrollPosition(float normalized) { }
-
-        private void NotifyScrollChanged()
-        {
-            var contentHeight = _rows.Count * RowHeight;
-            var bodyHeight = _list.Position.Height;
-
-            float vScale, normalizedY;
-            if (contentHeight <= bodyHeight || bodyHeight <= 0)
-            {
-                vScale = 1f;
-                normalizedY = 0f;
-            }
-            else
-            {
-                vScale = bodyHeight / contentHeight;
-                var range = contentHeight - bodyHeight;
-                normalizedY = Math.Clamp(_list.ScrollY / range, 0f, 1f);
-            }
-
-            VerticalScale = vScale;
-            HorizontalScale = 1f;
-
-            if (Math.Abs(vScale - _lastVerticalScale) > 0.0001f
-                || Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-            {
-                _lastVerticalScale = vScale;
-                _lastNormalizedY = normalizedY;
-                VerticalScrollPositionChanged?.Invoke(normalizedY);
-            }
-        }
+        return new Provide<BranchesViewModel> { Value = vm, Child = content }
+            .BindVm(vm)
+            .Use(_ => activeKey);
     }
+
+    private static IWidget BranchList(BranchesViewModel vm, InputSystem input) => new ScrollArea
+    {
+        Style = Theme.ScrollBar(),
+        AutoHide = true,
+        Children =
+        [
+            new Padding
+            {
+                Amount = new PaddingStyle { Left = Spacing.Md, Top = Spacing.Md, Bottom = Spacing.Md },
+                Children =
+                [
+                    new Each<BranchRow>
+                    {
+                        Items = vm.Rows,
+                        Template = new BranchListRow().WithController<BranchRowController, IBranchRowInteraction>(),
+                        CrossAxis = CrossAxisAlignment.Stretch,
+                    },
+                ],
+            },
+        ],
+    }.WithController(input, () => new BranchBackgroundController(vm));
+
+    private static IWidget Placeholder(BranchesViewModel vm) => new Center
+    {
+        Child = new Text
+        {
+            Value = Prop.Bind(vm.PlaceholderText),
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Color = Theme.Color(s => s.BranchesView.SectionHeaderText),
+        },
+    };
 }

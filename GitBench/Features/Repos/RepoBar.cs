@@ -9,21 +9,25 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
 internal sealed record RepoBar : Widget
 {
     internal const int RowPaddingLeft = (int)TreeMetrics.BaseIndent;
-    internal const int RowChevronWidth = 12;
-    internal const int RowIconWidth = Sizes.Icon;
-    internal const int RowIconGap = 6;
+    internal const int RowChevronWidth = (int)TreeMetrics.ChevronWidth;
+    internal const int RowIconWidth = (int)TreeMetrics.IconWidth;
+    internal const int RowIconGap = (int)TreeMetrics.ColumnGap;
 
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoBarViewModel>();
         var input = ctx.Require<InputSystem>();
-        var selectionBar = new RepoSelectionBar(ctx.Require<IFrameTicker>(), ctx.Require<IRepoRegistry>());
+        var registry = ctx.Require<IRepoRegistry>();
+        // The selection bar keys on the active repo id; it owns the subscription, this widget owns the Derived.
+        var activeId = new Derived<Guid?>(() => registry.Active.Value?.Id);
+        var selectionBar = new TreeSelectionBar<Guid>(ctx.Require<IFrameTicker>(), activeId);
 
         var bar = new Box
         {
@@ -40,7 +44,7 @@ internal sealed record RepoBar : Widget
                         BuildHeader(ctx),
                         new Grow
                         {
-                            Child = new RepoSelectionOverlay
+                            Child = new TreeSelectionOverlay<Guid>
                             {
                                 Bar = selectionBar,
                                 Child = new ScrollArea
@@ -74,7 +78,8 @@ internal sealed record RepoBar : Widget
 
         return bar
             .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm)))
-            .BindVm(vm);
+            .BindVm(vm)
+            .Use(_ => activeId);
     }
 
     // Sticky panel header: the "Repositories" title plus the add-repo menu trigger. Distinct from the

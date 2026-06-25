@@ -1,5 +1,4 @@
 using GitBench.Controls;
-using GitBench.Features.LocalChanges;
 using GitBench.Features.Worktrees;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -10,9 +9,11 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-// Shared visual layout for a RepoBar row: indent, expansion chevron, kind glyph, name, and status
-// dot, all driven by the surrounding node view model. The primary and nested variants supply the
-// glyph, height, and glyph size; the hover flag is owned by the variant's state and drives the accent.
+// A RepoBar row: composes the shared TreeRow with the repo kind glyph, name, status dot, and the
+// fold chevron, all driven by the surrounding node view model. The primary and nested variants supply
+// the glyph, height, and glyph size; the hover flag is owned by the variant's state and drives the
+// accent. Registers the row's live rect with the shared selection bar so the active row's fill slides
+// here.
 internal sealed record RepoRowShell : Widget
 {
     public required string Glyph { get; init; }
@@ -23,65 +24,33 @@ internal sealed record RepoRowShell : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-        var selectionBar = ctx.Require<RepoSelectionBar>();
-        var leftPad = RepoBar.RowPaddingLeft + (int)TreeMetrics.IndentLevel * vm.Depth;
+        var selectionBar = ctx.Require<TreeSelectionBar<Guid>>();
 
-        var box = new Box
+        var statusDot = new Box
         {
-            Height = RowHeight,
-            Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),
-            Children =
-            [
-                new Padding
-                {
-                    Amount = new PaddingStyle { Left = leftPad, Right = Spacing.Lg },
-                    Children =
-                    [
-                        new Row
-                        {
-                            Gap = RepoBar.RowIconGap,
-                            CrossAxis = CrossAxisAlignment.Center,
-                            Children =
-                            [
-                                new WorktreeChevron().WithController<KbmController>(),
-                                new Text
-                                {
-                                    Value = Glyph,
-                                    FontFamily = LucideIcons.FontFamily,
-                                    FontSize = GlyphSize,
-                                    Width = RepoBar.RowIconWidth,
-                                    HAlign = TextAlignment.Center,
-                                    VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
-                                },
-                                new Grow
-                                {
-                                    Child = new Text
-                                    {
-                                        Value = Prop.Bind<string?>(() => vm.DisplayName.Value),
-                                        HAlign = TextAlignment.Start,
-                                        VAlign = TextAlignment.Center,
-                                        Overflow = TextOverflow.Ellipsis,
-                                        Color = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value)),
-                                    },
-                                },
-                                new Box
-                                {
-                                    Width = 8,
-                                    Height = 8,
-                                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                                    Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
-                                        ? s.RepoBarRow.BadgeError
-                                        : s.RepoBarRow.BadgeDirty),
-                                    Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
-                                },
-                            ],
-                        },
-                    ],
-                },
-            ],
+            Width = 8,
+            Height = 8,
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
+                ? s.RepoBarRow.BadgeError
+                : s.RepoBarRow.BadgeDirty),
+            Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
         };
 
-        return box.Use(view => selectionBar.Register(vm.RepoId, () => view.Position));
+        var row = new TreeRow
+        {
+            Depth = vm.Depth,
+            RowHeight = RowHeight,
+            GlyphSize = GlyphSize,
+            Chevron = new WorktreeChevron().WithController<KbmController>(),
+            Glyph = Glyph,
+            IconColor = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
+            Name = Prop.Bind<string?>(() => vm.DisplayName.Value),
+            NameColor = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value)),
+            Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),
+            Trailing = statusDot,
+        };
+
+        return row.Use(view => selectionBar.Register(vm.RepoId, () => view.Position));
     }
 }

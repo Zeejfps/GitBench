@@ -46,6 +46,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public IReadable<bool> IsLoading { get; }
     public IReadable<IReadOnlySet<string>> WorktreeBranches { get; }
 
+    // The flattened, collapse-aware row list the sidebar renders, projected with value-equality
+    // reconciliation so a reload only remounts the rows whose data actually changed and a collapse
+    // only mounts/unmounts the affected subtree.
+    public ObservableList<BranchRow> Rows => _rows.Items;
+
+    // A centered placeholder ("Loading…" / error) shown in place of the list; null when the list shows.
+    public IReadable<string?> PlaceholderText => _placeholderText;
+    public IReadable<bool> HasPlaceholder => _hasPlaceholder;
+
     private Guid _activeRepoId;
 
     // Op lanes for the mutating commands. Checkout and fast-forward share one lane because
@@ -55,6 +64,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // switch — a mutation must still report its result after a switch.
     private readonly GenerationGuard _branchOpGen;
     private readonly GenerationGuard _stashGen;
+
+    private readonly Derived<IReadOnlyList<BranchRow>> _rowModels;
+    private readonly KeyedViewModelList<BranchRow, BranchRow, BranchRow> _rows;
+    private readonly Derived<string?> _placeholderText;
+    private readonly Derived<bool> _hasPlaceholder;
 
     public BranchesViewModel(
         IRepoRegistry registry,
@@ -83,6 +97,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         LoadError = Slice(s => s.LoadError);
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
+
+        _rowModels = new Derived<IReadOnlyList<BranchRow>>(() => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value));
+        _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
+        _placeholderText = new Derived<string?>(() =>
+            LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err)
+            : Listing.Value == null && IsLoading.Value ? _loc.Strings.Value.CommonLoading
+            : null);
+        _hasPlaceholder = new Derived<bool>(() => _placeholderText.Value != null);
 
         // The listing is projected from the store (which owns loading + caching). OnActiveRepoChanged
         // handles only the per-repo UI bits (fold state, worktree set, selection reset).
@@ -1009,6 +1031,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
 
         return segments;
+    }
+
+    public override void Dispose()
+    {
+        _rows.Dispose();
+        _rowModels.Dispose();
+        _placeholderText.Dispose();
+        _hasPlaceholder.Dispose();
+        base.Dispose();
     }
 }
 

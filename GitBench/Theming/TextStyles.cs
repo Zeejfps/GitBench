@@ -36,4 +36,14 @@ internal static class TextStyles
         VerticalAlignment = TextAlignment.Center,
         HorizontalAlignment = TextAlignment.Start,
     };
+
+    /// <summary>Icon shape centered within its column — for a fixed-width icon slot, as the repo bar uses.</summary>
+    public static TextStyle IconCentered(uint color, float size = 14f) => new()
+    {
+        TextColor = color,
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = size,
+        VerticalAlignment = TextAlignment.Center,
+        HorizontalAlignment = TextAlignment.Center,
+    };
 }
