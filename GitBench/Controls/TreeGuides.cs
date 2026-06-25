@@ -1,5 +1,6 @@
 using System;
 using GitBench.Features.LocalChanges;
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
@@ -18,30 +19,32 @@ internal enum TreeGuide : byte
     Corner = 3,
 }
 
-// A row's full set of ancestry guides, one <see cref="TreeGuide"/> per depth level, packed two bits per
-// level into a long so it travels as a cheap value (value equality lets a bound view skip redundant
-// repaints and the branches' value-keyed row list reuse unchanged rows). Levels run 0..Depth-1; the
-// deepest level is the row's own connector, the shallower ones its ancestors' trunks.
+// A row's full set of ancestry guides, one <see cref="TreeGuide"/> per level, packed two bits per level
+// into a long so it travels as a cheap value (value equality lets a bound view skip redundant repaints
+// and the branches' value-keyed row list reuse unchanged rows). Level 0 is the section/group header (the
+// root) the row's top-level ancestor hangs off; each deeper level is one tree depth in. The deepest
+// level (<see cref="Levels"/>-1) is the row's own connector, the shallower ones its ancestors' trunks.
+// A row with no guides (a section header — it is the root) has <see cref="Levels"/> 0.
 internal readonly struct TreeGuides : IEquatable<TreeGuides>
 {
     private readonly long _mask;
 
-    public TreeGuides(long mask, int depth)
+    public TreeGuides(long mask, int levels)
     {
         _mask = mask;
-        Depth = depth;
+        Levels = levels;
     }
 
-    public int Depth { get; }
+    public int Levels { get; }
 
     public TreeGuide At(int level) => (TreeGuide)((_mask >> (level * 2)) & 0b11);
 
     public static long SetKind(long mask, int level, TreeGuide kind) =>
         (mask & ~(0b11L << (level * 2))) | ((long)kind << (level * 2));
 
-    public bool Equals(TreeGuides other) => _mask == other._mask && Depth == other.Depth;
+    public bool Equals(TreeGuides other) => _mask == other._mask && Levels == other.Levels;
     public override bool Equals(object? obj) => obj is TreeGuides g && Equals(g);
-    public override int GetHashCode() => HashCode.Combine(_mask, Depth);
+    public override int GetHashCode() => HashCode.Combine(_mask, Levels);
 }
 
 // Paints a row's indent guides behind its content: a vertical hairline per ancestry level, plus the
@@ -50,6 +53,9 @@ internal readonly struct TreeGuides : IEquatable<TreeGuides>
 internal sealed class TreeGuidesView : View
 {
     private const float LineWidth = 1f;
+    // The rows carry a small gap between them (Spacing.Hair, shared by both trees). A continuing trunk
+    // overruns its row by that much at each open end so the line reads as unbroken across the gap.
+    private const float GapBridge = Spacing.Hair;
 
     private TreeGuides _guides;
     private uint _color;
@@ -78,38 +84,47 @@ internal sealed class TreeGuidesView : View
 
     protected override void OnDrawSelf(ICanvas c)
     {
-        var depth = _guides.Depth;
-        if (depth <= 0 || (_color >> 24) == 0) return;
+        var levels = _guides.Levels;
+        if (levels <= 0 || (_color >> 24) == 0) return;
 
         var z = GetDrawZIndex();
         var pos = Position;
         var half = LineWidth / 2f;
         var centerY = pos.Bottom + pos.Height / 2f;
-        // Where the elbow lands: the chevron column of the row's own indent.
-        var contentX = pos.Left + TreeMetrics.BaseIndent + TreeMetrics.IndentLevel * depth + TreeMetrics.ChevronWidth / 2f;
+        // Where the elbow lands: the chevron column of the row's own indent (its tree depth is levels-1).
+        var contentX = ColumnX(pos.Left, levels);
 
-        for (var level = 0; level < depth; level++)
+        for (var level = 0; level < levels; level++)
         {
             var kind = _guides.At(level);
             if (kind == TreeGuide.None) continue;
 
-            var colX = pos.Left + TreeMetrics.BaseIndent + TreeMetrics.IndentLevel * level + TreeMetrics.ChevronWidth / 2f;
+            var colX = ColumnX(pos.Left, level);
             switch (kind)
             {
                 case TreeGuide.Through:
-                    Fill(c, z, colX - half, pos.Bottom, LineWidth, pos.Height);
+                    // Continues both above and below: overrun both gaps.
+                    Fill(c, z, colX - half, pos.Bottom - GapBridge, LineWidth, pos.Height + 2f * GapBridge);
                     break;
                 case TreeGuide.Tee:
-                    Fill(c, z, colX - half, pos.Bottom, LineWidth, pos.Height);
+                    // Connects up to its parent/siblings and on down to the next sibling: overrun both.
+                    Fill(c, z, colX - half, pos.Bottom - GapBridge, LineWidth, pos.Height + 2f * GapBridge);
                     Fill(c, z, colX - half, centerY - half, contentX - (colX - half), LineWidth);
                     break;
                 case TreeGuide.Corner:
-                    Fill(c, z, colX - half, centerY, LineWidth, pos.Height / 2f);
+                    // Last child: the trunk ends here, so only overrun the gap above to reach its parent.
+                    Fill(c, z, colX - half, centerY, LineWidth, pos.Height / 2f + GapBridge);
                     Fill(c, z, colX - half, centerY - half, contentX - (colX - half), LineWidth);
                     break;
             }
         }
     }
+
+    // The x of a guide level's vertical, relative to the row's left edge. Level 0 is the section/group
+    // header column (outdented to the header's chevron); each deeper level steps in by one tree indent.
+    private static float ColumnX(float left, int level) => level == 0
+        ? left + Spacing.Hair + Sizes.Icon / 2f
+        : left + TreeMetrics.BaseIndent + TreeMetrics.IndentLevel * (level - 1) + TreeMetrics.ChevronWidth / 2f;
 
     private void Fill(ICanvas c, int z, float left, float bottom, float w, float h)
     {

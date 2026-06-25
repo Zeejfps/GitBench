@@ -99,16 +99,18 @@ internal sealed record TreeRow : Widget
             ],
         };
 
-        // Behind the content, a nested row draws its ancestry connectors (trunks + the elbow into it) so
-        // it reads as a child of the row above. Top-level rows (Depth 0) have no ancestry to draw.
-        var layers = new List<IWidget>(2);
-        if (Depth > 0)
-            layers.Add(new TreeGuidesWidget
+        // Behind the content, a row draws its ancestry connectors (trunks + the elbow into it) running up
+        // to its section/group header, so it reads as part of that header's tree. Section headers are the
+        // roots and pass empty guides, so the view draws nothing for them.
+        var layers = new List<IWidget>(2)
+        {
+            new TreeGuidesWidget
             {
                 Guides = Guides,
                 Color = Theme.Color(s => s.RowSelection.IndentGuide),
-            });
-        layers.Add(content);
+            },
+            content,
+        };
 
         var box = new Box
         {

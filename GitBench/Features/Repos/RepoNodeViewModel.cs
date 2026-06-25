@@ -111,7 +111,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _childRepos = new Derived<IReadOnlyList<Repo>>(ComputeChildRepos);
         _children = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _childRepos, r => r.Id, r => factory.Create(r, depth + 1));
-        _guides = new Derived<TreeGuides>(() => new TreeGuides(ComputeGuideMask(), Depth));
+        _guides = new Derived<TreeGuides>(() => new TreeGuides(ComputeGuideMask(), Depth + 1));
 
         ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
         Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
@@ -137,24 +137,23 @@ internal sealed class RepoNodeViewModel : IDisposable
         return false;
     }
 
-    // This row's guides: its own connector at its parent's column (corner if it is the last child, else a
-    // tee), plus a passthrough trunk at each shallower ancestor column whose subtree continues below this
-    // row — i.e. the ancestor on the path one level deeper than the column still has a sibling after it.
+    // This row's guides. Level k is the path node at depth k (level 0 is the group header's child — the
+    // top-level primary). The deepest level (this row) draws its own connector — a corner if it is the
+    // last child, else a tee — and each shallower level a passthrough trunk while that ancestor still has
+    // a sibling below it.
     private long ComputeGuideMask()
     {
-        if (Depth <= 0) return 0L;
-        var me = _currentRepo.Value ?? _initial;
-        var mask = TreeGuides.SetKind(0L, Depth - 1, IsLastSibling(me) ? TreeGuide.Corner : TreeGuide.Tee);
-
-        var node = me;
-        for (var nodeDepth = Depth; nodeDepth >= 1; nodeDepth--)
+        long mask = 0;
+        var node = _currentRepo.Value ?? _initial;
+        for (var depth = Depth; depth >= 0; depth--)
         {
-            if (node.ParentRepoId is not { } pid) break;
-            if (FindRepo(pid) is not { } parent) break;
+            var last = IsLastSibling(node);
+            mask = TreeGuides.SetKind(mask, depth, depth == Depth
+                ? (last ? TreeGuide.Corner : TreeGuide.Tee)
+                : (last ? TreeGuide.None : TreeGuide.Through));
+            if (depth == 0) break;
+            if (node.ParentRepoId is not { } pid || FindRepo(pid) is not { } parent) break;
             node = parent;
-            var ancestorDepth = nodeDepth - 1;
-            if (ancestorDepth >= 1)
-                mask = TreeGuides.SetKind(mask, ancestorDepth - 1, IsLastSibling(node) ? TreeGuide.None : TreeGuide.Through);
         }
         return mask;
     }

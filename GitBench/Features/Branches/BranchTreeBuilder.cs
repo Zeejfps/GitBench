@@ -36,15 +36,20 @@ internal static class BranchTreeBuilder
         rows.Add(new RemotesHeaderRow(Depth: 0, ui.RemotesOpen));
         if (ui.RemotesOpen)
         {
-            foreach (var rg in listing.Remotes)
+            var remoteCount = listing.Remotes.Count;
+            for (var ri = 0; ri < remoteCount; ri++)
             {
+                var rg = listing.Remotes[ri];
                 var isOpen = ui.RemoteOpen.TryGetValue(rg.Name, out var v) ? v : true;
-                rows.Add(new RemoteHeaderRow(RemoteHeaderDepth, rg.Name, isOpen));
+                // The remote header is a child of the REMOTES section: its own connector hangs off the
+                // root column, and its branches inherit the root trunk while another remote follows below.
+                var isLast = ri == remoteCount - 1;
+                var headerMask = TreeGuides.SetKind(0, RemoteHeaderDepth, isLast ? TreeGuide.Corner : TreeGuide.Tee);
+                rows.Add(new RemoteHeaderRow(RemoteHeaderDepth, rg.Name, isOpen) { GuideMask = headerMask });
                 if (!isOpen) continue;
-                // The remote header is a top-level row (like a primary repo under a group header), so it
-                // draws no trunk of its own; its branches start a fresh subtree just like the local one.
+                var childTrunk = TreeGuides.SetKind(0, RemoteHeaderDepth, isLast ? TreeGuide.None : TreeGuide.Through);
                 var remoteTree = PathTree.Build(rg.Branches, b => b.Name);
-                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, trunkMask: 0);
+                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, childTrunk);
             }
         }
 
@@ -53,18 +58,22 @@ internal static class BranchTreeBuilder
             rows.Add(new StashesHeaderRow(Depth: 0, ui.StashesOpen));
             if (ui.StashesOpen)
             {
-                foreach (var s in listing.Stashes)
+                var stashCount = listing.Stashes.Count;
+                for (var si = 0; si < stashCount; si++)
                 {
+                    var s = listing.Stashes[si];
                     var label = $"stash@{{{s.Index}}}";
-                    rows.Add(new StashRow(StashDepth, s.Index, label, s.Subject, s.Sha));
+                    var mask = TreeGuides.SetKind(0, StashDepth, si == stashCount - 1 ? TreeGuide.Corner : TreeGuide.Tee);
+                    rows.Add(new StashRow(StashDepth, s.Index, label, s.Subject, s.Sha) { GuideMask = mask });
                 }
             }
         }
         return rows;
     }
 
-    // trunkMask carries the ancestors' guide state for levels [0, rowDepth-1]: the passthrough trunks
-    // each row inherits, plus the parent's own column (overwritten here by each row's immediate elbow).
+    // trunkMask carries the ancestors' passthrough trunks for guide levels [0, rowDepth-1] — level 0 is
+    // the section/remote header (the root), each deeper level a tree depth in. Each row sets its own
+    // connector at level rowDepth (its parent's column) on top of those.
     private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth, long trunkMask)
     {
         var rowDepth = treeBaseDepth + depth;
@@ -74,11 +83,7 @@ internal static class BranchTreeBuilder
         {
             var node = nodes[i];
             var isLast = i == count - 1;
-            // This row's own connector lives at its parent's column (level rowDepth-1); top-level rows
-            // (rowDepth 0) sit directly under a section header and draw no connector.
-            var mask = rowDepth >= 1
-                ? TreeGuides.SetKind(trunkMask, rowDepth - 1, isLast ? TreeGuide.Corner : TreeGuide.Tee)
-                : trunkMask;
+            var mask = TreeGuides.SetKind(trunkMask, rowDepth, isLast ? TreeGuide.Corner : TreeGuide.Tee);
 
             if (node.Leaf is { } entry)
             {
@@ -93,12 +98,9 @@ internal static class BranchTreeBuilder
                 rows.Add(new FolderRow(rowDepth, folder, node.Segment, open) { GuideMask = mask });
                 if (open)
                 {
-                    // The children's passthrough at this folder's parent column is whether the folder has
-                    // a sibling below it. A top-level folder (rowDepth 0) sits under a section header, so —
-                    // like a primary repo under a group header — it starts no trunk for its descendants.
-                    var childTrunk = rowDepth >= 1
-                        ? TreeGuides.SetKind(trunkMask, rowDepth - 1, isLast ? TreeGuide.None : TreeGuide.Through)
-                        : 0L;
+                    // The folder's children inherit its trunk at its own column — a passthrough while the
+                    // folder has a sibling below it, nothing once it is the last.
+                    var childTrunk = TreeGuides.SetKind(trunkMask, rowDepth, isLast ? TreeGuide.None : TreeGuide.Through);
                     EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1, childTrunk);
                 }
             }
