@@ -14,7 +14,9 @@ namespace GitBench.Features.Commits;
 
 public abstract record CommitDetailsRenderState
 {
+    // No-selection and error states (carry centered text); Loading shows the structural skeleton.
     public sealed record Placeholder(string Text) : CommitDetailsRenderState;
+    public sealed record Loading : CommitDetailsRenderState;
     public sealed record Loaded(CommitDetails Details) : CommitDetailsRenderState;
 }
 
@@ -34,7 +36,6 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private string? _currentSha;
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
-    private string LoadingPlaceholder => _loc.Strings.Value.CommonLoading;
 
     public IReadable<CommitDetailsRenderState> RenderState { get; }
     public IReadable<string?> SelectedPath { get; }
@@ -122,7 +123,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         {
             SelectedPath = null,
             SelectedTarget = null,
-            Render = new CommitDetailsRenderState.Placeholder(LoadingPlaceholder),
+            Render = new CommitDetailsRenderState.Loading(),
         });
 
         RunBackground<CommitDetailsRenderState>(

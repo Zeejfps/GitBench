@@ -6,9 +6,9 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Controls;
 
 /// <summary>
-/// Plays a one-shot enter animation on its child when it mounts — the child fades, and (unless
-/// <see cref="Rise"/> is zero) drifts up, into place — then the tween parks and stops driving the
-/// render loop. Because a <see cref="Switch{T}"/> branch mounts fresh each time it becomes shown,
+/// Plays a one-shot enter animation on its child when it mounts — the child fades in (and, if a
+/// non-zero <see cref="Rise"/> is set, drifts up into place) — then the tween parks and stops driving
+/// the render loop. Because a <see cref="Switch{T}"/> branch mounts fresh each time it becomes shown,
 /// wrapping the branch makes the animation replay on appearance (a repo's content arriving) yet not
 /// on an in-place refresh of already-shown content.
 /// </summary>
@@ -16,7 +16,7 @@ internal sealed record FadeIn : Widget
 {
     public required IWidget Child { get; init; }
     public float Duration { get; init; } = Transitions.ContentEnterSeconds;
-    public float Rise { get; init; } = Transitions.ContentRise;
+    public float Rise { get; init; }
 
     /// <summary>For a loading placeholder rather than content: opacity rides an ease-in curve so it
     /// stays faint early and a fast load swaps it out before it registers. Defaults to a content fade

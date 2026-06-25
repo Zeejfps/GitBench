@@ -218,7 +218,6 @@ internal sealed class LocalChangesContentView : ContainerView
         this.UseController(input, _arrowController);
 
         this.Bind(_enterTween.LinearProgress, p => _snapshotContainer.Opacity = p);
-        this.Bind(_enterTween.Progress, p => _snapshotContainer.TranslationY = Transitions.ContentRise * (1f - p));
         this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
         this.Use(() => _enterTween);
         this.Use(() => _placeholderTween);

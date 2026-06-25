@@ -53,8 +53,8 @@ internal sealed record BranchesView : Widget
                         // blooms so a quick load swaps it out before it visibly registers.
                         Case = kind => kind switch
                         {
-                            BranchesContentKind.Loading => new FadeIn { Child = new BranchesSkeleton(), Bloom = true, Rise = 0f },
-                            BranchesContentKind.Message => new FadeIn { Child = Placeholder(vm), Bloom = true, Rise = 0f },
+                            BranchesContentKind.Loading => new FadeIn { Child = new BranchesSkeleton(), Bloom = true },
+                            BranchesContentKind.Message => new FadeIn { Child = Placeholder(vm), Bloom = true },
                             _ => new FadeIn { Child = BranchList(vm, input) },
                         },
                     },

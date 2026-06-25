@@ -9,9 +9,6 @@ internal static class Transitions
     /// <summary>A repo's content fading into place once its data arrives.</summary>
     public const float ContentEnterSeconds = 0.25f;
 
-    /// <summary>Upward drift content travels as it fades in (logical points).</summary>
-    public const float ContentRise = 6f;
-
     /// <summary>A loading placeholder blooming in. Longer and ease-in (see <see cref="Easings.EaseInCubic"/>)
     /// so a load that resolves within a moment replaces a placeholder that never visibly appeared.</summary>
     public const float PlaceholderBloomSeconds = 0.3f;

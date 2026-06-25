@@ -27,6 +27,7 @@ internal sealed class CommitDetailsView : ContainerView
         return CategoricalPalette.Avatar(h);
     }
 
+    private readonly Context _ctx;
     private readonly ICanvas _canvas;
     private readonly IThemeService<ThemeStyles> _theme;
     private readonly ILocalizationService _loc;
@@ -39,12 +40,12 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly RectView _panel;
     private readonly FlexColumnView _placeholderHost;
     private readonly TextView _placeholder;
-    // Details fade up as a commit's data arrives from a placeholder; the placeholder blooms in. Both
-    // park when settled, and neither replays on a commit-to-commit change of already-shown details.
+    // Details fade up as a commit's data arrives; the placeholder text blooms in. Both park when
+    // settled, and neither replays on a commit-to-commit change of already-shown details.
     private readonly Tween _enterTween;
     private readonly Tween _placeholderTween;
-    private bool _contentVisible;
-    private bool _placeholderShown;
+    private enum Shown { None, Content, Skeleton, Placeholder }
+    private Shown _shown = Shown.None;
     private readonly State<string?> _selectedPath = new(null);
     private readonly ListArrowKbmController _arrowController;
     private CommitDetailsViewModel? _vm;
@@ -52,6 +53,7 @@ internal sealed class CommitDetailsView : ContainerView
 
     public CommitDetailsView(Context ctx)
     {
+        _ctx = ctx;
         var input = ctx.Require<InputSystem>();
         _canvas = ctx.Canvas;
         _theme = ctx.Theme();
@@ -166,7 +168,6 @@ internal sealed class CommitDetailsView : ContainerView
         // Bound before the view model (which drives the first SetRenderState) so the opacities start at
         // zero before the first show, rather than flashing fully opaque for a frame.
         this.Bind(_enterTween.LinearProgress, p => _splitContainer.Opacity = p);
-        this.Bind(_enterTween.Progress, p => _splitContainer.TranslationY = Transitions.ContentRise * (1f - p));
         this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
         this.Use(() => _enterTween);
         this.Use(() => _placeholderTween);
@@ -220,6 +221,9 @@ internal sealed class CommitDetailsView : ContainerView
         _lastRenderState = state;
         switch (state)
         {
+            case CommitDetailsRenderState.Loading:
+                ShowSkeleton();
+                break;
             case CommitDetailsRenderState.Placeholder p:
                 ShowPlaceholder(p.Text);
                 break;
@@ -227,6 +231,21 @@ internal sealed class CommitDetailsView : ContainerView
                 ShowDetails(l.Details);
                 break;
         }
+    }
+
+    private void ShowSkeleton()
+    {
+        // Stale-while-revalidate: keep the current commit's details visible while the next loads — the
+        // skeleton is only for a cold load, where there's nothing to preserve.
+        if (_shown is Shown.Content or Shown.Skeleton) return;
+
+        // Rebuilt fresh each time (not cached) so its pulse starts clean: the pulse is disposed when the
+        // skeleton is swapped out, and a reused view's disposed pulse would never breathe again. FadeIn
+        // blooms it in (ease-in) so a fast cold load doesn't flash it.
+        var skeleton = new FadeIn { Child = new CommitDetailsSkeleton(), Bloom = true }.BuildView(_ctx);
+        _panel.Children.Clear();
+        _panel.Children.Add(skeleton);
+        _shown = Shown.Skeleton;
     }
 
     private void ShowPlaceholder(string text)
@@ -239,11 +258,10 @@ internal sealed class CommitDetailsView : ContainerView
             _panel.Children.Clear();
             _panel.Children.Add(_placeholderHost);
         }
-        // Bloom only when the placeholder emerges from details (or on first show), not on a
-        // placeholder re-render (e.g. a locale switch) while it's already up.
-        if (_contentVisible || !_placeholderShown) _placeholderTween.Restart();
-        _contentVisible = false;
-        _placeholderShown = true;
+        // Bloom only when the placeholder first appears, not on a re-render (e.g. a locale switch)
+        // while it's already up.
+        if (_shown != Shown.Placeholder) _placeholderTween.Restart();
+        _shown = Shown.Placeholder;
         _headerInfo.Children.Clear();
         _changesSection.SetFiles(Array.Empty<FileChange>());
         _innerSplit.BottomVisible = false;
@@ -256,11 +274,10 @@ internal sealed class CommitDetailsView : ContainerView
             _panel.Children.Clear();
             _panel.Children.Add(_splitContainer);
         }
-        // Fade up only when details emerge from a placeholder; a commit-to-commit change of already-
-        // shown details swaps instantly, matching how the other panels skip the fade on refresh.
-        if (!_contentVisible) _enterTween.Restart();
-        _contentVisible = true;
-        _placeholderShown = false;
+        // Fade up only when details emerge from a placeholder/skeleton; a commit-to-commit change of
+        // already-shown details swaps instantly, matching how the other panels skip the fade on refresh.
+        if (_shown != Shown.Content) _enterTween.Restart();
+        _shown = Shown.Content;
         _headerInfo.Children.Clear();
 
         var topColumn = new ColumnView { Gap = Spacing.Md };

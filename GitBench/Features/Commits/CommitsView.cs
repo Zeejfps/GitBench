@@ -211,7 +211,6 @@ internal sealed record CommitsView : Widget
             // Opacity fades them and the floating selection bar together); the placeholder text is
             // drawn by this view, faded via _placeholderAlpha.
             this.Bind(_enterTween.LinearProgress, p => { _list.Opacity = p; SetDirty(); });
-            this.Bind(_enterTween.Progress, p => { _list.TranslationY = Transitions.ContentRise * (1f - p); SetDirty(); });
             this.Bind(_placeholderTween.Progress, p => { _placeholderAlpha = p; SetDirty(); });
             this.Use(() => _enterTween);
             this.Use(() => _placeholderTween);
