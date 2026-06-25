@@ -119,6 +119,19 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
+        => AtomicFile.WriteAllText(path,
+            Serialize(repos, groups, activeId, branchesUi, worktreesExpanded, repoIdentityOverride));
+
+    // Snapshots the live model into the on-disk shape and serializes it. Runs on the caller's thread
+    // (it reads the mutable model, so it must), producing an immutable string the disk write can take
+    // off-thread — see BackgroundFileWriter.
+    public static string Serialize(
+        IReadOnlyList<Repo> repos,
+        IReadOnlyList<GroupState> groups,
+        Guid? activeId,
+        IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
+        IReadOnlyDictionary<Guid, bool> worktreesExpanded,
+        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
     {
         var file = new FileShape
         {
@@ -130,8 +143,7 @@ public static class RepoStateStore
             WorktreesExpanded = worktreesExpanded.ToDictionary(kv => kv.Key, kv => kv.Value),
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
         };
-        var json = JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
-        AtomicFile.WriteAllText(path, json);
+        return JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
     }
 
     public static bool IsGitRepo(string path) =>

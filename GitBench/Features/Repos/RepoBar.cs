@@ -23,6 +23,7 @@ internal sealed record RepoBar : Widget
     {
         var vm = ctx.Require<RepoBarViewModel>();
         var input = ctx.Require<InputSystem>();
+        var selectionBar = new RepoSelectionBar(ctx.Require<IFrameTicker>(), ctx.Require<IRepoRegistry>());
 
         var bar = new Box
         {
@@ -39,27 +40,31 @@ internal sealed record RepoBar : Widget
                         BuildHeader(ctx),
                         new Grow
                         {
-                            Child = new ScrollArea
+                            Child = new RepoSelectionOverlay
                             {
-                                Style = Theme.ScrollBar(),
-                                AutoHide = true,
-                                Children =
-                                [
-                                    new Padding
-                                    {
-                                        Amount = new PaddingStyle { Left = Spacing.Md, Top = Spacing.Md, Bottom = Spacing.Md },
-                                        Children =
-                                        [
-                                            new Each<GroupSectionViewModel>
-                                            {
-                                                Items = vm.GroupSections,
-                                                Template = new GroupSection(),
-                                                Gap = Spacing.Lg,
-                                                CrossAxis = CrossAxisAlignment.Stretch,
-                                            },
-                                        ],
-                                    },
-                                ],
+                                Bar = selectionBar,
+                                Child = new ScrollArea
+                                {
+                                    Style = Theme.ScrollBar(),
+                                    AutoHide = true,
+                                    Children =
+                                    [
+                                        new Padding
+                                        {
+                                            Amount = new PaddingStyle { Left = Spacing.Md, Top = Spacing.Md, Bottom = Spacing.Md },
+                                            Children =
+                                            [
+                                                new Each<GroupSectionViewModel>
+                                                {
+                                                    Items = vm.GroupSections,
+                                                    Template = new GroupSection(),
+                                                    Gap = Spacing.Lg,
+                                                    CrossAxis = CrossAxisAlignment.Stretch,
+                                                },
+                                            ],
+                                        },
+                                    ],
+                                },
                             },
                         },
                     ],

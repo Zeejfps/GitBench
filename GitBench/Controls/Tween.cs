@@ -14,6 +14,7 @@ internal sealed class Tween : IDisposable
 {
     private readonly IFrameTicker _ticker;
     private readonly float _duration;
+    private readonly float _maxStep;
     private readonly Func<float, float> _ease;
     private readonly Action<float> _tick;
     private readonly State<float> _linear = new(0f);
@@ -31,10 +32,15 @@ internal sealed class Tween : IDisposable
 
     public event Action? Completed;
 
-    public Tween(IFrameTicker ticker, float durationSeconds, Func<float, float>? easing = null)
+    /// <param name="maxStep">Upper bound (seconds) on the per-frame advance. A long frame (e.g. the UI
+    /// thread stalling on a heavy rebuild) otherwise hands the tween a large <c>dt</c> and it leaps to
+    /// stay on the wall clock; clamping the step trades a touch of wall-clock duration under load for a
+    /// slide that never jumps. Defaults to no clamp.</param>
+    public Tween(IFrameTicker ticker, float durationSeconds, Func<float, float>? easing = null, float maxStep = float.PositiveInfinity)
     {
         _ticker = ticker;
         _duration = MathF.Max(durationSeconds, 0.0001f);
+        _maxStep = maxStep;
         _ease = easing ?? Easings.Linear;
         _tick = Advance;
     }
@@ -62,7 +68,8 @@ internal sealed class Tween : IDisposable
 
     private void Advance(float dt)
     {
-        var next = Math.Clamp(_linear.Value + _direction * (dt / _duration), 0f, 1f);
+        var step = MathF.Min(dt, _maxStep);
+        var next = Math.Clamp(_linear.Value + _direction * (step / _duration), 0f, 1f);
         _linear.Value = next;
         _progress.Value = _ease(next); // State change → bound view setter → repaint next frame
 

@@ -23,16 +23,13 @@ internal sealed record RepoRowShell : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
+        var selectionBar = ctx.Require<RepoSelectionBar>();
         var leftPad = RepoBar.RowPaddingLeft + (int)TreeMetrics.IndentLevel * vm.Depth;
 
-        return new Box
+        var box = new Box
         {
             Height = RowHeight,
-            Background = Theme.Color(s => vm.IsActive.Value
-                ? s.RowSelection.Fill
-                : Hovered.Value ? s.RowSelection.FillHover : 0u),
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Left = s.RowSelection.AccentBar }),
-            BorderSize = Prop.Bind(() => new BorderSizeStyle { Left = vm.IsActive.Value ? 2f : 0f }),
+            Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),
             Children =
             [
                 new Padding
@@ -84,5 +81,7 @@ internal sealed record RepoRowShell : Widget
                 },
             ],
         };
+
+        return box.Use(view => selectionBar.Register(vm.RepoId, () => view.Position));
     }
 }

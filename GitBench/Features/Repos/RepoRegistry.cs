@@ -6,11 +6,12 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
+public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposable
 {
     private const string DefaultNewGroupName = "New Group";
 
     private readonly string _statePath;
+    private readonly BackgroundFileWriter _writer;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
     private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
@@ -27,6 +28,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
     public RepoRegistry(RepoStateStore.State initial, string statePath)
     {
         _statePath = statePath;
+        _writer = new BackgroundFileWriter(statePath);
         _branchesUi = new Dictionary<Guid, BranchesUiState>(initial.BranchesUi);
         _expanded = new Dictionary<Guid, State<bool>>();
         foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
@@ -581,9 +583,14 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides
         var collapsed = _expanded
             .Where(kv => !kv.Value.Value)
             .ToDictionary(kv => kv.Key, kv => kv.Value.Value);
-        RepoStateStore.Save(_statePath, Repos, Groups.Select(g => g.ToState()).ToList(),
+        // Serialize here (must read the live model on this thread); hand the finished text to the
+        // background writer so the disk write — the slow, UI-thread-stalling part — runs off-thread.
+        var json = RepoStateStore.Serialize(Repos, Groups.Select(g => g.ToState()).ToList(),
             Active.Value?.Id, _branchesUi, collapsed, _identityOverride);
+        _writer.Schedule(json);
     }
+
+    public void Dispose() => _writer.Dispose();
 
     private Group? FindGroup(Guid id)
     {
