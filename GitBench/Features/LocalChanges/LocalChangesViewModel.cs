@@ -76,6 +76,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // switch (blank the panels) from a same-repo refresh (keep them visible).
     private Guid? _renderedRepoId;
 
+    // While an optimistic index move is pending, the store can still push a snapshot it read
+    // before our mutation landed (e.g. a reload from an editor save that was in flight when we
+    // staged) — applying it would briefly revert the move until the post-mutation reload arrives.
+    // Set on an optimistic move, honored in OnStoreLocalChanges, cleared on the next
+    // WorkingTreeChangedMessage (which also bumps the store's reload lane, so only the fresh
+    // post-mutation snapshot can land afterwards). Mirrors DiffViewModel's defer for the file lists.
+    private bool _deferStoreReloadUntilWorkingTreeChange;
+
     // Mutations and commit get their own lanes so staging a file never drops an in-flight reload,
     // and a reload never drops the commit continuation. The base Gen lane is used for the amend
     // head-files refresh. The working-tree snapshot itself is loaded by the snapshot store.
@@ -146,14 +154,28 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // commit changes, so this VM no longer subscribes to those messages directly.
         Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
         Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
+        Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
         Subscriptions.Add(Selection.Subscribe(sel =>
             _selectionStore.UnstagedPaths.Value = sel.PathsOn(DiffSide.Unstaged)));
+    }
+
+    // Releases the optimistic-move hold once a working-tree change lands for the active repo. The
+    // broadcast that fires this also bumps the snapshot store's reload lane, so any reload that was
+    // in flight before our mutation is now stale and only the fresh post-mutation snapshot can reach
+    // OnStoreLocalChanges. The store still owns the actual reload — this VM only drops its hold.
+    private void OnWorkingTreeChanged(WorkingTreeChangedMessage msg)
+    {
+        var active = _registry.Active.Value;
+        if (active == null || active.Id != msg.RepoId) return;
+        _deferStoreReloadUntilWorkingTreeChange = false;
     }
 
     private void OnHunkAppliedOptimistic(HunkAppliedOptimisticMessage msg)
     {
         var active = _registry.Active.Value;
         if (active == null || active.Id != msg.RepoId) return;
+
+        _deferStoreReloadUntilWorkingTreeChange = true;
 
         Update(s =>
         {
@@ -807,7 +829,18 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         var isCrossRepoSwitch = _renderedRepoId != active.Id;
         _renderedRepoId = active.Id;
-        if (isCrossRepoSwitch) DropAmendSession();
+        if (isCrossRepoSwitch)
+        {
+            DropAmendSession();
+            // The pending move belonged to the old repo; the new repo's data must win.
+            _deferStoreReloadUntilWorkingTreeChange = false;
+        }
+        else if (_deferStoreReloadUntilWorkingTreeChange)
+        {
+            // Hold the optimistic state until the mutation's own WorkingTreeChangedMessage lands;
+            // applying this (possibly pre-mutation) snapshot now would flicker the move back.
+            return;
+        }
 
         if (fetched == null)
         {
@@ -978,6 +1011,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     private void ApplyOptimisticMove(IReadOnlyList<string> paths, DiffSide fromSide)
     {
         DiffVm.DeferReloadToWorkingTreeChange();
+        _deferStoreReloadUntilWorkingTreeChange = true;
         var toSide = fromSide == DiffSide.Unstaged ? DiffSide.Staged : DiffSide.Unstaged;
         Update(s =>
         {

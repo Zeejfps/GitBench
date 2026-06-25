@@ -70,6 +70,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
     private IDisposable? _workingTreeSub;
     private IDisposable? _refsSub;
     private IDisposable? _commitSub;
+    private IDisposable? _optimisticSyncSub;
 
     public IReadable<RepoStatus> Active => _active;
 
@@ -94,6 +95,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(m => Refresh(m.RepoId));
         _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(m => Refresh(m.RepoId));
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => Refresh(m.RepoId));
+        _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
         // Subscribe fires Reset immediately with the current list, seeding a probe for every repo.
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
     }
@@ -136,6 +138,21 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         return s;
     }
 
+    // Patches a repo's ahead/behind to the known post-sync outcome immediately, ahead of the
+    // reconciling probe (which the accompanying RefsChangedMessage already kicked, bumping the
+    // epoch so any older in-flight probe is dropped). Components left null stay as the probe found
+    // them. UI-thread only, like every other probe-state write here.
+    private void ApplyOptimisticSync(RemoteSyncOptimisticMessage msg)
+    {
+        if (_disposed) return;
+        var state = Probe(msg.RepoId);
+        var cur = state.Value;
+        var next = cur;
+        if (msg.Ahead is { } ahead) next = next with { Ahead = ahead };
+        if (msg.Behind is { } behind) next = next with { Behind = behind };
+        if (next != cur) state.Value = next;
+    }
+
     private void Refresh(Guid repoId)
     {
         var dispatcher = _dispatcher;
@@ -176,6 +193,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         _workingTreeSub?.Dispose();
         _refsSub?.Dispose();
         _commitSub?.Dispose();
+        _optimisticSyncSub?.Dispose();
         _active.Dispose();
         foreach (var s in _probe.Values) s.Dispose();
         _probe.Clear();

@@ -106,7 +106,9 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         s.Value = s.Value with { IsPushing = true, PendingError = null };
         Run(repo, _loc.Strings.Value.ReposErrorPushFailed, _loc.Strings.Value.ToastPushed,
             () => _git.Push(repo, force) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
-            st => st with { IsPushing = false });
+            st => st with { IsPushing = false },
+            // A successful push of the current branch leaves nothing left to send.
+            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: 0, Behind: null));
     }
 
     public void Pull(Repo repo, PullStrategy? strategy = null)
@@ -122,7 +124,9 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
                 PullOutcome.Diverged => (false, strings.ReposErrorDivergentBranches, true),
                 _ => (true, null, false),
             },
-            st => st with { IsPulling = false });
+            st => st with { IsPulling = false },
+            // A successful pull leaves the branch level with the upstream it pulled from.
+            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: null, Behind: 0));
     }
 
     public void Fetch(Repo repo)
@@ -175,7 +179,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         string failureTitle,
         string successMessage,
         Func<(bool Success, string? Error, bool Diverged)> work,
-        Func<RepoOperations, RepoOperations> clearInFlight)
+        Func<RepoOperations, RepoOperations> clearInFlight,
+        RemoteSyncOptimisticMessage? optimisticSync = null)
     {
         var dispatcher = _dispatcher;
         if (dispatcher == null) return;
@@ -186,7 +191,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
             bool diverged = false;
             try { (success, error, diverged) = work(); }
             catch (Exception ex) { error = ex.Message; }
-            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, success, error, diverged));
+            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, optimisticSync, success, error, diverged));
         });
     }
 
@@ -195,6 +200,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         string failureTitle,
         string successMessage,
         Func<RepoOperations, RepoOperations> clearInFlight,
+        RemoteSyncOptimisticMessage? optimisticSync,
         bool success,
         string? error,
         bool diverged)
@@ -207,6 +213,9 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         {
             s.Value = next with { PendingError = null };
             _bus.Broadcast(new RefsChangedMessage(repo.Id));
+            // Snap the ahead/behind number to its known outcome before the probe (kicked above)
+            // reconciles, so it doesn't trail the toast by a beat.
+            if (optimisticSync is { } sync) _bus.Broadcast(sync);
             _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(successMessage)));
             return;
         }

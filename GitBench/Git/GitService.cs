@@ -740,8 +740,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     // One `git status --porcelain=v2 --branch` read yielding the cheap per-repo signals the RepoBar
     // and toolbar need: branch / detached / upstream + ahead/behind (from the `# branch.*` headers)
-    // and whether the working tree is dirty (any non-header record). Same flags as the file-list
-    // read (untracked-all, ignore-submodules=dirty) so "dirty" matches the staged+unstaged count.
+    // and whether the working tree is dirty (any non-header record). Unlike the file-list read this
+    // uses `--untracked-files=normal`, not `all`: the summary only needs a dirty *bool*, and an
+    // untracked directory reports the same dirty=true either way — but `normal` stops at the first
+    // entry per directory instead of recursing every untracked file, so the probe stays cheap on
+    // repos with large untracked trees (the lag the ahead/behind number used to show after a sync).
     // Returns Unknown on any failure — callers treat that as "no decorations" rather than an error.
     public GitStatusSummary GetStatusSummary(Repo repo)
     {
@@ -750,7 +753,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!IsGitRepo(repo.Path)) return GitStatusSummary.Unknown;
             var result = _runner.Run(
                 repo.Path,
-                new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
+                new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "--ignored=no", "--ignore-submodules=dirty" },
                 GitProcessRunner.GitLaunch.Direct);
             return result.Ok ? ParseStatusSummary(result.Stdout) : GitStatusSummary.Unknown;
         }
