@@ -42,6 +42,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
         {
             Depth = row.Depth,
             RowHeight = IsSectionHeader(row) ? Sizes.RowHeight : ContentRowHeight,
+            Guides = new TreeGuides(row.GuideMask, row.Depth),
             Chevron = ChevronFor(row, ctx),
             Glyph = GlyphFor(row),
             GlyphSize = 13f,

@@ -16,6 +16,10 @@ public abstract record BranchRow(int Depth) : IDisposable
     // The selection identity for selectable rows (branches, stashes); null for headers and folders.
     public virtual BranchRowKey? SelectionKey => null;
 
+    // Packed ancestry connectors (see TreeGuides) for this row, computed by BranchTreeBuilder from its
+    // position in the tree. Part of the row's value identity, so a row remounts when its guides change.
+    public long GuideMask { get; init; }
+
     public void Dispose() { }
 }
 

@@ -44,6 +44,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Derived<bool> _canActivate;
     private readonly Derived<IReadOnlyList<Repo>> _childRepos;
     private readonly KeyedViewModelList<Repo, Guid, RepoNodeViewModel> _children;
+    private readonly Derived<TreeGuides> _guides;
 
     public Guid RepoId => _initial.Id;
     public RepoKind Kind => _initial.Kind;
@@ -61,6 +62,9 @@ internal sealed class RepoNodeViewModel : IDisposable
     public IReadable<bool> HasChildren => _hasChildren;
     public IReadable<bool> IsExpanded { get; }
     public ObservableList<RepoNodeViewModel> Children => _children.Items;
+
+    // The ancestry connectors this row draws (worktrees/submodules under their primary, recursively).
+    public IReadable<TreeGuides> Guides => _guides;
 
     // Folds the row's subtree. Gated on HasChildren, so a childless row's chevron is inert — its click
     // falls through to the row instead of being swallowed.
@@ -107,6 +111,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _childRepos = new Derived<IReadOnlyList<Repo>>(ComputeChildRepos);
         _children = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _childRepos, r => r.Id, r => factory.Create(r, depth + 1));
+        _guides = new Derived<TreeGuides>(() => new TreeGuides(ComputeGuideMask(), Depth));
 
         ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
         Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
@@ -130,6 +135,48 @@ internal sealed class RepoNodeViewModel : IDisposable
         foreach (var r in _registry.Repos)
             if (r.ParentRepoId == parentId) return true;
         return false;
+    }
+
+    // This row's guides: its own connector at its parent's column (corner if it is the last child, else a
+    // tee), plus a passthrough trunk at each shallower ancestor column whose subtree continues below this
+    // row — i.e. the ancestor on the path one level deeper than the column still has a sibling after it.
+    private long ComputeGuideMask()
+    {
+        if (Depth <= 0) return 0L;
+        var me = _currentRepo.Value ?? _initial;
+        var mask = TreeGuides.SetKind(0L, Depth - 1, IsLastSibling(me) ? TreeGuide.Corner : TreeGuide.Tee);
+
+        var node = me;
+        for (var nodeDepth = Depth; nodeDepth >= 1; nodeDepth--)
+        {
+            if (node.ParentRepoId is not { } pid) break;
+            if (FindRepo(pid) is not { } parent) break;
+            node = parent;
+            var ancestorDepth = nodeDepth - 1;
+            if (ancestorDepth >= 1)
+                mask = TreeGuides.SetKind(mask, ancestorDepth - 1, IsLastSibling(node) ? TreeGuide.None : TreeGuide.Through);
+        }
+        return mask;
+    }
+
+    // Whether a repo is the last among its siblings, in the same order the rows render: worktrees then
+    // submodules under a parent repo, or the group's repo order for a top-level primary.
+    private bool IsLastSibling(Repo repo)
+    {
+        if (repo.ParentRepoId is { } pid)
+        {
+            Repo? last = null;
+            foreach (var r in _registry.Repos)
+                if (r.ParentRepoId == pid && r.IsWorktree) last = r;
+            foreach (var r in _registry.Repos)
+                if (r.ParentRepoId == pid && r.IsSubmodule) last = r;
+            return last is null || last.Id == repo.Id;
+        }
+
+        var group = _registry.FindGroupContaining(repo.Id);
+        if (group is null) return true;
+        var ids = group.RepoIds;
+        return ids.Count == 0 || ids[ids.Count - 1] == repo.Id;
     }
 
     private Repo? FindRepo(Guid id)
@@ -246,6 +293,7 @@ internal sealed class RepoNodeViewModel : IDisposable
 
     public void Dispose()
     {
+        _guides.Dispose();
         _children.Dispose();
         _childRepos.Dispose();
         _canActivate.Dispose();

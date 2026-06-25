@@ -6,13 +6,15 @@ namespace GitBench.Theming;
 /// row from this, so the highlight can't drift from one list to the next. A selected row takes
 /// <see cref="Fill"/>, a merely hovered row <see cref="FillHover"/>, selected text switches to
 /// <see cref="Text"/>, and a selected row in the inset-pill lists gets a leading
-/// <see cref="AccentBar"/>.
+/// <see cref="AccentBar"/>. Nested rows in the tree lists draw their ancestry with
+/// <see cref="IndentGuide"/>.
 /// </summary>
 public sealed record RowSelectionStyles(
     uint Fill,
     uint FillHover,
     uint Text,
-    uint AccentBar);
+    uint AccentBar,
+    uint IndentGuide);
 
 public partial record ThemeStyles
 {
@@ -21,5 +23,6 @@ public partial record ThemeStyles
             Fill: p.SurfaceSelectedSubtle,
             FillHover: p.SurfaceHover,
             Text: p.RowSubtleText,
-            AccentBar: p.Accent);
+            AccentBar: p.Accent,
+            IndentGuide: p.Border);
 }

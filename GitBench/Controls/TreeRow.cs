@@ -23,6 +23,10 @@ internal sealed record TreeRow : Widget
     // at the repo bar's group-header indent rather than the content indent.
     public int? IndentOverride { get; init; }
 
+    // The ancestry connectors drawn behind a nested row (trunks + the elbow into this row). Empty for
+    // top-level rows (Depth 0). Both trees feed this so they draw identical guides.
+    public Prop<TreeGuides> Guides { get; init; }
+
     // The chevron column. A fold toggle for collapsible rows; null reserves the column so a leaf row's
     // glyph still aligns under its siblings' glyphs.
     public IWidget? Chevron { get; init; }
@@ -81,26 +85,36 @@ internal sealed record TreeRow : Widget
         if (Trailing is { } trailing)
             row.Add(trailing);
 
+        var content = new Padding
+        {
+            Amount = new PaddingStyle { Left = leftPad, Right = Spacing.Lg },
+            Children =
+            [
+                new Row
+                {
+                    Gap = TreeMetrics.ColumnGap,
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Children = row.ToArray(),
+                },
+            ],
+        };
+
+        // Behind the content, a nested row draws its ancestry connectors (trunks + the elbow into it) so
+        // it reads as a child of the row above. Top-level rows (Depth 0) have no ancestry to draw.
+        var layers = new List<IWidget>(2);
+        if (Depth > 0)
+            layers.Add(new TreeGuidesWidget
+            {
+                Guides = Guides,
+                Color = Theme.Color(s => s.RowSelection.IndentGuide),
+            });
+        layers.Add(content);
+
         var box = new Box
         {
             Height = RowHeight,
             Background = Background,
-            Children =
-            [
-                new Padding
-                {
-                    Amount = new PaddingStyle { Left = leftPad, Right = Spacing.Lg },
-                    Children =
-                    [
-                        new Row
-                        {
-                            Gap = TreeMetrics.ColumnGap,
-                            CrossAxis = CrossAxisAlignment.Center,
-                            Children = row.ToArray(),
-                        },
-                    ],
-                },
-            ],
+            Children = layers.ToArray(),
         };
 
         return SpacingBefore > 0

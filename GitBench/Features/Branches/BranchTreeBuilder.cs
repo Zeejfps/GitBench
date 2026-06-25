@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Infrastructure;
 
 namespace GitBench.Features.Branches;
@@ -29,7 +30,7 @@ internal static class BranchTreeBuilder
         if (ui.LocalOpen)
         {
             var localTree = PathTree.Build(listing.LocalBranches, b => b.Name);
-            EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, LocalTreeBaseDepth, depth: 0);
+            EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, LocalTreeBaseDepth, depth: 0, trunkMask: 0);
         }
 
         rows.Add(new RemotesHeaderRow(Depth: 0, ui.RemotesOpen));
@@ -40,8 +41,10 @@ internal static class BranchTreeBuilder
                 var isOpen = ui.RemoteOpen.TryGetValue(rg.Name, out var v) ? v : true;
                 rows.Add(new RemoteHeaderRow(RemoteHeaderDepth, rg.Name, isOpen));
                 if (!isOpen) continue;
+                // The remote header is a top-level row (like a primary repo under a group header), so it
+                // draws no trunk of its own; its branches start a fresh subtree just like the local one.
                 var remoteTree = PathTree.Build(rg.Branches, b => b.Name);
-                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0);
+                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, trunkMask: 0);
             }
         }
 
@@ -60,24 +63,44 @@ internal static class BranchTreeBuilder
         return rows;
     }
 
-    private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth)
+    // trunkMask carries the ancestors' guide state for levels [0, rowDepth-1]: the passthrough trunks
+    // each row inherits, plus the parent's own column (overwritten here by each row's immediate elbow).
+    private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth, long trunkMask)
     {
         var rowDepth = treeBaseDepth + depth;
         var scope = isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local;
-        foreach (var node in nodes)
+        var count = nodes.Count;
+        for (var i = 0; i < count; i++)
         {
+            var node = nodes[i];
+            var isLast = i == count - 1;
+            // This row's own connector lives at its parent's column (level rowDepth-1); top-level rows
+            // (rowDepth 0) sit directly under a section header and draw no connector.
+            var mask = rowDepth >= 1
+                ? TreeGuides.SetKind(trunkMask, rowDepth - 1, isLast ? TreeGuide.Corner : TreeGuide.Tee)
+                : trunkMask;
+
             if (node.Leaf is { } entry)
             {
                 rows.Add(isRemote
-                    ? new RemoteBranchRow(rowDepth, remoteName!, entry.Name, node.Segment, entry.TipSha)
-                    : new LocalBranchRow(rowDepth, entry.Name, node.Segment, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState));
+                    ? new RemoteBranchRow(rowDepth, remoteName!, entry.Name, node.Segment, entry.TipSha) { GuideMask = mask }
+                    : new LocalBranchRow(rowDepth, entry.Name, node.Segment, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState) { GuideMask = mask });
             }
             else
             {
                 var folder = new BranchFolder(scope, node.FullPath);
                 var open = ui.FolderOpen.TryGetValue(folder.Key, out var v) ? v : true;
-                rows.Add(new FolderRow(rowDepth, folder, node.Segment, open));
-                if (open) EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1);
+                rows.Add(new FolderRow(rowDepth, folder, node.Segment, open) { GuideMask = mask });
+                if (open)
+                {
+                    // The children's passthrough at this folder's parent column is whether the folder has
+                    // a sibling below it. A top-level folder (rowDepth 0) sits under a section header, so —
+                    // like a primary repo under a group header — it starts no trunk for its descendants.
+                    var childTrunk = rowDepth >= 1
+                        ? TreeGuides.SetKind(trunkMask, rowDepth - 1, isLast ? TreeGuide.None : TreeGuide.Through)
+                        : 0L;
+                    EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1, childTrunk);
+                }
             }
         }
     }

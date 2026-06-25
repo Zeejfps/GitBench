@@ -41,6 +41,7 @@ internal sealed record RepoRowShell : Widget
         {
             Depth = vm.Depth,
             RowHeight = RowHeight,
+            Guides = Prop.Bind(vm.Guides),
             GlyphSize = GlyphSize,
             Chevron = new WorktreeChevron().WithController<KbmController>(),
             Glyph = Glyph,
