@@ -18,6 +18,7 @@ internal sealed record ToastHostView : Widget
 
         return new Column
         {
+            ZIndex = 500,
             MainAxis = MainAxisAlignment.End,
             CrossAxis = CrossAxisAlignment.End,
             Children =
