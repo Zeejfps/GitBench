@@ -21,6 +21,7 @@ internal sealed record ToastCard : Widget<ToastCardState>
 {
     private const float MinCardWidth = 160f;
     private const float SlideUp = 10f;
+    private const float EnterScale = 0.9f;
 
     protected override ToastCardState CreateState(Context ctx)
     {
@@ -72,11 +73,13 @@ internal sealed record ToastCard : Widget<ToastCardState>
                 OffsetY = 4f,
                 Blur = 16f,
             }),
-            // Fade and rise into place; both are render-only, so this never re-lays-out. Opacity
-            // rides the raw linear progress (an even fade); the slide rides the eased progress
-            // (decelerates into place).
+            // Fade, rise, and pop into place; all render-only, so this never re-lays-out. Opacity
+            // rides the raw linear progress (an even fade); the slide and scale ride the eased
+            // progress (decelerate into place), scaling up from EnterScale about the card's center.
             Opacity = Prop.Bind(state.Enter.LinearProgress),
             TranslationY = state.Enter.Progress.Bind(p => -SlideUp * (1f - p)),
+            ScaleX = state.Enter.Progress.Bind(p => EnterScale + (1f - EnterScale) * p),
+            ScaleY = state.Enter.Progress.Bind(p => EnterScale + (1f - EnterScale) * p),
             Children =
             [
                 new Padding
