@@ -149,9 +149,13 @@ internal static class FileChangesUI
         string? displayText = null,
         float indent = 0f,
         bool reserveChevronColumn = false,
-        bool isRtl = false)
+        bool isRtl = false,
+        bool drawSelectionBackground = true)
     {
-        RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
+        // When the host floats an animated selection bar it owns the selected row's fill; skip the
+        // static one so the two don't double-paint, but still draw hover on non-selected rows.
+        if (drawSelectionBackground || !isSelected)
+            RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
 
         // In tree mode, reserve the same chevron column folder rows draw into so a file's
         // icon lines up under sibling folder icons (and one level right of its parent's).
