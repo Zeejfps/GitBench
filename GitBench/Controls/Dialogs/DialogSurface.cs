@@ -13,7 +13,7 @@ internal sealed record DialogSurface : Widget
 {
     protected override View CreateView(Context ctx)
     {
-        var surface = new DialogSurfaceView(ctx.Require<InputSystem>());
+        var surface = new DialogSurfaceView(ctx.Require<InputSystem>(), ctx.Require<IFrameTicker>());
         surface.Behaviors.Add(new DialogPresenter(ctx, surface));
         return surface;
     }

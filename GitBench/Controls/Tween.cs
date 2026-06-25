@@ -14,6 +14,7 @@ internal sealed class Tween : IDisposable
 {
     private readonly IFrameTicker _ticker;
     private readonly float _duration;
+    private readonly float _reverseDuration;
     private readonly float _maxStep;
     private readonly Func<float, float> _ease;
     private readonly Action<float> _tick;
@@ -36,10 +37,14 @@ internal sealed class Tween : IDisposable
     /// thread stalling on a heavy rebuild) otherwise hands the tween a large <c>dt</c> and it leaps to
     /// stay on the wall clock; clamping the step trades a touch of wall-clock duration under load for a
     /// slide that never jumps. Defaults to no clamp.</param>
-    public Tween(IFrameTicker ticker, float durationSeconds, Func<float, float>? easing = null, float maxStep = float.PositiveInfinity)
+    /// <param name="reverseDurationSeconds">Duration (seconds) for <see cref="Reverse"/>. Negative
+    /// reuses <paramref name="durationSeconds"/> (symmetric). Set it shorter than the forward duration
+    /// for an exit that snaps closed faster than it opened.</param>
+    public Tween(IFrameTicker ticker, float durationSeconds, Func<float, float>? easing = null, float maxStep = float.PositiveInfinity, float reverseDurationSeconds = -1f)
     {
         _ticker = ticker;
         _duration = MathF.Max(durationSeconds, 0.0001f);
+        _reverseDuration = reverseDurationSeconds < 0f ? _duration : MathF.Max(reverseDurationSeconds, 0.0001f);
         _maxStep = maxStep;
         _ease = easing ?? Easings.Linear;
         _tick = Advance;
@@ -69,7 +74,8 @@ internal sealed class Tween : IDisposable
     private void Advance(float dt)
     {
         var step = MathF.Min(dt, _maxStep);
-        var next = Math.Clamp(_linear.Value + _direction * (step / _duration), 0f, 1f);
+        var duration = _direction > 0 ? _duration : _reverseDuration;
+        var next = Math.Clamp(_linear.Value + _direction * (step / duration), 0f, 1f);
         _linear.Value = next;
         _progress.Value = _ease(next); // State change → bound view setter → repaint next frame
 
