@@ -264,11 +264,10 @@ internal sealed record CommitsView : Widget
         protected override void OnLayoutChildren()
         {
             base.OnLayoutChildren();
-            // A selection that arrived before the list had a measured viewport couldn't scroll
-            // into view (EnsureRowVisible no-ops at zero height). Retry now that the list is laid
-            // out — covers the first branch click, which opens History and selects a tip in one
-            // frame, before any layout pass.
-            if (_pendingScrollSha != null) ScrollShaIntoView(_pendingScrollSha);
+            // Reconcile a selection scroll that couldn't land yet (no viewport, or the scrollbar
+            // thumb's first-layout reset undid it). Runs before NotifyScrollChanged so the gutter
+            // re-syncs to the position we just applied.
+            ApplyPendingScroll();
             // Emit each layout pass (as VerticalScrollPane does) so a resize that changes the
             // viewport/content ratio re-syncs a bound scrollbar's gutter, not just user scrolls.
             NotifyScrollChanged();
@@ -311,7 +310,8 @@ internal sealed record CommitsView : Widget
             if (_selectedSha == sha) return;
             _selectedSha = sha;
             MoveSelectionTo(IndexOfSha(sha));
-            ScrollShaIntoView(sha);
+            _pendingScrollSha = sha;
+            ApplyPendingScroll();
             SetDirty();
         }
 
@@ -346,23 +346,24 @@ internal sealed record CommitsView : Widget
         private float CurrentSelectionIndex()
             => _animFromIndex + (_animToIndex - _animFromIndex) * _selectionTween.Progress.Value;
 
-        private void ScrollShaIntoView(string? sha)
+        // Reconciles a selection scroll across layout passes. On the first History open a one-shot
+        // scroll loses to two things: the list has no height until its first layout, and the new
+        // scrollbar thumb emits a reset-to-top from its own first layout that the panel pipes back
+        // in. So we re-apply until applying changes nothing (row parked, scrollbar settled), and
+        // only clear then — which also keeps it from yanking back a later user scroll.
+        private void ApplyPendingScroll()
         {
-            var idx = IndexOfSha(sha);
+            if (_pendingScrollSha == null) return;
+            var idx = IndexOfSha(_pendingScrollSha);
             if (idx < 0)
             {
                 _pendingScrollSha = null;
                 return;
             }
-            // Until the list has a measured height EnsureRowVisible can't scroll; stash the target
-            // and let OnLayoutChildren apply it once the viewport exists.
-            if (_list.Position.Height <= 0)
-            {
-                _pendingScrollSha = sha;
-                return;
-            }
+            if (_list.Position.Height <= 0) return;
+            var before = _list.ScrollY;
             _list.EnsureRowVisible(idx);
-            _pendingScrollSha = null;
+            if (_list.ScrollY == before) _pendingScrollSha = null;
         }
 
         private int IndexOfSha(string? sha)
