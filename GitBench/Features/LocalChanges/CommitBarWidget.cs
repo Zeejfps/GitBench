@@ -28,10 +28,11 @@ internal sealed record CommitBarWidget : Widget
     private const float DescriptionMaxHeight = 240f;
 
     public required FocusRing FocusRing { get; init; }
+    public required LocalChangesViewModel Vm { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = ctx.Require<LocalChangesViewModel>();
+        var vm = Vm;
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
         var loc = ctx.Localization();

@@ -27,7 +27,7 @@ internal sealed class LocalChangesView : ContainerView
         // cycle; the commit bar appends its own stops as it builds.
         var focusRing = new FocusRing();
         content.RegisterFocusStops(focusRing);
-        var commitBar = new CommitBarWidget { FocusRing = focusRing }.BuildView(ctx);
+        var commitBar = new CommitBarWidget { FocusRing = focusRing, Vm = vm }.BuildView(ctx);
 
         var bg = new RectView
         {
