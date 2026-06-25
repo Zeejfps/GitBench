@@ -389,8 +389,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private void SelectAndBroadcast(BranchSelection selection)
     {
-        Update(s => s with { Selection = selection });
+        // Switch first: the first switch into History synchronously builds the commits VM, which
+        // auto-selects HEAD and broadcasts it. Recording our selection only after that means the
+        // HEAD broadcast can't land on (and clear) the branch selection we're about to make.
         SwitchToHistory();
+        Update(s => s with { Selection = selection });
         _bus.Broadcast(new CommitSelectedMessage(_activeRepoId, selection.TipSha));
     }
 

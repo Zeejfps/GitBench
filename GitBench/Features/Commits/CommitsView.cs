@@ -64,6 +64,9 @@ internal sealed record CommitsView : Widget
         private float _lastNormalizedScroll;
         private float _lastScale = 1f;
         private string? _selectedSha;
+        // A selection SHA whose scroll-into-view was requested before the list had a measured
+        // viewport; applied on the next layout, then cleared (so it never fights user scroll).
+        private string? _pendingScrollSha;
         // Selection is painted once as a floating bar that slides between rows. _selectedIndex is
         // the resolved target row (-1 = none); the bar is drawn at CurrentSelectionIndex(), which
         // lerps _animFromIndex → _animToIndex by the tween so navigation animates.
@@ -261,6 +264,11 @@ internal sealed record CommitsView : Widget
         protected override void OnLayoutChildren()
         {
             base.OnLayoutChildren();
+            // A selection that arrived before the list had a measured viewport couldn't scroll
+            // into view (EnsureRowVisible no-ops at zero height). Retry now that the list is laid
+            // out — covers the first branch click, which opens History and selects a tip in one
+            // frame, before any layout pass.
+            if (_pendingScrollSha != null) ScrollShaIntoView(_pendingScrollSha);
             // Emit each layout pass (as VerticalScrollPane does) so a resize that changes the
             // viewport/content ratio re-syncs a bound scrollbar's gutter, not just user scrolls.
             NotifyScrollChanged();
@@ -341,8 +349,20 @@ internal sealed record CommitsView : Widget
         private void ScrollShaIntoView(string? sha)
         {
             var idx = IndexOfSha(sha);
-            if (idx < 0) return;
+            if (idx < 0)
+            {
+                _pendingScrollSha = null;
+                return;
+            }
+            // Until the list has a measured height EnsureRowVisible can't scroll; stash the target
+            // and let OnLayoutChildren apply it once the viewport exists.
+            if (_list.Position.Height <= 0)
+            {
+                _pendingScrollSha = sha;
+                return;
+            }
             _list.EnsureRowVisible(idx);
+            _pendingScrollSha = null;
         }
 
         private int IndexOfSha(string? sha)
