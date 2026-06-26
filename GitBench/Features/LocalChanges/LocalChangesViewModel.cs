@@ -931,19 +931,38 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         }
     }
 
-    // Splits the raw MERGE_MSG into editor title/description: drop git's '#'-prefixed comment
-    // lines (the "Conflicts:" hint), then take the first line as the subject and the rest as body.
+    // Splits the raw MERGE_MSG into editor title + description. The first line is the subject; the
+    // rest becomes the body with git's '#'-prefixed annotation lines (the "Conflicts:" list)
+    // de-commented, so the merge pre-fills with the same content Sourcetree shows — as real,
+    // committable text rather than dropped.
     private static (string Title, string Description) SplitMergeMessage(string message)
     {
-        var kept = new List<string>();
-        foreach (var line in message.Replace("\r\n", "\n").Split('\n'))
-            if (!line.StartsWith("#", StringComparison.Ordinal)) kept.Add(line);
-        while (kept.Count > 0 && kept[0].Trim().Length == 0) kept.RemoveAt(0);
-        while (kept.Count > 0 && kept[^1].Trim().Length == 0) kept.RemoveAt(kept.Count - 1);
-        if (kept.Count == 0) return (string.Empty, string.Empty);
-        var title = kept[0].Trim();
-        var body = kept.Count > 1 ? string.Join("\n", kept.Skip(1)).Trim() : string.Empty;
-        return (title, body);
+        var lines = message.Replace("\r\n", "\n").Split('\n');
+        var title = string.Empty;
+        var start = lines.Length;
+        for (var i = 0; i < lines.Length; i++)
+        {
+            if (lines[i].Trim().Length == 0) continue;
+            title = lines[i].Trim();
+            start = i + 1;
+            break;
+        }
+
+        var body = new List<string>();
+        for (var i = start; i < lines.Length; i++)
+            body.Add(Decomment(lines[i]));
+        while (body.Count > 0 && body[0].Trim().Length == 0) body.RemoveAt(0);
+        while (body.Count > 0 && body[^1].Trim().Length == 0) body.RemoveAt(body.Count - 1);
+        return (title, string.Join("\n", body));
+    }
+
+    // Strips git's leading comment marker from a MERGE_MSG line ("# Conflicts:" → "Conflicts:",
+    // "#\tpath" → "\tpath"); non-comment lines pass through unchanged.
+    private static string Decomment(string line)
+    {
+        if (!line.StartsWith('#')) return line;
+        var rest = line[1..];
+        return rest.StartsWith(' ') ? rest[1..] : rest;
     }
 
     // Writes a fresh snapshot — new lists plus whatever selection the caller computes
