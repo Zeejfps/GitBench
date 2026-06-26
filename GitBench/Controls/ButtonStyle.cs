@@ -18,12 +18,18 @@ internal sealed record ButtonStyle
     private readonly uint? _fill;
     private readonly Func<ThemeStyles, uint>? _fillSelect;
     private readonly Func<IInteractable, Prop<uint>>? _bareForeground;
+    private readonly Func<ThemeStyles, uint>? _outlineSelect;
 
-    private ButtonStyle(uint? fill, Func<ThemeStyles, uint>? fillSelect = null, Func<IInteractable, Prop<uint>>? bareForeground = null)
+    private ButtonStyle(
+        uint? fill,
+        Func<ThemeStyles, uint>? fillSelect = null,
+        Func<IInteractable, Prop<uint>>? bareForeground = null,
+        Func<ThemeStyles, uint>? outlineSelect = null)
     {
         _fill = fill;
         _fillSelect = fillSelect;
         _bareForeground = bareForeground;
+        _outlineSelect = outlineSelect;
     }
 
     /// <summary>Transparent surface with the themed idle/hover/disabled ramp.</summary>
@@ -40,13 +46,22 @@ internal sealed record ButtonStyle
     /// the button's interaction state). For inline icon buttons in a toolbar/header that own no chrome.</summary>
     public static ButtonStyle Bare(Func<IInteractable, Prop<uint>> foreground) => new(fill: null, bareForeground: foreground);
 
-    /// <summary>True for the chip styles (<see cref="Plain"/>/<see cref="Filled"/>) that wrap content in a
-    /// surface box; false for <see cref="Bare"/>, which renders content directly.</summary>
+    /// <summary>A bordered chip with a transparent fill: the border and glyph/label take <paramref name="select"/>'s
+    /// accent (dimmed when disabled, subtle surface on hover). The secondary look beside a <see cref="Filled"/>
+    /// primary — one solid call-to-action, the rest outlined.</summary>
+    public static ButtonStyle Outline(Func<ThemeStyles, uint> select) => new(fill: null, outlineSelect: select);
+
+    /// <summary>True for the chip styles (<see cref="Plain"/>/<see cref="Filled"/>/<see cref="Outline"/>) that wrap
+    /// content in a surface box; false for <see cref="Bare"/>, which renders content directly.</summary>
     public bool HasSurface => _bareForeground is null;
 
     private bool IsFilled => _fill is not null || _fillSelect is not null;
 
-    public BorderRadiusStyle Radius => IsFilled ? BorderRadiusStyle.All(GitBench.Widgets.Radius.Md) : default;
+    private bool IsOutline => _outlineSelect is not null;
+
+    public BorderRadiusStyle Radius => IsFilled || IsOutline ? BorderRadiusStyle.All(GitBench.Widgets.Radius.Md) : default;
+
+    public BorderSizeStyle BorderSize => IsOutline ? BorderSizeStyle.All(1) : default;
 
     /// <summary>Horizontal inset for an icon-only button: tighter for the plain toolbar look, chunkier
     /// for the filled chip. Labeled buttons use <see cref="ButtonWidget.ContentInset"/>'s default.</summary>
@@ -67,5 +82,11 @@ internal sealed record ButtonStyle
     public Prop<uint> Foreground(IInteractable state) =>
         _bareForeground is { } bare ? bare(state)
         : IsFilled ? Theme.Color(s => s.ActionButton.FilledForeground(state))
+        : _outlineSelect is { } accent ? Theme.Color(s => state.Enabled.Value ? accent(s) : s.Palette.TextDisabled)
         : Theme.Color(s => s.ActionButton.Foreground(state));
+
+    public Prop<BorderColorStyle> BorderColor(IInteractable state) =>
+        _outlineSelect is { } accent
+            ? Theme.BorderColor(s => BorderColorStyle.All(state.Enabled.Value ? accent(s) : s.Palette.TextDisabled))
+            : Theme.BorderColor(_ => default);
 }

@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
+using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
@@ -68,6 +69,7 @@ internal static class AppServices
             ctx.Get<IPlatformShell>(),
             ctx.Require<ILocalizationService>()));
         context.AddSingleton<LocalChangesSelectionStore>();
+        context.AddSingleton<OperationBannerViewModel>();
         context.AddSingleton<UpdateService>();
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>

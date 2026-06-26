@@ -23,6 +23,7 @@ internal sealed record WorkspaceWidget : Widget
                 Children = [new OperationBannerWidget(), new ActionsToolbar()],
             },
             Center = new MainContent(),
+            South = new OperationPanelWidget(),
         },
     };
 }

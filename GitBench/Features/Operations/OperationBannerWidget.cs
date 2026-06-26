@@ -1,34 +1,31 @@
-using GitBench.Controls;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Operations;
 
 /// <summary>
-/// Banner shown above the main content while the repo is mid-operation (merge / rebase /
-/// cherry-pick / revert / bisect / am) or has unmerged paths from a stash-apply conflict.
-/// Offers Continue where the operation supports it, and Abort.
+/// Thin status strip above the main content while the repo is mid-operation (merge / rebase /
+/// cherry-pick / revert / bisect / am) or has unmerged paths from a stash-apply conflict. Reports
+/// state only — the Continue / Skip / Abort actions live in <see cref="OperationPanelWidget"/> at
+/// the bottom, both driven by the shared <see cref="OperationBannerViewModel"/>.
 /// </summary>
 internal sealed record OperationBannerWidget : Widget
 {
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<OperationBannerViewModel>();
-        var loc = ctx.Localization();
-
         return new Show
         {
             When = vm.IsActive,
-            Then = () => Banner(vm, loc),
-        }.BindVm(vm);
+            Then = () => Banner(vm),
+        };
     }
 
-    private static IWidget Banner(OperationBannerViewModel vm, ILocalizationService loc) => new Box
+    private static IWidget Banner(OperationBannerViewModel vm) => new Box
     {
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border }),
@@ -40,92 +37,18 @@ internal sealed record OperationBannerWidget : Widget
                 Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Sm, Bottom = Spacing.Sm },
                 Children =
                 [
-                    new Row
+                    new Text
                     {
-                        Gap = Spacing.Xs,
-                        CrossAxis = CrossAxisAlignment.Center,
-                        Children =
-                        [
-                            new Grow
-                            {
-                                Child = new Text
-                                {
-                                    Value = L.T(s => vm.IsBusy.Value
-                                        ? BusyMessageFor(s, vm.OperationState.Value)
-                                        : MessageFor(s, vm.OperationState.Value)),
-                                    VAlign = TextAlignment.Center,
-                                    Wrap = TextWrap.Wrap,
-                                    Color = Theme.Color(s => s.Banner.Text),
-                                },
-                            },
-                            new Show
-                            {
-                                When = vm.IsBusy,
-                                Then = () => Spinner(vm),
-                                Else = () => Actions(vm),
-                            },
-                        ],
+                        Value = L.T(s => vm.IsBusy.Value
+                            ? BusyMessageFor(s, vm.OperationState.Value)
+                            : MessageFor(s, vm.OperationState.Value, vm.HasConflicts.Value)),
+                        VAlign = TextAlignment.Center,
+                        Wrap = TextWrap.Wrap,
+                        Color = Theme.Color(s => s.Banner.Text),
                     },
                 ],
             },
         ],
-    };
-
-    // Spinner existence is gated on the memoized IsBusy bool, so it survives every busy frame;
-    // the per-frame rotation flows in as a Prop, updating the live view without rebuilding it.
-    private static IWidget Spinner(OperationBannerViewModel vm) => new Text
-    {
-        Value = LucideIcons.Loader,
-        FontFamily = LucideIcons.FontFamily,
-        FontSize = FontSize.Heading,
-        VAlign = TextAlignment.Center,
-        HAlign = TextAlignment.Center,
-        Width = 20,
-        Color = Theme.Color(s => s.Banner.Text),
-        Rotation = Prop.Bind(vm.BusyRotation),
-    };
-
-    private static IWidget Actions(OperationBannerViewModel vm)
-    {
-        var continueStyle = ButtonStyle.Filled(s => s.Status.SuccessBar);
-        var abortStyle = ButtonStyle.Filled(s => s.Status.DangerBar);
-        return new Row
-        {
-            Gap = Spacing.Xs,
-            CrossAxis = CrossAxisAlignment.Center,
-            Children =
-            [
-                new ButtonWidget
-                {
-                    Style = continueStyle,
-                    ContentInset = continueStyle.IconOnlyInset,
-                    Command = vm.Continue,
-                    Visible = Prop.Bind(() => SupportsContinue(vm.OperationState.Value)),
-                    Children = [new ButtonIcon { Value = LucideIcons.ChevronsRight }],
-                }.WithTooltip(L.T(s => s.CommonContinue))
-                    .WithController<KbmController>(),
-
-                new ButtonWidget
-                {
-                    Style = abortStyle,
-                    ContentInset = abortStyle.IconOnlyInset,
-                    Command = vm.Abort,
-                    Children = [new ButtonIcon { Value = LucideIcons.X }],
-                }.WithTooltip(L.T(s => s.CommonAbort))
-                    .WithController<KbmController>(),
-            ],
-        };
-    }
-
-    private static bool SupportsContinue(RepoOperationState state) => state switch
-    {
-        // Merge finishes through the commit box (commit creates the merge commit), so no
-        // Continue button — unlike rebase/cherry-pick/revert, which advance via --continue.
-        RepoOperationState.Rebase => true,
-        RepoOperationState.CherryPick => true,
-        RepoOperationState.Revert => true,
-        RepoOperationState.ApplyMailbox => true,
-        _ => false,
     };
 
     private static string BusyMessageFor(Strings s, RepoOperationState state) => state switch
@@ -138,13 +61,13 @@ internal sealed record OperationBannerWidget : Widget
         _ => s.OperationsBannerBusyDefault,
     };
 
-    private static string MessageFor(Strings s, RepoOperationState state) => state switch
+    private static string MessageFor(Strings s, RepoOperationState state, bool hasConflicts) => state switch
     {
-        RepoOperationState.Merge => s.OperationsBannerMsgMerge,
-        RepoOperationState.Rebase => s.OperationsBannerMsgRebase,
-        RepoOperationState.CherryPick => s.OperationsBannerMsgCherryPick,
-        RepoOperationState.Revert => s.OperationsBannerMsgRevert,
-        RepoOperationState.ApplyMailbox => s.OperationsBannerMsgApply,
+        RepoOperationState.Merge => hasConflicts ? s.OperationsBannerMsgMerge : s.OperationsBannerMsgMergeResolved,
+        RepoOperationState.Rebase => hasConflicts ? s.OperationsBannerMsgRebase : s.OperationsBannerMsgRebaseResolved,
+        RepoOperationState.CherryPick => hasConflicts ? s.OperationsBannerMsgCherryPick : s.OperationsBannerMsgCherryPickResolved,
+        RepoOperationState.Revert => hasConflicts ? s.OperationsBannerMsgRevert : s.OperationsBannerMsgRevertResolved,
+        RepoOperationState.ApplyMailbox => hasConflicts ? s.OperationsBannerMsgApply : s.OperationsBannerMsgApplyResolved,
         RepoOperationState.Bisect => s.OperationsBannerMsgBisect,
         RepoOperationState.UnmergedPaths => s.OperationsBannerMsgUnmerged,
         _ => string.Empty,

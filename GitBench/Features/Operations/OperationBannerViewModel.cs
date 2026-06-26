@@ -22,10 +22,14 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
 
     public IReadable<bool> IsActive { get; }
     public IReadable<RepoOperationState> OperationState { get; }
+    public IReadable<bool> HasConflicts { get; }
+    public IReadable<string?> Subject { get; }
+    public IReadable<bool> HasSubject { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
     public IReadable<float> BusyRotation => _spinner.Rotation;
     public Command Abort { get; }
     public Command Continue { get; }
+    public Command Skip { get; }
 
     public OperationBannerViewModel(
         IRepoRegistry registry,
@@ -47,10 +51,15 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
         // re-render when the operation clears.
         IsActive = Slice(s => s.State != RepoOperationState.None);
         OperationState = Slice(s => s.State);
+        HasConflicts = Slice(s => s.HasConflicts);
+        Subject = Slice(s => s.Subject);
+        HasSubject = Slice(s => !string.IsNullOrEmpty(s.Subject));
         Abort = new Command(DoAbort);
         // Continue stays disabled while unmerged paths remain — git would refuse anyway.
         var canContinue = Slice(s => s.State != RepoOperationState.None && !s.HasConflicts);
         Continue = new Command(DoContinue, canContinue);
+        var canSkip = Slice(s => SupportsSkip(s.State));
+        Skip = new Command(DoSkip, canSkip);
 
         Subscriptions.Add(_registry.Active.Subscribe(_ => Reload()));
         Subscriptions.Add(_bus.SubscribeScoped<RefsChangedMessage>(_ => Reload()));
@@ -66,7 +75,11 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
         _bus.Broadcast(new ShowDialogMessage(onClose => new AbortOperationDialog { Repo = repo, State = state, OnClose = onClose }));
     }
 
-    private void DoContinue()
+    private void DoContinue() => Advance(skip: false);
+
+    private void DoSkip() => Advance(skip: true);
+
+    private void Advance(bool skip)
     {
         var repo = _registry.Active.Value;
         var state = OperationState.Value;
@@ -76,7 +89,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
         var bus = _bus;
         var started = TryRunOutcome(
             _continueLane,
-            () => service.ContinueOperation(repo, state),
+            () => skip ? service.SkipOperation(repo, state) : service.ContinueOperation(repo, state),
             outcome =>
             {
                 var strings = _loc.Strings.Value;
@@ -116,23 +129,33 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
 
         var repoId = repo.Id;
         var service = _gitService;
-        RunBackground<(RepoOperationState State, bool HasConflicts)>(
+        RunBackground<(RepoOperationState State, bool HasConflicts, string? Subject)>(
             () =>
             {
                 try
                 {
                     var state = service.GetOperationState(repo);
                     var hasConflicts = state != RepoOperationState.None && service.HasUnmergedPaths(repo);
-                    return ((state, hasConflicts), null);
+                    var subject = state != RepoOperationState.None ? service.GetOperationCommitSubject(repo, state) : null;
+                    return ((state, hasConflicts, subject), null);
                 }
-                catch { return ((RepoOperationState.None, false), null); }
+                catch { return ((RepoOperationState.None, false, (string?)null), null); }
             },
             (result, _) =>
             {
                 if (_registry.Active.Value?.Id != repoId) return;
-                Update(_ => new OperationBannerState(result.State, result.HasConflicts));
+                Update(_ => new OperationBannerState(result.State, result.HasConflicts, result.Subject));
             });
     }
+
+    private static bool SupportsSkip(RepoOperationState state) => state switch
+    {
+        RepoOperationState.Rebase => true,
+        RepoOperationState.CherryPick => true,
+        RepoOperationState.Revert => true,
+        RepoOperationState.ApplyMailbox => true,
+        _ => false,
+    };
 
     public override void Dispose()
     {
@@ -141,7 +164,7 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
     }
 }
 
-internal sealed record OperationBannerState(RepoOperationState State, bool HasConflicts = false)
+internal sealed record OperationBannerState(RepoOperationState State, bool HasConflicts = false, string? Subject = null)
 {
     public static OperationBannerState Initial { get; } = new(RepoOperationState.None);
 }

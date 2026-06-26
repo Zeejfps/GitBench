@@ -56,6 +56,8 @@ internal sealed record ButtonWidget : Widget<ButtonState>
             Height = Sizes.ControlHeight,
             BorderRadius = Style.Radius,
             Background = Style.Surface(state),
+            BorderColor = Style.BorderColor(state),
+            BorderSize = Style.BorderSize,
             Children =
             [
                 new Padding { Amount = ContentInset, Children = [content] },

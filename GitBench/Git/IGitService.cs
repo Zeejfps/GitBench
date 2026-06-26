@@ -65,6 +65,8 @@ public interface IGitService
     string? GetMergeMessage(Repo repo);
     AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state);
+    ContinueOutcome SkipOperation(Repo repo, RepoOperationState state);
+    string? GetOperationCommitSubject(Repo repo, RepoOperationState state);
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary);
     GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
     GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);

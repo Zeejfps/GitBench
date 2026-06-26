@@ -1001,6 +1001,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return (subject, when);
     }
 
+    public string? GetOperationCommitSubject(Repo repo, RepoOperationState state)
+    {
+        if (state == RepoOperationState.None) return null;
+        try
+        {
+            var sha = GetIncomingSha(repo.Path, state);
+            if (string.IsNullOrEmpty(sha)) return null;
+            var (subject, _) = GetCommitMeta(repo.Path, sha);
+            return string.IsNullOrWhiteSpace(subject) ? null : subject;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string? TrimOrNull(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();
 
     private static string ShortSha(string? sha)
@@ -2977,21 +2993,42 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (args == null)
                 return new ContinueOutcome.Failed(
                     $"Continue isn't supported for {DescribeState(state)}.");
-
-            var result = _runner.Run(repo.Path, args, configure: static psi =>
-            {
-                psi.EnvironmentVariables["GIT_EDITOR"] = "true";
-                psi.EnvironmentVariables["GIT_SEQUENCE_EDITOR"] = "true";
-            });
-            if (result.Ok) return ContinueOutcome.Ok;
-
-            bool hasMoreConflicts;
-            try { hasMoreConflicts = HasUnmergedPaths(repo.Path); }
-            catch { hasMoreConflicts = false; }
-
-            var message = result.BlockError($"git {string.Join(' ', args)}");
-            return hasMoreConflicts
-                ? new ContinueOutcome.MoreConflicts(message)
-                : new ContinueOutcome.Failed(message);
+            return RunSequencerAdvance(repo, args);
         }, static m => new ContinueOutcome.Failed(m));
+
+    public ContinueOutcome SkipOperation(Repo repo, RepoOperationState state)
+        => RunLocked<ContinueOutcome>(repo, () =>
+        {
+            var args = state switch
+            {
+                RepoOperationState.Rebase => new[] { "rebase", "--skip" },
+                RepoOperationState.CherryPick => new[] { "cherry-pick", "--skip" },
+                RepoOperationState.Revert => new[] { "revert", "--skip" },
+                RepoOperationState.ApplyMailbox => new[] { "am", "--skip" },
+                _ => null,
+            };
+            if (args == null)
+                return new ContinueOutcome.Failed(
+                    $"Skip isn't supported for {DescribeState(state)}.");
+            return RunSequencerAdvance(repo, args);
+        }, static m => new ContinueOutcome.Failed(m));
+
+    private ContinueOutcome RunSequencerAdvance(Repo repo, string[] args)
+    {
+        var result = _runner.Run(repo.Path, args, configure: static psi =>
+        {
+            psi.EnvironmentVariables["GIT_EDITOR"] = "true";
+            psi.EnvironmentVariables["GIT_SEQUENCE_EDITOR"] = "true";
+        });
+        if (result.Ok) return ContinueOutcome.Ok;
+
+        bool hasMoreConflicts;
+        try { hasMoreConflicts = HasUnmergedPaths(repo.Path); }
+        catch { hasMoreConflicts = false; }
+
+        var message = result.BlockError($"git {string.Join(' ', args)}");
+        return hasMoreConflicts
+            ? new ContinueOutcome.MoreConflicts(message)
+            : new ContinueOutcome.Failed(message);
+    }
 }
