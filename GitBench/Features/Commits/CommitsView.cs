@@ -691,7 +691,7 @@ internal sealed record CommitsView : Widget
 
             var textTop = rowBottom;
             var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
-            var refsEndX = DrawBadges(c, node, summaryStartX, textTop, z + 2);
+            var refsEndX = DrawBadges(c, node, summaryStartX, textTop, authorPanelLeft, z + 2);
             // Clip the message at the metadata edge (DrawText clips to its box) instead of masking
             // the overflow with opaque column rects, so the selection bar shows through uniformly.
             var summaryDraw = Math.Max(0, authorPanelLeft - refsEndX);
@@ -714,11 +714,15 @@ internal sealed record CommitsView : Widget
             RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
         }
 
-        private float DrawBadges(ICanvas c, CommitNode node, float left, float rowBottom, int z)
+        private float DrawBadges(ICanvas c, CommitNode node, float left, float rowBottom, float rightBoundary, int z)
         {
             if (node.Refs.Count == 0) return left;
 
             const float IconGap = 4f;
+
+            // Clip badges to the commit column so a long ref name is cut at the metadata edge
+            // (glyphs/rects aren't bounded by Position), matching DrawText/DrawHashText.
+            c.PushClip(Place(left, rowBottom, Math.Max(0, rightBoundary - left), RowHeight));
 
             var x = left;
             var badgeY = rowBottom + (RowHeight - BadgeHeight) * 0.5f;
@@ -786,6 +790,7 @@ internal sealed record CommitsView : Widget
                 });
                 x += badgeW + BadgeGap;
             }
+            c.PopClip();
             return x + BadgeGap;
         }
 
