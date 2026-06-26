@@ -404,6 +404,8 @@
   "operations.title_unmerged": "Unresolved conflicts",
   "operations.detail_resolved": "All conflicts resolved",
   "operations.detail_conflicts": { "one": "Working directory has 1 merge conflict", "other": "Working directory has {count} merge conflicts" },
+  "operations.step_progress": "Step {step} of {total}",
+  "operations.stopped_commit": "Commit: “{name}”",
   "operations.error_copy_tooltip": "Copy error to clipboard",
   "operations.reconcile_title": "Reconcile divergent branches",
   "operations.reconcile_desc": "'{name}' and its upstream have both moved on. Choose how to reconcile them, then pull.",

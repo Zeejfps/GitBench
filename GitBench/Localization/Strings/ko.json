@@ -404,6 +404,8 @@
   "operations.title_unmerged": "해결되지 않은 충돌",
   "operations.detail_resolved": "모든 충돌이 해결됨",
   "operations.detail_conflicts": { "one": "작업 디렉터리에 병합 충돌 {count}개가 있습니다", "other": "작업 디렉터리에 병합 충돌 {count}개가 있습니다" },
+  "operations.step_progress": "단계 {step}/{total}",
+  "operations.stopped_commit": "커밋: “{name}”",
   "operations.error_copy_tooltip": "오류를 클립보드에 복사",
   "operations.reconcile_title": "갈라진 브랜치 조정",
   "operations.reconcile_desc": "'{name}'과(와) 그 업스트림이 모두 진행되었습니다. 조정 방법을 선택한 다음 풀하세요.",

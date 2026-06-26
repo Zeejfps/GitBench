@@ -32,7 +32,8 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
     public IReadable<bool> HasSubject { get; }
     public IReadable<string?> Subject { get; }
     public IReadable<bool> HasProgress { get; }
-    public IReadable<string?> ProgressLabel { get; }
+    public IReadable<int> ProgressStep { get; }
+    public IReadable<int> ProgressTotal { get; }
     public IReadable<float> ProgressFraction { get; }
     public IReadable<string?> Context { get; }
     public IReadable<bool> HasContext { get; }
@@ -69,7 +70,8 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         Subject = Slice(s => s.Operation?.StoppedSubject());
         HasSubject = Slice(s => !string.IsNullOrEmpty(s.Operation?.StoppedSubject()));
         HasProgress = Slice(s => s.Operation is IProgressOperation { Total: > 0 });
-        ProgressLabel = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? $"{p.Step} / {p.Total}" : null);
+        ProgressStep = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? p.Step : 0);
+        ProgressTotal = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? p.Total : 0);
         ProgressFraction = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? Math.Clamp((float)p.Step / p.Total, 0f, 1f) : 0f);
         Context = Slice(s => s.Operation is RebaseOperation r ? FormatContext(r) : null);
         HasContext = Slice(s => s.Operation is RebaseOperation r && FormatContext(r) is not null);

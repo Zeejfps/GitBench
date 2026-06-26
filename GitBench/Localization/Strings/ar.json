@@ -446,6 +446,8 @@
   "operations.title_unmerged": "تعارضات لم تُحَل",
   "operations.detail_resolved": "تم حل جميع التعارضات",
   "operations.detail_conflicts": { "one": "يحتوي دليل العمل على تعارض دمج واحد", "other": "يحتوي دليل العمل على {count} تعارضات دمج" },
+  "operations.step_progress": "الخطوة {step} من {total}",
+  "operations.stopped_commit": "الإيداع: “{name}”",
   "operations.error_copy_tooltip": "نسخ الخطأ إلى الحافظة",
   "operations.reconcile_title": "التوفيق بين الفروع المتباعدة",
   "operations.reconcile_desc": "'{name}' وفرعه الأساسي تحرّكا كلاهما. اختر كيفية التوفيق بينهما، ثم اسحب.",

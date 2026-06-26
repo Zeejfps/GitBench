@@ -404,6 +404,8 @@
   "operations.title_unmerged": "未解決の競合",
   "operations.detail_resolved": "すべての競合が解決済み",
   "operations.detail_conflicts": { "one": "作業ディレクトリに {count} 件のマージ競合があります", "other": "作業ディレクトリに {count} 件のマージ競合があります" },
+  "operations.step_progress": "ステップ {step}/{total}",
+  "operations.stopped_commit": "コミット: 「{name}」",
   "operations.error_copy_tooltip": "エラーをクリップボードにコピー",
   "operations.reconcile_title": "分岐したブランチを調整",
   "operations.reconcile_desc": "'{name}' とそのアップストリームの両方が進んでいます。調整方法を選んでからプルしてください。",

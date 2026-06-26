@@ -404,6 +404,8 @@
   "operations.title_unmerged": "Conflictos sin resolver",
   "operations.detail_resolved": "Todos los conflictos resueltos",
   "operations.detail_conflicts": { "one": "El directorio de trabajo tiene 1 conflicto de fusión", "other": "El directorio de trabajo tiene {count} conflictos de fusión" },
+  "operations.step_progress": "Paso {step} de {total}",
+  "operations.stopped_commit": "Commit: “{name}”",
   "operations.error_copy_tooltip": "Copiar el error al portapapeles",
   "operations.reconcile_title": "Reconciliar ramas divergentes",
   "operations.reconcile_desc": "'{name}' y su upstream han avanzado por separado. Elige cómo reconciliarlas y luego haz pull.",

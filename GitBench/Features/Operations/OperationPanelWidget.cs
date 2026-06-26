@@ -51,7 +51,16 @@ internal sealed record OperationPanelWidget : Widget
                                         Gap = Spacing.Hair,
                                         Children =
                                         [
-                                            Title(vm),
+                                            new Row
+                                            {
+                                                Gap = Spacing.Sm,
+                                                CrossAxis = CrossAxisAlignment.Center,
+                                                Children =
+                                                [
+                                                    Title(vm),
+                                                    new Show { When = vm.HasContext, Then = () => ContextHeading(vm) },
+                                                ],
+                                            },
                                             new Show { When = vm.ShowsConflictCue, Then = () => Detail(vm) },
                                         ],
                                     },
@@ -71,17 +80,8 @@ internal sealed record OperationPanelWidget : Widget
                                             CrossAxis = CrossAxisAlignment.Stretch,
                                             Children =
                                             [
-                                                new Row
-                                                {
-                                                    Gap = Spacing.Md,
-                                                    CrossAxis = CrossAxisAlignment.Center,
-                                                    Children =
-                                                    [
-                                                        new Show { When = vm.HasProgress, Then = () => Progress(vm) },
-                                                        new Show { When = vm.HasSubject, Then = () => Subject(vm) },
-                                                    ],
-                                                },
-                                                new Show { When = vm.HasContext, Then = () => ContextLabel(vm) },
+                                                new Show { When = vm.HasSubject, Then = () => Subject(vm) },
+                                                new Show { When = vm.HasProgress, Then = () => Progress(vm) },
                                             ],
                                         },
                                     },
@@ -134,7 +134,7 @@ internal sealed record OperationPanelWidget : Widget
         [
             new Text
             {
-                Value = Prop.Bind(vm.ProgressLabel),
+                Value = L.T(s => s.OperationsStepProgress(vm.ProgressStep.Value, vm.ProgressTotal.Value)),
                 Wrap = TextWrap.NoWrap,
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.Palette.TextSecondary),
@@ -177,7 +177,7 @@ internal sealed record OperationPanelWidget : Widget
 
     private static IWidget Subject(OperationViewModel vm) => new Text
     {
-        Value = vm.Subject.Bind(sub => sub is null ? null : $"“{sub}”"),
+        Value = L.T(s => s.OperationsStoppedCommit(vm.Subject.Value)),
         Wrap = TextWrap.NoWrap,
         Overflow = TextOverflow.Ellipsis,
         FontSize = FontSize.Caption,
@@ -185,9 +185,9 @@ internal sealed record OperationPanelWidget : Widget
         Color = Theme.Color(s => s.Palette.TextSecondary),
     };
 
-    private static IWidget ContextLabel(OperationViewModel vm) => new Text
+    private static IWidget ContextHeading(OperationViewModel vm) => new Text
     {
-        Value = Prop.Bind(vm.Context),
+        Value = vm.Context.Bind(c => c is null ? null : $"· {c}"),
         Wrap = TextWrap.NoWrap,
         Overflow = TextOverflow.Ellipsis,
         FontSize = FontSize.Caption,
