@@ -251,12 +251,18 @@ gen_rebase_conflict() {                         # 21-rebase-conflict
   new_repo 21-rebase-conflict
   write data.txt "shared base line"; ci "base"
   git switch -q -c topic
+  # Five topic commits replay onto main; the first two add new files and apply
+  # cleanly, the third edits the shared line and conflicts, so the rebase stops at
+  # 3/5 — a multi-step rebase that exercises the progress indicator mid-way.
+  commit "topic: add readme"  readme.txt  "topic readme"
+  commit "topic: add helper"  helper.txt  "topic helper"
   write data.txt "topic version of the line"; ci "topic: edit data"
-  write topic-only.txt "topic stuff"; ci "topic: add file"
+  commit "topic: add widget"  widget.txt  "topic widget"
+  commit "topic: add tests"   tests.txt   "topic tests"
   git switch -q main
   write data.txt "main version of the line"; ci "main: edit data"
   git switch -q topic
-  stamp; git rebase main || true                # stops mid-rebase on conflict
+  stamp; git rebase main || true                # stops at 3/5 on the data.txt conflict
 }
 
 gen_cherry_pick_conflict() {                    # 22-cherry-pick-conflict

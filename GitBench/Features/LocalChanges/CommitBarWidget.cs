@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -36,6 +37,7 @@ internal sealed record CommitBarWidget : Widget
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
         var loc = ctx.Localization();
+        var operation = ctx.Require<OperationViewModel>();
 
         var titleInput = new TextInputView(ctx.Canvas)
         {
@@ -131,18 +133,20 @@ internal sealed record CommitBarWidget : Widget
         // while enabled, and shows its hover chrome while focused; Enter commits.
         void RegisterFocusStops()
         {
-            var titleStop = FocusRing.Add(titleController.BeginEditing, titleController.EndEditing);
+            var titleStop = FocusRing.Add(titleController.BeginEditing, titleController.EndEditing,
+                canFocus: () => operation.ShowsCommitBox.Value);
             titleController.OnTab = () => FocusRing.Next(titleStop);
             titleController.OnShiftTab = () => FocusRing.Previous(titleStop);
 
-            var descriptionStop = FocusRing.Add(descriptionField.BeginEditing, descriptionField.EndEditing);
+            var descriptionStop = FocusRing.Add(descriptionField.BeginEditing, descriptionField.EndEditing,
+                canFocus: () => operation.ShowsCommitBox.Value);
             descriptionField.OnTab = () => FocusRing.Next(descriptionStop);
             descriptionField.OnShiftTab = () => FocusRing.Previous(descriptionStop);
 
             var commitStop = FocusRing.Add(
                 () => input.StealFocus(commitController),
                 () => input.Blur(commitController),
-                canFocus: () => commitWidget.State.Enabled.Value);
+                canFocus: () => operation.ShowsCommitBox.Value && commitWidget.State.Enabled.Value);
             commitController.OnTab = () => FocusRing.Next(commitStop);
             commitController.OnShiftTab = () => FocusRing.Previous(commitStop);
         }

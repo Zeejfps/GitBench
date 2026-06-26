@@ -59,6 +59,7 @@ public interface IGitService
     // delete) or on any failure — the caller then renders that side plain.
     string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null);
     RepoOperationState GetOperationState(Repo repo);
+    RepoOperation? GetOperation(Repo repo);
     bool HasUnmergedPaths(Repo repo);
     // The default merge commit message (MERGE_MSG) when a merge is in progress, else null.
     // Used to pre-fill the commit box so committing finishes the merge.
@@ -66,7 +67,6 @@ public interface IGitService
     AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
     ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state);
     ContinueOutcome SkipOperation(Repo repo, RepoOperationState state);
-    string? GetOperationCommitSubject(Repo repo, RepoOperationState state);
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary);
     GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
     GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);

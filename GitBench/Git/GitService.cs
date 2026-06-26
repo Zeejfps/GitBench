@@ -1001,20 +1001,98 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return (subject, when);
     }
 
-    public string? GetOperationCommitSubject(Repo repo, RepoOperationState state)
+    public RepoOperation? GetOperation(Repo repo)
     {
+        var state = GetOperationState(repo);
         if (state == RepoOperationState.None) return null;
+        var path = repo.Path;
+        bool conflicts;
+        try { conflicts = HasUnmergedPaths(path); }
+        catch { conflicts = false; }
+
+        switch (state)
+        {
+            case RepoOperationState.Rebase:
+            {
+                var (step, total) = ReadRebaseProgress(path);
+                return new RebaseOperation(ReadRebaseOnto(path), step, total, SubjectFor(path, state), conflicts);
+            }
+            case RepoOperationState.ApplyMailbox:
+            {
+                var (step, total) = ReadRebaseProgress(path);
+                return new ApplyMailboxOperation(step, total, SubjectFor(path, state), conflicts);
+            }
+            case RepoOperationState.CherryPick:
+                return new CherryPickOperation(SubjectFor(path, state), conflicts);
+            case RepoOperationState.Revert:
+                return new RevertOperation(SubjectFor(path, state), conflicts);
+            case RepoOperationState.Merge:
+                return new MergeOperation(IncomingLabelFor(path, state), conflicts);
+            case RepoOperationState.Bisect:
+                return new BisectOperation();
+            case RepoOperationState.UnmergedPaths:
+                return new UnmergedPathsOperation(conflicts);
+            default:
+                return null;
+        }
+    }
+
+    private string? SubjectFor(string repoPath, RepoOperationState state)
+    {
         try
         {
-            var sha = GetIncomingSha(repo.Path, state);
+            var sha = GetIncomingSha(repoPath, state);
             if (string.IsNullOrEmpty(sha)) return null;
-            var (subject, _) = GetCommitMeta(repo.Path, sha);
+            var (subject, _) = GetCommitMeta(repoPath, sha);
             return string.IsNullOrWhiteSpace(subject) ? null : subject;
         }
-        catch
+        catch { return null; }
+    }
+
+    private string? IncomingLabelFor(string repoPath, RepoOperationState state)
+    {
+        try
         {
-            return null;
+            var sha = GetIncomingSha(repoPath, state);
+            if (string.IsNullOrEmpty(sha)) return null;
+            return GetRefLabelForSha(repoPath, sha) ?? ShortSha(sha);
         }
+        catch { return null; }
+    }
+
+    private (int Step, int Total) ReadRebaseProgress(string repoPath)
+    {
+        var gitDir = GetGitDir(repoPath);
+        if (gitDir == null) return (0, 0);
+        var merge = Path.Combine(gitDir, "rebase-merge");
+        if (Directory.Exists(merge))
+            return (ReadCount(Path.Combine(merge, "msgnum")), ReadCount(Path.Combine(merge, "end")));
+        var apply = Path.Combine(gitDir, "rebase-apply");
+        if (Directory.Exists(apply))
+            return (ReadCount(Path.Combine(apply, "next")), ReadCount(Path.Combine(apply, "last")));
+        return (0, 0);
+    }
+
+    private string? ReadRebaseOnto(string repoPath)
+    {
+        var gitDir = GetGitDir(repoPath);
+        if (gitDir == null) return null;
+        var sha = ReadSentinel(Path.Combine(gitDir, "rebase-merge", "onto"))
+                  ?? ReadSentinel(Path.Combine(gitDir, "rebase-apply", "onto"));
+        if (string.IsNullOrEmpty(sha)) return null;
+        return GetRefLabelForSha(repoPath, sha) ?? ShortSha(sha);
+    }
+
+    private static int ReadCount(string path)
+    {
+        try { return File.Exists(path) && int.TryParse(File.ReadAllText(path).Trim(), out var n) ? n : 0; }
+        catch { return 0; }
+    }
+
+    private static string? ReadSentinel(string path)
+    {
+        try { return File.Exists(path) ? File.ReadAllText(path).Trim() : null; }
+        catch { return null; }
     }
 
     private static string? TrimOrNull(string? s) => string.IsNullOrWhiteSpace(s) ? null : s.Trim();

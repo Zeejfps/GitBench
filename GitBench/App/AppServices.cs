@@ -69,7 +69,7 @@ internal static class AppServices
             ctx.Get<IPlatformShell>(),
             ctx.Require<ILocalizationService>()));
         context.AddSingleton<LocalChangesSelectionStore>();
-        context.AddSingleton<OperationBannerViewModel>();
+        context.AddSingleton<OperationViewModel>();
         context.AddSingleton<UpdateService>();
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>

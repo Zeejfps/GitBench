@@ -11,13 +11,13 @@ namespace GitBench.Features.Operations;
 /// Thin status strip above the main content while the repo is mid-operation (merge / rebase /
 /// cherry-pick / revert / bisect / am) or has unmerged paths from a stash-apply conflict. Reports
 /// state only — the Continue / Skip / Abort actions live in <see cref="OperationPanelWidget"/> at
-/// the bottom, both driven by the shared <see cref="OperationBannerViewModel"/>.
+/// the bottom, both driven by the shared <see cref="OperationViewModel"/>.
 /// </summary>
 internal sealed record OperationBannerWidget : Widget
 {
     protected override IWidget Build(Context ctx)
     {
-        var vm = ctx.Require<OperationBannerViewModel>();
+        var vm = ctx.Require<OperationViewModel>();
         return new Show
         {
             When = vm.IsActive,
@@ -25,7 +25,7 @@ internal sealed record OperationBannerWidget : Widget
         };
     }
 
-    private static IWidget Banner(OperationBannerViewModel vm) => new Box
+    private static IWidget Banner(OperationViewModel vm) => new Box
     {
         Background = Theme.Color(s => s.Banner.Background),
         BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Banner.Border }),
@@ -39,9 +39,7 @@ internal sealed record OperationBannerWidget : Widget
                 [
                     new Text
                     {
-                        Value = L.T(s => vm.IsBusy.Value
-                            ? BusyMessageFor(s, vm.OperationState.Value)
-                            : MessageFor(s, vm.OperationState.Value, vm.HasConflicts.Value)),
+                        Value = L.T(s => MessageForOp(s, vm)),
                         VAlign = TextAlignment.Center,
                         Wrap = TextWrap.Wrap,
                         Color = Theme.Color(s => s.Banner.Text),
@@ -50,6 +48,15 @@ internal sealed record OperationBannerWidget : Widget
             },
         ],
     };
+
+    private static string MessageForOp(Strings s, OperationViewModel vm)
+    {
+        var op = vm.Operation.Value;
+        if (op is null) return string.Empty;
+        return vm.IsBusy.Value
+            ? BusyMessageFor(s, op.Kind)
+            : MessageFor(s, op.Kind, op.IsConflicted());
+    }
 
     private static string BusyMessageFor(Strings s, RepoOperationState state) => state switch
     {

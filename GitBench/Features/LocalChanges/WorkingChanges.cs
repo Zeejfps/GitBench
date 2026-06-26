@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Operations;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -20,6 +21,7 @@ internal sealed class LocalChangesView : ContainerView
     public LocalChangesView(Context ctx)
     {
         var vm = ctx.Require<LocalChangesViewModel>();
+        var operation = ctx.Require<OperationViewModel>();
         var content = new LocalChangesContentView(ctx, vm);
 
         // Tab cycles unstaged files → commit title → commit description → commit button
@@ -29,6 +31,10 @@ internal sealed class LocalChangesView : ContainerView
         content.RegisterFocusStops(focusRing);
         var commitBar = new CommitBarWidget { FocusRing = focusRing, Vm = vm }.BuildView(ctx);
 
+        commitBar.BindIsVisible(operation.ShowsCommitBox);
+        var commitRegion = new ColumnView();
+        commitRegion.Children.Add(commitBar);
+
         var bg = new RectView
         {
             Children =
@@ -36,7 +42,7 @@ internal sealed class LocalChangesView : ContainerView
                 new BorderLayoutView
                 {
                     Center = content,
-                    South = commitBar,
+                    South = commitRegion,
                 },
             },
         };
