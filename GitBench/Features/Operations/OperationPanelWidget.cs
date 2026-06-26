@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -8,13 +9,6 @@ using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Operations;
 
-/// <summary>
-/// Footer action panel pinned to the bottom of the workspace while the repo is mid-operation.
-/// Shows progress and the stopped commit alongside the Continue / Skip / Abort actions where the
-/// conflict-resolution work happens, leaving <see cref="OperationBannerWidget"/> up top as a calm
-/// status strip. Continue and Skip appear only for sequencer operations (rebase / cherry-pick /
-/// revert / am); merge and friends finish elsewhere, so they show Abort alone.
-/// </summary>
 internal sealed record OperationPanelWidget : Widget
 {
     protected override IWidget Build(Context ctx)
@@ -30,7 +24,7 @@ internal sealed record OperationPanelWidget : Widget
     private static IWidget Panel(OperationViewModel vm) => new Box
     {
         Background = Theme.Color(s => s.CommitBar.Background),
-        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.CommitBar.TopBorder }),
+        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.Banner.Border }),
         BorderSize = new BorderSizeStyle { Top = 1 },
         Children =
         [
@@ -39,54 +33,97 @@ internal sealed record OperationPanelWidget : Widget
                 Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Md, Bottom = Spacing.Md },
                 Children =
                 [
-                    new Row
+                    new Column
                     {
                         Gap = Spacing.Md,
-                        CrossAxis = CrossAxisAlignment.Center,
+                        CrossAxis = CrossAxisAlignment.Stretch,
                         Children =
                         [
-                            new Grow
+                            new Row
                             {
-                                Child = new Column
-                                {
-                                    Gap = Spacing.Hair,
-                                    CrossAxis = CrossAxisAlignment.Stretch,
-                                    Children =
-                                    [
-                                        new Row
-                                        {
-                                            Gap = Spacing.Md,
-                                            CrossAxis = CrossAxisAlignment.Center,
-                                            Children =
-                                            [
-                                                new Show { When = vm.HasProgress, Then = () => Progress(vm) },
-                                                new Show { When = vm.HasSubject, Then = () => Subject(vm) },
-                                            ],
-                                        },
-                                        new Row
-                                        {
-                                            Gap = Spacing.Md,
-                                            CrossAxis = CrossAxisAlignment.Center,
-                                            Children =
-                                            [
-                                                new Show { When = vm.HasContext, Then = () => ContextLabel(vm) },
-                                                new Show { When = vm.ShowsConflictCue, Then = () => ConflictCue(vm) },
-                                            ],
-                                        },
-                                    ],
-                                },
+                                Gap = Spacing.Md,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    new Show { When = vm.ShowsConflictCue, Then = () => StatusIcon(vm) },
+                                    new Column
+                                    {
+                                        Gap = Spacing.Hair,
+                                        Children =
+                                        [
+                                            Title(vm),
+                                            new Show { When = vm.ShowsConflictCue, Then = () => Detail(vm) },
+                                        ],
+                                    },
+                                ],
                             },
-                            new Show
+                            new Row
                             {
-                                When = vm.IsBusy,
-                                Then = () => Spinner(vm),
-                                Else = () => Actions(vm),
+                                Gap = Spacing.Md,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    new Grow
+                                    {
+                                        Child = new Column
+                                        {
+                                            Gap = Spacing.Hair,
+                                            CrossAxis = CrossAxisAlignment.Stretch,
+                                            Children =
+                                            [
+                                                new Row
+                                                {
+                                                    Gap = Spacing.Md,
+                                                    CrossAxis = CrossAxisAlignment.Center,
+                                                    Children =
+                                                    [
+                                                        new Show { When = vm.HasProgress, Then = () => Progress(vm) },
+                                                        new Show { When = vm.HasSubject, Then = () => Subject(vm) },
+                                                    ],
+                                                },
+                                                new Show { When = vm.HasContext, Then = () => ContextLabel(vm) },
+                                            ],
+                                        },
+                                    },
+                                    new Show
+                                    {
+                                        When = vm.IsBusy,
+                                        Then = () => Spinner(vm),
+                                        Else = () => Actions(vm),
+                                    },
+                                ],
                             },
                         ],
                     },
                 ],
             },
         ],
+    };
+
+    private static IWidget StatusIcon(OperationViewModel vm) => new Text
+    {
+        Value = vm.IsConflicted.Bind(c => c ? LucideIcons.TriangleAlert : LucideIcons.CircleCheck),
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = FontSize.Display,
+        VAlign = TextAlignment.Center,
+        HAlign = TextAlignment.Center,
+        Color = Theme.Color(s => vm.IsConflicted.Value ? s.Status.Warning : s.Status.Success),
+    };
+
+    private static IWidget Title(OperationViewModel vm) => new Text
+    {
+        Value = L.T(s => TitleFor(s, vm)),
+        Wrap = TextWrap.NoWrap,
+        Color = Theme.Color(s => s.Banner.Text),
+    };
+
+    private static IWidget Detail(OperationViewModel vm) => new Text
+    {
+        Value = L.T(s => DetailFor(s, vm)),
+        Wrap = TextWrap.NoWrap,
+        Overflow = TextOverflow.Ellipsis,
+        FontSize = FontSize.Caption,
+        Color = Theme.Color(s => s.Palette.TextSecondary),
     };
 
     private static IWidget Progress(OperationViewModel vm) => new Row
@@ -158,35 +195,6 @@ internal sealed record OperationPanelWidget : Widget
         Color = Theme.Color(s => s.Palette.TextSecondary),
     };
 
-    private static IWidget ConflictCue(OperationViewModel vm) => new Row
-    {
-        Gap = Spacing.Hair,
-        CrossAxis = CrossAxisAlignment.Center,
-        Children =
-        [
-            new Text
-            {
-                FontFamily = LucideIcons.FontFamily,
-                FontSize = FontSize.Caption,
-                VAlign = TextAlignment.Center,
-                Value = vm.IsConflicted.Bind(c => c ? LucideIcons.TriangleAlert : LucideIcons.CircleCheck),
-                Color = Theme.Color(s => vm.IsConflicted.Value ? s.Status.Danger : s.Status.Success),
-            },
-            new Show
-            {
-                When = vm.IsConflicted,
-                Then = () => new Text
-                {
-                    Value = Prop.Bind(vm.ConflictCountLabel),
-                    Wrap = TextWrap.NoWrap,
-                    FontSize = FontSize.Caption,
-                    VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.Status.Danger),
-                },
-            },
-        ],
-    };
-
     private static IWidget Spinner(OperationViewModel vm) => new Text
     {
         Value = LucideIcons.Loader,
@@ -242,5 +250,29 @@ internal sealed record OperationPanelWidget : Widget
                 }.WithController<KbmController>(),
             ],
         };
+    }
+
+    private static string TitleFor(Strings s, OperationViewModel vm)
+    {
+        var op = vm.Operation.Value;
+        if (op is null) return string.Empty;
+        return op.Kind switch
+        {
+            RepoOperationState.Rebase => s.OperationsTitleRebase,
+            RepoOperationState.Merge => s.OperationsTitleMerge,
+            RepoOperationState.CherryPick => s.OperationsTitleCherryPick,
+            RepoOperationState.Revert => s.OperationsTitleRevert,
+            RepoOperationState.ApplyMailbox => s.OperationsTitleApply,
+            RepoOperationState.Bisect => s.OperationsTitleBisect,
+            RepoOperationState.UnmergedPaths => s.OperationsTitleUnmerged,
+            _ => string.Empty,
+        };
+    }
+
+    private static string DetailFor(Strings s, OperationViewModel vm)
+    {
+        if (vm.IsBusy.Value) return s.OperationsBannerBusyDefault;
+        if (vm.IsConflicted.Value) return s.OperationsDetailConflicts(vm.ConflictCount.Value);
+        return s.OperationsDetailResolved;
     }
 }

@@ -38,6 +38,7 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
     public IReadable<bool> HasContext { get; }
     public IReadable<bool> ShowsConflictCue { get; }
     public IReadable<bool> IsConflicted { get; }
+    public IReadable<int> ConflictCount { get; }
     public IReadable<string?> ConflictCountLabel { get; }
     public IReadable<bool> ShowsCommitBox { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
@@ -74,6 +75,7 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         HasContext = Slice(s => s.Operation is RebaseOperation r && FormatContext(r) is not null);
         ShowsConflictCue = Slice(s => s.Operation is IConflictableOperation);
         IsConflicted = Slice(s => s.Operation is IConflictableOperation { ConflictCount: > 0 });
+        ConflictCount = Slice(s => (s.Operation as IConflictableOperation)?.ConflictCount ?? 0);
         ConflictCountLabel = Slice(s => s.Operation is IConflictableOperation { ConflictCount: > 0 } c ? c.ConflictCount.ToString() : null);
         ShowsCommitBox = Slice(s => s.Operation.ShowsCommitBox());
 
