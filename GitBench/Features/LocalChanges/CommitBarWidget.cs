@@ -17,15 +17,14 @@ namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// Edits the pending commit's title, description, and (normally) amend flag and triggers the commit,
-/// all bound two-way to the <see cref="LocalChangesViewModel"/>. Two instances exist: the normal bar
-/// in the Local Changes view, and — with <see cref="ShowOperationChrome"/> set — the merge bar in the
-/// workspace footer, which trades the amend toggle for the operation's status header and an abort
-/// button so a conflicted merge commits from either tab. Editable fields and the commit button join
-/// the supplied <see cref="FocusRing"/> while <see cref="Active"/>.
+/// all bound two-way to the <see cref="LocalChangesViewModel"/>. Two instances exist, both in the Local
+/// Changes footer: the normal bar, and — with <see cref="ShowOperationChrome"/> set — the merge bar that
+/// takes its place during a merge, trading the amend toggle for the operation's status header and an
+/// abort button. Editable fields and the commit button join the supplied <see cref="FocusRing"/> while
+/// <see cref="Active"/>.
 /// </summary>
 internal sealed record CommitBarWidget : Widget
 {
-    private const int Pad = 10;
     private const float CommitButtonWidth = 120f;
     private const float DescriptionMinHeight = 0f;
     private const float DescriptionMaxHeight = 240f;
@@ -101,28 +100,7 @@ internal sealed record CommitBarWidget : Widget
 
         RegisterFocusStops();
 
-        return new Box
-        {
-            Background = Theme.Color(s => s.CommitBar.Background),
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.CommitBar.TopBorder }),
-            BorderSize = new BorderSizeStyle { Top = 1 },
-            Children =
-            [
-                new Padding
-                {
-                    Amount = new PaddingStyle { Left = Pad, Right = Pad, Top = Pad, Bottom = Pad },
-                    Children =
-                    [
-                        new Column
-                        {
-                            Gap = Spacing.Md,
-                            CrossAxis = CrossAxisAlignment.Stretch,
-                            Children = ColumnRows(),
-                        },
-                    ],
-                },
-            ],
-        };
+        return new FooterPanel { Children = ColumnRows() };
 
         IWidget[] ColumnRows()
         {

@@ -5,72 +5,47 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
-using ZGF.Observable;
 
 namespace GitBench.Features.Operations;
 
+/// <summary>
+/// The in-progress operation panel content (rebase / cherry-pick / revert / apply / bisect): status
+/// header, stopped-commit subject, progress, and the continue / skip / abort actions. Mounting and the
+/// enter / exit animation are owned by the Local Changes <see cref="GitBench.Controls.FooterSlot"/>.
+/// </summary>
 internal sealed record OperationPanelWidget : Widget
 {
-    protected override IWidget Build(Context ctx)
-    {
-        var vm = ctx.Require<OperationViewModel>();
-        // Operations that carry a commit box (merge / unmerged paths) are owned by the workspace-footer
-        // merge bar instead; this panel handles the sequencer operations (rebase, cherry-pick, …).
-        var visible = new Derived<bool>(() => vm.IsActive.Value && !vm.ShowsCommitBox.Value);
-        return new Show
-        {
-            When = visible,
-            Then = () => Panel(vm),
-        };
-    }
+    protected override IWidget Build(Context ctx) => Panel(ctx.Require<OperationViewModel>());
 
-    private static IWidget Panel(OperationViewModel vm) => new Box
+    private static IWidget Panel(OperationViewModel vm) => new FooterPanel
     {
-        Background = Theme.Color(s => s.CommitBar.Background),
-        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.Banner.Border }),
-        BorderSize = new BorderSizeStyle { Top = 1 },
         Children =
         [
-            new Padding
+            new OperationStatusHeader(),
+            new Row
             {
-                Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Lg, Top = Spacing.Md, Bottom = Spacing.Md },
+                Gap = Spacing.Md,
+                CrossAxis = CrossAxisAlignment.Center,
                 Children =
                 [
-                    new Column
+                    new Grow
                     {
-                        Gap = Spacing.Md,
-                        CrossAxis = CrossAxisAlignment.Stretch,
-                        Children =
-                        [
-                            new OperationStatusHeader(),
-                            new Row
-                            {
-                                Gap = Spacing.Md,
-                                CrossAxis = CrossAxisAlignment.Center,
-                                Children =
-                                [
-                                    new Grow
-                                    {
-                                        Child = new Column
-                                        {
-                                            Gap = Spacing.Hair,
-                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                            Children =
-                                            [
-                                                new Show { When = vm.HasSubject, Then = () => Subject(vm) },
-                                                new Show { When = vm.HasProgress, Then = () => Progress(vm) },
-                                            ],
-                                        },
-                                    },
-                                    new Show
-                                    {
-                                        When = vm.IsBusy,
-                                        Then = () => Spinner(vm),
-                                        Else = () => Actions(vm),
-                                    },
-                                ],
-                            },
-                        ],
+                        Child = new Column
+                        {
+                            Gap = Spacing.Hair,
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                new Show { When = vm.HasSubject, Then = () => Subject(vm) },
+                                new Show { When = vm.HasProgress, Then = () => Progress(vm) },
+                            ],
+                        },
+                    },
+                    new Show
+                    {
+                        When = vm.IsBusy,
+                        Then = () => Spinner(vm),
+                        Else = () => Actions(vm),
                     },
                 ],
             },
