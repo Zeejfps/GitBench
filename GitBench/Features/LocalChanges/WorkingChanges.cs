@@ -5,6 +5,7 @@ using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
 
@@ -29,9 +30,12 @@ internal sealed class LocalChangesView : ContainerView
         // cycle; the commit bar appends its own stops as it builds.
         var focusRing = new FocusRing();
         content.RegisterFocusStops(focusRing);
-        var commitBar = new CommitBarWidget { FocusRing = focusRing, Vm = vm }.BuildView(ctx);
+        // The normal commit bar shows only outside an operation. Merge / unmerged-paths commits move
+        // to the workspace footer's merge bar (visible on both tabs), so this one steps aside for them.
+        var normalCommit = new Derived<bool>(() => operation.ShowsCommitBox.Value && !operation.IsActive.Value);
+        var commitBar = new CommitBarWidget { FocusRing = focusRing, Vm = vm, Active = normalCommit }.BuildView(ctx);
 
-        commitBar.BindIsVisible(operation.ShowsCommitBox);
+        commitBar.BindIsVisible(normalCommit);
         var commitRegion = new ColumnView();
         commitRegion.Children.Add(commitBar);
 
@@ -48,7 +52,5 @@ internal sealed class LocalChangesView : ContainerView
         };
         bg.BindThemedBackgroundColor(ctx.Theme(), s => s.Palette.Surface);
         AddChildToSelf(bg);
-
-        this.UseViewModel(() => vm, _ => { });
     }
 }

@@ -70,6 +70,9 @@ internal static class AppServices
             ctx.Require<ILocalizationService>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<OperationViewModel>();
+        // Shared so the Local Changes file list and the workspace-footer merge bar drive the same
+        // staging / commit state from either tab.
+        context.AddSingleton<LocalChangesViewModel>();
         context.AddSingleton<UpdateService>();
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>

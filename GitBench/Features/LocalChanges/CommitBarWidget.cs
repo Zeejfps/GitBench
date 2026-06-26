@@ -16,10 +16,12 @@ using ZGF.Observable;
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
-/// The commit bar at the bottom of the Local Changes view: edits the pending commit's title,
-/// description, and amend flag and triggers the commit, all bound two-way to the
-/// <see cref="LocalChangesViewModel"/>. Adds its editable fields and the commit button to the
-/// supplied <see cref="FocusRing"/> as it builds, so Tab reaches them after the file list.
+/// Edits the pending commit's title, description, and (normally) amend flag and triggers the commit,
+/// all bound two-way to the <see cref="LocalChangesViewModel"/>. Two instances exist: the normal bar
+/// in the Local Changes view, and — with <see cref="ShowOperationChrome"/> set — the merge bar in the
+/// workspace footer, which trades the amend toggle for the operation's status header and an abort
+/// button so a conflicted merge commits from either tab. Editable fields and the commit button join
+/// the supplied <see cref="FocusRing"/> while <see cref="Active"/>.
 /// </summary>
 internal sealed record CommitBarWidget : Widget
 {
@@ -30,6 +32,14 @@ internal sealed record CommitBarWidget : Widget
 
     public required FocusRing FocusRing { get; init; }
     public required LocalChangesViewModel Vm { get; init; }
+
+    /// <summary>Whether this bar is the live editing surface — gates focus traversal into its fields.
+    /// The caller binds the bar's visibility to the same condition.</summary>
+    public required IReadable<bool> Active { get; init; }
+
+    /// <summary>Replaces the amend toggle with the operation status header and an abort button — set on
+    /// the workspace-footer instance that owns an in-progress merge / unmerged-paths commit.</summary>
+    public bool ShowOperationChrome { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -80,12 +90,14 @@ internal sealed record CommitBarWidget : Widget
         var commitController = new KbmController(commitWidget.State);
         commitButton.UseController(input, commitController);
 
+        // The amend toggle is two-way against vm.Amend (record equality stops the loop); only the
+        // normal bar carries it — the merge bar can't amend into an in-progress merge.
         var amend = new State<bool>(false);
-
-        // Amend checkbox is two-way against vm.Amend; record equality stops the loop. Anchored on the
-        // commit button (a persistent child) so it releases on unmount.
-        commitButton.Bind(vm.Amend, b => amend.Value = b);
-        amend.Changed += b => vm.SetAmend(b);
+        if (!ShowOperationChrome)
+        {
+            commitButton.Bind(vm.Amend, b => amend.Value = b);
+            amend.Changed += b => vm.SetAmend(b);
+        }
 
         RegisterFocusStops();
 
@@ -105,52 +117,75 @@ internal sealed record CommitBarWidget : Widget
                         {
                             Gap = Spacing.Md,
                             CrossAxis = CrossAxisAlignment.Stretch,
-                            Children =
-                            [
-                                new ErrorBarView { Message = vm.OpError },
-                                TitleBox(titleInput),
-                                new Raw { View = descriptionField },
-                                new Row
-                                {
-                                    MainAxis = MainAxisAlignment.SpaceBetween,
-                                    CrossAxis = CrossAxisAlignment.Center,
-                                    Children =
-                                    [
-                                        new CheckboxWidget { Label = L.T(s => s.LocalchangesAmendCheckbox), Checked = amend }
-                                            .WithController<KbmController>(),
-                                        new Raw { View = commitButton },
-                                    ],
-                                },
-                            ],
+                            Children = ColumnRows(),
                         },
                     ],
                 },
             ],
         };
 
+        IWidget[] ColumnRows()
+        {
+            var rows = new List<IWidget>(5);
+            if (ShowOperationChrome) rows.Add(new OperationStatusHeader());
+            rows.Add(new ErrorBarView { Message = vm.OpError });
+            rows.Add(TitleBox(titleInput));
+            rows.Add(new Raw { View = descriptionField });
+            rows.Add(ButtonRow());
+            return rows.ToArray();
+        }
+
+        // Commit button always anchors the right edge (via the grow spacer); the normal bar puts the
+        // amend toggle at the left, the merge bar puts the abort button to the commit's right.
+        IWidget ButtonRow()
+        {
+            var children = new List<IWidget>(4);
+            if (!ShowOperationChrome)
+                children.Add(new CheckboxWidget { Label = L.T(s => s.LocalchangesAmendCheckbox), Checked = amend }
+                    .WithController<KbmController>());
+            children.Add(new Grow { Child = Empty.Widget });
+            children.Add(new Raw { View = commitButton });
+            if (ShowOperationChrome)
+                children.Add(AbortButton(operation));
+            return new Row { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Center, Children = children.ToArray() };
+        }
+
         // Commit title and description join the ring after the unstaged file list, with the
-        // commit button last so it's the final stop in the cycle. The button only participates
-        // while enabled, and shows its hover chrome while focused; Enter commits.
+        // commit button last so it's the final stop in the cycle. Stops are live only while this
+        // bar is the active surface; the button additionally needs to be enabled. Enter commits.
         void RegisterFocusStops()
         {
             var titleStop = FocusRing.Add(titleController.BeginEditing, titleController.EndEditing,
-                canFocus: () => operation.ShowsCommitBox.Value);
+                canFocus: () => Active.Value);
             titleController.OnTab = () => FocusRing.Next(titleStop);
             titleController.OnShiftTab = () => FocusRing.Previous(titleStop);
 
             var descriptionStop = FocusRing.Add(descriptionField.BeginEditing, descriptionField.EndEditing,
-                canFocus: () => operation.ShowsCommitBox.Value);
+                canFocus: () => Active.Value);
             descriptionField.OnTab = () => FocusRing.Next(descriptionStop);
             descriptionField.OnShiftTab = () => FocusRing.Previous(descriptionStop);
 
             var commitStop = FocusRing.Add(
                 () => input.StealFocus(commitController),
                 () => input.Blur(commitController),
-                canFocus: () => operation.ShowsCommitBox.Value && commitWidget.State.Enabled.Value);
+                canFocus: () => Active.Value && commitWidget.State.Enabled.Value);
             commitController.OnTab = () => FocusRing.Next(commitStop);
             commitController.OnShiftTab = () => FocusRing.Previous(commitStop);
         }
     }
+
+    // Aborts the in-progress merge / unmerged-paths operation — the same outline-danger button the
+    // standalone operation panel uses, surfaced here so the merge has one panel instead of two.
+    private static IWidget AbortButton(OperationViewModel operation) => new ButtonWidget
+    {
+        Style = ButtonStyle.Outline(s => s.Status.DangerBar),
+        Command = operation.Abort,
+        Children =
+        [
+            new ButtonIcon { Value = LucideIcons.X },
+            new ButtonLabel { Value = L.T(s => s.CommonAbort) },
+        ],
+    }.WithController<KbmController>();
 
     // Single-line title input boxed with the text-input chrome. No PreferredHeight — the box
     // sizes to one line of text plus padding and border (the input reports a single line's
