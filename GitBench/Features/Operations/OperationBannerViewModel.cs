@@ -79,17 +79,24 @@ internal sealed class OperationBannerViewModel : ViewModelBase<OperationBannerSt
             () => service.ContinueOperation(repo, state),
             outcome =>
             {
-                _spinner.Stop();
                 var strings = _loc.Strings.Value;
                 switch (outcome)
                 {
                     case ContinueOutcome.MoreConflicts more:
+                        _spinner.Stop();
                         bus.Broadcast(new ShowOperationErrorMessage(strings.OperationsErrorResolveRemaining, more.Message));
                         break;
                     case ContinueOutcome.Failed failed:
+                        _spinner.Stop();
                         bus.Broadcast(new ShowOperationErrorMessage(strings.OperationsErrorContinueFailed, failed.Message));
                         break;
                     default:
+                        // Operation finished: clear the banner (IsActive -> false) before stopping the
+                        // spinner so it unmounts in one step. Stopping the spinner first would flip the
+                        // inner Show back to the action buttons for the frames until the async Reload
+                        // lands and hides the banner — the flash. The Reload still runs and confirms None.
+                        Update(_ => OperationBannerState.Initial);
+                        _spinner.Stop();
                         bus.Broadcast(new RefsChangedMessage(repo.Id));
                         bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                         break;
