@@ -34,6 +34,11 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
     public IReadable<bool> HasProgress { get; }
     public IReadable<string?> ProgressLabel { get; }
     public IReadable<float> ProgressFraction { get; }
+    public IReadable<string?> Context { get; }
+    public IReadable<bool> HasContext { get; }
+    public IReadable<bool> ShowsConflictCue { get; }
+    public IReadable<bool> IsConflicted { get; }
+    public IReadable<string?> ConflictCountLabel { get; }
     public IReadable<bool> ShowsCommitBox { get; }
     public IReadable<bool> IsBusy => _spinner.IsActive;
     public IReadable<float> BusyRotation => _spinner.Rotation;
@@ -65,6 +70,11 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         HasProgress = Slice(s => s.Operation is IProgressOperation { Total: > 0 });
         ProgressLabel = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? $"{p.Step} / {p.Total}" : null);
         ProgressFraction = Slice(s => s.Operation is IProgressOperation { Total: > 0 } p ? Math.Clamp((float)p.Step / p.Total, 0f, 1f) : 0f);
+        Context = Slice(s => s.Operation is RebaseOperation r ? FormatContext(r) : null);
+        HasContext = Slice(s => s.Operation is RebaseOperation r && FormatContext(r) is not null);
+        ShowsConflictCue = Slice(s => s.Operation is IConflictableOperation);
+        IsConflicted = Slice(s => s.Operation is IConflictableOperation { ConflictCount: > 0 });
+        ConflictCountLabel = Slice(s => s.Operation is IConflictableOperation { ConflictCount: > 0 } c ? c.ConflictCount.ToString() : null);
         ShowsCommitBox = Slice(s => s.Operation.ShowsCommitBox());
 
         Abort = new Command(DoAbort, Slice(s => s.Operation is not null));
@@ -146,6 +156,15 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
                 if (_registry.Active.Value?.Id != repoId) return;
                 Update(_ => new OperationVmState(op));
             });
+    }
+
+    private static string? FormatContext(RebaseOperation r)
+    {
+        var src = string.IsNullOrEmpty(r.SourceLabel) ? null : r.SourceLabel;
+        var onto = string.IsNullOrEmpty(r.OntoLabel) ? null : r.OntoLabel;
+        if (src != null && onto != null) return $"{src} → {onto}";
+        if (onto != null) return $"→ {onto}";
+        return src;
     }
 
     public override void Dispose()

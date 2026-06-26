@@ -1006,16 +1006,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         var state = GetOperationState(repo);
         if (state == RepoOperationState.None) return null;
         var path = repo.Path;
-        bool conflicts;
-        try { conflicts = HasUnmergedPaths(path); }
-        catch { conflicts = false; }
+        int conflicts;
+        try { conflicts = CountUnmergedPaths(path); }
+        catch { conflicts = 0; }
 
         switch (state)
         {
             case RepoOperationState.Rebase:
             {
                 var (step, total) = ReadRebaseProgress(path);
-                return new RebaseOperation(ReadRebaseOnto(path), step, total, SubjectFor(path, state), conflicts);
+                return new RebaseOperation(ReadRebaseHeadName(path), ReadRebaseOnto(path), step, total, SubjectFor(path, state), conflicts);
             }
             case RepoOperationState.ApplyMailbox:
             {
@@ -1081,6 +1081,30 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                   ?? ReadSentinel(Path.Combine(gitDir, "rebase-apply", "onto"));
         if (string.IsNullOrEmpty(sha)) return null;
         return GetRefLabelForSha(repoPath, sha) ?? ShortSha(sha);
+    }
+
+    private string? ReadRebaseHeadName(string repoPath)
+    {
+        var gitDir = GetGitDir(repoPath);
+        if (gitDir == null) return null;
+        var name = ReadSentinel(Path.Combine(gitDir, "rebase-merge", "head-name"))
+                   ?? ReadSentinel(Path.Combine(gitDir, "rebase-apply", "head-name"));
+        if (string.IsNullOrEmpty(name)) return null;
+        const string prefix = "refs/heads/";
+        return name.StartsWith(prefix, StringComparison.Ordinal) ? name[prefix.Length..] : name;
+    }
+
+    private int CountUnmergedPaths(string repoPath)
+    {
+        var output = RunGit(repoPath, out _, "ls-files", "--unmerged");
+        if (string.IsNullOrWhiteSpace(output)) return 0;
+        var paths = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var line in output.Split('\n'))
+        {
+            var tab = line.IndexOf('\t');
+            if (tab >= 0 && tab + 1 < line.Length) paths.Add(line[(tab + 1)..]);
+        }
+        return paths.Count;
     }
 
     private static int ReadCount(string path)

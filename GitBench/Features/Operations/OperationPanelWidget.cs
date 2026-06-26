@@ -53,8 +53,26 @@ internal sealed record OperationPanelWidget : Widget
                                     CrossAxis = CrossAxisAlignment.Stretch,
                                     Children =
                                     [
-                                        new Show { When = vm.HasProgress, Then = () => Progress(vm) },
-                                        new Show { When = vm.HasSubject, Then = () => Subject(vm) },
+                                        new Row
+                                        {
+                                            Gap = Spacing.Md,
+                                            CrossAxis = CrossAxisAlignment.Center,
+                                            Children =
+                                            [
+                                                new Show { When = vm.HasProgress, Then = () => Progress(vm) },
+                                                new Show { When = vm.HasSubject, Then = () => Subject(vm) },
+                                            ],
+                                        },
+                                        new Row
+                                        {
+                                            Gap = Spacing.Md,
+                                            CrossAxis = CrossAxisAlignment.Center,
+                                            Children =
+                                            [
+                                                new Show { When = vm.HasContext, Then = () => ContextLabel(vm) },
+                                                new Show { When = vm.ShowsConflictCue, Then = () => ConflictCue(vm) },
+                                            ],
+                                        },
                                     ],
                                 },
                             },
@@ -128,6 +146,45 @@ internal sealed record OperationPanelWidget : Widget
         FontSize = FontSize.Caption,
         VAlign = TextAlignment.Center,
         Color = Theme.Color(s => s.Palette.TextSecondary),
+    };
+
+    private static IWidget ContextLabel(OperationViewModel vm) => new Text
+    {
+        Value = Prop.Bind(vm.Context),
+        Wrap = TextWrap.NoWrap,
+        Overflow = TextOverflow.Ellipsis,
+        FontSize = FontSize.Caption,
+        VAlign = TextAlignment.Center,
+        Color = Theme.Color(s => s.Palette.TextSecondary),
+    };
+
+    private static IWidget ConflictCue(OperationViewModel vm) => new Row
+    {
+        Gap = Spacing.Hair,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new Text
+            {
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = FontSize.Caption,
+                VAlign = TextAlignment.Center,
+                Value = vm.IsConflicted.Bind(c => c ? LucideIcons.TriangleAlert : LucideIcons.CircleCheck),
+                Color = Theme.Color(s => vm.IsConflicted.Value ? s.Status.Danger : s.Status.Success),
+            },
+            new Show
+            {
+                When = vm.IsConflicted,
+                Then = () => new Text
+                {
+                    Value = Prop.Bind(vm.ConflictCountLabel),
+                    Wrap = TextWrap.NoWrap,
+                    FontSize = FontSize.Caption,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.Status.Danger),
+                },
+            },
+        ],
     };
 
     private static IWidget Spinner(OperationViewModel vm) => new Text
