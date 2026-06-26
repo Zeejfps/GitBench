@@ -84,12 +84,13 @@ internal sealed record OperationPanelWidget : Widget
                 VAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.Palette.TextSecondary),
             },
-            new Grow { Child = ProgressBar(vm) },
+            ProgressBar(vm),
         ],
     };
 
     private static IWidget ProgressBar(OperationViewModel vm) => new Box
     {
+        Width = 180,
         Height = 4,
         BorderRadius = BorderRadiusStyle.All(2),
         Background = Theme.Color(s => s.Palette.BorderMuted),
