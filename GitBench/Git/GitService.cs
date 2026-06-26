@@ -1391,6 +1391,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         try
         {
             if (!IsGitRepo(repo.Path)) return false;
+            if (GetOperationState(repo) != RepoOperationState.None) return false;
             if (!GetHeadInfo(repo.Path).IsDetached) return false;
             // Detached, but if any branch/tag already points at the HEAD commit it's reachable
             // by name — nothing to lose. Only when no named ref lands on HEAD are these commits
