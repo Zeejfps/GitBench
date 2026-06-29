@@ -154,6 +154,7 @@ internal sealed record CommitsView : Widget
                 RowHeight = RowHeight,
                 ItemBuilder = DrawCommitRowAt,
                 SelectionOverlayBuilder = DrawSelectionOverlay,
+                ScrollWheelStep = Scrolling.WheelStep,
             };
             _list.RowClicked += OnRowClicked;
             _list.RowContextRequested += OnRowContextRequested;

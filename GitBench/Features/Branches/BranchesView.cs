@@ -71,6 +71,7 @@ internal sealed record BranchesView : Widget
     {
         Style = Theme.ScrollBar(),
         AutoHide = true,
+        WheelStep = Scrolling.WheelStep,
         Children =
         [
             new Padding

@@ -51,6 +51,7 @@ internal sealed record RepoBar : Widget
                                 {
                                     Style = Theme.ScrollBar(),
                                     AutoHide = true,
+                                    WheelStep = Scrolling.WheelStep,
                                     Children =
                                     [
                                         new Padding

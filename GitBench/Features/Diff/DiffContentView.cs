@@ -151,6 +151,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         {
             RowHeight = AssumedFontSize, // placeholder until canvas-derived metrics resolve
             ItemBuilder = DrawDiffRowAt,
+            ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.ScrollChanged += () => NotifyScrollChanged(viewportFits: false);
         _list.HorizontalWheelHandler = OnHorizontalWheel;

@@ -139,6 +139,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             RowHeight = FileChangesUI.RowHeight,
             ItemBuilder = DrawFileRowAt,
             SelectionOverlayBuilder = _selectionTween != null ? DrawSelectionOverlay : null,
+            ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.RowClicked += OnRowClicked;
         _list.ScrollChanged += NotifyScrollChanged;

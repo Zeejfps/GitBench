@@ -161,7 +161,6 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
 
 internal sealed class VerticalScrollPaneWheelController : KeyboardMouseController
 {
-    private const float Step = 60f;
     private readonly VerticalScrollPane _pane;
 
     public VerticalScrollPaneWheelController(VerticalScrollPane pane)
@@ -171,7 +170,7 @@ internal sealed class VerticalScrollPaneWheelController : KeyboardMouseControlle
 
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
     {
-        _pane.Scroll(-e.DeltaY * Step);
+        _pane.Scroll(-e.DeltaY * Scrolling.WheelStep);
         e.Consume();
     }
 }

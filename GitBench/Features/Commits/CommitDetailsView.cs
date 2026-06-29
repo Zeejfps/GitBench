@@ -416,7 +416,6 @@ internal sealed class CommitDetailsView : ContainerView
 
 internal sealed class ScrollPaneWheelController : KeyboardMouseController
 {
-    private const float Step = 60f;
     private readonly ScrollPane _pane;
 
     public ScrollPaneWheelController(ScrollPane pane)
@@ -426,8 +425,8 @@ internal sealed class ScrollPaneWheelController : KeyboardMouseController
 
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
     {
-        if (e.DeltaY != 0f) _pane.ScrollVertical(-e.DeltaY * Step);
-        if (e.DeltaX != 0f) _pane.ScrollHorizontal(-e.DeltaX * Step);
+        if (e.DeltaY != 0f) _pane.ScrollVertical(-e.DeltaY * Scrolling.WheelStep);
+        if (e.DeltaX != 0f) _pane.ScrollHorizontal(-e.DeltaX * Scrolling.WheelStep);
         e.Consume();
     }
 }

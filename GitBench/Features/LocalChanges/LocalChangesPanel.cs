@@ -180,6 +180,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             RowHeight = FileChangesUI.RowHeight,
             ItemBuilder = DrawFileRowAt,
             SelectionOverlayBuilder = DrawSelectionOverlay,
+            ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.RowClicked += OnRowClicked;
         if (onRowActivated != null) _list.RowActivated += OnRowActivated;

@@ -17,6 +17,17 @@ public static class Spacing
     public const int Xxl = 24;
 }
 
+/// <summary>
+/// Pointer-scroll tuning shared by every scrollable surface — the repo bar, branches, commit
+/// history, file lists, diffs, and dialogs all read this so wheel speed stays uniform instead of
+/// each scroll view picking its own. Theme-independent, like the spacing scale.
+/// </summary>
+public static class Scrolling
+{
+    /// <summary>Pixels travelled per mouse-wheel notch.</summary>
+    public const float WheelStep = 60f;
+}
+
 /// <summary>Corner-radius scale in pixels for chips, badges, and cards.</summary>
 public static class Radius
 {

@@ -1,3 +1,4 @@
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -23,7 +24,6 @@ internal sealed record HorizontalScrollArea : Widget
 
 internal sealed class HorizontalScrollWheelController : KeyboardMouseController
 {
-    private const float Step = 60f;
     private readonly HorizontalScrollView _view;
 
     public HorizontalScrollWheelController(HorizontalScrollView view) => _view = view;
@@ -33,7 +33,7 @@ internal sealed class HorizontalScrollWheelController : KeyboardMouseController
         if (e.Phase != EventPhase.Bubbling) return;
         var delta = e.DeltaX != 0f ? e.DeltaX : e.DeltaY;
         if (delta == 0f) return;
-        _view.ScrollHorizontal(-delta * Step);
+        _view.ScrollHorizontal(-delta * Scrolling.WheelStep);
         e.Consume();
     }
 }
