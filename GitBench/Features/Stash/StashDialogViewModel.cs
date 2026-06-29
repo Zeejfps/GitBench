@@ -80,9 +80,10 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         Update(s => s.KeepStaged == value ? s : s with { KeepStaged = value });
 
     /// <summary>
-    /// Handles a click on the row at <paramref name="index"/>. Shift extends a range from the anchor,
-    /// checking every row between it and the clicked row (the anchor stays put for further extends);
-    /// any other click toggles just that row and moves the anchor to it.
+    /// Handles a click on the row at <paramref name="index"/>. Shift extends a range from the anchor
+    /// to the clicked row and sets the whole range to match the clicked row's toggled state — a Shift
+    /// on an unchecked row checks the range, on a checked row unchecks it (the anchor stays put for
+    /// further extends). Any other click toggles just that row and moves the anchor to it.
     /// </summary>
     public void ClickRow(int index, InputModifiers modifiers)
     {
@@ -95,8 +96,13 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
             var hi = Math.Max(_anchorIndex, index);
             Update(s =>
             {
+                var targetChecked = !s.CheckedPaths.Contains(s.Files[index].Path);
                 var next = new HashSet<string>(s.CheckedPaths);
-                for (var i = lo; i <= hi; i++) next.Add(s.Files[i].Path);
+                for (var i = lo; i <= hi; i++)
+                {
+                    if (targetChecked) next.Add(s.Files[i].Path);
+                    else next.Remove(s.Files[i].Path);
+                }
                 return s with { CheckedPaths = next };
             });
             return;
