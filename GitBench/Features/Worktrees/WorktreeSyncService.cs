@@ -22,6 +22,7 @@ internal sealed class WorktreeSyncService : IDisposable
     private readonly IGitService _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
+    private readonly IStartupSweepCoordinator _sweep;
     private readonly IDisposable _reposSub;
     private readonly IDisposable _worktreesChangedSub;
     private readonly IDisposable _refsChangedSub;
@@ -30,12 +31,14 @@ internal sealed class WorktreeSyncService : IDisposable
         IRepoRegistry registry,
         IGitService git,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IStartupSweepCoordinator sweep)
     {
         _registry = registry;
         _git = git;
         _dispatcher = dispatcher;
         _bus = bus;
+        _sweep = sweep;
 
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
         _worktreesChangedSub = _bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged);
@@ -47,10 +50,12 @@ internal sealed class WorktreeSyncService : IDisposable
         switch (change.Kind)
         {
             case ListChangeKind.Reset:
-                foreach (var repo in _registry.Repos)
+                // Defer the startup discovery burst until the active repo's first load has landed.
+                _sweep.RunInitialSweep(() =>
                 {
-                    if (repo.IsPrimary) ScheduleSync(repo.Id);
-                }
+                    foreach (var repo in _registry.Repos)
+                        if (repo.IsPrimary) ScheduleSync(repo.Id);
+                });
                 break;
             case ListChangeKind.Added:
                 if (change.Item is { } added && added.IsPrimary)
@@ -90,10 +95,10 @@ internal sealed class WorktreeSyncService : IDisposable
 
     private void ScheduleSync(Guid primaryId)
     {
-        // The discovery shells out to git and parses output; run it off the UI thread
-        // and post the registry mutation back. The registry itself is not thread-safe
-        // for writes from arbitrary threads.
-        Task.Run(() =>
+        // The discovery shells out to git and parses output; run it off the UI thread (under the
+        // shared sweep cap) and post the registry mutation back. The registry itself is not
+        // thread-safe for writes from arbitrary threads.
+        _sweep.RunThrottled(() =>
         {
             Repo? primary = null;
             foreach (var r in _registry.Repos)

@@ -56,6 +56,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
+    private readonly IStartupSweepCoordinator _sweep;
     private IUiDispatcher? _dispatcher;
     private bool _disposed;
 
@@ -74,12 +75,13 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep)
     {
         _ops = ops;
         _registry = registry;
         _git = git;
         _bus = bus;
+        _sweep = sweep;
         // Recomputes whenever the active repo, its probe, or its op state changes — all tracked.
         _active = new Derived<RepoStatus>(() =>
         {
@@ -114,7 +116,11 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         switch (change.Kind)
         {
             case ListChangeKind.Reset:
-                foreach (var r in _registry.Repos) Refresh(r.Id);
+                // Defer the startup probe burst until the active repo's first load has landed.
+                _sweep.RunInitialSweep(() =>
+                {
+                    foreach (var r in _registry.Repos) Refresh(r.Id);
+                });
                 break;
             case ListChangeKind.Added:
                 if (change.Item is { } added) Refresh(added.Id);

@@ -46,9 +46,17 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
 {
     private const int MaxCommits = 3000;
 
+    // If the active repo's first load never lands (no active repo, a load error, a hang), release
+    // the deferred startup sweeps anyway after this long so per-repo decorations aren't blocked.
+    private const int ActiveReadyFallbackMs = 5000;
+
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
+    private readonly IStartupSweepCoordinator _sweep;
+    // The active repo's first load kicks three slice loads; once all three have landed the active
+    // repo is "ready" and the deferred all-repos sweeps may run. UI-thread only.
+    private int _firstLoadRemaining = 3;
     // Set in Start once the UI dispatcher exists (it's created inside GuiApp). Null until then.
     private IUiDispatcher? _dispatcher;
 
@@ -84,11 +92,13 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     public RepoSnapshotStore(
         IRepoRegistry registry,
         IGitService git,
-        IMessageBus bus)
+        IMessageBus bus,
+        IStartupSweepCoordinator sweep)
     {
         _registry = registry;
         _git = git;
         _bus = bus;
+        _sweep = sweep;
     }
 
     /// <summary>
@@ -107,6 +117,14 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _commitCreatedSub = _bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated);
         _submodulesSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
         _remoteSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(OnRemoteSyncOptimistic);
+
+        // Safety net for the active-ready signal below: if the first load never lands, release the
+        // deferred startup sweeps anyway so per-repo decorations and discovery still run.
+        Task.Run(async () =>
+        {
+            await Task.Delay(ActiveReadyFallbackMs).ConfigureAwait(false);
+            dispatcher.Post(_sweep.MarkActiveReady);
+        });
     }
 
     // ---- triggers ----
@@ -123,6 +141,8 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
             _commits.Value = null;
             _branches.Value = null;
             _local.Value = null;
+            // No active repo to wait on — let the deferred all-repos sweeps run.
+            _sweep.MarkActiveReady();
             return;
         }
 
@@ -388,6 +408,9 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
 
             dispatcher.Post(() =>
             {
+                // First three slice loads landing = active repo ready; release the startup sweeps.
+                if (_firstLoadRemaining > 0 && --_firstLoadRemaining == 0)
+                    _sweep.MarkActiveReady();
                 if (result != null) cache.Set(repo.Id, result);
                 if (lane.IsStale(gen)) return;
                 if (result != null && _registry.Active.Value?.Id == repo.Id)

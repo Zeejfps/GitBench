@@ -26,6 +26,7 @@ internal sealed class SubmoduleSyncService : IDisposable
     private readonly IGitService _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
+    private readonly IStartupSweepCoordinator _sweep;
     private readonly IDisposable _reposSub;
     private readonly IDisposable _submodulesChangedSub;
     private readonly IDisposable _refsChangedSub;
@@ -34,12 +35,14 @@ internal sealed class SubmoduleSyncService : IDisposable
         IRepoRegistry registry,
         IGitService git,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IStartupSweepCoordinator sweep)
     {
         _registry = registry;
         _git = git;
         _dispatcher = dispatcher;
         _bus = bus;
+        _sweep = sweep;
 
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
         _submodulesChangedSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
@@ -51,10 +54,12 @@ internal sealed class SubmoduleSyncService : IDisposable
         switch (change.Kind)
         {
             case ListChangeKind.Reset:
-                foreach (var repo in _registry.Repos)
+                // Defer the startup discovery burst until the active repo's first load has landed.
+                _sweep.RunInitialSweep(() =>
                 {
-                    if (repo.IsPrimary || repo.IsWorktree) ScheduleSync(repo.Id);
-                }
+                    foreach (var repo in _registry.Repos)
+                        if (repo.IsPrimary || repo.IsWorktree) ScheduleSync(repo.Id);
+                });
                 break;
             case ListChangeKind.Added:
                 if (change.Item is { } added && (added.IsPrimary || added.IsWorktree))
@@ -86,7 +91,7 @@ internal sealed class SubmoduleSyncService : IDisposable
 
     private void ScheduleSync(Guid hostId)
     {
-        Task.Run(() =>
+        _sweep.RunThrottled(() =>
         {
             Repo? host = null;
             foreach (var r in _registry.Repos)

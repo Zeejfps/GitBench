@@ -433,14 +433,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 if (name.Length > 0) remotesByName[name] = new List<BranchEntry>();
             }
 
-            // Empty if HEAD is detached; we just compare for equality below, so null is fine.
-            var headRef = RunGit(repo.Path, out _, "symbolic-ref", "-q", "HEAD")?.Trim();
-
             const char Sep = '\x1F';
             // %(upstream:track) collapses two distinct cases to "": (a) no upstream
             // configured at all, (b) upstream is set and we are exactly in sync. So we
-            // also pull %(upstream) (the upstream ref name) to tell them apart.
-            var fmt = $"%(objectname){Sep}%(refname){Sep}%(upstream:track,nobracket){Sep}%(upstream)";
+            // also pull %(upstream) (the upstream ref name) to tell them apart. %(HEAD)
+            // marks the checked-out branch with "*", folding in what a separate
+            // `symbolic-ref HEAD` call used to report — one fewer git process per load.
+            var fmt = $"%(HEAD){Sep}%(objectname){Sep}%(refname){Sep}%(upstream:track,nobracket){Sep}%(upstream)";
             var branchesOut = RunGit(repo.Path, out var brErr,
                 "for-each-ref", $"--format={fmt}", "refs/heads", "refs/remotes");
             if (branchesOut == null)
@@ -451,16 +450,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             {
                 if (line.Length == 0) continue;
                 var parts = line.Split(Sep);
-                if (parts.Length < 2) continue;
-                var sha = parts[0];
-                var refname = parts[1];
-                var track = parts.Length > 2 ? parts[2] : string.Empty;
-                var upstream = parts.Length > 3 ? parts[3] : string.Empty;
+                if (parts.Length < 3) continue;
+                // parts[0] is %(HEAD): "*" for the checked-out branch, a space otherwise.
+                var sha = parts[1];
+                var refname = parts[2];
+                var track = parts.Length > 3 ? parts[3] : string.Empty;
+                var upstream = parts.Length > 4 ? parts[4] : string.Empty;
 
                 if (refname.StartsWith("refs/heads/", StringComparison.Ordinal))
                 {
                     var name = refname["refs/heads/".Length..];
-                    var isHead = headRef == refname;
+                    var isHead = parts[0] == "*";
                     var (ahead, behind, upstreamState) = ParseUpstream(track, upstream);
                     string? upstreamRemote = null;
                     string? upstreamBranch = null;
