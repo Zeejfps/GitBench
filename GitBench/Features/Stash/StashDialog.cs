@@ -19,8 +19,11 @@ namespace GitBench.Features.Stash;
 // passed iff any selected row is an untracked file.
 internal sealed record StashDialog : Widget
 {
-    // Rows the file list shows before it scrolls internally; past this the card stops growing.
-    private const int MaxVisibleRows = 11;
+    // Rows the file list shows before it scrolls internally. Lower than Discard's because Stash
+    // carries extra body chrome (the message field above, the keep-staged checkbox below), so a
+    // taller list would push the whole dialog past the window and hand scrolling to the frame's
+    // outer bar instead of the list's own.
+    private const int MaxVisibleRows = 8;
 
     public required Repo Repo { get; init; }
     public required Action OnClose { get; init; }

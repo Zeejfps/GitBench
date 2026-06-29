@@ -22,8 +22,11 @@ namespace GitBench.Features.Branches;
 /// </summary>
 internal sealed record CleanBranchesDialog : Widget
 {
-    // Rows the preview shows before it scrolls internally; past this the card stops growing.
-    private const int MaxVisibleRows = 11;
+    // Rows the preview shows before it scrolls internally. Lowest of the file-list dialogs because
+    // this one carries the most body chrome above it (description, up to two category checkboxes,
+    // the force checkbox, and the force hint), so a taller list would push the dialog past the
+    // window and hand scrolling to the frame's outer bar instead of the preview's own.
+    private const int MaxVisibleRows = 5;
 
     public required Repo Repo { get; init; }
 
