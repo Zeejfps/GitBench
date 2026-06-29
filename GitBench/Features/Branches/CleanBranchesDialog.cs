@@ -22,12 +22,6 @@ namespace GitBench.Features.Branches;
 /// </summary>
 internal sealed record CleanBranchesDialog : Widget
 {
-    // Rows the preview shows before it scrolls internally. Lowest of the file-list dialogs because
-    // this one carries the most body chrome above it (description, up to two category checkboxes,
-    // the force checkbox, and the force hint), so a taller list would push the dialog past the
-    // window and hand scrolling to the frame's outer bar instead of the preview's own.
-    private const int MaxVisibleRows = 5;
-
     public required Repo Repo { get; init; }
 
     /// The folder the cleanup is scoped to; empty for the "Local" root. Shown to the user so the
@@ -106,7 +100,7 @@ internal sealed record CleanBranchesDialog : Widget
             Value = Prop.Bind(vm.SelectedHeader),
             Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
         });
-        body.Add(new Raw { View = BuildPreview(ctx, vm, Candidates.Count) });
+        body.Add(new Grow { Child = new Raw { View = BuildPreview(ctx, vm) } });
 
         return new Dialog
         {
@@ -114,6 +108,7 @@ internal sealed record CleanBranchesDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
+            Height = 460f,
             BodyGap = 10,
             Action = (s.CommonDelete, DialogButtonRole.Destructive),
             BindActionLabel = vm.ActionLabel,
@@ -175,7 +170,7 @@ internal sealed record CleanBranchesDialog : Widget
     // Matches the branch/cloud glyph size the tree renders (TextStyles.Icon's default).
     private const float BranchIconSize = 14f;
 
-    private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm, int candidateCount)
+    private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm)
     {
         var theme = ctx.Theme();
 
@@ -186,17 +181,12 @@ internal sealed record CleanBranchesDialog : Widget
             Template = candidate => BuildBranchRow(vm, candidate),
         }.BuildView(ctx);
 
-        // See DiscardChangesDialog: the frame's own scroll region lays the body out at its natural
-        // height, so a Grow can't bound this list. An explicit height (honored at measure time,
-        // unlike MaxHeightConstraint) caps the card to MaxVisibleRows and scrolls internally past
-        // that. Sized for the full candidate set — the most the category toggles can reveal — so the
-        // card height stays put as categories are checked and unchecked.
-        var visibleRows = Math.Min(Math.Max(candidateCount, 1), MaxVisibleRows);
-        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
-
+        // FillParent: see DiscardChangesDialog. The card claims no height of its own, so the body's
+        // Grow hands it the space below the chrome and it scrolls its rows internally at whatever
+        // height the window leaves it — the dialog stays window-sized rather than handing scrolling
+        // to the frame's outer bar.
         var host = new RectView
         {
-            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -206,7 +196,7 @@ internal sealed record CleanBranchesDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
+                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },

@@ -21,10 +21,6 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed record DiscardChangesDialog : Widget
 {
-    // Rows the file list shows before it scrolls internally. Past this the card stops growing and
-    // its own scrollbar takes over, so a huge change set can't stretch the dialog off-screen.
-    private const int MaxVisibleRows = 11;
-
     public required Repo Repo { get; init; }
     public required IReadOnlyList<string> Paths { get; init; }
     public required Action OnClose { get; init; }
@@ -45,6 +41,7 @@ internal sealed record DiscardChangesDialog : Widget
             Title = s.LocalchangesDiscardDialogTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
+            Height = 480f,
             BodyGap = 10,
             Action = (s.CommonDiscard, DialogButtonRole.Destructive),
             Command = vm.Discard,
@@ -62,7 +59,7 @@ internal sealed record DiscardChangesDialog : Widget
                     Value = Prop.Bind(vm.FilesHeader),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                new Raw { View = BuildFileList(ctx, vm) },
+                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
             ],
         };
     }
@@ -90,17 +87,12 @@ internal sealed record DiscardChangesDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        // The dialog frame already wraps the body in a scroll region that lays its content out at
-        // the content's natural height, so a Grow can't bound this list — it would inflate the whole
-        // body and hand scrolling to the frame's outer bar. An explicit height (honored at measure
-        // time, unlike MaxHeightConstraint) caps the card to MaxVisibleRows and lets it scroll
-        // internally beyond that, while hugging its rows when there are fewer.
-        var visibleRows = Math.Min(Math.Max(files.Count, 1), MaxVisibleRows);
-        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
-
+        // FillParent: the card claims no height of its own, so the body's Grow hands it all the
+        // space below the header and it scrolls its rows internally. The dialog stays window-sized
+        // and the list — not the frame's outer bar — absorbs the overflow, at whatever height the
+        // window leaves it.
         var fileScrollHost = new RectView
         {
-            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -110,7 +102,7 @@ internal sealed record DiscardChangesDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
+                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },

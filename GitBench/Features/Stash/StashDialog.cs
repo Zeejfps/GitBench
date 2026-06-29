@@ -19,12 +19,6 @@ namespace GitBench.Features.Stash;
 // passed iff any selected row is an untracked file.
 internal sealed record StashDialog : Widget
 {
-    // Rows the file list shows before it scrolls internally. Lower than Discard's because Stash
-    // carries extra body chrome (the message field above, the keep-staged checkbox below), so a
-    // taller list would push the whole dialog past the window and hand scrolling to the frame's
-    // outer bar instead of the list's own.
-    private const int MaxVisibleRows = 8;
-
     public required Repo Repo { get; init; }
     public required Action OnClose { get; init; }
 
@@ -51,6 +45,7 @@ internal sealed record StashDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
+            Height = 520f,
             BodyGap = 10,
             Action = (s.StashAction, DialogButtonRole.Primary),
             Command = vm.Stash,
@@ -66,7 +61,7 @@ internal sealed record StashDialog : Widget
                     Value = Prop.Bind(vm.FilesHeader),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                new Raw { View = BuildFileList(ctx, vm) },
+                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
                 new CheckboxWidget
                 {
                     Label = s.StashKeepStagedCheckbox,
@@ -100,16 +95,12 @@ internal sealed record StashDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        // See DiscardChangesDialog: the frame's own scroll region lays the body out at its natural
-        // height, so a Grow can't bound this list. An explicit height (honored at measure time,
-        // unlike MaxHeightConstraint) caps the card to MaxVisibleRows and scrolls internally past
-        // that, while hugging its rows when there are fewer.
-        var visibleRows = Math.Min(Math.Max(files.Count, 1), MaxVisibleRows);
-        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
-
+        // FillParent: see DiscardChangesDialog. The card claims no height of its own, so the body's
+        // Grow hands it the space between the files header and the keep-staged checkbox, and it
+        // scrolls its rows internally at whatever height the window leaves it — the dialog stays
+        // window-sized rather than handing scrolling to the frame's outer bar.
         var fileScrollHost = new RectView
         {
-            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -119,7 +110,7 @@ internal sealed record StashDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
+                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },
