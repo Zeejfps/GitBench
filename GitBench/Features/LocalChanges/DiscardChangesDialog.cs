@@ -1,6 +1,4 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Operations;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -8,8 +6,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -25,6 +21,10 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed record DiscardChangesDialog : Widget
 {
+    // Rows the file list shows before it scrolls internally. Past this the card stops growing and
+    // its own scrollbar takes over, so a huge change set can't stretch the dialog off-screen.
+    private const int MaxVisibleRows = 11;
+
     public required Repo Repo { get; init; }
     public required IReadOnlyList<string> Paths { get; init; }
     public required Action OnClose { get; init; }
@@ -45,7 +45,6 @@ internal sealed record DiscardChangesDialog : Widget
             Title = s.LocalchangesDiscardDialogTitle,
             OnClose = OnClose,
             Width = DialogFrame.WidthWide,
-            Height = 480f,
             BodyGap = 10,
             Action = (s.CommonDiscard, DialogButtonRole.Destructive),
             Command = vm.Discard,
@@ -63,7 +62,7 @@ internal sealed record DiscardChangesDialog : Widget
                     Value = Prop.Bind(vm.FilesHeader),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
+                new Raw { View = BuildFileList(ctx, vm) },
             ],
         };
     }
@@ -91,15 +90,17 @@ internal sealed record DiscardChangesDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(column);
-        scrollPane.UseController(ctx.Require<InputSystem>(),
-            () => new VerticalScrollPaneWheelController(scrollPane));
-
-        var vScrollBar = ScrollBars.CreateVertical(ctx);
+        // The dialog frame already wraps the body in a scroll region that lays its content out at
+        // the content's natural height, so a Grow can't bound this list — it would inflate the whole
+        // body and hand scrolling to the frame's outer bar. An explicit height (honored at measure
+        // time, unlike MaxHeightConstraint) caps the card to MaxVisibleRows and lets it scroll
+        // internally beyond that, while hugging its rows when there are fewer.
+        var visibleRows = Math.Min(Math.Max(files.Count, 1), MaxVisibleRows);
+        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
 
         var fileScrollHost = new RectView
         {
+            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -109,18 +110,13 @@ internal sealed record DiscardChangesDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new BorderLayoutView
-                        {
-                            Center = scrollPane,
-                            East = vScrollBar,
-                        },
+                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },
         };
         fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-        fileScrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         return fileScrollHost;
     }
