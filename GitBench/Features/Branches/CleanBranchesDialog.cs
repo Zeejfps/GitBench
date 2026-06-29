@@ -1,6 +1,5 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Operations;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -8,8 +7,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -25,6 +22,9 @@ namespace GitBench.Features.Branches;
 /// </summary>
 internal sealed record CleanBranchesDialog : Widget
 {
+    // Rows the preview shows before it scrolls internally; past this the card stops growing.
+    private const int MaxVisibleRows = 11;
+
     public required Repo Repo { get; init; }
 
     /// The folder the cleanup is scoped to; empty for the "Local" root. Shown to the user so the
@@ -103,7 +103,7 @@ internal sealed record CleanBranchesDialog : Widget
             Value = Prop.Bind(vm.SelectedHeader),
             Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
         });
-        body.Add(new Grow { Child = new Raw { View = BuildPreview(ctx, vm) } });
+        body.Add(new Raw { View = BuildPreview(ctx, vm, Candidates.Count) });
 
         return new Dialog
         {
@@ -111,7 +111,6 @@ internal sealed record CleanBranchesDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Height = 460f,
             BodyGap = 10,
             Action = (s.CommonDelete, DialogButtonRole.Destructive),
             BindActionLabel = vm.ActionLabel,
@@ -161,6 +160,7 @@ internal sealed record CleanBranchesDialog : Widget
                         {
                             Value = candidate.Name,
                             VAlign = TextAlignment.Center,
+                            Overflow = TextOverflow.Ellipsis,
                             Color = Theme.Color(t => t.DialogBody.BodyText),
                         },
                     },
@@ -172,7 +172,7 @@ internal sealed record CleanBranchesDialog : Widget
     // Matches the branch/cloud glyph size the tree renders (TextStyles.Icon's default).
     private const float BranchIconSize = 14f;
 
-    private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm)
+    private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm, int candidateCount)
     {
         var theme = ctx.Theme();
 
@@ -183,15 +183,17 @@ internal sealed record CleanBranchesDialog : Widget
             Template = candidate => BuildBranchRow(vm, candidate),
         }.BuildView(ctx);
 
-        var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(column);
-        scrollPane.UseController(ctx.Require<InputSystem>(),
-            () => new VerticalScrollPaneWheelController(scrollPane));
-
-        var vScrollBar = ScrollBars.CreateVertical(ctx);
+        // See DiscardChangesDialog: the frame's own scroll region lays the body out at its natural
+        // height, so a Grow can't bound this list. An explicit height (honored at measure time,
+        // unlike MaxHeightConstraint) caps the card to MaxVisibleRows and scrolls internally past
+        // that. Sized for the full candidate set — the most the category toggles can reveal — so the
+        // card height stays put as categories are checked and unchecked.
+        var visibleRows = Math.Min(Math.Max(candidateCount, 1), MaxVisibleRows);
+        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
 
         var host = new RectView
         {
+            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -201,18 +203,13 @@ internal sealed record CleanBranchesDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new BorderLayoutView
-                        {
-                            Center = scrollPane,
-                            East = vScrollBar,
-                        },
+                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },
         };
         host.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         host.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-        host.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         return host;
     }

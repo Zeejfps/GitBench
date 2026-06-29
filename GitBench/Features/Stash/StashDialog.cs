@@ -1,7 +1,5 @@
-using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.LocalChanges;
-using GitBench.Features.Operations;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -9,8 +7,6 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -23,6 +19,9 @@ namespace GitBench.Features.Stash;
 // passed iff any selected row is an untracked file.
 internal sealed record StashDialog : Widget
 {
+    // Rows the file list shows before it scrolls internally; past this the card stops growing.
+    private const int MaxVisibleRows = 11;
+
     public required Repo Repo { get; init; }
     public required Action OnClose { get; init; }
 
@@ -49,7 +48,6 @@ internal sealed record StashDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Height = 520f,
             BodyGap = 10,
             Action = (s.StashAction, DialogButtonRole.Primary),
             Command = vm.Stash,
@@ -65,7 +63,7 @@ internal sealed record StashDialog : Widget
                     Value = Prop.Bind(vm.FilesHeader),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
-                new Grow { Child = new Raw { View = BuildFileList(ctx, vm) } },
+                new Raw { View = BuildFileList(ctx, vm) },
                 new CheckboxWidget
                 {
                     Label = s.StashKeepStagedCheckbox,
@@ -99,15 +97,16 @@ internal sealed record StashDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(column);
-        scrollPane.UseController(ctx.Require<InputSystem>(),
-            () => new VerticalScrollPaneWheelController(scrollPane));
-
-        var vScrollBar = ScrollBars.CreateVertical(ctx);
+        // See DiscardChangesDialog: the frame's own scroll region lays the body out at its natural
+        // height, so a Grow can't bound this list. An explicit height (honored at measure time,
+        // unlike MaxHeightConstraint) caps the card to MaxVisibleRows and scrolls internally past
+        // that, while hugging its rows when there are fewer.
+        var visibleRows = Math.Min(Math.Max(files.Count, 1), MaxVisibleRows);
+        var listHeight = visibleRows * Sizes.RowHeight + (visibleRows - 1) * Spacing.Hair;
 
         var fileScrollHost = new RectView
         {
+            Height = listHeight + 2 * Spacing.Sm + 2f,
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
             Children =
@@ -117,18 +116,13 @@ internal sealed record StashDialog : Widget
                     Padding = PaddingStyle.All(Spacing.Sm),
                     Children =
                     {
-                        new BorderLayoutView
-                        {
-                            Center = scrollPane,
-                            East = vScrollBar,
-                        },
+                        new DialogScrollRegion { Content = new Raw { View = column } }.BuildView(ctx),
                     },
                 },
             },
         };
         fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-        fileScrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         return fileScrollHost;
     }
@@ -142,6 +136,7 @@ internal sealed record StashDialog : Widget
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
+            TextOverflow = TextOverflow.Ellipsis,
         };
         pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 
