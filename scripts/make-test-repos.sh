@@ -439,6 +439,52 @@ gen_worktrees() {                               # 51-worktrees
   printf 'wip in linked worktree\n' >> "$ROOT/51-worktrees.wt-feature-x/main.txt"
 }
 
+gen_long_paths() {                              # 60-long-paths
+  new_repo 60-long-paths
+
+  # Deeply nested, realistic monorepo directories — long enough that a file path
+  # overflows the dialog width and has to ellipsize.
+  local dirs=(
+    "server/cloud-run/src/creatorEconomy/pendingSpendValuation"
+    "server/cloud-run/src/creatorEconomy/reconciliation"
+    "server/cloud-run/src/services/wallet/internal"
+    "packages/frontend/src/components/dashboard/widgets/analytics"
+    "packages/frontend/src/components/dashboard/widgets/notifications"
+    "packages/shared/src/domain/entitlements/validation/rules"
+    "infrastructure/terraform/modules/networking/load-balancers"
+    "apps/mobile/lib/features/onboarding/presentation/viewmodels"
+  )
+
+  # Seed each directory with a few files, then commit the baseline.
+  local d i leaf
+  for d in "${dirs[@]}"; do
+    mkdir -p "$d"; leaf="$(basename "$d")"
+    for i in 1 2 3 4; do
+      printf 'export const value%d = %d;\n' "$i" "$i" > "$d/${leaf}Service${i}.ts"
+    done
+  done
+  ci "Seed deeply-nested service modules"
+
+  # A large working-tree diff with long paths: mostly UNSTAGED so the Discard dialog
+  # shows a long, scrolling list, plus a few staged so Stash/mixed views have variety.
+  for d in "${dirs[@]}"; do
+    leaf="$(basename "$d")"
+    append "$d/${leaf}Service1.ts" "// unstaged modification on a very long path"
+    append "$d/${leaf}Service2.ts" "// another unstaged modification"
+    printf 'export const generated = true;\n' > "$d/${leaf}Controller.generated.ts"
+  done
+
+  # Deletions and a rename, all on long paths, for status-badge variety (D / R).
+  rm "server/cloud-run/src/services/wallet/internal/internalService4.ts"
+  rm "packages/frontend/src/components/dashboard/widgets/notifications/notificationsService3.ts"
+  git mv "packages/shared/src/domain/entitlements/validation/rules/rulesService4.ts" \
+         "packages/shared/src/domain/entitlements/validation/rules/rulesServiceRenamedToAMuchLongerFileName.ts"
+
+  # Stage roughly a third of the changes (two whole directories).
+  git add "server/cloud-run/src/creatorEconomy/pendingSpendValuation" \
+          "packages/frontend/src/components/dashboard/widgets/analytics"
+}
+
 gen_big_history() {                             # 90-big-history
   new_repo 90-big-history
   local count="${COUNT_BIG:-800}" i
@@ -501,6 +547,7 @@ REGISTRY=(
   "41-stash-conflict|gen_stash_conflict|A stash that conflicts when popped"
   "50-submodules|gen_submodules|One initialised + one uninitialised submodule"
   "51-worktrees|gen_worktrees|Two linked worktrees, one with a local edit"
+  "60-long-paths|gen_long_paths|Many long deeply-nested paths (M/A/D/R), mostly unstaged"
   "90-big-history|gen_big_history|Large history for perf (COUNT_BIG, default 800)"
   "91-wide-graph|gen_wide_graph|Many concurrent lanes with periodic merges"
 )
