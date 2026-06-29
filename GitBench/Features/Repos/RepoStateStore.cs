@@ -8,7 +8,7 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 5;
+    private const int CurrentSchemaVersion = 6;
     private const string DefaultGroupName = "Ungrouped";
     // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
     private const string LegacyDefaultGroupName = "Repositories";
@@ -19,7 +19,8 @@ public static class RepoStateStore
         Guid? ActiveRepoId,
         Dictionary<Guid, BranchesUiState> BranchesUi,
         Dictionary<Guid, bool> WorktreesExpanded,
-        Dictionary<Guid, Guid> RepoIdentityOverride);
+        Dictionary<Guid, Guid> RepoIdentityOverride,
+        Dictionary<int, Guid> Hotkeys);
 
     internal sealed class FileShape
     {
@@ -31,6 +32,8 @@ public static class RepoStateStore
         public Dictionary<Guid, bool>? WorktreesExpanded { get; set; }
         // repoId → identity profile id (manual override of auto-matching). Absent in pre-v4 files.
         public Dictionary<Guid, Guid>? RepoIdentityOverride { get; set; }
+        // slot (1-9) → repo id for keyboard repo switching. Absent in pre-v6 files.
+        public Dictionary<int, Guid>? Hotkeys { get; set; }
     }
 
     public static State Load(string path)
@@ -96,13 +99,30 @@ public static class RepoStateStore
                         .ToList();
             }
 
+            // Keep only slots 1-9 that still point at a live primary, and at most one slot per repo
+            // (lowest slot wins), so the 1:1 invariant survives a removed repo or a hand-edited file.
+            var primaryIds = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
+            var hotkeys = new Dictionary<int, Guid>();
+            if (file.Hotkeys is { } storedHotkeys)
+            {
+                var claimed = new HashSet<Guid>();
+                foreach (var (slot, id) in storedHotkeys.OrderBy(kv => kv.Key))
+                {
+                    if (slot is < 1 or > 9) continue;
+                    if (!primaryIds.Contains(id)) continue;
+                    if (!claimed.Add(id)) continue;
+                    hotkeys[slot] = id;
+                }
+            }
+
             return new State(
                 repos,
                 groups,
                 file.ActiveRepoId,
                 file.BranchesUi ?? new Dictionary<Guid, BranchesUiState>(),
                 file.WorktreesExpanded ?? new Dictionary<Guid, bool>(),
-                file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>());
+                file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>(),
+                hotkeys);
         }
         catch (Exception ex)
         {
@@ -118,9 +138,10 @@ public static class RepoStateStore
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
-        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
+        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
+        IReadOnlyDictionary<int, Guid> hotkeys)
         => AtomicFile.WriteAllText(path,
-            Serialize(repos, groups, activeId, branchesUi, worktreesExpanded, repoIdentityOverride));
+            Serialize(repos, groups, activeId, branchesUi, worktreesExpanded, repoIdentityOverride, hotkeys));
 
     // Snapshots the live model into the on-disk shape and serializes it. Runs on the caller's thread
     // (it reads the mutable model, so it must), producing an immutable string the disk write can take
@@ -131,7 +152,8 @@ public static class RepoStateStore
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
-        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride)
+        IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
+        IReadOnlyDictionary<int, Guid> hotkeys)
     {
         var file = new FileShape
         {
@@ -142,6 +164,7 @@ public static class RepoStateStore
             BranchesUi = branchesUi.ToDictionary(kv => kv.Key, kv => kv.Value),
             WorktreesExpanded = worktreesExpanded.ToDictionary(kv => kv.Key, kv => kv.Value),
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
+            Hotkeys = hotkeys.ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         return JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
     }
@@ -159,7 +182,8 @@ public static class RepoStateStore
             null,
             new Dictionary<Guid, BranchesUiState>(),
             new Dictionary<Guid, bool>(),
-            new Dictionary<Guid, Guid>());
+            new Dictionary<Guid, Guid>(),
+            new Dictionary<int, Guid>());
     }
 
     // Worktrees are children of a primary repo and never appear directly in a Group —

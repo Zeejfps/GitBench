@@ -15,6 +15,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
     private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
+    private readonly Dictionary<int, Guid> _hotkeys;
 
     // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
     // override, and repo-id→path for targeted memo flushing). Rebuilt on the UI thread (in Save)
@@ -33,6 +34,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         _expanded = new Dictionary<Guid, State<bool>>();
         foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
         _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
+        _hotkeys = new Dictionary<int, Guid>(initial.Hotkeys);
 
         Repos = new ObservableList<Repo>();
         foreach (var r in initial.Repos) Repos.Add(r);
@@ -52,6 +54,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
 
         RenamingGroupId = new State<Guid?>(null);
         WorktreesChanged = new State<int>(0);
+        HotkeysChanged = new State<int>(0);
     }
 
     public ObservableList<Repo> Repos { get; }
@@ -59,6 +62,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     public State<Repo?> Active { get; }
     public State<Guid?> RenamingGroupId { get; }
     public State<int> WorktreesChanged { get; }
+    public State<int> HotkeysChanged { get; }
 
     public OpenRepoOutcome Open(string path, Guid? groupId = null)
     {
@@ -93,6 +97,53 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         if (target is null) return;
         if (ReferenceEquals(Active.Value, target)) return;
         Active.Value = target;
+        Save();
+    }
+
+    public Guid? RepoForHotkey(int slot)
+        => _hotkeys.TryGetValue(slot, out var id) ? id : null;
+
+    public int? HotkeyFor(Guid repoId)
+    {
+        foreach (var (slot, id) in _hotkeys)
+            if (id == repoId) return slot;
+        return null;
+    }
+
+    public void AssignHotkey(Guid repoId, int slot)
+    {
+        if (slot is < 1 or > 9) return;
+        var repo = Repos.FirstOrDefault(r => r.Id == repoId);
+        if (repo is null || !repo.IsPrimary) return;
+
+        var changed = false;
+        // A repo wears at most one number: drop the slot it held before.
+        foreach (var (s, id) in _hotkeys.ToList())
+        {
+            if (id == repoId && s != slot)
+            {
+                _hotkeys.Remove(s);
+                changed = true;
+            }
+        }
+        // A number points at one repo: this assignment steals it from any prior holder.
+        if (!_hotkeys.TryGetValue(slot, out var current) || current != repoId)
+        {
+            _hotkeys[slot] = repoId;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            HotkeysChanged.Value++;
+            Save();
+        }
+    }
+
+    public void ClearHotkey(int slot)
+    {
+        if (!_hotkeys.Remove(slot)) return;
+        HotkeysChanged.Value++;
         Save();
     }
 
@@ -251,6 +302,17 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         {
             Active.Value = Repos.Count > 0 ? Repos[0] : null;
         }
+
+        var hotkeyChanged = false;
+        foreach (var (slot, id) in _hotkeys.ToList())
+        {
+            if (idsToRemove.Contains(id))
+            {
+                _hotkeys.Remove(slot);
+                hotkeyChanged = true;
+            }
+        }
+        if (hotkeyChanged) HotkeysChanged.Value++;
 
         Save();
     }
@@ -586,7 +648,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         // Serialize here (must read the live model on this thread); hand the finished text to the
         // background writer so the disk write — the slow, UI-thread-stalling part — runs off-thread.
         var json = RepoStateStore.Serialize(Repos, Groups.Select(g => g.ToState()).ToList(),
-            Active.Value?.Id, _branchesUi, collapsed, _identityOverride);
+            Active.Value?.Id, _branchesUi, collapsed, _identityOverride, _hotkeys);
         _writer.Schedule(json);
     }
 

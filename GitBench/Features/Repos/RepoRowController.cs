@@ -15,6 +15,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     private readonly View _view;
     private readonly IRepoRow _target;
     private readonly IRepoRegistry _registry;
+    private readonly RepoHoverState _hover;
     private readonly Context _context;
     private readonly IDragController? _dragController;
     private readonly InputSystem _inputSystem;
@@ -27,6 +28,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         View view,
         IRepoRow target,
         IRepoRegistry registry,
+        RepoHoverState hover,
         InputSystem inputSystem,
         Context context,
         IDragController? dragController = null)
@@ -34,6 +36,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
         _view = view;
         _target = target;
         _registry = registry;
+        _hover = hover;
         _inputSystem = inputSystem;
         _context = context;
         _dragController = dragController;
@@ -45,6 +48,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
     public void Dispose()
     {
+        _hover.Exit(_target.Repo.Id);
         _dragController?.Unregister(_view);
         if (_pressed || _dragging)
         {
@@ -57,12 +61,14 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
     {
         if (_dragging) return;
         _target.Hovered.Value = true;
+        _hover.Enter(_target.Repo.Id);
     }
 
     public override void OnMouseExit(ref MouseExitEvent e)
     {
         if (_dragging) return;
         _target.Hovered.Value = false;
+        _hover.Exit(_target.Repo.Id);
     }
 
     public override void OnMouseMoved(ref MouseMoveEvent e)
@@ -77,6 +83,7 @@ public sealed class RepoRowController : KeyboardMouseController, IDisposable
 
             _dragging = true;
             _target.Hovered.Value = false;
+            _hover.Exit(_target.Repo.Id);
             _dragController?.StartRepoDrag(_target.Repo, e.Mouse.Point);
             e.Consume();
             return;

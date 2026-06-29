@@ -61,6 +61,7 @@ internal static class AppServices
             return identityService;
         }, eager: true);
         context.AddSingleton<IDragController, DragController>();
+        context.AddSingleton<RepoHoverState>();
         context.AddSingleton(ctx => new RepoNodeFactory(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IRepoStatusStore>(),

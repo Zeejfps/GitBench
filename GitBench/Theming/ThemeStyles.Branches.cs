@@ -33,10 +33,16 @@ public sealed record RepoBarRowStyles(
     uint IconAccentWorktree,
     uint IconAccentSubmodule,
     uint BadgeError,
-    uint BadgeDirty)
+    uint BadgeDirty,
+    uint HotkeyDim)
 {
     public uint Text(bool active, bool missing)
         => missing ? TextMissing : active ? TextActive : TextIdle;
+
+    // The inline hotkey-slot hint, e.g. "(2)" after the name: muted so it reads as secondary to the
+    // name, following the active/missing label ramp where those override the resting muted tone.
+    public uint Hotkey(bool active, bool missing)
+        => missing ? TextMissing : active ? TextActive : HotkeyDim;
 
     // Row icon: each kind carries its own accent at rest; on the active fill or a missing checkout
     // the icon follows the label ramp so it stays legible.
@@ -96,7 +102,8 @@ public partial record ThemeStyles
             IconAccentWorktree: status.Info,
             IconAccentSubmodule: status.Purple,
             BadgeError: status.Danger,
-            BadgeDirty: status.Warning);
+            BadgeDirty: status.Warning,
+            HotkeyDim: p.TextMuted);
 
     private static BranchesViewStyles BuildBranchesView(ThemePalette p, StatusPalette status) =>
         new(

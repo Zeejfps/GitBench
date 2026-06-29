@@ -45,6 +45,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Derived<IReadOnlyList<Repo>> _childRepos;
     private readonly KeyedViewModelList<Repo, Guid, RepoNodeViewModel> _children;
     private readonly Derived<TreeGuides> _guides;
+    private readonly Derived<int?> _hotkeyDigit;
 
     public Guid RepoId => _initial.Id;
     public RepoKind Kind => _initial.Kind;
@@ -58,6 +59,10 @@ internal sealed class RepoNodeViewModel : IDisposable
     public IReadable<bool> IsMissing => _isMissing;
     public IReadable<bool> IsActive => _isActive;
     public IReadable<RepoRowBadge> Badge => _badge;
+
+    // The 1-9 keyboard slot this repo occupies, or null. Only primaries are assignable, so a worktree
+    // or submodule row always reads null and shows no badge.
+    public IReadable<int?> HotkeyDigit => _hotkeyDigit;
 
     public IReadable<bool> HasChildren => _hasChildren;
     public IReadable<bool> IsExpanded { get; }
@@ -112,6 +117,11 @@ internal sealed class RepoNodeViewModel : IDisposable
         _children = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _childRepos, r => r.Id, r => factory.Create(r, depth + 1));
         _guides = new Derived<TreeGuides>(() => new TreeGuides(ComputeGuideMask(), Depth + 1));
+        _hotkeyDigit = new Derived<int?>(() =>
+        {
+            _ = _registry.HotkeysChanged.Value;
+            return _registry.HotkeyFor(RepoId);
+        });
 
         ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
         Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
@@ -227,6 +237,27 @@ internal sealed class RepoNodeViewModel : IDisposable
                 LucideIcons.FolderInput));
         }
 
+        var currentSlot = _registry.HotkeyFor(repo.Id);
+        var slotItems = new List<RepoBarContextMenu.Item>(9);
+        for (var n = 1; n <= 9; n++)
+        {
+            var slot = n;
+            var holder = _registry.RepoForHotkey(slot);
+            // The repo that currently holds this slot (when it isn't us), surfaced as a hint so a pick
+            // that would steal the slot is visible beforehand.
+            var holderName = holder is { } hid && hid != repo.Id ? FindRepo(hid)?.DisplayName : null;
+            slotItems.Add(new RepoBarContextMenu.Item(
+                slot.ToString(),
+                () => _registry.AssignHotkey(repo.Id, slot),
+                Icon: currentSlot == slot ? LucideIcons.CircleCheck : null,
+                Shortcut: holderName));
+        }
+
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyAssign, () => { }, LucideIcons.SquareTerminal, Submenu: slotItems));
+        if (currentSlot is { } assigned)
+            items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyClear, () => _registry.ClearHotkey(assigned), LucideIcons.X));
+
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
         items.Add(new RepoBarContextMenu.Item(
             s.CommonNewGroup,
@@ -292,6 +323,7 @@ internal sealed class RepoNodeViewModel : IDisposable
 
     public void Dispose()
     {
+        _hotkeyDigit.Dispose();
         _guides.Dispose();
         _children.Dispose();
         _childRepos.Dispose();

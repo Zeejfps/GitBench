@@ -37,6 +37,16 @@ internal sealed record RepoRowShell : Widget
             Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
         };
 
+        var nameColor = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value));
+        Text NameText() => new()
+        {
+            Value = Prop.Bind<string?>(() => vm.DisplayName.Value),
+            HAlign = TextAlignment.Start,
+            VAlign = TextAlignment.Center,
+            Overflow = TextOverflow.Ellipsis,
+            Color = nameColor,
+        };
+
         var row = new TreeRow
         {
             Depth = vm.Depth,
@@ -46,8 +56,41 @@ internal sealed record RepoRowShell : Widget
             Chevron = new WorktreeChevron().WithController<KbmController>(),
             Glyph = Glyph,
             IconColor = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
-            Name = Prop.Bind<string?>(() => vm.DisplayName.Value),
-            NameColor = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value)),
+            // A pinned primary shows its slot inline after the name, e.g. "web-frontend (2)", in a
+            // smaller muted tone so it reads as a hint, not part of the name. Unpinned/nested rows fall
+            // back to the plain growing name so their long-name truncation is untouched.
+            NameSlot = new Grow
+            {
+                Child = new Row
+                {
+                    CrossAxis = CrossAxisAlignment.Center,
+                    Children =
+                    [
+                        new Grow
+                        {
+                            Visible = Prop.Bind(() => vm.HotkeyDigit.Value is null),
+                            Child = NameText(),
+                        },
+                        new Row
+                        {
+                            Visible = Prop.Bind(() => vm.HotkeyDigit.Value is not null),
+                            Gap = Spacing.Hair,
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Children =
+                            [
+                                NameText(),
+                                new Text
+                                {
+                                    Value = Prop.Bind<string?>(() => vm.HotkeyDigit.Value is { } d ? $"({d})" : string.Empty),
+                                    FontSize = FontSize.Caption,
+                                    VAlign = TextAlignment.Center,
+                                    Color = Theme.Color(s => s.RepoBarRow.Hotkey(vm.IsActive.Value, vm.IsMissing.Value)),
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
             Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),
             Trailing = statusDot,
         };
