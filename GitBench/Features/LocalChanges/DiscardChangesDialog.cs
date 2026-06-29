@@ -87,30 +87,7 @@ internal sealed record DiscardChangesDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        // FillParent: the card claims no height of its own, so the body's Grow hands it all the
-        // space below the header and it scrolls its rows internally. The dialog stays window-sized
-        // and the list — not the frame's outer bar — absorbs the overflow, at whatever height the
-        // window leaves it.
-        var fileScrollHost = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = PaddingStyle.All(Spacing.Sm),
-                    Children =
-                    {
-                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
-                    },
-                },
-            },
-        };
-        fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-
-        return fileScrollHost;
+        return new DialogScrollList { Content = column }.BuildView(ctx);
     }
 
     private static View BuildRow(Context ctx, DiscardChangesViewModel vm, DiscardFileRow file)
@@ -122,7 +99,6 @@ internal sealed record DiscardChangesDialog : Widget
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
-            TextOverflow = TextOverflow.Ellipsis,
         };
         pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 

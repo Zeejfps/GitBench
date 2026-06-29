@@ -95,30 +95,7 @@ internal sealed record StashDialog : Widget
                 column.Children.Add(BuildRow(ctx, vm, file));
         }
 
-        // FillParent: see DiscardChangesDialog. The card claims no height of its own, so the body's
-        // Grow hands it the space between the files header and the keep-staged checkbox, and it
-        // scrolls its rows internally at whatever height the window leaves it — the dialog stays
-        // window-sized rather than handing scrolling to the frame's outer bar.
-        var fileScrollHost = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = PaddingStyle.All(Spacing.Sm),
-                    Children =
-                    {
-                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
-                    },
-                },
-            },
-        };
-        fileScrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        fileScrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-
-        return fileScrollHost;
+        return new DialogScrollList { Content = column }.BuildView(ctx);
     }
 
     private static View BuildRow(Context ctx, StashDialogViewModel vm, StashFileRow file)
@@ -130,7 +107,6 @@ internal sealed record StashDialog : Widget
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
-            TextOverflow = TextOverflow.Ellipsis,
         };
         pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 

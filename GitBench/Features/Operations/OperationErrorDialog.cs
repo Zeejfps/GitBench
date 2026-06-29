@@ -170,8 +170,11 @@ internal sealed class VerticalScrollPaneWheelController : KeyboardMouseControlle
 
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
     {
-        _pane.Scroll(-e.DeltaY * Scrolling.WheelStep);
-        e.Consume();
+        // Consume only if we actually moved. The wheel dispatches root→leaf in the capture phase,
+        // so an outer pane that can't scroll (e.g. a dialog body that fits) must let the event reach
+        // the inner list instead of swallowing it.
+        if (_pane.Scroll(-e.DeltaY * Scrolling.WheelStep))
+            e.Consume();
     }
 }
 

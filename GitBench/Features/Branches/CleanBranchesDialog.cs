@@ -158,7 +158,6 @@ internal sealed record CleanBranchesDialog : Widget
                         {
                             Value = candidate.Name,
                             VAlign = TextAlignment.Center,
-                            Overflow = TextOverflow.Ellipsis,
                             Color = Theme.Color(t => t.DialogBody.BodyText),
                         },
                     },
@@ -172,8 +171,6 @@ internal sealed record CleanBranchesDialog : Widget
 
     private static View BuildPreview(Context ctx, CleanBranchesDialogViewModel vm)
     {
-        var theme = ctx.Theme();
-
         var column = new Column<CleanBranchCandidate>
         {
             Gap = Spacing.Hair,
@@ -181,29 +178,6 @@ internal sealed record CleanBranchesDialog : Widget
             Template = candidate => BuildBranchRow(vm, candidate),
         }.BuildView(ctx);
 
-        // FillParent: see DiscardChangesDialog. The card claims no height of its own, so the body's
-        // Grow hands it the space below the chrome and it scrolls its rows internally at whatever
-        // height the window leaves it — the dialog stays window-sized rather than handing scrolling
-        // to the frame's outer bar.
-        var host = new RectView
-        {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Children =
-            {
-                new PaddingView
-                {
-                    Padding = PaddingStyle.All(Spacing.Sm),
-                    Children =
-                    {
-                        new DialogScrollRegion { FillParent = true, Content = new Raw { View = column } }.BuildView(ctx),
-                    },
-                },
-            },
-        };
-        host.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        host.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
-
-        return host;
+        return new DialogScrollList { Content = column }.BuildView(ctx);
     }
 }

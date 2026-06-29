@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "GitBench": {
+      "commandName": "Project"
+    },
+    "GitBench (MCP)": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ZGF_GUI_MCP": "1"
+      }
+    }
+  }
+}
