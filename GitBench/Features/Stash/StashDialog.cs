@@ -75,7 +75,7 @@ internal sealed record StashDialog : Widget
     private static View BuildFileList(Context ctx, StashDialogViewModel vm)
     {
         var theme = ctx.Theme();
-        var column = new ColumnView { Gap = Spacing.Hair };
+        var column = new ColumnView { Gap = Spacing.None };
 
         var files = vm.Files.Value;
         if (files.Count == 0)
@@ -91,43 +91,16 @@ internal sealed record StashDialog : Widget
         }
         else
         {
-            foreach (var file in files)
-                column.Children.Add(BuildRow(ctx, vm, file));
+            for (var i = 0; i < files.Count; i++)
+            {
+                var index = i;
+                var file = files[i];
+                column.Children.Add(DialogFileRow.Build(
+                    ctx, file.Display, file.Path, vm.CheckedPaths,
+                    modifiers => vm.ClickRow(index, modifiers)));
+            }
         }
 
         return new DialogScrollList { Content = column }.BuildView(ctx);
-    }
-
-    private static View BuildRow(Context ctx, StashDialogViewModel vm, StashFileRow file)
-    {
-        var theme = ctx.Theme();
-        var badge = new FileStatusBadge { Status = file.Display.Status }.BuildView(ctx);
-
-        var pathText = new TextView(ctx.Canvas)
-        {
-            Text = FileChangeFormatting.FormatPath(file.Display),
-            VerticalTextAlignment = TextAlignment.Center,
-        };
-        pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
-
-        var rowContent = new FlexRowView
-        {
-            Gap = Spacing.Md,
-            CrossAxisAlignment = CrossAxisAlignment.Center,
-            Children =
-            {
-                badge,
-                new FlexItem { Grow = 1, Child = pathText },
-            },
-        };
-
-        var isChecked = new State<bool>(vm.CheckedPaths.Value.Contains(file.Path));
-        isChecked.Changed += _ => vm.ToggleFile(file.Path);
-        return new CheckboxWidget
-        {
-            Content = new Raw { View = rowContent },
-            Checked = isChecked,
-            Height = Sizes.RowHeight,
-        }.WithController<KbmController>().BuildView(ctx);
     }
 }

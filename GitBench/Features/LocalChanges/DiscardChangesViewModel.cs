@@ -4,6 +4,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
 namespace GitBench.Features.LocalChanges;
@@ -23,6 +24,9 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
     public AsyncCommand Discard { get; }
 
     public event Action? CloseRequested;
+
+    // The pivot a Shift-click extends a range from; moves to the row of every plain/toggle click.
+    private int _anchorIndex = -1;
 
     public DiscardChangesViewModel(
         DiscardChangesRequest request,
@@ -58,13 +62,38 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         Discard = AsyncCommand.ForOutcome(dispatcher, DoDiscard, OnDiscardSucceeded, canDiscard);
     }
 
-    public void ToggleFile(string path) =>
+    /// <summary>
+    /// Handles a click on the row at <paramref name="index"/>. Shift extends a range from the anchor,
+    /// checking every row between it and the clicked row (the anchor stays put for further extends);
+    /// any other click toggles just that row and moves the anchor to it.
+    /// </summary>
+    public void ClickRow(int index, InputModifiers modifiers)
+    {
+        var files = State.Value.Files;
+        if ((uint)index >= (uint)files.Count) return;
+
+        if ((modifiers & InputModifiers.Shift) != 0 && (uint)_anchorIndex < (uint)files.Count)
+        {
+            var lo = Math.Min(_anchorIndex, index);
+            var hi = Math.Max(_anchorIndex, index);
+            Update(s =>
+            {
+                var next = new HashSet<string>(s.CheckedPaths);
+                for (var i = lo; i <= hi; i++) next.Add(s.Files[i].Path);
+                return s with { CheckedPaths = next };
+            });
+            return;
+        }
+
+        _anchorIndex = index;
+        var path = files[index].Path;
         Update(s =>
         {
             var next = new HashSet<string>(s.CheckedPaths);
             if (!next.Add(path)) next.Remove(path);
             return s with { CheckedPaths = next };
         });
+    }
 
     private GitOutcome DoDiscard()
     {
