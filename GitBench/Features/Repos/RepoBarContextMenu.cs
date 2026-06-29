@@ -23,7 +23,10 @@ public static class RepoBarContextMenu
         IReadOnlyList<MenuLabelSegment>? LabelSegments = null,
         bool IsSeparator = false,
         string? Shortcut = null,
-        IReadOnlyList<Item>? Submenu = null);
+        IReadOnlyList<Item>? Submenu = null,
+        // Lower bound on the width of the submenu this item opens, so a submenu of narrow rows
+        // (e.g. single digits) stays wide enough to click comfortably. Ignored without a Submenu.
+        float SubmenuMinWidth = 0f);
 
     public static readonly Item Separator = new(string.Empty, static () => { }, IsSeparator: true);
 
@@ -61,7 +64,7 @@ public static class RepoBarContextMenu
 
     // Builds a themed menu from the item list. Recursed (via a per-item factory) for
     // submenus so nested menus share the same styling and click-to-close behavior.
-    private static ContextMenu BuildMenu(Context ctx, IContextMenuHost manager, IReadOnlyList<Item> items)
+    private static ContextMenu BuildMenu(Context ctx, IContextMenuHost manager, IReadOnlyList<Item> items, float minWidth = 0f)
     {
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
@@ -69,6 +72,7 @@ public static class RepoBarContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
             Padding = PaddingStyle.All(Spacing.Xs),
+            MinWidth = minWidth,
         };
         menu.BindThemed(theme, s =>
         {
@@ -116,7 +120,7 @@ public static class RepoBarContextMenu
                 menuItem.ArrowFontFamily = LucideIcons.FontFamily;
                 menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(
                     menuItem, ctx,
-                    subMenuFactory: subCtx => BuildMenu(subCtx, manager, submenu)));
+                    subMenuFactory: subCtx => BuildMenu(subCtx, manager, submenu, captured.SubmenuMinWidth)));
             }
             else
             {

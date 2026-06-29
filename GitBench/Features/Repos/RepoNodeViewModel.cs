@@ -254,7 +254,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         }
 
         items.Add(RepoBarContextMenu.Separator);
-        items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyAssign, () => { }, LucideIcons.SquareTerminal, Submenu: slotItems));
+        items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyAssign, () => { }, LucideIcons.SquareTerminal,
+            Submenu: slotItems, SubmenuMinWidth: 180f));
         if (currentSlot is { } assigned)
             items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyClear, () => _registry.ClearHotkey(assigned), LucideIcons.X));
 
