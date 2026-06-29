@@ -13,20 +13,26 @@ namespace GitBench.Controls;
 internal sealed record SeparatorSpacer : Widget
 {
     private const float SeparatorWidth = 1f;
-    private const float SeparatorBreathingRoom = 9f;
+    private const int SeparatorBreathingRoom = 9;
     private const float SeparatorHeight = 18f;
 
     protected override IWidget Build(Context ctx)
     {
-        return new Center
+        // The hairline is vertically centered by the toolbar Row's CrossAxis=Center; wrapping it in
+        // Padding (not Center) is deliberate — Center reserves a modal-sized margin that would clamp
+        // this tiny box to zero.
+        return new Padding
         {
-            Width = SeparatorWidth + SeparatorBreathingRoom * 2,
-            Child = new Box
-            {
-                Width = SeparatorWidth,
-                Height = SeparatorHeight,
-                Background = Theme.Color(s => s.Palette.Border),
-            },
+            Amount = new PaddingStyle { Left = SeparatorBreathingRoom, Right = SeparatorBreathingRoom },
+            Children =
+            [
+                new Box
+                {
+                    Width = SeparatorWidth,
+                    Height = SeparatorHeight,
+                    Background = Theme.Color(s => s.Palette.Border),
+                },
+            ],
         };
     }
 }

@@ -134,6 +134,7 @@ internal sealed record DiscardChangesDialog : Widget
         {
             Text = FileChangeFormatting.FormatPath(file.Display),
             VerticalTextAlignment = TextAlignment.Center,
+            TextOverflow = TextOverflow.Ellipsis,
         };
         pathText.BindTextColor(() => theme.Styles.Value.FileChangeRow.RowText);
 

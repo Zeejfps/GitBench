@@ -109,6 +109,7 @@ internal sealed record ActionsToolbar : Widget
                                             new ButtonLabel { Value = L.T(s => s.ToolbarDiscardAll) },
                                         ],
                                     }.WithController<KbmController>(),
+                                    new SeparatorSpacer(),
                                     new ButtonWidget
                                     {
                                         Command = vm.Branch,
