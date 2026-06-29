@@ -90,6 +90,7 @@
   "toolbar.push": "Enviar",
   "toolbar.pushing": "Enviando",
   "toolbar.stash": "Stash",
+  "toolbar.discard_all": "Descartar todo",
   "toolbar.branch": "Rama",
   "toolbar.open_folder_tooltip": "Abrir en el explorador de archivos",
   "toolbar.open_terminal_tooltip": "Abrir en el terminal",

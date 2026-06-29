@@ -90,6 +90,7 @@
   "toolbar.push": "푸시",
   "toolbar.pushing": "푸시 중",
   "toolbar.stash": "스태시",
+  "toolbar.discard_all": "모두 폐기",
   "toolbar.branch": "브랜치",
   "toolbar.open_folder_tooltip": "파일 탐색기에서 열기",
   "toolbar.open_terminal_tooltip": "터미널에서 열기",

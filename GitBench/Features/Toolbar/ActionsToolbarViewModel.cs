@@ -1,8 +1,10 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
+using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -29,6 +31,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     public Command Fetch { get; }
     public Command Branch { get; }
     public Command Stash { get; }
+    public Command DiscardAll { get; }
     public Command OpenFolder { get; }
     public Command OpenTerminal { get; }
 
@@ -50,6 +53,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IMessageBus bus,
         IRepoStatusStore status,
         IRepoOperationsStore ops,
+        IRepoSnapshotStore snapshots,
         ILocalizationService loc)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
@@ -69,6 +73,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Fetch = new Command(DoFetch, Slice(s => !s.IsFetching && s.HasActiveRepo));
         Branch = new Command(DoBranch, repoActionsEnabled);
         Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
+        DiscardAll = new Command(DoDiscardAll, Slice(s => s.HasUnstaged));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);
         OpenTerminal = new Command(DoOpenTerminal, repoActionsEnabled);
 
@@ -85,6 +90,10 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Subscriptions.Add(status.Active.Subscribe(st =>
             Update(s => s with { Status = st })));
 
+        // Discard All targets only the unstaged side, so gate it on the active repo's unstaged file
+        // list from the snapshot store rather than the status store's coarser IsDirty.
+        Subscriptions.Add(snapshots.LocalChanges.Subscribe(OnLocalChanges));
+
         // Push/pull/fetch in-flight state is owned per-repo by the operations store. Project the
         // active repo's slice into our flags + spinners, so switching repos shows the right state
         // and a background op keeps tracking after the switch.
@@ -100,6 +109,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
                     OnClose = onClose,
                 }));
         }));
+    }
+
+    private void OnLocalChanges(Fetched<LocalChangesData>? fetched)
+    {
+        var hasUnstaged = fetched is Fetched<LocalChangesData>.Ok ok && ok.Value.Snapshot.Unstaged.Count > 0;
+        Update(s => s with { HasUnstaged = hasUnstaged });
     }
 
     private void OnOps(RepoOperations ops)
@@ -190,6 +205,19 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         _bus.Broadcast(new ShowDialogMessage(onClose => new StashDialog
         {
             Repo = repo,
+            OnClose = onClose,
+        }));
+    }
+
+    private void DoDiscardAll()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        // Empty Paths makes the dialog pre-check every unstaged file; it loads the list itself.
+        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog
+        {
+            Repo = repo,
+            Paths = [],
             OnClose = onClose,
         }));
     }

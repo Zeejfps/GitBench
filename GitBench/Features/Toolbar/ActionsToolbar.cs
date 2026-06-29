@@ -102,6 +102,15 @@ internal sealed record ActionsToolbar : Widget
                                     }.WithController<KbmController>(),
                                     new ButtonWidget
                                     {
+                                        Command = vm.DiscardAll,
+                                        Children =
+                                        [
+                                            new ButtonIcon { Value = LucideIcons.Trash },
+                                            new ButtonLabel { Value = L.T(s => s.ToolbarDiscardAll) },
+                                        ],
+                                    }.WithController<KbmController>(),
+                                    new ButtonWidget
+                                    {
                                         Command = vm.Branch,
                                         Children =
                                         [

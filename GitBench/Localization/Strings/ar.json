@@ -132,6 +132,7 @@
   "toolbar.push": "دفع",
   "toolbar.pushing": "جارٍ الدفع",
   "toolbar.stash": "إخفاء",
+  "toolbar.discard_all": "تجاهل الكل",
   "toolbar.branch": "فرع",
   "toolbar.open_folder_tooltip": "فتح في مستكشف الملفات",
   "toolbar.open_terminal_tooltip": "فتح في الطرفية",
