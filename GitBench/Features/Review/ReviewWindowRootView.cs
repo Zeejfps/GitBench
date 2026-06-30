@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -46,7 +47,13 @@ internal sealed record ReviewWindowRootView : Widget
             ],
         };
 
-        return new Provide<ReviewWindowViewModel> { Value = Model, Child = content };
+        // The Viewed tracker is provided across the whole window so the reused diff-pane header (deep in
+        // the right pane's tabs) resolves it and shows its per-file Viewed toggle.
+        return new Provide<IReviewedFileTracker>
+        {
+            Value = Model.ReviewedFiles,
+            Child = new Provide<ReviewWindowViewModel> { Value = Model, Child = content },
+        };
     }
 
     private IWidget Split() => new BorderLayout

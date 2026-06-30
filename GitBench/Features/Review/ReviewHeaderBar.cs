@@ -58,6 +58,14 @@ internal sealed record ReviewHeaderBar : Widget
                                 },
                                 new Text
                                 {
+                                    Value = Prop.Bind(vm.FilesViewedLabel),
+                                    Visible = Prop.Bind(() => vm.FilesViewedLabel.Value.Length > 0),
+                                    FontSize = FontSize.Caption,
+                                    Color = Theme.Color(s => s.Palette.TextMuted),
+                                    VAlign = TextAlignment.Center,
+                                },
+                                new Text
+                                {
                                     Value = Prop.Bind(vm.ReviewedLabel),
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextSecondary),

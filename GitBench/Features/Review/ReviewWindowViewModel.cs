@@ -1,4 +1,5 @@
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Infrastructure;
 using ZGF.Observable;
 
@@ -24,8 +25,9 @@ internal sealed record ReviewState(
 /// <summary>
 /// One open review window, pinned to a single <see cref="ReviewSession"/>. Loads the stack through
 /// <see cref="IReviewStackSource"/>, auto-selects the first (base-most) increment, and drives the
-/// reused commit-details surface via its own <see cref="CommitDetailsViewModel"/>. Reviewed-state is
-/// stubbed empty here; toggling lands in Phase 5.
+/// reused commit-details surface via its own <see cref="CommitDetailsViewModel"/>. Tracks which
+/// increments the reviewer has marked reviewed (ephemeral for the window's lifetime) and offers
+/// step-through navigation over the unreviewed ones.
 /// </summary>
 internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 {
@@ -34,9 +36,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     private readonly IReviewStackSource _source;
     private readonly CommitDetailsViewModel _details;
+    private readonly ReviewedFileTracker _reviewedFiles = new();
 
     public ReviewSession Session { get; }
     public string Title { get; }
+
+    // Per-window store of marked-Viewed files, provided into the window subtree so the reused
+    // diff-pane header shows its Viewed toggle. Owned (and disposed) here.
+    public IReviewedFileTracker ReviewedFiles => _reviewedFiles;
 
     // The window's own commit-details VM, provided into the right pane's sub-context. It does not
     // subscribe to commit selection, so the History pane can never drive it. Its lifetime is owned
@@ -47,10 +54,12 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public IReadable<ReviewContentKind> ContentKind { get; }
     public IReadable<string> PlaceholderText { get; }
     public IReadable<string?> SelectedSha { get; }
+    public IReadable<IReadOnlySet<string>> ReviewedShas { get; }
     public IReadable<IReadOnlyList<ReviewIncrement>> Increments { get; }
     public IReadable<string> RangeText { get; }
     public IReadable<string> IncrementLabel { get; }
     public IReadable<string> ReviewedLabel { get; }
+    public IReadable<string> FilesViewedLabel { get; }
 
     public ReviewWindowViewModel(
         ReviewSession session,
@@ -72,12 +81,24 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         });
         PlaceholderText = Slice(s => s.Render is ReviewRenderState.Placeholder p ? p.Text : string.Empty);
         SelectedSha = Slice(s => s.SelectedSha);
+        ReviewedShas = Slice(s => s.ReviewedShas);
         Increments = Slice(s => s.Render is ReviewRenderState.Loaded l
             ? l.Stack.Increments
             : Array.Empty<ReviewIncrement>());
         RangeText = Slice(BuildRangeText);
         IncrementLabel = Slice(BuildIncrementLabel);
         ReviewedLabel = Slice(BuildReviewedLabel);
+
+        // Combines own state, the selected increment's loaded file list, and the Viewed tracker, so it
+        // refreshes on selection, on details load, and on every Viewed toggle.
+        var filesViewedLabel = new Derived<string>(BuildFilesViewedLabel);
+        FilesViewedLabel = filesViewedLabel;
+        Subscriptions.Add(filesViewedLabel);
+
+        // Viewing the last file of the selected increment marks the increment reviewed (one-way:
+        // un-viewing a file doesn't revoke the increment's reviewed mark, which can also be set by hand).
+        Subscriptions.Add(_reviewedFiles.Revision.Subscribe(_ => MarkIncrementIfAllFilesViewed()));
+        Subscriptions.Add(_details.RenderState.Subscribe(_ => MarkIncrementIfAllFilesViewed()));
 
         StartLoad();
     }
@@ -89,6 +110,59 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         if (State.Value.SelectedSha == sha) return;
         Update(s => s with { SelectedSha = sha });
         _details.Show(Session.RepoId, sha);
+    }
+
+    // Flips an increment's reviewed mark. Ephemeral: cleared when the window closes (Phase 5a).
+    // Per-file Viewed state and persistence land later.
+    public void ToggleReviewed(string sha)
+    {
+        Update(s =>
+        {
+            var next = new HashSet<string>(s.ReviewedShas);
+            if (!next.Remove(sha)) next.Add(sha);
+            return s with { ReviewedShas = next };
+        });
+    }
+
+    // Marks the selected increment reviewed, then steps to the next increment toward the tip. At the
+    // tip the selection stays put (the increment is still marked).
+    public void MarkReviewedAndAdvance()
+    {
+        var sha = State.Value.SelectedSha;
+        if (sha == null) return;
+        Update(s => s with { ReviewedShas = new HashSet<string>(s.ReviewedShas) { sha } });
+
+        var list = CurrentIncrements();
+        var index = IndexOf(list, sha);
+        if (index >= 0 && index + 1 < list.Count)
+            SelectIncrement(list[index + 1].Sha);
+    }
+
+    // Selects the next unreviewed increment after the current selection, wrapping past the tip back
+    // to the base. No-op when every increment is reviewed (or the stack is empty).
+    public void NextUnreviewed()
+    {
+        var list = CurrentIncrements();
+        if (list.Count == 0) return;
+        var reviewed = State.Value.ReviewedShas;
+        var start = IndexOf(list, State.Value.SelectedSha);
+        for (var step = 1; step <= list.Count; step++)
+        {
+            var candidate = list[(start + step) % list.Count];
+            if (!reviewed.Contains(candidate.Sha))
+            {
+                SelectIncrement(candidate.Sha);
+                return;
+            }
+        }
+    }
+
+    // Disposes the owned Viewed tracker, then the base (slices/subscriptions). The shared _details VM
+    // is owned by the reused CommitDetailsView and must not be disposed here.
+    public override void Dispose()
+    {
+        _reviewedFiles.Dispose();
+        base.Dispose();
     }
 
     private void StartLoad()
@@ -144,8 +218,48 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         return $"{s.ReviewedShas.Count} / {l.Stack.Increments.Count} reviewed";
     }
 
-    private static int IndexOf(IReadOnlyList<ReviewIncrement> list, string sha)
+    // "X / Y files viewed" for the selected increment. Empty until a non-empty increment is loaded.
+    private string BuildFilesViewedLabel()
     {
+        var sha = State.Value.SelectedSha;
+        if (sha == null) return string.Empty;
+        var files = SelectedFiles();
+        if (files.Count == 0) return string.Empty;
+
+        _ = _reviewedFiles.Revision.Value;
+        var viewed = 0;
+        foreach (var f in files)
+            if (_reviewedFiles.IsViewed(sha, f.Path)) viewed++;
+        return $"{viewed} / {files.Count} files viewed";
+    }
+
+    private void MarkIncrementIfAllFilesViewed()
+    {
+        var sha = State.Value.SelectedSha;
+        if (sha == null || State.Value.ReviewedShas.Contains(sha)) return;
+        var files = SelectedFiles();
+        if (files.Count == 0) return;
+
+        var viewed = _reviewedFiles.ViewedPaths(sha);
+        foreach (var f in files)
+            if (!viewed.Contains(f.Path)) return;
+        Update(s => s with { ReviewedShas = new HashSet<string>(s.ReviewedShas) { sha } });
+    }
+
+    // The selected increment's files, available once its details have loaded into the right pane.
+    private IReadOnlyList<FileChange> SelectedFiles() =>
+        _details.RenderState.Value is CommitDetailsRenderState.Loaded l
+            ? l.Details.Files
+            : Array.Empty<FileChange>();
+
+    private IReadOnlyList<ReviewIncrement> CurrentIncrements() =>
+        State.Value.Render is ReviewRenderState.Loaded l
+            ? l.Stack.Increments
+            : Array.Empty<ReviewIncrement>();
+
+    private static int IndexOf(IReadOnlyList<ReviewIncrement> list, string? sha)
+    {
+        if (sha == null) return -1;
         for (var i = 0; i < list.Count; i++)
             if (list[i].Sha == sha) return i;
         return -1;

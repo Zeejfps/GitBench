@@ -41,7 +41,9 @@ internal sealed record ReviewStackList : Widget
                             {
                                 Increment = inc,
                                 SelectedSha = vm.SelectedSha,
+                                ReviewedShas = vm.ReviewedShas,
                                 OnClick = () => vm.SelectIncrement(inc.Sha),
+                                OnToggleReviewed = () => vm.ToggleReviewed(inc.Sha),
                             },
                             Gap = Spacing.Hair,
                             CrossAxis = CrossAxisAlignment.Stretch,
@@ -56,7 +58,8 @@ internal sealed record ReviewStackList : Widget
 /// <summary>
 /// One increment row: a reviewed indicator, the short sha, the commit summary, optional churn, and a
 /// secondary author·date line. The selected row takes the shared row-selection fill plus a leading
-/// accent bar; a hovered row takes the hover fill. Reviewed-state is stubbed unreviewed in Phase 3.
+/// accent bar; a hovered row takes the hover fill. The leading indicator is a click target: a hollow
+/// ring when unreviewed, a filled success dot once marked reviewed.
 /// </summary>
 internal sealed record ReviewStackRow : Widget
 {
@@ -65,7 +68,9 @@ internal sealed record ReviewStackRow : Widget
 
     public required ReviewIncrement Increment { get; init; }
     public required IReadable<string?> SelectedSha { get; init; }
+    public required IReadable<IReadOnlySet<string>> ReviewedShas { get; init; }
     public required Action OnClick { get; init; }
+    public required Action OnToggleReviewed { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -75,6 +80,7 @@ internal sealed record ReviewStackRow : Widget
         var inc = Increment;
 
         bool IsSelected() => SelectedSha.Value == inc.Sha;
+        bool IsReviewed() => ReviewedShas.Value.Contains(inc.Sha);
 
         var accentBar = new Box
         {
@@ -82,15 +88,23 @@ internal sealed record ReviewStackRow : Widget
             Background = Prop.Bind(() => IsSelected() ? theme.Styles.Value.RowSelection.AccentBar : 0u),
         };
 
-        // Hollow circle for an unreviewed increment; Phase 5 fills/checks it from reviewed-state.
+        // Hollow ring while unreviewed; fills with the success color once the reviewer marks it. The
+        // surrounding padding (below) widens the click target past the 12px dot.
         var indicator = new Box
         {
             Width = IndicatorSize,
             Height = IndicatorSize,
+            Background = Prop.Bind(() => IsReviewed() ? theme.Styles.Value.Status.Success : 0u),
             BorderSize = BorderSizeStyle.All(1),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.TextMuted)),
+            BorderColor = Prop.Bind(() => BorderColorStyle.All(
+                IsReviewed() ? theme.Styles.Value.Status.Success : theme.Styles.Value.Palette.TextMuted)),
             BorderRadius = BorderRadiusStyle.All(IndicatorSize / 2f),
         };
+        var indicatorHit = new Padding
+        {
+            Amount = PaddingStyle.All(Spacing.Xs),
+            Children = [indicator],
+        }.WithController(input, () => new ReviewToggleController(OnToggleReviewed));
 
         var firstLine = new Row
         {
@@ -128,9 +142,9 @@ internal sealed record ReviewStackRow : Widget
                         [
                             new Row
                             {
-                                Gap = Spacing.Md,
+                                Gap = Spacing.Sm,
                                 CrossAxis = CrossAxisAlignment.Center,
-                                Children = [indicator, new Grow { Child = textColumn }],
+                                Children = [indicatorHit, new Grow { Child = textColumn }],
                             },
                         ],
                     },
@@ -190,6 +204,23 @@ internal sealed record ReviewStackRow : Widget
             return inc.Author;
         var date = inc.When.ToLocalTime().ToString("yyyy-MM-dd");
         return string.IsNullOrEmpty(inc.Author) ? date : $"{inc.Author} · {date}";
+    }
+}
+
+// Left-click on the leading indicator toggles the increment's reviewed mark. It sits deeper than the
+// row, so it consumes the click on bubbling before the row's selection controller sees it.
+internal sealed class ReviewToggleController : KeyboardMouseController
+{
+    private readonly Action _onToggle;
+
+    public ReviewToggleController(Action onToggle) => _onToggle = onToggle;
+
+    public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
+    {
+        if (e.Phase != EventPhase.Bubbling) return;
+        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
+        _onToggle();
+        e.Consume();
     }
 }
 

@@ -39,6 +39,8 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
     protected override IWidget Build(Context ctx, ButtonState state)
     {
         var vm = ctx.Require<DiffViewModel>();
+        // Present only in a review window's subtree; elsewhere null ⇒ no Viewed toggle.
+        var reviewed = ctx.Get<IReviewedFileTracker>();
 
         return new Box
         {
@@ -61,7 +63,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                         {
                             Gap = Spacing.Sm,
                             CrossAxis = CrossAxisAlignment.Center,
-                            Children = RowChildren(vm, state),
+                            Children = RowChildren(vm, state, reviewed),
                         },
                     ],
                 },
@@ -69,7 +71,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
         };
     }
 
-    private IWidget[] RowChildren(DiffViewModel vm, ButtonState state)
+    private IWidget[] RowChildren(DiffViewModel vm, ButtonState state, IReviewedFileTracker? reviewed)
     {
         var title = new Grow
         {
@@ -81,15 +83,17 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                 Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
             },
         };
-        var trailing = new IWidget[]
+        var trailing = new List<IWidget>
         {
             title,
             new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) },
             FullFileToggleButton(vm),
             OpenInWindowButton(vm),
         };
+        if (reviewed != null)
+            trailing.Add(ViewedToggleButton(vm, reviewed));
 
-        if (!Collapsible) return trailing;
+        if (!Collapsible) return trailing.ToArray();
 
         var chevron = new Text
         {
@@ -126,4 +130,37 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             Children = [new ButtonIcon { Value = LucideIcons.ExternalLink, FontSize = FontSize.Body }],
         }.WithTooltip(L.T(s => s.DiffOpenWindowTooltip))
             .WithController<KbmController>();
+
+    // The GitHub-style per-file "Viewed" toggle, shown only when a reviewed-file tracker is in scope
+    // (the review window). Tints success and flips the checkbox glyph once the file is marked viewed.
+    private static IWidget ViewedToggleButton(DiffViewModel vm, IReviewedFileTracker reviewed)
+    {
+        bool IsViewed()
+        {
+            _ = reviewed.Revision.Value;
+            var target = vm.Target.Value;
+            return target?.CommitSha is { } sha && reviewed.IsViewed(sha, target.Path);
+        }
+
+        return new ButtonWidget
+        {
+            Style = ButtonStyle.Bare(s => Theme.Color(t => IsViewed()
+                ? t.Status.Success
+                : t.DiffView.HeaderButtonColor(s))),
+            Command = new Command(() =>
+            {
+                var target = vm.Target.Value;
+                if (target?.CommitSha is { } sha) reviewed.ToggleViewed(sha, target.Path);
+            }),
+            Children =
+            [
+                new ButtonIcon
+                {
+                    FontSize = FontSize.Body,
+                    Value = Prop.Bind<string?>(() => IsViewed() ? LucideIcons.CheckSquare : LucideIcons.Square),
+                },
+                new ButtonLabel { Value = "Viewed" },
+            ],
+        }.WithController<KbmController>();
+    }
 }

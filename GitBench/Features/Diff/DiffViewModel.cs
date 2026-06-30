@@ -71,6 +71,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // navigated away from is dropped, and so it never invalidates the diff-load lane (Gen).
     private readonly GenerationGuard _highlightLane;
 
+    /// <summary>The file this pane is pinned to (path + side + optional commit sha), or null when no
+    /// file is selected. Read by the diff-pane header's Viewed toggle to key per-file reviewed state.</summary>
+    public IReadable<DiffTarget?> Target => _target;
+
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<string?> OpError { get; }
     public IReadable<LfsBadge> LfsStatus { get; }

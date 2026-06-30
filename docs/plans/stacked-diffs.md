@@ -582,7 +582,7 @@ Swap the stub for the correct `base..head` range. The GUI does not change — on
   reviewed repo is the active one. Phase 4 fixed the *stack source*, not the diff pane — threading the
   pinned repo through `DiffViewModel` remains a later refactor (decision #2 still partial).
 
-### Phase 5 — Reviewed-state, progress, next-unreviewed
+### Phase 5 — Reviewed-state, progress, next-unreviewed  ✅ DONE
 
 Make it a review tool, not just a stack viewer.
 
@@ -603,6 +603,60 @@ Make it a review tool, not just a stack viewer.
 - **Ship / test locally:** step through a branch, tick files Viewed → progress climbs, files
   collapse; `next-unreviewed` lands correctly; amend a commit, reopen → only the changed file
   un-ticks with the badge.
+
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **5a (increment-level) — as specified.** `ReviewState` already carried `IReadOnlySet<string>
+  ReviewedShas` from Phase 3; the VM now exposes it (`ReviewedShas`) and adds `ToggleReviewed(sha)`,
+  `MarkReviewedAndAdvance()`, `NextUnreviewed()` (increment-level; wraps past the tip). The rail's
+  leading indicator (`ReviewStackRow`) became a **click target**: a hollow `TextMuted` ring while
+  unreviewed, a filled `Status.Success` dot once marked. A `ReviewToggleController` on the indicator's
+  (padded) hit box consumes the click on bubbling so it toggles reviewed *without* also selecting the
+  row — same deeper-consumes-first pattern as the tab close button. Header still shows
+  `"{n} / {m} reviewed"`. (No "reset on range change" code: a window is pinned to one range for life,
+  so the only reset is disposal on close.)
+- **5b placement = the per-tab diff header, NOT the file-list row** — following the **Phase 3.5 note**
+  (the file list is now the always-visible top pane), not the original 5b "file-list rows consult"
+  text. Decisive reason found while implementing: `FileChangesSection` is a **virtualized,
+  canvas-drawn** list (`VirtualRowListView` + `FileChangesUI.DrawFileRow`), so a per-row checkbox =
+  manual draw + hit-test in shared canvas code — exactly the "awkward to graft onto the shared view"
+  path Open-decision #1 said to avoid. The GitHub-style **"Viewed" toggle (icon + label) lives on the
+  shared `DiffPaneHeaderWidget`** (where each file's diff already lives, in its tab), tinting
+  `Status.Success` and flipping `Square`→`CheckSquare` once marked.
+- **The seam is `IReviewedFileTracker`, placed in `Features/Diff`** (the lowest common consumer — the
+  header), implemented by `ReviewedFileTracker` in `Features/Review`, to avoid a `Diff → Review`
+  dependency. The header resolves it via **`ctx.Get<IReviewedFileTracker>()` (optional)** — non-null
+  only in a review window (provided once at `ReviewWindowRootView`'s root via
+  `Provide<IReviewedFileTracker>`), so the History pane and Local Changes show no Viewed toggle. The
+  tracker keys viewed state by `(sha → set<path>)` and bumps a `Revision` counter so the header's
+  auto-tracked `Prop.Bind`/`Theme.Color` computes refresh on toggle. `DiffViewModel` gained a public
+  `Target` (the pinned `DiffTarget`) so the header reads the `(sha, path)` to key on.
+- **Progress + auto-mark in the VM.** `ReviewWindowViewModel` **owns** the tracker
+  (`ReviewedFiles`, disposed in a new `Dispose` override that leaves `_details` alone). It exposes
+  `FilesViewedLabel` (a `Derived<string>` over own state + `_details.RenderState` + tracker `Revision`)
+  → `"X / Y files viewed"` for the selected increment, shown in the header (hidden when empty).
+  Viewing the **last** file of the selected increment auto-marks that increment reviewed
+  (`MarkIncrementIfAllFilesViewed`, subscribed to tracker + details) — **one-way**: un-viewing a file
+  doesn't revoke the mark (which can also be set by hand via the rail dot), so the derived and manual
+  paths don't fight.
+- **5c:** the rail "reviewed decoration" is the filled dot (done in 5a); `NextUnreviewed()` exists as a
+  VM method. The actual **key bindings (`n`, `v`, `j`/`k`, …) are deferred to Phase 6**, which already
+  owns the full keyboard set — the plan's 5c and Phase 6 overlap, so the keys land once in Phase 6.
+- **Deferred to Phase 6 (carried, not built here):** the **content-hash auto-uncheck** + "Changed
+  since last view" badge and **persistence** — both only bite across a reload/reopen (an amend), which
+  Phase 6 owns (`RefsChanged`/`WorkingTreeChanged` reload + the optional JSON store). MVP viewed-state
+  is **ephemeral per Open-decision #5**; within one window session content never changes, so
+  auto-uncheck is moot until then. Per-increment file *counts* for **un-opened** increments still
+  aren't available (churn/`FilesChanged` left at 0 since Phase 4), so all-files-viewed is evaluated
+  only for the increment whose details are loaded.
+- **Localization deferred to Phase 6** (Phases 1–3 precedent): the new strings — `"Viewed"`,
+  `"X / Y files viewed"`, `"N / M reviewed"` — are hardcoded English literals (the `"Viewed"` label
+  sits in shared `DiffPaneHeaderWidget` but only renders in the review context). No `Strings/*.json`
+  churn, no LOC004.
+- **New files:** `Features/Diff/IReviewedFileTracker.cs`, `Features/Review/ReviewedFileTracker.cs`.
+  **Edited:** `ReviewWindowViewModel` (tracker + labels + nav + Dispose), `ReviewStackList`
+  (indicator toggle + `ReviewToggleController`), `ReviewHeaderBar` (files-viewed label),
+  `ReviewWindowRootView` (`Provide<IReviewedFileTracker>`), `DiffViewModel` (`Target`),
+  `DiffPaneHeaderWidget` (gated Viewed toggle).
 
 ### Phase 6 — Keyboard, localization, polish
 
