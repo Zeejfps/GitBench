@@ -623,9 +623,12 @@ The Tier-2/3 differentiators; none block the MVP.
 | `Features/Review/ReviewHeaderBar.cs` + `ReviewStackList.cs` *(new)* | range/progress bar; increment rail |
 | `Features/Review/IReviewStackSource.cs` + `StubReviewStackSource.cs` + `GitReviewStackSource.cs` *(new)* | data seam; stub then git impl |
 | `Features/Review/ReviewStack.cs` *(new)* | `ReviewSession`, `ReviewIncrement`, `ReviewStack` records |
-| `Features/Commits/CommitDetailsViewModel.cs` | extract `Show(repoId, sha)` / `Clear()` from `OnCommitSelected` |
+| `Features/Commits/CommitDetailsViewModel.cs` | extract `Show(repoId, sha)` / `Clear()` from `OnCommitSelected`; *(3.5)* tab model: `OpenTabs`, `SelectFile`/`ActivateTab`/`CloseTab`/`ActiveDiff` (drops single `DiffVm`/`SelectedTarget`) |
+| `Features/Commits/CommitFileTab.cs` *(new, 3.5)* | per-open-file tab: a `DiffViewModel` pinned to one `DiffTarget` |
+| `Features/Commits/CommitDetailsTabStrip.cs` *(new, 3.5)* | tab strip (Details + file tabs), shared `CommitTabChrome`, `HorizontalScrollArea` reuse, dividers |
+| `Features/Diff/DiffPaneHeaderWidget.cs` | *(3.5)* `Collapsible` flag (false in tabs — drops the collapse chevron) |
 | `Git/IGitService.cs`, `Git/GitService.cs` | `MergeBase`; `LoadReviewStack` (range RevWalk, first-parent, reversed) |
-| `Features/Commits/CommitDetailsView.cs` (+ file-row) | *(Phase 5b)* optional `IReviewedFileTracker` Viewed checkbox |
+| `Features/Commits/CommitDetailsView.cs` | *(3.5)* file list + tabbed metadata/diff split, per-tab `IsVisible` body swap; *(Phase 5b, + file-row)* optional `IReviewedFileTracker` Viewed checkbox |
 | `Localization/Strings/*.json` | new strings × all 6 locales |
 | `GitBench.Tests/ReviewStackTests.cs` *(new)* | range-listing + merge-base tests |
 | *(Phase 7, optional)* `Git/DiffResult.cs`, `Git/GitService.cs`, `Features/Diff/DiffViewModel.cs` | range/combined diff (`git diff base...head`, `git range-diff`) |
