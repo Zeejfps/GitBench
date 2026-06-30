@@ -1057,6 +1057,171 @@ The Tier-2/3 differentiators; none block the MVP.
 - **7.4 (Later)** a history-list item ("Review from here to HEAD"); Graphite-style "upstack" gutter
   marker; conversation drawer with batched/pending comments + draft autosave.
 
+#### Phase 7.2 — Combined "net-diff" mode (chosen slice — detailed plan)  ✅ DONE
+
+**Decision:** of Phase 7's four separable parts, we build **7.2 only** now. 7.1 (reflog/`range-diff`
+version comparator) is deferred — it needs first-ever reflog plumbing, the persistence Phase 6
+deliberately left out, *and* a brand-new meta-diff visualization (`range-diff` doesn't map onto the
+per-file `DiffView`); it deserves a design spike, not blind implementation. 7.3 is mostly redundant
+after Phase 6.5's in-window base picker (only a *head* picker remains, and changing head changes the
+window's identity). 7.4 stays Later.
+
+**What 7.2 is:** a header toggle **By increment ↔ Combined**. *By increment* = today's per-commit
+chain (`commit^→commit`). *Combined* = the whole resolved range as **one net diff** — a single file
+list of every file changed between `ReviewStack.BaseSha` and `HeadSha`, each file rendered as
+`git diff <baseSha> <headSha> -- <path>`. Two-dot/direct (not three-dot) because `BaseSha` is
+*already* the resolved merge-base (`ResolveAutoReviewBase`→`MergeBase`), and two-dot also survives the
+unrelated-history fallback where base isn't an ancestor. It **reuses the entire file-list + tabbed-diff
+surface**; the rendering pipeline (`ParseGitDiff`/`DiffContentView`/`DiffView`) is side-agnostic and
+carries a new `DiffSide` through untouched.
+
+Outside-in slices (each builds; the GUI lands last):
+
+- **7.2.1 — Git layer (the only new plumbing; all additive, no existing caller changes).**
+  - `Git/DiffResult.cs:3` — add `Range` to `enum DiffSide { Unstaged, Staged, Commit, Range }`.
+  - `GetDiff(repo, path, side, commitSha=null, baseSha=null)` (`GitService.cs:2637`, iface
+    `IGitService.cs:67`) — add a `DiffSide.Range` branch beside the `Commit` one:
+    `RunGitDiff(repo.Path, out error, "diff", "--no-color", "-M", contextArg, baseSha, commitSha,
+    "--", path)` (head = `commitSha`, base = `baseSha`; guard both non-empty). `ParseGitDiff`/`DiffError`
+    stamp the side through unchanged.
+  - `GetFileText(repo, path, side, oldSide, commitSha=null, baseSha=null)` (`GitService.cs:2695`) —
+    add `case DiffSide.Range` → `ShowBlob(oldSide ? $"{baseSha}:{path}" : $"{commitSha}:{path}")`
+    (needed for FullFile mode + highlighting; without it Range falls into the working-tree `default`).
+  - `DiffHighlightCoordinator.Compute(git, repo, diff, commitSha, baseSha=null)`
+    (`DiffHighlightCoordinator.cs:20`) — thread `baseSha` into the old-side `GetFileText` call (`:59`)
+    so range highlighting reads `base:path`, not `commit~1:path`.
+  - **New** `Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string
+    headSha)` — `RunGit(repo.Path, out err, "diff", "-M", "--name-status", "-z", baseSha, headSha)`
+    → **reuse the existing `ParseDiffTreeNameStatusZ`** (`GitService.cs:460`, identical NUL format) →
+    sort. The *net* file list (a file touched in N commits appears once; added-then-deleted nets out).
+    `git diff <a> <b>` exits 0 normally, so plain `RunGit` is correct.
+
+- **7.2.2 — `DiffTarget` two-rev thread (additive).**
+  - `DiffTarget` (`Features/Diff/DiffViewModel.cs:12`) → `record DiffTarget(string Path, DiffSide
+    Side, string? CommitSha = null, string? BaseSha = null);` — new optional field; every existing
+    `new DiffTarget(path, side, sha)` is unaffected.
+  - `DiffViewModel.StartLoad` (`:434-480`) — read `target.BaseSha` and pass it to `GetDiff` (`:460`),
+    `BuildFullFile`→`GetFileText` (`:463`/`:497`), and `StartHighlight`→`Compute` (`:479`/`:552`).
+    All default-null, so commit/working-tree panes are byte-for-byte unchanged.
+
+- **7.2.3 — Combined details path on the (shared) `CommitDetailsViewModel` (additive; History never
+  calls it).** Add a `_currentBaseSha` field; `Show`/`Clear` set it null (commit mode). New
+  `ShowRange(repoId, baseSha, headSha)` mirrors `Show` (`:178`) but loads via `LoadRangeFiles` and
+  wraps the result in a **synthesized `CommitDetails`** (`Sha` = the synthetic range key
+  `"{baseSha}..{headSha}"`, `ParentShas = [baseSha]`, message = a localized "Combined diff · N files"
+  summary) so the existing `CommitDetailsView.ShowDetails` (`:340`) renders it with **zero view
+  changes**; `_currentSha = headSha` (real rev for git). `SelectFile` (`:98`) builds a **range** tab
+  when `_currentBaseSha != null`. `CommitFileTab` (`:26`) gains an optional `string? baseSha`; when
+  set, target = `new DiffTarget(path, DiffSide.Range, headSha, baseSha)` and its `Sha` identity = the
+  range key (distinct from the tip commit's sha → no viewed-state collision).
+
+- **7.2.4 — Combined = read-only overview; Viewed suppressed in range diffs (locked decision).** The
+  per-file Viewed loop is inherently *by-increment*; combined is "see the net change." Gate the
+  header's Viewed toggle on `reviewed != null && vm.Target.Value?.Side != DiffSide.Range`
+  (`DiffPaneHeaderWidget.cs:93`) — the pinned target's Side is fixed per tab, so it's a stable
+  build-time check. Result: no Viewed toggle on range tabs, no marks in the combined Changes
+  list/tabs (nothing writes to the range key), and the tip increment's `headSha`-keyed marks never
+  bleed in. (Combined-mode per-file Viewed under its own key = a noted future enhancement, not MVP.)
+
+- **7.2.5 — Mode state + pane driving (`ReviewWindowViewModel`).** Add `enum ReviewDiffMode {
+  ByIncrement, Combined }`, `State<ReviewDiffMode> _mode` (next to `_baseOverride`, `:78`),
+  `IReadable<ReviewDiffMode> Mode`, `ToggleMode()`/`SetMode(mode)`, and a `DriveDetails()` helper that
+  reads the current stack from `State.Render` Loaded: combined → `_details.ShowRange(RepoId,
+  stack.BaseSha, stack.HeadSha)`, else `_details.Show(RepoId, SelectedSha)`. Route `StartLoad`
+  (`:504`), `ApplyReloadedStack` (`:548`), `SelectIncrement` (`:304`) and `SetMode` through
+  `DriveDetails()`. `SelectIncrement` also forces `_mode = ByIncrement` (a rail-row click drops into
+  that increment). So combined survives a refs-change / base-change reload (re-resolves base/head from
+  the new stack).
+
+- **7.2.6 — UI.** New `Features/Review/ReviewModeToggle.cs`: a two-segment "By increment | Combined"
+  control bound to `vm.Mode`/`vm.SetMode` (shared `RowSelection` tokens), mounted in
+  `ReviewHeaderBar.Build` (`:46`) between `Grow{BaseRange}` and `NavCluster`, visible only when
+  loaded. `ReviewWindowRootView.Split()` (`:84`) wraps `South = ReviewActionBar` in a
+  `Switch<ReviewDiffMode>` so the increment advance-bar hides in combined. `ReviewStackList` hides the
+  "you are here" accent while combined (rail is context-only; a click still returns to by-increment).
+  Optional `ReviewKeyController` `c` → `ToggleMode()` + a cheatsheet row.
+
+- **7.2.7 — Localization (LOC004, all six `Strings/*.json`).** `review.mode_by_increment`,
+  `review.mode_combined`, `review.combined_summary` (Details-tab synthetic message; avoid reserved
+  param names like `base`), an optional `c`-key cheatsheet label/desc, and a toggle tooltip.
+
+- **7.2.8 — Tests (`GitBench.Tests/ReviewStackTests.cs`, real-git harness).** `LoadRangeFiles`: net
+  list across a linear stack (file touched twice → once; added-then-deleted → absent; rename → `R`).
+  `GetDiff(.., Range, head, base)`: a file modified across two commits → a single base→head diff (not
+  per-commit). `base == head` → empty.
+
+- **Ship / test locally:** open a multi-commit branch review → the header shows **By increment |
+  Combined**. Toggle to Combined → the rail de-emphasizes, the file list becomes the whole `base..head`
+  net change, clicking a file shows the combined diff (highlight + intra-line inherited), the increment
+  action bar hides. Toggle back → returns to the selected increment. Change the base / amend a commit →
+  combined re-resolves from the new range. The by-increment review loop (Viewed, progress, keys) is
+  untouched.
+
+**Touch list (7.2):** *new* — `Features/Review/ReviewModeToggle.cs`; `IGitService.LoadRangeFiles`.
+*edited* — `Git/DiffResult.cs` (enum), `Git/GitService.cs` (`GetDiff`/`GetFileText` Range arms +
+`LoadRangeFiles`), `Git/IGitService.cs`, `Features/Diff/DiffViewModel.cs` (`DiffTarget` + thread),
+`Features/Diff/DiffHighlightCoordinator.cs` (baseSha), `Features/Diff/DiffPaneHeaderWidget.cs` (gate
+Viewed off Range), `Features/Commits/CommitDetailsViewModel.cs` (`ShowRange` + range `SelectFile`),
+`Features/Commits/CommitFileTab.cs` (range target), `Features/Review/ReviewWindowViewModel.cs` (mode +
+`DriveDetails`), `Features/Review/ReviewHeaderBar.cs` (toggle), `Features/Review/ReviewWindowRootView.cs`
+(action-bar gate), `Features/Review/ReviewStackList.cs` ("you are here" gate),
+`Features/Review/ReviewKeyController.cs` (optional `c`), `Localization/Strings/*.json` ×6,
+`GitBench.Tests/ReviewStackTests.cs`.
+
+**Landed as (actual, build-verified; 16/16 `ReviewStackTests` green) — and where it deviated:**
+- **Git layer (7.2.1) as specified, plus one extra thread.** `DiffSide.Range` added; `GetDiff` got a
+  `baseSha` param + a `Range` arm (`git diff --no-color -M <ctx> base head -- path`, two-dot — base is
+  already the merge-base, so two-dot is the net diff and also survives the unrelated-history fallback);
+  `GetFileText` got a `Range` case (`base:path` / `head:path`). The plan's two required switches were
+  right, but **`DiffHighlightCoordinator.Compute` also needed `baseSha`** (its old-side blob fetch goes
+  through `GetFileText` and would otherwise read `commit~1:path`) — a third additive signature, not in
+  the original two-switch list. `LoadRangeFiles` returns `Fetched<IReadOnlyList<FileChange>>` and
+  **reuses `ParseDiffTreeNameStatusZ` verbatim** (`git diff -M --name-status -z base head`; exits 0, so
+  plain `RunGit`).
+- **Two-rev thread (7.2.2) as specified.** `DiffTarget` gained `string? BaseSha`; `DiffViewModel`
+  threads it through `GetDiff`/`BuildFullFile`→`GetFileText`/`StartHighlight`→`Compute`. All default-null,
+  so commit/working-tree panes are untouched.
+- **Combined details (7.2.3) via a synthesized `CommitDetails`.** `CommitDetailsViewModel.ShowRange`
+  loads `LoadRangeFiles` and wraps it in `BuildRangeDetails`: `Sha` = a short `"base..head"` key
+  (display-only — Combined suppresses Viewed), author = localized **"Combined diff"** (so the avatar/name
+  read sensibly; `FormatFullDate(default)` is blank), subject = **"{count} files changed"**, parent =
+  base. The shared `CommitDetailsView.ShowDetails` renders it with **zero view changes**. `CommitFileTab`
+  gained an optional `baseSha` → a `DiffSide.Range` target + a range-key `Sha` identity. `_currentBaseSha`
+  on the VM (null in `Show`/`Clear`, set in `ShowRange`) makes `SelectFile` build range tabs.
+- **Viewed suppression (7.2.4) is one gated condition.** `DiffPaneHeaderWidget.RowChildren` now gates
+  the Viewed toggle on `reviewed != null && vm.Target.Value?.Side != DiffSide.Range` (the pinned target's
+  Side is fixed per tab). Combined writes no viewed state, so the Changes-list/tab marks stay empty and
+  the tip commit's `headSha`-keyed marks never bleed into the combined view.
+- **Mode state (7.2.5).** `ReviewDiffMode { ByIncrement, Combined }`, `_mode` + `Mode`, `SetMode`/
+  `ToggleMode`/`DriveDetails`/`CurrentStack`. `SelectIncrement` forces ByIncrement (a rail click drops
+  into that commit). `StartLoad` and `ApplyReloadedStack` are mode-aware — **Combined always re-drives
+  `ShowRange`** on a reload (the range's base/head can shift even when the selected commit survives),
+  ByIncrement keeps the "re-drive only when selection moved" optimization. `RunPrimaryAction`,
+  `ToggleActiveFileViewed`, and `MarkIncrementIfAllFilesViewed` early-return in Combined (the loop is
+  by-increment; the loaded file list is the whole range, so "all files viewed" must not mark an
+  increment). `j`/`k` still navigate the combined file list (they read the loaded files) — a free bonus.
+- **UI (7.2.6).** New `ReviewModeToggle` — two pills in a bordered group, the active one taking the
+  shared `RowSelection.Fill` (a tiny `SegmentClickController` for hover+click), mounted in the header
+  between the base chip and the nav cluster, **visible only when Loaded**. The action bar is gated off
+  in Combined via `Switch<ReviewDiffMode>` (`Empty.Widget` ⇒ zero-height South, diff fills the pane).
+  `ReviewStackRow` took a `Mode` prop and drops its selected fill + accent bar in Combined (rows still
+  hover/click). **The planned toggle tooltip was dropped** — `WithTooltip` needs an `IInteractable` and
+  the outer `Box` isn't one; the two labels are self-explanatory, so `review.mode_toggle_tooltip` was
+  not added.
+- **Key + cheatsheet.** `c` → `ToggleMode` in the one `ReviewKeyController`; a `["c"]` cheatsheet row
+  (`review.shortcut_toggle_mode`).
+- **Pop-out works for free.** `RequestOpenInWindow` forwards the whole `DiffTarget` (now incl. `BaseSha`)
+  + the pinned repo, so popping out a combined range diff stays correct; the pop-out has no
+  `IReviewedFileTracker` in scope, so it shows no Viewed toggle regardless.
+- **Localization — 5 new `review.*` keys across all six `Strings/*.json`:** `mode_by_increment`,
+  `mode_combined`, `combined_diff_title`, `combined_summary` (`{count}`), `shortcut_toggle_mode`.
+- **Tests — 5 new in `ReviewStackTests` (16 total green):** `LoadRangeFiles` net dedup + add-then-delete
+  nets out, added-file status, rename → `R`, `base==head` empty; and `GetDiff(.., Range)` proven
+  base→head not per-commit (modify one line v0→v1→v2; the net removes **v0** and adds **v2**, with v1 on
+  neither side).
+- **Not run live:** the user owns running/testing GitBench, so this is build- + unit-verified, not yet
+  exercised in the live window.
+
 ### Phase 8 — Verification
 
 - Build: `dotnet build GitBench\GitBench.csproj --artifacts-path <scratchpad>` (isolated outputs).

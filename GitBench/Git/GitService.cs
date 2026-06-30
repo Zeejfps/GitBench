@@ -378,6 +378,30 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    public Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new Fetched<IReadOnlyList<FileChange>>.Failed("Not a git repository.");
+
+            // The combined net file list of base→head (two-dot, base is already the merge-base). Same
+            // NUL `--name-status` format as diff-tree, so ParseDiffTreeNameStatusZ is reused verbatim;
+            // a file touched in several increments appears once, an add-then-delete nets out.
+            var diffOutput = RunGit(repo.Path, out var error, "diff", "-M", "--name-status", "-z", baseSha, headSha);
+            if (diffOutput == null)
+                return new Fetched<IReadOnlyList<FileChange>>.Failed(error ?? "git diff failed.");
+
+            var files = ParseDiffTreeNameStatusZ(diffOutput);
+            files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
+            return new Fetched<IReadOnlyList<FileChange>>.Ok(files);
+        }
+        catch (Exception ex)
+        {
+            return new Fetched<IReadOnlyList<FileChange>>.Failed(ex.Message);
+        }
+    }
+
     // "origin/main" -> "main"; "origin/feature/x" -> "feature/x". Remote names can't contain
     // slashes, so the local-branch name is everything after the first segment.
     private static string RemoteBranchShortName(Branch remote)
@@ -2634,7 +2658,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // hunk and per line), which the NativeAOT-generated marshalling stubs for GitDiffHunk
     // NRE on. Everything else in libgit2 we use is fine; only diff goes through this
     // callback path. Shell out to `git diff` for diffs to sidestep it entirely.
-    public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null)
+    public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null)
     {
         try
         {
@@ -2654,6 +2678,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 // the commit message header so the output is a plain patch parseable by ParseGitDiff.
                 patchText = RunGitDiff(repo.Path, out error,
                     "show", "--no-color", "--format=", "-M", contextArg, commitSha, "--", path);
+            }
+            else if (side == DiffSide.Range)
+            {
+                if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha))
+                    return DiffError(repo, path, side, "Base and head SHAs required for range diff.");
+
+                // The range's net diff for one file: base→head directly (two-dot). base is already
+                // the resolved merge-base, so this is the sum of the range's increments for this path.
+                patchText = RunGitDiff(repo.Path, out error,
+                    "diff", "--no-color", "-M", contextArg, baseSha, commitSha, "--", path);
             }
             else if (side == DiffSide.Staged)
             {
@@ -2692,7 +2726,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null)
+    public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null)
     {
         try
         {
@@ -2705,6 +2739,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     // old = the commit's first parent; new = the commit itself. A root commit has
                     // no parent, so `<sha>~1:` fails and old comes back null (all-add diff anyway).
                     return ShowBlob(repo.Path, oldSide ? $"{commitSha}~1:{path}" : $"{commitSha}:{path}");
+
+                case DiffSide.Range:
+                    // Combined range: old = the base blob, new = the head blob.
+                    if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha)) return null;
+                    return ShowBlob(repo.Path, oldSide ? $"{baseSha}:{path}" : $"{commitSha}:{path}");
 
                 case DiffSide.Staged:
                     // Staged diff is index-vs-HEAD: old = HEAD blob, new = staged (index) blob.

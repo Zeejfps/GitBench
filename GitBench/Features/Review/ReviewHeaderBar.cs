@@ -44,6 +44,7 @@ internal sealed record ReviewHeaderBar : Widget
                             Children =
                             [
                                 new Grow { Child = BaseRange(vm, ctx) },
+                                new ReviewModeToggle(),
                                 NavCluster(vm),
                                 ProgressGroup(vm),
                                 HelpButton(vm),

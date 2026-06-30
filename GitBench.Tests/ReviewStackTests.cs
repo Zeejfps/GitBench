@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
@@ -172,6 +173,100 @@ public sealed class ReviewStackTests : IDisposable
 
         Assert.Null(_git.ResolveAutoReviewBase(_repo, "solo"));
     }
+
+    // Combined net diff (Phase 7.2): LoadRangeFiles is the whole base→head change as one file list,
+    // and GetDiff(DiffSide.Range) is each file's net diff — both the *net* effect, not per-commit.
+
+    [Fact]
+    public void LoadRangeFiles_NetAcrossStack_DedupesTouchedFileAndNetsOutAddDelete()
+    {
+        var c0 = Commit("a.txt", "0", "base");   // a.txt present at base
+        Commit("a.txt", "1", "modify a");        // touch a
+        Commit("b.txt", "x", "add b");           // add b (absent in base)
+        Commit("a.txt", "2", "modify a again");  // touch a again
+        Git("rm", "b.txt");
+        Git("commit", "-m", "remove b");
+        var head = Head();
+
+        var files = OkFiles(_git.LoadRangeFiles(_repo, c0, head));
+
+        // a.txt is modified once net (0→2) despite two commits; b.txt was added then deleted, so the
+        // net range doesn't list it at all.
+        var f = Assert.Single(files);
+        Assert.Equal("a.txt", f.Path);
+        Assert.Equal(FileChangeStatus.Modified, f.Status);
+    }
+
+    [Fact]
+    public void LoadRangeFiles_AddedFile_StatusAdded()
+    {
+        var c0 = Commit("a.txt", "0", "base");
+        Commit("new.txt", "n", "add new");
+        var head = Head();
+
+        var files = OkFiles(_git.LoadRangeFiles(_repo, c0, head));
+
+        // a.txt is unchanged base→head, so only the added file appears.
+        var f = Assert.Single(files);
+        Assert.Equal("new.txt", f.Path);
+        Assert.Equal(FileChangeStatus.Added, f.Status);
+    }
+
+    [Fact]
+    public void LoadRangeFiles_RenameAcrossRange_StatusRenamed()
+    {
+        var c0 = Commit("a.txt", "the quick brown fox jumps over the lazy dog\n", "base");
+        Git("mv", "a.txt", "b.txt");
+        Git("commit", "-m", "rename a to b");
+        var head = Head();
+
+        var files = OkFiles(_git.LoadRangeFiles(_repo, c0, head));
+
+        var f = Assert.Single(files);
+        Assert.Equal(FileChangeStatus.Renamed, f.Status);
+        Assert.Equal("b.txt", f.Path);
+        Assert.Equal("a.txt", f.OldPath);
+    }
+
+    [Fact]
+    public void LoadRangeFiles_BaseEqualsHead_IsEmpty()
+    {
+        var c0 = Commit("a.txt", "0", "base");
+        Commit("a.txt", "1", "ahead");
+
+        var files = OkFiles(_git.LoadRangeFiles(_repo, c0, c0));
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
+    public void GetDiff_Range_IsNetBaseToHead_NotPerCommit()
+    {
+        var c0 = Commit("a.txt", "v0\n", "base");
+        Commit("a.txt", "v1\n", "mod1");
+        Commit("a.txt", "v2\n", "mod2");
+        var head = Head();
+
+        var diff = _git.GetDiff(_repo, "a.txt", DiffSide.Range, commitSha: head, baseSha: c0);
+
+        Assert.Null(diff.ErrorMessage);
+        Assert.False(diff.IsBinary);
+        var removed = diff.Hunks.SelectMany(h => h.Lines)
+            .Where(l => l.Kind == DiffLineKind.Removed).Select(l => l.Text.Trim()).ToList();
+        var added = diff.Hunks.SelectMany(h => h.Lines)
+            .Where(l => l.Kind == DiffLineKind.Added).Select(l => l.Text.Trim()).ToList();
+
+        // The net base→head removes the BASE line (v0) and adds the HEAD line (v2); the intermediate
+        // v1 appears on neither side — proof this is base→head, not the tip commit's own diff (which
+        // would remove v1).
+        Assert.Contains("v0", removed);
+        Assert.Contains("v2", added);
+        Assert.DoesNotContain("v1", removed);
+        Assert.DoesNotContain("v1", added);
+    }
+
+    private static IReadOnlyList<FileChange> OkFiles(Fetched<IReadOnlyList<FileChange>> fetched)
+        => Assert.IsType<Fetched<IReadOnlyList<FileChange>>.Ok>(fetched).Value;
 
     private static ReviewStack Ok(Fetched<ReviewStack> fetched)
         => Assert.IsType<Fetched<ReviewStack>.Ok>(fetched).Value;

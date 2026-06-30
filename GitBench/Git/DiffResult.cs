@@ -1,6 +1,8 @@
 namespace GitBench.Git;
 
-public enum DiffSide { Unstaged, Staged, Commit }
+// Range = the combined "net diff" of a review range: base→head as one diff (DiffTarget carries both
+// SHAs — CommitSha = head, BaseSha = base). Renders like Commit (read-only, not stageable).
+public enum DiffSide { Unstaged, Staged, Commit, Range }
 
 public enum DiffLineKind { Context, Added, Removed }
 

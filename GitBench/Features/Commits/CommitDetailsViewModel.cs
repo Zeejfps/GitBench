@@ -33,6 +33,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
     private string? _currentSha;
+    // Non-null only in the Review window's Combined mode: the range base. When set, opened files are
+    // range tabs (base→head) rather than commit-vs-parent. Null for every commit/History selection.
+    private string? _currentBaseSha;
     private Guid _currentRepoId;
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
@@ -99,7 +102,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -162,6 +165,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         Gen.Bump();
         _currentSha = null;
+        _currentBaseSha = null;
         CloseAllTabs();
         Update(s => s with
         {
@@ -181,6 +185,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         if (repo == null) return;
 
         _currentSha = sha;
+        _currentBaseSha = null;
         _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
@@ -208,6 +213,66 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
                     Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
                 }));
     }
+
+    /// <summary>
+    /// Loads and shows the combined net diff of a review range — base→head as one file list — for the
+    /// Review window's Combined mode. The History pane never calls this. The Details tab renders a
+    /// synthesized range summary; opening a file diffs base→head (<see cref="DiffSide.Range"/>).
+    /// </summary>
+    public void ShowRange(Guid repoId, string baseSha, string headSha)
+    {
+        var repo = ResolveRepo(repoId);
+        if (repo == null) return;
+
+        _currentSha = headSha;
+        _currentBaseSha = baseSha;
+        _currentRepoId = repoId;
+        CloseAllTabs();
+        Update(s => s with
+        {
+            SelectedPath = null,
+            Render = new CommitDetailsRenderState.Loading(),
+        });
+
+        RunBackground<CommitDetailsRenderState>(
+            work: () =>
+            {
+                var fetched = _gitService.LoadRangeFiles(repo, baseSha, headSha);
+                if (fetched is Fetched<IReadOnlyList<FileChange>>.Failed failed)
+                    return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
+
+                var files = ((Fetched<IReadOnlyList<FileChange>>.Ok)fetched).Value;
+                return (new CommitDetailsRenderState.Loaded(BuildRangeDetails(repoId, baseSha, headSha, files)), null);
+            },
+            onResult: (result, error) =>
+                Update(s => s with
+                {
+                    Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
+                }));
+    }
+
+    // A synthetic CommitDetails for a combined range so the shared details view renders it unchanged:
+    // a labelled "Combined diff" header, a file-count subject, and base shown as the parent. Sha is a
+    // short "base..head" key (Combined suppresses per-file Viewed, so it's display-only).
+    private CommitDetails BuildRangeDetails(Guid repoId, string baseSha, string headSha, IReadOnlyList<FileChange> files)
+    {
+        var s = _loc.Strings.Value;
+        return new CommitDetails(
+            RepoId: repoId,
+            Sha: $"{ShortSha(baseSha)}..{ShortSha(headSha)}",
+            AuthorName: s.ReviewCombinedDiffTitle,
+            AuthorEmail: string.Empty,
+            AuthorWhen: default,
+            CommitterName: string.Empty,
+            CommitterEmail: string.Empty,
+            CommitterWhen: default,
+            Message: s.ReviewCombinedSummary(files.Count),
+            MessageShort: s.ReviewCombinedSummary(files.Count),
+            ParentShas: new[] { baseSha },
+            Files: files);
+    }
+
+    private static string ShortSha(string sha) => sha.Length >= 7 ? sha[..7] : sha;
 
     private Repo? ResolveRepo(Guid repoId)
     {

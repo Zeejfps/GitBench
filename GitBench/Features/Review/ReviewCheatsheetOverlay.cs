@@ -61,6 +61,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                                 ShortcutRow(["Space"], L.T(s => s.ReviewShortcutPrimary)),
                                 ShortcutRow(["v"], L.T(s => s.ReviewShortcutToggleViewed)),
                                 ShortcutRow(["n"], L.T(s => s.ReviewShortcutNextUnreviewed)),
+                                ShortcutRow(["c"], L.T(s => s.ReviewShortcutToggleMode)),
                                 ShortcutRow(["?"], L.T(s => s.ReviewShortcutHelp)),
                                 ShortcutRow(["Esc"], L.T(s => s.ReviewShortcutClose)),
                             ],

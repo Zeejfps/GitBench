@@ -28,6 +28,10 @@ internal enum ReviewContentKind { Loading, Message, Loaded }
 // Complete = every increment reviewed, nothing left to do.
 internal enum ReviewPrimaryAction { ViewFile, NextIncrement, Complete }
 
+// The right-pane diff mode. ByIncrement = the per-commit chain (commit^→commit), the default review
+// flow. Combined = the whole resolved range shown as one net diff (base→head), a read-only overview.
+internal enum ReviewDiffMode { ByIncrement, Combined }
+
 internal sealed record ReviewState(
     ReviewRenderState Render,
     string? SelectedSha,
@@ -77,6 +81,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // through the reload lane.
     private readonly State<string?> _baseOverride = new(null);
 
+    // The right-pane diff mode (header toggle). Window-ephemeral; a rail-row click / increment nav
+    // forces ByIncrement, the toggle picks Combined. Read-only overview in Combined — no Viewed loop.
+    private readonly State<ReviewDiffMode> _mode = new(ReviewDiffMode.ByIncrement);
+
     // Refs-driven reload runs on its own lane so it never invalidates an in-flight first load (or
     // vice versa), and stale-while-revalidate: it keeps the current stack on screen until the new
     // one arrives.
@@ -90,6 +98,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public string Title { get; }
 
     public IReadable<bool> CheatsheetOpen => _cheatsheetOpen;
+
+    // The right-pane diff mode, bound by the header's By-increment/Combined toggle and read by the
+    // rail (to drop its "you are here" accent) and the root view (to hide the increment action bar).
+    public IReadable<ReviewDiffMode> Mode => _mode;
 
     // Per-window store of marked-Viewed files, provided into the window subtree so the reused
     // diff-pane header shows its Viewed toggle. Owned (and disposed) here.
@@ -159,6 +171,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         _reloadLane = CreateLane();
         Subscriptions.Add(_cheatsheetOpen);
         Subscriptions.Add(_baseOverride);
+        Subscriptions.Add(_mode);
         Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
 
         ContentKind = Slice(s => s.Render switch
@@ -295,11 +308,43 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             : Session with { BaseRef = baseRef, BaseLabel = baseRef };
     }
 
-    // Selects an increment and drives the right pane to its commit-vs-parent diff. Dedupes so a
-    // re-click of the current row is a no-op.
+    // Switches the right-pane diff mode (the header toggle). Combined shows the whole loaded range as
+    // one net diff; ByIncrement returns to the selected increment's commit-vs-parent diff.
+    public void SetMode(ReviewDiffMode mode)
+    {
+        if (_mode.Value == mode) return;
+        _mode.Value = mode;
+        DriveDetails();
+    }
+
+    public void ToggleMode() =>
+        SetMode(_mode.Value == ReviewDiffMode.Combined ? ReviewDiffMode.ByIncrement : ReviewDiffMode.Combined);
+
+    // Drives the right pane for the current mode + selection from the loaded state.
+    private void DriveDetails()
+    {
+        if (CurrentStack() is { } stack) DriveDetails(stack, State.Value.SelectedSha);
+    }
+
+    // Combined → the whole range as one net diff (base→head); ByIncrement → the selected commit's diff.
+    private void DriveDetails(ReviewStack stack, string? selectedSha)
+    {
+        if (_mode.Value == ReviewDiffMode.Combined)
+            _details.ShowRange(Session.RepoId, stack.BaseSha, stack.HeadSha);
+        else if (selectedSha is { } sha)
+            _details.Show(Session.RepoId, sha);
+    }
+
+    private ReviewStack? CurrentStack() =>
+        State.Value.Render is ReviewRenderState.Loaded l ? l.Stack : null;
+
+    // Selects an increment and drives the right pane to its commit-vs-parent diff, dropping out of
+    // Combined mode (selecting a commit means reviewing it by increment). Dedupes a re-click only when
+    // already in ByIncrement mode, so a rail click while Combined always switches back.
     public void SelectIncrement(string sha)
     {
-        if (State.Value.SelectedSha == sha) return;
+        if (_mode.Value == ReviewDiffMode.ByIncrement && State.Value.SelectedSha == sha) return;
+        _mode.Value = ReviewDiffMode.ByIncrement;
         Update(s => s with { SelectedSha = sha });
         _details.Show(Session.RepoId, sha);
     }
@@ -320,6 +365,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // diff-pane header button drives. No-op when no file tab is open.
     public void ToggleActiveFileViewed()
     {
+        if (_mode.Value == ReviewDiffMode.Combined) return; // read-only overview: no Viewed loop
         var sha = State.Value.SelectedSha;
         var active = _details.SelectedPath.Value;
         if (sha == null || active == null) return;
@@ -401,6 +447,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // stack is reviewed.
     public void RunPrimaryAction()
     {
+        if (_mode.Value == ReviewDiffMode.Combined) return; // the advance loop is by-increment only
         switch (Hud.Value.Primary)
         {
             case ReviewPrimaryAction.ViewFile:
@@ -499,9 +546,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
                 }
 
                 // Land on the first (base-most) increment so the right pane opens on something.
-                // Drive the details VM before flipping to Loaded so the pane mounts already loading.
+                // Drive the details VM before flipping to Loaded so the pane mounts already loading;
+                // mode-aware so a window restored into Combined would open on the net diff.
                 var first = stack.Increments[0].Sha;
-                _details.Show(Session.RepoId, first);
+                DriveDetails(stack, first);
                 Update(s => s with { Render = new ReviewRenderState.Loaded(stack), SelectedSha = first });
             });
     }
@@ -543,9 +591,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             ReviewedShas = reviewed,
         });
 
-        // Re-drive the right pane only when the selection moved; a surviving commit's diff is
-        // immutable (sha identity == content identity), so re-showing it would needlessly reload.
-        if (selected != current) _details.Show(Session.RepoId, selected);
+        // Combined always re-drives: the range's base/head can shift on a reload even when the
+        // selected commit survives. ByIncrement re-drives only when the selection moved — a surviving
+        // commit's diff is immutable (sha identity == content identity), so re-showing it would reload
+        // for nothing.
+        if (_mode.Value == ReviewDiffMode.Combined)
+            _details.ShowRange(Session.RepoId, stack.BaseSha, stack.HeadSha);
+        else if (selected != current)
+            _details.Show(Session.RepoId, selected);
     }
 
     // The base side of the header range. Once loaded it's the resolved ref name; before that the
@@ -679,6 +732,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     private void MarkIncrementIfAllFilesViewed()
     {
+        // In Combined mode the loaded file list is the whole range, not the selected increment's, so
+        // "all files viewed" would mark the wrong increment — skip until back in ByIncrement.
+        if (_mode.Value == ReviewDiffMode.Combined) return;
         var sha = State.Value.SelectedSha;
         if (sha == null || State.Value.ReviewedShas.Contains(sha)) return;
         var files = SelectedFiles();

@@ -398,6 +398,11 @@
   "review.shortcut_next_unreviewed": "Siguiente incremento sin revisar",
   "review.shortcut_help": "Mostrar / ocultar atajos",
   "review.shortcut_close": "Cerrar",
+  "review.mode_by_increment": "Por incremento",
+  "review.mode_combined": "Combinado",
+  "review.combined_diff_title": "Diff combinado",
+  "review.combined_summary": "{count} archivos cambiados",
+  "review.shortcut_toggle_mode": "Por incremento / combinado",
 
   "operations.abort_force_clear": "Forzar limpieza",
   "operations.abort_merge": "Cancelar fusión",

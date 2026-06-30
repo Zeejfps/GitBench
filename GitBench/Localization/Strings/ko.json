@@ -398,6 +398,11 @@
   "review.shortcut_next_unreviewed": "다음 미검토 증분",
   "review.shortcut_help": "단축키 표시 / 숨기기",
   "review.shortcut_close": "닫기",
+  "review.mode_by_increment": "증분별",
+  "review.mode_combined": "통합",
+  "review.combined_diff_title": "통합 차이",
+  "review.combined_summary": "파일 {count}개 변경됨",
+  "review.shortcut_toggle_mode": "증분 / 통합 전환",
 
   "operations.abort_force_clear": "강제 지우기",
   "operations.abort_merge": "병합 중단",

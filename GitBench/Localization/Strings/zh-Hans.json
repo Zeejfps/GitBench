@@ -398,6 +398,11 @@
   "review.shortcut_next_unreviewed": "下一个未审查增量",
   "review.shortcut_help": "显示 / 隐藏快捷键",
   "review.shortcut_close": "关闭",
+  "review.mode_by_increment": "按增量",
+  "review.mode_combined": "合并",
+  "review.combined_diff_title": "合并差异",
+  "review.combined_summary": "已更改 {count} 个文件",
+  "review.shortcut_toggle_mode": "按增量 / 合并",
 
   "operations.abort_force_clear": "强制清除",
   "operations.abort_merge": "中止合并",

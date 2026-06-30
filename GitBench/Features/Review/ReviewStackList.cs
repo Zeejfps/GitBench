@@ -42,6 +42,7 @@ internal sealed record ReviewStackList : Widget
                                 Increment = inc,
                                 SelectedSha = vm.SelectedSha,
                                 ReviewedShas = vm.ReviewedShas,
+                                Mode = vm.Mode,
                                 OnClick = () => vm.SelectIncrement(inc.Sha),
                                 OnToggleReviewed = () => vm.ToggleReviewed(inc.Sha),
                             },
@@ -69,6 +70,7 @@ internal sealed record ReviewStackRow : Widget
     public required ReviewIncrement Increment { get; init; }
     public required IReadable<string?> SelectedSha { get; init; }
     public required IReadable<IReadOnlySet<string>> ReviewedShas { get; init; }
+    public required IReadable<ReviewDiffMode> Mode { get; init; }
     public required Action OnClick { get; init; }
     public required Action OnToggleReviewed { get; init; }
 
@@ -81,11 +83,14 @@ internal sealed record ReviewStackRow : Widget
 
         bool IsSelected() => SelectedSha.Value == inc.Sha;
         bool IsReviewed() => ReviewedShas.Value.Contains(inc.Sha);
+        // In Combined mode the rail is context only — no single increment is "here", so drop the
+        // selected fill + accent (rows still hover and click, which switches back to ByIncrement).
+        bool ShowSelected() => IsSelected() && Mode.Value == ReviewDiffMode.ByIncrement;
 
         var accentBar = new Box
         {
             Width = 3f,
-            Background = Prop.Bind(() => IsSelected() ? theme.Styles.Value.RowSelection.AccentBar : 0u),
+            Background = Prop.Bind(() => ShowSelected() ? theme.Styles.Value.RowSelection.AccentBar : 0u),
         };
 
         // Hollow ring while unreviewed; fills with the success color once the reviewer marks it. The
@@ -158,7 +163,7 @@ internal sealed record ReviewStackRow : Widget
             Background = Prop.Bind(() =>
             {
                 var styles = theme.Styles.Value.RowSelection;
-                if (IsSelected()) return styles.Fill;
+                if (ShowSelected()) return styles.Fill;
                 return hover.Value ? styles.FillHover : 0u;
             }),
             Children = [content],

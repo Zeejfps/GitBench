@@ -15,6 +15,7 @@ namespace GitBench.Features.Review;
 /// <item><c>Space</c> / <c>Enter</c> — run the primary action (mark viewed → advance, or next increment).</item>
 /// <item><c>v</c> — toggle the active file's Viewed mark.</item>
 /// <item><c>n</c> — jump to the next unreviewed increment.</item>
+/// <item><c>c</c> — toggle between the increment chain and the combined net diff.</item>
 /// <item><c>?</c> — show / hide the keyboard cheatsheet; <c>Esc</c> dismisses it.</item>
 /// </list>
 /// It never steals focus, so the file list keeps the focus it needs for its own Up/Down arrows. While
@@ -71,6 +72,10 @@ internal sealed class ReviewKeyController : KeyboardMouseController
                 break;
             case KeyboardKey.N:
                 _vm.NextUnreviewed();
+                e.Consume();
+                break;
+            case KeyboardKey.C:
+                _vm.ToggleMode();
                 e.Consume();
                 break;
             case KeyboardKey.Space:

@@ -398,6 +398,11 @@
   "review.shortcut_next_unreviewed": "次の未レビュー増分",
   "review.shortcut_help": "ショートカットの表示 / 非表示",
   "review.shortcut_close": "閉じる",
+  "review.mode_by_increment": "増分ごと",
+  "review.mode_combined": "統合",
+  "review.combined_diff_title": "統合差分",
+  "review.combined_summary": "{count} 個のファイルが変更されました",
+  "review.shortcut_toggle_mode": "増分 / 統合の切り替え",
 
   "operations.abort_force_clear": "強制クリア",
   "operations.abort_merge": "マージを中止",

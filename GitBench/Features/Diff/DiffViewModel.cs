@@ -9,7 +9,9 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Diff;
 
-public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null);
+// BaseSha is set only for DiffSide.Range (the Combined net diff): CommitSha = head, BaseSha = base.
+// All other sides leave it null and thread a single CommitSha as before.
+public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null, string? BaseSha = null);
 
 // Per-pane diff body mode. Sticky on the DiffViewModel: persists across file selection within a
 // pane and is toggled via ToggleFullFile(). FullFile shows the after-side whole file with changed
@@ -434,6 +436,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var path = target.Path;
         var side = target.Side;
         var commitSha = target.CommitSha;
+        var baseSha = target.BaseSha;
         var mode = State.Value.Mode;
         var git = _gitService;
         // Capture localized placeholder text up front so the background worker doesn't touch the
@@ -457,10 +460,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                         return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
                 }
 
-                var diff = git.GetDiff(repo, path, side, commitSha);
+                var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
                 if (mode == DiffViewMode.Diff)
                     return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
-                var render = BuildFullFile(git, repo, diff, path, side, commitSha, binaryText, noVersionText);
+                var render = BuildFullFile(git, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText);
                 return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
             },
             onResult: (result, error) =>
@@ -476,7 +479,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 // Highlight applies to either render carrying the new-side file; result.Diff is null
                 // for full-file placeholders (binary/deleted), which need no highlighting.
                 if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
-                    StartHighlight(repo, diff, commitSha);
+                    StartHighlight(repo, diff, commitSha, baseSha);
             });
     }
 
@@ -489,12 +492,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // version (binary, diff error, or a deleted/absent file).
     private static DiffRenderState BuildFullFile(
         IGitService git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha,
-        string binaryText, string noVersionText)
+        string? baseSha, string binaryText, string noVersionText)
     {
         if (diff.IsBinary) return new DiffRenderState.Placeholder(binaryText);
         if (diff.ErrorMessage != null) return new DiffRenderState.Placeholder(diff.ErrorMessage);
 
-        var text = git.GetFileText(repo, path, side, oldSide: false, commitSha);
+        var text = git.GetFileText(repo, path, side, oldSide: false, commitSha, baseSha);
         if (text == null) return new DiffRenderState.Placeholder(noVersionText);
 
         var lines = SplitLines(text);
@@ -545,11 +548,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // Tokenizes the diff's file(s) off-thread and, when done, re-emits the same Loaded state
     // carrying the spans. Runs on the highlight lane (stale results dropped) and only attaches
     // to the still-current diff — an optimistic hunk apply may have swapped Result underneath us.
-    private void StartHighlight(Repo repo, DiffResult diff, string? commitSha)
+    private void StartHighlight(Repo repo, DiffResult diff, string? commitSha, string? baseSha)
     {
         var git = _gitService;
         RunBackground<DiffHighlight>(
-            work: () => (DiffHighlightCoordinator.Compute(git, repo, diff, commitSha), null),
+            work: () => (DiffHighlightCoordinator.Compute(git, repo, diff, commitSha, baseSha), null),
             onResult: (highlight, _) =>
             {
                 if (highlight == null) return; // plain rendering — nothing to apply

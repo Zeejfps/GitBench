@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.StatusBar;
+using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -90,7 +91,9 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             FullFileToggleButton(vm),
             OpenInWindowButton(vm),
         };
-        if (reviewed != null)
+        // Combined (range) diffs are a read-only overview — no per-file Viewed toggle (it would also
+        // collide with the tip commit's headSha-keyed marks). The pinned target's Side is fixed per tab.
+        if (reviewed != null && vm.Target.Value?.Side != DiffSide.Range)
             trailing.Add(ViewedToggleButton(vm, reviewed));
 
         if (!Collapsible) return trailing.ToArray();

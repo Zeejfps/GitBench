@@ -91,14 +91,19 @@ internal sealed record ReviewWindowRootView : Widget
             MaxResizeWidth = 600f,
         },
         // The reused details surface with the review action bar pinned beneath it — the explicit
-        // "Next" the review loop turns on.
+        // "Next" the review loop turns on. Combined mode is a read-only overview, so the increment
+        // advance bar collapses away (Empty.Widget yields a zero-height South).
         Center = new Provide<CommitDetailsViewModel>
         {
             Value = Model.Details,
             Child = new BorderLayout
             {
                 Center = new CommitDetailsHost(),
-                South = new ReviewActionBar(),
+                South = new Switch<ReviewDiffMode>
+                {
+                    Value = Model.Mode,
+                    Case = mode => mode == ReviewDiffMode.ByIncrement ? new ReviewActionBar() : Empty.Widget,
+                },
             },
         },
     };

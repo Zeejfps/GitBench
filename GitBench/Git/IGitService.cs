@@ -15,6 +15,9 @@ public interface IGitService
     // but not base, oldest→newest. base/head accept any ref or SHA; the returned stack carries
     // their resolved SHAs and short-sha labels (the caller overrides labels with branch names).
     Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap);
+    // The combined net file list of a review range (base→head as one diff), for the Review window's
+    // Combined mode. base/head are resolved SHAs; the list is the same FileChange shape as a commit's.
+    Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha);
     // The merge-base (common-ancestor) SHA of two refs/SHAs, or null when none exists (unrelated
     // histories) or git fails. Anchors a review range's base at the divergence point.
     string? MergeBase(Repo repo, string a, string b);
@@ -64,12 +67,12 @@ public interface IGitService
     MergeLikeOutcome ApplyStash(Repo repo, int index);
     GitOutcome DropStash(Repo repo, int index);
     GitOutcome RenameStash(Repo repo, int index, string newMessage);
-    DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null);
+    DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null);
     // Full file text for one side of a diff, used by syntax highlighting's whole-file tokenize.
     // oldSide picks the "before" content (removed lines), else the "after" content (added/
     // context). Returns null when that side has no content (root commit's parent, pure add/
     // delete) or on any failure — the caller then renders that side plain.
-    string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null);
+    string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null);
     RepoOperationState GetOperationState(Repo repo);
     RepoOperation? GetOperation(Repo repo);
     bool HasUnmergedPaths(Repo repo);

@@ -440,6 +440,11 @@
   "review.shortcut_next_unreviewed": "الزيادة التالية غير المُراجَعة",
   "review.shortcut_help": "إظهار / إخفاء الاختصارات",
   "review.shortcut_close": "إغلاق",
+  "review.mode_by_increment": "حسب التزايد",
+  "review.mode_combined": "مجمّع",
+  "review.combined_diff_title": "فرق مجمّع",
+  "review.combined_summary": "{count} ملفات تم تغييرها",
+  "review.shortcut_toggle_mode": "حسب التزايد / مجمّع",
 
   "operations.abort_force_clear": "مسح قسري",
   "operations.abort_merge": "إحباط الدمج",

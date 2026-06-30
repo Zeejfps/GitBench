@@ -398,6 +398,11 @@
   "review.shortcut_next_unreviewed": "Next unreviewed increment",
   "review.shortcut_help": "Show / hide shortcuts",
   "review.shortcut_close": "Close",
+  "review.mode_by_increment": "By increment",
+  "review.mode_combined": "Combined",
+  "review.combined_diff_title": "Combined diff",
+  "review.combined_summary": "{count} files changed",
+  "review.shortcut_toggle_mode": "By increment / combined",
 
   "operations.abort_force_clear": "Force clear",
   "operations.abort_merge": "Abort merge",
