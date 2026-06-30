@@ -460,6 +460,50 @@ are still fake.
   commits) — exactly the Phase-3 contract. The VM auto-selects `Increments[0]` (base-most) ⇒
   "Increment 1 of M".
 
+### Phase 3.5 — Tabbed commit-details surface (interjected after Phase 3)  ✅ DONE
+
+Not in the original plan. While tuning Phase 3 it became clear the reused `CommitDetailsView` squashed
+everything: selecting a file opened the diff in a third stacked pane that compressed the metadata +
+file list above it. Reworked the **shared** `CommitDetailsView` (so this lands in *both* the History
+pane and the Review window) into a file list + tabbed metadata/diff surface. No git or
+`IReviewStackSource` changes — purely the right-pane presentation.
+
+**Final layout** — a single draggable `VerticalSplitContainer`:
+- **Top pane: the file list (`FileChangesSection`), always visible.** Pulled out of the old inner
+  split so it never disappears when a diff is open.
+- **Bottom pane (default 2/3): a tabbed metadata/diff region.** A `CommitDetailsTabStrip` over a body
+  that swaps between the **Details** tab (commit metadata) and one tab per open file (its diff). The
+  strip stays attached to this region (it's the `North` of the bottom pane).
+- Clicking a file in the top list opens (or focuses) its tab below; the list stays put. Selecting a
+  different commit closes all file tabs and returns to **Details**.
+
+**Key implementation points:**
+- **One `DiffViewModel` per open file tab** (`CommitFileTab`, each pinned to a `DiffTarget(path,
+  DiffSide.Commit, sha)`). Switching tabs **toggles `View.IsVisible`** on stacked bodies inside a
+  `FlexColumnView` — it never unmounts a body, so each diff keeps its scroll, highlight, and full-file
+  toggle. (Detaching would dispose the diff's factory controllers; `IsVisible` = `display:none` keeps
+  them mounted.) Stale-while-revalidate still holds: tabs are always cleared before any
+  placeholder/skeleton, so a diff body never reattaches.
+- `CommitDetailsViewModel` gained `ObservableList<CommitFileTab> OpenTabs`, `SelectFile`/`ActivateTab`/
+  `CloseTab`/`ActiveDiff`; `Show`/`Clear`/`Dispose` reset+dispose tabs. The old single `DiffVm` /
+  `SelectedTarget` are gone (`SelectedPath` now = active tab; null = Details). Arrow / `j`-`k` over the
+  always-visible list opens the next file's tab, preserving sequential review.
+- **Tab strip** reuses the Actions toolbar's scrollbar-less `HorizontalScrollArea` (wheel — vertical
+  wheel included — pans it; clips on overflow). Tabs size to content, capped at 220px via `MaxWidth`
+  on the pill + label in a `Grow` + ellipsis (a flex measures intrinsic width *unclamped* but lays out
+  *clamped*, so a capped label alone left dead space — the `Grow` makes the cap flow into the label).
+  1px right-border dividers; active/hover use the shared `RowSelection` token.
+- `DiffPaneHeaderWidget` gained a `Collapsible` flag (default true; **false** in tabs — the diff fills
+  its tab, so the collapse chevron is dropped). Local Changes is untouched (still uses the stacked
+  split; out of scope).
+- **New files:** `Features/Commits/CommitFileTab.cs`, `Features/Commits/CommitDetailsTabStrip.cs`
+  (strip + `CommitDetailsTab` + `CommitFileTabButton` + shared `CommitTabChrome` + `TabClickController`).
+- **Localization:** `commits.details_tab` ("Details") added to all 6 `Strings/*.json`; the close button
+  reuses `common.close`.
+
+**Note for Phase 5b:** the per-file "Viewed" checkbox now lands on the tab strip / per-tab diff rather
+than on a row in a stacked list — design the `IReviewedFileTracker?` seam accordingly.
+
 ### Phase 4 — Real backend (the git range layer)
 
 Swap the stub for the correct `base..head` range. The GUI does not change — only the source.
