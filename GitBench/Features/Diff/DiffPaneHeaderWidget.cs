@@ -159,7 +159,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                     FontSize = FontSize.Body,
                     Value = Prop.Bind<string?>(() => IsViewed() ? LucideIcons.CheckSquare : LucideIcons.Square),
                 },
-                new ButtonLabel { Value = "Viewed" },
+                new ButtonLabel { Value = L.T(s => s.ReviewViewed) },
             ],
         }.WithController<KbmController>();
     }

@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -30,17 +31,18 @@ internal sealed record ReviewWindowRootView : Widget
             Value = Model.ContentKind,
             Case = kind => kind switch
             {
-                ReviewContentKind.Loading => new FadeIn { Bloom = true, Child = Centered("Loading…") },
+                ReviewContentKind.Loading => new FadeIn { Bloom = true, Child = Centered(L.T(s => s.ReviewLoading)) },
                 ReviewContentKind.Message => new FadeIn { Bloom = true, Child = Message() },
                 _ => new FadeIn { Child = Split() },
             },
         };
 
-        // Window-level keyboard for the review loop ([ ] increments, j/k files, Enter/Space primary
-        // action). Attached to the root box so it sits in the hover/bubble path for the whole window;
-        // it never steals focus, so the file list keeps its own arrow-key focus.
+        // Window-level keyboard for the review loop ([ ] increments, j/k files, Space primary action,
+        // v viewed, n next-unreviewed, ? cheatsheet). Attached to the main box so it sits in the
+        // hover/bubble path for the whole window; it never steals focus, so the file list keeps its
+        // own arrow-key focus.
         var input = ctx.Require<InputSystem>();
-        var content = new Box
+        var main = new Box
         {
             Background = Theme.Color(s => s.Palette.Surface),
             Children =
@@ -52,6 +54,23 @@ internal sealed record ReviewWindowRootView : Widget
                 },
             ],
         }.WithController(input, () => new ReviewKeyController(Model));
+
+        // The cheatsheet overlay layers over everything when open; when closed it collapses to a
+        // zero-sized child so it never intercepts input meant for the surface below.
+        var content = new Stack
+        {
+            Children =
+            [
+                main,
+                new Switch<bool>
+                {
+                    Value = Model.CheatsheetOpen,
+                    Case = open => open
+                        ? new ReviewCheatsheetOverlay { OnClose = Model.CloseCheatsheet }
+                        : Empty.Widget,
+                },
+            ],
+        };
 
         // The Viewed tracker is provided across the whole window so the reused diff-pane header (deep in
         // the right pane's tabs) resolves it and shows its per-file Viewed toggle.

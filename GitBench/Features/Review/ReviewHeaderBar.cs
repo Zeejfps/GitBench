@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -54,6 +55,7 @@ internal sealed record ReviewHeaderBar : Widget
                                 },
                                 NavCluster(vm),
                                 ProgressGroup(vm),
+                                HelpButton(vm),
                             ],
                         },
                     ],
@@ -137,7 +139,7 @@ internal sealed record ReviewHeaderBar : Widget
                     },
                     new Text
                     {
-                        Value = "Review complete",
+                        Value = L.T(s => s.ReviewComplete),
                         FontSize = FontSize.Caption,
                         Color = Theme.Color(s => s.Status.Success),
                         VAlign = TextAlignment.Center,
@@ -146,4 +148,14 @@ internal sealed record ReviewHeaderBar : Widget
             },
         ],
     };
+
+    // A discoverable mouse affordance for the cheatsheet (mirrors the '?' key). No help glyph exists
+    // in the icon subset, so it's a plain "?" with an explanatory tooltip.
+    private static IWidget HelpButton(ReviewWindowViewModel vm) => new ButtonWidget
+    {
+        Style = ButtonStyle.Bare(_ => Theme.Color(t => t.Palette.TextSecondary)),
+        Command = new Command(vm.ToggleCheatsheet),
+        ContentInset = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
+        Children = [new ButtonLabel { Value = "?" }],
+    }.WithTooltip(L.T(s => s.ReviewShortcutsTitle)).WithController<KbmController>();
 }

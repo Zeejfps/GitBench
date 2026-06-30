@@ -48,6 +48,15 @@ internal sealed record ReviewWindowsView : Widget
             this.UseViewModel(() => vm, _ => { });
             this.Use(() => vm.Windows.Subscribe(OnWindowsChanged));
 
+            // Focus-existing: a repeat open request for an already-open review raises this instead
+            // of adding a window; bring its OS window forward (and restore it if minimized).
+            this.Use(() =>
+            {
+                void OnFocus(ReviewWindowViewModel w) => FocusExisting(w);
+                vm.FocusRequested += OnFocus;
+                return new ActionDisposable(() => vm.FocusRequested -= OnFocus);
+            });
+
             // Match every open window's native title bar to the active theme, like the main window
             // (see Program.cs). The binding fires immediately, then on each toggle, re-theming all
             // open windows.
@@ -104,6 +113,20 @@ internal sealed record ReviewWindowsView : Widget
         {
             if (_windows.Remove(windowVm, out var win))
                 win.Close();
+        }
+
+        private void FocusExisting(ReviewWindowViewModel windowVm)
+        {
+            if (!_windows.TryGetValue(windowVm, out var win)) return;
+            win.Window.Show();
+            win.Window.Focus();
+        }
+
+        private sealed class ActionDisposable : IDisposable
+        {
+            private readonly Action _dispose;
+            public ActionDisposable(Action dispose) => _dispose = dispose;
+            public void Dispose() => _dispose();
         }
     }
 }

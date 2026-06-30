@@ -821,6 +821,72 @@ visible change** (the file gets out of your way), and (2) there is **always an e
   `JsonSerializerContext`). Caveat: SHA-keyed state doesn't survive a rebase of the range — acceptable
   (a review session is tied to specific SHAs; Phase 7's range-diff is the proper fix).
 
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **Keyboard remainder — as specified, all in the one `ReviewKeyController`.** Added `v` →
+  `ToggleActiveFileViewed()` (a *reversible* toggle of the active file's Viewed mark — the keyboard
+  twin of the diff-header button, not the one-way action-bar advance), `n` → `NextUnreviewed()`, and
+  `?` (`Slash`+`Shift`) → `ToggleCheatsheet()`. `Esc` closes the cheatsheet. The controller now reads
+  the toggle from *any* state, and **while the cheatsheet is open it swallows the loop keys** (only
+  `?`/`Esc` act) so they don't drive the surface behind the overlay. Arrow keys consumed by a focused
+  file list before they reach the root are a deliberate non-issue (negligible behind a help overlay).
+- **Cheatsheet = an in-window overlay, not a dialog.** A secondary OS window can't use the main
+  window's `DialogPresenter` (it mounts into the *main* window's surface), so the cheatsheet is a
+  new `ReviewCheatsheetOverlay` widget layered over the window content via the root `Stack`: a dimmed
+  scrim (`0xB0000000`, dismiss-on-click + modal input block) around a centered card of `kbd`-pill
+  rows. Toggled through a `Switch<bool>` over `vm.CheatsheetOpen`; the closed branch is `Empty.Widget`
+  (the `SwapRegion` sentinel that hides the host outright, so it never intercepts input). **Gotcha
+  found in testing:** draw order is *global by cumulative ZIndex* (`View.GetDrawZIndex` sums down the
+  tree), and the diff/file panes draw their canvas content a couple levels above their box — so an
+  overlay at the default ZIndex 0 had the diff text bleed through it. Fixed by pinning the scrim's
+  `ZIndex = 1000` (inherited by the whole overlay subtree), matching the app's modal convention
+  (`DialogSurface` = 1000, `DragOverlay` = 900, `ToastHost` = 500). A discoverable
+  **`?` help button** sits on the header trailing edge (mouse twin of the key; no help glyph exists in
+  the icon subset, so it's a plain "?" with a tooltip).
+- **Window singleton/focus-existing — as specified.** `ReviewWindowsViewModel.OnOpenRequested` dedupes
+  by `(Session.RepoId, Session.HeadRef)`; a repeat request raises a new `FocusRequested` event instead
+  of appending, and `ReviewWindowsView` brings that window's OS window forward (`IWindow.Show()` +
+  `Focus()`). Since Phase 1/2 set `HeadRef == HeadLabel ==` branch name, reopening the same branch
+  focuses the existing review.
+- **Stale-while-revalidate reload — `RefsChangedMessage` only (deliberate narrowing of the plan's
+  "`RefsChanged` / `WorkingTreeChanged`").** A review stack is committed history; *every* commit-altering
+  op (commit, amend, rebase, reset, merge, checkout, branch move, push/fetch — and the filesystem
+  watcher for external git) broadcasts `RefsChangedMessage`, whereas `WorkingTreeChanged`-only events
+  (discard, stage/unstage, an editor save via `RepoWatcher`) never change the stack and would only
+  cause wasteful reloads/flicker. The reload runs on its own `GenerationGuard` lane (never invalidates
+  the first load), keeps the current stack on screen until the new one arrives, preserves the selection
+  when its commit survives, prunes reviewed marks to surviving commits, and re-drives the right pane
+  only when the selection actually moved (a surviving sha's diff is immutable). The VM now takes
+  `IMessageBus` for this.
+- **Churn (`+N −M`) — filled in `GitService.LoadReviewStack`.** Each increment's churn is the
+  commit-vs-first-parent line counts via LibGit2Sharp `Diff.Compare<Patch>(parentTree, commitTree)`
+  (`Patch.LinesAdded`/`LinesDeleted`; file count from the patch entries; root commit diffs against the
+  empty tree). The rail's existing churn slot (`ReviewStackRow`, hidden while `+0 −0`) now lights up.
+  Computed on the window's background load, bounded by the 200-commit cap. The 11 `ReviewStackTests`
+  still pass.
+- **Localization — 23 new `review.*` keys across all six `Strings/*.json`** (window title, range
+  "auto", increment position, increments/files-viewed counters, "Review complete", the three adaptive
+  action labels, loading/empty-range placeholders, the three `GitReviewStackSource` error messages,
+  the "Viewed" toggle, and the eight cheatsheet strings). VM count/position/label builders read
+  `_loc.Strings.Value` at compute time (dialog-precedent: not live on a locale switch); the static
+  widget labels use `L.T(...)` (live). The adaptive primary-action label moved into the VM as a
+  `Derived<string>` (`PrimaryActionLabel`) so the action bar binds one localized readable; its icon
+  stays a glyph in the view. `GitReviewStackSource` gained `ILocalizationService` (DI auto-wired).
+  Window title is set once at open (the OS title bar isn't re-localized live).
+- **Polish carried, not built:** title-bar theme was already done in Phase 2 (`ReviewWindowsView`).
+  Loading still uses the `FadeIn` "Loading…" + the right pane's real `CommitDetailsSkeleton` (no new
+  bespoke skeleton). **Persistence (optional) was not built** — viewed/reviewed state stays ephemeral
+  per Open-decision #5; the content-hash "Changed since last view" auto-uncheck rides with it (moot
+  until a persisted reopen). Per-row partial progress on the rail still needs un-opened increments'
+  file counts and stays deferred.
+- **New files:** `Features/Review/ReviewCheatsheetOverlay.cs` (overlay + `ScrimController` +
+  `CardController`). **Edited:** `ReviewWindowViewModel` (`_loc`/`IMessageBus`, cheatsheet state,
+  `ToggleActiveFileViewed`, `PrimaryActionLabel`, localized builders, `Reload`/`ApplyReloadedStack`),
+  `ReviewKeyController` (`v`/`n`/`?`/`Esc` + open-state gating), `ReviewWindowRootView` (cheatsheet
+  `Stack` layer), `ReviewHeaderBar` (help button + localized "complete"), `ReviewActionBar` (binds the
+  VM label), `ReviewWindowsViewModel` (singleton + `FocusRequested`), `ReviewWindowsView` (focus
+  existing), `GitReviewStackSource` (localized errors), `DiffPaneHeaderWidget` (localized "Viewed"),
+  `GitService.LoadReviewStack` (churn), `Localization/Strings/*.json` (×6).
+
 ### Phase 7 — (Optional, separable) version comparator + combined diff
 
 The Tier-2/3 differentiators; none block the MVP.

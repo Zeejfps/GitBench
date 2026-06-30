@@ -26,6 +26,11 @@ internal sealed class ReviewWindowsViewModel : IDisposable
 
     public ObservableList<ReviewWindowViewModel> Windows { get; } = new();
 
+    // Raised when an open request matches an already-open window (same repo + head ref). The view
+    // focuses that window's OS window instead of opening a duplicate — a review is a place you
+    // return to. The DiffWindows template has no such dedupe; this is the review window's addition.
+    public event Action<ReviewWindowViewModel>? FocusRequested;
+
     public ReviewWindowsViewModel(
         IMessageBus bus,
         IReviewStackSource source,
@@ -47,12 +52,28 @@ internal sealed class ReviewWindowsViewModel : IDisposable
 
     private void OnOpenRequested(OpenReviewWindowMessage m)
     {
+        // Singleton-per-(repo, head): focus the existing review instead of opening a duplicate.
+        var existing = FindOpenWindow(m.RepoId, m.HeadRef);
+        if (existing != null)
+        {
+            FocusRequested?.Invoke(existing);
+            return;
+        }
+
         var session = new ReviewSession(m.RepoId, m.HeadRef, m.HeadLabel, m.BaseRef, m.BaseLabel);
         // The window's own commit-details VM, opted out of the selection bus so the History pane's
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
             _gitService, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
-        Windows.Add(new ReviewWindowViewModel(session, _source, _dispatcher, details));
+        Windows.Add(new ReviewWindowViewModel(session, _source, _dispatcher, details, _loc, _bus));
+    }
+
+    private ReviewWindowViewModel? FindOpenWindow(Guid repoId, string headRef)
+    {
+        foreach (var w in Windows)
+            if (w.Session.RepoId == repoId && w.Session.HeadRef == headRef)
+                return w;
+        return null;
     }
 
     // Removes a window (e.g. the user clicked the native close button). The removal drives the

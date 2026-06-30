@@ -1,5 +1,6 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 
 namespace GitBench.Features.Review;
 
@@ -15,27 +16,28 @@ internal sealed class GitReviewStackSource : IReviewStackSource
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
+    private readonly ILocalizationService _loc;
 
-    public GitReviewStackSource(IRepoRegistry registry, IGitService gitService)
+    public GitReviewStackSource(IRepoRegistry registry, IGitService gitService, ILocalizationService loc)
     {
         _registry = registry;
         _gitService = gitService;
+        _loc = loc;
     }
 
     public Task<ReviewStack> LoadAsync(ReviewSession session, int cap)
     {
         var repo = ResolveRepo(session.RepoId);
         if (repo == null)
-            throw new InvalidOperationException("The repository is no longer available.");
+            throw new InvalidOperationException(_loc.Strings.Value.ReviewErrorRepoUnavailable);
 
         var baseRef = ResolveBaseRef(repo, session);
         if (baseRef == null)
-            throw new InvalidOperationException(
-                "Couldn't determine a base to review against (no upstream or default branch).");
+            throw new InvalidOperationException(_loc.Strings.Value.ReviewErrorNoBase);
 
         var fetched = _gitService.LoadReviewStack(repo, baseRef, session.HeadRef, cap);
         if (fetched is not Fetched<ReviewStack>.Ok ok)
-            throw new InvalidOperationException(fetched.FailureMessage ?? "Failed to load the review range.");
+            throw new InvalidOperationException(fetched.FailureMessage ?? _loc.Strings.Value.ReviewErrorLoadFailed);
 
         // Labels come from the pinned session (branch names); the base falls back to its short SHA.
         var stack = ok.Value;

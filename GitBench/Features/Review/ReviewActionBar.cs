@@ -84,7 +84,7 @@ internal sealed record ReviewActionBar : Widget
                 FontSize = FontSize.Body,
                 Value = Prop.Bind<string?>(() => PrimaryIcon(vm.Hud.Value.Primary)),
             },
-            new ButtonLabel { Value = Prop.Bind<string?>(() => PrimaryLabel(vm.Hud.Value)) },
+            new ButtonLabel { Value = Prop.Bind<string?>(() => vm.PrimaryActionLabel.Value) },
         ],
     }.WithController<KbmController>();
 
@@ -93,12 +93,5 @@ internal sealed record ReviewActionBar : Widget
         ReviewPrimaryAction.ViewFile => LucideIcons.CheckSquare,
         ReviewPrimaryAction.NextIncrement => LucideIcons.ChevronRight,
         _ => LucideIcons.CircleCheck,
-    };
-
-    private static string PrimaryLabel(ReviewHud hud) => hud.Primary switch
-    {
-        ReviewPrimaryAction.ViewFile => hud.HasActiveFile ? "Mark viewed → next file" : "Review files",
-        ReviewPrimaryAction.NextIncrement => "Next increment",
-        _ => "Review complete",
     };
 }

@@ -1,6 +1,8 @@
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Infrastructure;
+using GitBench.Localization;
+using GitBench.Messages;
 using ZGF.Observable;
 
 namespace GitBench.Features.Review;
@@ -62,10 +64,22 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     private readonly IReviewStackSource _source;
     private readonly CommitDetailsViewModel _details;
+    private readonly ILocalizationService _loc;
     private readonly ReviewedFileTracker _reviewedFiles = new();
+
+    // Refs-driven reload runs on its own lane so it never invalidates an in-flight first load (or
+    // vice versa), and stale-while-revalidate: it keeps the current stack on screen until the new
+    // one arrives.
+    private readonly GenerationGuard _reloadLane;
+
+    // The keyboard cheatsheet overlay's visibility. Window-ephemeral; toggled by the '?' key and the
+    // header's help button.
+    private readonly State<bool> _cheatsheetOpen = new(false);
 
     public ReviewSession Session { get; }
     public string Title { get; }
+
+    public IReadable<bool> CheatsheetOpen => _cheatsheetOpen;
 
     // Per-window store of marked-Viewed files, provided into the window subtree so the reused
     // diff-pane header shows its Viewed toggle. Owned (and disposed) here.
@@ -104,17 +118,26 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // Gates the action-bar primary button: disabled once the whole stack is reviewed (nothing to do).
     public IReadable<bool> PrimaryActionEnabled { get; }
 
+    // The adaptive primary action's localized label, derived off the HUD so it tracks selection and
+    // every Viewed toggle. The icon stays in the view (glyphs aren't localized).
+    public IReadable<string> PrimaryActionLabel { get; }
+
     public ReviewWindowViewModel(
         ReviewSession session,
         IReviewStackSource source,
         IUiDispatcher dispatcher,
-        CommitDetailsViewModel details)
+        CommitDetailsViewModel details,
+        ILocalizationService loc,
+        IMessageBus bus)
         : base(dispatcher, new ReviewState(new ReviewRenderState.Loading(), null, NoneReviewed))
     {
         Session = session;
         _source = source;
         _details = details;
-        Title = $"Review: {session.HeadLabel}";
+        _loc = loc;
+        _reloadLane = CreateLane();
+        Subscriptions.Add(_cheatsheetOpen);
+        Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
 
         ContentKind = Slice(s => s.Render switch
         {
@@ -162,10 +185,22 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         PrimaryActionEnabled = primaryEnabled;
         Subscriptions.Add(primaryEnabled);
 
+        var primaryLabel = new Derived<string>(() => BuildPrimaryActionLabel(hud.Value));
+        PrimaryActionLabel = primaryLabel;
+        Subscriptions.Add(primaryLabel);
+
         // Viewing the last file of the selected increment marks the increment reviewed (one-way:
         // un-viewing a file doesn't revoke the increment's reviewed mark, which can also be set by hand).
         Subscriptions.Add(_reviewedFiles.Revision.Subscribe(_ => MarkIncrementIfAllFilesViewed()));
         Subscriptions.Add(_details.RenderState.Subscribe(_ => MarkIncrementIfAllFilesViewed()));
+
+        // A ref change in the reviewed repo (amend, rebase, push, branch move) reshapes the stack;
+        // reload it without dropping the current view. Working-tree edits never touch committed
+        // history, so they're deliberately ignored here.
+        Subscriptions.Add(bus.SubscribeScoped<RefsChangedMessage>(m =>
+        {
+            if (m.RepoId == Session.RepoId) Reload();
+        }));
 
         StartLoad();
     }
@@ -190,6 +225,19 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             return s with { ReviewedShas = next };
         });
     }
+
+    // Flips the active file's Viewed mark — the 'v' key's reversible toggle, the same one the
+    // diff-pane header button drives. No-op when no file tab is open.
+    public void ToggleActiveFileViewed()
+    {
+        var sha = State.Value.SelectedSha;
+        var active = _details.SelectedPath.Value;
+        if (sha == null || active == null) return;
+        _reviewedFiles.ToggleViewed(sha, active);
+    }
+
+    public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
+    public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
     // Marks the selected increment reviewed, then jumps to the next increment that still needs review
     // (the action-bar "Next increment"). Going to the next *unreviewed* increment — not the strict
@@ -354,7 +402,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
                 {
                     Update(s => s with
                     {
-                        Render = new ReviewRenderState.Placeholder("No commits to review in this range."),
+                        Render = new ReviewRenderState.Placeholder(_loc.Strings.Value.ReviewEmptyRange),
                     });
                     return;
                 }
@@ -367,9 +415,52 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             });
     }
 
+    // Reloads the stack after a ref change without disturbing the current view until the result is
+    // in (stale-while-revalidate): a transient failure keeps the existing stack on screen. On
+    // success the selection is preserved when its commit survives, and reviewed marks are pruned to
+    // the surviving commits.
+    private void Reload()
+    {
+        RunBackground<ReviewStack>(
+            work: () => (_source.LoadAsync(Session, StackCap).GetAwaiter().GetResult(), null),
+            onResult: (stack, error) =>
+            {
+                if (error != null || stack == null) return;
+                ApplyReloadedStack(stack);
+            },
+            lane: _reloadLane);
+    }
+
+    private void ApplyReloadedStack(ReviewStack stack)
+    {
+        if (stack.Increments.Count == 0)
+        {
+            Update(s => s with { Render = new ReviewRenderState.Placeholder(_loc.Strings.Value.ReviewEmptyRange) });
+            return;
+        }
+
+        var shas = new HashSet<string>(stack.Increments.Select(i => i.Sha));
+        var current = State.Value.SelectedSha;
+        var selected = current != null && shas.Contains(current) ? current : stack.Increments[0].Sha;
+        var reviewed = new HashSet<string>(State.Value.ReviewedShas.Where(shas.Contains));
+
+        Update(s => s with
+        {
+            Render = new ReviewRenderState.Loaded(stack),
+            SelectedSha = selected,
+            ReviewedShas = reviewed,
+        });
+
+        // Re-drive the right pane only when the selection moved; a surviving commit's diff is
+        // immutable (sha identity == content identity), so re-showing it would needlessly reload.
+        if (selected != current) _details.Show(Session.RepoId, selected);
+    }
+
     private string BuildRangeText(ReviewState s)
     {
-        var baseLabel = s.Render is ReviewRenderState.Loaded l ? l.Stack.BaseLabel : (Session.BaseLabel ?? "auto");
+        var baseLabel = s.Render is ReviewRenderState.Loaded l
+            ? l.Stack.BaseLabel
+            : (Session.BaseLabel ?? _loc.Strings.Value.ReviewBaseAuto);
         return $"{baseLabel} → {Session.HeadLabel}";
     }
 
@@ -379,13 +470,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         var total = l.Stack.Increments.Count;
         if (total == 0 || s.SelectedSha == null) return string.Empty;
         var index = IndexOf(l.Stack.Increments, s.SelectedSha);
-        return index < 0 ? string.Empty : $"Increment {index + 1} of {total}";
+        return index < 0 ? string.Empty : _loc.Strings.Value.ReviewIncrementPosition(index + 1, total);
     }
 
     private string BuildReviewedLabel(ReviewState s)
     {
         if (s.Render is not ReviewRenderState.Loaded l) return string.Empty;
-        return $"{s.ReviewedShas.Count} / {l.Stack.Increments.Count} reviewed";
+        return _loc.Strings.Value.ReviewIncrementsReviewed(s.ReviewedShas.Count, l.Stack.Increments.Count);
     }
 
     // "X / Y files viewed" for the selected increment. Empty until a non-empty increment is loaded.
@@ -400,7 +491,21 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         var viewed = 0;
         foreach (var f in files)
             if (_reviewedFiles.IsViewed(sha, f.Path)) viewed++;
-        return $"{viewed} / {files.Count} files viewed";
+        return _loc.Strings.Value.ReviewFilesViewed(viewed, files.Count);
+    }
+
+    // The adaptive primary action's localized label. "Mark viewed → next file" while reviewing a
+    // file (or "Review files" when sitting on the Details tab), "Next increment" once the increment
+    // is fully viewed, "Review complete" at the end.
+    private string BuildPrimaryActionLabel(ReviewHud hud)
+    {
+        var s = _loc.Strings.Value;
+        return hud.Primary switch
+        {
+            ReviewPrimaryAction.ViewFile => hud.HasActiveFile ? s.ReviewActionMarkViewedNext : s.ReviewActionReviewFiles,
+            ReviewPrimaryAction.NextIncrement => s.ReviewActionNextIncrement,
+            _ => s.ReviewComplete,
+        };
     }
 
     private ReviewHud BuildHud()

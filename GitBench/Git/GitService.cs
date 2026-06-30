@@ -309,7 +309,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Load's RevWalk but with a range + first-parent filter: the commits reachable from head but
     // not base, walked newest→oldest, then reversed so the stack reads base→tip. base/head accept
     // any ref or SHA; the returned stack carries their resolved SHAs and short-sha labels (the
-    // caller overrides labels with branch names). Churn is left at 0 until a later polish pass.
+    // caller overrides labels with branch names). Each increment's churn is the commit-vs-first-parent
+    // line counts (the unit the review pane shows).
     public Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap)
     {
         try
@@ -343,13 +344,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     truncated = true;
                     break;
                 }
+
+                // Churn for the row's "+N −M": the commit-vs-first-parent diff, the same unit the
+                // review pane shows. A root commit (no parent in range) diffs against the empty tree.
+                var parentTree = c.Parents.FirstOrDefault()?.Tree;
+                var stats = lg.Diff.Compare<Patch>(parentTree, c.Tree);
+                var files = 0;
+                foreach (var _ in stats) files++;
+
                 increments.Add(new ReviewIncrement(
                     c.Sha,
                     ShortSha(c.Sha),
                     c.MessageShort ?? string.Empty,
                     c.Author?.Name ?? string.Empty,
                     c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
-                    FilesChanged: 0, Added: 0, Removed: 0));
+                    FilesChanged: files, Added: stats.LinesAdded, Removed: stats.LinesDeleted));
             }
 
             increments.Reverse();
