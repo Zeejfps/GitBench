@@ -504,7 +504,7 @@ pane and the Review window) into a file list + tabbed metadata/diff surface. No 
 **Note for Phase 5b:** the per-file "Viewed" checkbox now lands on the tab strip / per-tab diff rather
 than on a row in a stacked list — design the `IReviewedFileTracker?` seam accordingly.
 
-### Phase 4 — Real backend (the git range layer)
+### Phase 4 — Real backend (the git range layer)  ✅ DONE
 
 Swap the stub for the correct `base..head` range. The GUI does not change — only the source.
 
@@ -538,6 +538,49 @@ Swap the stub for the correct `base..head` range. The GUI does not change — on
 - **Ship / test locally:** "Review changes…" on a real feature branch → the rail shows the *correct*
   `base..head` increments; each shows commit-vs-parent files + diff. Reordering/rebasing the branch
   and reopening reflects reality.
+
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **Three additive git reads, not two.** `MergeBase` and `LoadReviewStack` per the plan, plus a third —
+  `ResolveAutoReviewBase(repo, headRef)` — that the plan implied but didn't name in decision #6. The
+  auto-base policy (open decision #3: *upstream → default → dialog*) needs git-CLI access to
+  `<branch>@{upstream}` and `origin/HEAD`, which belongs in the git layer, so it lives there behind one
+  public method (private `GetUpstreamRef` / `GetDefaultBranchRef` helpers; the *dialog* fallback is
+  Phase 7, so unresolved ⇒ null ⇒ the source throws a friendly "couldn't determine a base"). All three
+  are additive; **no existing behavior changes** (decision #6 honored in spirit).
+- **`LoadReviewStack(Repo, baseRef, headRef, cap)` → `Fetched<ReviewStack>`**, mirroring `Load` on
+  LibGit2Sharp: `CommitFilter { IncludeReachableFrom = headCommit, ExcludeReachableFrom = baseCommit,
+  FirstParentOnly = true, SortBy = Topological | Time }`, collect up to `cap`, **reverse** to
+  oldest→newest. `FirstParentOnly` exists in LibGit2Sharp 0.31.0 (build-confirmed). `base`/`head` accept
+  **any ref or SHA** (resolved via `lg.Lookup<Commit>`; unresolvable ⇒ `Failed`). Labels default to
+  short SHAs (the source overrides them). Churn left at 0. **Truncation drops the oldest (base-most)
+  increments, keeping the newest `cap`** — the stack still reads base→tip from where it was cut.
+- **`MergeBase(Repo, a, b)` via `RunGit`** (CLI, like the grounding's `IsAncestor` but returning the
+  SHA): null on any non-zero exit — `RunGit` already maps unrelated histories (exit 1) and bad refs
+  (exit 128) to null, so one null-check covers both.
+- **`GitReviewStackSource`** (new) resolves the base — explicit `BaseRef` ⇒ `MergeBase(BaseRef, head)`
+  (falling back to the ref itself); null `BaseRef` ⇒ `ResolveAutoReviewBase` — then `LoadReviewStack`,
+  then overrides `HeadLabel = session.HeadLabel`, `BaseLabel = session.BaseLabel ?? short-sha(base)`.
+  Since Phase 1/2 set `HeadRef == HeadLabel ==` branch name and `BaseRef = null`, **every review today
+  auto-resolves its base**; the explicit-base path is dead until Phase 7's range dialog feeds it.
+- **Seam contract kept (not the plan's `Fetched` return on the seam):** `IReviewStackSource.LoadAsync`
+  still returns `Task<ReviewStack>`; the source **throws** on any failure (repo gone, no base, `Failed`
+  fetch). The VM's existing `RunBackground` bridge (`LoadAsync(...).GetAwaiter().GetResult()`) catches
+  the throw and renders it as the error placeholder — so **the GUI and the VM are unchanged**, exactly
+  as the phase promised. The source returns synchronous work wrapped in `Task.FromResult`.
+- **DI swap is the one line:** `AppServices` now binds `GitReviewStackSource`. `StubReviewStackSource`
+  is **kept** as the Phase-3 reference impl behind the seam (still compiles; no longer bound).
+- **Tests — `GitBench.Tests/ReviewStackTests.cs` (11, all green).** First tests in the suite to drive
+  **real git**: each builds a throwaway repo via the `git` CLI (`Process`), then calls the real
+  `GitService`. Covers linear-stack ordering + base/head SHAs, single commit, `base==head` (empty),
+  cap truncation (keeps newest + `Truncated`), **merge-commit first-parent linearization** (merged side
+  excluded), bad ref ⇒ `Failed`; `MergeBase` happy / bad-ref / unrelated-histories (orphan branch);
+  `ResolveAutoReviewBase` default-branch fallback + no-default ⇒ null. *(Note: 12 pre-existing
+  `GitIdentityServiceTests` failures on this dev machine are environmental — they read remotes from temp
+  repos and resolve `NoRemote`; identical 12 fail on the clean baseline, unrelated to Phase 4.)*
+- **Still open (carried from Phase 3, not a Phase-4 concern):** the embedded `DiffViewModel` resolves
+  `_registry.Active.Value` for its own diff load, so a review window's *diffs* are correct only while the
+  reviewed repo is the active one. Phase 4 fixed the *stack source*, not the diff pane — threading the
+  pinned repo through `DiffViewModel` remains a later refactor (decision #2 still partial).
 
 ### Phase 5 — Reviewed-state, progress, next-unreviewed
 

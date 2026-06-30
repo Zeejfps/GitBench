@@ -80,9 +80,9 @@ internal static class AppServices
         context.AddSingleton<LocalChangesViewModel>();
         context.AddSingleton<UpdateService>();
 
-        // Review windows' data seam. Phase 3 binds the stub (naive HEAD-relative walk on real
-        // commits); Phase 4 swaps in the real base..head source through this single binding.
-        context.AddSingleton<IReviewStackSource, StubReviewStackSource>();
+        // Review windows' data seam: the real base..head range source (first-parent, merge-base
+        // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
+        context.AddSingleton<IReviewStackSource, GitReviewStackSource>();
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>
         {

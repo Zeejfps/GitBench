@@ -5,6 +5,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
+using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using LibGit2Sharp;
@@ -301,6 +302,70 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         catch (Exception ex)
         {
             return new Fetched<CommitSnapshot>.Failed(ex.Message);
+        }
+    }
+
+    // Lists base..head as a linear review stack for the review window (decisions #3/#6). Mirrors
+    // Load's RevWalk but with a range + first-parent filter: the commits reachable from head but
+    // not base, walked newest→oldest, then reversed so the stack reads base→tip. base/head accept
+    // any ref or SHA; the returned stack carries their resolved SHAs and short-sha labels (the
+    // caller overrides labels with branch names). Churn is left at 0 until a later polish pass.
+    public Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path))
+                return new Fetched<ReviewStack>.Failed("Not a git repository.");
+
+            using var lg = new Repository(repo.Path);
+
+            var headCommit = lg.Lookup<Commit>(headRef);
+            if (headCommit == null)
+                return new Fetched<ReviewStack>.Failed($"Could not resolve '{headRef}'.");
+            var baseCommit = lg.Lookup<Commit>(baseRef);
+            if (baseCommit == null)
+                return new Fetched<ReviewStack>.Failed($"Could not resolve '{baseRef}'.");
+
+            var filter = new CommitFilter
+            {
+                IncludeReachableFrom = headCommit,
+                ExcludeReachableFrom = baseCommit,
+                FirstParentOnly = true,
+                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
+            };
+
+            var increments = new List<ReviewIncrement>();
+            var truncated = false;
+            foreach (var c in lg.Commits.QueryBy(filter))
+            {
+                if (increments.Count >= cap)
+                {
+                    truncated = true;
+                    break;
+                }
+                increments.Add(new ReviewIncrement(
+                    c.Sha,
+                    ShortSha(c.Sha),
+                    c.MessageShort ?? string.Empty,
+                    c.Author?.Name ?? string.Empty,
+                    c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
+                    FilesChanged: 0, Added: 0, Removed: 0));
+            }
+
+            increments.Reverse();
+
+            return new ReviewStack(
+                repo.Id,
+                baseCommit.Sha,
+                headCommit.Sha,
+                ShortSha(baseCommit.Sha),
+                ShortSha(headCommit.Sha),
+                increments,
+                truncated);
+        }
+        catch (Exception ex)
+        {
+            return new Fetched<ReviewStack>.Failed(ex.Message);
         }
     }
 
@@ -1687,6 +1752,52 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             GitProcessRunner.GitLaunch.Direct);
         return result.ExitCode == 0;
     }
+
+    // The merge-base (common-ancestor) SHA of two refs/SHAs via `git merge-base a b`, trimmed.
+    // Null when git fails (bad ref, exit 128) or the histories are unrelated (exit 1) — RunGit
+    // returns null on any non-zero exit. Used to anchor a review range at the divergence point.
+    public string? MergeBase(Repo repo, string a, string b)
+    {
+        if (!IsGitRepo(repo.Path)) return null;
+        var output = RunGit(repo.Path, out _, "merge-base", a, b);
+        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+    }
+
+    // Resolves the default review base SHA for headRef when the session pins no explicit base:
+    // the merge-base with the branch's upstream, falling back to the merge-base with the repo's
+    // default branch (origin/HEAD, then a local main/master). Null when none resolves — e.g. an
+    // orphan branch with no upstream and no default. (Open decision #3: upstream → default → …)
+    public string? ResolveAutoReviewBase(Repo repo, string headRef)
+    {
+        if (!IsGitRepo(repo.Path)) return null;
+        var target = GetUpstreamRef(repo.Path, headRef) ?? GetDefaultBranchRef(repo.Path);
+        return target == null ? null : MergeBase(repo, target, headRef);
+    }
+
+    // The upstream (remote-tracking) ref of branchRef, e.g. "origin/main", or null when the
+    // branch has no configured upstream (a local-only or remote-tracking head).
+    private string? GetUpstreamRef(string repoPath, string branchRef)
+    {
+        var output = RunGit(repoPath, out _, "rev-parse", "--abbrev-ref",
+            "--symbolic-full-name", branchRef + "@{upstream}");
+        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+    }
+
+    // The repo's default branch: origin/HEAD's target (e.g. "origin/main") for a cloned repo,
+    // else a local "main"/"master" when no remote default exists. Null when none is found.
+    private string? GetDefaultBranchRef(string repoPath)
+    {
+        var originHead = RunGit(repoPath, out _, "symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD");
+        if (!string.IsNullOrWhiteSpace(originHead)) return originHead.Trim();
+        foreach (var name in DefaultBranchCandidates)
+        {
+            var verified = RunGit(repoPath, out _, "rev-parse", "--verify", "-q", "refs/heads/" + name);
+            if (!string.IsNullOrWhiteSpace(verified)) return name;
+        }
+        return null;
+    }
+
+    private static readonly string[] DefaultBranchCandidates = { "main", "master" };
 
     // Creates an annotated tag when a message is supplied (`git tag -a <name> -m <msg> <sha>`),
     // otherwise a lightweight tag (`git tag <name> <sha>`). When pushToAllRemotes is set, the new
