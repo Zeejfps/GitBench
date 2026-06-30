@@ -176,7 +176,7 @@ internal sealed record CommitTabChrome : Widget
             ],
         };
 
-        return pill.WithController(input, () => new TabClickController(hover, OnActivate));
+        return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose));
     }
 
     private static IWidget CloseButton(Action onClose) => new ButtonWidget
@@ -187,17 +187,20 @@ internal sealed record CommitTabChrome : Widget
     }.WithTooltip(L.T(s => s.CommonClose)).WithController<KbmController>();
 }
 
-// Hover tracking + left-click activation for a tab pill. The close button consumes its own click
-// first (bubbling), so pressing it closes the tab without also activating it.
+// Hover tracking + left-click activation for a tab pill, plus middle-click to close (closable tabs
+// only). The close button consumes its own click first (bubbling), so pressing it closes the tab
+// without also activating it.
 internal sealed class TabClickController : KeyboardMouseController
 {
     private readonly State<bool> _hover;
     private readonly Action _onClick;
+    private readonly Action? _onClose;
 
-    public TabClickController(State<bool> hover, Action onClick)
+    public TabClickController(State<bool> hover, Action onClick, Action? onClose)
     {
         _hover = hover;
         _onClick = onClick;
+        _onClose = onClose;
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
@@ -205,9 +208,16 @@ internal sealed class TabClickController : KeyboardMouseController
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
-        if (e.Phase != EventPhase.Bubbling) return;
-        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
-        _onClick();
-        e.Consume();
+        if (e.Phase != EventPhase.Bubbling || e.State != InputState.Released) return;
+        if (e.Button == MouseButton.Left)
+        {
+            _onClick();
+            e.Consume();
+        }
+        else if (e.Button == MouseButton.Middle && _onClose is { } close)
+        {
+            close();
+            e.Consume();
+        }
     }
 }
