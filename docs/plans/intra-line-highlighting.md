@@ -20,16 +20,20 @@
 - `DiffViewModel.StartLoad` (`DiffViewModel.cs:389`) loads the diff on a background lane and emits
   `DiffRenderState.Loaded(DiffResult, DiffHighlight?)` (`DiffViewModel.cs:24`); a second lane,
   `StartHighlight` (`DiffViewModel.cs:505`), re-emits the same `Loaded` carrying syntax spans.
+  The re-emit reuses **the same `DiffResult` instance** — it re-attaches only when
+  `ReferenceEquals(cur.Result, diff)` (`DiffViewModel.cs:518`), so every `DiffHunk`/`DiffLine`
+  is reference-stable across the two emits. (This is what makes the §3 memoization a guaranteed
+  cache hit on the second flatten.)
 - `DiffContentView.SetRenderState` (`DiffContentView.cs:187`) → `FlattenRows`
-  (`DiffContentView.cs:275`) turns each `DiffLine` into a `DiffRow.Line(Kind, OldNumber,
+  (`DiffContentView.cs:276`) turns each `DiffLine` into a `DiffRow.Line(Kind, OldNumber,
   NewNumber, Text, Chars, Spans)` (`DiffRow.cs:20-26`). `Text` is tab-expanded via
   `DiffText.ExpandTabs` (`DiffText.cs:13`, a fixed 4-space replacement).
-- `DrawLineRow` (`DiffContentView.cs:836`) paints **one full-width background rect per line**
-  keyed on `Kind` (`:851-856`), then gutters/glyph, then `DrawLineText`.
-- `DrawLineText` (`DiffContentView.cs:878`) already renders **multiple colored runs within one
-  line** by walking `Spans` and calling `DrawTextRun` (`:909`), which measures each substring with
-  `c.MeasureTextWidth` to position the next run. `SlotColor` (`:920`) maps a `TokenColorSlot` to a
-  **foreground** color only.
+- `DrawLineRow` (`DiffContentView.cs:837`) paints **one full-width background rect per line**
+  keyed on `Kind` (`:852-857`), then gutters/glyph, then `DrawLineText`.
+- `DrawLineText` (`DiffContentView.cs:879`) already renders **multiple colored runs within one
+  line** by walking `Spans` **incrementally** (carrying `x` forward run-by-run) and calling
+  `DrawTextRun` (`:910`), which measures each substring with `c.MeasureTextWidth` to position the
+  next run. `SlotColor` (`:921`) maps a `TokenColorSlot` to a **foreground** color only.
 
 **Key consequences for this work:**
 1. A per-line **foreground** span model already exists (`TokenSpan`, `DiffRow.Line.Spans`) — but
@@ -41,6 +45,9 @@
    breaks. New state must be parallel metadata, default-empty.
 4. `DiffLineTintAlpha = 0x80` (`ThemeStyles.Diff.cs:89`) means the add/remove tints are already
    ~50% transparent; emphasis colors must read as *stronger* than that to stand out.
+5. `FlattenRows` runs **twice per file** — once on the initial `Loaded(diff, null)` emit and again
+   on the `Loaded(diff, highlight)` re-emit. Anything derived purely from `DiffResult` is therefore
+   computed twice unless memoized (see §3).
 
 ## Locked decisions
 
@@ -48,7 +55,8 @@
    fields on `DiffLine`. Emphasis rides as parallel metadata on `DiffRow.Line` (view-local).
 2. **Intra-line emphasis = a background layer**, computed inside `FlattenRows` on the
    tab-expanded `Text` (so it shares one coordinate space with `Spans` and the glyph grid). It is
-   cheap and local; no background lane, no new render-state field, no VM changes.
+   cheap and local; no background lane, no new render-state field, no VM changes. The work is
+   **memoized on hunk identity** so the double-flatten (consequence #5) computes it only once.
 3. **Runtime-toggleable**, mirroring `DiffOptions.SyntaxHighlightingEnabled` (`DiffOptions.cs:13`):
    add `IntraLineHighlightingEnabled`.
 4. **Monospace-but-measured positioning.** Emphasis rects are positioned with
@@ -75,7 +83,8 @@ public sealed record Line(
     IReadOnlyList<CharRange>? Emphasis = null) : DiffRow;
 ```
 
-New value type (next to `TokenSpan` in `Theming/TokenColorSlot.cs`, or in `Features/Diff`):
+New value type, in `Features/Diff` (not `Theming` — emphasis is a diff concept and carries no
+color, so `Theming/TokenColorSlot.cs` should not gain a dependency on it):
 
 ```csharp
 internal readonly record struct CharRange(int Start, int Length);
@@ -90,9 +99,16 @@ A new static helper `GitBench/Features/Diff/IntraLineDiff.cs`. Two responsibilit
 **(a) Pair lines within a hunk.** A *replace block* is a maximal run of `Removed` lines
 immediately followed by a maximal run of `Added` lines (no intervening `Context`). Within a
 block of `R` removed and `A` added lines, pair index-wise for `k in [0, min(R,A))`. Lines past
-the overlap have no counterpart and get no emphasis (they read as plain add/remove). Index-wise
-pairing is what GitHub/most viewers do for the common balanced case; similarity-based re-pairing
-of unbalanced blocks is a noted future refinement.
+the overlap have no counterpart and get no emphasis (they read as plain add/remove).
+
+Index-wise pairing matches GitHub/most viewers for the common balanced case, but has a known
+failure mode: when a line is inserted or deleted in the *middle* of an otherwise-balanced block,
+every subsequent pair shifts by one, so each shifted pair looks almost entirely changed. The
+similarity gate below is what rescues this — mispaired lines fall under the match threshold and
+emit nothing, degrading to plain delete+add rather than full-line noise. **The gate is therefore
+load-bearing for unbalanced blocks, not just full rewrites; don't weaken it without accounting
+for that.** Similarity-based best-match assignment over small blocks (`≤ ~10×10`) is the noted
+future refinement.
 
 **(b) Diff a paired (old, new) line into changed ranges.** Operate on the **tab-expanded**
 strings:
@@ -102,12 +118,16 @@ strings:
 3. Run an LCS over the token lists (lines are short; `O(n·m)` is fine). Guard: if either side's
    middle exceeds ~`2000` chars, skip (treat as full-line change) to bound cost.
 4. Map the non-matching tokens back to char ranges, offset by the trimmed prefix length, and
-   coalesce adjacent ranges. Return old-side ranges and new-side ranges separately.
+   coalesce adjacent ranges. Return old-side ranges and new-side ranges separately, each sorted
+   and non-overlapping (the renderer in §4 relies on this to walk them in one incremental pass).
 
-**Similarity gate (anti-noise).** If the changed fraction of a pair is high — e.g. matched chars
-`< ~30%` of the longer line — the two lines are a wholesale rewrite, not an edit. Emit *no*
-emphasis for that pair so the line just reads as plain delete+add (highlighting everything is
-noise). Tunable constant in `IntraLineDiff`.
+**Similarity gate (anti-noise).** Compute `matchedChars = commonPrefixLen + commonSuffixLen +
+Σ(length of each matched middle token)`. If `matchedChars < ~30%` of the longer line, the pair is
+a wholesale rewrite (or a mispairing from index-wise pairing) — emit *no* emphasis so the line
+just reads as plain delete+add (highlighting everything is noise). The threshold is a tunable
+constant in `IntraLineDiff`. Counting the trimmed prefix/suffix as matched matters: code lines
+commonly share long stable prefixes (indentation, `var x = `), and omitting them would over-fire
+the gate.
 
 Suggested surface:
 
@@ -116,6 +136,7 @@ internal static class IntraLineDiff
 {
     // Per-line emphasis for one hunk, indexed by position in hunk.Lines. expandedTexts[i] is
     // DiffText.ExpandTabs(hunk.Lines[i].Text). Entry is null where there is no emphasis.
+    // Memoized on the `lines` reference (see §3) — same hunk instance returns the cached array.
     public static IReadOnlyList<CharRange>?[] ForHunk(
         IReadOnlyList<DiffLine> lines, IReadOnlyList<string> expandedTexts);
 
@@ -125,12 +146,34 @@ internal static class IntraLineDiff
 }
 ```
 
+Memoize inside `ForHunk` on the `lines` list reference, which is reference-stable across the two
+flattens (consequence #5). `expandedTexts` is a deterministic function of `lines`
+(`ExpandTabs` per line), so caching on `lines` alone is correct:
+
+```csharp
+private static readonly ConditionalWeakTable<IReadOnlyList<DiffLine>, IReadOnlyList<CharRange>?[]>
+    Cache = new();
+
+public static IReadOnlyList<CharRange>?[] ForHunk(
+    IReadOnlyList<DiffLine> lines, IReadOnlyList<string> expandedTexts)
+{
+    if (!Cache.TryGetValue(lines, out var cached))
+    {
+        cached = Compute(lines, expandedTexts);
+        Cache.Add(lines, cached);
+    }
+    return cached;
+}
+```
+
+`ConditionalWeakTable` keys weakly, so entries are collected when the hunk is — no manual eviction,
+no leak across diffs.
+
 ### 3. Integration — `FlattenRows`
 
-`FlattenRows` (`DiffContentView.cs:301-328`) already expands tabs per line and attaches
-`highlight?.ForLine(...)` spans. Add a per-hunk pre-pass that computes emphasis, then attach it
-when building each row. Because the inner loop emits rows sequentially, compute the whole hunk's
-emphasis array first:
+`FlattenRows` (`DiffContentView.cs:302-329`) already expands tabs per line and attaches
+`highlight?.ForLine(...)` spans. Add a per-hunk pre-pass that computes emphasis (memoized in
+`ForHunk`, so the re-emit flatten is a cache hit), then attach it when building each row:
 
 ```csharp
 for (var i = 0; i < r.Hunks.Count; i++)
@@ -160,15 +203,20 @@ for (var i = 0; i < r.Hunks.Count; i++)
 }
 ```
 
-This recomputes on the `StartHighlight` re-emit (one extra pass per file) — negligible for short
-lines, and it keeps a single coordinate source (the expanded `text`). No VM/render-state changes.
+`expanded[]` is built every flatten anyway (the row needs it for `Text`), and it shares the
+single coordinate source with `emphasis`. The actual LCS work runs once per hunk thanks to the
+`ForHunk` cache. No VM/render-state changes.
 
 ### 4. Rendering — emphasis background rects + z-layering
 
-In `DrawLineRow` (`DiffContentView.cs:836`), after the full-line background rect (`:851-856`)
-and **before** the gutters/text, paint one rect per emphasis range. Position each rect by
-measuring substrings of `l.Text` exactly as `DrawTextRun` does, so it lands under the right
-glyphs (the text start `x` is the value computed at `:858-870`):
+In `DrawLineRow` (`DiffContentView.cs:837`), paint one rect per emphasis range. Insert the block
+**right before the `DrawLineText` call** (`:873`) — by then `x` has advanced past the gutters and
+glyph to the text start (the value computed at `:859-872`). Physical draw order is irrelevant;
+the z-index assigned below governs layering, so this does not have to precede the gutter draws.
+
+Walk the ranges **incrementally**, carrying `cx` forward exactly as `DrawLineText` does — measure
+the gap before each range and the range itself, never re-measuring from column 0 (ranges are
+sorted and non-overlapping per §2):
 
 ```csharp
 if (l.Emphasis is { Count: > 0 } ranges)
@@ -176,29 +224,38 @@ if (l.Emphasis is { Count: > 0 } ranges)
     var emBg = l.Kind == DiffLineKind.Removed
         ? _styles.LineRemovedEmphasisBackground
         : _styles.LineAddedEmphasisBackground;
+    var col = 0;
+    var cx = x; // text start
     foreach (var rng in ranges)
     {
-        var pre = c.MeasureTextWidth(l.Text.Substring(0, rng.Start), MonoStartStyle);
-        var w   = c.MeasureTextWidth(l.Text.Substring(rng.Start, rng.Length), MonoStartStyle);
+        if (rng.Start > col)
+            cx += c.MeasureTextWidth(l.Text.Substring(col, rng.Start - col), MonoStartStyle);
+        var w = c.MeasureTextWidth(l.Text.Substring(rng.Start, rng.Length), MonoStartStyle);
         c.DrawRect(new DrawRectInputs
         {
-            Position = new RectF(x + pre, bottom, w, _lineHeight),
+            Position = new RectF(cx, bottom, w, _lineHeight),
             Style = SolidBgStyle(emBg),
             ZIndex = z + 1,
         });
+        cx += w;
+        col = rng.Start + rng.Length;
     }
 }
 ```
 
 **Z-layering.** Today the line bg is at `z` and gutters/glyph/text at `z + 1`
-(`DiffContentView.cs:855` vs `:863-872`). Insert the emphasis layer between them: line bg `z`,
-emphasis `z + 1`, foreground bumped to `z + 2`. (Bump the four `z + 1` foreground draws in
-`DrawLineRow` to `z + 2`; verify `DrawDiffRowAt` at `DiffContentView.cs:635` leaves a free
-integer per row — if rows are spaced by 1, widen the per-row z stride to ≥3.)
+(`DiffContentView.cs:857` vs `:863-873`). Insert the emphasis layer between them: line bg `z`,
+emphasis `z + 1`, foreground bumped to `z + 2` (bump the four `z + 1` foreground draws —
+old/new gutter, glyph, and the `DrawLineText` call). No per-row z-stride change is needed:
+`DrawDiffRowAt` already draws the hunk outline at `z + 5` and buttons at `z + 6`
+(`DiffContentView.cs:664-666`), which proves each row already owns a z-band ≥7 wide.
 
-Cost note: the two `Substring` + `MeasureTextWidth` calls per range allocate. If profiling flags
-it on huge diffs, precompute cumulative column widths once per visible line; for typical diffs
-the visible-row count is small (virtualized) so it is unlikely to matter.
+**Shared column table (the clean end-state).** With this change, `DrawLineRow` and `DrawLineText`
+now *both* walk the same line measuring substrings independently. The duplication — not the raw
+per-range cost — is the smell. If it shows up in profiling on huge diffs, compute one cumulative
+column→x table per visible line and have both the emphasis rects and the syntax runs index into
+it. Visible rows are virtualized (small count), so for typical diffs the two incremental walks are
+fine and this stays a deferred cleanup.
 
 ### 5. Theme — emphasis tokens
 
@@ -232,17 +289,27 @@ public static bool IntraLineHighlightingEnabled = true;
 
 Gated in `FlattenRows` (§3). Off → `Emphasis` is null everywhere → identical to today.
 
+Like `SyntaxHighlightingEnabled`, this is baked into rows at flatten time, so flipping it at
+runtime takes effect on the **next** `FlattenRows` (next diff load / re-emit), not instantly. If a
+live toggle is ever wanted, wire a re-flatten on change — but that limitation is shared with the
+existing syntax toggle and is out of scope here.
+
 ### 7. Tests (`GitBench.Tests/IntraLineDiffTests.cs`)
 
 Pure-function tests on `IntraLineDiff.ForPair` / `ForHunk` (mirroring `DiffHighlightTests.cs`
 which fabricates spans with no git):
 - Single-word change mid-line → one range each side, prefix/suffix excluded.
 - Trailing-only / leading-only change.
-- Multiple disjoint changes in one line → multiple coalesced ranges.
+- Multiple disjoint changes in one line → multiple coalesced ranges (assert sorted, non-overlapping).
 - Identical lines → no emphasis.
 - Full rewrite (below similarity gate) → no emphasis.
+- Shared-prefix gate sanity: lines differing only in a short suffix stay *above* the gate (prefix
+  counts as matched) and emit emphasis rather than being suppressed as a rewrite.
 - Unbalanced replace block (3 removed, 1 added) → only the paired index emphasized; extras plain.
+- Mid-block insertion (4 removed, 5 added, one inserted line) → shifted mispairs fall under the
+  gate and emit nothing, not full-line noise.
 - Tab-containing lines → ranges align to expanded columns (compute on `ExpandTabs` output).
+- `ForHunk` called twice on the same `lines` returns the cached array (reference-equal).
 
 ---
 
@@ -252,7 +319,7 @@ which fabricates spans with no git):
   emphasis never touches those, so staging/discarding a hunk is unaffected. Add a regression test
   asserting a diff with emphasis still produces a byte-identical patch.
 - **FullFile mode** (`DiffRenderState.FullFile`, `DiffViewModel.cs:28`): single-side, no paired
-  lines — intra-line is inert there. Leave `FlattenFullFile` (`DiffContentView.cs:344`) untouched.
+  lines — intra-line is inert there. Leave `FlattenFullFile` (`DiffContentView.cs:345`) untouched.
 - **Conflict / binary / error / truncated:** no `Loaded` line rows or already gated; nothing to do.
 - **Whitespace-only diffs:** intra-line tightly boxes the changed whitespace (useful).
 - **Very long lines / huge replace blocks:** the `IntraLineDiff` length guard (§2) and
