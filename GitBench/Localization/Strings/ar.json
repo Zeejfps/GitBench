@@ -184,6 +184,7 @@
   "branches.clean_action": { "one": "حذف فرع", "other": "حذف {count} فرع" },
   "branches.clean_error_title": "فشل التنظيف",
   "branches.context_switch_worktree": "التبديل إلى شجرة العمل",
+  "branches.context_review_changes": "مراجعة التغييرات…",
   "branches.context_fast_forward": "تقديم سريع إلى '{remote}/{branch}'",
   "branches.context_merge": "دمج {source} في {target}…",
   "branches.context_rebase": "إعادة تأسيس {source} على {target}…",

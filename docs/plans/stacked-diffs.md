@@ -157,8 +157,10 @@ fully generic seam; we mirror it.
   `() => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog{ Request = …,
   OnClose = onClose }))`. **Our menu item is identical in shape but broadcasts an
   `OpenReviewWindowMessage` instead** (handled by a window presenter, not the dialog presenter).
-- Transient success/info feedback is the status-bar slot (`StatusFeedbackService` +
-  `ShowFeedbackMessage`) — handy for the Phase 1 placeholder action.
+- Transient success/info feedback is a **toast**: `_bus.Broadcast(new ShowToastMessage(
+  ToastIntent.Info(...)))` (`IToastService`/`ToastService`, `Features/Notifications/`,
+  `Messages/ShowToastMessage.cs`). *(There is no `StatusFeedbackService`/`ShowFeedbackMessage` in
+  this repo — earlier drafts mis-named it.)* This is what Phase 1's placeholder action used.
 
 ## Architecture (target)
 
@@ -241,7 +243,7 @@ public sealed record ReviewStack(
 
 ## Implementation plan — outside-in (each phase runs + is testable)
 
-### Phase 1 — Entry point: the context-menu item
+### Phase 1 — Entry point: the context-menu item  ✅ DONE
 
 Add the affordance and prove it fires, with **no window and no git work yet**.
 
@@ -258,10 +260,72 @@ Add the affordance and prove it fires, with **no window and no git work yet**.
   with the right branch label. Verifiable live via the GUI MCP tools (`gui_click button:right` →
   `gui_snapshot` for the menu item → click → confirm feedback).
 
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **`OpenReviewWindowMessage`** lives at `Messages/OpenReviewWindowMessage.cs` exactly as the
+  *New types* block specifies: `readonly record struct (Guid RepoId, string HeadRef, string
+  HeadLabel, string? BaseRef = null, string? BaseLabel = null)`. It compiles but is **not yet
+  broadcast** (no subscriber until Phase 2).
+- **`StartReview` signature is `(string headRef, string headLabel)`** — *not* the step-1.2
+  `(fullPath, isHead)`. It's generic over local/remote so both menus reuse it; `isHead`/base
+  resolution were unnecessary for a read-only placeholder. It currently *constructs* the message
+  and then broadcasts a **toast** built from its fields. (`BranchesViewModel.cs:737`.)
+- **Both menus wired:** local `BuildLocalBranchMenuItems` calls `StartReview(capturedName,
+  capturedName)` (`:779`); remote `BuildRemoteBranchMenuItems` calls `StartReview(remoteRef,
+  remoteRef)` where `remoteRef = "{remote}/{branch}"` (`:926`). Item sits **right after Checkout**
+  in both, icon `LucideIcons.Search`, **`Enabled` unconditional** (read-only window; the
+  no-active-repo case is already guarded by each builder's early `return` and by `StartReview`'s
+  own `if (repo == null) return`). ⇒ today **`HeadRef == HeadLabel`** for both local and remote.
+- **Feedback is a toast, not a "status-bar feedback" service.** This repo has **no
+  `StatusFeedbackService` / `ShowFeedbackMessage`** (the plan/grounding mis-named it). Transient
+  feedback is `_bus.Broadcast(new ShowToastMessage(ToastIntent.Info(...)))` via `IToastService`
+  (`Features/Notifications/`, `Messages/ShowToastMessage.cs`). The placeholder string is a
+  **hardcoded literal** (intentionally un-localized — it's deleted in 2.5).
+- **Localization:** key `branches.context_review_changes` → property `s.BranchesContextReviewChanges`,
+  added to **all 6** `Strings/*.json`. `using GitBench.Features.Notifications;` added to
+  `BranchesViewModel` for `ToastIntent`.
+- **Icon caveat:** `LucideIcons` is a *fixed glyph subset* of the bundled font — there is no
+  review/pull-request glyph and one can't be added without extending the font, so `Search` (inspect)
+  was reused. Swap freely if the font gains a better glyph.
+
 ### Phase 2 — Open the real (empty) window
 
 Stand up the windowing skeleton by copying `DiffWindows`. The window opens, is titled, is movable,
 closes cleanly — content is a placeholder.
+
+**Current world (verified at Phase-1 close) — read these before starting:**
+- **The 2.5 swap point already exists.** `BranchesViewModel.StartReview` (`:737`) builds the
+  `OpenReviewWindowMessage` and broadcasts a placeholder toast. Step 2.5 is literally: **delete the
+  toast lines, broadcast the message** — `_bus.Broadcast(new OpenReviewWindowMessage(repo.Id,
+  headRef, headLabel))`. Nothing else in `BranchesViewModel` changes.
+- **Mount point is `AppView.Build` (a `Build` override, not `CreateView`).** `new DiffWindowsView()`
+  is the last child of the root `Stack` at **`AppView.cs:44`** (siblings: `frame`, `ToastHostView`,
+  `DragOverlay`, `DialogSurface`). Add `new ReviewWindowsView()` as the next sibling there, and add
+  `using GitBench.Features.Review;` to `AppView.cs`.
+- **Presenter shape to mirror (`DiffWindowsView.cs:20-108`):** `internal sealed record
+  ReviewWindowsView : Widget` with `protected override View CreateView(Context ctx) => new
+  Core(ctx)`. The nested `Core : ContainerView` pins `Width = Height = 0`, resolves
+  `ISecondaryWindowFactory` (`ctx.Require`), optional `IWindowChrome` + `State<ThemeMode>` (`ctx.Get`,
+  null on Linux) for title-bar theming, `ctx.Require<ReviewWindowsViewModel>()`, calls
+  `this.UseViewModel(() => vm, _ => {})`, then `this.Use(() => vm.Windows.Subscribe(OnWindowsChanged))`.
+  Keep a `Dictionary<ReviewWindowViewModel, ISecondaryWindow>`. On `Added` → `factory.Open(new
+  SecondaryWindowRequest { BuildRoot = c => new ReviewWindowRootView{ Model = vm }.BuildView(c),
+  Title = vm.Title, Width = 1100, Height = 800 })`; then `win.Closed += () => _vm.Close(vm)`, store
+  it, `ApplyTitleBarTheme(win)`. On `Removed` close the OS window; on `Cleared/Reset` close all.
+- **VM auto-construction is real — no DI registration.** `DiffWindowsViewModel` is `internal sealed
+  class : IDisposable`; ctor `(IRepoRegistry, IGitService, IUiDispatcher, IMessageBus,
+  ILocalizationService)`; it `_bus.SubscribeScoped<OpenDiffWindowMessage>(...)` in the ctor and on
+  each message `Windows.Add(new DiffWindowViewModel(...))`. `ctx.Require<DiffWindowsViewModel>()`
+  constructs it on demand. Mirror exactly for `ReviewWindowsViewModel` +
+  `SubscribeScoped<OpenReviewWindowMessage>`; the pinned per-window VM holds the `ReviewSession`
+  built from the message payload.
+- **Root view shape (`DiffWindowRootView.cs:17-50`):** `internal sealed record ReviewWindowRootView
+  : Widget` with `required ReviewWindowViewModel Model { get; init; }`; `CreateView` builds the tree
+  and injects the per-window VM via `new Provide<T>{ Value = …, Child = … }`. Per-window
+  `InputSystem` comes from the passed `ctx` (`ctx.Require<InputSystem>()`) — it's the window's own,
+  not the main window's, because `SecondaryWindowFactory` hands each window a child `Context`.
+- **`SecondaryWindowRequest` fields:** `{ Func<Context,View> BuildRoot, string Title, int Width,
+  int Height }`. `ISecondaryWindow = { IWindow Window; event Action Closed; void Close() }`. (No
+  framework change needed; confirmed unchanged.)
 
 - **2.1** `ReviewWindowViewModel` — holds the pinned `ReviewSession` + `Title`. Minimal for now.
 - **2.2** `ReviewWindowsViewModel : IDisposable` with `ObservableList<ReviewWindowViewModel>

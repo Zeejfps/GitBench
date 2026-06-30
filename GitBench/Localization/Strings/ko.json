@@ -142,6 +142,7 @@
   "branches.clean_action": { "other": "{count}개 브랜치 삭제" },
   "branches.clean_error_title": "정리 실패",
   "branches.context_switch_worktree": "작업 트리로 전환",
+  "branches.context_review_changes": "변경 사항 검토…",
   "branches.context_fast_forward": "'{remote}/{branch}'로 빨리 감기",
   "branches.context_merge": "{source}을(를) {target}에 병합…",
   "branches.context_rebase": "{source}을(를) {target} 위로 리베이스…",

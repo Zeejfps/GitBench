@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
@@ -729,6 +730,19 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }));
     }
 
+    // Opens a dedicated Review window for headRef's range of commits. Phase 1 placeholder:
+    // proves the affordance fires by flashing a toast; Phase 2 replaces the body with
+    // _bus.Broadcast(msg) once the windowing skeleton exists. BaseRef is left null ("auto" —
+    // resolved via merge-base in a later phase).
+    public void StartReview(string headRef, string headLabel)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var msg = new OpenReviewWindowMessage(repo.Id, headRef, headLabel, BaseRef: null);
+        var baseLabel = msg.BaseLabel ?? "auto";
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Info($"Review: {baseLabel}..{msg.HeadLabel}")));
+    }
+
     public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalBranchMenuItems(string fullPath, bool isHead)
     {
         var repo = _registry.Active.Value;
@@ -761,6 +775,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             () => StartCheckoutLocal(capturedName),
             LucideIcons.Branch,
             Enabled: !checkoutDisabled));
+
+        items.Add(new RepoBarContextMenu.Item(
+            s.BranchesContextReviewChanges,
+            () => StartReview(capturedName, capturedName),
+            LucideIcons.Search));
 
         var entry = FindLocalBranchEntry(fullPath);
         if (!isHead
@@ -903,6 +922,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 LucideIcons.Branch,
                 Enabled: !checkoutDisabled),
         };
+
+        var remoteRef = $"{capturedRemote}/{capturedName}";
+        items.Add(new RepoBarContextMenu.Item(
+            s.BranchesContextReviewChanges,
+            () => StartReview(remoteRef, remoteRef),
+            LucideIcons.Search));
 
         if (headBranch != null)
         {

@@ -142,6 +142,7 @@
   "branches.clean_action": { "other": "{count} 個のブランチを削除" },
   "branches.clean_error_title": "クリーンアップに失敗しました",
   "branches.context_switch_worktree": "ワークツリーに切り替え",
+  "branches.context_review_changes": "変更をレビュー…",
   "branches.context_fast_forward": "'{remote}/{branch}' にfast-forward",
   "branches.context_merge": "{source} を {target} にマージ…",
   "branches.context_rebase": "{source} を {target} にリベース…",
