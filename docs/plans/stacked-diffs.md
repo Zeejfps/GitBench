@@ -887,6 +887,84 @@ visible change** (the file gets out of your way), and (2) there is **always an e
   existing), `GitReviewStackSource` (localized errors), `DiffPaneHeaderWidget` (localized "Viewed"),
   `GitService.LoadReviewStack` (churn), `Localization/Strings/*.json` (×6).
 
+### Phase 6.5 — Legible & selectable comparison base  [interjected after Phase 6]
+
+Not in the original plan. Phases 1–6 always opened a review with `BaseRef = null` ⇒ the base was
+silently auto-resolved and rendered first as the literal word **"auto"**, then — once loaded — as a
+**bare 7-char short SHA** (`ReviewStack.BaseLabel = ShortSha(baseCommit.Sha)`, `GitService.cs:370`,
+surfaced by `ReviewWindowViewModel.BuildRangeText`, `:459`). So the header reads `auto → my-branch`
+then `a1b2c3d → my-branch`: the reviewer can't tell **what** the diff is computed against, **why**
+that base was chosen, or **change** it. This phase makes the base *legible* and *user-selectable*.
+A slice of Phase 7.3 (base-by-branch picking) is pulled forward here; the heavier version-comparator
+and `git range-diff` / combined-diff work stays in Phase 7.
+
+**Root cause — the resolved ref identity is discarded.** `ResolveAutoReviewBase` (`GitService.cs:1779`)
+collapses *"upstream `<branch>@{upstream}` → default `origin/HEAD`/main/master → merge-base"* into a
+**single SHA**, throwing away *which ref* gave us the base and *how* it was chosen. The header has
+nothing human-readable to show. Everything below depends on threading that identity back up.
+
+**6.5a — Legible base (do regardless of the picker):**
+- **Carry the base's identity, not just its SHA.** Evolve `ResolveAutoReviewBase` to return a richer
+  result — `ResolvedReviewBase(string Sha, string Ref, ReviewBaseKind Kind)` with
+  `ReviewBaseKind { Upstream, DefaultBranch, Explicit, RawCommit }` — and add `BaseRef` + `BaseKind`
+  to `ReviewStack` (alongside the existing `BaseSha`/`BaseLabel`). `GitReviewStackSource.LoadAsync`
+  (`:28`) sets `BaseLabel` to the **ref name** (e.g. `origin/main`), not the short SHA.
+- **Header shows the ref name, never "auto" or a bare SHA in the loaded state.** `BuildRangeText`
+  (`:459`) → `origin/main → my-branch`. While the stack is still loading, show *"Resolving base…"*
+  rather than the bare word "auto" (`review.base_auto` is repurposed/retired).
+- **Provenance + full story on hover.** A tooltip on the base chip: *"N commits since my-branch forked
+  from origin/main (a1b2c3d)"* plus the kind (*upstream* / *default branch*). The increment count is
+  already in the stack; the base short-SHA + kind are now threaded through.
+
+**6.5b — In-header base dropdown (re-resolve in place):**
+- **Make the base mutable per window; keep (repo, head) pinned.** Add a per-window
+  `State<string?> _baseOverride` to `ReviewWindowViewModel` (null = auto). `StartLoad`/`Reload` build
+  the effective session via `Session with { BaseRef = currentBase, BaseLabel = … }` before calling
+  `_source.LoadAsync` — the seam signature is unchanged; only the VM's chosen base varies. The window
+  never re-pins its repo or head.
+- **Changing the base reuses the existing reload lane verbatim.** Setting `_baseOverride` calls the
+  built `Reload()` (`:422`) on `_reloadLane`: stale-while-revalidate (the current stack stays on
+  screen until the new one arrives), and `ApplyReloadedStack` (`:434`) **already** does exactly the
+  locked behavior — **prune reviewed/viewed marks to the surviving commits, keep the selection if its
+  commit survives else fall to base-most**. So a base change needs *no new reload logic*; it's the
+  same code path as a `RefsChanged` reload.
+- **The dropdown is an in-window popup.** A secondary OS window can't use the main window's
+  `DialogPresenter` (the Phase 6 cheatsheet finding) — reuse `RepoBarContextMenu`'s popup if it can
+  be summoned from the secondary window's context, else a small overlay like `ReviewCheatsheetOverlay`.
+  Items: **auto/upstream (✓), default branch, other local branches (recent first), remote branches**,
+  and a deferred-able *"Specific commit…"* (a commit picker can ride Phase 7). Candidate refs come from
+  the repo's branch data (the snapshot store / the same source the branch menus read).
+- **Make the base read as interactive** — the header range's base becomes a chip with a `ChevronDown`,
+  so it's obviously clickable (the affordance the current flat text lacks).
+- **Merge-base semantics unchanged.** Picking `main` means `merge-base(main, head)` ("changes since the
+  fork"), consistent with today's auto behavior and with how the explicit-base path already works
+  (`GitReviewStackSource.ResolveBaseRef`, `:53`, with the unrelated-history fallback to the ref itself).
+  Two-dot vs three-dot / `range-diff` stays Phase 7.
+- **Localization (LOC004 — all six locales):** *"Resolving base…"*, the provenance labels
+  (*upstream* / *default branch*), the tooltip template, and the dropdown item labels / *"Specific
+  commit…"*. The auto-resolved-ref *value* (`origin/main`) is data, not a string key.
+
+**Locked decisions for this phase:**
+- **Picker = in-header dropdown that re-resolves the range in place** via the existing reload lane —
+  not a modal dialog, not an open-time submenu. (User decision.)
+- **Progress on a base change = prune to surviving commits** (keep marks for commits still in range,
+  keep selection if it survives else base-most) — i.e. reuse `ApplyReloadedStack`, the same as a
+  refs-change reload. (User decision.)
+- **The base carries its ref name + kind**; the header shows the **ref name**, and "auto"/short-SHA
+  never appear in the loaded state. (User decision — the headline clarity fix.)
+- **The window stays pinned to (repo, head); only the base is mutable.** A different head/repo is still
+  a different review window.
+- **The popup is in-window** (secondary windows have no `DialogPresenter`).
+- **"Specific commit…" may defer to Phase 7** (needs a commit picker); the branch-based dropdown is the
+  6.5 MVP.
+
+- **Ship / test locally:** open a feature branch's review → the header reads `origin/main → my-branch`
+  (not `auto`/SHA) with a tooltip explaining *N commits since the fork from origin/main*. Click the
+  base chip → pick `main` (or another branch) → the stack re-resolves in place, the increments/rail
+  update, reviewed marks for surviving commits stick, and the selection holds if its commit survives.
+  Pick a base with unrelated history → graceful fallback (the ref itself), no crash. Reopening the same
+  branch still focuses the existing window (Phase 6 singleton) with its current base.
+
 ### Phase 7 — (Optional, separable) version comparator + combined diff
 
 The Tier-2/3 differentiators; none block the MVP.
@@ -902,7 +980,9 @@ The Tier-2/3 differentiators; none block the MVP.
   unchanged.
 - **7.3 Range dialog** as an alternate entry + in-window "Change range…": an `IDialogViewModel` with
   base/head pickers (default base = merge-base(head, upstream/main)), following
-  `MergeBranchDialogViewModel` + `ShowDialogMessage`.
+  `MergeBranchDialogViewModel` + `ShowDialogMessage`. *(The **base-by-branch** half of this shipped
+  early in Phase 6.5 as the in-header dropdown; what's left here is the **head** picker + a
+  full-dialog alternate entry, only if the in-window dropdown proves insufficient.)*
 - **7.4 (Later)** a history-list item ("Review from here to HEAD"); Graphite-style "upstack" gutter
   marker; conversation drawer with batched/pending comments + draft autosave.
 
@@ -925,15 +1005,15 @@ The Tier-2/3 differentiators; none block the MVP.
 | `Features/Review/ReviewWindowsView.cs` *(new)* | zero-sized presenter → `ISecondaryWindowFactory.Open` |
 | `App/AppView.cs` | mount `ReviewWindowsView` next to `DiffWindowsView` |
 | `Features/Review/ReviewWindowRootView.cs` *(new)* | window tree: header bar + split |
-| `Features/Review/ReviewWindowViewModel.cs` *(new)* | stack load via `IReviewStackSource`, selection, reviewed-state, nav; drives details; *(5.5)* `AdvanceToNextUnviewedFile`, wire `MarkReviewedAndAdvance`/`NextUnreviewed`, adaptive primary-action state, core key commands |
-| `Features/Review/ReviewHeaderBar.cs` + `ReviewStackList.cs` *(new)* | range/progress bar; increment rail; *(5.5)* header progress **meter** + `‹ Prev · N of M · Next ›` cluster + adaptive primary action; rail "you are here" polish |
-| `Features/Review/IReviewStackSource.cs` + `StubReviewStackSource.cs` + `GitReviewStackSource.cs` *(new)* | data seam; stub then git impl |
-| `Features/Review/ReviewStack.cs` *(new)* | `ReviewSession`, `ReviewIncrement`, `ReviewStack` records |
+| `Features/Review/ReviewWindowViewModel.cs` *(new)* | stack load via `IReviewStackSource`, selection, reviewed-state, nav; drives details; *(5.5)* `AdvanceToNextUnviewedFile`, wire `MarkReviewedAndAdvance`/`NextUnreviewed`, adaptive primary-action state, core key commands; *(6.5)* mutable `_baseOverride` + effective-session build; base-change → `Reload()` (prune via `ApplyReloadedStack`) |
+| `Features/Review/ReviewHeaderBar.cs` + `ReviewStackList.cs` *(new)* | range/progress bar; increment rail; *(5.5)* header progress **meter** + `‹ Prev · N of M · Next ›` cluster + adaptive primary action; rail "you are here" polish; *(6.5)* base **chip + dropdown** (ref name not SHA, provenance tooltip, in-window ref popup) |
+| `Features/Review/IReviewStackSource.cs` + `StubReviewStackSource.cs` + `GitReviewStackSource.cs` *(new)* | data seam; stub then git impl; *(6.5)* `BaseLabel = ref name`, base ref/kind threaded through |
+| `Features/Review/ReviewStack.cs` *(new)* | `ReviewSession`, `ReviewIncrement`, `ReviewStack` records; *(6.5)* `BaseRef`/`BaseKind` on `ReviewStack` |
 | `Features/Commits/CommitDetailsViewModel.cs` | extract `Show(repoId, sha)` / `Clear()` from `OnCommitSelected`; *(3.5)* tab model: `OpenTabs`, `SelectFile`/`ActivateTab`/`CloseTab`/`ActiveDiff` (drops single `DiffVm`/`SelectedTarget`) |
 | `Features/Commits/CommitFileTab.cs` *(new, 3.5)* | per-open-file tab: a `DiffViewModel` pinned to one `DiffTarget` |
 | `Features/Commits/CommitDetailsTabStrip.cs` *(new, 3.5)* | tab strip (Details + file tabs), shared `CommitTabChrome`, `HorizontalScrollArea` reuse, dividers; *(5.5)* draw-only Viewed mark on file tabs (gated on optional `IReviewedFileTracker`) |
 | `Features/Diff/DiffPaneHeaderWidget.cs` | *(3.5)* `Collapsible` flag (false in tabs — drops the collapse chevron) |
-| `Git/IGitService.cs`, `Git/GitService.cs` | `MergeBase`; `LoadReviewStack` (range RevWalk, first-parent, reversed) |
+| `Git/IGitService.cs`, `Git/GitService.cs` | `MergeBase`; `LoadReviewStack` (range RevWalk, first-parent, reversed); *(6.5)* `ResolveAutoReviewBase` → `ResolvedReviewBase(Sha, Ref, Kind)` (ref+kind, not bare SHA) |
 | `Features/Commits/CommitDetailsView.cs` (+ `FileChangesUI.DrawFileRow`) | *(3.5)* file list + tabbed metadata/diff split, per-tab `IsVisible` body swap; *(5.5)* **draw-only** Viewed check + dim on Changes-list rows (gated on optional `IReviewedFileTracker` + current sha; no hit-test — toggle stays on the header) |
 | `Localization/Strings/*.json` | new strings × all 6 locales |
 | `GitBench.Tests/ReviewStackTests.cs` *(new)* | range-listing + merge-base tests |
@@ -952,6 +1032,8 @@ The Tier-2/3 differentiators; none block the MVP.
 5.5. **Close the review loop** — Viewed feedback on the Changes list/tabs, header progress meter +
    Prev/Next/primary-action, advance-on-view (stop at increment edge), core keys (Phase 5.5).
 6. **Keyboard (remainder) + localization + singleton + polish** (Phase 6).
+6.5. **Legible & selectable base** — base ref name + provenance in the header; in-header dropdown that
+   re-resolves the range in place via the existing reload lane (Phase 6.5).
 7. *(Optional, separable)* version comparator / combined diff / range dialog (Phase 7).
 
 ## Open decisions (recommend, but worth confirming)
@@ -967,7 +1049,10 @@ The Tier-2/3 differentiators; none block the MVP.
    per-increment in 5a, per-file in 5b.
 3. **Default base for "Review changes…".** Merge-base with the branch's *upstream* (more correct for
    a feature-vs-its-target review) vs merge-base with the repo's *default/main* branch; fall back to
-   the range dialog when neither resolves. Recommendation: upstream → default → dialog.
+   the range dialog when neither resolves. Recommendation: upstream → default → dialog. *(Resolved:
+   Phase 4 ships upstream → default → error; **Phase 6.5** makes the resolved base **legible** (ref
+   name + provenance, not a SHA) and **user-overridable** via an in-header dropdown that re-resolves
+   in place — so the auto choice is a default, not a lock-in.)*
 4. **Window dedupe.** Singleton-per-`(repo, head)` with focus-existing (recommended — a review is a
    place you return to) vs allow duplicate windows (the `DiffWindows` default).
 5. **Reviewed-state persistence** in the MVP (ephemeral, recommended) vs persisted from day one
