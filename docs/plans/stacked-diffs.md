@@ -415,6 +415,51 @@ are still fake.
   one updates the file list + diff (with syntax highlighting + intra-line + hunk actions, all
   inherited from `DiffView`); divider drags; layout/spacing/styling tunable. All on real diffs.
 
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **New `Features/Review/` files:** `IReviewStackSource.cs`, `StubReviewStackSource.cs`,
+  `ReviewHeaderBar.cs`, `ReviewStackList.cs` (carries `ReviewStackList`, `ReviewStackRow`, and
+  `ReviewRowController`). `ReviewWindowViewModel` promoted to `ViewModelBase<ReviewState>`;
+  `ReviewWindowsViewModel` ctor widened; `ReviewWindowRootView` rebuilt into the real tree.
+  `CommitDetailsViewModel` gained `Show`/`Clear` + a `subscribeToSelection` flag. The stub is bound
+  in `AppServices` (`AddSingleton<IReviewStackSource, StubReviewStackSource>()`).
+- **Seam shape:** `IReviewStackSource.LoadAsync` returns `Task<ReviewStack>` (no `Fetched`/error
+  field as in step 3.1); an empty range is an empty `Increments` list and a load failure is a thrown
+  exception. The VM bridges it through the proven `RunBackground` path via
+  `LoadAsync(...).GetAwaiter().GetResult()` on the worker (the stub completes synchronously — a truly
+  async Phase-4 source can move off this bridge).
+- **`CommitDetailsViewModel` extraction (3.2):** `Show(repoId, sha)` now resolves the repo **by id**
+  (active-first, then `_registry.Repos`) so a pinned surface keeps working off the active repo;
+  `OnCommitSelected` keeps the active-repo guard before forwarding, so the History pane's behavior is
+  unchanged. **Caveat (decision #2 not fully met yet):** the embedded `DiffViewModel` still resolves
+  `_registry.Active.Value` for its own diff load, so a review window's diffs are correct only while
+  the reviewed repo is the active one — the Phase-3/stub case. Threading the pinned repo through
+  `DiffViewModel` is a later refactor.
+- **Cross-talk fix is the `subscribeToSelection: false` flag, not child-context isolation.** The plan
+  (decision #7) assumed the per-window context made cross-talk "evaporate"; it doesn't, because the
+  message bus is a shared singleton, so a second `CommitDetailsViewModel` would still receive the
+  History pane's `CommitSelectedMessage`. The window's instance opts out of that subscription and is
+  driven only via `Show()`.
+- **Draggable divider via reuse, not a copy of `HistoryView`.** The body is a `BorderLayout` with
+  `West = ResizableSidebar { Content = ReviewStackList }` (the existing `ResizableLeftSidebar`
+  draggable-edge control) and `Center =` the reused `CommitDetailsView` (wrapped by a tiny
+  `CommitDetailsHost : IWidget` so it builds against the `Provide<CommitDetailsViewModel>` scope).
+- **Rail rows** are high-level `Box`/`Row`/`Column` widgets (`Column<ReviewIncrement>` over
+  `vm.Increments`), using the shared `RowSelectionStyles` token (`Fill`/`FillHover`/`AccentBar`) for
+  the selected/hovered look — a **snap**, not the animated slide (the rail reads like a commit list).
+  Reviewed-state is a hollow-circle placeholder (stubbed unreviewed); churn is hidden while `+0 −0`
+  (the stub leaves churn at 0). No `CommitsView.Core` graph renderer, per the plan.
+- **Header/empty/loading strings are hardcoded English literals** (Phase 1/2 precedent); localization
+  is deferred to Phase 6, so no `Strings/*.json` / LOC004 churn here. The loading state is a
+  centered "Loading…" with a `FadeIn` bloom rather than a bespoke skeleton — the right pane already
+  shows the real `CommitDetailsSkeleton` while the first commit loads, and the stub load is
+  effectively instant.
+- **Stub semantics:** ignores `BaseRef`, walks the **first-parent chain from the current HEAD**
+  through the existing `IGitService.Load(...)` snapshot (`FakeRangeSize = 12`), reversed to
+  oldest→newest; base = the oldest increment's first parent. So the *range is fake* (reviewing a
+  non-checked-out branch still walks HEAD; the header may show the clicked branch name over HEAD's
+  commits) — exactly the Phase-3 contract. The VM auto-selects `Increments[0]` (base-most) ⇒
+  "Increment 1 of M".
+
 ### Phase 4 — Real backend (the git range layer)
 
 Swap the stub for the correct `base..head` range. The GUI does not change — only the source.

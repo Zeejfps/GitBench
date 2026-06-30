@@ -50,7 +50,8 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        PreferencesService preferences)
+        PreferencesService preferences,
+        bool subscribeToSelection = true)
         : base(dispatcher, new CommitDetailsState(
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
             null, null, preferences.Current.FileViewMode))
@@ -68,7 +69,10 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         ToggleViewMode = new Command(DoToggleViewMode);
 
         DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, loc: loc);
-        Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
+        // The History pane follows commit selection over the bus; the Review window drives its own
+        // instance directly via Show()/Clear() and opts out so it never reacts to History's selection.
+        if (subscribeToSelection)
+            Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
     }
 
     // Shares the global tree/flat preference with the Local Changes panels so the choice is
@@ -100,23 +104,38 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(msg.Sha))
         {
-            Gen.Bump();
-            _currentSha = null;
-            Update(s => s with
-            {
-                SelectedPath = null,
-                SelectedTarget = null,
-                Render = new CommitDetailsRenderState.Placeholder(DefaultPlaceholder),
-            });
+            Clear();
             return;
         }
-        StartLoad(msg.RepoId, msg.Sha);
+        // The History pane follows only the active repo's selection — guard stale messages from a
+        // repo it has since switched away from.
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != msg.RepoId) return;
+        Show(msg.RepoId, msg.Sha);
     }
 
-    private void StartLoad(Guid repoId, string sha)
+    /// <summary>Resets to the no-selection placeholder, cancelling any in-flight load.</summary>
+    public void Clear()
     {
-        var repo = _registry.Active.Value;
-        if (repo == null || repo.Id != repoId) return;
+        Gen.Bump();
+        _currentSha = null;
+        Update(s => s with
+        {
+            SelectedPath = null,
+            SelectedTarget = null,
+            Render = new CommitDetailsRenderState.Placeholder(DefaultPlaceholder),
+        });
+    }
+
+    /// <summary>
+    /// Loads and shows the given commit's details. The repo is resolved by id (not assumed active),
+    /// so a pinned surface like the Review window keeps working when it isn't the main window's
+    /// active repo. No-ops when the repo isn't open.
+    /// </summary>
+    public void Show(Guid repoId, string sha)
+    {
+        var repo = ResolveRepo(repoId);
+        if (repo == null) return;
 
         _currentSha = sha;
         Update(s => s with
@@ -144,6 +163,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
                 {
                     Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
                 }));
+    }
+
+    private Repo? ResolveRepo(Guid repoId)
+    {
+        var active = _registry.Active.Value;
+        if (active != null && active.Id == repoId) return active;
+        foreach (var r in _registry.Repos)
+            if (r.Id == repoId) return r;
+        return null;
     }
 
     private static CommitDetails MergePointerChanges(CommitDetails details, IReadOnlyList<SubmodulePointerChange> changes)

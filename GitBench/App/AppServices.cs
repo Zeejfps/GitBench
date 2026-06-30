@@ -4,6 +4,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
+using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
@@ -78,6 +79,10 @@ internal static class AppServices
         // staging / commit state from either tab.
         context.AddSingleton<LocalChangesViewModel>();
         context.AddSingleton<UpdateService>();
+
+        // Review windows' data seam. Phase 3 binds the stub (naive HEAD-relative walk on real
+        // commits); Phase 4 swaps in the real base..head source through this single binding.
+        context.AddSingleton<IReviewStackSource, StubReviewStackSource>();
 
         context.AddSingleton<IRepoSnapshotStore>(ctx =>
         {
