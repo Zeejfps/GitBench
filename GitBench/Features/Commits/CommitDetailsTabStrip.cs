@@ -11,10 +11,10 @@ using ZGF.Observable;
 namespace GitBench.Features.Commits;
 
 /// <summary>
-/// The tab strip across the top of the commit-details surface: a fixed "Details" tab (commit
-/// metadata + file list) followed by one tab per open file. The active tab takes the shared
-/// row-selection fill; file tabs carry a close button. Clicking a tab activates it; opening a file
-/// from the list adds or focuses its tab through the <see cref="CommitDetailsViewModel"/>.
+/// The tab strip across the top of the commit-details (metadata/diff) region: a fixed "Details" tab
+/// (commit metadata) followed by one tab per open file. The active tab takes the shared row-selection
+/// fill; file tabs carry a close button. Clicking a tab activates it; opening a file from the list
+/// adds or focuses its tab through the <see cref="CommitDetailsViewModel"/>.
 /// </summary>
 internal sealed record CommitDetailsTabStrip : Widget
 {
@@ -36,12 +36,11 @@ internal sealed record CommitDetailsTabStrip : Widget
             {
                 Child = new Row
                 {
-                    Gap = 1f,
                     CrossAxis = CrossAxisAlignment.Stretch,
                     Children =
                     [
                         new CommitDetailsTab { Vm = Vm },
-                        Each.Of(Vm.OpenTabs, new CommitFileTabButton { Vm = Vm }, gap: 1f, axis: Axis.Horizontal)
+                        Each.Of(Vm.OpenTabs, new CommitFileTabButton { Vm = Vm }, axis: Axis.Horizontal)
                             with { CrossAxis = CrossAxisAlignment.Stretch },
                     ],
                 },
@@ -50,7 +49,7 @@ internal sealed record CommitDetailsTabStrip : Widget
     };
 }
 
-/// <summary>The leftmost, always-present tab: shows the commit metadata + file list. Not closable.</summary>
+/// <summary>The leftmost, always-present tab: shows the commit metadata. Not closable.</summary>
 internal sealed record CommitDetailsTab : Widget
 {
     public required CommitDetailsViewModel Vm { get; init; }
@@ -123,6 +122,9 @@ internal sealed record CommitTabChrome : Widget
         var pill = new Box
         {
             MaxWidth = MaxTabWidth,
+            // A trailing 1px divider between adjacent tabs (and after the last one).
+            BorderSize = new BorderSizeStyle { Right = 1 },
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Right = s.Palette.Border }),
             Background = Prop.Bind(() =>
             {
                 var sel = theme.Styles.Value.RowSelection;
