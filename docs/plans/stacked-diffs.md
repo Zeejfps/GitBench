@@ -1017,6 +1017,17 @@ nothing human-readable to show. Everything below depends on threading that ident
   `GitService.cs` (`ResolveAutoReviewBase`), `GitReviewStackSource.cs`, `ReviewWindowViewModel.cs`,
   `ReviewWindowsViewModel.cs`, `ReviewHeaderBar.cs`, `Localization/Strings/*.json` (×6),
   `GitBench.Tests/ReviewStackTests.cs`.
+- **Framework fix found in testing — secondary windows weren't in the `PointerOwnershipArbiter`.**
+  `SecondaryWindowFactory` built each window's `DesktopInputSystem` with **no arbiter** and never
+  registered it, so the arbiter (the single source of truth for "which window owns the pointer")
+  couldn't deny the main window ownership at screen points overlapping a secondary window — hover
+  (and a context menu opened over it) bled *through* the Review window into the main window's History
+  pane. Fix: thread the shared arbiter into `SecondaryWindowFactory`, `Register(input, isModal:false)`
+  on open / `Unregister` on dispose, and **re-register on `OnFocusChanged(true)`** for both secondary
+  windows and the main window (`GuiApp.HandleMainFocusChanged`) — the arbiter orders by registration
+  as a z-order proxy, so the last-raised window must move to the top to win the overlap. This also
+  silently fixes the same latent bleed-through for the diff pop-out (the other secondary window).
+  Edited: `framework/ZGF.Gui.Desktop/SecondaryWindowFactory.cs`, `framework/ZGF.Gui.Desktop/GuiApp.cs`.
 
 ### Phase 7 — (Optional, separable) version comparator + combined diff
 
