@@ -57,4 +57,16 @@ public sealed partial record ThemeStyles
         var b = Math.Min(0xFFu, (argb & 0xFF) + delta);
         return (a << 24) | (r << 16) | (g << 8) | b;
     }
+
+    // Linearly interpolates RGB from→to by t (0..1), returning a fully opaque color. Used to
+    // derive a saturated shade partway toward an accent without adding a palette slot — t toward
+    // the accent gains saturation in every theme, unlike bumping the alpha of a near-white base.
+    private static uint Mix(uint from, uint to, double t)
+    {
+        static uint Lerp(uint a, uint b, double k) => (uint)Math.Round(a + (b - (double)a) * k);
+        var r = Lerp((from >> 16) & 0xFF, (to >> 16) & 0xFF, t);
+        var g = Lerp((from >> 8) & 0xFF, (to >> 8) & 0xFF, t);
+        var b = Lerp(from & 0xFF, to & 0xFF, t);
+        return 0xFF000000u | (r << 16) | (g << 8) | b;
+    }
 }

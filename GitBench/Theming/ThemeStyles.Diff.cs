@@ -90,9 +90,13 @@ public partial record ThemeStyles
     // legible through them. 0x00 = invisible, 0xFF = fully opaque (the pre-highlighting look).
     private const byte DiffLineTintAlpha = 0x80;
 
-    // Stronger tint for the actually-changed characters in a replace block, layered over the
-    // faint line tint above so the changed words stand out (the GitHub/VS Code look).
-    private const byte DiffEmphasisTintAlpha = 0xC8;
+    // The changed-character box: blend the faint line tint toward the vivid status accent, then
+    // draw semi-transparent over the line wash. Blending toward the accent (not just raising the
+    // line tint's alpha) gains real saturation in every theme; keeping it translucent lets the
+    // line tint show through so it doesn't overpower — dark's accent is far punchier than light's,
+    // so a lower mix tames dark more than light, matching how vivid each theme's accent is.
+    private const double DiffEmphasisMix = 0.42;
+    private const byte DiffEmphasisAlpha = 0xC8;
 
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
@@ -105,10 +109,10 @@ public partial record ThemeStyles
             // clearly through them; the full-strength +/- glyphs still signal the line kind.
             // Lower the alpha (e.g. 0x66) for a fainter tint, raise it (e.g. 0xB3) for a bolder one.
             LineAddedBackground: WithAlpha(status.SuccessLineBg, DiffLineTintAlpha),
-            LineAddedEmphasisBackground: WithAlpha(status.SuccessLineBg, DiffEmphasisTintAlpha),
+            LineAddedEmphasisBackground: WithAlpha(Mix(status.SuccessLineBg, status.Success, DiffEmphasisMix), DiffEmphasisAlpha),
             LineAddedGlyph: status.SuccessLineGlyph,
             LineRemovedBackground: WithAlpha(status.DangerLineBg, DiffLineTintAlpha),
-            LineRemovedEmphasisBackground: WithAlpha(status.DangerLineBg, DiffEmphasisTintAlpha),
+            LineRemovedEmphasisBackground: WithAlpha(Mix(status.DangerLineBg, status.Danger, DiffEmphasisMix), DiffEmphasisAlpha),
             LineRemovedGlyph: status.DangerLineGlyph,
             LineContextGlyph: p.TextMuted,
             SectionBackground: p.SurfaceRaised,
