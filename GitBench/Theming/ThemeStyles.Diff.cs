@@ -95,7 +95,7 @@ public partial record ThemeStyles
     // line tint's alpha) gains real saturation in every theme; keeping it translucent lets the
     // line tint show through so it doesn't overpower — dark's accent is far punchier than light's,
     // so a lower mix tames dark more than light, matching how vivid each theme's accent is.
-    private const double DiffEmphasisMix = 0.42;
+    private const double DiffEmphasisMix = 0.38;
     private const byte DiffEmphasisAlpha = 0xC8;
 
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
