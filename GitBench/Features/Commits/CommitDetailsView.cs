@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
@@ -61,6 +62,7 @@ internal sealed class CommitDetailsView : ContainerView
         _canvas = ctx.Canvas;
         _theme = ctx.Theme();
         _loc = ctx.Localization();
+        var preferences = ctx.Require<PreferencesService>();
         var vm = ctx.Require<CommitDetailsViewModel>();
 
         _headerInfo = new ColumnView { Gap = Spacing.Md };
@@ -120,9 +122,11 @@ internal sealed class CommitDetailsView : ContainerView
             splitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
         // Top: the file list, always visible. Bottom: the tabbed metadata/diff region (the larger
         // share), shown once a commit is loaded (BottomVisible toggled in ShowDetails/ShowPlaceholder).
-        _contentView = new VerticalSplitContainer(_changesSection, tabbedRegion, splitter, bottomFraction: 2f / 3f)
+        _contentView = new VerticalSplitContainer(_changesSection, tabbedRegion, splitter,
+            bottomFraction: preferences.Current.CommitDetailsSplitFraction)
         {
             BottomVisible = false,
+            FractionChanged = preferences.SetCommitDetailsSplitFraction,
         };
         splitter.UseController(input, () => new SplitterController(
             ctx,

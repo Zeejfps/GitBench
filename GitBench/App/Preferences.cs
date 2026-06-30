@@ -15,6 +15,7 @@ public sealed record Preferences
     public float RepoBarWidth { get; init; } = 220f;
     public float BranchesWidth { get; init; } = 220f;
     public float CommitDetailsWidth { get; init; } = 380f;
+    public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;
     public FileViewMode FileViewMode { get; init; } = FileViewMode.Flat;
 
     public static Preferences Default { get; } = new();

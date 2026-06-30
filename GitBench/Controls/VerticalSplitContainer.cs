@@ -24,6 +24,10 @@ internal sealed class VerticalSplitContainer : ContainerView
     private float _collapsedBottomHeight;
     private float _bottomFraction;
 
+    /// <summary>Raised with the new bottom fraction after a drag changes it; lets a caller persist
+    /// the split position.</summary>
+    public Action<float>? FractionChanged { get; set; }
+
     public VerticalSplitContainer(View top, View bottom, View splitter, float bottomFraction)
     {
         _top = top;
@@ -74,8 +78,11 @@ internal sealed class VerticalSplitContainer : ContainerView
         if (!_bottomVisible || _bottomCollapsed) return;
         var available = Position.Height - SplitterThickness;
         if (available <= 0f) return;
-        _bottomFraction = Math.Clamp(_bottomFraction + dy / available, MinFraction, MaxFraction);
+        var next = Math.Clamp(_bottomFraction + dy / available, MinFraction, MaxFraction);
+        if (next == _bottomFraction) return;
+        _bottomFraction = next;
         SetDirty();
+        FractionChanged?.Invoke(_bottomFraction);
     }
 
     private void SyncBottomChildren()
