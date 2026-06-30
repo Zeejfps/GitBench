@@ -23,7 +23,6 @@ public sealed record CommitHistory : Widget
 internal sealed class HistoryView : ContainerView
 {
     private const float MinDetailsWidth = 240f;
-    private const float MaxDetailsWidth = 800f;
     private const float MinCenterWidth = 320f;
     private const float DefaultDetailsWidth = 380f;
     private const float DividerHitWidth = 6f;
@@ -62,10 +61,14 @@ internal sealed class HistoryView : ContainerView
             _detailsWidth = _preferences.Current.CommitDetailsWidth;
     }
 
+    // The details panel may grow until the commits list reaches its minimum — no fixed upper cap, so a
+    // wide window can give the details panel as much room as the user drags for.
+    private float MaxDetailsWidthForLayout() => Math.Max(MinDetailsWidth, Position.Width - MinCenterWidth);
+
     protected override void OnLayoutChildren()
     {
         var pos = Position;
-        var detailsWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var detailsWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
         var centerWidth = Math.Max(MinCenterWidth, pos.Width - detailsWidth);
         if (centerWidth + detailsWidth > pos.Width)
         {
@@ -92,7 +95,7 @@ internal sealed class HistoryView : ContainerView
     {
         if (!_dividerHovered) return;
         var pos = Position;
-        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
         var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
         var z = GetDrawZIndex();
         c.DrawRect(new DrawRectInputs
@@ -113,7 +116,7 @@ internal sealed class HistoryView : ContainerView
     {
         var pos = Position;
         if (point.Y < pos.Bottom || point.Y > pos.Top) return false;
-        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidth);
+        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
         var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
         return Math.Abs(point.X - dividerX) <= DividerHitWidth * 0.5f;
     }
@@ -130,9 +133,7 @@ internal sealed class HistoryView : ContainerView
         // Dragging right (positive delta) shrinks the right panel and grows the center; under RTL the
         // details panel is on the left, so the drag direction flips.
         if (IsRtl) mouseDeltaX = -mouseDeltaX;
-        var pos = Position;
-        var maxByCenter = pos.Width - MinCenterWidth;
-        var newWidth = Math.Clamp(_detailsWidth - mouseDeltaX, MinDetailsWidth, Math.Min(MaxDetailsWidth, maxByCenter));
+        var newWidth = Math.Clamp(_detailsWidth - mouseDeltaX, MinDetailsWidth, MaxDetailsWidthForLayout());
         if (Math.Abs(newWidth - _detailsWidth) < 0.0001f) return;
         _detailsWidth = newWidth;
         _preferences?.SetCommitDetailsWidth(newWidth);
