@@ -361,6 +361,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         var digits = Math.Max(1, DigitCount(ff.Lines.Count));
         _gutterWidth = digits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
 
+        var emphasis = ff.Emphasis;
         for (var i = 0; i < ff.Lines.Count; i++)
         {
             var lineNumber = i + 1;
@@ -370,7 +371,9 @@ internal sealed class DiffContentView : View, IScrollableContent
             // which is exactly what the full after-side file needs.
             var spans = ff.Highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
             if (spans != null && spans.Count == 0) spans = null;
-            _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, text.Length, spans));
+            IReadOnlyList<CharRange>? em = null;
+            emphasis?.TryGetValue(lineNumber, out em);
+            _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, text.Length, spans, em));
             var cells = VisualCells(text);
             if (cells > _maxRowCells) _maxRowCells = cells;
         }

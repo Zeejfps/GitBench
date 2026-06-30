@@ -25,12 +25,16 @@ internal abstract record DiffRenderState
     // Full after-side file. AddedLineNumbers are 1-based new-file line numbers tinted as additions
     // (derived from the diff's Added rows); every other line renders as context. Removed lines are
     // absent — this is the current state of the file. Highlight reuses the new-side spans.
+    // Emphasis maps a new-file line number to its intra-line changed-character ranges: the diff has
+    // both sides, so the new-side ranges are paired up here (the view can't, it only sees the
+    // after-file). Only added lines that paired with a similar removed line appear.
     public sealed record FullFile(
         string Path,
         IReadOnlyList<string> Lines,
         IReadOnlySet<int> AddedLineNumbers,
         DiffSide Side,
         bool Truncated,
+        IReadOnlyDictionary<int, IReadOnlyList<CharRange>>? Emphasis = null,
         DiffHighlight? Highlight = null) : DiffRenderState;
     // A conflicted (unmerged) working-tree file. Drives the Fork-style resolution header
     // (two side cards + take ours/theirs/both + open-in-editor) instead of a normal diff.
@@ -481,12 +485,30 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
 
         var added = new HashSet<int>();
+        Dictionary<int, IReadOnlyList<CharRange>>? emphasis = null;
         foreach (var hunk in diff.Hunks)
-            foreach (var line in hunk.Lines)
-                if (line.Kind == DiffLineKind.Added && line.NewLineNumber is int n)
-                    added.Add(n);
+        {
+            // Intra-line pairing needs both sides; do it here while the diff is in hand, keyed by
+            // new-line number so the after-file view can attach the new-side ranges per row.
+            IReadOnlyList<CharRange>?[]? hunkEmphasis = null;
+            if (DiffOptions.IntraLineHighlightingEnabled)
+            {
+                var expanded = new string[hunk.Lines.Count];
+                for (var i = 0; i < hunk.Lines.Count; i++)
+                    expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
+                hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
+            }
+            for (var i = 0; i < hunk.Lines.Count; i++)
+            {
+                var line = hunk.Lines[i];
+                if (line.Kind != DiffLineKind.Added || line.NewLineNumber is not int n) continue;
+                added.Add(n);
+                if (hunkEmphasis?[i] is { Count: > 0 } ranges)
+                    (emphasis ??= new Dictionary<int, IReadOnlyList<CharRange>>())[n] = ranges;
+            }
+        }
 
-        return new DiffRenderState.FullFile(path, lines, added, side, truncated);
+        return new DiffRenderState.FullFile(path, lines, added, side, truncated, emphasis);
     }
 
     // Splits file text into display lines, normalizing CRLF/CR to LF and dropping the single empty
