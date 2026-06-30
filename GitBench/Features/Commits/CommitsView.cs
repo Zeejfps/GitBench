@@ -31,7 +31,7 @@ internal sealed record CommitsView : Widget
     internal sealed class Core : ContainerView
     {
         private const float HeaderHeight = 28f;
-        private const float RowHeight = 26f;
+        private const float RowHeight = 36f;
         private const float ColumnGap = 12f;
 
         private const float DefaultAuthorColumnWidth = 140f;
@@ -687,8 +687,14 @@ internal sealed record CommitsView : Widget
 
             // Filtered list is flat: skip the graph cell and start the summary at the graph origin.
             if (!_filtering)
-                CommitGraphRenderer.DrawCell(c, node, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground,
+            {
+                // The graph cell draws lane-shift S-curves that span the full gap into its neighbours'
+                // rows, so it needs the adjacent commits to know which half-stubs those curves cover.
+                var prevNode = rowIndex > 0 ? snap.Commits[rowIndex - 1] : null;
+                var nextNode = rowIndex + 1 < snap.Commits.Count ? snap.Commits[rowIndex + 1] : null;
+                CommitGraphRenderer.DrawCell(c, node, prevNode, nextNode, graphStartX, rowBottom, RowHeight, snap.LaneCount, z + 1, rowBackground,
                     IsRtl, Position.Left + Position.Right);
+            }
 
             var textTop = rowBottom;
             var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
