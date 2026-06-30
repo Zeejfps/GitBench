@@ -28,6 +28,10 @@ internal static class CommitGraphRenderer
     private const float DashLength = 4f;
     private const float GapLength = 3f;
     private const float RingThickness = 1.75f;
+    // How far each lane-shift curve's control points are pushed past the vertical midpoint (0.5 =
+    // midpoint). Higher values keep the curve vertical longer at each end and sharpen the central
+    // crossing, reading as a more pronounced "S".
+    private const float CurveTension = 0.85f;
 
     private static uint LaneColor(int lane) => CategoricalPalette.Lane(lane);
 
@@ -55,7 +59,7 @@ internal static class CommitGraphRenderer
         return LaneCenterX(graphStartX, maxLane, laneCount) + DotRadius + PaddingRight;
     }
 
-    public static void DrawCell(ICanvas c, CommitNode node, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z, uint rowBackground, bool isRtl = false, float mirrorBound = 0f)
+    public static void DrawCell(ICanvas c, CommitNode node, CommitNode? prevNode, CommitNode? nextNode, float graphStartX, float rowBottom, float rowHeight, int laneCount, int z, uint rowBackground, bool isRtl = false, float mirrorBound = 0f)
     {
         // Under RTL the graph mirrors with the rest of the row: every lane x reflects within the
         // row, so lanes run right-to-left and edges/dots follow. All x's flow from LaneCenterX, so
@@ -71,28 +75,41 @@ internal static class CommitGraphRenderer
         var stash = IsStash(node);
         var dashed = stash || node.RemoteOnly;
 
-        // Pass-through verticals (lanes with no interaction at this row) stay solid —
-        // they belong to whatever lane is passing, not to this (possibly dashed) commit.
+        // A lane-shift edge is one S-curve spanning the whole gap between two dots, drawn by the dot
+        // it springs from (a divergence descends from the row above; a convergence rises from the row
+        // below). So this row must skip its own straight stub on a lane a neighbour's curve already
+        // owns, or the stub and the curve would overlap into a forked double line:
+        //   top half covered    -> the row above branched a NEW lane down into this one;
+        //   bottom half covered -> the row below merges this lane up into its dot.
+        bool TopCovered(int lane) => prevNode is not null && IsNewLaneShift(prevNode, lane);
+        bool BottomCovered(int lane) => nextNode is not null && Contains(nextNode.IncomingLanes, lane);
+
+        // Pass-through verticals (lanes with no interaction at this row) stay solid — they belong to
+        // whatever lane is passing, not to this (possibly dashed) commit. A covered half is dropped so
+        // the neighbour's curve owns it.
         foreach (var ptLane in node.PassThroughLanes)
         {
             var x = Mx(LaneCenterX(graphStartX, ptLane, laneCount));
-            DrawSegment(c, x, rowBottom, x, rowTop, LaneColor(ptLane), z);
+            var yLow = BottomCovered(ptLane) ? rowCenterY : rowBottom;
+            var yHigh = TopCovered(ptLane) ? rowCenterY : rowTop;
+            if (yHigh > yLow)
+                DrawSegment(c, x, yLow, x, yHigh, LaneColor(ptLane), z);
         }
 
-        // Top half of commit's own lane (only if an edge continues from above).
-        if (node.HasIncomingAtCommitLane)
+        // Top half of commit's own lane — unless it's the tail of a divergence curve descending into
+        // this dot, which already covers it.
+        if (node.HasIncomingAtCommitLane && !TopCovered(node.Lane))
         {
             DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z, dashed: dashed);
         }
 
-        // Incoming merge edges from other lanes above this commit: a connector that
-        // leaves the lane vertically at the top boundary (so it lines up with the
-        // vertical above) and bends through the elbow into the dot, blending the
-        // source lane's color into this commit's.
+        // Convergence: lanes merging into this dot from above. Each is a full-gap S rising straight
+        // from the source dot one row up into this circle, blending the source lane's color into this
+        // commit's. The source row drops its matching bottom-half stub (see BottomCovered there).
         foreach (var inLane in node.IncomingLanes)
         {
             var inCx = Mx(LaneCenterX(graphStartX, inLane, laneCount));
-            DrawCurve(c, inCx, rowTop, inCx, rowCenterY, commitCx, rowCenterY, LaneColor(inLane), z, commitColor, dashed);
+            DrawCurve(c, inCx, rowCenterY + rowHeight, commitCx, rowCenterY, LaneColor(inLane), z, commitColor, dashed);
         }
 
         // Outgoing edges to parents (continuation + branches).
@@ -102,13 +119,22 @@ internal static class CommitGraphRenderer
             var pColor = LaneColor(pl.Lane);
             if (pl.Lane == node.Lane)
             {
-                DrawSegment(c, commitCx, rowBottom, commitCx, rowCenterY, commitColor, z, dashed: dashed);
+                // Straight continuation down the commit's own lane — unless the row below pulls this
+                // lane up into its dot, whose convergence curve then owns the bottom half.
+                if (!BottomCovered(node.Lane))
+                    DrawSegment(c, commitCx, rowBottom, commitCx, rowCenterY, commitColor, z, dashed: dashed);
+            }
+            else if (Contains(node.PassThroughLanes, pl.Lane))
+            {
+                // Merge into a lane that already runs below this row: a half-S into the existing vertical.
+                DrawCurve(c, commitCx, rowCenterY, pCx, rowBottom, commitColor, z, pColor, dashed);
             }
             else
             {
-                // Connector from the dot down to where the parent lane continues below,
-                // arriving vertically and blending this commit's color into the parent lane's.
-                DrawCurve(c, commitCx, rowCenterY, pCx, rowCenterY, pCx, rowBottom, commitColor, z, pColor, dashed);
+                // Divergence onto a freshly branched lane: a full-gap S running straight from this dot
+                // to the next dot on that lane, so a branch leaves its parent circle with no straight
+                // stub. The landing row drops its matching top-half stub (see TopCovered there).
+                DrawCurve(c, commitCx, rowCenterY, pCx, rowCenterY - rowHeight, commitColor, z, pColor, dashed);
             }
         }
 
@@ -162,6 +188,28 @@ internal static class CommitGraphRenderer
         return false;
     }
 
+    // True when <paramref name="above"/> branches a parent onto <paramref name="lane"/> as a freshly
+    // allocated lane — neither its own lane nor an already-running pass-through. That parent edge is
+    // the divergence S-curve descending into the row below, so the row below must skip its top stub
+    // there. Matches the divergence branch in the outgoing-edge loop above.
+    private static bool IsNewLaneShift(CommitNode above, int lane)
+    {
+        if (lane == above.Lane || Contains(above.PassThroughLanes, lane))
+            return false;
+        foreach (var pl in above.InWalkParentLanes)
+            if (pl.Lane == lane)
+                return true;
+        return false;
+    }
+
+    private static bool Contains(IReadOnlyList<int> lanes, int lane)
+    {
+        for (var i = 0; i < lanes.Count; i++)
+            if (lanes[i] == lane)
+                return true;
+        return false;
+    }
+
     private static void DrawSegment(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z,
         uint? gradientEnd = null, bool dashed = false)
     {
@@ -178,13 +226,19 @@ internal static class CommitGraphRenderer
         });
     }
 
-    private static void DrawCurve(ICanvas c, float x0, float y0, float cx, float cy, float x1, float y1, uint color, int z,
+    // A smooth S between the two endpoints with vertical tangents at both, so it lines up with the
+    // vertical lanes it joins. The control points sit on each endpoint's vertical, pushed past the
+    // midpoint by CurveTension so the curve hugs the lane longer at each end and crosses sharply in
+    // the middle — a more pronounced "S" than midpoint controls give.
+    private static void DrawCurve(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z,
         uint? gradientEnd = null, bool dashed = false)
     {
-        c.DrawBezier(new DrawBezierInputs
+        var dy = y1 - y0;
+        c.DrawCubicBezier(new DrawCubicBezierInputs
         {
             Start = new PointF(x0, y0),
-            Control = new PointF(cx, cy),
+            Control1 = new PointF(x0, y0 + dy * CurveTension),
+            Control2 = new PointF(x1, y1 - dy * CurveTension),
             End = new PointF(x1, y1),
             Thickness = EdgeThickness,
             Color = color,
