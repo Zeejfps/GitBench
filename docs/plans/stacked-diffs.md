@@ -658,13 +658,93 @@ Make it a review tool, not just a stack viewer.
   `ReviewWindowRootView` (`Provide<IReviewedFileTracker>`), `DiffViewModel` (`Target`),
   `DiffPaneHeaderWidget` (gated Viewed toggle).
 
+### Phase 5.5 — Close the review loop (feedback + progression)  [interjected after Phase 5]
+
+Not in the original plan. Phase 5 wired the reviewed/viewed **state** but never built the surface
+that exposes it or the controls that drive through it — so in practice the window reads as a stack
+*viewer*, not a review *tool*: ticking **Viewed** has no effect the eye can find, and there is no
+**Next**. This phase closes the loop. It is mostly *wiring methods that already exist* + *drawing
+state that already exists* — small code, high payoff. No git / `IReviewStackSource` changes.
+
+**Why "Viewed does nothing" — verified, not a bug (read before starting):**
+- The state machine is correct end-to-end. Click → `Command` → `IReviewedFileTracker.ToggleViewed`
+  (`ReviewedFileTracker.cs:24-30`) flips the set + bumps `Revision`; the `Derived` files-viewed
+  label recomputes; viewing an increment's last file auto-marks it (`ReviewWindowViewModel.cs:236-247`).
+  Nothing is mis-fired.
+- The problem is purely **where feedback surfaces**: the only visible change is the header button
+  glyph (`Square`→`CheckSquare` + green, `DiffPaneHeaderWidget.cs:147-160`). The **Changes file-list
+  row shows nothing** (`CommitDetailsView.cs:94` only selects), the **file tab shows nothing**
+  (`CommitDetailsTabStrip.cs:108-160`), and the one progress readout is a `Caption`/`TextMuted`
+  string in the far top-right (`ReviewHeaderBar.cs:59-66`) — away from the diff the eye is on.
+- And the loop **dead-ends**: `MarkReviewedAndAdvance()` / `NextUnreviewed()` exist
+  (`ReviewWindowViewModel.cs:129,143`) but **have no callers** — no button, no key. `ReviewHeaderBar`
+  is text-only; the only nav is a rail-row click (`ReviewStackList.cs:45`). Marking Viewed leaves the
+  cursor exactly where it was.
+
+**UX north star for this phase (from the research):** across GitHub, Gerrit, Graphite, and
+Reviewable two patterns are universal — (1) marking a file viewed produces an **immediate, *local*,
+visible change** (the file gets out of your way), and (2) there is **always an explicit advance**
+(a Next control, a shortcut, or auto-advance). We have neither; 5.5 adds both.
+
+- **5.5.1 — Viewed visibility in the always-visible Changes list (highest leverage).** The top pane
+  from Phase 3.5 is our GitHub-style "what's left" surface and today it's blank. Draw a check glyph
+  + dim the label on viewed rows in `FileChangesUI.DrawFileRow`. **Draw-only — no hit-test**, so it
+  sidesteps the Phase 5b objection (the list is virtualized/canvas-drawn; an *interactive* checkbox
+  there is painful) — the interactive toggle stays on the diff header; the row only *reflects*
+  `IReviewedFileTracker.IsViewed(sha, path)`. Gate on the optional `ctx.Get<IReviewedFileTracker>()`
+  + the current sha (`CommitDetailsViewModel._currentSha`) so the **History pane stays clean** (no
+  tracker ⇒ no marks) — same opt-in seam as Phase 5b's header.
+- **5.5.2 — Viewed mark on the file tab.** A check glyph (or strikethrough) in `CommitDetailsTabStrip`
+  / `CommitTabChrome`, same optional-tracker + sha gating, so an open tab also shows done-ness.
+- **5.5.3 — Header progress, promoted from caption to a real meter.** Replace the muted "X / Y files
+  viewed" string with a glanceable progress bar (files within the selected increment **and**
+  increments within the stack — the Reviewable "donut" idea). Reuses the data already computed for
+  `FilesViewedLabel` + `ReviewedShas`/`Increments.Count`; add a **"Review complete ✓"** terminal
+  state when all increments are reviewed.
+- **5.5.4 — Increment nav cluster + adaptive primary action (the literal "Next").** In
+  `ReviewHeaderBar`: `‹ Prev · Increment N of M · Next ›` buttons → `SelectIncrement(prev/next sha)`
+  (turns today's dead "Increment N of M" text into controls). Plus a **primary action button by the
+  diff** whose label adapts: *"Mark viewed → next file"* within an increment → *"Next increment ›"*
+  once the increment's last file is viewed → *"Review complete"* at the tip. It wires the
+  **already-existing, currently-dead** `MarkReviewedAndAdvance()` / `NextUnreviewed()`.
+- **5.5.5 — Advance-on-view, stopping at the increment edge (locked).** Marking a file Viewed opens
+  the next **unviewed file's** tab in the same increment (`_details.SelectFile`, the tabbed analog of
+  GitHub's collapse-and-move-on). When the **last** file of the increment is viewed, the cursor
+  **stays put** and the primary action flips to *"Next increment ›"* — crossing a commit boundary is
+  always an explicit choice, never automatic. (New small VM method, e.g. `AdvanceToNextUnviewedFile`.)
+- **5.5.6 — Rail polish.** Strengthen the "you are here" treatment; keep the **binary** reviewed dot
+  (empty / filled-`Status.Success`). *Defer per-row partial progress ("2/4")* — it needs each
+  increment's file count, which isn't loaded for un-opened increments (`FilesChanged` is still 0 since
+  Phase 4); fold it into the later churn/`numstat` pass rather than block 5.5.
+- **5.5.7 — Core keyboard (the loop-critical subset; full set still Phase 6).** Wire into the window's
+  own `InputSystem`, reusing `ListArrowKbmController` where the file/increment lists already fit:
+  `Enter`/`Space` = **mark viewed → advance** (5.5.5), `[`/`]` = **prev/next increment**, `j`/`k` =
+  **prev/next file**. The remaining keys (`v`, `n`), the `?` **cheatsheet overlay**, and
+  **localization** of all 5.5 strings stay in Phase 6 (single keyboard + localization pass there).
+
+**Locked decisions for this phase:**
+- **Auto-advance = next unviewed *file*, stop at the increment edge** (explicit hop between commits) —
+  not fully-automatic across increments, and not badge-only. (User decision.)
+- **Core keys land here**; `v`/`n`/cheatsheet/localization defer to Phase 6. (User decision.)
+- **Viewed indicators are draw-only and gated on the optional `IReviewedFileTracker`** — History pane
+  and Local Changes show nothing (same opt-in seam as Phase 5b).
+- **New strings stay English literals** (Phases 1–5 precedent); localized in Phase 6 — no
+  `Strings/*.json` / LOC004 churn here.
+- **State stays ephemeral** (persistence + content-hash "Changed since last view" remain Phase 6).
+
+- **Ship / test locally:** open a multi-commit branch's review. Scan the Changes list — viewed rows
+  are checked/dimmed. Click a file → read → **Viewed** (row **and** tab check off, the header meter
+  climbs) → the next unviewed file opens automatically → after the increment's last file the cursor
+  holds and the primary action reads *"Next increment ›"* → click it (or `]`) → the rail advances and
+  the dot for the finished increment is filled → at the tip the header shows **"Review complete."**
+  `Enter`/`Space`, `[`/`]`, `j`/`k` drive the same loop without the mouse.
+
 ### Phase 6 — Keyboard, localization, polish
 
-- **Keyboard** (research-backed set), wired into the window's own `InputSystem`, reusing
-  `ListArrowKbmController` where the file/increment lists already fit: `j`/`k` next/prev **file**;
-  `]`/`[` (or `Shift+J`/`Shift+K`) next/prev **increment**; `v` mark **Viewed**; `n` **next
-  unreviewed**; `Enter`/`space` mark-reviewed-and-advance; `?` opens a **cheatsheet overlay** (ship
-  it — every researched tool has one).
+- **Keyboard — the *remainder* (the core loop keys `j`/`k`, `[`/`]`, `Enter`/`Space` landed in
+  Phase 5.5).** Add `v` mark **Viewed** and `n` **next unreviewed** (wiring `NextUnreviewed()`),
+  plus `?` opens a **cheatsheet overlay** documenting the full set (ship it — every researched tool
+  has one).
 - **Window singleton/focus-existing:** before appending in `ReviewWindowsViewModel`, if a window for
   the same `(repoId, headRef)` is open, focus it instead (the `DiffWindows` template has no dedupe;
   we add it).
@@ -716,16 +796,16 @@ The Tier-2/3 differentiators; none block the MVP.
 | `Features/Review/ReviewWindowsView.cs` *(new)* | zero-sized presenter → `ISecondaryWindowFactory.Open` |
 | `App/AppView.cs` | mount `ReviewWindowsView` next to `DiffWindowsView` |
 | `Features/Review/ReviewWindowRootView.cs` *(new)* | window tree: header bar + split |
-| `Features/Review/ReviewWindowViewModel.cs` *(new)* | stack load via `IReviewStackSource`, selection, reviewed-state, nav; drives details |
-| `Features/Review/ReviewHeaderBar.cs` + `ReviewStackList.cs` *(new)* | range/progress bar; increment rail |
+| `Features/Review/ReviewWindowViewModel.cs` *(new)* | stack load via `IReviewStackSource`, selection, reviewed-state, nav; drives details; *(5.5)* `AdvanceToNextUnviewedFile`, wire `MarkReviewedAndAdvance`/`NextUnreviewed`, adaptive primary-action state, core key commands |
+| `Features/Review/ReviewHeaderBar.cs` + `ReviewStackList.cs` *(new)* | range/progress bar; increment rail; *(5.5)* header progress **meter** + `‹ Prev · N of M · Next ›` cluster + adaptive primary action; rail "you are here" polish |
 | `Features/Review/IReviewStackSource.cs` + `StubReviewStackSource.cs` + `GitReviewStackSource.cs` *(new)* | data seam; stub then git impl |
 | `Features/Review/ReviewStack.cs` *(new)* | `ReviewSession`, `ReviewIncrement`, `ReviewStack` records |
 | `Features/Commits/CommitDetailsViewModel.cs` | extract `Show(repoId, sha)` / `Clear()` from `OnCommitSelected`; *(3.5)* tab model: `OpenTabs`, `SelectFile`/`ActivateTab`/`CloseTab`/`ActiveDiff` (drops single `DiffVm`/`SelectedTarget`) |
 | `Features/Commits/CommitFileTab.cs` *(new, 3.5)* | per-open-file tab: a `DiffViewModel` pinned to one `DiffTarget` |
-| `Features/Commits/CommitDetailsTabStrip.cs` *(new, 3.5)* | tab strip (Details + file tabs), shared `CommitTabChrome`, `HorizontalScrollArea` reuse, dividers |
+| `Features/Commits/CommitDetailsTabStrip.cs` *(new, 3.5)* | tab strip (Details + file tabs), shared `CommitTabChrome`, `HorizontalScrollArea` reuse, dividers; *(5.5)* draw-only Viewed mark on file tabs (gated on optional `IReviewedFileTracker`) |
 | `Features/Diff/DiffPaneHeaderWidget.cs` | *(3.5)* `Collapsible` flag (false in tabs — drops the collapse chevron) |
 | `Git/IGitService.cs`, `Git/GitService.cs` | `MergeBase`; `LoadReviewStack` (range RevWalk, first-parent, reversed) |
-| `Features/Commits/CommitDetailsView.cs` | *(3.5)* file list + tabbed metadata/diff split, per-tab `IsVisible` body swap; *(Phase 5b, + file-row)* optional `IReviewedFileTracker` Viewed checkbox |
+| `Features/Commits/CommitDetailsView.cs` (+ `FileChangesUI.DrawFileRow`) | *(3.5)* file list + tabbed metadata/diff split, per-tab `IsVisible` body swap; *(5.5)* **draw-only** Viewed check + dim on Changes-list rows (gated on optional `IReviewedFileTracker` + current sha; no hit-test — toggle stays on the header) |
 | `Localization/Strings/*.json` | new strings × all 6 locales |
 | `GitBench.Tests/ReviewStackTests.cs` *(new)* | range-listing + merge-base tests |
 | *(Phase 7, optional)* `Git/DiffResult.cs`, `Git/GitService.cs`, `Features/Diff/DiffViewModel.cs` | range/combined diff (`git diff base...head`, `git range-diff`) |
@@ -740,7 +820,9 @@ The Tier-2/3 differentiators; none block the MVP.
 4. **Git backend** — `MergeBase` + `LoadReviewStack` + `GitReviewStackSource` + tests; swap the
    source (Phase 4).
 5. **Reviewed-state** — increment-level, then per-file Viewed + progress + next-unreviewed (Phase 5).
-6. **Keyboard + localization + singleton + polish** (Phase 6).
+5.5. **Close the review loop** — Viewed feedback on the Changes list/tabs, header progress meter +
+   Prev/Next/primary-action, advance-on-view (stop at increment edge), core keys (Phase 5.5).
+6. **Keyboard (remainder) + localization + singleton + polish** (Phase 6).
 7. *(Optional, separable)* version comparator / combined diff / range dialog (Phase 7).
 
 ## Open decisions (recommend, but worth confirming)
