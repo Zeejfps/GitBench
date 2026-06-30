@@ -3,6 +3,8 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
@@ -34,6 +36,10 @@ internal sealed record ReviewWindowRootView : Widget
             },
         };
 
+        // Window-level keyboard for the review loop ([ ] increments, j/k files, Enter/Space primary
+        // action). Attached to the root box so it sits in the hover/bubble path for the whole window;
+        // it never steals focus, so the file list keeps its own arrow-key focus.
+        var input = ctx.Require<InputSystem>();
         var content = new Box
         {
             Background = Theme.Color(s => s.Palette.Surface),
@@ -45,7 +51,7 @@ internal sealed record ReviewWindowRootView : Widget
                     Center = body,
                 },
             ],
-        };
+        }.WithController(input, () => new ReviewKeyController(Model));
 
         // The Viewed tracker is provided across the whole window so the reused diff-pane header (deep in
         // the right pane's tabs) resolves it and shows its per-file Viewed toggle.
@@ -65,10 +71,16 @@ internal sealed record ReviewWindowRootView : Widget
             MinResizeWidth = 240f,
             MaxResizeWidth = 600f,
         },
+        // The reused details surface with the review action bar pinned beneath it — the explicit
+        // "Next" the review loop turns on.
         Center = new Provide<CommitDetailsViewModel>
         {
             Value = Model.Details,
-            Child = new CommitDetailsHost(),
+            Child = new BorderLayout
+            {
+                Center = new CommitDetailsHost(),
+                South = new ReviewActionBar(),
+            },
         },
     };
 

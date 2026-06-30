@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
@@ -48,6 +49,19 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly HorizontalScrollBarView _hScrollBar;
     private readonly IReadable<string?>? _selectedPath;
     private readonly Action<FileChange>? _onRowClicked;
+
+    // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
+    // so the History pane and Local Changes stay clean). When present, rows whose (sha, path) is viewed
+    // draw a trailing check and dim their label. Reflect-only: the toggle lives on the diff header.
+    private readonly IReviewedFileTracker? _reviewedFiles;
+    private string? _reviewSha;
+    private readonly TextStyle _viewedIconStyle = new()
+    {
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.Center,
+        VerticalAlignment = TextAlignment.Center,
+    };
 
     private IReadOnlyList<FileChange> _files = Array.Empty<FileChange>();
     private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
@@ -124,6 +138,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _canvas = ctx.Canvas;
         _registry = ctx.Get<IRepoRegistry>();
         _bus = ctx.Get<IMessageBus>();
+        _reviewedFiles = ctx.Get<IReviewedFileTracker>();
         _selectedPath = selectedPath;
         _onRowClicked = onRowClicked;
         var input = ctx.Require<InputSystem>();
@@ -207,8 +222,13 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             _pathTextActiveStyle.TextColor = _rowSelection.Text;
             _chevronStyle.TextColor = _rowStyles.RowText;
             _folderIconStyle.TextColor = _rowStyles.RowText;
+            _viewedIconStyle.TextColor = s.Status.Success;
             SetDirty();
         });
+
+        // Repaint when a file is toggled Viewed on the diff header so its row's check/dim updates live.
+        if (_reviewedFiles != null)
+            this.Bind(_reviewedFiles.Revision, _ => SetDirty());
 
         this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
     }
@@ -228,6 +248,16 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _viewMode = mode;
         RebuildRows();
         NotifyScrollChanged();
+    }
+
+    // The commit whose files are listed, so the review tracker's per-(sha, path) Viewed marks key
+    // correctly. Only meaningful in a review window (where a tracker is in scope); a no-op effect
+    // elsewhere. The host sets it alongside the file list when a commit's details load.
+    public void SetReviewSha(string? sha)
+    {
+        if (_reviewSha == sha) return;
+        _reviewSha = sha;
+        SetDirty();
     }
 
     private void RebuildRows()
@@ -315,6 +345,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
         var file = row.File!;
         var isSelected = _selectedPath?.Value == file.Path;
+        var reviewMode = _reviewedFiles != null && _reviewSha != null;
+        var isViewed = reviewMode && _reviewedFiles!.IsViewed(_reviewSha!, file.Path);
         FileChangesUI.DrawFileRow(
             _canvas,
             rowRect,
@@ -331,7 +363,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             row.Indent,
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl,
-            drawSelectionBackground: _selectionTween == null);
+            drawSelectionBackground: _selectionTween == null,
+            reserveViewedColumn: reviewMode,
+            isViewed: isViewed,
+            viewedIconStyle: _viewedIconStyle);
     }
 
     // Retargets the floating selection bar. Slides only between two real rows; first-select and

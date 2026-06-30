@@ -27,6 +27,10 @@ internal static class FileChangesUI
     public const float RowPaddingRight = 14f;
     public const float BadgeGap = 8f;
 
+    // Trailing column reserved on every row in a review surface for the per-file "Viewed" check, so
+    // the path text width stays put whether or not a row is currently marked viewed.
+    public const float ViewedColumnWidth = 16f;
+
     public static string FormatHeader(string title, int count) => $"{title} ({count})";
 
     public static TextView CreateHeaderText(Context ctx, string title)
@@ -150,7 +154,10 @@ internal static class FileChangesUI
         float indent = 0f,
         bool reserveChevronColumn = false,
         bool isRtl = false,
-        bool drawSelectionBackground = true)
+        bool drawSelectionBackground = true,
+        bool reserveViewedColumn = false,
+        bool isViewed = false,
+        TextStyle? viewedIconStyle = null)
     {
         // When the host floats an animated selection bar it owns the selected row's fill; skip the
         // static one so the two don't double-paint, but still draw hover on non-selected rows.
@@ -171,13 +178,19 @@ internal static class FileChangesUI
         });
 
         var textLeft = iconLeft + BadgeSize + BadgeGap;
-        var textRight = rowRect.Right - RowPaddingRight;
+        // Keep clear of the trailing Viewed column (reserved whether or not this row is viewed) so the
+        // check never overlaps a long path and the text doesn't reflow when a row is ticked.
+        var rightInset = RowPaddingRight + (reserveViewedColumn ? ViewedColumnWidth : 0f);
+        var textRight = rowRect.Right - rightInset;
         var textWidth = Math.Max(0f, textRight - textLeft);
         if (textWidth <= 0f) return;
 
         var renderStyle = isSelected ? pathActiveStyle : pathStyle;
         var pathText = displayText ?? FileChangeFormatting.FormatPath(file);
         var rendered = TextMeasure.TruncateToFit(pathText, renderStyle, textWidth, canvas);
+        // A viewed file is "done" — dim its label (half alpha) so the eye skips to what's left.
+        var baseColor = renderStyle.TextColor;
+        if (isViewed) renderStyle.TextColor = Dim(baseColor);
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, textLeft, textWidth, isRtl),
@@ -185,7 +198,23 @@ internal static class FileChangesUI
             Style = renderStyle,
             ZIndex = z + 2,
         });
+        renderStyle.TextColor = baseColor;
+
+        if (isViewed && viewedIconStyle != null)
+        {
+            var checkLeft = rowRect.Right - RowPaddingRight - ViewedColumnWidth;
+            canvas.DrawText(new DrawTextInputs
+            {
+                Position = Place(rowRect, checkLeft, ViewedColumnWidth, isRtl),
+                Text = LucideIcons.CheckSquare,
+                Style = viewedIconStyle,
+                ZIndex = z + 2,
+            });
+        }
     }
+
+    // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
+    private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
 
     // Reflects an element's horizontal extent within the row when the UI is right-to-left, so these
     // shared left-origin row painters mirror (status/chevron/icon to the right, path text flowing

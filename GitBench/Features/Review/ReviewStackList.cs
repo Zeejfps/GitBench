@@ -84,7 +84,7 @@ internal sealed record ReviewStackRow : Widget
 
         var accentBar = new Box
         {
-            Width = 2f,
+            Width = 3f,
             Background = Prop.Bind(() => IsSelected() ? theme.Styles.Value.RowSelection.AccentBar : 0u),
         };
 

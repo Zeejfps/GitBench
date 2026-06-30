@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Diff;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -70,12 +71,21 @@ internal sealed record CommitFileTabButton : Widget
     protected override IWidget Build(Context ctx)
     {
         var tab = ctx.Require<CommitFileTab>();
+        // Present only in a review window; elsewhere null ⇒ the tab shows no Viewed mark.
+        var reviewed = ctx.Get<IReviewedFileTracker>();
         return new CommitTabChrome
         {
             Label = tab.FileName,
             IsActive = () => Vm.SelectedPath.Value == tab.Path,
             OnActivate = () => Vm.ActivateTab(tab.Path),
             OnClose = () => Vm.CloseTab(tab.Path),
+            Viewed = reviewed == null
+                ? null
+                : () =>
+                {
+                    _ = reviewed.Revision.Value;
+                    return reviewed.IsViewed(tab.Sha, tab.Path);
+                },
         };
     }
 }
@@ -93,6 +103,10 @@ internal sealed record CommitTabChrome : Widget
     public required Func<bool> IsActive { get; init; }
     public required Action OnActivate { get; init; }
     public Action? OnClose { get; init; }
+
+    // Optional per-file "Viewed" predicate (review window only). When it returns true a leading
+    // success-tinted check sits before the label; null ⇒ no mark (Details tab, History pane).
+    public Func<bool>? Viewed { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -117,7 +131,20 @@ internal sealed record CommitTabChrome : Widget
         };
 
         IWidget grow = new Grow { Child = label };
-        IWidget[] rowChildren = OnClose is { } close ? [grow, CloseButton(close)] : [grow];
+        var rowChildren = new List<IWidget>();
+        if (Viewed is { } viewed)
+            rowChildren.Add(new Text
+            {
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = FontSize.Caption,
+                Value = LucideIcons.CheckSquare,
+                VAlign = TextAlignment.Center,
+                Visible = Prop.Bind(viewed),
+                Color = Theme.Color(s => s.Status.Success),
+            });
+        rowChildren.Add(grow);
+        if (OnClose is { } close)
+            rowChildren.Add(CloseButton(close));
 
         var pill = new Box
         {
@@ -142,7 +169,7 @@ internal sealed record CommitTabChrome : Widget
                         {
                             Gap = Spacing.Sm,
                             CrossAxis = CrossAxisAlignment.Center,
-                            Children = rowChildren,
+                            Children = rowChildren.ToArray(),
                         },
                     ],
                 },

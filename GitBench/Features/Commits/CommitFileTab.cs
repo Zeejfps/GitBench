@@ -20,6 +20,7 @@ internal sealed class CommitFileTab : IDisposable
 
     public string Path { get; }
     public string FileName { get; }
+    public string Sha { get; }
     public DiffViewModel Diff { get; }
 
     public CommitFileTab(
@@ -33,6 +34,7 @@ internal sealed class CommitFileTab : IDisposable
     {
         Path = path;
         FileName = LastSegment(path);
+        Sha = sha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.Commit, sha));
         Diff = new DiffViewModel(_target, registry, gitService, dispatcher, bus, loc: loc);
     }

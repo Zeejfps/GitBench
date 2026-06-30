@@ -329,6 +329,7 @@ internal sealed class CommitDetailsView : ContainerView
         _shown = Shown.Placeholder;
         _headerInfo.Children.Clear();
         _changesSection.SetFiles(Array.Empty<FileChange>());
+        _changesSection.SetReviewSha(null);
         _contentView.BottomVisible = false;
     }
 
@@ -384,6 +385,7 @@ internal sealed class CommitDetailsView : ContainerView
         });
 
         _changesSection.SetFiles(d.Files);
+        _changesSection.SetReviewSha(d.Sha);
         _contentView.BottomVisible = true;
         _headerScrollPane.ScrollToOrigin();
     }

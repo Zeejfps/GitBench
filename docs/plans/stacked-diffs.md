@@ -739,6 +739,69 @@ visible change** (the file gets out of your way), and (2) there is **always an e
   the dot for the finished increment is filled → at the tip the header shows **"Review complete."**
   `Enter`/`Space`, `[`/`]`, `j`/`k` drive the same loop without the mouse.
 
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **5.5.1 (Changes-list marks) — as specified, draw-only + gated.** `FileChangesUI.DrawFileRow` gained
+  `reserveViewedColumn` / `isViewed` / `viewedIconStyle`: it reserves a fixed trailing column (so text
+  width is stable whether or not a row is ticked), dims a viewed row's label to half alpha, and draws a
+  success-tinted `CheckSquare` in the column. `FileChangesSection` resolves the optional
+  `ctx.Get<IReviewedFileTracker>()`, holds the current sha via a new `SetReviewSha(sha)` (driven from
+  `CommitDetailsView.ShowDetails`/`ShowPlaceholder` off `d.Sha`), repaints on the tracker's `Revision`,
+  and passes `reviewMode`/`isViewed` per row. No tracker (History pane, Local Changes) ⇒ no column, no
+  marks — same opt-in seam as Phase 5b. **No hit-test added** (the toggle stays on the diff header).
+- **5.5.2 (tab mark) — as specified.** `CommitFileTab` exposes its `Sha`; `CommitTabChrome` gained an
+  optional `Viewed` predicate that, when set, prepends a `Visible`-bound success `CheckSquare` before the
+  label. `CommitFileTabButton` supplies it only when a tracker is in scope (reading `Revision` so it
+  refreshes on toggle); the Details tab and History pane pass none.
+- **5.5.3 (header meter) — split across two bars, deliberately.** The plan put *both* the files meter and
+  the increments meter in the header; instead the **header carries the macro meter** (increments reviewed
+  across the stack, accent-filled, with the "N / M reviewed" caption and a `CircleCheck` **"Review
+  complete"** badge once `ReviewedShas.Count >= Increments.Count`) and the **action bar carries the micro
+  meter** (files viewed within the selected increment, success-filled) right next to the primary action it
+  describes. New `ReviewProgressMeter` widget (a rounded track + a left-anchored fill `Box` sized to a
+  `0..1` fraction via a `Row`, not a stretched child). This keeps the 40px header uncluttered and groups
+  each meter with the thing it measures.
+- **5.5.4 (nav cluster + primary action).** The header's `Increment N of M` is now `‹ N of M ›` — bare
+  `ButtonWidget`s gated by new VM `CanSelectPrev`/`CanSelectNext` slices, calling
+  `SelectPrevIncrement`/`SelectNextIncrement` (clamped, no wrap). The **adaptive primary action lives in a
+  new `ReviewActionBar` pinned beneath the diff** (the `Center` of `Split()` became a `BorderLayout` with
+  `South = ReviewActionBar`), *not* in the header — "by the diff" per the plan, and isolated to the review
+  window (never touches the shared `CommitDetailsView`). Its label/icon adapt off a single
+  `Derived<ReviewHud>`: *"Mark viewed → next file"* (or *"Review files"* when on the Details tab) →
+  *"Next increment"* → *"Review complete"* (disabled, gated by `PrimaryActionEnabled`).
+- **5.5.5 (advance-on-view) — routed through the explicit primary action, not the header toggle.** The
+  diff-header **Viewed** toggle stays a pure toggle (it can un-view), so it is **not** coupled to the
+  review VM. The advance is the explicit control the north-star asks for: the action-bar button and
+  `Enter`/`Space` run `RunPrimaryAction` → `MarkActiveFileViewedAndAdvance` (marks the active file, opens
+  the next unviewed file's tab, **then closes the just-reviewed file's tab**, **stops at the increment
+  edge**) → then `MarkReviewedAndAdvance` once the increment is done. Closing the reviewed tab is the
+  tabbed analog of collapsing a viewed file out of the way; the viewed state lives in the tracker (not the
+  tab), so the file still reads checked/dimmed in the Changes list and reopens on a click. Only this
+  explicit path closes tabs — the diff-header **Viewed** toggle stays a pure, reversible toggle.
+- **`MarkReviewedAndAdvance` repurposed (both previously-dead methods now wired).** It was a dead
+  sequential-advance; it now **marks the current increment reviewed then `NextUnreviewed()`** — so passing
+  an *empty* increment marks it, and a finished tip with an earlier gap doesn't dead-end (the loop can
+  always reach "complete"). `RunPrimaryAction`'s *Next increment* case calls it.
+- **5.5.6 (rail polish) — minimal.** The "you are here" accent bar widened 2px → 3px; the binary
+  empty/`Status.Success` dot is kept. Per-row partial progress ("2/4") stays deferred (needs per-increment
+  file counts not loaded for un-opened increments, as the plan notes).
+- **5.5.7 (core keyboard).** A single window-root `ReviewKeyController` (attached to the root `Box` via
+  `WithController`, **never steals focus**) handles `[`/`]`, `j`/`k`, `Enter`/`Space` on **bubbling**.
+  Per the framework's hover/focus dispatch (`InputSystem.SendKeyboardKeyEvent`: focused component first,
+  then the hover path), it receives a key whenever the cursor is over the window and the focused file list
+  hasn't consumed it — and the list only consumes its own Up/Down/Left/Right/**Enter**/Delete/Tab/F, so
+  `Space`/`j`/`k`/`[`/`]` always reach the root and arrow-key list nav is untouched. **Caveat:** because
+  the list consumes Enter while it holds focus, `Space` is the reliable primary key and `Enter` only
+  advances when the list isn't focused — the action-bar button is always available regardless. `v`/`n`,
+  the `?` cheatsheet, window-singleton/focus, and **localization** of all the new English literals stay in
+  Phase 6.
+- **New files:** `Features/Review/ReviewProgressMeter.cs`, `ReviewActionBar.cs`, `ReviewKeyController.cs`.
+  **Edited:** `ReviewWindowViewModel` (`ReviewHud`/`ReviewPrimaryAction`, nav/file/primary methods,
+  fraction + enabled readables), `ReviewHeaderBar` (meter + nav cluster + complete badge),
+  `ReviewWindowRootView` (action bar + key controller), `ReviewStackList` (accent bar),
+  `Features/LocalChanges/FileChangesUI.cs` + `FileChangesSection.cs` (gated viewed marks),
+  `Features/Commits/CommitDetailsView.cs` (`SetReviewSha`), `CommitFileTab.cs` (`Sha`),
+  `CommitDetailsTabStrip.cs` (tab Viewed mark). State stays ephemeral; no `Strings/*.json` churn.
+
 ### Phase 6 — Keyboard, localization, polish
 
 - **Keyboard — the *remainder* (the core loop keys `j`/`k`, `[`/`]`, `Enter`/`Space` landed in

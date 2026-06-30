@@ -17,10 +17,36 @@ internal abstract record ReviewRenderState
 // What the window body should show, derived from ReviewRenderState for the view's Switch.
 internal enum ReviewContentKind { Loading, Message, Loaded }
 
+// The single adaptive control by the diff. ViewFile = "mark this file viewed and open the next
+// unviewed one"; NextIncrement = the current increment is fully viewed, step to the next commit;
+// Complete = every increment reviewed, nothing left to do.
+internal enum ReviewPrimaryAction { ViewFile, NextIncrement, Complete }
+
 internal sealed record ReviewState(
     ReviewRenderState Render,
     string? SelectedSha,
     IReadOnlySet<string> ReviewedShas);
+
+// A snapshot of everything the header bar and action bar render: file/increment progress, the
+// current increment's position, whether the ends of the stack are reached, and which primary
+// action applies. Recomputed (as a Derived) from review state, the loaded file list, the Viewed
+// tracker, and the active tab — so the whole HUD refreshes on selection, load, and every toggle.
+internal sealed record ReviewHud(
+    int FilesViewed,
+    int FilesTotal,
+    int IncrementsReviewed,
+    int IncrementsTotal,
+    int IncrementIndex,
+    bool CanPrev,
+    bool CanNext,
+    bool IsComplete,
+    ReviewPrimaryAction Primary,
+    bool HasActiveFile)
+{
+    public float FilesFraction => FilesTotal == 0 ? 0f : (float)FilesViewed / FilesTotal;
+    public float IncrementsFraction => IncrementsTotal == 0 ? 0f : (float)IncrementsReviewed / IncrementsTotal;
+    public bool HasFiles => FilesTotal > 0;
+}
 
 /// <summary>
 /// One open review window, pinned to a single <see cref="ReviewSession"/>. Loads the stack through
@@ -61,6 +87,23 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public IReadable<string> ReviewedLabel { get; }
     public IReadable<string> FilesViewedLabel { get; }
 
+    // The aggregate header/action-bar state (progress, position, primary action). The views bind
+    // their pieces off this single Derived so they all refresh together.
+    public IReadable<ReviewHud> Hud { get; }
+
+    // Whether a base-ward / tip-ward increment exists from the current selection — gates the header's
+    // ‹ › nav buttons. Depend only on review state, so a cheap Slice covers them.
+    public IReadable<bool> CanSelectPrev { get; }
+    public IReadable<bool> CanSelectNext { get; }
+
+    // 0..1 progress for the two meters: increments reviewed across the stack (header) and files viewed
+    // within the selected increment (action bar).
+    public IReadable<float> IncrementsFraction { get; }
+    public IReadable<float> FilesFraction { get; }
+
+    // Gates the action-bar primary button: disabled once the whole stack is reviewed (nothing to do).
+    public IReadable<bool> PrimaryActionEnabled { get; }
+
     public ReviewWindowViewModel(
         ReviewSession session,
         IReviewStackSource source,
@@ -88,12 +131,36 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         RangeText = Slice(BuildRangeText);
         IncrementLabel = Slice(BuildIncrementLabel);
         ReviewedLabel = Slice(BuildReviewedLabel);
+        CanSelectPrev = Slice(s => SelectedIndex(s) > 0);
+        CanSelectNext = Slice(s =>
+        {
+            var increments = s.Render is ReviewRenderState.Loaded l ? l.Stack.Increments.Count : 0;
+            var index = SelectedIndex(s);
+            return index >= 0 && index < increments - 1;
+        });
 
         // Combines own state, the selected increment's loaded file list, and the Viewed tracker, so it
         // refreshes on selection, on details load, and on every Viewed toggle.
         var filesViewedLabel = new Derived<string>(BuildFilesViewedLabel);
         FilesViewedLabel = filesViewedLabel;
         Subscriptions.Add(filesViewedLabel);
+
+        var hud = new Derived<ReviewHud>(BuildHud);
+        Hud = hud;
+        Subscriptions.Add(hud);
+
+        IncrementsFraction = Slice(s =>
+        {
+            if (s.Render is not ReviewRenderState.Loaded l || l.Stack.Increments.Count == 0) return 0f;
+            return (float)s.ReviewedShas.Count / l.Stack.Increments.Count;
+        });
+        var filesFraction = new Derived<float>(() => hud.Value.FilesFraction);
+        FilesFraction = filesFraction;
+        Subscriptions.Add(filesFraction);
+
+        var primaryEnabled = new Derived<bool>(() => hud.Value.Primary != ReviewPrimaryAction.Complete);
+        PrimaryActionEnabled = primaryEnabled;
+        Subscriptions.Add(primaryEnabled);
 
         // Viewing the last file of the selected increment marks the increment reviewed (one-way:
         // un-viewing a file doesn't revoke the increment's reviewed mark, which can also be set by hand).
@@ -124,18 +191,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         });
     }
 
-    // Marks the selected increment reviewed, then steps to the next increment toward the tip. At the
-    // tip the selection stays put (the increment is still marked).
+    // Marks the selected increment reviewed, then jumps to the next increment that still needs review
+    // (the action-bar "Next increment"). Going to the next *unreviewed* increment — not the strict
+    // sequential neighbour — marks an empty increment as it's passed and lets a finished tip send the
+    // reviewer back to an earlier gap, so the loop reaches "complete" instead of dead-ending.
     public void MarkReviewedAndAdvance()
     {
         var sha = State.Value.SelectedSha;
         if (sha == null) return;
         Update(s => s with { ReviewedShas = new HashSet<string>(s.ReviewedShas) { sha } });
-
-        var list = CurrentIncrements();
-        var index = IndexOf(list, sha);
-        if (index >= 0 && index + 1 < list.Count)
-            SelectIncrement(list[index + 1].Sha);
+        NextUnreviewed();
     }
 
     // Selects the next unreviewed increment after the current selection, wrapping past the tip back
@@ -155,6 +220,111 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
                 return;
             }
         }
+    }
+
+    // Steps one increment toward the base / tip without wrapping (the header's ‹ › cluster and the
+    // [ / ] keys). Clamped at the ends, where the matching nav control is disabled.
+    public void SelectPrevIncrement() => StepIncrement(-1);
+    public void SelectNextIncrement() => StepIncrement(+1);
+
+    private void StepIncrement(int delta)
+    {
+        var list = CurrentIncrements();
+        var index = IndexOf(list, State.Value.SelectedSha);
+        if (index < 0) return;
+        var next = index + delta;
+        if (next < 0 || next >= list.Count) return;
+        SelectIncrement(list[next].Sha);
+    }
+
+    // Opens the next / previous file's tab within the selected increment (the j / k keys). Clamped at
+    // the first/last file; no-op when the increment has no files loaded yet.
+    public void NextFile() => StepFile(+1);
+    public void PrevFile() => StepFile(-1);
+
+    private void StepFile(int delta)
+    {
+        var files = SelectedFiles();
+        if (files.Count == 0) return;
+        var active = _details.SelectedPath.Value;
+        int next;
+        if (active == null)
+            next = delta > 0 ? 0 : files.Count - 1;
+        else
+        {
+            var index = IndexOfFile(files, active);
+            next = index < 0 ? 0 : Math.Clamp(index + delta, 0, files.Count - 1);
+        }
+        _details.SelectFile(files[next].Path);
+    }
+
+    // The single adaptive control by the diff (the action-bar button and Enter/Space): mark-and-advance
+    // within an increment, hop to the next increment once it's fully viewed, or do nothing when the whole
+    // stack is reviewed.
+    public void RunPrimaryAction()
+    {
+        switch (Hud.Value.Primary)
+        {
+            case ReviewPrimaryAction.ViewFile:
+                MarkActiveFileViewedAndAdvance();
+                break;
+            case ReviewPrimaryAction.NextIncrement:
+                MarkReviewedAndAdvance();
+                break;
+            case ReviewPrimaryAction.Complete:
+                break;
+        }
+    }
+
+    // Marks the active file Viewed, opens the next unviewed file's tab, then closes the just-reviewed
+    // file's tab — the tabbed analog of GitHub's collapse-and-move-on: a reviewed file gets out of the
+    // way. Selecting the next tab before closing the old one avoids a transient flash back to Details.
+    // Stops at the increment edge: when no unviewed file remains the cursor falls to a neighbouring tab
+    // (or Details) and the primary action flips to "Next increment". The reviewed state lives in the
+    // tracker, so the file still reads checked/dimmed in the Changes list and reopens on demand.
+    public void MarkActiveFileViewedAndAdvance()
+    {
+        var sha = State.Value.SelectedSha;
+        if (sha == null) return;
+        var active = _details.SelectedPath.Value;
+        if (active == null)
+        {
+            AdvanceToNextUnviewedFile();
+            return;
+        }
+        if (!_reviewedFiles.IsViewed(sha, active))
+            _reviewedFiles.ToggleViewed(sha, active);
+
+        var next = NextUnviewedFile(sha, active);
+        if (next != null) _details.SelectFile(next);
+        _details.CloseTab(active);
+    }
+
+    // Opens the next unviewed file's tab in the selected increment without touching the current one.
+    // No-op (stay put) when every file is already viewed.
+    public void AdvanceToNextUnviewedFile()
+    {
+        var sha = State.Value.SelectedSha;
+        if (sha == null) return;
+        var next = NextUnviewedFile(sha, _details.SelectedPath.Value);
+        if (next != null) _details.SelectFile(next);
+    }
+
+    // The next unviewed file's path in the selected increment, searching forward from anchorPath and
+    // wrapping once within the increment. Null when the increment has no files or all are viewed.
+    private string? NextUnviewedFile(string sha, string? anchorPath)
+    {
+        var files = SelectedFiles();
+        if (files.Count == 0) return null;
+        var start = anchorPath == null ? -1 : IndexOfFile(files, anchorPath);
+        for (var step = 1; step <= files.Count; step++)
+        {
+            var i = (start + step) % files.Count;
+            if (i < 0) i += files.Count;
+            if (!_reviewedFiles.IsViewed(sha, files[i].Path))
+                return files[i].Path;
+        }
+        return null;
     }
 
     // Disposes the owned Viewed tracker, then the base (slices/subscriptions). The shared _details VM
@@ -233,6 +403,63 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         return $"{viewed} / {files.Count} files viewed";
     }
 
+    private ReviewHud BuildHud()
+    {
+        var s = State.Value;
+        var increments = s.Render is ReviewRenderState.Loaded l
+            ? l.Stack.Increments
+            : Array.Empty<ReviewIncrement>();
+        var total = increments.Count;
+        var index = IndexOf(increments, s.SelectedSha);
+        var files = SelectedFiles();
+
+        _ = _reviewedFiles.Revision.Value;
+        var sha = s.SelectedSha;
+        var filesViewed = 0;
+        if (sha != null)
+            foreach (var f in files)
+                if (_reviewedFiles.IsViewed(sha, f.Path)) filesViewed++;
+
+        var reviewedCount = s.ReviewedShas.Count;
+        var complete = total > 0 && reviewedCount >= total;
+        var hasActiveFile = _details.SelectedPath.Value != null;
+        var detailsLoading = _details.RenderState.Value is CommitDetailsRenderState.Loading;
+        var primary = ComputePrimaryAction(s, increments, index, files, filesViewed, complete, detailsLoading);
+
+        return new ReviewHud(
+            FilesViewed: filesViewed,
+            FilesTotal: files.Count,
+            IncrementsReviewed: reviewedCount,
+            IncrementsTotal: total,
+            IncrementIndex: index,
+            CanPrev: index > 0,
+            CanNext: index >= 0 && index < total - 1,
+            IsComplete: complete,
+            Primary: primary,
+            HasActiveFile: hasActiveFile);
+    }
+
+    private ReviewPrimaryAction ComputePrimaryAction(
+        ReviewState s,
+        IReadOnlyList<ReviewIncrement> increments,
+        int index,
+        IReadOnlyList<FileChange> files,
+        int filesViewed,
+        bool complete,
+        bool detailsLoading)
+    {
+        if (complete) return ReviewPrimaryAction.Complete;
+        if (increments.Count == 0 || index < 0 || s.SelectedSha is not { } sha)
+            return ReviewPrimaryAction.Complete;
+
+        var currentDone = s.ReviewedShas.Contains(sha) || (files.Count > 0 && filesViewed >= files.Count);
+        if (currentDone) return ReviewPrimaryAction.NextIncrement;
+        // No files loaded: while the increment's details are still loading, hold on ViewFile so the
+        // button doesn't flash "Next increment" mid-load; a genuinely empty increment can only advance.
+        if (files.Count == 0) return detailsLoading ? ReviewPrimaryAction.ViewFile : ReviewPrimaryAction.NextIncrement;
+        return ReviewPrimaryAction.ViewFile;
+    }
+
     private void MarkIncrementIfAllFilesViewed()
     {
         var sha = State.Value.SelectedSha;
@@ -252,6 +479,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             ? l.Details.Files
             : Array.Empty<FileChange>();
 
+    private static int SelectedIndex(ReviewState s) =>
+        s.Render is ReviewRenderState.Loaded l ? IndexOf(l.Stack.Increments, s.SelectedSha) : -1;
+
     private IReadOnlyList<ReviewIncrement> CurrentIncrements() =>
         State.Value.Render is ReviewRenderState.Loaded l
             ? l.Stack.Increments
@@ -262,6 +492,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         if (sha == null) return -1;
         for (var i = 0; i < list.Count; i++)
             if (list[i].Sha == sha) return i;
+        return -1;
+    }
+
+    private static int IndexOfFile(IReadOnlyList<FileChange> files, string path)
+    {
+        for (var i = 0; i < files.Count; i++)
+            if (files[i].Path == path) return i;
         return -1;
     }
 }
