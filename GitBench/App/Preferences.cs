@@ -10,6 +10,8 @@ public sealed record Preferences
     public Locale Language { get; init; } = Locale.En;
     public int WindowWidth { get; init; } = 1400;
     public int WindowHeight { get; init; } = 900;
+    public int ReviewWindowWidth { get; init; } = 1100;
+    public int ReviewWindowHeight { get; init; } = 800;
     public float RepoBarWidth { get; init; } = 220f;
     public float BranchesWidth { get; init; } = 220f;
     public float CommitDetailsWidth { get; init; } = 380f;

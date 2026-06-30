@@ -22,6 +22,8 @@ public static class PreferencesStore
         public string? Language { get; set; } = nameof(Locale.En);
         public int? WindowWidth { get; set; } = 1400;
         public int? WindowHeight { get; set; } = 900;
+        public int? ReviewWindowWidth { get; set; } = 1100;
+        public int? ReviewWindowHeight { get; set; } = 800;
         public float? RepoBarWidth { get; set; } = 220f;
         public float? BranchesWidth { get; set; } = 220f;
         public float? CommitDetailsWidth { get; set; } = 380f;
@@ -47,6 +49,8 @@ public static class PreferencesStore
                 Language = ParseLocale(file.Language) ?? defaults.Language,
                 WindowWidth = file.WindowWidth is > 0 ? file.WindowWidth.Value : defaults.WindowWidth,
                 WindowHeight = file.WindowHeight is > 0 ? file.WindowHeight.Value : defaults.WindowHeight,
+                ReviewWindowWidth = file.ReviewWindowWidth is > 0 ? file.ReviewWindowWidth.Value : defaults.ReviewWindowWidth,
+                ReviewWindowHeight = file.ReviewWindowHeight is > 0 ? file.ReviewWindowHeight.Value : defaults.ReviewWindowHeight,
                 RepoBarWidth = file.RepoBarWidth is > 0 ? file.RepoBarWidth.Value : defaults.RepoBarWidth,
                 BranchesWidth = file.BranchesWidth is > 0 ? file.BranchesWidth.Value : defaults.BranchesWidth,
                 CommitDetailsWidth = file.CommitDetailsWidth is > 0 ? file.CommitDetailsWidth.Value : defaults.CommitDetailsWidth,
@@ -69,6 +73,8 @@ public static class PreferencesStore
             Language = preferences.Language.ToString(),
             WindowWidth = preferences.WindowWidth,
             WindowHeight = preferences.WindowHeight,
+            ReviewWindowWidth = preferences.ReviewWindowWidth,
+            ReviewWindowHeight = preferences.ReviewWindowHeight,
             RepoBarWidth = preferences.RepoBarWidth,
             BranchesWidth = preferences.BranchesWidth,
             CommitDetailsWidth = preferences.CommitDetailsWidth,

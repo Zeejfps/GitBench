@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -26,6 +27,7 @@ internal sealed record ReviewWindowsView : Widget
         private readonly Dictionary<ReviewWindowViewModel, ISecondaryWindow> _windows = new();
         private readonly ReviewWindowsViewModel _vm;
         private readonly ISecondaryWindowFactory _windowFactory;
+        private readonly PreferencesService _preferences;
 
         // Native title-bar theming (Windows/macOS). Resolved from the build context; null on
         // platforms without a window-chrome implementation (e.g. Linux), in which case title-bar
@@ -40,6 +42,7 @@ internal sealed record ReviewWindowsView : Widget
             Height = 0;
 
             _windowFactory = ctx.Require<ISecondaryWindowFactory>();
+            _preferences = ctx.Require<PreferencesService>();
             _windowChrome = ctx.Get<IWindowChrome>();
             _themeMode = ctx.Get<State<ThemeMode>>();
 
@@ -99,12 +102,14 @@ internal sealed record ReviewWindowsView : Widget
             {
                 BuildRoot = ctx => new ReviewWindowRootView { Model = windowVm }.BuildView(ctx),
                 Title = windowVm.Title,
-                Width = 1100,
-                Height = 800,
+                Width = _preferences.Current.ReviewWindowWidth,
+                Height = _preferences.Current.ReviewWindowHeight,
             });
             // Native close → drive removal through the view model so its list stays authoritative;
             // that removal calls CloseOsWindow below (idempotent if the window is already gone).
             win.Closed += () => _vm.Close(windowVm);
+            // Persist size like the main window; all review windows share one remembered size.
+            win.Window.OnResize += _preferences.SetReviewWindowSize;
             _windows[windowVm] = win;
             ApplyTitleBarTheme(win);
         }
