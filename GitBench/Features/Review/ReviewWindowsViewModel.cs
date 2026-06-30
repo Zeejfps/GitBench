@@ -19,6 +19,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
     private readonly IReviewStackSource _source;
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
+    private readonly IRepoSnapshotStore _snapshots;
     private readonly IUiDispatcher _dispatcher;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
@@ -36,6 +37,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         IReviewStackSource source,
         IRepoRegistry registry,
         IGitService gitService,
+        IRepoSnapshotStore snapshots,
         IUiDispatcher dispatcher,
         ILocalizationService loc,
         PreferencesService preferences)
@@ -44,6 +46,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         _source = source;
         _registry = registry;
         _gitService = gitService;
+        _snapshots = snapshots;
         _dispatcher = dispatcher;
         _loc = loc;
         _preferences = preferences;
@@ -65,7 +68,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
             _gitService, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
-        Windows.Add(new ReviewWindowViewModel(session, _source, _dispatcher, details, _loc, _bus));
+        Windows.Add(new ReviewWindowViewModel(session, _source, _dispatcher, details, _loc, _bus, _snapshots));
     }
 
     private ReviewWindowViewModel? FindOpenWindow(Guid repoId, string headRef)

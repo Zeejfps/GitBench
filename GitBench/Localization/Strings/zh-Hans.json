@@ -372,7 +372,11 @@
   "repos.error_fetch_failed": "获取失败",
 
   "review.window_title": "审查：{label}",
-  "review.base_auto": "自动",
+  "review.base_resolving": "正在解析基线…",
+  "review.base_menu_auto": "自动",
+  "review.base_provenance": "自 {head} 从 {baseRef} 分叉以来的 {count} 个提交（{sha}）",
+  "review.base_kind_upstream": "上游",
+  "review.base_kind_default": "默认分支",
   "review.increment_position": "增量 {index} / {total}",
   "review.increments_reviewed": "{reviewed} / {total} 已审查",
   "review.complete": "审查完成",

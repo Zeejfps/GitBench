@@ -372,7 +372,11 @@
   "repos.error_fetch_failed": "가져오기에 실패했습니다",
 
   "review.window_title": "리뷰: {label}",
-  "review.base_auto": "자동",
+  "review.base_resolving": "기준 확인 중…",
+  "review.base_menu_auto": "자동",
+  "review.base_provenance": "{head}이(가) {baseRef}에서 분기된 이후 {count}개의 커밋 ({sha})",
+  "review.base_kind_upstream": "업스트림",
+  "review.base_kind_default": "기본 브랜치",
   "review.increment_position": "증분 {index} / {total}",
   "review.increments_reviewed": "{reviewed} / {total} 검토됨",
   "review.complete": "리뷰 완료",

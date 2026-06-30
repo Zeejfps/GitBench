@@ -965,6 +965,59 @@ nothing human-readable to show. Everything below depends on threading that ident
   Pick a base with unrelated history → graceful fallback (the ref itself), no crash. Reopening the same
   branch still focuses the existing window (Phase 6 singleton) with its current base.
 
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **6.5a — base identity threaded through, as specified.** `ResolveAutoReviewBase` now returns
+  `ResolvedReviewBase?(string Sha, string Ref, ReviewBaseKind Kind)` (`ReviewBaseKind { Upstream,
+  DefaultBranch, Explicit, RawCommit }`, both new in `ReviewStack.cs`). It keeps the original
+  **target selection** (upstream ⇒ Upstream; else default ⇒ DefaultBranch; then one merge-base) — it
+  does *not* fall through to the default branch when an existing upstream's merge-base fails, so
+  behaviour is unchanged from Phase 4 beyond carrying the ref + kind. `ReviewStack` gained
+  `BaseRef`/`BaseKind` (optional, defaulted to `null`/`RawCommit`); **`GitService.LoadReviewStack`
+  is unchanged** — the *source* sets them, since only it knows the ref identity.
+- **`GitReviewStackSource` resolves a `ResolvedReviewBase`** (explicit pick ⇒ `Explicit` kind,
+  merge-base of the picked ref + head, falling back to the ref itself; null base ⇒
+  `ResolveAutoReviewBase`) and sets `BaseLabel = BaseRef = ref name`, `BaseKind = kind`. So the
+  loaded `BaseLabel` is now the **ref name** (`origin/main`), never a short SHA.
+- **Header: a real `ReviewBaseChip` (new widget) + "→ head", not a single range `Text`.** `RangeText`
+  /`BuildRangeText` were **removed**; the VM now exposes `BaseChipLabel` (ref name once loaded, else
+  *"Resolving base…"* — never "auto"/SHA) and `BaseTooltip` (provenance). The chip is a
+  `Widget<ButtonState>` (a hover-washed pill with a `ChevronDown`) that the header bolts the tooltip
+  and dropdown onto via `WithTooltip` + `WithMenuController` (the `rect.BottomLeft` anchor pattern).
+- **Provenance tooltip** = `"{count} commits since {head} forked from {baseRef} ({sha})"` plus
+  *· upstream* / *· default branch* for an auto base (no kind suffix for an explicit pick). The
+  placeholder is `{baseRef}`, **not `{base}`** — `base` is a C# keyword and would generate an invalid
+  param name in the localization source-gen.
+- **6.5b — dropdown reuses `RepoBarContextMenu.Show`, summoned from the secondary window's context.**
+  This *does* work from a secondary window without a `DialogPresenter`: `IContextMenuHost` resolves up
+  the parent chain to the shared manager, while the anchor is converted through the secondary window's
+  **own** `IWindowCoordinates` (registered per-window in `SecondaryWindowFactory`), and the menu opens
+  as its own popup OS window at those screen coords. So the plan's overlay fallback was **not**
+  needed. *(The one thing only a live run can confirm is outside-click dismissal when clicking back on
+  the review window; on Windows the popup decorator's OS capture handles it.)*
+- **Menu contents:** *Auto* (✓ via `LucideIcons.CircleCheck` when no override), then local branches
+  (the head under review excluded — self-range is empty), then each remote's branches as
+  `remote/branch`; the current override is checkmarked. **Dropped the dedicated "default branch"
+  item** (it already appears in the local/remote list, and computing it needs a git read the snapshot
+  doesn't carry) and **"Specific commit…"** (deferred to Phase 7, as the plan allowed).
+- **Candidate refs come from `IRepoSnapshotStore.Branches`** (the active repo's listing — the same
+  source the branch menus read), injected through `ReviewWindowsViewModel` into the per-window VM.
+  This inherits the carried **active-repo scoping** limitation (the dropdown lists the active repo's
+  branches); acceptable since the window's diffs already require its repo to be active, and reopening
+  the same branch focuses the existing window.
+- **Base mutation reuses the reload lane verbatim.** `_baseOverride` (`State<string?>`, null = auto)
+  + `EffectiveSession()` (override → pinned base → auto); `StartLoad`/`Reload` capture the effective
+  session on the UI thread before the background load. `SetBase(ref)` sets the override and calls the
+  existing `Reload()` ⇒ stale-while-revalidate + `ApplyReloadedStack` (prune reviewed marks to
+  surviving commits, keep selection if it survives else base-most) — **no new reload logic**.
+- **Localization:** retired `review.base_auto`; added `base_resolving`, `base_menu_auto`,
+  `base_provenance`, `base_kind_upstream`, `base_kind_default` across **all six** `Strings/*.json`.
+- **Tests:** `ReviewStackTests.ResolveAutoReviewBase_*` updated for the `ResolvedReviewBase?` return
+  (Sha/Ref/Kind asserted); all **11 ReviewStackTests green**.
+- **New file:** `Features/Review/ReviewBaseChip.cs`. **Edited:** `ReviewStack.cs`, `IGitService.cs`,
+  `GitService.cs` (`ResolveAutoReviewBase`), `GitReviewStackSource.cs`, `ReviewWindowViewModel.cs`,
+  `ReviewWindowsViewModel.cs`, `ReviewHeaderBar.cs`, `Localization/Strings/*.json` (×6),
+  `GitBench.Tests/ReviewStackTests.cs`.
+
 ### Phase 7 — (Optional, separable) version comparator + combined diff
 
 The Tier-2/3 differentiators; none block the MVP.

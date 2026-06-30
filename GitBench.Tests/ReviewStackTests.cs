@@ -153,8 +153,13 @@ public sealed class ReviewStackTests : IDisposable
         Commit("f.txt", "2", "feature-2");
 
         // No upstream configured ⇒ falls back to the local default branch (main); the auto base is
-        // the merge-base of main and feature, i.e. where feature diverged.
-        Assert.Equal(c0, _git.ResolveAutoReviewBase(_repo, "feature"));
+        // the merge-base of main and feature, i.e. where feature diverged. The resolved base carries
+        // the ref name + kind it came from, not just the SHA.
+        var resolved = _git.ResolveAutoReviewBase(_repo, "feature");
+        Assert.NotNull(resolved);
+        Assert.Equal(c0, resolved!.Value.Sha);
+        Assert.Equal("main", resolved.Value.Ref);
+        Assert.Equal(ReviewBaseKind.DefaultBranch, resolved.Value.Kind);
     }
 
     [Fact]

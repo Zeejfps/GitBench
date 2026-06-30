@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -42,17 +43,7 @@ internal sealed record ReviewHeaderBar : Widget
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [
-                                new Grow
-                                {
-                                    Child = new Text
-                                    {
-                                        Value = Prop.Bind(vm.RangeText),
-                                        FontSize = FontSize.Body,
-                                        Color = Theme.Color(s => s.Palette.TextPrimary),
-                                        Overflow = TextOverflow.Ellipsis,
-                                        VAlign = TextAlignment.Center,
-                                    },
-                                },
+                                new Grow { Child = BaseRange(vm, ctx) },
                                 NavCluster(vm),
                                 ProgressGroup(vm),
                                 HelpButton(vm),
@@ -63,6 +54,33 @@ internal sealed record ReviewHeaderBar : Widget
             ],
         };
     }
+
+    // The comparison range: an interactive base chip (ref name + chevron) that opens the base
+    // dropdown, then "→ head". The dropdown is RepoBarContextMenu's popup, summoned from this
+    // (secondary) window's context — its anchor is converted through the window's own coordinates, so
+    // it lands under the chip regardless of which window is active.
+    private static IWidget BaseRange(ReviewWindowViewModel vm, Context ctx) => new Row
+    {
+        Gap = Spacing.Sm,
+        CrossAxis = CrossAxisAlignment.Center,
+        Children =
+        [
+            new ReviewBaseChip { Label = Prop.Bind(vm.BaseChipLabel) }
+                .WithTooltip(Prop.Bind(vm.BaseTooltip))
+                .WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, vm.BuildBaseMenuItems())),
+            new Grow
+            {
+                Child = new Text
+                {
+                    Value = $"→ {vm.Session.HeadLabel}",
+                    FontSize = FontSize.Body,
+                    Color = Theme.Color(s => s.Palette.TextPrimary),
+                    Overflow = TextOverflow.Ellipsis,
+                    VAlign = TextAlignment.Center,
+                },
+            },
+        ],
+    };
 
     // ‹ Increment N of M › — the bracket buttons turn the position readout into sequential nav.
     private static IWidget NavCluster(ReviewWindowViewModel vm) => new Row

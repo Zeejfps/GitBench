@@ -1772,15 +1772,29 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
     }
 
-    // Resolves the default review base SHA for headRef when the session pins no explicit base:
-    // the merge-base with the branch's upstream, falling back to the merge-base with the repo's
-    // default branch (origin/HEAD, then a local main/master). Null when none resolves — e.g. an
-    // orphan branch with no upstream and no default. (Open decision #3: upstream → default → …)
-    public string? ResolveAutoReviewBase(Repo repo, string headRef)
+    // Resolves the default review base for headRef when the session pins no explicit base: the
+    // merge-base with the branch's upstream, falling back to the merge-base with the repo's default
+    // branch (origin/HEAD, then a local main/master). Carries the ref it came from + which kind it
+    // was, so the header can name the base instead of showing a bare SHA. Null when none resolves —
+    // e.g. an orphan branch with no upstream and no default. (Open decision #3: upstream → default → …)
+    public ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef)
     {
         if (!IsGitRepo(repo.Path)) return null;
-        var target = GetUpstreamRef(repo.Path, headRef) ?? GetDefaultBranchRef(repo.Path);
-        return target == null ? null : MergeBase(repo, target, headRef);
+        string? target;
+        ReviewBaseKind kind;
+        if (GetUpstreamRef(repo.Path, headRef) is { } upstream)
+        {
+            target = upstream;
+            kind = ReviewBaseKind.Upstream;
+        }
+        else
+        {
+            target = GetDefaultBranchRef(repo.Path);
+            kind = ReviewBaseKind.DefaultBranch;
+        }
+        if (target == null) return null;
+        var sha = MergeBase(repo, target, headRef);
+        return sha == null ? null : new ResolvedReviewBase(sha, target, kind);
     }
 
     // The upstream (remote-tracking) ref of branchRef, e.g. "origin/main", or null when the

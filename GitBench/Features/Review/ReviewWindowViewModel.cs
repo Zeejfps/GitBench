@@ -1,5 +1,9 @@
+using GitBench.Controls;
+using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Repos;
+using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -65,7 +69,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     private readonly IReviewStackSource _source;
     private readonly CommitDetailsViewModel _details;
     private readonly ILocalizationService _loc;
+    private readonly IRepoSnapshotStore _snapshots;
     private readonly ReviewedFileTracker _reviewedFiles = new();
+
+    // The reviewer's in-window base override (the header base dropdown); null = auto-resolve. Only
+    // the base varies — the window stays pinned to its repo + head. Setting it re-resolves the range
+    // through the reload lane.
+    private readonly State<string?> _baseOverride = new(null);
 
     // Refs-driven reload runs on its own lane so it never invalidates an in-flight first load (or
     // vice versa), and stale-while-revalidate: it keeps the current stack on screen until the new
@@ -96,7 +106,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public IReadable<string?> SelectedSha { get; }
     public IReadable<IReadOnlySet<string>> ReviewedShas { get; }
     public IReadable<IReadOnlyList<ReviewIncrement>> Increments { get; }
-    public IReadable<string> RangeText { get; }
+
+    // The base side of the header range: the resolved ref name (e.g. "origin/main") once loaded, or
+    // "Resolving base…" while the first stack loads. Rendered as a clickable chip that opens the base
+    // dropdown. The head side is read straight off the pinned Session.
+    public IReadable<string> BaseChipLabel { get; }
+
+    // Provenance for the base chip's hover tooltip ("N commits since head forked from origin/main
+    // (sha) · upstream"). Null until the stack loads.
+    public IReadable<string?> BaseTooltip { get; }
+
     public IReadable<string> IncrementLabel { get; }
     public IReadable<string> ReviewedLabel { get; }
     public IReadable<string> FilesViewedLabel { get; }
@@ -128,15 +147,18 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         IUiDispatcher dispatcher,
         CommitDetailsViewModel details,
         ILocalizationService loc,
-        IMessageBus bus)
+        IMessageBus bus,
+        IRepoSnapshotStore snapshots)
         : base(dispatcher, new ReviewState(new ReviewRenderState.Loading(), null, NoneReviewed))
     {
         Session = session;
         _source = source;
         _details = details;
         _loc = loc;
+        _snapshots = snapshots;
         _reloadLane = CreateLane();
         Subscriptions.Add(_cheatsheetOpen);
+        Subscriptions.Add(_baseOverride);
         Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
 
         ContentKind = Slice(s => s.Render switch
@@ -151,7 +173,8 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         Increments = Slice(s => s.Render is ReviewRenderState.Loaded l
             ? l.Stack.Increments
             : Array.Empty<ReviewIncrement>());
-        RangeText = Slice(BuildRangeText);
+        BaseChipLabel = Slice(BuildBaseChipLabel);
+        BaseTooltip = Slice<string?>(BuildBaseTooltip);
         IncrementLabel = Slice(BuildIncrementLabel);
         ReviewedLabel = Slice(BuildReviewedLabel);
         CanSelectPrev = Slice(s => SelectedIndex(s) > 0);
@@ -203,6 +226,73 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         }));
 
         StartLoad();
+    }
+
+    // Re-resolves the range against a new base (null = auto) without re-pinning the window's repo or
+    // head. Reuses the refs-change reload lane: stale-while-revalidate (the current stack stays on
+    // screen until the new one arrives), and ApplyReloadedStack prunes reviewed marks to the
+    // surviving commits and keeps the selection when its commit survives — the same path as a
+    // refs-change reload.
+    public void SetBase(string? baseRef)
+    {
+        if (_baseOverride.Value == baseRef) return;
+        _baseOverride.Value = baseRef;
+        Reload();
+    }
+
+    // Candidate bases for the header dropdown: Auto (the smart default), then the repo's local and
+    // remote branches — the head under review excluded (reviewing against itself is an empty range).
+    // A check marks the current choice. Built fresh per open from the already-loaded branch snapshot,
+    // so the click never blocks on git. (Reads the active repo's branches — consistent with the
+    // window's existing active-repo scoping.)
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildBaseMenuItems()
+    {
+        var s = _loc.Strings.Value;
+        var current = _baseOverride.Value;
+        var items = new List<RepoBarContextMenu.Item>
+        {
+            new(s.ReviewBaseMenuAuto, () => SetBase(null),
+                Icon: current == null ? LucideIcons.CircleCheck : null),
+        };
+
+        if ((_snapshots.Branches.Value as Fetched<BranchListing>.Ok)?.Value is not { } listing)
+            return items;
+
+        var locals = listing.LocalBranches.Where(b => b.Name != Session.HeadRef).ToList();
+        if (locals.Count > 0)
+        {
+            items.Add(RepoBarContextMenu.Separator);
+            foreach (var b in locals)
+            {
+                var name = b.Name;
+                items.Add(new RepoBarContextMenu.Item(name, () => SetBase(name),
+                    Icon: current == name ? LucideIcons.CircleCheck : null));
+            }
+        }
+
+        foreach (var group in listing.Remotes)
+        {
+            if (group.Branches.Count == 0) continue;
+            items.Add(RepoBarContextMenu.Separator);
+            foreach (var b in group.Branches)
+            {
+                var refName = $"{group.Name}/{b.Name}";
+                items.Add(new RepoBarContextMenu.Item(refName, () => SetBase(refName),
+                    Icon: current == refName ? LucideIcons.CircleCheck : null));
+            }
+        }
+
+        return items;
+    }
+
+    // The base the window currently reviews against: the in-window override (the dropdown), falling
+    // back to the session's pinned base, else null = auto-resolve. Only the base varies.
+    private ReviewSession EffectiveSession()
+    {
+        var baseRef = _baseOverride.Value ?? Session.BaseRef;
+        return baseRef == null
+            ? Session with { BaseRef = null, BaseLabel = null }
+            : Session with { BaseRef = baseRef, BaseLabel = baseRef };
     }
 
     // Selects an increment and drives the right pane to its commit-vs-parent diff. Dedupes so a
@@ -386,11 +476,12 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     private void StartLoad()
     {
         Update(s => s with { Render = new ReviewRenderState.Loading() });
+        var session = EffectiveSession();
         RunBackground<ReviewStack>(
             // The source is async by contract; the stub completes synchronously, so bridging through
             // RunBackground's worker keeps the proven staleness/dispatcher handling. A truly async
             // git source (Phase 4) can move off this bridge.
-            work: () => (_source.LoadAsync(Session, StackCap).GetAwaiter().GetResult(), null),
+            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
             onResult: (stack, error) =>
             {
                 if (error != null)
@@ -421,8 +512,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // the surviving commits.
     private void Reload()
     {
+        var session = EffectiveSession();
         RunBackground<ReviewStack>(
-            work: () => (_source.LoadAsync(Session, StackCap).GetAwaiter().GetResult(), null),
+            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
             onResult: (stack, error) =>
             {
                 if (error != null || stack == null) return;
@@ -456,13 +548,33 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         if (selected != current) _details.Show(Session.RepoId, selected);
     }
 
-    private string BuildRangeText(ReviewState s)
+    // The base side of the header range. Once loaded it's the resolved ref name; before that the
+    // real base ref is unknown, so show the pinned/overridden label if any, else "Resolving base…"
+    // rather than a bare "auto"/SHA.
+    private string BuildBaseChipLabel(ReviewState s)
     {
-        var baseLabel = s.Render is ReviewRenderState.Loaded l
-            ? l.Stack.BaseLabel
-            : (Session.BaseLabel ?? _loc.Strings.Value.ReviewBaseAuto);
-        return $"{baseLabel} → {Session.HeadLabel}";
+        if (s.Render is ReviewRenderState.Loaded l) return l.Stack.BaseLabel;
+        return _baseOverride.Value ?? Session.BaseLabel ?? _loc.Strings.Value.ReviewBaseResolving;
     }
+
+    // "N commits since {head} forked from {ref} ({sha})" plus the kind (upstream / default branch)
+    // for an auto-resolved base. Null until the stack loads (nothing to explain yet).
+    private string? BuildBaseTooltip(ReviewState s)
+    {
+        if (s.Render is not ReviewRenderState.Loaded l) return null;
+        var stack = l.Stack;
+        var provenance = _loc.Strings.Value.ReviewBaseProvenance(
+            stack.Increments.Count, Session.HeadLabel, stack.BaseLabel, ShortSha(stack.BaseSha));
+        var kindWord = stack.BaseKind switch
+        {
+            ReviewBaseKind.Upstream => _loc.Strings.Value.ReviewBaseKindUpstream,
+            ReviewBaseKind.DefaultBranch => _loc.Strings.Value.ReviewBaseKindDefault,
+            _ => null,
+        };
+        return kindWord == null ? provenance : $"{provenance} · {kindWord}";
+    }
+
+    private static string ShortSha(string sha) => sha.Length <= 7 ? sha : sha[..7];
 
     private string BuildIncrementLabel(ReviewState s)
     {

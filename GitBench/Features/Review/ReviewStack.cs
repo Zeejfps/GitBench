@@ -29,8 +29,31 @@ public sealed record ReviewIncrement(
     int Removed);
 
 /// <summary>
+/// How the review base was chosen, so the header can explain it. <see cref="Upstream"/> /
+/// <see cref="DefaultBranch"/> come from auto-resolution; <see cref="Explicit"/> is a base the
+/// reviewer picked; <see cref="RawCommit"/> is a base known only by SHA (no ref name).
+/// </summary>
+public enum ReviewBaseKind
+{
+    Upstream,
+    DefaultBranch,
+    Explicit,
+    RawCommit,
+}
+
+/// <summary>
+/// A resolved review base: its commit <see cref="Sha"/>, the human-readable <see cref="Ref"/> it
+/// was derived from (e.g. <c>origin/main</c>), and <see cref="Kind"/> (why it was chosen). Carries
+/// the ref identity that a bare merge-base SHA throws away, so the header can show a name not a hash.
+/// </summary>
+public readonly record struct ResolvedReviewBase(string Sha, string Ref, ReviewBaseKind Kind);
+
+/// <summary>
 /// A resolved review stack: the linearized first-parent commit list of <c>base..head</c>,
 /// oldest→newest. <see cref="Truncated"/> is true when the walk hit its cap before reaching the base.
+/// <see cref="BaseRef"/>/<see cref="BaseKind"/> carry the base's ref identity (set by the source) so
+/// the header reads <c>origin/main → my-branch</c> rather than a bare SHA; they default to the
+/// SHA-only case when only a commit is known.
 /// </summary>
 public sealed record ReviewStack(
     Guid RepoId,
@@ -39,4 +62,6 @@ public sealed record ReviewStack(
     string BaseLabel,
     string HeadLabel,
     IReadOnlyList<ReviewIncrement> Increments,
-    bool Truncated);
+    bool Truncated,
+    string? BaseRef = null,
+    ReviewBaseKind BaseKind = ReviewBaseKind.RawCommit);

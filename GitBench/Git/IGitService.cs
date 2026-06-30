@@ -18,9 +18,10 @@ public interface IGitService
     // The merge-base (common-ancestor) SHA of two refs/SHAs, or null when none exists (unrelated
     // histories) or git fails. Anchors a review range's base at the divergence point.
     string? MergeBase(Repo repo, string a, string b);
-    // The default review base SHA for headRef when no explicit base is pinned: merge-base with the
-    // branch's upstream, else with the repo's default branch. Null when neither resolves.
-    string? ResolveAutoReviewBase(Repo repo, string headRef);
+    // The default review base for headRef when no explicit base is pinned: the merge-base with the
+    // branch's upstream, else with the repo's default branch — carrying the ref name + kind it came
+    // from (so the header can name it). Null when neither resolves.
+    ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef);
     Fetched<CommitDetails> LoadDetails(Repo repo, string sha);
     Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo);
     GitStatusSummary GetStatusSummary(Repo repo);

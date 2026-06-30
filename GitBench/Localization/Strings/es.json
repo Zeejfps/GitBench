@@ -372,7 +372,11 @@
   "repos.error_fetch_failed": "Error al obtener",
 
   "review.window_title": "Revisión: {label}",
-  "review.base_auto": "auto",
+  "review.base_resolving": "Resolviendo base…",
+  "review.base_menu_auto": "Automático",
+  "review.base_provenance": "{count} commits desde que {head} se bifurcó de {baseRef} ({sha})",
+  "review.base_kind_upstream": "upstream",
+  "review.base_kind_default": "rama predeterminada",
   "review.increment_position": "Incremento {index} de {total}",
   "review.increments_reviewed": "{reviewed} / {total} revisados",
   "review.complete": "Revisión completa",

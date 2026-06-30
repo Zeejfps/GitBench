@@ -372,7 +372,11 @@
   "repos.error_fetch_failed": "フェッチに失敗しました",
 
   "review.window_title": "レビュー: {label}",
-  "review.base_auto": "自動",
+  "review.base_resolving": "ベースを解決中…",
+  "review.base_menu_auto": "自動",
+  "review.base_provenance": "{head} が {baseRef} から分岐してからの {count} 件のコミット ({sha})",
+  "review.base_kind_upstream": "アップストリーム",
+  "review.base_kind_default": "デフォルトブランチ",
   "review.increment_position": "増分 {index} / {total}",
   "review.increments_reviewed": "{reviewed} / {total} 件レビュー済み",
   "review.complete": "レビュー完了",

@@ -31,29 +31,37 @@ internal sealed class GitReviewStackSource : IReviewStackSource
         if (repo == null)
             throw new InvalidOperationException(_loc.Strings.Value.ReviewErrorRepoUnavailable);
 
-        var baseRef = ResolveBaseRef(repo, session);
-        if (baseRef == null)
+        var resolved = ResolveBase(repo, session);
+        if (resolved == null)
             throw new InvalidOperationException(_loc.Strings.Value.ReviewErrorNoBase);
+        var b = resolved.Value;
 
-        var fetched = _gitService.LoadReviewStack(repo, baseRef, session.HeadRef, cap);
+        var fetched = _gitService.LoadReviewStack(repo, b.Sha, session.HeadRef, cap);
         if (fetched is not Fetched<ReviewStack>.Ok ok)
             throw new InvalidOperationException(fetched.FailureMessage ?? _loc.Strings.Value.ReviewErrorLoadFailed);
 
-        // Labels come from the pinned session (branch names); the base falls back to its short SHA.
+        // The base carries its ref name + kind (not a bare SHA), so the header reads
+        // "origin/main → my-branch"; the head label is the pinned branch name.
         var stack = ok.Value;
         return Task.FromResult(stack with
         {
             HeadLabel = session.HeadLabel,
-            BaseLabel = session.BaseLabel ?? stack.BaseLabel,
+            BaseLabel = b.Ref,
+            BaseRef = b.Ref,
+            BaseKind = b.Kind,
         });
     }
 
     // Explicit base ⇒ merge-base(base, head) so the range starts at the divergence point (falling
-    // back to the ref itself if histories are unrelated). No explicit base ⇒ auto resolution.
-    private string? ResolveBaseRef(Repo repo, ReviewSession session)
+    // back to the ref itself if histories are unrelated), labelled by the chosen ref. No explicit
+    // base ⇒ auto resolution (upstream → default), labelled by the resolved ref.
+    private ResolvedReviewBase? ResolveBase(Repo repo, ReviewSession session)
     {
         if (!string.IsNullOrEmpty(session.BaseRef))
-            return _gitService.MergeBase(repo, session.BaseRef, session.HeadRef) ?? session.BaseRef;
+        {
+            var sha = _gitService.MergeBase(repo, session.BaseRef, session.HeadRef) ?? session.BaseRef;
+            return new ResolvedReviewBase(sha, session.BaseLabel ?? session.BaseRef, ReviewBaseKind.Explicit);
+        }
         return _gitService.ResolveAutoReviewBase(repo, session.HeadRef);
     }
 

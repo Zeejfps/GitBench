@@ -372,7 +372,11 @@
   "repos.error_fetch_failed": "Fetch failed",
 
   "review.window_title": "Review: {label}",
-  "review.base_auto": "auto",
+  "review.base_resolving": "Resolving base…",
+  "review.base_menu_auto": "Auto",
+  "review.base_provenance": "{count} commits since {head} forked from {baseRef} ({sha})",
+  "review.base_kind_upstream": "upstream",
+  "review.base_kind_default": "default branch",
   "review.increment_position": "Increment {index} of {total}",
   "review.increments_reviewed": "{reviewed} / {total} reviewed",
   "review.complete": "Review complete",
