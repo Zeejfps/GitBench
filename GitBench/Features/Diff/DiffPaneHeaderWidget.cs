@@ -25,8 +25,16 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
     // height, keeping the chevron clickable.
     public const float HeaderHeight = 24f;
 
+    /// <summary>
+    /// Whether the bar acts as a collapse toggle. True (default) for the stacked embedded panes
+    /// (Local Changes, Commit Details) where the header collapses the diff below it. False for the
+    /// tabbed commit-details surface, where the diff fills its own tab and there is nothing to
+    /// collapse into — the chevron is dropped and pressing the bar does nothing.
+    /// </summary>
+    public bool Collapsible { get; init; } = true;
+
     protected override ButtonState CreateState(Context ctx) =>
-        new(new Command(ctx.Require<DiffViewModel>().ToggleCollapse));
+        new(new Command(Collapsible ? ctx.Require<DiffViewModel>().ToggleCollapse : static () => { }));
 
     protected override IWidget Build(Context ctx, ButtonState state)
     {
@@ -53,38 +61,48 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
                         {
                             Gap = Spacing.Sm,
                             CrossAxis = CrossAxisAlignment.Center,
-                            Children =
-                            [
-                                new Text
-                                {
-                                    FontFamily = LucideIcons.FontFamily,
-                                    FontSize = FontSize.Body,
-                                    Width = 16f,
-                                    HAlign = TextAlignment.Center,
-                                    VAlign = TextAlignment.Center,
-                                    Value = vm.IsCollapsed.Bind(string? (c) =>
-                                        c ? LucideIcons.ChevronUp : LucideIcons.ChevronDown),
-                                    Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
-                                },
-                                new Grow
-                                {
-                                    Child = new Text
-                                    {
-                                        Value = L.T(s => s.DiffHeaderTitle),
-                                        FontSize = FontSize.Body,
-                                        VAlign = TextAlignment.Center,
-                                        Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
-                                    },
-                                },
-                                new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) },
-                                FullFileToggleButton(vm),
-                                OpenInWindowButton(vm),
-                            ],
+                            Children = RowChildren(vm, state),
                         },
                     ],
                 },
             ],
         };
+    }
+
+    private IWidget[] RowChildren(DiffViewModel vm, ButtonState state)
+    {
+        var title = new Grow
+        {
+            Child = new Text
+            {
+                Value = L.T(s => s.DiffHeaderTitle),
+                FontSize = FontSize.Body,
+                VAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
+            },
+        };
+        var trailing = new IWidget[]
+        {
+            title,
+            new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) },
+            FullFileToggleButton(vm),
+            OpenInWindowButton(vm),
+        };
+
+        if (!Collapsible) return trailing;
+
+        var chevron = new Text
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = FontSize.Body,
+            Width = 16f,
+            HAlign = TextAlignment.Center,
+            VAlign = TextAlignment.Center,
+            Value = vm.IsCollapsed.Bind(string? (c) =>
+                c ? LucideIcons.ChevronUp : LucideIcons.ChevronDown),
+            Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
+        };
+        return [chevron, .. trailing];
     }
 
     // Toggles the diff body between the normal diff and the after-side full file. Tinted while active

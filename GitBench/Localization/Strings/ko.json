@@ -230,6 +230,7 @@
   "commits.details_commit_label": "커밋:",
   "commits.details_parents_label": "부모:",
   "commits.details_parents_none": "(없음)",
+  "commits.details_tab": "세부 정보",
   "commits.context_reset_branch": "{head}을(를) 여기로 재설정",
   "commits.context_reset_branch_detached": "브랜치를 여기로 재설정",
   "commits.context_reset_detached": "이 커밋으로 재설정",

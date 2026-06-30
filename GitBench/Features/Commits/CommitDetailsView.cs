@@ -34,10 +34,13 @@ internal sealed class CommitDetailsView : ContainerView
     private readonly ColumnView _headerInfo;
     private readonly ScrollPane _headerScrollPane;
     private readonly FileChangesSection _changesSection;
-    private readonly View _diffView;
-    private readonly VerticalSplitContainer _splitContainer;
-    private readonly VerticalSplitContainer _innerSplit;
     private readonly RectView _panel;
+    // The "Content" surface: a draggable split of the file list (top, always visible) over the tabbed
+    // metadata/diff region (bottom). Opening a file swaps the bottom region to its diff; the list stays.
+    private readonly VerticalSplitContainer _contentView;
+    private readonly FlexColumnView _bodyHost;
+    private readonly FlexItem _detailsItem;
+    private readonly Dictionary<string, FlexItem> _tabBodies = new();
     private readonly FlexColumnView _placeholderHost;
     private readonly TextView _placeholder;
     // Details fade up as a commit's data arrives; the placeholder text blooms in. Both park when
@@ -95,49 +98,36 @@ internal sealed class CommitDetailsView : ContainerView
             },
             headerActions: [viewModeButton]);
 
-        var innerSplitterHovered = new State<bool>(false);
-        var innerSplitter = new RectView();
-        innerSplitter.BindThemedBackgroundColor(_theme, s =>
-            innerSplitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
-        _innerSplit = new VerticalSplitContainer(headerWithBars, _changesSection, innerSplitter, bottomFraction: 1f / 2f)
-        {
-            BottomVisible = false,
-        };
-        innerSplitter.UseController(input, () => new SplitterController(
-            ctx,
-            DragAxis.Y,
-            _innerSplit.AdjustBottomFractionByPixels,
-            h => innerSplitterHovered.Value = h));
+        // The Details tab body = the commit metadata (author / message / sha / parents). The file
+        // list is intentionally NOT in here — it is the split's own top pane, so it stays visible
+        // when a diff tab is open. The metadata and each open file's diff stack in _bodyHost; only the
+        // active one is IsVisible, so switching tabs hides rather than unmounts — each diff keeps its
+        // scroll, highlight, and full-file toggle.
+        _detailsItem = new FlexItem { Grow = 1, Child = headerWithBars };
+        _bodyHost = new FlexColumnView { CrossAxisAlignment = CrossAxisAlignment.Stretch };
+        _bodyHost.Children.Add(_detailsItem);
 
-        _diffView = new Provide<DiffViewModel>
+        var tabStrip = new CommitDetailsTabStrip { Vm = vm }.BuildView(ctx);
+        var tabbedRegion = new BorderLayoutView
         {
-            Value = vm.DiffVm,
-            Child = new DiffView(),
-        }.BuildView(ctx);
-
-        var diffHeader = new Provide<DiffViewModel>
-        {
-            Value = vm.DiffVm,
-            Child = new DiffPaneHeaderWidget().WithController<KbmController>(),
-        }.BuildView(ctx);
-        var diffPane = new BorderLayoutView
-        {
-            North = diffHeader,
-            Center = _diffView,
+            North = tabStrip,
+            Center = _bodyHost,
         };
-        this.Bind(vm.DiffVm.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
 
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
         splitter.BindThemedBackgroundColor(_theme, s =>
             splitterHovered.Value ? s.CommitDetailsView.SplitterHover : s.CommitDetailsView.SplitterIdle);
-
-        _splitContainer = new VerticalSplitContainer(_innerSplit, diffPane, splitter, bottomFraction: 1f / 2f);
-
+        // Top: the file list, always visible. Bottom: the tabbed metadata/diff region (the larger
+        // share), shown once a commit is loaded (BottomVisible toggled in ShowDetails/ShowPlaceholder).
+        _contentView = new VerticalSplitContainer(_changesSection, tabbedRegion, splitter, bottomFraction: 2f / 3f)
+        {
+            BottomVisible = false,
+        };
         splitter.UseController(input, () => new SplitterController(
             ctx,
             DragAxis.Y,
-            _splitContainer.AdjustBottomFractionByPixels,
+            _contentView.AdjustBottomFractionByPixels,
             h => splitterHovered.Value = h));
 
         _placeholder = new TextView(_canvas)
@@ -156,7 +146,7 @@ internal sealed class CommitDetailsView : ContainerView
         _panel = new RectView
         {
             BorderSize = new BorderSizeStyle { Left = 1 },
-            Children = { _splitContainer },
+            Children = { _contentView },
         };
         _panel.BindThemedBackgroundColor(_theme, s => s.CommitDetailsView.Background);
         _panel.BindThemedBorderColor(_theme, s => new BorderColorStyle { Left = s.CommitDetailsView.BorderLeft });
@@ -167,7 +157,7 @@ internal sealed class CommitDetailsView : ContainerView
         _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
         // Bound before the view model (which drives the first SetRenderState) so the opacities start at
         // zero before the first show, rather than flashing fully opaque for a frame.
-        this.Bind(_enterTween.LinearProgress, p => _splitContainer.Opacity = p);
+        this.Bind(_enterTween.LinearProgress, p => _contentView.Opacity = p);
         this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
         this.Use(() => _enterTween);
         this.Use(() => _placeholderTween);
@@ -188,7 +178,7 @@ internal sealed class CommitDetailsView : ContainerView
             _ => { },
             () => { },
             () => { });
-        _arrowController.OnToggleFullFile = () => _vm?.DiffVm.ToggleFullFile();
+        _arrowController.OnToggleFullFile = () => _vm?.ActiveDiff?.ToggleFullFile();
         this.UseController(input, _arrowController);
 
         this.UseViewModel(() => vm, Bind);
@@ -211,9 +201,84 @@ internal sealed class CommitDetailsView : ContainerView
         {
             _selectedPath.Value = path;
             if (path != null) _changesSection.EnsureRowVisible(path);
+            ApplyActiveVisibility();
         });
-        _splitContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _splitContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
+        this.Use(() => vm.OpenTabs.Subscribe(OnTabsChanged));
+    }
+
+    // Mirrors the VM's OpenTabs into _bodyHost: a diff body per open file, plus the always-present
+    // Details body. Removed/Cleared/Reset evict the body view (its DiffViewModel is disposed by the
+    // VM); visibility is applied after every structural change.
+    private void OnTabsChanged(ListChange<CommitFileTab> change)
+    {
+        switch (change.Kind)
+        {
+            case ListChangeKind.Added:
+                AddTabBody(change.Item!);
+                break;
+            case ListChangeKind.Removed:
+                RemoveTabBody(change.OldItem!.Path);
+                break;
+            case ListChangeKind.Reset:
+            case ListChangeKind.Cleared:
+                ClearTabBodies();
+                if (_vm != null)
+                    foreach (var tab in _vm.OpenTabs)
+                        AddTabBody(tab);
+                break;
+        }
+        ApplyActiveVisibility();
+    }
+
+    private void AddTabBody(CommitFileTab tab)
+    {
+        if (_tabBodies.ContainsKey(tab.Path)) return;
+        var item = new FlexItem { Grow = 1, Child = BuildDiffBody(tab) };
+        item.IsVisible = false;
+        _tabBodies[tab.Path] = item;
+        _bodyHost.Children.Add(item);
+    }
+
+    private void RemoveTabBody(string path)
+    {
+        if (!_tabBodies.Remove(path, out var item)) return;
+        _bodyHost.Children.Remove(item);
+    }
+
+    private void ClearTabBodies()
+    {
+        foreach (var item in _tabBodies.Values)
+            _bodyHost.Children.Remove(item);
+        _tabBodies.Clear();
+    }
+
+    // Shows the body for the active tab and hides the rest (Details body when SelectedPath is null).
+    // IsVisible is display:none — the hidden bodies stay mounted, so their diffs keep their state.
+    private void ApplyActiveVisibility()
+    {
+        var active = _vm?.SelectedPath.Value;
+        _detailsItem.IsVisible = active == null;
+        foreach (var (path, item) in _tabBodies)
+            item.IsVisible = path == active;
+    }
+
+    private View BuildDiffBody(CommitFileTab tab)
+    {
+        var diffView = new Provide<DiffViewModel>
+        {
+            Value = tab.Diff,
+            Child = new DiffView(),
+        }.BuildView(_ctx);
+        var header = new Provide<DiffViewModel>
+        {
+            Value = tab.Diff,
+            Child = new DiffPaneHeaderWidget { Collapsible = false },
+        }.BuildView(_ctx);
+        return new BorderLayoutView
+        {
+            North = header,
+            Center = diffView,
+        };
     }
 
     private void SetRenderState(CommitDetailsRenderState state)
@@ -264,15 +329,15 @@ internal sealed class CommitDetailsView : ContainerView
         _shown = Shown.Placeholder;
         _headerInfo.Children.Clear();
         _changesSection.SetFiles(Array.Empty<FileChange>());
-        _innerSplit.BottomVisible = false;
+        _contentView.BottomVisible = false;
     }
 
     private void ShowDetails(CommitDetails d)
     {
-        if (!_panel.Children.Contains(_splitContainer))
+        if (!_panel.Children.Contains(_contentView))
         {
             _panel.Children.Clear();
-            _panel.Children.Add(_splitContainer);
+            _panel.Children.Add(_contentView);
         }
         // Fade up only when details emerge from a placeholder/skeleton; a commit-to-commit change of
         // already-shown details swaps instantly, matching how the other panels skip the fade on refresh.
@@ -319,7 +384,7 @@ internal sealed class CommitDetailsView : ContainerView
         });
 
         _changesSection.SetFiles(d.Files);
-        _innerSplit.BottomVisible = true;
+        _contentView.BottomVisible = true;
         _headerScrollPane.ScrollToOrigin();
     }
 

@@ -230,6 +230,7 @@
   "commits.details_commit_label": "Commit:",
   "commits.details_parents_label": "Padres:",
   "commits.details_parents_none": "(ninguno)",
+  "commits.details_tab": "Detalles",
   "commits.context_reset_branch": "Restablecer {head} hasta aquí",
   "commits.context_reset_branch_detached": "Restablecer rama hasta aquí",
   "commits.context_reset_detached": "Restablecer a este commit",

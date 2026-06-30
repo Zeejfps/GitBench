@@ -272,6 +272,7 @@
   "commits.details_commit_label": "الإيداع:",
   "commits.details_parents_label": "الآباء:",
   "commits.details_parents_none": "(لا شيء)",
+  "commits.details_tab": "التفاصيل",
   "commits.context_reset_branch": "إعادة تعيين {head} إلى هنا",
   "commits.context_reset_branch_detached": "إعادة تعيين الفرع إلى هنا",
   "commits.context_reset_detached": "إعادة التعيين إلى هذا الإيداع",

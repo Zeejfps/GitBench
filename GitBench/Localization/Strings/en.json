@@ -230,6 +230,7 @@
   "commits.details_commit_label": "Commit:",
   "commits.details_parents_label": "Parents:",
   "commits.details_parents_none": "(none)",
+  "commits.details_tab": "Details",
   "commits.context_reset_branch": "Reset {head} to here",
   "commits.context_reset_branch_detached": "Reset branch to here",
   "commits.context_reset_detached": "Reset to this commit",

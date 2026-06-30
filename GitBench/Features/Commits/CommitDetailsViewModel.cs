@@ -23,7 +23,6 @@ public abstract record CommitDetailsRenderState
 internal sealed record CommitDetailsState(
     CommitDetailsRenderState Render,
     string? SelectedPath,
-    DiffTarget? SelectedTarget,
     FileViewMode ViewMode);
 
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
@@ -39,10 +38,13 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
     public IReadable<CommitDetailsRenderState> RenderState { get; }
     public IReadable<string?> SelectedPath { get; }
-    public IReadable<DiffTarget?> SelectedTarget { get; }
     public IReadable<FileViewMode> ViewMode { get; }
     public Command ToggleViewMode { get; }
-    public DiffViewModel DiffVm { get; }
+
+    // Open file tabs, in tab order. The "Details" tab (commit metadata + file list) is implicit and
+    // always present as the leftmost tab; SelectedPath == null means it is the active tab. Each entry
+    // owns its own DiffViewModel, so switching tabs preserves each file's loaded diff and scroll.
+    public ObservableList<CommitFileTab> OpenTabs { get; } = new();
 
     public CommitDetailsViewModel(
         IGitService gitService,
@@ -54,7 +56,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         bool subscribeToSelection = true)
         : base(dispatcher, new CommitDetailsState(
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
-            null, null, preferences.Current.FileViewMode))
+            null, preferences.Current.FileViewMode))
     {
         _gitService = gitService;
         _registry = registry;
@@ -64,16 +66,17 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
-        SelectedTarget = Slice(s => s.SelectedTarget);
         ViewMode = Slice(s => s.ViewMode);
         ToggleViewMode = new Command(DoToggleViewMode);
 
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, loc: loc);
         // The History pane follows commit selection over the bus; the Review window drives its own
         // instance directly via Show()/Clear() and opts out so it never reacts to History's selection.
         if (subscribeToSelection)
             Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
     }
+
+    /// <summary>The active tab's diff view model, or null when the implicit Details tab is active.</summary>
+    public DiffViewModel? ActiveDiff => FindTab(State.Value.SelectedPath)?.Diff;
 
     // Shares the global tree/flat preference with the Local Changes panels so the choice is
     // consistent app-wide and persists across launches.
@@ -86,18 +89,57 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
     public override void Dispose()
     {
-        DiffVm.Dispose();
+        CloseAllTabs();
         base.Dispose();
     }
 
+    /// <summary>Opens the file in a new tab — or focuses its existing tab — and makes it active.</summary>
     public void SelectFile(string path)
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
-        Update(s => s with
-        {
-            SelectedPath = path,
-            SelectedTarget = new DiffTarget(path, DiffSide.Commit, _currentSha),
-        });
+        if (FindTab(path) == null)
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _registry, _gitService, Dispatcher, _bus, _loc));
+        Update(s => s with { SelectedPath = path });
+    }
+
+    /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>
+    public void ActivateTab(string? path) => Update(s => s with { SelectedPath = path });
+
+    /// <summary>Closes a file tab and disposes its diff. If it was active, the neighbouring tab (or
+    /// the Details tab when none remain) becomes active.</summary>
+    public void CloseTab(string path)
+    {
+        var index = IndexOfTab(path);
+        if (index < 0) return;
+        var tab = OpenTabs[index];
+        var wasActive = State.Value.SelectedPath == path;
+        OpenTabs.RemoveAt(index);
+        tab.Dispose();
+        if (!wasActive) return;
+        var next = OpenTabs.Count == 0 ? null : OpenTabs[Math.Min(index, OpenTabs.Count - 1)].Path;
+        Update(s => s with { SelectedPath = next });
+    }
+
+    private CommitFileTab? FindTab(string? path)
+    {
+        if (path == null) return null;
+        foreach (var tab in OpenTabs)
+            if (tab.Path == path) return tab;
+        return null;
+    }
+
+    private int IndexOfTab(string path)
+    {
+        for (var i = 0; i < OpenTabs.Count; i++)
+            if (OpenTabs[i].Path == path) return i;
+        return -1;
+    }
+
+    private void CloseAllTabs()
+    {
+        if (OpenTabs.Count == 0) return;
+        foreach (var tab in OpenTabs) tab.Dispose();
+        OpenTabs.Clear();
     }
 
     private void OnCommitSelected(CommitSelectedMessage msg)
@@ -114,15 +156,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Show(msg.RepoId, msg.Sha);
     }
 
-    /// <summary>Resets to the no-selection placeholder, cancelling any in-flight load.</summary>
+    /// <summary>Resets to the no-selection placeholder, closing all tabs and cancelling any in-flight load.</summary>
     public void Clear()
     {
         Gen.Bump();
         _currentSha = null;
+        CloseAllTabs();
         Update(s => s with
         {
             SelectedPath = null,
-            SelectedTarget = null,
             Render = new CommitDetailsRenderState.Placeholder(DefaultPlaceholder),
         });
     }
@@ -138,10 +180,10 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         if (repo == null) return;
 
         _currentSha = sha;
+        CloseAllTabs();
         Update(s => s with
         {
             SelectedPath = null,
-            SelectedTarget = null,
             Render = new CommitDetailsRenderState.Loading(),
         });
 

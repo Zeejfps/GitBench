@@ -230,6 +230,7 @@
   "commits.details_commit_label": "提交:",
   "commits.details_parents_label": "父提交:",
   "commits.details_parents_none": "(无)",
+  "commits.details_tab": "详情",
   "commits.context_reset_branch": "将 {head} 重置到此处",
   "commits.context_reset_branch_detached": "将分支重置到此处",
   "commits.context_reset_detached": "重置到此提交",

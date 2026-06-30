@@ -230,6 +230,7 @@
   "commits.details_commit_label": "コミット:",
   "commits.details_parents_label": "親:",
   "commits.details_parents_none": "（なし）",
+  "commits.details_tab": "詳細",
   "commits.context_reset_branch": "{head} をここにリセット",
   "commits.context_reset_branch_detached": "ブランチをここにリセット",
   "commits.context_reset_detached": "このコミットにリセット",
