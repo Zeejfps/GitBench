@@ -152,4 +152,24 @@ public class HunkPatchBuilderTests
         Assert.Contains("new file mode", patch);
         Assert.Contains("--- /dev/null\n", patch);
     }
+
+    // Intra-line emphasis is view-local (lives on DiffRow.Line, never on DiffLine), so a replace
+    // block — the kind that gets emphasized at render time — produces a patch built solely from
+    // Kind/Text. Byte-for-byte unchanged regardless of any emphasis the renderer computes.
+    [Fact]
+    public void ReplaceBlockPatchUnaffectedByEmphasis()
+    {
+        var diff = Diff(Rem(1, "foo bar"), Add(1, "foo baz"));
+
+        var patch = HunkPatchBuilder.Build(diff, 0);
+
+        Assert.Equal(
+            "diff --git a/file.txt b/file.txt\n" +
+            "--- a/file.txt\n" +
+            "+++ b/file.txt\n" +
+            "@@ -1,1 +1,1 @@\n" +
+            "-foo bar\n" +
+            "+foo baz\n",
+            patch);
+    }
 }

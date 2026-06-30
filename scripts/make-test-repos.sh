@@ -226,6 +226,101 @@ gen_gitignore() {                               # 19-gitignored
   append tracked.log "change to a tracked-but-ignored file"
 }
 
+gen_intra_line() {                              # 1a-intra-line
+  # Exercises intra-line (changed-character) emphasis, which fires on REPLACE BLOCKS: a run of
+  # removed lines immediately followed by a run of added lines, paired index-wise and word-diffed.
+  # Covers single-word/leading/trailing/multi-range edits, the similarity gate (a full rewrite
+  # must read as a plain delete+add with NO emphasis), tab/whitespace boxing, an unbalanced block
+  # (more removed than added -> only the paired index lights up), and a multi-line block. Uses .ts
+  # so the emphasis layers under syntax colors. Spread across a commit diff + staged + unstaged.
+  new_repo 1a-intra-line
+
+  # --- a committed in-place edit, so the COMMIT diff also shows intra-line emphasis ---
+  write committed-edit.ts \
+    "export function calculateTotalPrice(quantity: number): number {" \
+    "  const unitPrice = 9.99;" \
+    "  return quantity * unitPrice;" \
+    "}"
+  ci "Add price helper"
+  write committed-edit.ts \
+    "export function calculateTotalPrice(amount: number): number {" \
+    "  const unitCost = 9.99;" \
+    "  return amount * unitCost;" \
+    "}"
+  ci "Rename quantity->amount, unitPrice->unitCost"
+
+  # --- baseline for the working-tree demo files ---
+  write edits.ts \
+    "// Intra-line emphasis demo - each edited line below is its own replace block." \
+    "export const greeting = \"hello world\";" \
+    "const KEEP_A = true;" \
+    "const radius = 10;" \
+    "const KEEP_B = true;" \
+    "let userName = \"alice\";" \
+    "const KEEP_C = true;" \
+    "const total = price + tax + shipping;" \
+    "const KEEP_D = true;" \
+    "function add(a: number, b: number): number { return a + b; }" \
+    "const KEEP_E = true;" \
+    "const filePath = \"src/old/module/file.ts\";" \
+    "const KEEP_F = true;" \
+    "const message = \"completely unrelated original sentence\";"
+  write whitespace.txt \
+    "keep this line stable" \
+    "this line gains trailing space" \
+    "columns    are    space    aligned" \
+    "keep this one stable too"
+  write block-reindent.ts \
+    "function reindentDemo() {" \
+    $'\tconst first = 1;' \
+    $'\tconst second = 2;' \
+    $'\tconst third = 3;' \
+    $'\treturn first + second + third;' \
+    "}"
+  write unbalanced.txt \
+    "config alpha = 1" \
+    "config beta = 2" \
+    "config gamma = 3" \
+    "config delta = 4"
+  ci "Add working-tree intra-line demo files"
+
+  # --- UNSTAGED edits: single-line cases + whitespace boxing ---
+  write edits.ts \
+    "// Intra-line emphasis demo - each edited line below is its own replace block." \
+    "export const greeting = \"hello there\";" \
+    "const KEEP_A = true;" \
+    "const radius = 25;" \
+    "const KEEP_B = true;" \
+    "let userName = \"bob\";" \
+    "const KEEP_C = true;" \
+    "const total = cost + tax + freight;" \
+    "const KEEP_D = true;" \
+    "function add(a: number, c: number): number { return a + c; }" \
+    "const KEEP_E = true;" \
+    "const filePath = \"src/new/module/file.ts\";" \
+    "const KEEP_F = true;" \
+    "const note = 42;"
+  write whitespace.txt \
+    "keep this line stable" \
+    "this line gains trailing space   " \
+    "columns are space aligned" \
+    "keep this one stable too"
+
+  # --- STAGED edits: a tab reindent block + an unbalanced (3 removed, 1 added) block ---
+  write block-reindent.ts \
+    "function reindentDemo() {" \
+    $'\t\tconst first = 1;' \
+    $'\t\tconst second = 2;' \
+    $'\t\tconst third = 3;' \
+    $'\t\treturn first + second + third;' \
+    "}"
+  git add block-reindent.ts
+  write unbalanced.txt \
+    "config alpha = 100" \
+    "config delta = 4"
+  git add unbalanced.txt
+}
+
 gen_merge_conflict() {                          # 20-merge-conflict
   new_repo 20-merge-conflict
   write README.md "# Project" "" "Status: stable"; ci "Add README"
@@ -529,6 +624,7 @@ REGISTRY=(
   "17-unicode-emoji|gen_unicode|Unicode/emoji filenames, content, and commit messages"
   "18-line-endings|gen_line_endings|CRLF->LF and whitespace-only changes"
   "19-gitignored|gen_gitignore|Ignored files, untracked, and a tracked-but-ignored file"
+  "1a-intra-line|gen_intra_line|Intra-line emphasis: replace blocks, gate, tab/ws, unbalanced (commit+staged+unstaged)"
   "20-merge-conflict|gen_merge_conflict|MERGE in progress: content + add/add + modify/delete"
   "21-rebase-conflict|gen_rebase_conflict|REBASE stopped mid-conflict"
   "22-cherry-pick-conflict|gen_cherry_pick_conflict|CHERRY-PICK stopped mid-conflict"

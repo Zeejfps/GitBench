@@ -16,6 +16,9 @@ internal abstract record DiffRow
     /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
     /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the
     /// same tab-expanded column space as <see cref="Text"/>; null/empty means plain rendering.
+    /// <see cref="Emphasis"/> carries intra-line changed-character ranges in that same column
+    /// space (a background concern, separate from the foreground <see cref="Spans"/>); null for
+    /// context lines, unpaired adds/removes, and full rewrites.
     /// </summary>
     public sealed record Line(
         DiffLineKind Kind,
@@ -23,5 +26,6 @@ internal abstract record DiffRow
         string NewNumber,
         string Text,
         int Chars,
-        IReadOnlyList<TokenSpan>? Spans = null) : DiffRow;
+        IReadOnlyList<TokenSpan>? Spans = null,
+        IReadOnlyList<CharRange>? Emphasis = null) : DiffRow;
 }

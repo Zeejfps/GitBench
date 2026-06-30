@@ -308,9 +308,19 @@ internal sealed class DiffContentView : View, IScrollableContent
             var sepCells = VisualCells(range) + (h.Header != null ? VisualCells(h.Header) : 0) + 2;
             if (sepCells > _maxRowCells) _maxRowCells = sepCells;
 
-            foreach (var l in h.Lines)
+            // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
+            // tab-expanded column space so it aligns with Spans and the glyph grid.
+            var expanded = new string[h.Lines.Count];
+            for (var j = 0; j < h.Lines.Count; j++)
+                expanded[j] = DiffText.ExpandTabs(h.Lines[j].Text);
+            var emphasis = DiffOptions.IntraLineHighlightingEnabled
+                ? IntraLineDiff.ForHunk(h.Lines, expanded)
+                : null;
+
+            for (var j = 0; j < h.Lines.Count; j++)
             {
-                var text = DiffText.ExpandTabs(l.Text);
+                var l = h.Lines[j];
+                var text = expanded[j];
                 // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
                 var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
                 if (spans != null && spans.Count == 0) spans = null;
@@ -320,7 +330,8 @@ internal sealed class DiffContentView : View, IScrollableContent
                     l.NewLineNumber?.ToString() ?? string.Empty,
                     text,
                     text.Length,
-                    spans);
+                    spans,
+                    emphasis?[j]);
                 _rows.Add(row);
                 var cells = VisualCells(text);
                 if (cells > _maxRowCells) _maxRowCells = cells;
@@ -861,16 +872,48 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (!_singleGutter)
         {
             DrawMonoText(c, l.OldNumber, x, bottom, _gutterWidth,
-                _styles.LineNumberText, TextAlignment.End, z + 1);
+                _styles.LineNumberText, TextAlignment.End, z + 2);
             x += _gutterWidth + 4f;
         }
         DrawMonoText(c, l.NewNumber, x, bottom, _gutterWidth,
-            _styles.LineNumberText, TextAlignment.End, z + 1);
+            _styles.LineNumberText, TextAlignment.End, z + 2);
         x += _gutterWidth + 4f;
-        DrawMonoText(c, glyph, x, bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, z + 1);
+        DrawMonoText(c, glyph, x, bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, z + 2);
         x += GlyphColumnWidth + 4f;
 
-        DrawLineText(c, l, x, bottom, left + width, z + 1);
+        // Intra-line emphasis: a stronger background tint over the changed characters, layered
+        // between the line bg (z) and the text (z + 2). Walk the ranges incrementally, carrying
+        // cx forward exactly as DrawLineText does, never re-measuring from column 0.
+        if (l.Emphasis is { Count: > 0 } ranges)
+        {
+            var emBg = l.Kind == DiffLineKind.Removed
+                ? _styles.LineRemovedEmphasisBackground
+                : _styles.LineAddedEmphasisBackground;
+            var len = l.Text.Length;
+            var col = 0;
+            var cx = x;
+            foreach (var rng in ranges)
+            {
+                // ForPair promises sorted, non-overlapping, in-bounds ranges; this clamp is the
+                // backstop so a regression there shows up as a wrong-looking rect, never a
+                // per-frame Substring crash in the render loop.
+                var start = Math.Clamp(rng.Start, col, len);
+                var end = Math.Clamp(rng.Start + rng.Length, start, len);
+                if (start > col)
+                    cx += c.MeasureTextWidth(l.Text.Substring(col, start - col), MonoStartStyle);
+                var w = c.MeasureTextWidth(l.Text.Substring(start, end - start), MonoStartStyle);
+                c.DrawRect(new DrawRectInputs
+                {
+                    Position = new RectF(cx, bottom, w, _lineHeight),
+                    Style = SolidBgStyle(emBg),
+                    ZIndex = z + 1,
+                });
+                cx += w;
+                col = end;
+            }
+        }
+
+        DrawLineText(c, l, x, bottom, left + width, z + 2);
     }
 
     // Draws the line's text either as one run (no spans → plain, identical to before) or as a

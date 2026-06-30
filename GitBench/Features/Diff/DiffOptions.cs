@@ -11,4 +11,9 @@ internal static class DiffOptions
     // to flat single-color rendering. A mutable field (not const) so a future setting/menu can
     // toggle it at runtime.
     public static bool SyntaxHighlightingEnabled = true;
+
+    // Intra-line (changed-character) emphasis in replace blocks. On by default. Baked into rows
+    // at flatten time like SyntaxHighlightingEnabled, so a runtime flip takes effect on the next
+    // FlattenRows (next diff load / re-emit), not instantly.
+    public static bool IntraLineHighlightingEnabled = true;
 }

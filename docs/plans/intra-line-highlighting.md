@@ -155,19 +155,20 @@ private static readonly ConditionalWeakTable<IReadOnlyList<DiffLine>, IReadOnlyL
     Cache = new();
 
 public static IReadOnlyList<CharRange>?[] ForHunk(
-    IReadOnlyList<DiffLine> lines, IReadOnlyList<string> expandedTexts)
-{
-    if (!Cache.TryGetValue(lines, out var cached))
-    {
-        cached = Compute(lines, expandedTexts);
-        Cache.Add(lines, cached);
-    }
-    return cached;
-}
+    IReadOnlyList<DiffLine> lines, IReadOnlyList<string> expandedTexts) =>
+    Cache.GetValue(lines, _ => Compute(lines, expandedTexts));
 ```
 
-`ConditionalWeakTable` keys weakly, so entries are collected when the hunk is — no manual eviction,
-no leak across diffs.
+Use `GetValue(key, factory)`, **not** `TryGetValue`+`Add`: `GetValue` creates-and-inserts
+atomically, so it can't throw the duplicate-key `ArgumentException` a `TryGetValue`/`Add` pair
+would if `ForHunk` were ever entered for the same `lines` from two threads. Both flattens are on
+the UI thread today (grounding pass confirmed `SetRenderState`→`FlattenRows` is UI-thread), so the
+race is only theoretical — but `GetValue` is also just shorter. The factory closes over
+`expandedTexts`; on a cache hit it isn't invoked, so the ignored `expandedTexts` is correct (it is
+a deterministic function of `lines`). `IReadOnlyList<DiffLine>` is an interface (reference type) so
+it satisfies `where TKey : class`, and CWT keys by reference identity — exactly the hunk-instance
+match we want. `ConditionalWeakTable` keys weakly, so entries are collected when the hunk is — no
+manual eviction, no leak across diffs.
 
 ### 3. Integration — `FlattenRows`
 
@@ -224,13 +225,22 @@ if (l.Emphasis is { Count: > 0 } ranges)
     var emBg = l.Kind == DiffLineKind.Removed
         ? _styles.LineRemovedEmphasisBackground
         : _styles.LineAddedEmphasisBackground;
+    var len = l.Text.Length;
     var col = 0;
     var cx = x; // text start
     foreach (var rng in ranges)
     {
-        if (rng.Start > col)
-            cx += c.MeasureTextWidth(l.Text.Substring(col, rng.Start - col), MonoStartStyle);
-        var w = c.MeasureTextWidth(l.Text.Substring(rng.Start, rng.Length), MonoStartStyle);
+        // Defensive clamp, mirroring DrawLineText's span guard (DiffContentView.cs:895-896).
+        // §2 promises sorted, non-overlapping, in-bounds ranges, but a draw-time
+        // Substring(col, start-col) throws ArgumentOutOfRangeException *every frame* if that
+        // promise is ever violated (negative gap from an unsorted/overlapping range, or a
+        // start/len past the tab-expanded text). A clamp degrades a bad range to a harmless
+        // rect instead of taking down the whole diff body.
+        var start = Math.Clamp(rng.Start, col, len);
+        var end = Math.Clamp(rng.Start + rng.Length, start, len);
+        if (start > col)
+            cx += c.MeasureTextWidth(l.Text.Substring(col, start - col), MonoStartStyle);
+        var w = c.MeasureTextWidth(l.Text.Substring(start, end - start), MonoStartStyle);
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(cx, bottom, w, _lineHeight),
@@ -238,10 +248,15 @@ if (l.Emphasis is { Count: > 0 } ranges)
             ZIndex = z + 1,
         });
         cx += w;
-        col = rng.Start + rng.Length;
+        col = end;
     }
 }
 ```
+
+The clamp is belt-and-suspenders: `ForPair` is still required to emit sorted, non-overlapping,
+in-bounds, non-zero-length ranges (and the §7 tests must assert it). The clamp only guarantees that
+a regression there shows up as a wrong-looking highlight, never as a per-frame crash in the render
+loop.
 
 **Z-layering.** Today the line bg is at `z` and gutters/glyph/text at `z + 1`
 (`DiffContentView.cs:857` vs `:863-873`). Insert the emphasis layer between them: line bg `z`,
@@ -333,3 +348,89 @@ Moved-code detection is the other half of diff-improvement #1, tracked in
 cheap; moves are precomputed and cross-hunk. **Ship intra-line first.** Once both land, a moved
 line that was also tweaked can show intra-line emphasis on top of the "moved" tint — the layers
 compose with no special-casing.
+
+---
+
+## Virtual implementation walkthrough (grounding pass, 2026-06-29)
+
+A dry run: every file/line the plan touches was read and the plan's claims checked against the
+real code *before* writing a line of implementation. Result: the plan's line numbers and APIs are
+accurate as of `aff703a`; the integration is mechanically clean; two robustness gaps were found and
+folded back into §2 and §4 above.
+
+### Grounding — claims confirmed against the tree
+
+- **`DiffRow.Line` is safe to extend.** Only two positional constructions exist — `FlattenRows`
+  (`DiffContentView.cs:317`) and `FlattenFullFile` (`DiffContentView.cs:362`). Every other reference
+  (`:403`, `:430`, `:554`, `:658`, `:837`, `:879`) is a *property* pattern (`is DiffRow.Line l`),
+  never a positional deconstruction, so a trailing optional `Emphasis` param breaks nothing.
+  `FlattenFullFile`'s 6-arg call stays valid (param defaults to null) → no edit there, matching the
+  FullFile edge-case note.
+- **Theme wiring is a one-factory change.** `BuildDiffContent` is the sole `DiffContentStyles`
+  factory and its only call site is `ThemeStyles.Build.cs:40`; the call passes `(p, status,
+  diffSyntax)` and that signature is unchanged, so the call site needs no edit. `BuildDiffContent`
+  builds the record with *named* arguments (`ThemeStyles.Diff.cs:92-120`), so the two new fields can
+  be added anywhere in the record and initialized by name — order-independent.
+- **`WithAlpha` is ARGB top-byte** (`ThemeStyles.cs:47-48`: `(color & 0x00FFFFFF) | (alpha << 24)`).
+  `status.SuccessLineBg`/`DangerLineBg` exist (`ThemePalettes.cs:51,55`) and are fully opaque
+  (`0xFF…`), so `WithAlpha(…, 0xC8)` yields the intended stronger-than-line-tint emphasis fill.
+- **The memo is a guaranteed cache hit on the re-emit.** `StartHighlight` re-attaches with
+  `new DiffRenderState.Loaded(diff, highlight)` reusing the *same* `diff` instance, gated on
+  `ReferenceEquals(cur.Result, diff)` (`DiffViewModel.cs:518-519`). Same `DiffResult` → same
+  `DiffHunk` → same `h.Lines` reference → CWT keyed on `h.Lines` hits on flatten #2. Even if this
+  reuse ever changed, correctness is unaffected (a miss just recomputes an identical result); only
+  the double-flatten cost returns.
+- **Z-bands have headroom.** Line bg is `z` (`:856`); the four foreground draws are all `z + 1`
+  (old gutter `:864`, new gutter `:868`, glyph `:870`, `DrawLineText` `:873`); row chrome is
+  `z + 5`/`z + 6` (`:664`/`:666`). Inserting emphasis at `z + 1` and bumping the four foreground
+  draws to `z + 2` keeps everything inside the row's existing ≥7-wide band — no per-row stride
+  change. (In single-gutter/full-file mode only three of the four draws run; bumping all four is
+  still correct since the old-gutter draw is inside `if (!_singleGutter)`.)
+
+### Ordered implementation steps
+
+1. **`CharRange` value type** (§1) — `internal readonly record struct CharRange(int Start, int
+   Length);` in `Features/Diff` (same namespace as `DiffRow`, so no new usings).
+2. **Extend `DiffRow.Line`** (§1) — append `IReadOnlyList<CharRange>? Emphasis = null`. Safe per
+   grounding above.
+3. **`IntraLineDiff.cs`** (§2) — new pure helper in `GitBench/Features/Diff/`. Usings:
+   `GitBench.Git` (for `DiffLine`/`DiffLineKind`) and `System.Runtime.CompilerServices` (for
+   `ConditionalWeakTable`). `ForHunk` (memoized via `GetValue`) → `Compute` (replace-block pairing,
+   index-wise within each block) → `ForPair` (prefix/suffix trim → word/ws/symbol tokenize → LCS →
+   map-back+coalesce → similarity gate). `Compute` must return an array of length exactly
+   `lines.Count` so `emphasis?[j]` is always in range. `ForPair` must emit sorted, non-overlapping,
+   in-bounds, non-zero-length ranges.
+4. **`DiffOptions.IntraLineHighlightingEnabled = true`** (§6) — mirror `SyntaxHighlightingEnabled`
+   (`DiffOptions.cs:13`).
+5. **`FlattenRows`** (§3, `DiffContentView.cs:302-329`) — convert the per-line `foreach (var l in
+   h.Lines)` to an indexed `for (j…)`; build `expanded[]` once; compute `emphasis` via `ForHunk`
+   gated on the toggle; pass `emphasis?[j]` as the 7th arg. Preserve the existing `_maxRowCells`
+   update and `_hunkRanges.Add(...)` bookkeeping verbatim. `FlattenFullFile` untouched.
+6. **Theme** (§5, `ThemeStyles.Diff.cs`) — add `LineAddedEmphasisBackground` /
+   `LineRemovedEmphasisBackground` to the `DiffContentStyles` record; add
+   `const byte DiffEmphasisTintAlpha = 0xC8;`; add two named initializers in `BuildDiffContent`
+   (`WithAlpha(status.SuccessLineBg/DangerLineBg, DiffEmphasisTintAlpha)`).
+7. **Render** (§4, `DrawLineRow` `:837-873`) — insert the emphasis-rect walk (with the defensive
+   clamp now in §4) right before the `DrawLineText` call at `z + 1`; bump the four foreground draws
+   (`:864/:868/:870/:873`) from `z + 1` to `z + 2`. Line bg stays `z`.
+8. **Tests** (§7) — `GitBench.Tests/IntraLineDiffTests.cs` for the enumerated `ForPair`/`ForHunk`
+   cases (mirroring `DiffHighlightTests.cs`'s no-git style), plus a `HunkPatchBuilder` round-trip
+   regression. Grounding confirms `HunkPatchBuilder.Build` (`GitBench/Git/HunkPatchBuilder.cs:60-71`)
+   reads only `line.Kind`/`line.Text`/`line.NoNewlineAtEof` — emphasis can't perturb the patch.
+9. **Build + run** `GitBench.Tests`.
+
+### Issues caught (folded into the plan above)
+
+- **I1 — render-loop crash hazard (fixed in §4).** The emphasis walk's
+  `l.Text.Substring(col, rng.Start - col)` / `Substring(rng.Start, rng.Length)` throw
+  `ArgumentOutOfRangeException` on the *very next frame, every frame* if `ForPair` ever yields an
+  unsorted/overlapping/out-of-bounds range — a far worse failure than the wrong-color rect a clamp
+  produces. `DrawLineText` already clamps its syntax spans (`:895-896`); §4 now mirrors that. The
+  `ForPair` invariant is still required and test-asserted; the clamp is the backstop.
+- **I2 — CWT duplicate-key race (fixed in §2).** `TryGetValue`+`Add` can throw `ArgumentException`
+  if two threads miss and both `Add` the same `lines`. Switched to `GetValue(key, factory)`, which
+  inserts atomically. Benign today (UI-thread-only), but strictly safer and shorter.
+- **I3 — path nit.** `HunkPatchBuilder` lives at `GitBench/Git/HunkPatchBuilder.cs`, not under
+  `Features/Diff/` (the body of the plan cites the bare filename, which is fine).
+
+No blocking issues. The plan is implementable as written once I1/I2 (now incorporated) are in.

@@ -33,8 +33,10 @@ public sealed record DiffContentStyles(
     uint LineText,
     uint LineNumberText,
     uint LineAddedBackground,
+    uint LineAddedEmphasisBackground,
     uint LineAddedGlyph,
     uint LineRemovedBackground,
+    uint LineRemovedEmphasisBackground,
     uint LineRemovedGlyph,
     uint LineContextGlyph,
     uint SectionBackground,
@@ -88,6 +90,10 @@ public partial record ThemeStyles
     // legible through them. 0x00 = invisible, 0xFF = fully opaque (the pre-highlighting look).
     private const byte DiffLineTintAlpha = 0x80;
 
+    // Stronger tint for the actually-changed characters in a replace block, layered over the
+    // faint line tint above so the changed words stand out (the GitHub/VS Code look).
+    private const byte DiffEmphasisTintAlpha = 0xC8;
+
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
@@ -99,8 +105,10 @@ public partial record ThemeStyles
             // clearly through them; the full-strength +/- glyphs still signal the line kind.
             // Lower the alpha (e.g. 0x66) for a fainter tint, raise it (e.g. 0xB3) for a bolder one.
             LineAddedBackground: WithAlpha(status.SuccessLineBg, DiffLineTintAlpha),
+            LineAddedEmphasisBackground: WithAlpha(status.SuccessLineBg, DiffEmphasisTintAlpha),
             LineAddedGlyph: status.SuccessLineGlyph,
             LineRemovedBackground: WithAlpha(status.DangerLineBg, DiffLineTintAlpha),
+            LineRemovedEmphasisBackground: WithAlpha(status.DangerLineBg, DiffEmphasisTintAlpha),
             LineRemovedGlyph: status.DangerLineGlyph,
             LineContextGlyph: p.TextMuted,
             SectionBackground: p.SurfaceRaised,
