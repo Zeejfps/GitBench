@@ -976,6 +976,11 @@ internal sealed class DiffContentView : View, IScrollableContent
         TokenColorSlot.Operator => _styles.Syntax.Operator,
         TokenColorSlot.Punctuation => _styles.Syntax.Punctuation,
         TokenColorSlot.Constant => _styles.Syntax.Constant,
+        TokenColorSlot.Heading => _styles.Syntax.Heading,
+        TokenColorSlot.Emphasis => _styles.Syntax.Emphasis,
+        TokenColorSlot.Link => _styles.Syntax.Link,
+        TokenColorSlot.Code => _styles.Syntax.Code,
+        TokenColorSlot.Quote => _styles.Syntax.Quote,
         _ => _styles.LineText,
     };
 

@@ -5,6 +5,7 @@ namespace GitBench.Theming;
 /// are theme-agnostic intents; each is bound to a concrete palette color per light/dark theme
 /// in <see cref="DiffContentStyles"/>. <see cref="Default"/> means "no special color" — the
 /// token renders in the line's ordinary text color, identical to plain (un-highlighted) diff.
+/// The first group covers source code; the trailing group covers markup/prose (Markdown).
 /// </summary>
 internal enum TokenColorSlot
 {
@@ -19,6 +20,12 @@ internal enum TokenColorSlot
     Operator,
     Punctuation,
     Constant,
+    // Markup/prose intents (Markdown). Code-only files never resolve to these.
+    Heading,
+    Emphasis,   // bold and italic
+    Link,
+    Code,       // inline `code` and fenced blocks of an unrecognized language
+    Quote,      // blockquotes
 }
 
 /// <summary>

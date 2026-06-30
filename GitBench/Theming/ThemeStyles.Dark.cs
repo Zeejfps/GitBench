@@ -91,7 +91,12 @@ public partial record ThemeStyles
             Variable: 0xFF9CDCFEu,
             Operator: 0xFFD4D4D4u,
             Punctuation: 0xFF969A9Du,
-            Constant: 0xFF4FC1FFu);
+            Constant: 0xFF4FC1FFu,
+            Heading: 0xFF569CD6u,    // blue, like a keyword
+            Emphasis: 0xFFC586C0u,   // purple — bold/italic stand apart from headings
+            Link: 0xFF4FC1FFu,       // bright cyan
+            Code: 0xFFCE9178u,       // orange, like a string
+            Quote: 0xFF6A9955u);     // muted green, like a comment
 
         var commitBadge = new CommitBadgePalette(
             LocalBg: 0xFF2F4A6Bu,

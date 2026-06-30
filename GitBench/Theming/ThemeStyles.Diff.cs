@@ -58,7 +58,13 @@ public sealed record DiffSyntaxStyles(
     uint Variable,
     uint Operator,
     uint Punctuation,
-    uint Constant);
+    uint Constant,
+    // Markdown markup intents.
+    uint Heading,
+    uint Emphasis,
+    uint Link,
+    uint Code,
+    uint Quote);
 
 public sealed record DiffHunkButtonStyles(
     uint BackgroundIdle,
@@ -129,7 +135,12 @@ public partial record ThemeStyles
                 Variable: syntax.Variable,
                 Operator: syntax.Operator,
                 Punctuation: syntax.Punctuation,
-                Constant: syntax.Constant));
+                Constant: syntax.Constant,
+                Heading: syntax.Heading,
+                Emphasis: syntax.Emphasis,
+                Link: syntax.Link,
+                Code: syntax.Code,
+                Quote: syntax.Quote));
 
     private static DiffHunkButtonStyles BuildDiffHunkButton(DiffHunkButtonPalette hunkButton) =>
         new(

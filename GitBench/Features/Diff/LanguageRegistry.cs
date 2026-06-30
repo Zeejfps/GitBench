@@ -26,6 +26,8 @@ internal static class LanguageRegistry
         [".css"] = "css",
         [".scss"] = "scss",
         [".less"] = "less",
+        [".md"] = "markdown",
+        [".markdown"] = "markdown",
         // Svelte isn't a TextMateSharp-bundled grammar; BundledGrammarRegistryOptions ships it.
         [".svelte"] = "svelte",
     };

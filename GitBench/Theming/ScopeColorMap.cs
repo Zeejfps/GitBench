@@ -41,6 +41,24 @@ internal static class ScopeColorMap
         new("variable", TokenColorSlot.Variable),
         new("entity.name.variable", TokenColorSlot.Variable),
         new("punctuation", TokenColorSlot.Punctuation),
+
+        // Markdown (markup.*). The punctuation.definition.* entries pull each construct's
+        // delimiters (#, **, `, >) into its parent color so the construct reads as one run,
+        // mirroring the comment/string delimiter rules above.
+        new("markup.heading", TokenColorSlot.Heading),
+        new("entity.name.section", TokenColorSlot.Heading),    // heading text in some grammars
+        new("punctuation.definition.heading", TokenColorSlot.Heading),
+        new("markup.bold", TokenColorSlot.Emphasis),
+        new("markup.italic", TokenColorSlot.Emphasis),
+        new("punctuation.definition.bold", TokenColorSlot.Emphasis),
+        new("punctuation.definition.italic", TokenColorSlot.Emphasis),
+        new("markup.inline.raw", TokenColorSlot.Code),
+        new("markup.fenced_code", TokenColorSlot.Code),
+        new("punctuation.definition.raw", TokenColorSlot.Code),
+        new("markup.underline", TokenColorSlot.Link),          // markup.underline.link: the URL
+        new("string.other.link", TokenColorSlot.Link),         // link title/destination strings
+        new("markup.quote", TokenColorSlot.Quote),
+        new("punctuation.definition.quote", TokenColorSlot.Quote),
     };
 
     public static TokenColorSlot Map(string scope)

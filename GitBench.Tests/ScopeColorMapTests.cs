@@ -22,6 +22,23 @@ public class ScopeColorMapTests
     public void MapsRepresentativeScopes(string scope, int expected)
         => Assert.Equal((TokenColorSlot)expected, ScopeColorMap.Map(scope));
 
+    [Theory]
+    [InlineData("markup.heading.1.markdown", (int)TokenColorSlot.Heading)]
+    [InlineData("entity.name.section.markdown", (int)TokenColorSlot.Heading)]
+    [InlineData("punctuation.definition.heading.markdown", (int)TokenColorSlot.Heading)]
+    [InlineData("markup.bold.markdown", (int)TokenColorSlot.Emphasis)]
+    [InlineData("markup.italic.markdown", (int)TokenColorSlot.Emphasis)]
+    [InlineData("punctuation.definition.bold.markdown", (int)TokenColorSlot.Emphasis)]
+    [InlineData("markup.inline.raw.string.markdown", (int)TokenColorSlot.Code)]
+    [InlineData("markup.fenced_code.block.markdown", (int)TokenColorSlot.Code)]
+    [InlineData("punctuation.definition.raw.markdown", (int)TokenColorSlot.Code)]
+    [InlineData("markup.underline.link.markdown", (int)TokenColorSlot.Link)]
+    [InlineData("string.other.link.title.markdown", (int)TokenColorSlot.Link)]
+    [InlineData("markup.quote.markdown", (int)TokenColorSlot.Quote)]
+    [InlineData("punctuation.definition.quote.begin.markdown", (int)TokenColorSlot.Quote)]
+    public void MapsMarkdownScopes(string scope, int expected)
+        => Assert.Equal((TokenColorSlot)expected, ScopeColorMap.Map(scope));
+
     [Fact]
     public void LongestPrefixWins_NumericBeatsConstant()
     {

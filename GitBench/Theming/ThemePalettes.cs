@@ -88,7 +88,13 @@ public sealed record DiffSyntaxPalette(
     uint Variable,
     uint Operator,
     uint Punctuation,
-    uint Constant);
+    uint Constant,
+    // Markdown markup intents.
+    uint Heading,
+    uint Emphasis,
+    uint Link,
+    uint Code,
+    uint Quote);
 
 public sealed record CommitBadgePalette(
     uint LocalBg,

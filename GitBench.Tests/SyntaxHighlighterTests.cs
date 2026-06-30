@@ -85,6 +85,37 @@ public class SyntaxHighlighterTests
     }
 
     [Fact]
+    public void Markdown_Constructs_AreColored()
+    {
+        // Markdown is a TextMateSharp-bundled grammar — this proves "markdown" resolves and that
+        // its markup.* scopes reach the new prose slots (Heading/Emphasis/Code/Link/Quote).
+        var src = string.Join("\n",
+            "# Title",
+            "Some **bold** and `code` here.",
+            "> a quoted line",
+            "[label](https://example.com)");
+        var lines = HighlightOrFail(src, "markdown");
+
+        Assert.True(LineHasSlot(lines[0], TokenColorSlot.Heading));   // # Title
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Emphasis));  // **bold**
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Code));      // `code`
+        Assert.True(LineHasSlot(lines[2], TokenColorSlot.Quote));     // > a quoted line
+        Assert.True(LineHasSlot(lines[3], TokenColorSlot.Link));      // the URL
+    }
+
+    [Fact]
+    public void Markdown_FencedCodeBlock_TokenizesEmbeddedLanguage()
+    {
+        // A ```cs fence embeds the C# grammar, so an interior keyword colors as code, not prose.
+        var src = string.Join("\n",
+            "```cs",
+            "var x = 1;",
+            "```");
+        var lines = HighlightOrFail(src, "markdown");
+        Assert.True(LineHasSlot(lines[1], TokenColorSlot.Keyword));   // var, via embedded C#
+    }
+
+    [Fact]
     public void SpansAreOrderedAndNonOverlapping()
     {
         var lines = HighlightOrFail("int count = 42; // note", "csharp");
