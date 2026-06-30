@@ -802,7 +802,7 @@ visible change** (the file gets out of your way), and (2) there is **always an e
   `Features/Commits/CommitDetailsView.cs` (`SetReviewSha`), `CommitFileTab.cs` (`Sha`),
   `CommitDetailsTabStrip.cs` (tab Viewed mark). State stays ephemeral; no `Strings/*.json` churn.
 
-### Phase 6 — Keyboard, localization, polish
+### Phase 6 — Keyboard, localization, polish  ✅ DONE
 
 - **Keyboard — the *remainder* (the core loop keys `j`/`k`, `[`/`]`, `Enter`/`Space` landed in
   Phase 5.5).** Add `v` mark **Viewed** and `n` **next unreviewed** (wiring `NextUnreviewed()`),
