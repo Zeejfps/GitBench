@@ -287,7 +287,7 @@ Add the affordance and prove it fires, with **no window and no git work yet**.
   review/pull-request glyph and one can't be added without extending the font, so `Search` (inspect)
   was reused. Swap freely if the font gains a better glyph.
 
-### Phase 2 — Open the real (empty) window
+### Phase 2 — Open the real (empty) window  ✅ DONE
 
 Stand up the windowing skeleton by copying `DiffWindows`. The window opens, is titled, is movable,
 closes cleanly — content is a placeholder.
@@ -345,6 +345,36 @@ closes cleanly — content is a placeholder.
 - **Ship / test locally:** right-click a branch → "Review changes…" → a **real separate OS window**
   opens, titled with the branch, showing the placeholder. Close (native title bar + programmatic)
   works; reopening works; opening two reviews yields two windows.
+
+**Landed as (actual, build-verified) — and where it deviated from the steps above:**
+- **New `Features/Review/` package** with five files: `ReviewStack.cs` (records),
+  `ReviewWindowViewModel.cs`, `ReviewWindowsViewModel.cs`, `ReviewWindowsView.cs`,
+  `ReviewWindowRootView.cs`. `AppView.cs` mounts `new ReviewWindowsView()` right after
+  `new DiffWindowsView()` (`+ using GitBench.Features.Review;`).
+- **`ReviewStack.cs` carries all three records now** (`ReviewSession`, `ReviewIncrement`,
+  `ReviewStack`) per the *New types* block, `public sealed record` (matching `DiffTarget`/`CommitNode`
+  domain-record convention), even though Phase 2 only consumes `ReviewSession`. `ReviewIncrement`/
+  `ReviewStack` are defined-but-unused until Phase 3/4 — intentional, no warning.
+- **`ReviewWindowViewModel` derives its own title** (`Title = $"Review: {session.HeadLabel}"`) from
+  the pinned `ReviewSession` in its ctor — the windows-VM doesn't compute/pass it. Still `internal
+  sealed class : IDisposable` with a no-op `Dispose()` for now.
+- **`ReviewWindowsViewModel` ctor injects only `IMessageBus`** — *not* the step-2.2 five-arg mirror
+  of `DiffWindowsViewModel`. Phase 2 genuinely uses only the bus (it appends a bare
+  `ReviewWindowViewModel(session)`); the four extra deps would be assigned-but-unread, and Phase 3's
+  real deps (`IReviewStackSource`, the details VM) aren't the same set anyway — so mirroring them now
+  buys nothing. Auto-construction resolves the single-arg ctor fine; Phase 3 just widens it.
+- **`ReviewWindowRootView` uses the high-level `Build`/`IWidget` style** (`Box` + `Center` + `Text` +
+  `Provide<ReviewWindowViewModel>`, à la `AboutDialog`), *not* the low-level `CreateView`/`View` style
+  of `DiffWindowRootView` — the placeholder takes no input, so no `InputSystem`/controller wiring is
+  needed yet. Background `Theme.Color(s => s.Palette.Surface)`, muted `TextSecondary` label. It still
+  `Provide`s its VM into the subtree so Phase 3 can resolve it. Uses a plain `→` (U+2192), not the
+  plan's `⟶` (U+27F6), to stay within bundled-font glyph coverage.
+- **Window title is a hardcoded `"Review: <headLabel>"`** (un-localized) — same precedent as the diff
+  pop-out's raw file-path title; the `SecondaryWindowRequest.Title` plain string never touches the
+  source-gen `Strings` flow, so no LOC004. Phase 6 localizes the header/title strings.
+- **`StartReview` (`BranchesViewModel`) now just `_bus.Broadcast(new OpenReviewWindowMessage(repo.Id,
+  headRef, headLabel, BaseRef: null))`** — the Phase-1 toast lines are gone, and the now-unused
+  `using GitBench.Features.Notifications;` was removed. `Width = 1100, Height = 800`.
 
 ### Phase 3 — Window GUI (driven by stub data)
 

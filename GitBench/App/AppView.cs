@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Features.Notifications;
+using GitBench.Features.Review;
 using GitBench.Features.StatusBar;
 using GitBench.Localization;
 using ZGF.Gui;
@@ -42,6 +43,7 @@ internal sealed record AppView : Widget
                 new DragOverlay(),
                 new DialogSurface(),
                 new DiffWindowsView(),
+                new ReviewWindowsView(),
             ],
         }
         .WithController<AppKeybindController>(ctx);

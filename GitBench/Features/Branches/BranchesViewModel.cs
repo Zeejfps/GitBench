@@ -1,6 +1,5 @@
 using GitBench.App;
 using GitBench.Controls;
-using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
@@ -730,17 +729,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }));
     }
 
-    // Opens a dedicated Review window for headRef's range of commits. Phase 1 placeholder:
-    // proves the affordance fires by flashing a toast; Phase 2 replaces the body with
-    // _bus.Broadcast(msg) once the windowing skeleton exists. BaseRef is left null ("auto" —
+    // Opens a dedicated Review window for headRef's range of commits. ReviewWindowsViewModel picks
+    // up the broadcast and reflects it into a real OS window. BaseRef is left null ("auto" —
     // resolved via merge-base in a later phase).
     public void StartReview(string headRef, string headLabel)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var msg = new OpenReviewWindowMessage(repo.Id, headRef, headLabel, BaseRef: null);
-        var baseLabel = msg.BaseLabel ?? "auto";
-        _bus.Broadcast(new ShowToastMessage(ToastIntent.Info($"Review: {baseLabel}..{msg.HeadLabel}")));
+        _bus.Broadcast(new OpenReviewWindowMessage(repo.Id, headRef, headLabel, BaseRef: null));
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalBranchMenuItems(string fullPath, bool isHead)
