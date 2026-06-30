@@ -33,6 +33,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
     private string? _currentSha;
+    private Guid _currentRepoId;
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
 
@@ -98,7 +99,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _registry, _gitService, Dispatcher, _bus, _loc));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -180,6 +181,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         if (repo == null) return;
 
         _currentSha = sha;
+        _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
         {

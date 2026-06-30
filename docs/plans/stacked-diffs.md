@@ -580,7 +580,14 @@ Swap the stub for the correct `base..head` range. The GUI does not change — on
 - **Still open (carried from Phase 3, not a Phase-4 concern):** the embedded `DiffViewModel` resolves
   `_registry.Active.Value` for its own diff load, so a review window's *diffs* are correct only while the
   reviewed repo is the active one. Phase 4 fixed the *stack source*, not the diff pane — threading the
-  pinned repo through `DiffViewModel` remains a later refactor (decision #2 still partial).
+  pinned repo through `DiffViewModel` remains a later refactor (decision #2 still partial). *(Resolved
+  post-Phase-6.5: `DiffViewModel` gained an optional `pinnedRepoId`; a new `ResolveRepo()` resolves
+  that repo by id (else falls back to active) and **all six** `_registry.Active.Value` reads route
+  through it. `CommitDetailsViewModel.Show(repoId, sha)` now records the repo id and passes it through
+  `CommitFileTab` → `DiffViewModel`, so a review window's diffs stay correct regardless of the main
+  window's active repo. The pop-out path is pinned too: `OpenDiffWindowMessage` carries a `Guid? RepoId`
+  and `RequestOpenInWindow` forwards the source pane's pin. Un-pinned panes (Local Changes, History)
+  are unchanged. **Decision #2 now fully met.**)*
 
 ### Phase 5 — Reviewed-state, progress, next-unreviewed  ✅ DONE
 

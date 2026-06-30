@@ -59,6 +59,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService? _loc;
+    // When set, this pane is pinned to a specific repo (a commit diff in the Review window or a
+    // pop-out) and resolves it by id, so its diff stays correct no matter which repo is active in
+    // the main window. Null ⇒ the pane follows the active repo (Local Changes, History).
+    private readonly Guid? _pinnedRepoId;
 
     private string EmptyText => _loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder;
     private string LoadingText => _loc?.Strings.Value.CommonLoading ?? LoadingPlaceholder;
@@ -101,7 +105,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IPlatformShell? shell = null,
-        ILocalizationService? loc = null)
+        ILocalizationService? loc = null,
+        Guid? pinnedRepoId = null)
         : base(dispatcher, new DiffState(
             new DiffRenderState.Placeholder(loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder), null, DiffViewMode.Diff))
     {
@@ -111,6 +116,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _bus = bus;
         _shell = shell;
         _loc = loc;
+        _pinnedRepoId = pinnedRepoId;
         _highlightLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
@@ -151,9 +157,20 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public void DeferReloadToWorkingTreeChange() => _deferReloadToWorkingTreeChange = true;
 
+    // The repo this pane operates on: the pinned repo (resolved by id) when set, else the active repo.
+    private Repo? ResolveRepo()
+    {
+        if (_pinnedRepoId is not { } id) return _registry.Active.Value;
+        var active = _registry.Active.Value;
+        if (active != null && active.Id == id) return active;
+        foreach (var r in _registry.Repos)
+            if (r.Id == id) return r;
+        return null;
+    }
+
     private void OnWorkingTreeChanged(WorkingTreeChangedMessage msg)
     {
-        var active = _registry.Active.Value;
+        var active = ResolveRepo();
         if (active == null || active.Id != msg.RepoId) return;
         _deferReloadToWorkingTreeChange = false;
         if (_target.Value == null) return;
@@ -170,7 +187,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         var target = _target.Value;
         if (target == null) return;
-        _bus.Broadcast(new OpenDiffWindowMessage(target));
+        _bus.Broadcast(new OpenDiffWindowMessage(target, _pinnedRepoId));
     }
 
     public void ToggleCollapse() => _isCollapsed.Value = !_isCollapsed.Value;
@@ -192,7 +209,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // re-syncs against the truth — LocalChangesViewModel owns the optimistic list updates.
     private void RunFileIndexOp(bool stage)
     {
-        var repo = _registry.Active.Value;
+        var repo = ResolveRepo();
         if (repo == null) return;
         var target = _target.Value;
         if (target == null) return;
@@ -243,7 +260,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     private void RunResolve(Func<IGitService, Repo, string, GitOutcome> op)
     {
-        var repo = _registry.Active.Value;
+        var repo = ResolveRepo();
         if (repo == null) return;
         if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
 
@@ -275,7 +292,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // hand; they then stage it normally to mark it resolved.
     public void OpenConflictInEditor()
     {
-        var repo = _registry.Active.Value;
+        var repo = ResolveRepo();
         if (repo == null || _shell == null) return;
         if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
         _shell.OpenFile(System.IO.Path.Combine(repo.Path, conflict.Path));
@@ -384,7 +401,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         repo = null!;
         diff = null!;
-        var active = _registry.Active.Value;
+        var active = ResolveRepo();
         if (active == null) return false;
         if (State.Value.Render is not DiffRenderState.Loaded loaded) return false;
         if (!HunkPatchBuilder.CanPatchHunk(loaded.Result)) return false;
@@ -408,7 +425,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             return;
         }
 
-        var repo = _registry.Active.Value;
+        var repo = ResolveRepo();
         if (repo == null) return;
 
         if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile))

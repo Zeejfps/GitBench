@@ -26,6 +26,7 @@ internal sealed class CommitFileTab : IDisposable
     public CommitFileTab(
         string path,
         string sha,
+        Guid repoId,
         IRepoRegistry registry,
         IGitService gitService,
         IUiDispatcher dispatcher,
@@ -36,7 +37,7 @@ internal sealed class CommitFileTab : IDisposable
         FileName = LastSegment(path);
         Sha = sha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.Commit, sha));
-        Diff = new DiffViewModel(_target, registry, gitService, dispatcher, bus, loc: loc);
+        Diff = new DiffViewModel(_target, registry, gitService, dispatcher, bus, loc: loc, pinnedRepoId: repoId);
     }
 
     public void Dispose()

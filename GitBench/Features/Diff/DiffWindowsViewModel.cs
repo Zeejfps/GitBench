@@ -42,7 +42,7 @@ internal sealed class DiffWindowsViewModel : IDisposable
         // A fixed, never-mutated target observable: the main window's selection cannot change
         // what this window shows. The DiffViewModel still reloads on WorkingTreeChangedMessage.
         var pinned = new State<DiffTarget?>(m.Target);
-        var diff = new DiffViewModel(pinned, _registry, _gitService, _dispatcher, _bus, loc: _loc);
+        var diff = new DiffViewModel(pinned, _registry, _gitService, _dispatcher, _bus, loc: _loc, pinnedRepoId: m.RepoId);
         Windows.Add(new DiffWindowViewModel(m.Target.Path, diff));
     }
 
