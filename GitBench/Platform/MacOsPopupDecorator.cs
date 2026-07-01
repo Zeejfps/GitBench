@@ -64,6 +64,16 @@ internal sealed class MacOsPopupDecorator : IPopupNativeDecorator
         _activeCallback = onOutsideClick;
     }
 
+    public void WatchWindowNonClientPress(IntPtr glfwHandle, Action onNonClientPress)
+    {
+        // Dismissing a menu when its host window's title bar is dragged needs an NSWindow-level
+        // event hook (an NSEvent monitor / window-move observer), which shares the block-trampoline
+        // work still outstanding for BeginCapture above. Deferred; a title-bar drag on macOS relies
+        // on the existing focus-change dismissal for now.
+    }
+
+    public void UnwatchWindow(IntPtr glfwHandle) { }
+
     // The native NSWindow is supplied directly by IWindow.NativeHandle; no conversion needed.
     private static IntPtr NsWindowFromGlfw(IntPtr nativeHandle) => nativeHandle;
 

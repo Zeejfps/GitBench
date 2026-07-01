@@ -31,9 +31,15 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
 
     private delegate IntPtr WndProc(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
+    // Capture: a popup window whose outside clicks (and WM_CANCELMODE) dismiss the menu chain.
+    // NonClientWatch: a host window whose non-client presses (title bar, borders, caption buttons)
+    // dismiss an open menu — the signal GLFW never surfaces.
+    private enum SubclassKind { Capture, NonClientWatch }
+
     private sealed class Subclass
     {
         public IntPtr OriginalProc;
+        public SubclassKind Kind;
         public Action<PointI> Callback = _ => { };
         public WndProc NewProc = null!;
     }
@@ -105,14 +111,29 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
         _capturedHwnd = toHwnd;
     }
 
-    private void InstallSubclass(IntPtr hwnd, Action<PointI> callback)
+    public void WatchWindowNonClientPress(IntPtr glfwHandle, Action onNonClientPress)
+    {
+        var hwnd = GetHwnd(glfwHandle);
+        if (hwnd == IntPtr.Zero) return;
+        InstallSubclass(hwnd, _ => onNonClientPress(), SubclassKind.NonClientWatch);
+    }
+
+    public void UnwatchWindow(IntPtr glfwHandle)
+    {
+        var hwnd = GetHwnd(glfwHandle);
+        if (hwnd == IntPtr.Zero) return;
+        RemoveSubclass(hwnd);
+    }
+
+    private void InstallSubclass(IntPtr hwnd, Action<PointI> callback, SubclassKind kind = SubclassKind.Capture)
     {
         if (_subclasses.TryGetValue(hwnd, out var existing))
         {
             existing.Callback = callback;
+            existing.Kind = kind;
             return;
         }
-        var sub = new Subclass { Callback = callback };
+        var sub = new Subclass { Callback = callback, Kind = kind };
         sub.NewProc = (h, msg, w, l) => SubclassProc(sub, h, msg, w, l);
         sub.OriginalProc = SetWindowLongPtr(hwnd, GWLP_WNDPROC, Marshal.GetFunctionPointerForDelegate(sub.NewProc));
         _subclasses[hwnd] = sub;
@@ -127,6 +148,16 @@ internal sealed class WindowsPopupDecorator : IPopupNativeDecorator
 
     private static IntPtr SubclassProc(Subclass sub, IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
+        if (sub.Kind == SubclassKind.NonClientWatch)
+        {
+            // A non-client press dismisses any open menu, then falls through to the original proc so
+            // the window still drags / resizes / minimizes as usual. Fires before DefWindowProc's
+            // modal move loop, so the dismissal is requested at the moment the frame is grabbed.
+            if (msg is WM_NCLBUTTONDOWN or WM_NCRBUTTONDOWN)
+                sub.Callback(default);
+            return CallWindowProc(sub.OriginalProc, hwnd, msg, wParam, lParam);
+        }
+
         switch (msg)
         {
             case WM_LBUTTONDOWN:
