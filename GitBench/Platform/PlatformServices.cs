@@ -53,12 +53,13 @@ internal static class PlatformServices
             }
         }
 
-        public void InstallNativeAppMenu(State<ThemeMode> themeMode,
-            UpdateService updateService,
-            IUiDispatcher dispatcher)
+        public void InstallNativeAppMenu()
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 
+            var themeMode = context.Require<State<ThemeMode>>();
+            var updateService = context.Require<UpdateService>();
+            var dispatcher = context.Require<IUiDispatcher>();
             var bus = context.Require<IMessageBus>();
             var locale = context.Require<State<Locale>>();
             var loc = context.Require<ILocalizationService>();
