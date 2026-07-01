@@ -374,6 +374,8 @@
   "review.window_title": "レビュー: {label}",
   "review.base_resolving": "ベースを解決中…",
   "review.base_menu_auto": "自動",
+  "review.base_search_placeholder": "ブランチを検索…",
+  "review.base_no_matches": "一致するブランチがありません",
   "review.base_provenance": "{head} が {baseRef} から分岐してからの {count} 件のコミット ({sha})",
   "review.base_kind_upstream": "アップストリーム",
   "review.base_kind_default": "デフォルトブランチ",

@@ -257,7 +257,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // remote branches — the head under review excluded (reviewing against itself is an empty range).
     // A check marks the current choice. Built fresh per open from the already-loaded branch snapshot,
     // so the click never blocks on git. (Reads the active repo's branches — consistent with the
-    // window's existing active-repo scoping.)
+    // window's existing active-repo scoping.) The menu itself adds the search box and scrolling.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildBaseMenuItems()
     {
         var s = _loc.Strings.Value;

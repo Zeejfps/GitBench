@@ -374,6 +374,8 @@
   "review.window_title": "Revisión: {label}",
   "review.base_resolving": "Resolviendo base…",
   "review.base_menu_auto": "Automático",
+  "review.base_search_placeholder": "Buscar ramas…",
+  "review.base_no_matches": "No hay ramas coincidentes",
   "review.base_provenance": "{count} commits desde que {head} se bifurcó de {baseRef} ({sha})",
   "review.base_kind_upstream": "upstream",
   "review.base_kind_default": "rama predeterminada",

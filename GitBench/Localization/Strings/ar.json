@@ -416,6 +416,8 @@
   "review.window_title": "مراجعة: {label}",
   "review.base_resolving": "جارٍ تحديد الأساس…",
   "review.base_menu_auto": "تلقائي",
+  "review.base_search_placeholder": "ابحث عن الفروع…",
+  "review.base_no_matches": "لا توجد فروع مطابقة",
   "review.base_provenance": "{count} إيداعات منذ تفرّع {head} من {baseRef} ({sha})",
   "review.base_kind_upstream": "المصدر",
   "review.base_kind_default": "الفرع الافتراضي",

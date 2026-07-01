@@ -18,7 +18,7 @@ namespace GitBench.Features.Review;
 /// </summary>
 internal sealed record ReviewHeaderBar : Widget
 {
-    private const float BarHeight = 40f;
+    internal const float BarHeight = 40f;
 
     protected override IWidget Build(Context ctx)
     {
@@ -57,9 +57,10 @@ internal sealed record ReviewHeaderBar : Widget
     }
 
     // The comparison range: an interactive base chip (ref name + chevron) that opens the base
-    // dropdown, then "→ head". The dropdown is RepoBarContextMenu's popup, summoned from this
-    // (secondary) window's context — its anchor is converted through the window's own coordinates, so
-    // it lands under the chip regardless of which window is active.
+    // dropdown, then "→ head". The dropdown is a searchable context-menu popup (max height + scrollbar
+    // + a top search box), summoned from this (secondary) window's context — its anchor is converted
+    // through the window's own coordinates, so it lands under the chip regardless of which window is
+    // active.
     private static IWidget BaseRange(ReviewWindowViewModel vm, Context ctx) => new Row
     {
         Gap = Spacing.Sm,
@@ -68,7 +69,13 @@ internal sealed record ReviewHeaderBar : Widget
         [
             new ReviewBaseChip { Label = Prop.Bind(vm.BaseChipLabel) }
                 .WithTooltip(Prop.Bind(vm.BaseTooltip))
-                .WithMenuController(rect => RepoBarContextMenu.Show(ctx, rect.BottomLeft, vm.BuildBaseMenuItems())),
+                .WithMenuController(rect =>
+                {
+                    var s = ctx.Localization().Strings.Value;
+                    RepoBarContextMenu.ShowSearchable(
+                        ctx, rect.BottomLeft, vm.BuildBaseMenuItems(),
+                        s.ReviewBaseSearchPlaceholder, s.ReviewBaseNoMatches);
+                }),
             new Grow
             {
                 Child = new Text

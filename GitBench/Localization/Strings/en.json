@@ -374,6 +374,8 @@
   "review.window_title": "Review: {label}",
   "review.base_resolving": "Resolving base…",
   "review.base_menu_auto": "Auto",
+  "review.base_search_placeholder": "Search branches…",
+  "review.base_no_matches": "No matching branches",
   "review.base_provenance": "{count} commits since {head} forked from {baseRef} ({sha})",
   "review.base_kind_upstream": "upstream",
   "review.base_kind_default": "default branch",

@@ -374,6 +374,8 @@
   "review.window_title": "리뷰: {label}",
   "review.base_resolving": "기준 확인 중…",
   "review.base_menu_auto": "자동",
+  "review.base_search_placeholder": "브랜치 검색…",
+  "review.base_no_matches": "일치하는 브랜치가 없습니다",
   "review.base_provenance": "{head}이(가) {baseRef}에서 분기된 이후 {count}개의 커밋 ({sha})",
   "review.base_kind_upstream": "업스트림",
   "review.base_kind_default": "기본 브랜치",
