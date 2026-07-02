@@ -6,10 +6,10 @@ namespace GitBench.Features.LocalChanges;
 /// <summary>
 /// Captures the extra state that exists only while the user is amending the previous
 /// commit: a backup of the editor's title/description so toggling amend off can restore
-/// them, the HEAD commit's message used to populate the editor on entry, and HEAD's file
-/// list so the staged panel can surface files that would otherwise silently carry over
-/// into the amended commit. Owned by <see cref="LocalChangesViewModel"/>; mutated only on
-/// the UI thread.
+/// them, the HEAD commit's message used to populate the editor on entry, and the staged
+/// file list diffed against HEAD's parent — the contents the amended commit would record,
+/// which is what the staged panel shows in amend mode. Owned by
+/// <see cref="LocalChangesViewModel"/>; mutated only on the UI thread.
 /// </summary>
 internal sealed class AmendSession
 {
@@ -17,20 +17,20 @@ internal sealed class AmendSession
     public string PreAmendDescription { get; }
     public string Title { get; }
     public string Description { get; }
-    public IReadOnlyList<FileChange> HeadFiles { get; private set; }
+    public IReadOnlyList<FileChange> StagedFiles { get; private set; }
 
     private AmendSession(
         string preAmendTitle,
         string preAmendDescription,
         string title,
         string description,
-        IReadOnlyList<FileChange> headFiles)
+        IReadOnlyList<FileChange> stagedFiles)
     {
         PreAmendTitle = preAmendTitle;
         PreAmendDescription = preAmendDescription;
         Title = title;
         Description = description;
-        HeadFiles = headFiles;
+        StagedFiles = stagedFiles;
     }
 
     /// <summary>
@@ -54,42 +54,20 @@ internal sealed class AmendSession
         }
 
         var head = gitService.GetHeadCommitMessage(repo);
-        var headFiles = gitService.GetHeadCommitFiles(repo);
+        var stagedFiles = gitService.GetAmendStagedFiles(repo);
         return new AmendSession(
             preAmendTitle,
             preAmendDescription,
             head?.Title ?? string.Empty,
             head?.Description ?? string.Empty,
-            headFiles);
+            stagedFiles);
     }
 
-    /// <summary>Replaces the captured HEAD file list. Called from the VM's load path
-    /// after a refs-changed reload so the displayed staged panel doesn't keep showing
-    /// files from a HEAD that has since moved.</summary>
-    public void UpdateHeadFiles(IReadOnlyList<FileChange> headFiles)
-        => HeadFiles = headFiles;
-
-    /// <summary>
-    /// Merges HEAD's files into the staged-from-index list so the user can see — and
-    /// optionally drop — files that would carry over into the amended commit. On path
-    /// collision the index entry wins so the badge reflects the *current* change rather
-    /// than the previous-commit change.
-    /// </summary>
-    public IReadOnlyList<FileChange> MergeWithIndex(IReadOnlyList<FileChange> stagedFromIndex)
-    {
-        if (HeadFiles.Count == 0) return stagedFromIndex;
-
-        var seen = new HashSet<string>(stagedFromIndex.Select(f => f.Path));
-        var merged = new List<FileChange>(stagedFromIndex.Count + HeadFiles.Count);
-        merged.AddRange(stagedFromIndex);
-        foreach (var h in HeadFiles)
-        {
-            if (seen.Add(h.Path))
-                merged.Add(h);
-        }
-        merged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
-        return merged;
-    }
+    /// <summary>Replaces the staged-vs-parent file list. Called from the VM's load path
+    /// on every reload so the displayed staged panel tracks index mutations and external
+    /// HEAD moves made while amending.</summary>
+    public void UpdateStagedFiles(IReadOnlyList<FileChange> stagedFiles)
+        => StagedFiles = stagedFiles;
 
     /// <summary>
     /// Splits a user-supplied path list into two batches: paths that exist in the index

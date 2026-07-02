@@ -1363,15 +1363,33 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    public IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo)
+    public IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo)
     {
         try
         {
             if (!IsGitRepo(repo.Path)) return Array.Empty<FileChange>();
-            var output = RunGit(repo.Path, out _, "diff-tree", "-r", "-M", "--name-status",
-                "--no-commit-id", "-z", "--root", "HEAD");
-            if (output == null) return Array.Empty<FileChange>();
-            var files = ParseDiffTreeNameStatusZ(output);
+            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
+                return Array.Empty<FileChange>();
+
+            List<FileChange> files;
+            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null)
+            {
+                // Index vs HEAD's parent — the contents the amended commit would record.
+                // Same NUL `--name-status` format as diff-tree, so the parser is shared.
+                var output = RunGit(repo.Path, out _, "diff", "--cached", "-M", "--name-status", "-z", "HEAD^");
+                if (output == null) return Array.Empty<FileChange>();
+                files = ParseDiffTreeNameStatusZ(output);
+            }
+            else
+            {
+                // Amending the root commit: no parent to diff against, so every index
+                // entry is an add.
+                var output = RunGit(repo.Path, out _, "ls-files", "--cached", "-z");
+                if (output == null) return Array.Empty<FileChange>();
+                files = new List<FileChange>();
+                foreach (var path in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                    files.Add(new FileChange(path, null, FileChangeStatus.Added));
+            }
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             return files;
         }

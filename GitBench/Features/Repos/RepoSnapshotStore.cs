@@ -12,7 +12,7 @@ namespace GitBench.Features.Repos;
 
 // The active repo's working-tree snapshot plus its submodule drift list, bundled so the two
 // always move together. Mirrors LocalChangesViewModel's private LoadResult minus the amend-only
-// HeadFiles, which stays view-model-local.
+// staged-vs-parent list, which stays view-model-local.
 public sealed record LocalChangesData(
     LocalChangesSnapshot Snapshot,
     IReadOnlyList<SubmoduleInfo> Drift,

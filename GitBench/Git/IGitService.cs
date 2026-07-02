@@ -36,7 +36,7 @@ public interface IGitService
     GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse);
     GitOutcome Commit(Repo repo, string message, bool amend);
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
-    IReadOnlyList<FileChange> GetHeadCommitFiles(Repo repo);
+    IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo);
     PushStatus GetPushStatus(Repo repo);
     bool IsHeadDetachedAtRisk(Repo repo);
     GitOutcome Push(Repo repo, bool force = false);

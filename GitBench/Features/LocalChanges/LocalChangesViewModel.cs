@@ -650,7 +650,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         // While amending, the staged panel may include HEAD-only files (not in the
         // index) that the user wants to drop from the amended commit. Those need a
         // reset against HEAD~1; truly-staged files take the normal unstage path.
-        if (State.Value.Editor is EditorMode.Amending { Session: var session } && session.HeadFiles.Count > 0)
+        if (State.Value.Editor is EditorMode.Amending { Session: var session })
         {
             var (toUnstage, toResetToParent) = session.Classify(paths, _stagedFromIndex);
             if (toResetToParent.Count > 0)
@@ -891,18 +891,19 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         if (State.Value.Editor is EditorMode.Amending)
         {
-            // HEAD may have moved (e.g. an external commit) while amending — refresh HEAD's file
-            // list off-thread before applying so the staged panel's HEAD-only rows stay valid.
+            // The amend staged panel diffs the index against HEAD's parent, which the
+            // status snapshot doesn't carry — recompute off-thread before applying so
+            // index mutations and external HEAD moves stay reflected.
             // Uses the base Gen lane: a newer push supersedes an older in-flight refresh.
             var repo = active;
             var drift = data.Drift;
             RunBackground<IReadOnlyList<FileChange>>(
-                work: () => (_gitService.GetHeadCommitFiles(repo), null),
-                onResult: (headFiles, _) =>
+                work: () => (_gitService.GetAmendStagedFiles(repo), null),
+                onResult: (stagedFiles, _) =>
                 {
                     if (_registry.Active.Value?.Id != repo.Id) return;
-                    if (State.Value.Editor is EditorMode.Amending amending && headFiles != null)
-                        amending.Session.UpdateHeadFiles(headFiles);
+                    if (State.Value.Editor is EditorMode.Amending amending && stagedFiles != null)
+                        amending.Session.UpdateStagedFiles(stagedFiles);
                     ApplySnapshot(snap, drift);
                 });
             return;
@@ -1087,6 +1088,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     private IReadOnlyList<FileChange> ComputeDisplayedStaged(EditorMode editor)
         => editor is EditorMode.Amending amending
-            ? amending.Session.MergeWithIndex(_stagedFromIndex)
+            ? amending.Session.StagedFiles
             : _stagedFromIndex;
 }
