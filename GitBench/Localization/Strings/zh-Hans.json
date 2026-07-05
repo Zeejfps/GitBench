@@ -293,6 +293,8 @@
   "localchanges.staged_empty_hint": "暂存更改以将其包含在您的提交中。",
   "localchanges.show_error_button": "显示完整错误",
   "localchanges.show_error_tooltip": "打开完整的 git 错误",
+  "localchanges.retry_button": "重试",
+  "localchanges.retry_tooltip": "重新加载仓库状态",
   "localchanges.stage_all_menu": "全部暂存",
   "localchanges.discard_all_menu": "全部丢弃…",
   "localchanges.unstage_all_menu": "全部取消暂存",

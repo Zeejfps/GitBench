@@ -293,6 +293,8 @@
   "localchanges.staged_empty_hint": "Stage changes to include them in your commit.",
   "localchanges.show_error_button": "Show full error",
   "localchanges.show_error_tooltip": "Open the full git error",
+  "localchanges.retry_button": "Retry",
+  "localchanges.retry_tooltip": "Reload the repository status",
   "localchanges.stage_all_menu": "Stage All",
   "localchanges.discard_all_menu": "Discard All…",
   "localchanges.unstage_all_menu": "Unstage All",

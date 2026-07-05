@@ -293,6 +293,8 @@
   "localchanges.staged_empty_hint": "커밋에 포함하려면 변경 사항을 스테이징하세요.",
   "localchanges.show_error_button": "전체 오류 보기",
   "localchanges.show_error_tooltip": "전체 git 오류 열기",
+  "localchanges.retry_button": "다시 시도",
+  "localchanges.retry_tooltip": "저장소 상태를 다시 불러오기",
   "localchanges.stage_all_menu": "모두 스테이징",
   "localchanges.discard_all_menu": "모두 폐기…",
   "localchanges.unstage_all_menu": "모두 스테이징 해제",

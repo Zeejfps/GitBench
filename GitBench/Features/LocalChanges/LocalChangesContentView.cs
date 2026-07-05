@@ -29,7 +29,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly LocalChangesPanel _unstagedPanel;
     private readonly LocalChangesPanel _stagedPanel;
     private readonly TextView _placeholder;
-    private readonly View _showErrorButton;
+    private readonly FlexRowView _errorActions;
     private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
     private readonly View _diffView;
@@ -134,10 +134,23 @@ internal sealed class LocalChangesContentView : ContainerView
         _placeholder.BindThemedTextColor(theme, s => s.LocalChangesContent.PlaceholderText);
 
         // Shown only when the placeholder is a status/submodule failure carrying a full error
-        // block — opens it in the scrollable OperationErrorDialog. Status re-reads on every
-        // working-tree change, so the failure surfaces inline (one line) and the full block is
-        // pulled up on demand rather than auto-popping a modal each poll.
-        _showErrorButton = new ButtonWidget
+        // block. Retry re-kicks the loads (which also respawns a dead fsmonitor daemon, the
+        // usual cause of a persistent status failure); Show full error opens the block in the
+        // scrollable OperationErrorDialog. Status re-reads on every working-tree change, so the
+        // failure surfaces inline (one line) and the full block is pulled up on demand rather
+        // than auto-popping a modal each poll.
+        var retryButton = new ButtonWidget
+        {
+            Command = new Command(() => _vm.RetryLoad()),
+            Children =
+            [
+                new ButtonIcon { Value = LucideIcons.RefreshCw },
+                new ButtonLabel { Value = L.T(s => s.LocalchangesRetryButton) },
+            ],
+        }.WithTooltip(L.T(s => s.LocalchangesRetryTooltip))
+            .WithController<KbmController>()
+            .BuildView(ctx);
+        var showErrorButton = new ButtonWidget
         {
             Command = new Command(() => _vm.ShowLoadError()),
             Children =
@@ -148,6 +161,13 @@ internal sealed class LocalChangesContentView : ContainerView
         }.WithTooltip(L.T(s => s.LocalchangesShowErrorTooltip))
             .WithController<KbmController>()
             .BuildView(ctx);
+        _errorActions = new FlexRowView
+        {
+            MainAxisAlignment = MainAxisAlignment.Center,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Gap = Spacing.Md,
+            Children = { retryButton, showErrorButton },
+        };
 
         _placeholderHost = new FlexColumnView
         {
@@ -291,13 +311,13 @@ internal sealed class LocalChangesContentView : ContainerView
     {
         _placeholder.Text = Localize(text);
 
-        // Read the detail straight off the VM rather than a cached field: LoadError and
-        // LoadErrorDetail land in the same atomic Update, so the value is always current here
-        // regardless of subscription order.
+        // Read the detail straight off the VM rather than a cached field. Current because the
+        // VM declares the LoadErrorDetail slice before Placeholder (slices notify in declaration
+        // order), so it has recomputed by the time the Placeholder bind lands here.
         var hasDetail = !string.IsNullOrEmpty(_vm.LoadErrorDetail.Value);
-        var buttonAttached = _placeholderHost.Children.Contains(_showErrorButton);
-        if (hasDetail && !buttonAttached) _placeholderHost.Children.Add(_showErrorButton);
-        else if (!hasDetail && buttonAttached) _placeholderHost.Children.Remove(_showErrorButton);
+        var attached = _placeholderHost.Children.Contains(_errorActions);
+        if (hasDetail && !attached) _placeholderHost.Children.Add(_errorActions);
+        else if (!hasDetail && attached) _placeholderHost.Children.Remove(_errorActions);
 
         _centerContainer.Children.Clear();
         _centerContainer.Children.Add(_placeholderHost);

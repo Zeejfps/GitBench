@@ -118,8 +118,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Title = Slice(s => s.Title);
         Description = Slice(s => s.Description);
         Amend = Slice(s => s.Amend);
-        Placeholder = Slice(s => s.Placeholder);
+        // LoadErrorDetail is declared before Placeholder: slices notify in declaration order,
+        // and the view reads LoadErrorDetail imperatively from inside its Placeholder bind —
+        // declared the other way round it would read the pre-update (stale) detail and never
+        // attach the error-action buttons.
         LoadErrorDetail = Slice(s => s.LoadErrorDetail);
+        Placeholder = Slice(s => s.Placeholder);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
@@ -253,6 +257,17 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var detail = State.Value.LoadErrorDetail;
         if (string.IsNullOrEmpty(detail)) return;
         _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, detail));
+    }
+
+    // Explicit retry after a failed status load: re-kicks every slice of the active repo (plus the
+    // cheap status probe) through the stores. Re-running `git status` also respawns a crashed
+    // fsmonitor daemon — the usual source of a persistent "remote end hung up" status failure —
+    // so this recovers, not just re-displays.
+    public void RetryLoad()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        _bus.Broadcast(new RepoRefreshRequestedMessage(repo.Id));
     }
 
     public void SetTitle(string value)

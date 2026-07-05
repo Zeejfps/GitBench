@@ -27,7 +27,8 @@ public interface IGitService
     ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef);
     Fetched<CommitDetails> LoadDetails(Repo repo, string sha);
     Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo);
-    GitStatusSummary GetStatusSummary(Repo repo);
+    // Unknown = not a repo; null = the probe failed (caller keeps its last known value).
+    GitStatusSummary? GetStatusSummary(Repo repo);
     Fetched<BranchListing> GetBranches(Repo repo);
     GitOutcome Stage(Repo repo, IReadOnlyList<string> paths);
     GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths);

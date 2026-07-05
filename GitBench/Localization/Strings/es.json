@@ -293,6 +293,8 @@
   "localchanges.staged_empty_hint": "Prepara los cambios para incluirlos en tu commit.",
   "localchanges.show_error_button": "Mostrar error completo",
   "localchanges.show_error_tooltip": "Abrir el error completo de git",
+  "localchanges.retry_button": "Reintentar",
+  "localchanges.retry_tooltip": "Volver a cargar el estado del repositorio",
   "localchanges.stage_all_menu": "Preparar todo",
   "localchanges.discard_all_menu": "Descartar todo…",
   "localchanges.unstage_all_menu": "Quitar todo de preparados",

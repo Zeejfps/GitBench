@@ -293,6 +293,8 @@
   "localchanges.staged_empty_hint": "コミットに含めるには変更をステージしてください。",
   "localchanges.show_error_button": "エラーの全文を表示",
   "localchanges.show_error_tooltip": "gitエラーの全文を開く",
+  "localchanges.retry_button": "再試行",
+  "localchanges.retry_tooltip": "リポジトリの状態を再読み込み",
   "localchanges.stage_all_menu": "すべてステージ",
   "localchanges.discard_all_menu": "すべて破棄…",
   "localchanges.unstage_all_menu": "すべてステージ解除",

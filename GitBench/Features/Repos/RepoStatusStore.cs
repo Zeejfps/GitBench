@@ -72,6 +72,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
     private IDisposable? _refsSub;
     private IDisposable? _commitSub;
     private IDisposable? _optimisticSyncSub;
+    private IDisposable? _refreshSub;
 
     public IReadable<RepoStatus> Active => _active;
 
@@ -97,6 +98,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(m => Refresh(m.RepoId));
         _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(m => Refresh(m.RepoId));
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => Refresh(m.RepoId));
+        _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(m => Refresh(m.RepoId));
         _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
         // Subscribe fires Reset immediately with the current list, seeding a probe for every repo.
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
@@ -171,16 +173,19 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         _ = Task.Run(async () =>
         {
             await _gate.WaitAsync().ConfigureAwait(false);
-            GitStatusSummary summary;
+            GitStatusSummary? summary;
             try { summary = _git.GetStatusSummary(repo); }
-            catch { summary = GitStatusSummary.Unknown; }
+            catch { summary = null; }
             finally { _gate.Release(); }
             dispatcher.Post(() =>
             {
                 if (_disposed) return;
                 // Drop a result superseded by a newer refresh for the same repo.
                 if (_epoch.TryGetValue(repoId, out var cur) && cur != gen) return;
-                state.Value = summary;
+                // A failed probe (null) keeps the last known status: zeroing ahead/upstream here
+                // would silently disable push/pull in the toolbar while the branches view still
+                // shows the cached counts. The actual operations report their own errors.
+                if (summary != null) state.Value = summary;
             });
         });
     }
@@ -200,6 +205,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         _refsSub?.Dispose();
         _commitSub?.Dispose();
         _optimisticSyncSub?.Dispose();
+        _refreshSub?.Dispose();
         _active.Dispose();
         foreach (var s in _probe.Values) s.Dispose();
         _probe.Clear();

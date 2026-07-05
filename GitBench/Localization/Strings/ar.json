@@ -335,6 +335,8 @@
   "localchanges.staged_empty_hint": "جهّز التغييرات لتضمينها في إيداعك.",
   "localchanges.show_error_button": "عرض الخطأ الكامل",
   "localchanges.show_error_tooltip": "افتح خطأ git الكامل",
+  "localchanges.retry_button": "إعادة المحاولة",
+  "localchanges.retry_tooltip": "إعادة تحميل حالة المستودع",
   "localchanges.stage_all_menu": "تجهيز الكل",
   "localchanges.discard_all_menu": "تجاهل الكل…",
   "localchanges.unstage_all_menu": "إلغاء تجهيز الكل",
