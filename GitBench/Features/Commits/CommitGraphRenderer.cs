@@ -53,7 +53,7 @@ internal static class CommitGraphRenderer
     {
         var maxLane = node.Lane;
         foreach (var l in node.PassThroughLanes) if (l.Lane > maxLane) maxLane = l.Lane;
-        foreach (var l in node.IncomingLanes) if (l > maxLane) maxLane = l;
+        foreach (var l in node.IncomingLanes) if (l.Lane > maxLane) maxLane = l.Lane;
         foreach (var p in node.InWalkParentLanes) if (p.Lane > maxLane) maxLane = p.Lane;
         return LaneCenterX(graphStartX, maxLane, laneCount) + DotRadius + PaddingRight;
     }
@@ -96,20 +96,22 @@ internal static class CommitGraphRenderer
         }
 
         // Top half of commit's own lane — unless it's the tail of a divergence curve descending into
-        // this dot, which already covers it.
+        // this dot, which already covers it. It belongs to the edge arriving from above, so it
+        // dashes by that edge's flag rather than this commit's.
         if (node.HasIncomingAtCommitLane && !TopCovered(node.Lane))
         {
-            DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z, dashed: dashed);
+            DrawSegment(c, commitCx, rowCenterY, commitCx, rowTop, commitColor, z, dashed: node.IncomingAtCommitLaneDashed);
         }
 
         // Convergence: lanes whose history forks off this dot — reading chronologically, each begins
         // here. A level run out of this circle's center swoops up onto the lane and runs straight to
-        // the child dot one row up, blending this commit's color into the lane's. The source row
-        // drops its matching bottom-half stub (see BottomCovered there).
+        // the child dot one row up, blending this commit's color into the lane's. The edge belongs
+        // to the lane forking off, so it dashes by that lane's flag rather than this commit's. The
+        // source row drops its matching bottom-half stub (see BottomCovered there).
         foreach (var inLane in node.IncomingLanes)
         {
-            var inCx = Mx(LaneCenterX(graphStartX, inLane, laneCount));
-            DrawSwoop(c, commitCx, rowCenterY, inCx, rowCenterY + rowHeight, rowHeight * 0.5f, commitColor, z, LaneColor(inLane), dashed);
+            var inCx = Mx(LaneCenterX(graphStartX, inLane.Lane, laneCount));
+            DrawSwoop(c, commitCx, rowCenterY, inCx, rowCenterY + rowHeight, rowHeight * 0.5f, commitColor, z, LaneColor(inLane.Lane), inLane.Dashed);
         }
 
         // Outgoing edges to parents (continuation + branches).
@@ -204,15 +206,7 @@ internal static class CommitGraphRenderer
         return false;
     }
 
-    private static bool Contains(IReadOnlyList<int> lanes, int lane)
-    {
-        for (var i = 0; i < lanes.Count; i++)
-            if (lanes[i] == lane)
-                return true;
-        return false;
-    }
-
-    private static bool Contains(IReadOnlyList<PassThroughLane> lanes, int lane)
+    private static bool Contains(IReadOnlyList<GraphLane> lanes, int lane)
     {
         for (var i = 0; i < lanes.Count; i++)
             if (lanes[i].Lane == lane)

@@ -5,9 +5,10 @@ internal readonly record struct LaneParent(int ParentIndex, int Lane);
 internal readonly record struct LaneAssignment(
     int Lane,
     bool HasIncomingAtCommitLane,
+    bool IncomingAtCommitLaneDashed,
     LaneParent[] InWalkParentLanes,
-    int[] IncomingLanes,
-    PassThroughLane[] PassThroughLanes);
+    GraphLane[] IncomingLanes,
+    GraphLane[] PassThroughLanes);
 
 internal static class LaneAssigner
 {
@@ -39,38 +40,40 @@ internal static class LaneAssigner
             }
 
             int commitLane;
-            int[] incomingLanes;
+            GraphLane[] incomingLanes;
             bool hasIncomingAtCommitLane;
+            var incomingAtCommitLaneDashed = false;
             if (expectingIndexes.Count > 0)
             {
                 commitLane = expectingIndexes[0];
                 hasIncomingAtCommitLane = true;
+                incomingAtCommitLaneDashed = laneDashed[commitLane];
                 foreach (var li in expectingIndexes)
                     lanes[li] = null;
 
                 if (expectingIndexes.Count > 1)
                 {
-                    incomingLanes = new int[expectingIndexes.Count - 1];
+                    incomingLanes = new GraphLane[expectingIndexes.Count - 1];
                     for (var k = 1; k < expectingIndexes.Count; k++)
-                        incomingLanes[k - 1] = expectingIndexes[k];
+                        incomingLanes[k - 1] = new GraphLane(expectingIndexes[k], laneDashed[expectingIndexes[k]]);
                 }
                 else
                 {
-                    incomingLanes = Array.Empty<int>();
+                    incomingLanes = Array.Empty<GraphLane>();
                 }
             }
             else
             {
                 commitLane = FindOrAllocateFreeLane(lanes, laneDashed);
-                incomingLanes = Array.Empty<int>();
+                incomingLanes = Array.Empty<GraphLane>();
                 hasIncomingAtCommitLane = false;
             }
 
-            var passThroughList = new List<PassThroughLane>();
+            var passThroughList = new List<GraphLane>();
             for (var li = 0; li < lanes.Count; li++)
             {
                 if (lanes[li] != null && li != commitLane)
-                    passThroughList.Add(new PassThroughLane(li, laneDashed[li]));
+                    passThroughList.Add(new GraphLane(li, laneDashed[li]));
             }
 
             var inWalkParentLanes = new List<LaneParent>(c.ParentShas.Count);
@@ -120,6 +123,7 @@ internal static class LaneAssigner
             assignments[i] = new LaneAssignment(
                 commitLane,
                 hasIncomingAtCommitLane,
+                incomingAtCommitLaneDashed,
                 inWalkParentLanes.ToArray(),
                 incomingLanes,
                 passThroughList.ToArray());

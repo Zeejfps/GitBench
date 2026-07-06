@@ -299,6 +299,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     ParentShas: parentShas,
                     Lane: a.Lane,
                     HasIncomingAtCommitLane: a.HasIncomingAtCommitLane,
+                    IncomingAtCommitLaneDashed: a.IncomingAtCommitLaneDashed,
                     InWalkParentLanes: inWalkParents,
                     IncomingLanes: a.IncomingLanes,
                     PassThroughLanes: a.PassThroughLanes,
