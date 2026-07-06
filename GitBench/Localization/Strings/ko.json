@@ -468,7 +468,7 @@
   "submodules.deinit_desc": "`git submodule deinit`에 이어 `git rm`을 실행합니다. 서브모듈은 작업 트리에서 제거되고, 다음 커밋을 위해 상위에서 삭제가 스테이징됩니다.",
   "submodules.deinit_force_label": "변경 사항이 있어도 deinit",
   "submodules.section_header": "서브모듈",
-  "submodules.action_stage": "포인터 업데이트 스테이징",
+  "submodules.action_init": "서브모듈 초기화",
   "submodules.action_reset": "기록된 SHA로 재설정",
   "submodules.status_not_initialized": "초기화 안 됨",
   "submodules.status_merge_conflict": "병합 충돌",
@@ -515,7 +515,6 @@
   "submodules.deinit_action": "Deinit",
   "submodules.update_action": "업데이트",
   "submodules.status_up_to_date": "최신",
-  "submodules.status_modified": "수정됨",
 
   "diff.hunk_stage": "스테이징",
   "diff.hunk_unstage": "스테이징 해제",

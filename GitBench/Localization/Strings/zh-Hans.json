@@ -468,7 +468,7 @@
   "submodules.deinit_desc": "运行 `git submodule deinit`，随后运行 `git rm`。子模块将从工作树中移除，并在父级中暂存删除以供您下次提交。",
   "submodules.deinit_force_label": "即使有更改也取消初始化",
   "submodules.section_header": "子模块",
-  "submodules.action_stage": "暂存指针更新",
+  "submodules.action_init": "初始化子模块",
   "submodules.action_reset": "重置到记录的 SHA",
   "submodules.status_not_initialized": "未初始化",
   "submodules.status_merge_conflict": "合并冲突",
@@ -515,7 +515,6 @@
   "submodules.deinit_action": "取消初始化",
   "submodules.update_action": "更新",
   "submodules.status_up_to_date": "最新",
-  "submodules.status_modified": "已修改",
 
   "diff.hunk_stage": "暂存",
   "diff.hunk_unstage": "取消暂存",

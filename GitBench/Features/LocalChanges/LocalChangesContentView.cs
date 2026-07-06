@@ -179,7 +179,7 @@ internal sealed class LocalChangesContentView : ContainerView
 
         _submoduleSection = new LocalChangesSubmoduleSection(
             ctx,
-            onStage: path => _vm.StageSubmodulePointer(path),
+            onInit: path => _vm.InitializeSubmodule(path),
             onReset: path => _vm.ResetSubmoduleToRecorded(path));
 
         _diffView = new Provide<DiffViewModel>

@@ -468,7 +468,7 @@
   "submodules.deinit_desc": "`git submodule deinit` の後に `git rm` を実行します。サブモジュールは作業ツリーから削除され、次のコミット用に親で削除がステージされます。",
   "submodules.deinit_force_label": "変更があってもdeinit",
   "submodules.section_header": "サブモジュール",
-  "submodules.action_stage": "ポインタの更新をステージ",
+  "submodules.action_init": "サブモジュールを初期化",
   "submodules.action_reset": "記録されたSHAにリセット",
   "submodules.status_not_initialized": "未初期化",
   "submodules.status_merge_conflict": "マージコンフリクト",
@@ -515,7 +515,6 @@
   "submodules.deinit_action": "Deinit",
   "submodules.update_action": "更新",
   "submodules.status_up_to_date": "最新",
-  "submodules.status_modified": "変更あり",
 
   "diff.hunk_stage": "ステージ",
   "diff.hunk_unstage": "ステージ解除",

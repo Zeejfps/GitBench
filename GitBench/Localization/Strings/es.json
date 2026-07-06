@@ -468,7 +468,7 @@
   "submodules.deinit_desc": "Ejecuta `git submodule deinit` seguido de `git rm`. El submódulo se quitará del árbol de trabajo y la eliminación se preparará en el padre para tu próximo commit.",
   "submodules.deinit_force_label": "Desinicializar aunque tenga cambios",
   "submodules.section_header": "Submódulos",
-  "submodules.action_stage": "Preparar actualización del puntero",
+  "submodules.action_init": "Inicializar submódulo",
   "submodules.action_reset": "Restablecer al SHA registrado",
   "submodules.status_not_initialized": "sin inicializar",
   "submodules.status_merge_conflict": "conflicto de fusión",
@@ -515,7 +515,6 @@
   "submodules.deinit_action": "Desinicializar",
   "submodules.update_action": "Actualizar",
   "submodules.status_up_to_date": "actualizado",
-  "submodules.status_modified": "modificado",
 
   "diff.hunk_stage": "Preparar",
   "diff.hunk_unstage": "Quitar de preparados",

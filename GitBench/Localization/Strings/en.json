@@ -468,7 +468,7 @@
   "submodules.deinit_desc": "Runs `git submodule deinit` followed by `git rm`. The submodule will be removed from the working tree and the deletion staged in the parent for your next commit.",
   "submodules.deinit_force_label": "Deinit even if dirty",
   "submodules.section_header": "Submodules",
-  "submodules.action_stage": "Stage pointer update",
+  "submodules.action_init": "Initialize submodule",
   "submodules.action_reset": "Reset to recorded SHA",
   "submodules.status_not_initialized": "not initialized",
   "submodules.status_merge_conflict": "merge conflict",
@@ -515,8 +515,6 @@
   "submodules.deinit_action": "Deinit",
   "submodules.update_action": "Update",
   "submodules.status_up_to_date": "up to date",
-  "submodules.status_modified": "modified",
-
   "diff.hunk_stage": "Stage",
   "diff.hunk_unstage": "Unstage",
   "diff.hunk_discard": "Discard",

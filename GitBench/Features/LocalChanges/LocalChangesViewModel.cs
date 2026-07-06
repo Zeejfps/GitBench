@@ -584,8 +584,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     public void Stage(IReadOnlyList<string> paths) => RunIndexOp(paths, isStage: true);
 
-    public void StageSubmodulePointer(string submodulePath) => RunIndexOp([submodulePath], isStage: true);
-
     // The subset of the given paths that are still conflicted (unmerged) in the unstaged
     // panel — drives the "Mark as Resolved" context-menu item, which only applies to those.
     public IReadOnlyList<string> ConflictedAmong(IReadOnlyList<string> paths)
@@ -635,12 +633,20 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // `git submodule update -- <path>` and broadcasts SubmodulesChangedMessage so the
     // drift list refreshes once the watcher / re-load catches up.
     public void ResetSubmoduleToRecorded(string submodulePath)
+        => RunSubmoduleUpdate(submodulePath, init: false);
+
+    // Clones and checks out a not-yet-initialized submodule at the recorded SHA
+    // (`git submodule update --init -- <path>`).
+    public void InitializeSubmodule(string submodulePath)
+        => RunSubmoduleUpdate(submodulePath, init: true);
+
+    private void RunSubmoduleUpdate(string submodulePath, bool init)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
         var req = new SubmoduleUpdateRequest(
             Paths: [submodulePath],
-            Init: false,
+            Init: init,
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
