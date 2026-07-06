@@ -14,10 +14,15 @@ namespace GitBench.Controls.Dialogs;
 /// view in full rather than truncating, and a long list scrolls vertically; both scrollbars
 /// auto-hide when their axis fits. <see cref="ScrollPane.FillParent"/> makes the card claim no
 /// height of its own, so a fixed-height dialog's body Grow hands it all the leftover space and the
-/// frame's outer bar never engages (see <see cref="DialogScrollRegion"/>); place it in a Grow.
+/// frame's outer bar stays out of it (see <see cref="DialogScrollRegion"/>); place it in a Grow.
+/// A min height keeps the card usable when the window caps the dialog below its fixed height —
+/// past that floor the body stops shrinking and the frame's outer bar scrolls it instead.
 /// </summary>
 internal sealed record DialogScrollList : Widget
 {
+    // Roughly five 22px rows plus the card's padding and border.
+    private const float DefaultMinHeight = 132f;
+
     /// <summary>The list content — a column of rows (or an empty-state placeholder).</summary>
     public required View Content { get; init; }
 
@@ -54,6 +59,7 @@ internal sealed record DialogScrollList : Widget
                 },
             },
         };
+        card.MinHeightConstraint = DefaultMinHeight;
         card.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
         card.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
         card.Use(() => new ScrollSyncController(pane, vBar, hBar));

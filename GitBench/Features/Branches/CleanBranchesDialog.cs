@@ -108,7 +108,7 @@ internal sealed record CleanBranchesDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Height = 460f,
+            Height = 600f,
             BodyGap = 10,
             Action = (s.CommonDelete, DialogButtonRole.Destructive),
             BindActionLabel = vm.ActionLabel,
