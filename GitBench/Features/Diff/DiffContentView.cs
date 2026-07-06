@@ -316,21 +316,38 @@ internal sealed class DiffContentView : View, IScrollableContent
             if (top > 0)
                 EmitExpandedRows(gap.NewStart, gap.NewStart + top - 1, gap.OldNewDelta, expansion!, highlight);
 
-            // The bar stays while lines remain hidden (with expander icons) or when the gap was
-            // empty to begin with (plain — the pre-expansion look). A fully expanded gap drops
-            // it so the hunks read as one continuous block.
+            // While lines stay hidden the gap keeps its chrome: a large middle gap splits into a
+            // down-arrow bar hugging the hunk above, a torn "hidden lines" break, and an
+            // up-arrow bar carrying the @@ header — each arrow pointing into the tear it
+            // reveals. Small and top-of-file gaps stay a single bar, an untouched empty gap
+            // keeps the plain separator, and a fully expanded gap drops everything so the hunks
+            // read as one continuous block.
             var barRowIndex = -1;
             if (remaining > 0 || (top == 0 && bottom == 0))
             {
                 var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
-                barRowIndex = _rows.Count;
-                _rows.Add(new DiffRow.HunkSeparator(
-                    range,
-                    string.IsNullOrEmpty(h.Header) ? null : h.Header,
-                    remaining > 0 ? BarFor(gap.GapIndex, remaining.Value) : null));
-                var sepCells = VisualCells(range) + (h.Header != null ? VisualCells(h.Header) : 0) + 2;
-                if (remaining > 0)
-                    sepCells += VisualCells(s.DiffHiddenLines(remaining.Value)) + 2;
+                var header = string.IsNullOrEmpty(h.Header) ? null : h.Header;
+                var sepCells = VisualCells(range) + (header != null ? VisualCells(header) : 0) + 2;
+                if (remaining is int hidden && gap.GapIndex > 0 && hidden > DiffOptions.ContextExpandStep)
+                {
+                    _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
+                        new GapBar(gap.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: null)));
+                    _rows.Add(new DiffRow.Tear(
+                        new GapBar(gap.GapIndex, ShowDown: false, ShowUp: false, ShowUnfold: true, HiddenCount: hidden)));
+                    barRowIndex = _rows.Count;
+                    _rows.Add(new DiffRow.HunkSeparator(range, header,
+                        new GapBar(gap.GapIndex, ShowDown: false, ShowUp: true, ShowUnfold: false, HiddenCount: null)));
+                    var tearCells = VisualCells(s.DiffHiddenLines(hidden)) + 10;
+                    if (tearCells > _maxRowCells) _maxRowCells = tearCells;
+                }
+                else
+                {
+                    barRowIndex = _rows.Count;
+                    _rows.Add(new DiffRow.HunkSeparator(range, header,
+                        remaining > 0 ? BarFor(gap.GapIndex, remaining.Value) : null));
+                    if (remaining > 0)
+                        sepCells += VisualCells(s.DiffHiddenLines(remaining.Value)) + 2;
+                }
                 if (sepCells > _maxRowCells) _maxRowCells = sepCells;
             }
 
@@ -417,17 +434,13 @@ internal sealed class DiffContentView : View, IScrollableContent
         return (top, bottom, total - top - bottom);
     }
 
-    // Small middle gaps collapse to a single unfold-all icon; the top-of-file gap keeps its
-    // lone up arrow (it can only grow upward from hunk 0, and one click covers ≤ a step anyway).
+    // Single-bar gaps: the top-of-file gap keeps a lone up arrow (it can only grow upward from
+    // hunk 0), a small middle gap collapses to one unfold-all icon. Large middle gaps never get
+    // here — they split into the bar/tear/bar arrangement instead.
     private static GapBar BarFor(int gapIndex, int remaining)
     {
-        var unfold = gapIndex > 0 && remaining <= DiffOptions.ContextExpandStep;
-        return new GapBar(
-            gapIndex,
-            ShowDown: gapIndex > 0 && !unfold,
-            ShowUp: !unfold,
-            ShowUnfold: unfold,
-            HiddenCount: remaining);
+        var unfold = gapIndex > 0;
+        return new GapBar(gapIndex, ShowDown: false, ShowUp: !unfold, ShowUnfold: unfold, HiddenCount: remaining);
     }
 
     // Ordinary context rows for expanded gap lines [from..to] (1-based new-file numbers), the
@@ -769,6 +782,9 @@ internal sealed class DiffContentView : View, IScrollableContent
             case DiffRow.HunkSeparator s:
                 DrawHunkSeparatorRow(c, s, rowIndex, rowLeft, rowBottom, rowWidth, z);
                 break;
+            case DiffRow.Tear t:
+                DrawTearRow(c, t, rowIndex, rowLeft, rowBottom, rowWidth, z);
+                break;
             case DiffRow.Line l:
                 DrawLineRow(c, l, rowLeft, rowBottom, rowWidth, z);
                 break;
@@ -935,39 +951,9 @@ internal sealed class DiffContentView : View, IScrollableContent
         var textX = left + BannerPaddingX;
         if (s.Gap is { } gap)
         {
-            // Expander icons at the far left, over the gutter columns; the bar text shifts
-            // right of them.
-            var icons = ExpanderIconsFor(gap);
-            var x = left + ExpanderPadLeft;
-            foreach (var dir in icons)
-            {
-                var hovered = rowIndex == _hoveredExpanderRow && dir == _hoveredExpanderDir;
-                if (hovered)
-                {
-                    c.DrawRect(new DrawRectInputs
-                    {
-                        Position = new RectF(
-                            x, bottom + ExpanderChipInsetY,
-                            ExpanderCellWidth - ExpanderChipGap, _lineHeight - ExpanderChipInsetY * 2),
-                        Style = new RectStyle
-                        {
-                            BackgroundColor = _styles.ExpanderHoverBackground,
-                            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                        },
-                        ZIndex = z + 1,
-                    });
-                }
-                ExpanderIconStyle.TextColor = hovered ? _styles.ExpanderHoverIcon : _styles.ExpanderIcon;
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = new RectF(x, bottom, ExpanderCellWidth - ExpanderChipGap, _lineHeight),
-                    Text = ExpanderGlyph(dir),
-                    Style = ExpanderIconStyle,
-                    ZIndex = z + 2,
-                });
-                x += ExpanderCellWidth;
-            }
-            textX = Math.Max(textX, x + BannerPaddingX);
+            // Expander icon at the far left, over the gutter columns; the bar text shifts
+            // right of it.
+            textX = Math.Max(textX, DrawExpanderIcons(c, gap, rowIndex, left, bottom, z) + BannerPaddingX);
         }
 
         var cursorX = textX;
@@ -1001,6 +987,99 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
     }
 
+    // Draws a GapBar's expander icons (accent glyphs, a filled chip under the hovered one) and
+    // returns the x just past the last cell. Shared by the separator bars and the tear row.
+    private float DrawExpanderIcons(ICanvas c, GapBar gap, int rowIndex, float left, float bottom, int z)
+    {
+        var x = left + ExpanderPadLeft;
+        foreach (var dir in ExpanderIconsFor(gap))
+        {
+            var hovered = rowIndex == _hoveredExpanderRow && dir == _hoveredExpanderDir;
+            if (hovered)
+            {
+                c.DrawRect(new DrawRectInputs
+                {
+                    Position = new RectF(
+                        x, bottom + ExpanderChipInsetY,
+                        ExpanderCellWidth - ExpanderChipGap, _lineHeight - ExpanderChipInsetY * 2),
+                    Style = new RectStyle
+                    {
+                        BackgroundColor = _styles.ExpanderHoverBackground,
+                        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+                    },
+                    ZIndex = z + 1,
+                });
+            }
+            ExpanderIconStyle.TextColor = hovered ? _styles.ExpanderHoverIcon : _styles.ExpanderIcon;
+            c.DrawText(new DrawTextInputs
+            {
+                Position = new RectF(x, bottom, ExpanderCellWidth - ExpanderChipGap, _lineHeight),
+                Text = ExpanderGlyph(dir),
+                Style = ExpanderIconStyle,
+                ZIndex = z + 2,
+            });
+            x += ExpanderCellWidth;
+        }
+        return x;
+    }
+
+    private static string ExpanderGlyph(GapExpandDirection dir) => dir switch
+    {
+        GapExpandDirection.Down => LucideIcons.ChevronDown,
+        GapExpandDirection.Up => LucideIcons.ChevronUp,
+        _ => LucideIcons.UnfoldVertical,
+    };
+
+    // The torn break between a split gap's two bars: plain background with a jagged zigzag
+    // along each row edge — the ragged ends of the bar strips above and below, as if the file
+    // strip between them were torn out — plus the unfold-all affordance and the hidden count.
+    private void DrawTearRow(ICanvas c, DiffRow.Tear t, int rowIndex, float left, float bottom, float width, int z)
+    {
+        var cursorX = DrawExpanderIcons(c, t.Gap, rowIndex, left, bottom, z) + BannerPaddingX;
+        if (t.Gap.HiddenCount is int hidden)
+        {
+            var label = _loc.Strings.Value.DiffHiddenLines(hidden);
+            var labelWidth = VisualCells(label) * _monoAdvance;
+            DrawMonoText(c, label, cursorX, bottom, labelWidth,
+                _styles.SectionMutedText, TextAlignment.Start, z + 1);
+            cursorX += labelWidth + HunkHeaderGap;
+        }
+        DrawTearLine(c, cursorX, left + width, bottom + _lineHeight / 2f, z + 1);
+    }
+
+    private const float TearHalfPeriod = 9f;
+    private const float TearAmplitude = 4.5f;
+    private const float TearThickness = 1.25f;
+
+    // A thin zigzag polyline centered on the row. Segment endpoints derive from the tear's
+    // content-space start, so the pattern holds its phase under horizontal scroll; only the
+    // segments intersecting the viewport are issued (the pattern can span the whole content
+    // width, most of it scrolled out of view).
+    private void DrawTearLine(ICanvas c, float from, float to, float centerY, int z)
+    {
+        if (to - from < TearHalfPeriod * 2) return;
+        var listPos = _list.Position;
+        var visFrom = Math.Max(from, listPos.Left - TearHalfPeriod);
+        var visTo = Math.Min(to, listPos.Right + TearHalfPeriod);
+        if (visTo <= visFrom) return;
+
+        var kFrom = Math.Max(0, (int)((visFrom - from) / TearHalfPeriod));
+        var kTo = Math.Min((int)((to - from) / TearHalfPeriod), (int)((visTo - from) / TearHalfPeriod) + 1);
+        var color = _styles.LineNumberText;
+        for (var k = kFrom; k < kTo; k++)
+        {
+            var down = (k & 1) == 0;
+            c.DrawLine(new DrawLineInputs
+            {
+                Start = new PointF(from + k * TearHalfPeriod, centerY + (down ? TearAmplitude : -TearAmplitude)),
+                End = new PointF(from + (k + 1) * TearHalfPeriod, centerY + (down ? -TearAmplitude : TearAmplitude)),
+                Thickness = TearThickness,
+                Color = color,
+                ZIndex = z,
+            });
+        }
+    }
+
     private static readonly GapExpandDirection[] NoExpanders = Array.Empty<GapExpandDirection>();
     private static readonly GapExpandDirection[] UnfoldOnly = { GapExpandDirection.All };
     private static readonly GapExpandDirection[] DownOnly = { GapExpandDirection.Down };
@@ -1016,12 +1095,6 @@ internal sealed class DiffContentView : View, IScrollableContent
         return NoExpanders;
     }
 
-    private static string ExpanderGlyph(GapExpandDirection dir) => dir switch
-    {
-        GapExpandDirection.Down => LucideIcons.ChevronDown,
-        GapExpandDirection.Up => LucideIcons.ChevronUp,
-        _ => LucideIcons.UnfoldVertical,
-    };
 
     private sealed record HunkRowRange(int HunkIndex, int FirstRow, int LastRow);
 
@@ -1226,15 +1299,15 @@ internal sealed class DiffContentView : View, IScrollableContent
         return true;
     }
 
-    // The expander icon under the pointer, if any: separator-row hit first (full row height),
-    // then the per-icon cell check mirroring DrawHunkSeparatorRow's geometry.
+    // The expander icon under the pointer, if any: row hit first (full row height), then the
+    // per-icon cell check mirroring DrawExpanderIcons' geometry.
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
     {
         if (_lineHeight <= 0) return null;
         var listPos = _list.Position;
         if (!listPos.ContainsPoint(point)) return null;
         var rowIndex = HitTestListRow(point);
-        if (rowIndex < 0 || _rows[rowIndex] is not DiffRow.HunkSeparator { Gap: { } gap }) return null;
+        if (rowIndex < 0 || GapBarOf(_rows[rowIndex]) is not { } gap) return null;
 
         var x = listPos.Left - _scrollX + ExpanderPadLeft;
         foreach (var dir in ExpanderIconsFor(gap))
@@ -1244,6 +1317,13 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
         return null;
     }
+
+    private static GapBar? GapBarOf(DiffRow row) => row switch
+    {
+        DiffRow.HunkSeparator { Gap: { } g } => g,
+        DiffRow.Tear t => t.Gap,
+        _ => null,
+    };
 
     private void SetExpanderHover(int rowIndex, GapExpandDirection dir)
     {

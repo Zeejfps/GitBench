@@ -21,6 +21,10 @@ internal abstract record DiffRow
     public sealed record Banner(string Text) : DiffRow;
     // Range is empty for the trailing EOF bar, which draws no "@@" text.
     public sealed record HunkSeparator(string Range, string? Header, GapBar? Gap = null) : DiffRow;
+    /// <summary>The torn break between a large gap's two expander bars: plain background with a
+    /// jagged tear line, the unfold-all icon, and the hidden-line count. <see cref="Gap"/> always
+    /// has <c>ShowUnfold</c> set and an exact <c>HiddenCount</c>.</summary>
+    public sealed record Tear(GapBar Gap) : DiffRow;
     /// <summary>
     /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
     /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the

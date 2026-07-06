@@ -1,4 +1,3 @@
-using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
@@ -96,6 +95,17 @@ public class DiffContextExpansionViewTests
         return count;
     }
 
+    // Every separator bar draws exactly one full-row rect in the section background color
+    // (banners would too, but these diffs have none), so this counts the bars on screen.
+    private static int CountBars(RecordingCanvas canvas)
+    {
+        var section = ThemeStyles.Dark.DiffContent.SectionBackground;
+        var count = 0;
+        foreach (var r in canvas.Rects)
+            if (r.Inputs.Style.BackgroundColor == section) count++;
+        return count;
+    }
+
     private static float RowCenterY(int rowIndex) => Top - rowIndex * RowH - RowH / 2f;
 
     [Fact]
@@ -112,14 +122,16 @@ public class DiffContextExpansionViewTests
             // Gap 0 hides lines 1..9; the middle gap hides 15..61.
             Assert.True(HasText(canvas, "… 9 hidden lines"));
             Assert.True(HasText(canvas, "… 47 hidden lines"));
-            // Up arrows: top-of-file bar + middle bar. Down arrows: middle bar + EOF bar.
-            Assert.Equal(2, CountText(canvas, LucideIcons.ChevronUp));
-            Assert.Equal(2, CountText(canvas, LucideIcons.ChevronDown));
+            // Four bars: top-of-file, the split gap's two, and the EOF bar. The tear between
+            // the split gap's bars draws on the plain background (no section fill).
+            Assert.Equal(4, CountBars(canvas));
             // The EOF bar has no exact count yet, so only the two labels above are drawn.
             var labels = 0;
             foreach (var t in canvas.Texts)
                 if (t.Inputs.Text.Contains("hidden lines")) labels++;
             Assert.Equal(2, labels);
+            // The tear's zigzag and the expander arrows are line-drawn.
+            Assert.NotEmpty(canvas.Lines);
         }
     }
 
@@ -139,8 +151,8 @@ public class DiffContextExpansionViewTests
             view.SetRenderState(new DiffRenderState.Loaded(diff));
             var canvas = h.Render();
 
-            // Only the middle bar's down arrow remains — no trailing EOF bar.
-            Assert.Equal(1, CountText(canvas, LucideIcons.ChevronDown));
+            // Three bars only — the trailing EOF bar is gone.
+            Assert.Equal(3, CountBars(canvas));
         }
     }
 
@@ -155,16 +167,19 @@ public class DiffContextExpansionViewTests
             view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
             h.Render(); // resolve font metrics so hit-testing has row geometry
 
-            // Rows: [0] bar 0, [1..5] hunk 0, [6] bar 1, [7..11] hunk 1, [12] EOF bar.
-            h.Click(15f, RowCenterY(0));   // top bar: lone up arrow in the first cell
-            h.Click(15f, RowCenterY(6));   // middle bar: down arrow first…
-            h.Click(37f, RowCenterY(6));   // …up arrow second
-            h.Click(15f, RowCenterY(12));  // EOF bar: lone down arrow
+            // Rows: [0] bar 0, [1..5] hunk 0, [6] split gap top bar, [7] tear, [8] split gap
+            // bottom bar, [9..13] hunk 1, [14] EOF bar.
+            h.Click(15f, RowCenterY(0));   // top-of-file bar: lone up arrow
+            h.Click(15f, RowCenterY(6));   // split gap, top bar: down arrow
+            h.Click(15f, RowCenterY(7));   // split gap, tear: unfold-all
+            h.Click(15f, RowCenterY(8));   // split gap, bottom bar: up arrow
+            h.Click(15f, RowCenterY(14));  // EOF bar: lone down arrow
 
             Assert.Equal(new[]
             {
                 (0, GapExpandDirection.Up),
                 (1, GapExpandDirection.Down),
+                (1, GapExpandDirection.All),
                 (1, GapExpandDirection.Up),
                 (2, GapExpandDirection.Down),
             }, calls);
