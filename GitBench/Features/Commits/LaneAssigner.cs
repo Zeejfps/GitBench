@@ -7,11 +7,13 @@ internal readonly record struct LaneAssignment(
     bool HasIncomingAtCommitLane,
     LaneParent[] InWalkParentLanes,
     int[] IncomingLanes,
-    int[] PassThroughLanes);
+    PassThroughLane[] PassThroughLanes);
 
 internal static class LaneAssigner
 {
-    public readonly record struct Input(string Sha, IReadOnlyList<string> ParentShas);
+    // IsAuxiliary marks stash and remote-only commits; lanes opened by their parent edges carry
+    // the flag so pass-through rows can render those edges dashed.
+    public readonly record struct Input(string Sha, IReadOnlyList<string> ParentShas, bool IsAuxiliary = false);
 
     public static (LaneAssignment[] Assignments, int LaneCount) Assign(
         IReadOnlyList<Input> commitsInDisplayOrder)
@@ -21,6 +23,7 @@ internal static class LaneAssigner
             presentShas.Add(commitsInDisplayOrder[i].Sha);
 
         var lanes = new List<string?>();
+        var laneDashed = new List<bool>();
         var assignments = new LaneAssignment[commitsInDisplayOrder.Count];
         var maxLaneCount = 0;
 
@@ -58,16 +61,16 @@ internal static class LaneAssigner
             }
             else
             {
-                commitLane = FindOrAllocateFreeLane(lanes);
+                commitLane = FindOrAllocateFreeLane(lanes, laneDashed);
                 incomingLanes = Array.Empty<int>();
                 hasIncomingAtCommitLane = false;
             }
 
-            var passThroughList = new List<int>();
+            var passThroughList = new List<PassThroughLane>();
             for (var li = 0; li < lanes.Count; li++)
             {
                 if (lanes[li] != null && li != commitLane)
-                    passThroughList.Add(li);
+                    passThroughList.Add(new PassThroughLane(li, laneDashed[li]));
             }
 
             var inWalkParentLanes = new List<LaneParent>(c.ParentShas.Count);
@@ -80,8 +83,9 @@ internal static class LaneAssigner
                 {
                     if (parentInWalk)
                     {
-                        EnsureLane(lanes, commitLane);
+                        EnsureLane(lanes, laneDashed, commitLane);
                         lanes[commitLane] = parent;
+                        laneDashed[commitLane] = c.IsAuxiliary;
                         inWalkParentLanes.Add(new LaneParent(j, commitLane));
                     }
                 }
@@ -105,8 +109,9 @@ internal static class LaneAssigner
                     }
                     else
                     {
-                        var newLane = FindOrAllocateFreeLane(lanes);
+                        var newLane = FindOrAllocateFreeLane(lanes, laneDashed);
                         lanes[newLane] = parent;
+                        laneDashed[newLane] = c.IsAuxiliary;
                         inWalkParentLanes.Add(new LaneParent(j, newLane));
                     }
                 }
@@ -124,19 +129,23 @@ internal static class LaneAssigner
         return (assignments, maxLaneCount);
     }
 
-    private static int FindOrAllocateFreeLane(List<string?> lanes)
+    private static int FindOrAllocateFreeLane(List<string?> lanes, List<bool> laneDashed)
     {
         for (var i = 0; i < lanes.Count; i++)
         {
             if (lanes[i] == null) return i;
         }
         lanes.Add(null);
+        laneDashed.Add(false);
         return lanes.Count - 1;
     }
 
-    private static void EnsureLane(List<string?> lanes, int index)
+    private static void EnsureLane(List<string?> lanes, List<bool> laneDashed, int index)
     {
         while (lanes.Count <= index)
+        {
             lanes.Add(null);
+            laneDashed.Add(false);
+        }
     }
 }

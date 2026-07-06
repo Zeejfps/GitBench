@@ -52,7 +52,7 @@ internal static class CommitGraphRenderer
     public static float SummaryStartX(float graphStartX, CommitNode node, int laneCount)
     {
         var maxLane = node.Lane;
-        foreach (var l in node.PassThroughLanes) if (l > maxLane) maxLane = l;
+        foreach (var l in node.PassThroughLanes) if (l.Lane > maxLane) maxLane = l.Lane;
         foreach (var l in node.IncomingLanes) if (l > maxLane) maxLane = l;
         foreach (var p in node.InWalkParentLanes) if (p.Lane > maxLane) maxLane = p.Lane;
         return LaneCenterX(graphStartX, maxLane, laneCount) + DotRadius + PaddingRight;
@@ -83,16 +83,16 @@ internal static class CommitGraphRenderer
         bool TopCovered(int lane) => prevNode is not null && IsNewLaneShift(prevNode, lane);
         bool BottomCovered(int lane) => nextNode is not null && Contains(nextNode.IncomingLanes, lane);
 
-        // Pass-through verticals (lanes with no interaction at this row) stay solid — they belong to
-        // whatever lane is passing, not to this (possibly dashed) commit. A covered half is dropped so
-        // the neighbour's curve owns it.
-        foreach (var ptLane in node.PassThroughLanes)
+        // Pass-through verticals (lanes with no interaction at this row) belong to whatever edge is
+        // passing, not to this commit — they dash by that edge's own stash/remote-only flag rather
+        // than this row's. A covered half is dropped so the neighbour's curve owns it.
+        foreach (var pt in node.PassThroughLanes)
         {
-            var x = Mx(LaneCenterX(graphStartX, ptLane, laneCount));
-            var yLow = BottomCovered(ptLane) ? rowCenterY : rowBottom;
-            var yHigh = TopCovered(ptLane) ? rowCenterY : rowTop;
+            var x = Mx(LaneCenterX(graphStartX, pt.Lane, laneCount));
+            var yLow = BottomCovered(pt.Lane) ? rowCenterY : rowBottom;
+            var yHigh = TopCovered(pt.Lane) ? rowCenterY : rowTop;
             if (yHigh > yLow)
-                DrawSegment(c, x, yLow, x, yHigh, LaneColor(ptLane), z);
+                DrawSegment(c, x, yLow, x, yHigh, LaneColor(pt.Lane), z, dashed: pt.Dashed);
         }
 
         // Top half of commit's own lane — unless it's the tail of a divergence curve descending into
@@ -208,6 +208,14 @@ internal static class CommitGraphRenderer
     {
         for (var i = 0; i < lanes.Count; i++)
             if (lanes[i] == lane)
+                return true;
+        return false;
+    }
+
+    private static bool Contains(IReadOnlyList<PassThroughLane> lanes, int lane)
+    {
+        for (var i = 0; i < lanes.Count; i++)
+            if (lanes[i].Lane == lane)
                 return true;
         return false;
     }

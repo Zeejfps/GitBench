@@ -261,7 +261,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             {
                 var c = commitsRaw[i];
                 var parentShas = c.Parents.Select(p => p.Sha).ToArray();
-                inputs[i] = new LaneAssigner.Input(c.Sha, parentShas);
+                var auxiliary = !localReachable[i];
+                if (!auxiliary && refsBySha.TryGetValue(c.Sha, out var cBadges))
+                {
+                    foreach (var b in cBadges)
+                    {
+                        if (b.Kind != RefKind.Stash) continue;
+                        auxiliary = true;
+                        break;
+                    }
+                }
+                inputs[i] = new LaneAssigner.Input(c.Sha, parentShas, auxiliary);
             }
 
             var (assignments, laneCount) = LaneAssigner.Assign(inputs);

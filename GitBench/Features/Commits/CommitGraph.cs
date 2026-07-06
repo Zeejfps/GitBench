@@ -27,6 +27,11 @@ public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent
 
 public readonly record struct ParentLink(int ParentIndex, int Lane);
 
+// A lane running vertically through a row it doesn't interact with. Dashed follows the edge
+// occupying the lane (opened by a stash or remote-only commit), so auxiliary chains keep their
+// dashes across rows owned by other commits.
+public readonly record struct PassThroughLane(int Lane, bool Dashed);
+
 public sealed record CommitNode(
     string Sha,
     string Summary,
@@ -37,7 +42,7 @@ public sealed record CommitNode(
     bool HasIncomingAtCommitLane,
     IReadOnlyList<ParentLink> InWalkParentLanes,
     IReadOnlyList<int> IncomingLanes,
-    IReadOnlyList<int> PassThroughLanes,
+    IReadOnlyList<PassThroughLane> PassThroughLanes,
     IReadOnlyList<RefBadge> Refs,
     // Reachable from a remote-tracking branch but from no local branch, HEAD, tag or stash.
     bool RemoteOnly = false);
