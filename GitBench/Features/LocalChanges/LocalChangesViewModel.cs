@@ -118,8 +118,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Title = Slice(s => s.Title);
         Description = Slice(s => s.Description);
         Amend = Slice(s => s.Amend);
-        Placeholder = Slice(s => s.Placeholder);
+        // LoadErrorDetail is declared before Placeholder: slices notify in declaration order,
+        // and the view reads LoadErrorDetail imperatively from inside its Placeholder bind —
+        // declared the other way round it would read the pre-update (stale) detail and never
+        // attach the error-action buttons.
         LoadErrorDetail = Slice(s => s.LoadErrorDetail);
+        Placeholder = Slice(s => s.Placeholder);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
@@ -253,6 +257,17 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var detail = State.Value.LoadErrorDetail;
         if (string.IsNullOrEmpty(detail)) return;
         _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.LocalchangesErrorStatusFailed, detail));
+    }
+
+    // Explicit retry after a failed status load: re-kicks every slice of the active repo (plus the
+    // cheap status probe) through the stores. Re-running `git status` also respawns a crashed
+    // fsmonitor daemon — the usual source of a persistent "remote end hung up" status failure —
+    // so this recovers, not just re-displays.
+    public void RetryLoad()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        _bus.Broadcast(new RepoRefreshRequestedMessage(repo.Id));
     }
 
     public void SetTitle(string value)
@@ -569,8 +584,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     public void Stage(IReadOnlyList<string> paths) => RunIndexOp(paths, isStage: true);
 
-    public void StageSubmodulePointer(string submodulePath) => RunIndexOp([submodulePath], isStage: true);
-
     // The subset of the given paths that are still conflicted (unmerged) in the unstaged
     // panel — drives the "Mark as Resolved" context-menu item, which only applies to those.
     public IReadOnlyList<string> ConflictedAmong(IReadOnlyList<string> paths)
@@ -620,12 +633,20 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // `git submodule update -- <path>` and broadcasts SubmodulesChangedMessage so the
     // drift list refreshes once the watcher / re-load catches up.
     public void ResetSubmoduleToRecorded(string submodulePath)
+        => RunSubmoduleUpdate(submodulePath, init: false);
+
+    // Clones and checks out a not-yet-initialized submodule at the recorded SHA
+    // (`git submodule update --init -- <path>`).
+    public void InitializeSubmodule(string submodulePath)
+        => RunSubmoduleUpdate(submodulePath, init: true);
+
+    private void RunSubmoduleUpdate(string submodulePath, bool init)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
         var req = new SubmoduleUpdateRequest(
             Paths: [submodulePath],
-            Init: false,
+            Init: init,
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);

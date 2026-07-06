@@ -10,9 +10,10 @@ using ZGF.Observable;
 namespace GitBench.Features.Submodules;
 
 // Section rendered above the unstaged/staged file panels in LocalChangesContentView,
-// listing submodules whose HEAD has drifted from the parent's recorded pointer. Each
-// row offers "Stage pointer" (so the pointer update can be committed) and "Reset"
-// (re-checkout the recorded SHA). Hidden when there's no drift.
+// listing submodules that need attention from the parent: not-initialized ones (offer
+// "Initialize" — clone/check out via `git submodule update --init`) and merge-conflicted
+// ones (offer "Reset" — re-checkout the recorded SHA). Plain pointer drift shows in the
+// file list instead (see RepoSnapshotStore.BuildLocalData). Hidden when empty.
 internal sealed class LocalChangesSubmoduleSection : ContainerView
 {
     private const int ContentPadding = 10;
@@ -21,16 +22,16 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
     private readonly ILocalizationService _loc;
     private readonly TextView _headerText;
     private readonly ColumnView _rows;
-    private readonly Action<string> _onStage;
+    private readonly Action<string> _onInit;
     private readonly Action<string> _onReset;
 
     private IReadOnlyList<SubmoduleInfo> _drift = Array.Empty<SubmoduleInfo>();
 
-    public LocalChangesSubmoduleSection(Context ctx, Action<string> onStage, Action<string> onReset)
+    public LocalChangesSubmoduleSection(Context ctx, Action<string> onInit, Action<string> onReset)
     {
         _ctx = ctx;
         _loc = ctx.Localization();
-        _onStage = onStage;
+        _onInit = onInit;
         _onReset = onReset;
 
         _headerText = FileChangesUI.CreateHeaderText(ctx, _loc.Strings.Value.SubmodulesSectionHeader);
@@ -101,21 +102,19 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
         };
         label.BindThemedTextColor(theme, s => s.SubmoduleSection.RowText);
 
-        // Stageable only when the submodule is actually modified (not when it's
-        // uninitialized or in a merge conflict — both need different actions).
-        var stageButton = new LocalChangesHeaderActionButton
-        {
-            Icon = LucideIcons.ChevronRight,
-            Command = new Command(() => _onStage(info.Path), new State<bool>(info.Status == SubmoduleStatus.Modified)),
-            Tooltip = _loc.Strings.Value.SubmodulesActionStage,
-        }.BuildView(_ctx);
-
-        var resetButton = new LocalChangesHeaderActionButton
-        {
-            Icon = LucideIcons.X,
-            Command = new Command(() => _onReset(info.Path), new State<bool>(info.Status != SubmoduleStatus.NotInitialized)),
-            Tooltip = _loc.Strings.Value.SubmodulesActionReset,
-        }.BuildView(_ctx);
+        var actionButton = info.Status == SubmoduleStatus.NotInitialized
+            ? new LocalChangesHeaderActionButton
+            {
+                Icon = LucideIcons.Pull,
+                Command = new Command(() => _onInit(info.Path)),
+                Tooltip = _loc.Strings.Value.SubmodulesActionInit,
+            }.BuildView(_ctx)
+            : new LocalChangesHeaderActionButton
+            {
+                Icon = LucideIcons.X,
+                Command = new Command(() => _onReset(info.Path)),
+                Tooltip = _loc.Strings.Value.SubmodulesActionReset,
+            }.BuildView(_ctx);
 
         return new FlexRowView
         {
@@ -125,8 +124,7 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
             {
                 badge,
                 new FlexItem { Grow = 1, Child = label },
-                stageButton,
-                resetButton,
+                actionButton,
             },
         };
     }
@@ -135,19 +133,6 @@ internal sealed class LocalChangesSubmoduleSection : ContainerView
     {
         SubmoduleStatus.NotInitialized => strings.SubmodulesStatusNotInitialized,
         SubmoduleStatus.MergeConflict  => strings.SubmodulesStatusMergeConflict,
-        SubmoduleStatus.Modified       => ShortShaSummary(strings, info),
         _                              => strings.SubmodulesStatusUpToDate,
     };
-
-    private static string ShortShaSummary(Strings strings, SubmoduleInfo info)
-    {
-        var recorded = ShortSha(info.RecordedSha);
-        var current = ShortSha(info.CurrentSha);
-        if (string.IsNullOrEmpty(recorded) || string.IsNullOrEmpty(current))
-            return strings.SubmodulesStatusModified;
-        return $"{recorded} → {current}";
-    }
-
-    private static string ShortSha(string? sha)
-        => string.IsNullOrEmpty(sha) ? string.Empty : (sha.Length >= 7 ? sha.Substring(0, 7) : sha);
 }

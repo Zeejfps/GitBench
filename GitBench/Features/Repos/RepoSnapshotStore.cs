@@ -84,6 +84,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     private IDisposable? _commitCreatedSub;
     private IDisposable? _submodulesSub;
     private IDisposable? _remoteSyncSub;
+    private IDisposable? _refreshSub;
 
     public IReadable<Fetched<CommitSnapshot>?> Commits => _commits;
     public IReadable<Fetched<BranchListing>?> Branches => _branches;
@@ -117,6 +118,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _commitCreatedSub = _bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated);
         _submodulesSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
         _remoteSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(OnRemoteSyncOptimistic);
+        _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(OnRefreshRequested);
 
         // Safety net for the active-ready signal below: if the first load never lands, release the
         // deferred startup sweeps anyway so per-repo decorations and discovery still run.
@@ -252,6 +254,19 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         var newLocals = new List<BranchEntry>(locals);
         newLocals[headIdx] = head with { AheadBy = newAhead, BehindBy = newBehind };
         return new Fetched<BranchListing>.Ok(ok.Value with { LocalBranches = newLocals });
+    }
+
+    // Explicit user retry after a failed load. The local slice is nulled before reloading so the
+    // view model re-renders even when the retry fails with a byte-identical error (the equality-
+    // deduped State would otherwise swallow it and the placeholder would sit on stale "Loading…").
+    private void OnRefreshRequested(RepoRefreshRequestedMessage msg)
+    {
+        var active = _registry.Active.Value;
+        if (active == null || active.Id != msg.RepoId) return;
+        _local.Value = null;
+        ReloadCommits(active);
+        ReloadBranches(active);
+        ReloadLocal(active);
     }
 
     private void OnSubmodulesChanged(SubmodulesChangedMessage msg)
@@ -427,6 +442,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         _commitCreatedSub?.Dispose();
         _submodulesSub?.Dispose();
         _remoteSyncSub?.Dispose();
+        _refreshSub?.Dispose();
         _commits.Dispose();
         _branches.Dispose();
         _local.Dispose();

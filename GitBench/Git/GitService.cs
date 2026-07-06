@@ -843,8 +843,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // untracked directory reports the same dirty=true either way — but `normal` stops at the first
     // entry per directory instead of recursing every untracked file, so the probe stays cheap on
     // repos with large untracked trees (the lag the ahead/behind number used to show after a sync).
-    // Returns Unknown on any failure — callers treat that as "no decorations" rather than an error.
-    public GitStatusSummary GetStatusSummary(Repo repo)
+    // Returns Unknown when the path isn't a repo (decorations should clear) and null when the
+    // probe itself failed (a transient git failure — e.g. a crashed fsmonitor daemon — where the
+    // caller keeps the last known status instead of zeroing it out).
+    public GitStatusSummary? GetStatusSummary(Repo repo)
     {
         try
         {
@@ -853,11 +855,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 repo.Path,
                 new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "--ignored=no", "--ignore-submodules=dirty" },
                 GitProcessRunner.GitLaunch.Direct);
-            return result.Ok ? ParseStatusSummary(result.Stdout) : GitStatusSummary.Unknown;
+            return result.Ok ? ParseStatusSummary(result.Stdout) : null;
         }
         catch
         {
-            return GitStatusSummary.Unknown;
+            return null;
         }
     }
 
