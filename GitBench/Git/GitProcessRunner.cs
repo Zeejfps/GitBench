@@ -149,6 +149,12 @@ internal sealed class GitProcessRunner
             CreateNoWindow = true,
         };
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        // Even with git itself resolved to an absolute path, git spawns helpers (git-lfs for
+        // the filter-process, credential helpers) via PATH — the GUI app's bare PATH lacks
+        // /usr/local/bin & /opt/homebrew/bin, which surfaces as "git-lfs: command not found" +
+        // "the remote end hung up unexpectedly" on every status/diff in an LFS repo.
+        var loginPath = LoginShellPath();
+        if (loginPath != null) psi.Environment["PATH"] = loginPath;
         // Identity `-c key=value` overrides must come before the subcommand.
         if (prefix != null) foreach (var a in prefix) psi.ArgumentList.Add(a);
         foreach (var a in args) psi.ArgumentList.Add(a);
@@ -266,6 +272,51 @@ internal sealed class GitProcessRunner
             if (File.Exists(p)) return p;
 
         return "git";
+    }
+
+    private static string? _loginShellPath;
+    private static readonly object _loginShellPathLock = new();
+
+    private static string? LoginShellPath()
+    {
+        if (!OperatingSystem.IsMacOS()) return null;
+        lock (_loginShellPathLock)
+        {
+            return _loginShellPath ??= ResolveLoginShellPath();
+        }
+    }
+
+    private static string ResolveLoginShellPath()
+    {
+        try
+        {
+            var shell = Environment.GetEnvironmentVariable("SHELL");
+            if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
+            var psi = new ProcessStartInfo
+            {
+                FileName = shell,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("-l");
+            psi.ArgumentList.Add("-c");
+            psi.ArgumentList.Add("printf %s \"$PATH\"");
+            using var proc = Process.Start(psi);
+            if (proc != null)
+            {
+                var path = proc.StandardOutput.ReadToEnd().Trim();
+                proc.WaitForExit();
+                if (path.Length > 0) return path;
+            }
+        }
+        catch { /* fall through to defaults */ }
+
+        var current = Environment.GetEnvironmentVariable("PATH");
+        var extras = new[] { "/opt/homebrew/bin", "/usr/local/bin" }
+            .Where(p => current == null || !current.Split(':').Contains(p));
+        return string.Join(':', extras.Prepend(current ?? string.Empty).Where(s => s.Length > 0));
     }
 
     // ────────── error-text extraction ──────────
