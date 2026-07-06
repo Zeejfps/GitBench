@@ -57,6 +57,8 @@ public sealed class PreferencesService : IDisposable
 
     public void SetFileViewMode(FileViewMode mode) => Mutate(p => p with { FileViewMode = mode });
 
+    public void SetHideRemoteOnlyBranches(bool hide) => Mutate(p => p with { HideRemoteOnlyBranches = hide });
+
     private void Mutate(Func<Preferences, Preferences> mutator)
     {
         lock (_gate)

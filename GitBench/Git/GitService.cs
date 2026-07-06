@@ -127,6 +127,24 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 refTips.Add(tip);
             }
 
+            // Remote branches anchored by a local counterpart (a local branch tracks them, or a
+            // local branch shares their short name). The history view's remote filter keeps
+            // commits reachable from these — hiding remote-only branches must not hide e.g.
+            // origin/main's unpulled commits while main exists locally.
+            var localNames = new HashSet<string>(StringComparer.Ordinal);
+            var trackedUpstreams = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var local in localBranches)
+            {
+                localNames.Add(local.FriendlyName);
+                if (local.TrackedBranch is { } upstream) trackedUpstreams.Add(upstream.FriendlyName);
+            }
+            var matchedRemoteTips = new List<Commit>();
+            foreach (var remote in remoteBranches)
+            {
+                if (trackedUpstreams.Contains(remote.FriendlyName) || localNames.Contains(RemoteBranchShortName(remote)))
+                    matchedRemoteTips.Add(remote.Tip!);
+            }
+
             // A local branch sitting on the same commit as its tracking remote absorbs that
             // remote into a single "synced" badge; record the absorbed remote names so the
             // remote pass skips them. The checked-out branch also absorbs the HEAD badge.
@@ -236,31 +254,25 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 commitsRaw.Add(c);
             }
 
-            // Remote-only = displayed but not reachable from any local tip. Seed the local
-            // tips that landed in the walk, then propagate reachability down to parents.
-            // The walk is topologically sorted (a commit precedes its parents), so a single
-            // forward pass marks every local-reachable ancestor.
             var indexBySha = new Dictionary<string, int>(commitsRaw.Count);
-            for (var i = 0; i < commitsRaw.Count; i++)
-                indexBySha[commitsRaw[i].Sha] = i;
-
-            var localReachable = new bool[commitsRaw.Count];
-            foreach (var t in localTips)
-                if (indexBySha.TryGetValue(t.Sha, out var li))
-                    localReachable[li] = true;
+            var parentShasByIndex = new string[commitsRaw.Count][];
             for (var i = 0; i < commitsRaw.Count; i++)
             {
-                if (!localReachable[i]) continue;
-                foreach (var p in commitsRaw[i].Parents)
-                    if (indexBySha.TryGetValue(p.Sha, out var pi))
-                        localReachable[pi] = true;
+                indexBySha[commitsRaw[i].Sha] = i;
+                parentShasByIndex[i] = commitsRaw[i].Parents.Select(p => p.Sha).ToArray();
             }
+
+            // Remote-only = displayed but not reachable from any local tip. Anchored widens the
+            // seeds with the matched remote tips, so !anchored = reachable only from remote
+            // branches with no local counterpart (what the history view's remote filter hides).
+            var localReachable = ComputeReachability(indexBySha, parentShasByIndex, localTips);
+            var anchoredReachable = ComputeReachability(indexBySha, parentShasByIndex, localTips.Concat(matchedRemoteTips));
 
             var inputs = new LaneAssigner.Input[commitsRaw.Count];
             for (var i = 0; i < commitsRaw.Count; i++)
             {
                 var c = commitsRaw[i];
-                var parentShas = c.Parents.Select(p => p.Sha).ToArray();
+                var parentShas = parentShasByIndex[i];
                 var auxiliary = !localReachable[i];
                 if (!auxiliary && refsBySha.TryGetValue(c.Sha, out var cBadges))
                 {
@@ -304,7 +316,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     IncomingLanes: a.IncomingLanes,
                     PassThroughLanes: a.PassThroughLanes,
                     Refs: badges ?? (IReadOnlyList<RefBadge>)Array.Empty<RefBadge>(),
-                    RemoteOnly: !localReachable[i]);
+                    RemoteOnly: !localReachable[i],
+                    UnmatchedRemoteOnly: !anchoredReachable[i]);
             }
 
             var headBranchName = lg.Info.IsHeadDetached ? null : lg.Head?.FriendlyName;
@@ -314,6 +327,25 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return new Fetched<CommitSnapshot>.Failed(ex.Message);
         }
+    }
+
+    // Marks every commit reachable from the seed tips. The walk is topologically sorted (a
+    // commit precedes its parents), so a single forward pass propagates the mark to ancestors.
+    private static bool[] ComputeReachability(
+        Dictionary<string, int> indexBySha, string[][] parentShasByIndex, IEnumerable<Commit> seeds)
+    {
+        var reachable = new bool[parentShasByIndex.Length];
+        foreach (var seed in seeds)
+            if (indexBySha.TryGetValue(seed.Sha, out var si))
+                reachable[si] = true;
+        for (var i = 0; i < parentShasByIndex.Length; i++)
+        {
+            if (!reachable[i]) continue;
+            foreach (var parent in parentShasByIndex[i])
+                if (indexBySha.TryGetValue(parent, out var pi))
+                    reachable[pi] = true;
+        }
+        return reachable;
     }
 
     // Lists base..head as a linear review stack for the review window (decisions #3/#6). Mirrors

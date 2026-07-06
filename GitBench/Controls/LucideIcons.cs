@@ -43,6 +43,7 @@ internal static class LucideIcons
     public const string Moon = "";         // moon
     public const string List = "";         // list (flat file view)
     public const string ListTree = "";     // list-tree (tree file view)
+    public const string ListFilter = ""; // list-filter (hide remote-only branches)
 
     public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
     public const string Inbox = "";        // inbox (empty state: nothing staged)

@@ -235,8 +235,10 @@ internal sealed record CommitsView : Widget
                 this.Use(() => StartDateRefresh(dispatcher));
         }
 
-        // Pass-through for the panel's search bar; the VM is owned by this view via UseViewModel.
+        // Pass-throughs for the panel's search bar; the VM is owned by this view via UseViewModel.
         public void SetSearchQuery(string? query) => _vm.SetSearchQuery(query);
+        public IReadable<bool> RemoteFilterActive => _vm.HideRemoteOnly;
+        public void ToggleRemoteFilter() => _vm.ToggleRemoteOnlyFilter();
 
         private IDisposable StartDateRefresh(IUiDispatcher dispatcher)
         {

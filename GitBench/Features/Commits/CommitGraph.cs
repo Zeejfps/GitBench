@@ -46,7 +46,10 @@ public sealed record CommitNode(
     IReadOnlyList<GraphLane> PassThroughLanes,
     IReadOnlyList<RefBadge> Refs,
     // Reachable from a remote-tracking branch but from no local branch, HEAD, tag or stash.
-    bool RemoteOnly = false);
+    bool RemoteOnly = false,
+    // Reachable only from remote branches with no local counterpart (no local branch tracks
+    // or name-matches them). Implies RemoteOnly; the history view's remote filter hides these.
+    bool UnmatchedRemoteOnly = false);
 
 public sealed record CommitSnapshot(
     Guid RepoId,

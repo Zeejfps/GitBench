@@ -49,7 +49,9 @@ public sealed record CommitsViewStyles(
     uint BadgeText,
     uint BadgeBranchInSyncIcon,
     uint BadgeBranchDivergedIcon,
-    uint BadgeBranchUntrackedIcon);
+    uint BadgeBranchUntrackedIcon,
+    // Tint for the search bar's remote filter toggle while it's hiding remote-only branches.
+    uint FilterToggleActive);
 
 public partial record ThemeStyles
 {
@@ -99,5 +101,6 @@ public partial record ThemeStyles
             BadgeText: badge.Text,
             BadgeBranchInSyncIcon: badge.BranchInSyncIcon,
             BadgeBranchDivergedIcon: badge.BranchDivergedIcon,
-            BadgeBranchUntrackedIcon: badge.BranchUntrackedIcon);
+            BadgeBranchUntrackedIcon: badge.BranchUntrackedIcon,
+            FilterToggleActive: p.Accent);
 }

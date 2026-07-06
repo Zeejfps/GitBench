@@ -226,6 +226,8 @@
   "commits.truncated_banner": "히스토리가 잘렸습니다.",
   "commits.search_placeholder": "커밋 필터…",
   "commits.search_clear_tooltip": "필터 지우기",
+  "commits.filter_remote_hide_tooltip": "원격 전용 브랜치 숨기기",
+  "commits.filter_remote_show_tooltip": "원격 전용 브랜치 표시",
   "commits.details_no_selection": "세부 정보를 볼 커밋을 선택하세요.",
   "commits.details_commit_label": "커밋:",
   "commits.details_parents_label": "부모:",

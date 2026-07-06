@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Branches;
 using GitBench.Features.LocalChanges;
@@ -34,12 +35,16 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
+    private readonly PreferencesService _preferences;
 
     public IReadable<CommitsRenderState> Render { get; }
     public IReadable<string?> SelectedSha { get; }
     // True while a non-empty search query is filtering the list; drives the view to drop the
     // graph column (lanes are meaningless across a subset).
     public IReadable<bool> IsFiltering { get; }
+    // True while the graph hides commits that exist only on remote branches with no local
+    // counterpart. Persisted as a preference; drives the search bar's filter toggle tint.
+    public IReadable<bool> HideRemoteOnly { get; }
 
     // Holds the most recent *successfully* loaded snapshot for the active repo, or null if we
     // have no good data for it (no repo, in-flight first load, or last load errored).
@@ -51,6 +56,11 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private CommitSnapshot? _rendered;
     // Repo whose history is currently reflected in state; used to clear selection on switch.
     private Guid? _renderedRepoId;
+
+    // Caches the remote-filtered projection of _snapshot so search keystrokes don't re-run lane
+    // assignment; keyed by snapshot instance, invalidated when the store emits a new one.
+    private CommitSnapshot? _remoteFilterSource;
+    private CommitSnapshot? _remoteFilterResult;
 
     // Exclusive lane for the reset probe/apply op; kept off the default Gen lane so a
     // repo-switch reload never drops an in-flight reset's result.
@@ -68,13 +78,18 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoSnapshotStore store,
-        ILocalizationService loc)
-        : base(dispatcher, CommitsState.Initial)
+        ILocalizationService loc,
+        PreferencesService preferences)
+        : base(dispatcher, CommitsState.Initial with
+        {
+            HideRemoteOnly = preferences.Current.HideRemoteOnlyBranches,
+        })
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
         _loc = loc;
+        _preferences = preferences;
 
         _resetGen = CreateLane();
         _moveGen = CreateLane();
@@ -83,6 +98,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         Render = Slice(s => s.Render);
         SelectedSha = Slice(s => s.SelectedSha);
         IsFiltering = Slice(s => s.IsFiltering);
+        HideRemoteOnly = Slice(s => s.HideRemoteOnly);
 
         // History is projected from the store (which owns loading + caching + the soft refresh).
         Subscriptions.Add(store.Commits.Subscribe(OnStoreCommits));
@@ -415,18 +431,31 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         ApplyProjection(_snapshot, q);
     }
 
+    // Hides remote-only branches (commits reachable only from remotes with no local
+    // counterpart) and persists the choice. Purely a projection of the loaded snapshot —
+    // toggling never re-runs the git walk, only lane reassignment over the kept rows.
+    public void ToggleRemoteOnlyFilter()
+    {
+        var hide = !State.Value.HideRemoteOnly;
+        _preferences.SetHideRemoteOnlyBranches(hide);
+        Update(s => s with { HideRemoteOnly = hide });
+        if (_snapshot != null) ApplyProjection(_snapshot, State.Value.Query);
+    }
+
     // Builds the Loaded render for snap under the given query, updates _rendered, and writes
-    // Render/Query/IsFiltering in one state update. An empty/whitespace query is the unfiltered
-    // fast path (full snapshot, graph intact).
+    // Render/Query/IsFiltering in one state update. The remote filter applies first (graph
+    // intact, lanes reassigned); an empty/whitespace query is then the unfiltered fast path.
     private void ApplyProjection(CommitSnapshot snap, string query)
     {
+        var basis = State.Value.HideRemoteOnly ? FilterUnmatchedRemotes(snap) : snap;
+
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
         {
-            _rendered = snap;
+            _rendered = basis;
             Update(s => s with
             {
-                Render = new CommitsRenderState.Loaded(snap),
+                Render = new CommitsRenderState.Loaded(basis),
                 Query = query,
                 IsFiltering = false,
             });
@@ -434,12 +463,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         }
 
         var matched = new List<CommitNode>();
-        foreach (var node in snap.Commits)
+        foreach (var node in basis.Commits)
             if (MatchesQuery(node, trimmed)) matched.Add(node);
 
         // Lanes are meaningless across a filtered subset, so the view renders a flat list;
         // LaneCount = 0 collapses the graph column.
-        var filtered = snap with { Commits = matched, LaneCount = 0 };
+        var filtered = basis with { Commits = matched, LaneCount = 0 };
         _rendered = filtered;
 
         Update(s => s with
@@ -448,6 +477,16 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             Query = query,
             IsFiltering = true,
         });
+    }
+
+    private CommitSnapshot FilterUnmatchedRemotes(CommitSnapshot snap)
+    {
+        if (!ReferenceEquals(_remoteFilterSource, snap))
+        {
+            _remoteFilterSource = snap;
+            _remoteFilterResult = CommitHistoryFilter.ExcludeUnmatchedRemotes(snap);
+        }
+        return _remoteFilterResult!;
     }
 
     private static bool MatchesQuery(CommitNode node, string q) =>
@@ -471,6 +510,8 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             _renderedRepoId = activeId;
             _snapshot = null;
             _rendered = null;
+            _remoteFilterSource = null;
+            _remoteFilterResult = null;
             Update(s => s with
             {
                 Render = activeId == null ? new CommitsRenderState.NoRepo() : new CommitsRenderState.Loading(),
@@ -486,6 +527,8 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
             // Drop any prior good snapshot so the next reload shows "Loading…" not a stale graph.
             _snapshot = null;
             _rendered = null;
+            _remoteFilterSource = null;
+            _remoteFilterResult = null;
             Update(s => s with { Render = new CommitsRenderState.Error(failed.Message) });
         }
         else
@@ -560,7 +603,8 @@ internal sealed record CommitsState(
     CommitsRenderState Render,
     string? SelectedSha,
     string Query,
-    bool IsFiltering)
+    bool IsFiltering,
+    bool HideRemoteOnly)
 {
-    public static CommitsState Initial { get; } = new(new CommitsRenderState.NoRepo(), null, "", false);
+    public static CommitsState Initial { get; } = new(new CommitsRenderState.NoRepo(), null, "", false, false);
 }

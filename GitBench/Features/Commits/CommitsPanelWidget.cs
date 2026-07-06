@@ -23,7 +23,12 @@ public sealed record CommitsPanelWidget : Widget
 
         return new BorderLayout
         {
-            North = new CommitSearchBarView { OnQueryChanged = commits.SetSearchQuery },
+            North = new CommitSearchBarView
+            {
+                OnQueryChanged = commits.SetSearchQuery,
+                RemoteFilterActive = commits.RemoteFilterActive,
+                OnToggleRemoteFilter = commits.ToggleRemoteFilter,
+            },
             Center = new Raw { View = commits },
             East = new Raw { View = scrollBar },
             South = new Box

@@ -226,6 +226,8 @@
   "commits.truncated_banner": "历史已截断。",
   "commits.search_placeholder": "筛选提交…",
   "commits.search_clear_tooltip": "清除筛选",
+  "commits.filter_remote_hide_tooltip": "隐藏仅远程分支",
+  "commits.filter_remote_show_tooltip": "显示仅远程分支",
   "commits.details_no_selection": "请选择一个提交以查看详情。",
   "commits.details_commit_label": "提交:",
   "commits.details_parents_label": "父提交:",

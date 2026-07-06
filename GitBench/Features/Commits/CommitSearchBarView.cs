@@ -16,11 +16,11 @@ using ZGF.Observable;
 namespace GitBench.Features.Commits;
 
 /// <summary>
-/// Slim filter bar shown above the commit list: a single rounded search box containing a leading
-/// search icon, the text input, and a trailing clear (✕) button that appears once there's text.
-/// Edits are surfaced through <see cref="OnQueryChanged"/>; the panel forwards those to
-/// <see cref="CommitsView.Core.SetSearchQuery"/>. It deliberately holds no view model — the
-/// <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView.Core"/>.
+/// Slim filter bar shown above the commit list: a rounded search box (leading search icon, text
+/// input, trailing clear (✕) button once there's text) and a remote filter toggle beside it that
+/// hides branches existing only on the remote. Interactions are surfaced through the init
+/// callbacks; the panel forwards them to <see cref="CommitsView.Core"/>. It deliberately holds no
+/// view model — the <see cref="CommitsViewModel"/> is owned by <see cref="CommitsView.Core"/>.
 /// </summary>
 internal sealed record CommitSearchBarView : Widget
 {
@@ -28,6 +28,12 @@ internal sealed record CommitSearchBarView : Widget
 
     /// <summary>Fires on every edit (including a programmatic clear) with the current text.</summary>
     public required Action<string> OnQueryChanged { get; init; }
+
+    /// <summary>True while the graph is hiding remote-only branches; tints the filter toggle.</summary>
+    public required IReadable<bool> RemoteFilterActive { get; init; }
+
+    /// <summary>Flips the remote filter on/off.</summary>
+    public required Action OnToggleRemoteFilter { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -59,6 +65,22 @@ internal sealed record CommitSearchBarView : Widget
             .WithTooltip(L.T(s => s.CommitsSearchClearTooltip))
             .WithController<KbmController>();
 
+        // Engaged-toggle styling (accent tint while active) so it reads as a filter that stays on,
+        // not a one-shot action.
+        var strings = ctx.Localization().Strings;
+        var remoteFilter = new ButtonWidget
+        {
+            Style = ButtonStyle.Bare(s => Theme.Color(t => RemoteFilterActive.Value
+                ? t.CommitsView.FilterToggleActive
+                : s.Enabled.Value && s.Hovered.Value ? t.CommitsView.RowText : t.CommitsView.RowTextDim)),
+            Command = new Command(OnToggleRemoteFilter),
+            Children = [new ButtonIcon { Value = LucideIcons.ListFilter, FontSize = FontSize.Body }],
+        }
+            .WithTooltip(Prop.Bind(() => (string?)(RemoteFilterActive.Value
+                ? strings.Value.CommitsFilterRemoteShowTooltip
+                : strings.Value.CommitsFilterRemoteHideTooltip)))
+            .WithController<KbmController>();
+
         return new Box
         {
             Height = BarHeight,
@@ -72,40 +94,52 @@ internal sealed record CommitSearchBarView : Widget
                     Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
                     Children =
                     [
-                        new Box
+                        new Row
                         {
-                            BorderSize = BorderSizeStyle.All(1),
-                            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                            Background = Theme.Color(s => s.TextInput.Background),
-                            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Gap = Spacing.Sm,
                             Children =
                             [
-                                new Padding
+                                new Grow
                                 {
-                                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
-                                    Children =
-                                    [
-                                        new Row
-                                        {
-                                            CrossAxis = CrossAxisAlignment.Center,
-                                            Gap = Spacing.Md,
-                                            Children =
-                                            [
-                                                new Text
-                                                {
-                                                    FontFamily = LucideIcons.FontFamily,
-                                                    FontSize = FontSize.Default,
-                                                    Value = LucideIcons.Search,
-                                                    HAlign = TextAlignment.Center,
-                                                    VAlign = TextAlignment.Center,
-                                                    Color = Theme.Color(s => s.CommitsView.RowTextDim),
-                                                },
-                                                new Grow { Child = new Raw { View = textInput } },
-                                                clear,
-                                            ],
-                                        },
-                                    ],
+                                    Child = new Box
+                                    {
+                                        BorderSize = BorderSizeStyle.All(1),
+                                        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+                                        Background = Theme.Color(s => s.TextInput.Background),
+                                        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
+                                        Children =
+                                        [
+                                            new Padding
+                                            {
+                                                Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
+                                                Children =
+                                                [
+                                                    new Row
+                                                    {
+                                                        CrossAxis = CrossAxisAlignment.Center,
+                                                        Gap = Spacing.Md,
+                                                        Children =
+                                                        [
+                                                            new Text
+                                                            {
+                                                                FontFamily = LucideIcons.FontFamily,
+                                                                FontSize = FontSize.Default,
+                                                                Value = LucideIcons.Search,
+                                                                HAlign = TextAlignment.Center,
+                                                                VAlign = TextAlignment.Center,
+                                                                Color = Theme.Color(s => s.CommitsView.RowTextDim),
+                                                            },
+                                                            new Grow { Child = new Raw { View = textInput } },
+                                                            clear,
+                                                        ],
+                                                    },
+                                                ],
+                                            },
+                                        ],
+                                    },
                                 },
+                                remoteFilter,
                             ],
                         },
                     ],

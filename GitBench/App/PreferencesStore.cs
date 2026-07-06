@@ -29,6 +29,7 @@ public static class PreferencesStore
         public float? CommitDetailsWidth { get; set; } = 380f;
         public float? CommitDetailsSplitFraction { get; set; } = 2f / 3f;
         public FileViewMode? FileViewMode { get; set; } = Features.LocalChanges.FileViewMode.Flat;
+        public bool? HideRemoteOnlyBranches { get; set; } = false;
     }
 
     public static Preferences Load(string path)
@@ -57,6 +58,7 @@ public static class PreferencesStore
                 CommitDetailsWidth = file.CommitDetailsWidth is > 0 ? file.CommitDetailsWidth.Value : defaults.CommitDetailsWidth,
                 CommitDetailsSplitFraction = file.CommitDetailsSplitFraction is > 0 ? file.CommitDetailsSplitFraction.Value : defaults.CommitDetailsSplitFraction,
                 FileViewMode = file.FileViewMode ?? defaults.FileViewMode,
+                HideRemoteOnlyBranches = file.HideRemoteOnlyBranches ?? defaults.HideRemoteOnlyBranches,
             };
         }
         catch (Exception ex)
@@ -82,6 +84,7 @@ public static class PreferencesStore
             CommitDetailsWidth = preferences.CommitDetailsWidth,
             CommitDetailsSplitFraction = preferences.CommitDetailsSplitFraction,
             FileViewMode = preferences.FileViewMode,
+            HideRemoteOnlyBranches = preferences.HideRemoteOnlyBranches,
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);

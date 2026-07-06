@@ -226,6 +226,8 @@
   "commits.truncated_banner": "Historial truncado.",
   "commits.search_placeholder": "Filtrar commits…",
   "commits.search_clear_tooltip": "Borrar filtro",
+  "commits.filter_remote_hide_tooltip": "Ocultar ramas solo remotas",
+  "commits.filter_remote_show_tooltip": "Mostrar ramas solo remotas",
   "commits.details_no_selection": "Selecciona un commit para ver los detalles.",
   "commits.details_commit_label": "Commit:",
   "commits.details_parents_label": "Padres:",

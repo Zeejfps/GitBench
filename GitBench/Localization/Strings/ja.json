@@ -226,6 +226,8 @@
   "commits.truncated_banner": "履歴が省略されています。",
   "commits.search_placeholder": "コミットをフィルタ…",
   "commits.search_clear_tooltip": "フィルタをクリア",
+  "commits.filter_remote_hide_tooltip": "リモートのみのブランチを隠す",
+  "commits.filter_remote_show_tooltip": "リモートのみのブランチを表示",
   "commits.details_no_selection": "詳細を表示するコミットを選択してください。",
   "commits.details_commit_label": "コミット:",
   "commits.details_parents_label": "親:",
