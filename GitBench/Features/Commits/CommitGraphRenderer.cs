@@ -126,8 +126,10 @@ internal static class CommitGraphRenderer
             }
             else if (Contains(node.PassThroughLanes, pl.Lane))
             {
-                // Merge into a lane that already runs below this row: a half-S into the existing vertical.
-                DrawCurve(c, commitCx, rowCenterY, pCx, rowBottom, commitColor, z, pColor, dashed);
+                // Merge into a lane that already runs below this row — the one edge that starts and
+                // ends inside a single row, so it swoops: a horizontal run out of the dot's center
+                // bending down into the existing vertical.
+                DrawSwoop(c, commitCx, rowCenterY, pCx, rowBottom, commitColor, z, pColor, dashed);
             }
             else
             {
@@ -247,5 +249,38 @@ internal static class CommitGraphRenderer
             DashLength = dashed ? DashLength : 0f,
             GapLength = dashed ? GapLength : 0f,
         });
+    }
+
+    // A "swoop" (sideways J) for the one edge drawn entirely inside a single row: a dead-straight
+    // horizontal out of the dot's center ending in one quarter-turn that lands tangent on the lane
+    // it joins. The turn's radius is the full height available (the half-row), not a tight corner —
+    // a small bend hides on top of the lane's running vertical, while this one sweeps out beside it
+    // where it can be seen. The color blends across the horizontal run and the turn carries the
+    // lane's color.
+    private static void DrawSwoop(ICanvas c, float x0, float y0, float x1, float y1, uint color, int z,
+        uint? gradientEnd = null, bool dashed = false)
+    {
+        var sx = Math.Sign(x0 - x1);
+        var sy = Math.Sign(y1 - y0);
+        var r = Math.Min(Math.Abs(x1 - x0), Math.Abs(y1 - y0));
+        var laneColor = gradientEnd ?? color;
+        if (Math.Abs(x1 - x0) > r)
+            DrawSegment(c, x0, y0, x1 + sx * r, y0, color, z, gradientEnd, dashed);
+        // Quarter-turn approximating a circular arc (control points k*r along the tangents).
+        const float k = 0.5523f;
+        c.DrawCubicBezier(new DrawCubicBezierInputs
+        {
+            Start = new PointF(x1 + sx * r, y0),
+            Control1 = new PointF(x1 + sx * r * (1 - k), y0),
+            Control2 = new PointF(x1, y0 + sy * r * (1 - k)),
+            End = new PointF(x1, y0 + sy * r),
+            Thickness = EdgeThickness,
+            Color = laneColor,
+            ZIndex = z,
+            DashLength = dashed ? DashLength : 0f,
+            GapLength = dashed ? GapLength : 0f,
+        });
+        if (Math.Abs(y1 - y0) > r)
+            DrawSegment(c, x1, y0 + sy * r, x1, y1, laneColor, z, dashed: dashed);
     }
 }
