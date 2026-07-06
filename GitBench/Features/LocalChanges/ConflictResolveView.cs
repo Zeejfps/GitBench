@@ -80,53 +80,55 @@ internal sealed record ConflictResolveView : Widget
             Children =
             [
                 BuildTitleRow(),
-                new Center { Child = BuildFileNameRow(path) },
-                new Center
+                BuildFileNameRow(path),
+                new Row
                 {
-                    Child = new Row
-                    {
-                        // Cards sit flush against the inner junction edges; the junction supplies its
-                        // own inset, so no inter-item gap here.
-                        Gap = Spacing.None,
-                        CrossAxis = CrossAxisAlignment.Stretch,
-                        Children =
-                        [
-                            new ConflictCard { Side = conflict.Theirs, Checked = theirsChecked }
-                                .WithController<KbmController>(),
-                            new Raw { View = new MergeJunctionView(ctx.Theme(), theirsChecked, oursChecked) },
-                            new ConflictCard { Side = conflict.Ours, Checked = oursChecked }
-                                .WithController<KbmController>(),
-                        ],
-                    },
+                    // Cards sit flush against the inner junction edges; the junction supplies its
+                    // own inset, so no inter-item gap here.
+                    Gap = Spacing.None,
+                    MainAxis = MainAxisAlignment.Center,
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children =
+                    [
+                        new ConflictCard { Side = conflict.Theirs, Checked = theirsChecked }
+                            .WithController<KbmController>(),
+                        new Raw { View = new MergeJunctionView(ctx.Theme(), theirsChecked, oursChecked) },
+                        new ConflictCard { Side = conflict.Ours, Checked = oursChecked }
+                            .WithController<KbmController>(),
+                    ],
                 },
-                new Center
+                new Row
                 {
-                    Child = new Column
-                    {
-                        Gap = Spacing.Md,
-                        Width = ButtonStackWidth,
-                        CrossAxis = CrossAxisAlignment.Stretch,
-                        Children =
-                        [
-                            MergeButton(loc, vm, conflict, theirsChecked, oursChecked, canMerge),
-                            new SecondaryDialogButton
-                            {
-                                Label = L.T(s => s.LocalchangesConflictMergeInEditor),
-                                Icon = LucideIcons.ExternalLink,
-                                Command = new Command(vm.OpenConflictInEditor),
-                                Height = ButtonHeight,
-                            }.WithController<KbmController>(),
-                            // For conflicts already resolved outside the app: stages the file as-is so
-                            // the path clears the unmerged state, no side-pick needed.
-                            new SecondaryDialogButton
-                            {
-                                Label = L.T(s => s.LocalchangesConflictMarkResolved),
-                                Icon = LucideIcons.CheckSquare,
-                                Command = new Command(vm.ResolveMarkResolved),
-                                Height = ButtonHeight,
-                            }.WithController<KbmController>(),
-                        ],
-                    },
+                    MainAxis = MainAxisAlignment.Center,
+                    Children =
+                    [
+                        new Column
+                        {
+                            Gap = Spacing.Md,
+                            Width = ButtonStackWidth,
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                MergeButton(loc, vm, conflict, theirsChecked, oursChecked, canMerge),
+                                new SecondaryDialogButton
+                                {
+                                    Label = L.T(s => s.LocalchangesConflictMergeInEditor),
+                                    Icon = LucideIcons.ExternalLink,
+                                    Command = new Command(vm.OpenConflictInEditor),
+                                    Height = ButtonHeight,
+                                }.WithController<KbmController>(),
+                                // For conflicts already resolved outside the app: stages the file as-is so
+                                // the path clears the unmerged state, no side-pick needed.
+                                new SecondaryDialogButton
+                                {
+                                    Label = L.T(s => s.LocalchangesConflictMarkResolved),
+                                    Icon = LucideIcons.CheckSquare,
+                                    Command = new Command(vm.ResolveMarkResolved),
+                                    Height = ButtonHeight,
+                                }.WithController<KbmController>(),
+                            ],
+                        },
+                    ],
                 },
             ],
         };
@@ -164,40 +166,35 @@ internal sealed record ConflictResolveView : Widget
         CrossAxis = CrossAxisAlignment.Stretch,
         Children =
         [
-            new Center
+            new Row
             {
-                Child = new Row
-                {
-                    Gap = Spacing.Md,
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Children =
-                    [
-                        new Text
-                        {
-                            Value = LucideIcons.TriangleAlert,
-                            FontFamily = LucideIcons.FontFamily,
-                            FontSize = FontSize.Heading,
-                            VAlign = TextAlignment.Center,
-                            Color = Theme.Color(s => s.FileChangeRow.StatusModified),
-                        },
-                        new Text
-                        {
-                            Value = L.T(s => s.LocalchangesConflictTitle),
-                            FontSize = FontSize.Heading,
-                            VAlign = TextAlignment.Center,
-                            Color = Theme.Color(s => s.Palette.TextStrong),
-                        },
-                    ],
-                },
+                Gap = Spacing.Md,
+                MainAxis = MainAxisAlignment.Center,
+                CrossAxis = CrossAxisAlignment.Center,
+                Children =
+                [
+                    new Text
+                    {
+                        Value = LucideIcons.TriangleAlert,
+                        FontFamily = LucideIcons.FontFamily,
+                        FontSize = FontSize.Heading,
+                        VAlign = TextAlignment.Center,
+                        Color = Theme.Color(s => s.FileChangeRow.StatusModified),
+                    },
+                    new Text
+                    {
+                        Value = L.T(s => s.LocalchangesConflictTitle),
+                        FontSize = FontSize.Heading,
+                        VAlign = TextAlignment.Center,
+                        Color = Theme.Color(s => s.Palette.TextStrong),
+                    },
+                ],
             },
-            new Center
+            new Text
             {
-                Child = new Text
-                {
-                    Value = L.T(s => s.LocalchangesConflictSubtitle),
-                    HAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.Palette.TextMuted),
-                },
+                Value = L.T(s => s.LocalchangesConflictSubtitle),
+                HAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.Palette.TextMuted),
             },
         ],
     };
@@ -205,6 +202,7 @@ internal sealed record ConflictResolveView : Widget
     private static IWidget BuildFileNameRow(string path) => new Row
     {
         Gap = Spacing.Md,
+        MainAxis = MainAxisAlignment.Center,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
