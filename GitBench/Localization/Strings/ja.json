@@ -525,6 +525,7 @@
   "diff.mode_changed": "モード: {old_mode} → {new_mode}",
   "diff.diff_truncated": "差分が省略されました — 最初の {count} 行のみ表示しています。",
   "diff.file_truncated": "ファイルが省略されました — 最初の {count} 行のみ表示しています。",
+  "diff.hidden_lines": "… 非表示の {count} 行",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

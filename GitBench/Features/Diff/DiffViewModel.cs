@@ -18,12 +18,34 @@ public record DiffTarget(string Path, DiffSide Side, string? CommitSha = null, s
 // lines tinted, so a change can be read with full surrounding context.
 internal enum DiffViewMode { Diff, FullFile }
 
+// Direction of a hunk-gap expander click: Down reveals lines at the top of the gap (growing
+// downward from the hunk above), Up at the bottom (growing upward from the hunk below), All
+// bridges the remainder in one click.
+internal enum GapExpandDirection { Down, Up, All }
+
+// How many lines of a gap are revealed from its top and bottom.
+internal sealed record GapShown(int Top, int Bottom);
+
+// Presentation-only context expansion for diff mode: the capped after-side file lines plus the
+// per-gap revealed counts, keyed by gap index (see DiffGaps). Never mutates the DiffResult —
+// the view weaves these lines around the untouched hunks at flatten time.
+internal sealed record ContextExpansion(
+    IReadOnlyList<string> Lines,
+    bool Truncated,
+    IReadOnlyDictionary<int, GapShown> Gaps);
+
 internal abstract record DiffRenderState
 {
     public sealed record Placeholder(string Text) : DiffRenderState;
     // Highlight is null until the async syntax pass completes (or stays null when highlighting
     // is off/unsupported/failed) — the view renders plain in that case, identical to before.
-    public sealed record Loaded(DiffResult Result, DiffHighlight? Highlight = null) : DiffRenderState;
+    // Expansion is null until the first gap-expander click; any reload/target change/optimistic
+    // hunk apply constructs a fresh Loaded, deliberately resetting it (gap indices and line
+    // numbers may have shifted).
+    public sealed record Loaded(
+        DiffResult Result,
+        DiffHighlight? Highlight = null,
+        ContextExpansion? Expansion = null) : DiffRenderState;
     // Full after-side file. AddedLineNumbers are 1-based new-file line numbers tinted as additions
     // (derived from the diff's Added rows); every other line renders as context. Removed lines are
     // absent — this is the current state of the file. Highlight reuses the new-side spans.
@@ -77,6 +99,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // navigated away from is dropped, and so it never invalidates the diff-load lane (Gen).
     private readonly GenerationGuard _highlightLane;
 
+    // The lazy file-text fetch behind the first gap-expander click. Its own lane so it never
+    // invalidates an in-flight diff load; staleness is guarded by the Result reference check.
+    private readonly GenerationGuard _expandLane;
+
     /// <summary>The file this pane is pinned to (path + side + optional commit sha), or null when no
     /// file is selected. Read by the diff-pane header's Viewed toggle to key per-file reviewed state.</summary>
     public IReadable<DiffTarget?> Target => _target;
@@ -120,6 +146,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _loc = loc;
         _pinnedRepoId = pinnedRepoId;
         _highlightLane = CreateLane();
+        _expandLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
         OpError = Slice(s => s.OpError);
@@ -182,6 +209,69 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public void StageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: false);
 
     public void UnstageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: true);
+
+    // A gap-expander click on a hunk separator bar. The first click fetches the after-side file
+    // text in the background and seeds the expansion; every later click re-emits synchronously.
+    public void ExpandGap(int gapIndex, GapExpandDirection dir)
+    {
+        if (State.Value.Render is not DiffRenderState.Loaded loaded) return;
+
+        if (loaded.Expansion is { } expansion)
+        {
+            Update(s => s with { Render = loaded with { Expansion = ApplyExpansion(loaded.Result, expansion, gapIndex, dir) } });
+            return;
+        }
+
+        var repo = ResolveRepo();
+        var target = _target.Value;
+        if (repo == null || target == null) return;
+        // The rendered diff can trail the target briefly (a reload in flight); fetching the new
+        // target's file and weaving it into the old diff would mismatch, so ignore the click.
+        var diff = loaded.Result;
+        if (target.Path != diff.Path || target.Side != diff.Side) return;
+
+        var git = _gitService;
+        RunBackground<List<string>>(
+            work: () =>
+            {
+                var text = git.GetFileText(repo, target.Path, target.Side, oldSide: false, target.CommitSha, target.BaseSha);
+                return (text == null ? null : SplitLines(text), null);
+            },
+            onResult: (lines, _) =>
+            {
+                if (lines == null) return; // no new side (deleted underneath us) — nothing to expand
+                // Attach only to the still-current diff (mirrors StartHighlight's guard): a
+                // reload or an optimistic hunk apply swaps Result and must reset expansion.
+                if (State.Value.Render is not DiffRenderState.Loaded cur || !ReferenceEquals(cur.Result, diff)) return;
+                var truncated = lines.Count > DiffOptions.TruncationLineCap;
+                if (truncated) lines.RemoveRange(DiffOptions.TruncationLineCap, lines.Count - DiffOptions.TruncationLineCap);
+                var seeded = new ContextExpansion(lines, truncated, new Dictionary<int, GapShown>());
+                Update(s => s with { Render = cur with { Expansion = ApplyExpansion(cur.Result, seeded, gapIndex, dir) } });
+            },
+            lane: _expandLane);
+    }
+
+    // Applies one expander increment to a gap, clamped against the exact gap bounds (the file
+    // line count is known once an expansion exists, so every count here is exact).
+    private static ContextExpansion ApplyExpansion(DiffResult diff, ContextExpansion e, int gapIndex, GapExpandDirection dir)
+    {
+        var gaps = DiffGaps.Compute(diff, e.Lines.Count);
+        if (gapIndex < 0 || gapIndex >= gaps.Count) return e;
+        var total = gaps[gapIndex].Count ?? 0;
+        var shown = e.Gaps.TryGetValue(gapIndex, out var g) ? g : new GapShown(0, 0);
+        var top = Math.Min(shown.Top, total);
+        var bottom = Math.Min(shown.Bottom, total - top);
+        var remaining = total - top - bottom;
+        if (remaining <= 0) return e;
+        switch (dir)
+        {
+            case GapExpandDirection.Down: top += Math.Min(DiffOptions.ContextExpandStep, remaining); break;
+            case GapExpandDirection.Up: bottom += Math.Min(DiffOptions.ContextExpandStep, remaining); break;
+            default: top += remaining; break;
+        }
+        var updated = new Dictionary<int, GapShown>(e.Gaps) { [gapIndex] = new GapShown(top, bottom) };
+        return e with { Gaps = updated };
+    }
 
     // Pops the current diff into its own top-level window. DiffWindowPresenter handles the
     // message and spins up an independent, live DiffViewModel pinned to this target.
@@ -562,7 +652,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 switch (State.Value.Render)
                 {
                     case DiffRenderState.Loaded cur when ReferenceEquals(cur.Result, diff):
-                        Update(s => s with { Render = new DiffRenderState.Loaded(diff, highlight) });
+                        // `with` (not a fresh Loaded) so a context expansion made while the
+                        // highlight was computing survives the re-attach.
+                        Update(s => s with { Render = cur with { Highlight = highlight } });
                         break;
                     case DiffRenderState.FullFile ff when ff.Path == diff.Path && ff.Side == diff.Side:
                         Update(s => s with { Render = ff with { Highlight = highlight } });

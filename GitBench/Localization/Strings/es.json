@@ -525,6 +525,7 @@
   "diff.mode_changed": "Modo: {old_mode} → {new_mode}",
   "diff.diff_truncated": "Diferencia truncada: solo se muestran las primeras {count} líneas.",
   "diff.file_truncated": "Archivo truncado: solo se muestran las primeras {count} líneas.",
+  "diff.hidden_lines": "… {count} líneas ocultas",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

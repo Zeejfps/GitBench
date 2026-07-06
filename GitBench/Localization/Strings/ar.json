@@ -567,6 +567,7 @@
   "diff.mode_changed": "الوضع: {old_mode} → {new_mode}",
   "diff.diff_truncated": "تم اقتطاع الفروق — تُعرض أول {count} سطر فقط.",
   "diff.file_truncated": "تم اقتطاع الملف — تُعرض أول {count} سطر فقط.",
+  "diff.hidden_lines": "… {count} أسطر مخفية",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

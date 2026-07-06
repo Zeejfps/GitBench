@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\GitBench\GitBench.csproj" />
+        <ProjectReference Include="..\framework\ZGF.Gui.Testing\ZGF.Gui.Testing.csproj" />
     </ItemGroup>
 
 </Project>

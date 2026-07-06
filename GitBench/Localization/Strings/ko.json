@@ -525,6 +525,7 @@
   "diff.mode_changed": "모드: {old_mode} → {new_mode}",
   "diff.diff_truncated": "차이가 잘렸습니다 — 처음 {count}줄만 표시됩니다.",
   "diff.file_truncated": "파일이 잘렸습니다 — 처음 {count}줄만 표시됩니다.",
+  "diff.hidden_lines": "… 숨겨진 {count}줄",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

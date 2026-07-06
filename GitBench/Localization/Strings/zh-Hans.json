@@ -525,6 +525,7 @@
   "diff.mode_changed": "模式: {old_mode} → {new_mode}",
   "diff.diff_truncated": "差异已截断 — 仅显示前 {count} 行。",
   "diff.file_truncated": "文件已截断 — 仅显示前 {count} 行。",
+  "diff.hidden_lines": "… 已隐藏 {count} 行",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

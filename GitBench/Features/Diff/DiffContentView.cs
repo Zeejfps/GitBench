@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -37,6 +38,11 @@ internal sealed class DiffContentView : View, IScrollableContent
     private const float HunkButtonsTopInset = 4f;
     private const float HunkButtonFontSize = FontSize.Caption;
     private const float HunkOutlineThickness = 1f;
+
+    // Gap-expander icons on the separator bars: fixed-width clickable cells at the far left of
+    // the bar, over the gutter columns. Draw and hit-test share this geometry.
+    private const float ExpanderPadLeft = 4f;
+    private const float ExpanderCellWidth = 22f;
 
     // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; we
     // mutate the few that need per-row recoloring (banner/glyph/line text in the row body)
@@ -84,6 +90,13 @@ internal sealed class DiffContentView : View, IScrollableContent
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
+    private static readonly TextStyle ExpanderIconStyle = new()
+    {
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.Center,
+        VerticalAlignment = TextAlignment.Center,
+    };
 
     public event Action<float>? VerticalScrollPositionChanged;
     public event Action<float>? HorizontalScrollPositionChanged;
@@ -111,6 +124,8 @@ internal sealed class DiffContentView : View, IScrollableContent
     private bool _singleGutter;
     private int _hoveredHunkIndex = -1;
     private HunkAction _hoveredButton = HunkAction.None;
+    private int _hoveredExpanderRow = -1;
+    private GapExpandDirection _hoveredExpanderDir;
     private float _stageBtnTextWidth;
     private float _unstageBtnTextWidth;
     private float _discardBtnTextWidth;
@@ -119,6 +134,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     public Action<int>? OnStageHunk { get; set; }
     public Action<int>? OnUnstageHunk { get; set; }
     public Action<int>? OnDiscardHunk { get; set; }
+    public Action<int, GapExpandDirection>? OnExpandGap { get; set; }
 
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
@@ -202,6 +218,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         _scrollX = 0;
         _hoveredHunkIndex = -1;
         _hoveredButton = HunkAction.None;
+        _hoveredExpanderRow = -1;
         _hunksPatchable = false;
         _singleGutter = false;
         _diffSide = DiffSide.Unstaged;
@@ -213,7 +230,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         {
             _diffSide = loaded.Result.Side;
             _hunksPatchable = HunkPatchBuilder.CanPatchHunk(loaded.Result);
-            FlattenRows(loaded.Result, loaded.Highlight);
+            FlattenRows(loaded.Result, loaded.Highlight, loaded.Expansion);
         }
         else if (state is DiffRenderState.FullFile fullFile)
         {
@@ -273,7 +290,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         _ => (null, false),
     };
 
-    private void FlattenRows(DiffResult r, DiffHighlight? highlight)
+    private void FlattenRows(DiffResult r, DiffHighlight? highlight, ContextExpansion? expansion)
     {
         if (r.ErrorMessage != null) return;
         if (r.IsBinary) return;
@@ -285,28 +302,42 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (r.IsModeOnly)
             AddBanner(s.DiffModeChanged(FormatMode(r.OldMode), FormatMode(r.NewMode)));
 
-        int maxOld = 0, maxNew = 0, totalLines = 0;
-        foreach (var h in r.Hunks)
-        {
-            foreach (var l in h.Lines)
-            {
-                if (l.OldLineNumber is int o && o > maxOld) maxOld = o;
-                if (l.NewLineNumber is int n && n > maxNew) maxNew = n;
-            }
-            totalLines += h.Lines.Count;
-        }
-        // Gutter widths picked from max digit count, same heuristic as the old code.
-        var digits = Math.Max(1, Math.Max(DigitCount(maxOld), DigitCount(maxNew)));
-        _gutterWidth = digits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
+        var gaps = DiffGaps.Compute(r, expansion?.Lines.Count);
+        var totalLines = 0;
 
         for (var i = 0; i < r.Hunks.Count; i++)
         {
             var h = r.Hunks[i];
-            var separatorRowIndex = _rows.Count;
-            var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
-            _rows.Add(new DiffRow.HunkSeparator(range, string.IsNullOrEmpty(h.Header) ? null : h.Header));
-            var sepCells = VisualCells(range) + (h.Header != null ? VisualCells(h.Header) : 0) + 2;
-            if (sepCells > _maxRowCells) _maxRowCells = sepCells;
+            var gap = gaps[i];
+            var (top, bottom, remaining) = GapState(gap, expansion);
+
+            if (top > 0)
+                EmitExpandedRows(gap.NewStart, gap.NewStart + top - 1, gap.OldNewDelta, expansion!, highlight);
+
+            // The bar stays while lines remain hidden (with expander icons) or when the gap was
+            // empty to begin with (plain — the pre-expansion look). A fully expanded gap drops
+            // it so the hunks read as one continuous block.
+            var barRowIndex = -1;
+            if (remaining > 0 || (top == 0 && bottom == 0))
+            {
+                var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
+                barRowIndex = _rows.Count;
+                _rows.Add(new DiffRow.HunkSeparator(
+                    range,
+                    string.IsNullOrEmpty(h.Header) ? null : h.Header,
+                    remaining > 0 ? BarFor(gap.GapIndex, remaining.Value) : null));
+                var sepCells = VisualCells(range) + (h.Header != null ? VisualCells(h.Header) : 0) + 2;
+                if (remaining > 0)
+                    sepCells += VisualCells(s.DiffHiddenLines(remaining.Value)) + 2;
+                if (sepCells > _maxRowCells) _maxRowCells = sepCells;
+            }
+
+            if (bottom > 0)
+                EmitExpandedRows(gap.NewEnd - bottom + 1, gap.NewEnd, gap.OldNewDelta, expansion!, highlight);
+
+            // Rows revealed below the bar sit between it and the hunk, so the hover/button
+            // range anchors on the bar only while the two are still adjacent.
+            var firstHunkRow = barRowIndex >= 0 && bottom == 0 ? barRowIndex : _rows.Count;
 
             // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
             // tab-expanded column space so it aligns with Spans and the glyph grid.
@@ -336,17 +367,84 @@ internal sealed class DiffContentView : View, IScrollableContent
                 var cells = VisualCells(text);
                 if (cells > _maxRowCells) _maxRowCells = cells;
             }
-            _hunkRanges.Add(new HunkRowRange(i, separatorRowIndex, _rows.Count - 1));
+            _hunkRanges.Add(new HunkRowRange(i, firstHunkRow, _rows.Count - 1));
+            totalLines += h.Lines.Count;
+        }
+
+        // The EOF gap: expanded rows grow downward from the last hunk; the trailing bar shows
+        // while lines remain below (before the fetch the count is unknown and the trailing-
+        // context heuristic decides optimistically — the first click's re-flatten corrects it).
+        var eof = gaps[^1];
+        var (eofTop, _, eofRemaining) = GapState(eof, expansion);
+        if (eofTop > 0)
+            EmitExpandedRows(eof.NewStart, eof.NewStart + eofTop - 1, eof.OldNewDelta, expansion!, highlight);
+        var showEofBar = eofRemaining is int rem ? rem > 0 : !DiffGaps.LastHunkReachesEof(r);
+        if (showEofBar)
+        {
+            _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
+                new GapBar(eof.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: eofRemaining)));
+            if (eofRemaining is int n)
+            {
+                var eofCells = VisualCells(s.DiffHiddenLines(n)) + 2;
+                if (eofCells > _maxRowCells) _maxRowCells = eofCells;
+            }
         }
 
         if (r.Truncated)
             AddBanner(s.DiffDiffTruncated(totalLines));
+
+        // Gutter width from the max digit count, sized after emission so expanded rows'
+        // (possibly larger) line numbers are included.
+        _gutterWidth = Math.Max(1, GutterDigitCount()) * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
 
         _rowToHunk = new int[_rows.Count];
         Array.Fill(_rowToHunk, -1);
         foreach (var range in _hunkRanges)
             for (var i = range.FirstRow; i <= range.LastRow; i++)
                 _rowToHunk[i] = range.HunkIndex;
+    }
+
+    // Revealed top/bottom counts and the remaining hidden count for a gap. Remaining is null
+    // while the gap is open-ended (the EOF gap before any expansion exists).
+    private static (int Top, int Bottom, int? Remaining) GapState(DiffGap gap, ContextExpansion? expansion)
+    {
+        if (gap.Count is not int total) return (0, 0, null);
+        var shown = expansion != null && expansion.Gaps.TryGetValue(gap.GapIndex, out var g) ? g : null;
+        var top = Math.Min(shown?.Top ?? 0, total);
+        var bottom = Math.Min(shown?.Bottom ?? 0, total - top);
+        return (top, bottom, total - top - bottom);
+    }
+
+    // Small middle gaps collapse to a single unfold-all icon; the top-of-file gap keeps its
+    // lone up arrow (it can only grow upward from hunk 0, and one click covers ≤ a step anyway).
+    private static GapBar BarFor(int gapIndex, int remaining)
+    {
+        var unfold = gapIndex > 0 && remaining <= DiffOptions.ContextExpandStep;
+        return new GapBar(
+            gapIndex,
+            ShowDown: gapIndex > 0 && !unfold,
+            ShowUp: !unfold,
+            ShowUnfold: unfold,
+            HiddenCount: remaining);
+    }
+
+    // Ordinary context rows for expanded gap lines [from..to] (1-based new-file numbers), the
+    // old-side number recovered via the gap's delta. Emitted outside every hunk range, so
+    // _rowToHunk stays -1 for them and hunk hover outlines and buttons ignore them.
+    private void EmitExpandedRows(int from, int to, int oldNewDelta, ContextExpansion expansion, DiffHighlight? highlight)
+    {
+        for (var n = from; n <= to; n++)
+        {
+            if (n < 1 || n > expansion.Lines.Count) continue;
+            var text = DiffText.ExpandTabs(expansion.Lines[n - 1]);
+            // DiffHighlight tokenizes the whole new-side file, so spans exist beyond the hunks.
+            var spans = highlight?.ForLine(DiffLineKind.Context, n + oldNewDelta, n);
+            if (spans != null && spans.Count == 0) spans = null;
+            _rows.Add(new DiffRow.Line(
+                DiffLineKind.Context, (n + oldNewDelta).ToString(), n.ToString(), text, text.Length, spans));
+            var cells = VisualCells(text);
+            if (cells > _maxRowCells) _maxRowCells = cells;
+        }
     }
 
     // Flattens the whole after-side file into one Line row per source line: lines in
@@ -667,7 +765,7 @@ internal sealed class DiffContentView : View, IScrollableContent
                 DrawBannerRow(c, b, rowLeft, rowBottom, rowWidth, z);
                 break;
             case DiffRow.HunkSeparator s:
-                DrawHunkSeparatorRow(c, s, rowLeft, rowBottom, rowWidth, z);
+                DrawHunkSeparatorRow(c, s, rowIndex, rowLeft, rowBottom, rowWidth, z);
                 break;
             case DiffRow.Line l:
                 DrawLineRow(c, l, rowLeft, rowBottom, rowWidth, z);
@@ -822,7 +920,8 @@ internal sealed class DiffContentView : View, IScrollableContent
             width - BannerPaddingX * 2, _styles.SectionMutedText, TextAlignment.Start, z + 1);
     }
 
-    private void DrawHunkSeparatorRow(ICanvas c, DiffRow.HunkSeparator s, float left, float bottom, float width, int z)
+    private void DrawHunkSeparatorRow(
+        ICanvas c, DiffRow.HunkSeparator s, int rowIndex, float left, float bottom, float width, int z)
     {
         c.DrawRect(new DrawRectInputs
         {
@@ -831,20 +930,81 @@ internal sealed class DiffContentView : View, IScrollableContent
             ZIndex = z,
         });
 
-        var rangeWidth = s.Range.Length * _monoAdvance;
         var textX = left + BannerPaddingX;
-        DrawMonoText(c, s.Range, textX, bottom, rangeWidth,
-            _styles.HunkSeparatorRangeText, TextAlignment.Start, z + 1);
+        if (s.Gap is { } gap)
+        {
+            // Expander icons at the far left, over the gutter columns; the bar text shifts
+            // right of them.
+            var icons = ExpanderIconsFor(gap);
+            var x = left + ExpanderPadLeft;
+            foreach (var dir in icons)
+            {
+                var hovered = rowIndex == _hoveredExpanderRow && dir == _hoveredExpanderDir;
+                ExpanderIconStyle.TextColor = hovered ? _styles.LineText : _styles.HunkSeparatorRangeText;
+                c.DrawText(new DrawTextInputs
+                {
+                    Position = new RectF(x, bottom, ExpanderCellWidth, _lineHeight),
+                    Text = ExpanderGlyph(dir),
+                    Style = ExpanderIconStyle,
+                    ZIndex = z + 1,
+                });
+                x += ExpanderCellWidth;
+            }
+            textX = Math.Max(textX, x + BannerPaddingX);
+        }
+
+        var cursorX = textX;
+        if (s.Range.Length > 0)
+        {
+            var rangeWidth = s.Range.Length * _monoAdvance;
+            DrawMonoText(c, s.Range, cursorX, bottom, rangeWidth,
+                _styles.HunkSeparatorRangeText, TextAlignment.Start, z + 1);
+            cursorX += rangeWidth + HunkHeaderGap;
+        }
 
         if (s.Header != null)
         {
-            var headerX = textX + rangeWidth + HunkHeaderGap;
-            var headerWidth = Math.Max(0f, left + width - BannerPaddingX - headerX);
+            var headerWidth = Math.Max(0f, left + width - BannerPaddingX - cursorX);
             if (headerWidth > 0)
-                DrawMonoText(c, s.Header, headerX, bottom, headerWidth,
+            {
+                DrawMonoText(c, s.Header, cursorX, bottom, headerWidth,
+                    _styles.SectionMutedText, TextAlignment.Start, z + 1);
+                cursorX += Math.Min(VisualCells(s.Header) * _monoAdvance, headerWidth) + HunkHeaderGap;
+            }
+        }
+
+        // The muted "… N hidden lines" label; omitted on the EOF bar until the count is exact.
+        if (s.Gap is { HiddenCount: int hidden })
+        {
+            var label = _loc.Strings.Value.DiffHiddenLines(hidden);
+            var labelWidth = Math.Max(0f, left + width - BannerPaddingX - cursorX);
+            if (labelWidth > 0)
+                DrawMonoText(c, label, cursorX, bottom, labelWidth,
                     _styles.SectionMutedText, TextAlignment.Start, z + 1);
         }
     }
+
+    private static readonly GapExpandDirection[] NoExpanders = Array.Empty<GapExpandDirection>();
+    private static readonly GapExpandDirection[] UnfoldOnly = { GapExpandDirection.All };
+    private static readonly GapExpandDirection[] DownOnly = { GapExpandDirection.Down };
+    private static readonly GapExpandDirection[] UpOnly = { GapExpandDirection.Up };
+    private static readonly GapExpandDirection[] DownAndUp = { GapExpandDirection.Down, GapExpandDirection.Up };
+
+    private static GapExpandDirection[] ExpanderIconsFor(GapBar gap)
+    {
+        if (gap.ShowUnfold) return UnfoldOnly;
+        if (gap.ShowDown && gap.ShowUp) return DownAndUp;
+        if (gap.ShowDown) return DownOnly;
+        if (gap.ShowUp) return UpOnly;
+        return NoExpanders;
+    }
+
+    private static string ExpanderGlyph(GapExpandDirection dir) => dir switch
+    {
+        GapExpandDirection.Down => LucideIcons.ChevronDown,
+        GapExpandDirection.Up => LucideIcons.ChevronUp,
+        _ => LucideIcons.UnfoldVertical,
+    };
 
     private sealed record HunkRowRange(int HunkIndex, int FirstRow, int LastRow);
 
@@ -1019,6 +1179,10 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     public void OnHunkPointerMove(PointF point)
     {
+        // Expander hover is independent of hunk buttons: it applies to read-only sides too.
+        var expander = HitTestExpander(point);
+        SetExpanderHover(expander?.Row ?? -1, expander?.Dir ?? default);
+
         if (!HasHunkButtons()) { SetHunkHover(-1, HunkAction.None); return; }
 
         var listPos = _list.Position;
@@ -1034,7 +1198,42 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     public void OnHunkPointerExit()
     {
+        SetExpanderHover(-1, default);
         SetHunkHover(-1, HunkAction.None);
+    }
+
+    public bool TryClickExpander(PointF point)
+    {
+        if (HitTestExpander(point) is not { } hit) return false;
+        OnExpandGap?.Invoke(hit.GapIndex, hit.Dir);
+        return true;
+    }
+
+    // The expander icon under the pointer, if any: separator-row hit first (full row height),
+    // then the per-icon cell check mirroring DrawHunkSeparatorRow's geometry.
+    private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
+    {
+        if (_lineHeight <= 0) return null;
+        var listPos = _list.Position;
+        if (!listPos.ContainsPoint(point)) return null;
+        var rowIndex = HitTestListRow(point);
+        if (rowIndex < 0 || _rows[rowIndex] is not DiffRow.HunkSeparator { Gap: { } gap }) return null;
+
+        var x = listPos.Left - _scrollX + ExpanderPadLeft;
+        foreach (var dir in ExpanderIconsFor(gap))
+        {
+            if (point.X >= x && point.X <= x + ExpanderCellWidth) return (rowIndex, gap.GapIndex, dir);
+            x += ExpanderCellWidth;
+        }
+        return null;
+    }
+
+    private void SetExpanderHover(int rowIndex, GapExpandDirection dir)
+    {
+        if (_hoveredExpanderRow == rowIndex && _hoveredExpanderDir == dir) return;
+        _hoveredExpanderRow = rowIndex;
+        _hoveredExpanderDir = dir;
+        SetDirty();
     }
 
     public bool TryClickHunkAction(PointF point)
