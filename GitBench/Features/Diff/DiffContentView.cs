@@ -43,6 +43,8 @@ internal sealed class DiffContentView : View, IScrollableContent
     // the bar, over the gutter columns. Draw and hit-test share this geometry.
     private const float ExpanderPadLeft = 4f;
     private const float ExpanderCellWidth = 22f;
+    private const float ExpanderChipGap = 2f;
+    private const float ExpanderChipInsetY = 1.5f;
 
     // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; we
     // mutate the few that need per-row recoloring (banner/glyph/line text in the row body)
@@ -93,7 +95,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     private static readonly TextStyle ExpanderIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
-        FontSize = FontSize.Caption,
+        FontSize = FontSize.Body,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
@@ -940,13 +942,28 @@ internal sealed class DiffContentView : View, IScrollableContent
             foreach (var dir in icons)
             {
                 var hovered = rowIndex == _hoveredExpanderRow && dir == _hoveredExpanderDir;
-                ExpanderIconStyle.TextColor = hovered ? _styles.LineText : _styles.HunkSeparatorRangeText;
+                if (hovered)
+                {
+                    c.DrawRect(new DrawRectInputs
+                    {
+                        Position = new RectF(
+                            x, bottom + ExpanderChipInsetY,
+                            ExpanderCellWidth - ExpanderChipGap, _lineHeight - ExpanderChipInsetY * 2),
+                        Style = new RectStyle
+                        {
+                            BackgroundColor = _styles.ExpanderHoverBackground,
+                            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+                        },
+                        ZIndex = z + 1,
+                    });
+                }
+                ExpanderIconStyle.TextColor = hovered ? _styles.ExpanderHoverIcon : _styles.ExpanderIcon;
                 c.DrawText(new DrawTextInputs
                 {
-                    Position = new RectF(x, bottom, ExpanderCellWidth, _lineHeight),
+                    Position = new RectF(x, bottom, ExpanderCellWidth - ExpanderChipGap, _lineHeight),
                     Text = ExpanderGlyph(dir),
                     Style = ExpanderIconStyle,
-                    ZIndex = z + 1,
+                    ZIndex = z + 2,
                 });
                 x += ExpanderCellWidth;
             }
