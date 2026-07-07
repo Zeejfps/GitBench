@@ -41,7 +41,9 @@ appHost.RegisterAppFonts();
 appHost.LoadPlatformIcons();
 services.InstallNativeAppMenu();
 
-_ = services.Require<UpdateService>()
-    .CheckForUpdatesAsync(services.Require<IUiDispatcher>(), userInitiated: false);
+var updateService = services.Require<UpdateService>();
+var updateDispatcher = services.Require<IUiDispatcher>();
+_ = updateService.CheckForUpdatesAsync(updateDispatcher, userInitiated: false);
+updateService.StartAutoChecks(updateDispatcher);
 
 appHost.Run();

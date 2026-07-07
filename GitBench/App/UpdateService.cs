@@ -14,17 +14,34 @@ namespace GitBench.App;
 /// update banner binds to <see cref="BannerMessage"/> and invokes <see cref="ApplyAndRestart"/>
 /// on click; the status bar binds to <see cref="IsChecking"/> (spinner) and
 /// <see cref="CheckFeedback"/> (inline "up to date" / "failed" result of a manual check).
+/// <see cref="StartAutoChecks"/> adds a periodic silent recheck on top of the one-shot startup
+/// check, gated by <see cref="AutoCheckEnabled"/> so a future settings toggle can turn it off.
 /// </summary>
-public sealed class UpdateService
+public sealed class UpdateService : IDisposable
 {
     private readonly ILocalizationService _loc;
+    private readonly CancellationTokenSource _autoCheckCts = new();
     private UpdateManager? _manager;
     private UpdateInfo? _update;
+    private bool _autoChecksStarted;
 
     public UpdateService(ILocalizationService loc)
     {
         _loc = loc;
     }
+
+    /// <summary>
+    /// Gates the periodic background check. On by default; a future settings screen binds a
+    /// checkbox here to let the user disable automatic update checks. Read/written on the UI
+    /// thread only. The one-shot startup check and the manual button are unaffected.
+    /// </summary>
+    public State<bool> AutoCheckEnabled { get; } = new(true);
+
+    /// <summary>
+    /// How long <see cref="StartAutoChecks"/> waits between background rechecks. Sampled once
+    /// when the loop starts; changing it afterward doesn't reschedule the running timer.
+    /// </summary>
+    public TimeSpan AutoCheckInterval { get; set; } = TimeSpan.FromHours(6);
 
     /// <summary>Non-null once an update is staged; drives the banner's text and visibility.</summary>
     public State<string?> BannerMessage { get; } = new(null);
@@ -87,6 +104,41 @@ public sealed class UpdateService
         }
     }
 
+    /// <summary>
+    /// Starts the periodic silent recheck loop (idempotent). The one-shot startup check in
+    /// Program.cs runs first; this then rechecks every <see cref="AutoCheckInterval"/> until the
+    /// service is disposed. Each tick re-reads <see cref="AutoCheckEnabled"/> on the UI thread, so
+    /// disabling the toggle stops further checks without tearing the loop down. Must be called on
+    /// the UI thread. Once an update is staged the underlying check no-ops, so the loop naturally
+    /// idles after the banner appears.
+    /// </summary>
+    public void StartAutoChecks(IUiDispatcher dispatcher)
+    {
+        if (_autoChecksStarted) return;
+        _autoChecksStarted = true;
+        _ = RunAutoCheckLoopAsync(dispatcher);
+    }
+
+    private async Task RunAutoCheckLoopAsync(IUiDispatcher dispatcher)
+    {
+        using var timer = new PeriodicTimer(AutoCheckInterval);
+        try
+        {
+            // First tick fires one interval from now — the startup check already covered t=0.
+            while (await timer.WaitForNextTickAsync(_autoCheckCts.Token).ConfigureAwait(false))
+            {
+                // Marshal back to the UI thread: AutoCheckEnabled and the State<T>s that
+                // CheckForUpdatesAsync mutates are single-threaded.
+                dispatcher.Post(() =>
+                {
+                    if (!AutoCheckEnabled.Value) return;
+                    _ = CheckForUpdatesAsync(dispatcher, userInitiated: false);
+                });
+            }
+        }
+        catch (OperationCanceledException) { /* disposed */ }
+    }
+
     /// <summary>Call on the UI thread after the update has been downloaded.</summary>
     public void OfferUpdate(UpdateManager manager, UpdateInfo update)
     {
@@ -103,6 +155,16 @@ public sealed class UpdateService
     {
         if (_manager is null || _update is null) return;
         _manager.ApplyUpdatesAndRestart(_update);
+    }
+
+    public void Dispose()
+    {
+        _autoCheckCts.Cancel();
+        _autoCheckCts.Dispose();
+        AutoCheckEnabled.Dispose();
+        BannerMessage.Dispose();
+        IsChecking.Dispose();
+        CheckFeedback.Dispose();
     }
 
     // The per-OS/arch channel must match the --channel vpk packs with in CI (see
