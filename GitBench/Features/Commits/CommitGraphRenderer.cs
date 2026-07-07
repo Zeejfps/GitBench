@@ -142,31 +142,17 @@ internal static class CommitGraphRenderer
             }
         }
 
-        // The dot — shrinks with the lane spacing so compressed (dense) graphs don't stack dots.
-        // Stash and remote-only commits draw as a hollow ring to set them apart from local history.
-        var dotRadius = Math.Min(DotRadius, Math.Max(MinDotRadius, LaneSpacing(laneCount) * 0.5f - 1f));
         var dotCenter = new PointF(commitCx, rowCenterY);
-        if (dashed)
-        {
-            // Knock out the edge inside the ring with the row background so the hollow
-            // center reads cleanly instead of showing the connector through it.
-            c.DrawCircle(new DrawCircleInputs
-            {
-                Center = dotCenter,
-                Radius = dotRadius,
-                Color = rowBackground,
-                ZIndex = z + 1,
-            });
-            c.DrawCircle(new DrawCircleInputs
-            {
-                Center = dotCenter,
-                Radius = dotRadius,
-                Color = commitColor,
-                ZIndex = z + 1,
-                Thickness = RingThickness,
-            });
-        }
-        else
+        DrawCommitDot(c, dotCenter, commitColor, rowBackground, laneCount, dashed, z);
+    }
+
+    // The dot — shrinks with the lane spacing so compressed (dense) graphs don't stack dots. Stash
+    // and remote-only commits (dashed) draw as a hollow ring to set them apart from local history.
+    private static void DrawCommitDot(
+        ICanvas c, PointF dotCenter, uint commitColor, uint rowBackground, int laneCount, bool dashed, int z)
+    {
+        var dotRadius = Math.Min(DotRadius, Math.Max(MinDotRadius, LaneSpacing(laneCount) * 0.5f - 1f));
+        if (!dashed)
         {
             c.DrawCircle(new DrawCircleInputs
             {
@@ -175,7 +161,26 @@ internal static class CommitGraphRenderer
                 Color = commitColor,
                 ZIndex = z + 1,
             });
+            return;
         }
+
+        // Knock out the edge inside the ring with the row background so the hollow center reads
+        // cleanly instead of showing the connector through it.
+        c.DrawCircle(new DrawCircleInputs
+        {
+            Center = dotCenter,
+            Radius = dotRadius,
+            Color = rowBackground,
+            ZIndex = z + 1,
+        });
+        c.DrawCircle(new DrawCircleInputs
+        {
+            Center = dotCenter,
+            Radius = dotRadius,
+            Color = commitColor,
+            ZIndex = z + 1,
+            Thickness = RingThickness,
+        });
     }
 
     internal static float LaneCenterX(float graphStartX, int lane, int laneCount)

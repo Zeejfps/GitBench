@@ -165,63 +165,69 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var repo = _registry.Active.Value;
         if (repo == null || repo.Id != snap.RepoId) return;
 
-        var capturedRepo = repo;
-        var capturedSha = sha;
-
-        // All git I/O happens in work; onResult only dispatches UI. The probe decides between
-        // an immediate hard reset (clean tree) and prompting for the reset mode (dirty tree).
+        // All git I/O happens in work; onResult only dispatches UI. The probe decides between an
+        // immediate hard reset (clean tree) and prompting for the reset mode (dirty tree).
         TryRunBackground<ResetProbe>(
             _resetGen,
-            work: () =>
-            {
-                var fetched = _gitService.GetLocalChanges(capturedRepo);
-                if (fetched is Fetched<LocalChangesSnapshot>.Failed failed)
-                    return (new ResetProbe.Failed(failed.Message), null);
+            work: () => ProbeReset(repo, sha),
+            onResult: (probe, error) => OnResetProbed(probe, error, repo, sha, snap));
+    }
 
-                var changes = ((Fetched<LocalChangesSnapshot>.Ok)fetched).Value;
-                var staged = changes.Staged.Count;
-                var unstaged = changes.Unstaged.Count;
-                if (staged == 0 && unstaged == 0)
-                    return (new ResetProbe.CleanReset(_gitService.ResetCurrent(capturedRepo, capturedSha, ResetMode.Hard)), null);
-                return (new ResetProbe.NeedsDialog(staged, unstaged), null);
-            },
-            onResult: (probe, error) =>
-            {
-                var strings = _loc.Strings.Value;
-                if (error != null)
-                {
-                    _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, error));
-                    return;
-                }
-                switch (probe)
-                {
-                    case ResetProbe.Failed f:
-                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, f.Message));
-                        break;
-                    case ResetProbe.CleanReset { Outcome: GitOutcome.Failed failed }:
-                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, failed.Message));
-                        break;
-                    case ResetProbe.CleanReset:
-                        _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
-                        _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-                        break;
-                    case ResetProbe.NeedsDialog d:
-                        var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
-                        var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
-                        _bus.Broadcast(new ShowDialogMessage(onClose => new ResetCommitDialog
-                        {
-                            Repo = capturedRepo,
-                            Sha = capturedSha,
-                            ShortSha = shortSha,
-                            Summary = summary,
-                            BranchName = snap.HeadBranchName,
-                            StagedCount = d.Staged,
-                            UnstagedCount = d.Unstaged,
-                            OnClose = onClose,
-                        }));
-                        break;
-                }
-            });
+    private (ResetProbe?, string?) ProbeReset(Repo repo, string sha)
+    {
+        var fetched = _gitService.GetLocalChanges(repo);
+        if (fetched is Fetched<LocalChangesSnapshot>.Failed failed)
+            return (new ResetProbe.Failed(failed.Message), null);
+
+        var changes = ((Fetched<LocalChangesSnapshot>.Ok)fetched).Value;
+        var staged = changes.Staged.Count;
+        var unstaged = changes.Unstaged.Count;
+        if (staged == 0 && unstaged == 0)
+            return (new ResetProbe.CleanReset(_gitService.ResetCurrent(repo, sha, ResetMode.Hard)), null);
+        return (new ResetProbe.NeedsDialog(staged, unstaged), null);
+    }
+
+    private void OnResetProbed(ResetProbe? probe, string? error, Repo repo, string sha, CommitSnapshot snap)
+    {
+        var strings = _loc.Strings.Value;
+        if (error != null)
+        {
+            _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, error));
+            return;
+        }
+        switch (probe)
+        {
+            case ResetProbe.Failed f:
+                _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, f.Message));
+                break;
+            case ResetProbe.CleanReset { Outcome: GitOutcome.Failed failed }:
+                _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetFailed, failed.Message));
+                break;
+            case ResetProbe.CleanReset:
+                _bus.Broadcast(new RefsChangedMessage(repo.Id));
+                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                break;
+            case ResetProbe.NeedsDialog d:
+                ShowResetDialog(repo, sha, snap, d);
+                break;
+        }
+    }
+
+    private void ShowResetDialog(Repo repo, string sha, CommitSnapshot snap, ResetProbe.NeedsDialog d)
+    {
+        var shortSha = sha.Length >= 7 ? sha[..7] : sha;
+        var summary = LookupSummary(snap, sha) ?? string.Empty;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new ResetCommitDialog
+        {
+            Repo = repo,
+            Sha = sha,
+            ShortSha = shortSha,
+            Summary = summary,
+            BranchName = snap.HeadBranchName,
+            StagedCount = d.Staged,
+            UnstagedCount = d.Unstaged,
+            OnClose = onClose,
+        }));
     }
 
     // ---- create tag ----

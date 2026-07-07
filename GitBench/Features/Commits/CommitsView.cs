@@ -727,8 +727,6 @@ internal sealed record CommitsView : Widget
         {
             if (node.Refs.Count == 0) return left;
 
-            const float IconGap = 4f;
-
             // Clip badges to the commit column so a long ref name is cut at the metadata edge
             // (glyphs/rects aren't bounded by Position), matching DrawText/DrawHashText.
             c.PushClip(Place(left, rowBottom, Math.Max(0, rightBoundary - left), RowHeight));
@@ -736,72 +734,83 @@ internal sealed record CommitsView : Widget
             var x = left;
             var badgeY = rowBottom + (RowHeight - BadgeHeight) * 0.5f;
             foreach (var badge in node.Refs)
-            {
-                var icon = badge.Kind switch
-                {
-                    RefKind.Stash => LucideIcons.Stash,
-                    RefKind.LocalBranch => LucideIcons.Branch,
-                    RefKind.RemoteBranch => LucideIcons.Branch,
-                    RefKind.Tag => LucideIcons.Tag,
-                    _ => null,
-                };
+                x += DrawBadge(c, badge, x, badgeY, z) + BadgeGap;
 
-                // The checked-out branch's name is bolded (like the Branches view) rather than
-                // carrying a separate HEAD marker. The branch glyph is tinted by upstream sync:
-                // green = level, amber = ahead/behind, gray = no upstream. A level upstream is
-                // already folded into this badge.
-                var iconStyle = badge.Sync switch
-                {
-                    BranchSync.InSync => _badgeIconInSyncStyle,
-                    BranchSync.Diverged => _badgeIconDivergedStyle,
-                    BranchSync.Untracked => _badgeIconUntrackedStyle,
-                    _ => _badgeIconStyle,
-                };
-                var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
-                var iconWidth = icon != null ? _canvas.MeasureTextWidth(icon, iconStyle) : 0f;
-                var textWidth = _canvas.MeasureTextWidth(badge.Name, nameStyle);
-
-                var badgeW = BadgePaddingX * 2 + textWidth
-                           + (icon != null ? iconWidth + IconGap : 0f);
-                var bg = badge.Kind switch
-                {
-                    RefKind.LocalBranch => _styles.BadgeLocalBackground,
-                    RefKind.RemoteBranch => _styles.BadgeRemoteBackground,
-                    RefKind.Head => _styles.BadgeHeadBackground,
-                    RefKind.Tag => _styles.BadgeTagBackground,
-                    _ => _styles.BadgeLocalBackground,
-                };
-                _badgeRectStyle.BackgroundColor = bg;
-                c.DrawRect(new DrawRectInputs
-                {
-                    Position = Place(x, badgeY, badgeW, BadgeHeight),
-                    Style = _badgeRectStyle,
-                    ZIndex = z,
-                });
-                var contentX = x + BadgePaddingX;
-                if (icon != null)
-                {
-                    c.DrawText(new DrawTextInputs
-                    {
-                        Position = Place(contentX, badgeY, iconWidth, BadgeHeight),
-                        Text = icon,
-                        Style = iconStyle,
-                        ZIndex = z + 1,
-                    });
-                    contentX += iconWidth + IconGap;
-                }
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = Place(contentX, badgeY, textWidth, BadgeHeight),
-                    Text = badge.Name,
-                    Style = nameStyle,
-                    ZIndex = z + 1,
-                });
-                x += badgeW + BadgeGap;
-            }
             c.PopClip();
             return x + BadgeGap;
         }
+
+        private const float BadgeIconGap = 4f;
+
+        // Draws one ref badge (background pill, optional kind icon, name) and returns its width.
+        private float DrawBadge(ICanvas c, RefBadge badge, float x, float badgeY, int z)
+        {
+            var icon = BadgeIcon(badge.Kind);
+            var iconStyle = BadgeIconStyle(badge.Sync);
+            // The checked-out branch's name is bolded (like the Branches view) rather than carrying
+            // a separate HEAD marker.
+            var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
+            var iconWidth = icon != null ? _canvas.MeasureTextWidth(icon, iconStyle) : 0f;
+            var textWidth = _canvas.MeasureTextWidth(badge.Name, nameStyle);
+            var badgeW = BadgePaddingX * 2 + textWidth + (icon != null ? iconWidth + BadgeIconGap : 0f);
+
+            _badgeRectStyle.BackgroundColor = BadgeBackground(badge.Kind);
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = Place(x, badgeY, badgeW, BadgeHeight),
+                Style = _badgeRectStyle,
+                ZIndex = z,
+            });
+
+            var contentX = x + BadgePaddingX;
+            if (icon != null)
+            {
+                c.DrawText(new DrawTextInputs
+                {
+                    Position = Place(contentX, badgeY, iconWidth, BadgeHeight),
+                    Text = icon,
+                    Style = iconStyle,
+                    ZIndex = z + 1,
+                });
+                contentX += iconWidth + BadgeIconGap;
+            }
+            c.DrawText(new DrawTextInputs
+            {
+                Position = Place(contentX, badgeY, textWidth, BadgeHeight),
+                Text = badge.Name,
+                Style = nameStyle,
+                ZIndex = z + 1,
+            });
+            return badgeW;
+        }
+
+        private static string? BadgeIcon(RefKind kind) => kind switch
+        {
+            RefKind.Stash => LucideIcons.Stash,
+            RefKind.LocalBranch => LucideIcons.Branch,
+            RefKind.RemoteBranch => LucideIcons.Branch,
+            RefKind.Tag => LucideIcons.Tag,
+            _ => null,
+        };
+
+        // The branch glyph is tinted by upstream sync: green = level, amber = ahead/behind,
+        // gray = no upstream. A level upstream is already folded into this badge.
+        private TextStyle BadgeIconStyle(BranchSync sync) => sync switch
+        {
+            BranchSync.InSync => _badgeIconInSyncStyle,
+            BranchSync.Diverged => _badgeIconDivergedStyle,
+            BranchSync.Untracked => _badgeIconUntrackedStyle,
+            _ => _badgeIconStyle,
+        };
+
+        private uint BadgeBackground(RefKind kind) => kind switch
+        {
+            RefKind.LocalBranch => _styles.BadgeLocalBackground,
+            RefKind.RemoteBranch => _styles.BadgeRemoteBackground,
+            RefKind.Head => _styles.BadgeHeadBackground,
+            RefKind.Tag => _styles.BadgeTagBackground,
+            _ => _styles.BadgeLocalBackground,
+        };
 
         private void DrawText(ICanvas c, string text, float left, float rowBottom, float width, bool active, int z)
         {
@@ -926,13 +935,32 @@ internal sealed record CommitsView : Widget
 
         private IReadOnlyList<RepoBarContextMenu.Item> BuildCommitMenuItems(CommitNode node)
         {
-            var capturedSha = node.Sha;
-            var head = _snapshot?.HeadBranchName;
+            var sha = node.Sha;
             var s = _loc.Strings.Value;
             var items = new List<RepoBarContextMenu.Item>();
 
-            // Per-tag entries at the top: each tag on this commit opens a submenu (hover) that
-            // currently offers "Delete Tag…". More per-tag actions can be added here later.
+            AddTagMenuItems(items, node, s);
+            AddResetMenuItem(items, sha, s);
+
+            // Create / apply actions share one definition with the keyboard (see CommitActionsFor),
+            // so their menu shortcut hints derive from the same gestures the list dispatches on.
+            var actions = CommitActionsFor(sha);
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateBranch));
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateTag));
+
+            // Apply-this-commit actions. Both run immediately (no dialog): they're non-destructive
+            // and any conflict is recoverable via the operation banner, so no "…" suffix.
+            items.Add(RepoBarContextMenu.Separator);
+            items.Add(RepoBarContextMenu.ToItem(actions.CherryPick));
+            items.Add(RepoBarContextMenu.ToItem(actions.Revert));
+
+            return items;
+        }
+
+        // Per-tag entries at the top: each tag on this commit opens a submenu (hover) that
+        // currently offers "Delete Tag…". More per-tag actions can be added here later.
+        private void AddTagMenuItems(List<RepoBarContextMenu.Item> items, CommitNode node, Strings s)
+        {
             var hasTag = false;
             foreach (var badge in node.Refs)
             {
@@ -952,60 +980,48 @@ internal sealed record CommitsView : Widget
                     ]));
             }
             if (hasTag) items.Add(RepoBarContextMenu.Separator);
+        }
 
+        private void AddResetMenuItem(List<RepoBarContextMenu.Item> items, string sha, Strings s)
+        {
+            var head = _snapshot?.HeadBranchName;
             if (head != null)
             {
                 items.Add(new RepoBarContextMenu.Item(
                     s.CommitsContextResetBranch(head),
-                    () => _vm.RequestReset(capturedSha),
+                    () => _vm.RequestReset(sha),
                     LucideIcons.Branch,
                     LabelSegments: BuildResetSegments(s.CommitsContextResetBranch(head), head)));
+                return;
             }
-            else
+
+            // Detached: there's no current branch to reset, so let the user pick which local branch
+            // to move to this commit (git branch -f + checkout). Falls back to moving the detached
+            // HEAD itself when the repo has no local branches.
+            var branches = CollectLocalBranchNames();
+            if (branches.Count == 0)
             {
-                // Detached: there's no current branch to reset, so let the user pick which local
-                // branch to move to this commit (git branch -f + checkout). Falls back to moving
-                // the detached HEAD itself when the repo has no local branches.
-                var branches = CollectLocalBranchNames();
-                if (branches.Count > 0)
-                {
-                    var submenu = new List<RepoBarContextMenu.Item>(branches.Count);
-                    foreach (var name in branches)
-                    {
-                        var branch = name;
-                        submenu.Add(new RepoBarContextMenu.Item(
-                            branch,
-                            () => _vm.RequestMoveBranch(branch, capturedSha),
-                            LucideIcons.Branch));
-                    }
-                    items.Add(new RepoBarContextMenu.Item(
-                        s.CommitsContextResetBranchDetached,
-                        () => { },
-                        LucideIcons.Branch,
-                        Submenu: submenu));
-                }
-                else
-                {
-                    items.Add(new RepoBarContextMenu.Item(
-                        s.CommitsContextResetDetached,
-                        () => _vm.RequestReset(capturedSha),
-                        LucideIcons.Branch));
-                }
+                items.Add(new RepoBarContextMenu.Item(
+                    s.CommitsContextResetDetached,
+                    () => _vm.RequestReset(sha),
+                    LucideIcons.Branch));
+                return;
             }
 
-            // Create / apply actions share one definition with the keyboard (see CommitActionsFor),
-            // so their menu shortcut hints derive from the same gestures the list dispatches on.
-            var actions = CommitActionsFor(capturedSha);
-            items.Add(RepoBarContextMenu.ToItem(actions.CreateBranch));
-            items.Add(RepoBarContextMenu.ToItem(actions.CreateTag));
-
-            // Apply-this-commit actions. Both run immediately (no dialog): they're non-destructive
-            // and any conflict is recoverable via the operation banner, so no "…" suffix.
-            items.Add(RepoBarContextMenu.Separator);
-            items.Add(RepoBarContextMenu.ToItem(actions.CherryPick));
-            items.Add(RepoBarContextMenu.ToItem(actions.Revert));
-
-            return items;
+            var submenu = new List<RepoBarContextMenu.Item>(branches.Count);
+            foreach (var name in branches)
+            {
+                var branch = name;
+                submenu.Add(new RepoBarContextMenu.Item(
+                    branch,
+                    () => _vm.RequestMoveBranch(branch, sha),
+                    LucideIcons.Branch));
+            }
+            items.Add(new RepoBarContextMenu.Item(
+                s.CommitsContextResetBranchDetached,
+                () => { },
+                LucideIcons.Branch,
+                Submenu: submenu));
         }
 
         // The shortcut-bearing commit actions, defined once for both the context menu (per row under

@@ -48,72 +48,9 @@ public static class RepoStateStore
             if (file is null)
                 return EmptyState();
 
-            var repos = Enumerable
-                .Select<Repo, Repo>(file.Repos, r =>
-                {
-                    // Backward compat: pre-submodule state files have no Kind field, so the
-                    // deserializer defaults Kind = Primary. Migrate by inferring Kind from
-                    // ParentRepoId (every existing child was a worktree at the time).
-                    var migrated = r;
-                    if (r.ParentRepoId is not null && r.Kind == RepoKind.Primary)
-                        migrated = r with { Kind = RepoKind.Worktree };
-                    return migrated with { IsMissing = !IsGitRepo(migrated.Path) };
-                })
-                .ToList();
-
-            // Keep only records reachable from a top-level repo through the parent chain — a
-            // child whose parent (or any ancestor) is gone can't be reattached and a dangling
-            // ParentRepoId would corrupt nested rendering. Nested submodules have a submodule
-            // parent, so a single "parent is top-level" check isn't enough: grow the kept set
-            // transitively from the roots outward.
-            var kept = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
-            bool grew;
-            do
-            {
-                grew = false;
-                foreach (var r in repos)
-                {
-                    if (kept.Contains(r.Id)) continue;
-                    if (r.ParentRepoId is { } pid && kept.Contains(pid))
-                        grew = kept.Add(r.Id) || grew;
-                }
-            } while (grew);
-            repos = repos.Where(r => kept.Contains(r.Id)).ToList();
-
-            var groups = file.Groups;
-            if (groups is null || groups.Count == 0)
-            {
-                groups =
-                [
-                    new GroupState(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false,
-                        RepoIds: repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToList())
-
-                ];
-            }
-            else
-            {
-                groups = ReconcileGroups(groups, repos);
-                if (file.SchemaVersion < 5)
-                    groups = groups
-                        .Select(g => g.Name == LegacyDefaultGroupName ? g with { Name = DefaultGroupName } : g)
-                        .ToList();
-            }
-
-            // Keep only slots 1-9 that still point at a live primary, and at most one slot per repo
-            // (lowest slot wins), so the 1:1 invariant survives a removed repo or a hand-edited file.
-            var primaryIds = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
-            var hotkeys = new Dictionary<int, Guid>();
-            if (file.Hotkeys is { } storedHotkeys)
-            {
-                var claimed = new HashSet<Guid>();
-                foreach (var (slot, id) in storedHotkeys.OrderBy(kv => kv.Key))
-                {
-                    if (slot is < 1 or > 9) continue;
-                    if (!primaryIds.Contains(id)) continue;
-                    if (!claimed.Add(id)) continue;
-                    hotkeys[slot] = id;
-                }
-            }
+            var repos = KeepReachableRepos(MigrateRepos(file.Repos));
+            var groups = ResolveGroups(file, repos);
+            var hotkeys = SanitizeHotkeys(file.Hotkeys, repos);
 
             return new State(
                 repos,
@@ -129,6 +66,80 @@ public static class RepoStateStore
             Console.WriteLine($"Failed to load repo state from {path}: {ex.Message}");
             return EmptyState();
         }
+    }
+
+    // Backward compat: pre-submodule state files have no Kind field, so the deserializer defaults
+    // Kind = Primary. Migrate by inferring Kind from ParentRepoId (every existing child was a
+    // worktree at the time), and flag repos whose path no longer resolves.
+    private static List<Repo> MigrateRepos(List<Repo> stored)
+    {
+        var repos = new List<Repo>(stored.Count);
+        foreach (var r in stored)
+        {
+            var migrated = r;
+            if (r.ParentRepoId is not null && r.Kind == RepoKind.Primary)
+                migrated = r with { Kind = RepoKind.Worktree };
+            repos.Add(migrated with { IsMissing = !IsGitRepo(migrated.Path) });
+        }
+        return repos;
+    }
+
+    // Keep only records reachable from a top-level repo through the parent chain — a child whose
+    // parent (or any ancestor) is gone can't be reattached and a dangling ParentRepoId would
+    // corrupt nested rendering. Nested submodules have a submodule parent, so a single "parent is
+    // top-level" check isn't enough: grow the kept set transitively from the roots outward.
+    private static List<Repo> KeepReachableRepos(List<Repo> repos)
+    {
+        var kept = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var r in repos)
+            {
+                if (kept.Contains(r.Id)) continue;
+                if (r.ParentRepoId is { } pid && kept.Contains(pid))
+                    grew = kept.Add(r.Id) || grew;
+            }
+        } while (grew);
+        return repos.Where(r => kept.Contains(r.Id)).ToList();
+    }
+
+    private static List<GroupState> ResolveGroups(FileShape file, List<Repo> repos)
+    {
+        var groups = file.Groups;
+        if (groups is null || groups.Count == 0)
+            return
+            [
+                new GroupState(Guid.NewGuid(), DefaultGroupName, IsCollapsed: false,
+                    RepoIds: repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToList())
+            ];
+
+        groups = ReconcileGroups(groups, repos);
+        if (file.SchemaVersion < 5)
+            groups = groups
+                .Select(g => g.Name == LegacyDefaultGroupName ? g with { Name = DefaultGroupName } : g)
+                .ToList();
+        return groups;
+    }
+
+    // Keep only slots 1-9 that still point at a live primary, and at most one slot per repo (lowest
+    // slot wins), so the 1:1 invariant survives a removed repo or a hand-edited file.
+    private static Dictionary<int, Guid> SanitizeHotkeys(Dictionary<int, Guid>? storedHotkeys, List<Repo> repos)
+    {
+        var primaryIds = repos.Where(r => r.ParentRepoId is null).Select(r => r.Id).ToHashSet();
+        var hotkeys = new Dictionary<int, Guid>();
+        if (storedHotkeys is null) return hotkeys;
+
+        var claimed = new HashSet<Guid>();
+        foreach (var (slot, id) in storedHotkeys.OrderBy(kv => kv.Key))
+        {
+            if (slot is < 1 or > 9) continue;
+            if (!primaryIds.Contains(id)) continue;
+            if (!claimed.Add(id)) continue;
+            hotkeys[slot] = id;
+        }
+        return hotkeys;
     }
 
     public static void Save(

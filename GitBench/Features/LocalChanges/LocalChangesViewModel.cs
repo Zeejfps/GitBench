@@ -832,22 +832,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var active = _registry.Active.Value;
         if (active == null)
         {
-            DropAmendSession();
-            _stagedFromIndex = Empty;
-            _renderedRepoId = null;
-            Update(s => s with
-            {
-                HasRepo = false,
-                IsLoading = false,
-                LoadError = null,
-                LoadErrorDetail = null,
-                OpError = null,
-                Staged = Empty,
-                Unstaged = Empty,
-                Selection = LocalChanges.Selection.Empty,
-                DriftedSubmodules = [],
-                Editor = EditorMode.Idle,
-            });
+            ApplyNoRepoState();
             return;
         }
 
@@ -868,40 +853,74 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         if (fetched == null)
         {
-            // No data for the active repo yet. Cross-repo switch blanks the panels; a same-repo
-            // gap just shows the loading flag while keeping the current lists.
-            Update(s => s with
-            {
-                HasRepo = true,
-                IsLoading = true,
-                LoadError = null,
-                LoadErrorDetail = null,
-                OpError = null,
-                Staged = isCrossRepoSwitch ? Empty : s.Staged,
-                Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
-                Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
-            });
+            ApplyLoadingState(isCrossRepoSwitch);
             return;
         }
 
         if (fetched is Fetched<LocalChangesData>.Failed failed)
         {
-            _stagedFromIndex = Empty;
-            Update(s => s with
-            {
-                HasRepo = true,
-                IsLoading = false,
-                LoadError = failed.Message,
-                LoadErrorDetail = failed.Detail ?? failed.Message,
-                Staged = Empty,
-                Unstaged = Empty,
-                Selection = LocalChanges.Selection.Empty,
-                DriftedSubmodules = [],
-            });
+            ApplyLoadFailure(failed);
             return;
         }
 
-        var data = ((Fetched<LocalChangesData>.Ok)fetched).Value;
+        ApplyLoadedData(((Fetched<LocalChangesData>.Ok)fetched).Value, active, isCrossRepoSwitch);
+    }
+
+    private void ApplyNoRepoState()
+    {
+        DropAmendSession();
+        _stagedFromIndex = Empty;
+        _renderedRepoId = null;
+        Update(s => s with
+        {
+            HasRepo = false,
+            IsLoading = false,
+            LoadError = null,
+            LoadErrorDetail = null,
+            OpError = null,
+            Staged = Empty,
+            Unstaged = Empty,
+            Selection = LocalChanges.Selection.Empty,
+            DriftedSubmodules = [],
+            Editor = EditorMode.Idle,
+        });
+    }
+
+    // No data for the active repo yet. Cross-repo switch blanks the panels; a same-repo gap just
+    // shows the loading flag while keeping the current lists.
+    private void ApplyLoadingState(bool isCrossRepoSwitch)
+    {
+        Update(s => s with
+        {
+            HasRepo = true,
+            IsLoading = true,
+            LoadError = null,
+            LoadErrorDetail = null,
+            OpError = null,
+            Staged = isCrossRepoSwitch ? Empty : s.Staged,
+            Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
+            Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
+        });
+    }
+
+    private void ApplyLoadFailure(Fetched<LocalChangesData>.Failed failed)
+    {
+        _stagedFromIndex = Empty;
+        Update(s => s with
+        {
+            HasRepo = true,
+            IsLoading = false,
+            LoadError = failed.Message,
+            LoadErrorDetail = failed.Detail ?? failed.Message,
+            Staged = Empty,
+            Unstaged = Empty,
+            Selection = LocalChanges.Selection.Empty,
+            DriftedSubmodules = [],
+        });
+    }
+
+    private void ApplyLoadedData(LocalChangesData data, Repo active, bool isCrossRepoSwitch)
+    {
         var snap = data.Snapshot;
 
         // On a cross-repo switch the selection belongs to the previous repo — drop it before
@@ -915,25 +934,28 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         if (State.Value.Editor is EditorMode.Amending)
         {
-            // The amend staged panel diffs the index against HEAD's parent, which the
-            // status snapshot doesn't carry — recompute off-thread before applying so
-            // index mutations and external HEAD moves stay reflected.
-            // Uses the base Gen lane: a newer push supersedes an older in-flight refresh.
-            var repo = active;
-            var drift = data.Drift;
-            RunBackground<IReadOnlyList<FileChange>>(
-                work: () => (_gitService.GetAmendStagedFiles(repo), null),
-                onResult: (stagedFiles, _) =>
-                {
-                    if (_registry.Active.Value?.Id != repo.Id) return;
-                    if (State.Value.Editor is EditorMode.Amending amending && stagedFiles != null)
-                        amending.Session.UpdateStagedFiles(stagedFiles);
-                    ApplySnapshot(snap, drift);
-                });
+            ReloadAmendStagedThenApply(active, snap, data.Drift);
             return;
         }
 
         ApplySnapshot(snap, data.Drift);
+    }
+
+    // The amend staged panel diffs the index against HEAD's parent, which the status snapshot
+    // doesn't carry — recompute off-thread before applying so index mutations and external HEAD
+    // moves stay reflected. Uses the base Gen lane: a newer push supersedes an older in-flight
+    // refresh.
+    private void ReloadAmendStagedThenApply(Repo repo, LocalChangesSnapshot snap, IReadOnlyList<SubmoduleInfo>? drift)
+    {
+        RunBackground<IReadOnlyList<FileChange>>(
+            work: () => (_gitService.GetAmendStagedFiles(repo), null),
+            onResult: (stagedFiles, _) =>
+            {
+                if (_registry.Active.Value?.Id != repo.Id) return;
+                if (State.Value.Editor is EditorMode.Amending amending && stagedFiles != null)
+                    amending.Session.UpdateStagedFiles(stagedFiles);
+                ApplySnapshot(snap, drift);
+            });
     }
 
     // Drives the merge-aware commit box from the store's merge message. On entering a merge,

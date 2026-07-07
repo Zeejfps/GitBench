@@ -215,30 +215,38 @@ internal sealed class RepoNodeViewModel : IDisposable
     private IReadOnlyList<RepoBarContextMenu.Item> BuildPrimaryMenu()
     {
         var repo = Repo;
-        var sourceGroup = _registry.FindGroupContaining(repo.Id);
         var s = _loc.Strings.Value;
+        var items = new List<RepoBarContextMenu.Item>();
 
-        // Primary actions first — the common ones a right-click is usually reaching for.
-        var items = new List<RepoBarContextMenu.Item>
-        {
-            new(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine),
-            new(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash),
-        };
+        AddPrimaryRepoActions(items, s, repo);
+        AddHotkeyMenu(items, s, repo);
+        AddWorktreeMenu(items, s, repo);
+        AddSubmoduleMenu(items, s, repo);
+        AddMoveToGroupMenu(items, s, repo);
+        return items;
+    }
 
+    // Primary actions first — the common ones a right-click is usually reaching for.
+    private void AddPrimaryRepoActions(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
         if (_clipboard is not null)
             items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
+    }
 
-        // Hotkey assignment.
+    private void AddHotkeyMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
         var currentSlot = _registry.HotkeyFor(repo.Id);
         var slotItems = new List<RepoBarContextMenu.Item>(9);
         for (var n = 1; n <= 9; n++)
         {
             var slot = n;
             var holder = _registry.RepoForHotkey(slot);
-            // The repo that currently holds this slot (when it isn't us), surfaced as a hint so a pick
-            // that would steal the slot is visible beforehand.
+            // The repo that currently holds this slot (when it isn't us), surfaced as a hint so a
+            // pick that would steal the slot is visible beforehand.
             var holderName = holder is { } hid && hid != repo.Id ? FindRepo(hid)?.DisplayName : null;
             slotItems.Add(new RepoBarContextMenu.Item(
                 slot.ToString(),
@@ -252,8 +260,10 @@ internal sealed class RepoNodeViewModel : IDisposable
             Submenu: slotItems, SubmenuMinWidth: 180f));
         if (currentSlot is { } assigned)
             items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyClear, () => _registry.ClearHotkey(assigned), LucideIcons.X));
+    }
 
-        // Worktrees.
+    private void AddWorktreeMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoNewWorktree,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog { Primary = repo, OnClose = onClose })),
@@ -265,8 +275,10 @@ internal sealed class RepoNodeViewModel : IDisposable
                 _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
             },
             LucideIcons.Trash));
+    }
 
-        // Submodules.
+    private void AddSubmoduleMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoAddSubmodule,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog { Primary = repo, OnClose = onClose })),
@@ -274,24 +286,25 @@ internal sealed class RepoNodeViewModel : IDisposable
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoUpdateAllSubmodules,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose })),
             LucideIcons.Pull));
+    }
 
-        // "Move to <group>" last, in its own section — this list grows and shrinks with the group set,
-        // so keeping it at the bottom leaves the fixed actions above it stable.
+    // "Move to <group>" last, in its own section — this list grows and shrinks with the group set,
+    // so keeping it at the bottom leaves the fixed actions above it stable.
+    private void AddMoveToGroupMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
+        var sourceGroup = _registry.FindGroupContaining(repo.Id);
         var moveTargets = _registry.Groups.Where(g => sourceGroup == null || g.Id != sourceGroup.Id).ToList();
-        if (moveTargets.Count > 0)
-        {
-            items.Add(RepoBarContextMenu.Separator);
-            foreach (var group in moveTargets)
-            {
-                var captured = group;
-                items.Add(new RepoBarContextMenu.Item(
-                    s.ReposRepoMoveToGroup(captured.Name.Value),
-                    () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
-                    LucideIcons.FolderInput));
-            }
-        }
+        if (moveTargets.Count == 0) return;
 
-        return items;
+        items.Add(RepoBarContextMenu.Separator);
+        foreach (var group in moveTargets)
+        {
+            var captured = group;
+            items.Add(new RepoBarContextMenu.Item(
+                s.ReposRepoMoveToGroup(captured.Name.Value),
+                () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
+                LucideIcons.FolderInput));
+        }
     }
 
     private void CopyPath(string path)
