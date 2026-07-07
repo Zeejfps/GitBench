@@ -1,3 +1,4 @@
+using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -13,7 +14,7 @@ internal enum DragAxis { X, Y }
 /// <paramref name="onDelta"/>. The container handles the meaning of that delta (resize a
 /// fraction, change a width, etc.).
 /// </summary>
-internal sealed class SplitterController : KeyboardMouseController, IDisposable
+internal sealed class SplitterController : KeyboardMouseController, IProvidesCursor, IDisposable
 {
     private readonly DragAxis _axis;
     private readonly Action<float> _onDelta;
@@ -31,6 +32,9 @@ internal sealed class SplitterController : KeyboardMouseController, IDisposable
         _onHoverChanged = onHoverChanged;
         _inputSystem = context.Get<InputSystem>()!;
     }
+
+    public MouseCursor Cursor =>
+        _axis == DragAxis.X ? MouseCursor.ResizeHorizontal : MouseCursor.ResizeVertical;
 
     public void Dispose()
     {
