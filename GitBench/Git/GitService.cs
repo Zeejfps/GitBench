@@ -451,6 +451,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
             };
 
+            // Churn for the rows' "+N −M": commit-vs-first-parent counts, fetched for the whole
+            // range in one `git log --numstat` pass. Not Compare<Patch> — like GetDiff, patch
+            // building would go through the callback marshalling path that crashes NativeAOT.
+            var churnBySha = LoadRangeChurn(repo.Path, baseCommit.Sha, headCommit.Sha, cap);
+
             var increments = new List<ReviewIncrement>();
             var truncated = false;
             foreach (var c in lg.Commits.QueryBy(filter))
@@ -461,20 +466,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                     break;
                 }
 
-                // Churn for the row's "+N −M": the commit-vs-first-parent diff, the same unit the
-                // review pane shows. A root commit (no parent in range) diffs against the empty tree.
-                var parentTree = c.Parents.FirstOrDefault()?.Tree;
-                var stats = lg.Diff.Compare<Patch>(parentTree, c.Tree);
-                var files = 0;
-                foreach (var _ in stats) files++;
-
+                churnBySha.TryGetValue(c.Sha, out var churn);
                 increments.Add(new ReviewIncrement(
                     c.Sha,
                     ShortSha(c.Sha),
                     c.MessageShort ?? string.Empty,
                     c.Author?.Name ?? string.Empty,
                     c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
-                    FilesChanged: files, Added: stats.LinesAdded, Removed: stats.LinesDeleted));
+                    FilesChanged: churn.Files, Added: churn.Added, Removed: churn.Removed));
             }
 
             increments.Reverse();
@@ -492,6 +491,43 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return new Fetched<ReviewStack>.Failed(ex.Message);
         }
+    }
+
+    // Per-commit churn for base..head from a single `git log --numstat` invocation: each commit's
+    // file count and added/removed line totals, keyed by SHA. A commit absent from the output (or
+    // past the cap under a different ordering) reads as zero churn. Binary files contribute a file
+    // count but "-" line counts, which parse as zero; a root commit numstats against the empty tree.
+    private Dictionary<string, (int Files, int Added, int Removed)> LoadRangeChurn(
+        string repoPath, string baseSha, string headSha, int cap)
+    {
+        var churn = new Dictionary<string, (int Files, int Added, int Removed)>(StringComparer.Ordinal);
+        var output = RunGit(repoPath, out _,
+            "log", "--first-parent", "--topo-order", $"--max-count={cap}",
+            "--format=%x01%H", "--numstat", "-M", $"{baseSha}..{headSha}");
+        if (output == null) return churn;
+
+        string? sha = null;
+        var current = (Files: 0, Added: 0, Removed: 0);
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            if (line[0] == '\x01')
+            {
+                if (sha != null) churn[sha] = current;
+                sha = line[1..].Trim();
+                current = default;
+                continue;
+            }
+            if (sha == null) continue;
+            var parts = line.Split('\t');
+            if (parts.Length < 3) continue;
+            current.Files++;
+            if (int.TryParse(parts[0], out var added)) current.Added += added;
+            if (int.TryParse(parts[1], out var removed)) current.Removed += removed;
+        }
+        if (sha != null) churn[sha] = current;
+        return churn;
     }
 
     public Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha)
