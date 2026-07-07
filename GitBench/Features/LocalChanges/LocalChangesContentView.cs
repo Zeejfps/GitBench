@@ -4,6 +4,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -26,20 +27,22 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed class LocalChangesContentView : ContainerView
 {
-    private readonly LocalChangesPanel _unstagedPanel;
-    private readonly LocalChangesPanel _stagedPanel;
-    private readonly TextView _placeholder;
-    private readonly FlexRowView _errorActions;
-    private readonly FlexColumnView _placeholderHost;
-    private readonly RectView _centerContainer;
-    private readonly View _diffView;
-    private readonly VerticalSplitContainer _snapshotContainer;
-    private readonly LocalChangesSubmoduleSection _submoduleSection;
-    private readonly BorderLayoutView _topHalf;
+    // Widgets assembled by the constructor's Build/Create helpers, then referenced by the
+    // reactive bindings; not readonly because they're set outside the constructor body.
+    private LocalChangesPanel _unstagedPanel = null!;
+    private LocalChangesPanel _stagedPanel = null!;
+    private TextView _placeholder = null!;
+    private FlexRowView _errorActions = null!;
+    private FlexColumnView _placeholderHost = null!;
+    private RectView _centerContainer = null!;
+    private View _diffView = null!;
+    private VerticalSplitContainer _snapshotContainer = null!;
+    private LocalChangesSubmoduleSection _submoduleSection = null!;
+    private BorderLayoutView _topHalf = null!;
 
     private readonly State<Selection> _selection = new(Selection.Empty);
     private readonly LocalChangesViewModel _vm;
-    private readonly ListArrowKbmController _arrowController;
+    private ListArrowKbmController _arrowController = null!;
     private readonly ILocalizationService _loc;
     private string? _rawPlaceholder;
 
@@ -58,6 +61,17 @@ internal sealed class LocalChangesContentView : ContainerView
         _enterTween = new Tween(ticker, Transitions.ContentEnterSeconds, Easings.EaseOutCubic);
         _placeholderTween = new Tween(ticker, Transitions.PlaceholderBloomSeconds, Easings.EaseInCubic);
 
+        CreateFilePanels(ctx, vm);
+        BuildPlaceholder(ctx, theme);
+        var diffPane = BuildDiffPane(ctx, vm);
+        BuildSnapshotContainer(ctx, theme, input, diffPane);
+        AddChildToSelf(_centerContainer);
+        SetupArrowController(input);
+        WireBindings(vm);
+    }
+
+    private void CreateFilePanels(Context ctx, LocalChangesViewModel vm)
+    {
         var viewModeIcon = Prop.Bind<string?>(() =>
             vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
 
@@ -124,7 +138,10 @@ internal sealed class LocalChangesContentView : ContainerView
             onEmptyAreaClicked: () => _vm.ClearSelection(),
             onFolderToggle: OnFolderToggle,
             buildContextMenu: BuildStagedMenu);
+    }
 
+    private void BuildPlaceholder(Context ctx, IThemeService<ThemeStyles> theme)
+    {
         _placeholder = new TextView(ctx.Canvas)
         {
             HorizontalTextAlignment = TextAlignment.Center,
@@ -176,7 +193,12 @@ internal sealed class LocalChangesContentView : ContainerView
             Gap = Spacing.Lg,
             Children = { _placeholder },
         };
+    }
 
+    // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so only
+    // the header strip remains (the split container pins the pane to header height).
+    private BorderLayoutView BuildDiffPane(Context ctx, LocalChangesViewModel vm)
+    {
         _submoduleSection = new LocalChangesSubmoduleSection(
             ctx,
             onInit: path => _vm.InitializeSubmodule(path),
@@ -188,8 +210,6 @@ internal sealed class LocalChangesContentView : ContainerView
             Child = new DiffView(),
         }.BuildView(ctx);
 
-        // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
-        // only the header strip remains (the split container pins the pane to header height).
         var diffHeader = new Provide<DiffViewModel>
         {
             Value = vm.DiffVm,
@@ -201,7 +221,11 @@ internal sealed class LocalChangesContentView : ContainerView
             Center = _diffView,
         };
         this.Bind(vm.DiffVm.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
+        return diffPane;
+    }
 
+    private void BuildSnapshotContainer(Context ctx, IThemeService<ThemeStyles> theme, InputSystem input, BorderLayoutView diffPane)
+    {
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
         splitter.BindThemedBackgroundColor(theme, s =>
@@ -224,9 +248,10 @@ internal sealed class LocalChangesContentView : ContainerView
             Children = { _snapshotContainer },
         };
         _centerContainer.BindThemedBackgroundColor(theme, s => s.LocalChangesContent.ContentBackground);
+    }
 
-        AddChildToSelf(_centerContainer);
-
+    private void SetupArrowController(InputSystem input)
+    {
         _arrowController = new ListArrowKbmController(
             this,
             input,
@@ -236,7 +261,10 @@ internal sealed class LocalChangesContentView : ContainerView
             OnDeleteSelection);
         _arrowController.OnToggleFullFile = () => _vm.DiffVm.ToggleFullFile();
         this.UseController(input, _arrowController);
+    }
 
+    private void WireBindings(LocalChangesViewModel vm)
+    {
         this.Bind(_enterTween.LinearProgress, p => _snapshotContainer.Opacity = p);
         this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
         this.Use(() => _enterTween);

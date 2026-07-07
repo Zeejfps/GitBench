@@ -401,20 +401,27 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         if (!TryGetPatchContext(hunkIndex, out var repo, out var diff)) return;
         var patch = HunkPatchBuilder.Build(diff, hunkIndex);
-
         var isLastHunk = diff.Hunks.Count == 1;
-        var fromSide = diff.Side;
-        DiffSide? toSide = (cached, reverse) switch
-        {
-            (true, false) => DiffSide.Staged,    // stage: unstaged → staged
-            (true, true) => DiffSide.Unstaged,   // unstage: staged → unstaged
-            _ => null,
-        };
+        var toSide = ResolveApplyToSide(cached, reverse);
 
-        // Optimistic diff update — when there are hunks left, drop the just-applied one so
-        // the diff repaints immediately. When this was the last hunk and the file moves to
-        // another side, show a brief Loading placeholder; the selection swap below will
-        // kick off a fresh load for the destination side and replace it.
+        ApplyOptimisticHunkRemoval(diff, hunkIndex, isLastHunk, toSide);
+        _bus.Broadcast(new HunkAppliedOptimisticMessage(repo.Id, diff.Path, diff.Side, toSide, isLastHunk));
+        RunApplyPatch(repo, patch, cached, reverse, diff);
+    }
+
+    private static DiffSide? ResolveApplyToSide(bool cached, bool reverse) => (cached, reverse) switch
+    {
+        (true, false) => DiffSide.Staged,    // stage: unstaged → staged
+        (true, true) => DiffSide.Unstaged,   // unstage: staged → unstaged
+        _ => null,
+    };
+
+    // Optimistic diff update — when there are hunks left, drop the just-applied one so the diff
+    // repaints immediately. When this was the last hunk and the file moves to another side, show a
+    // brief Loading placeholder; the selection swap kicks off a fresh load for the destination
+    // side and replaces it.
+    private void ApplyOptimisticHunkRemoval(DiffResult diff, int hunkIndex, bool isLastHunk, DiffSide? toSide)
+    {
         if (!isLastHunk)
         {
             var remainingHunks = new List<DiffHunk>(diff.Hunks.Count - 1);
@@ -429,17 +436,17 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         {
             Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
         }
+    }
 
-        _bus.Broadcast(new HunkAppliedOptimisticMessage(repo.Id, diff.Path, fromSide, toSide, isLastHunk));
-
-        // Intentionally unguarded: every apply must broadcast a working-tree change so the
-        // optimistic move (here and in LocalChangesViewModel) reconciles against the truth,
-        // so this op does not run through RunBackground's staleness drop.
+    // Intentionally unguarded: every apply must broadcast a working-tree change so the optimistic
+    // move (here and in LocalChangesViewModel) reconciles against the truth, so this op does not
+    // run through RunBackground's staleness drop.
+    private void RunApplyPatch(Repo repo, string patch, bool cached, bool reverse, DiffResult original)
+    {
         var service = _gitService;
         var bus = _bus;
         var dispatcher = Dispatcher;
         var repoId = repo.Id;
-        var original = diff;
         Task.Run(() =>
         {
             GitOutcome outcome;
@@ -451,9 +458,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 if (outcome is GitOutcome.Failed failed)
                 {
                     Update(s => s with { OpError = failed.Message });
-                    // Roll back the optimistic diff state, and broadcast a working-tree
-                    // change so LocalChangesViewModel re-syncs its lists against the truth
-                    // (we may have optimistically moved the file in OnHunkAppliedOptimistic).
+                    // Roll back the optimistic diff state, and broadcast a working-tree change so
+                    // LocalChangesViewModel re-syncs its lists against the truth (we may have
+                    // optimistically moved the file in OnHunkAppliedOptimistic).
                     if (State.Value.Render is DiffRenderState.Loaded)
                         Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
                     bus.Broadcast(new WorkingTreeChangedMessage(repoId));
@@ -537,40 +544,48 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
         // file off the same worker thread.
         RunBackground<LoadResult>(
-            work: () =>
-            {
-                // A conflicted working-tree file gets the resolution header, not a normal diff —
-                // but only in Diff mode. Toggling to FullFile escapes the header to show the raw
-                // working-tree file (conflict markers and all). GetConflictContext is cheap (one
-                // `ls-files -u`) and returns null for the common non-conflict case.
-                if (side == DiffSide.Unstaged && mode == DiffViewMode.Diff)
-                {
-                    var conflict = git.GetConflictContext(repo, path);
-                    if (conflict != null)
-                        return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
-                }
+            work: () => LoadDiffAndRender(git, repo, path, side, commitSha, baseSha, mode, binaryText, noVersionText),
+            onResult: (result, error) => OnDiffLoaded(result, error, repo, commitSha, baseSha));
+    }
 
-                var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
-                if (mode == DiffViewMode.Diff)
-                    return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
-                var render = BuildFullFile(git, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText);
-                return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
-            },
-            onResult: (result, error) =>
-            {
-                var render = error != null ? new DiffRenderState.Placeholder(error) : result!.Render;
-                // Seed the new render with the prior highlight when it's for the same file, so the
-                // diff doesn't blink to plain between this load landing and the async highlight pass
-                // finishing. Staging a file is the common case: the file moves to the other side but
-                // its new-side text — hence the spans — is unchanged, so the body doesn't flash but
-                // the highlight would. StartHighlight below refreshes the spans either way.
-                render = CarryHighlightForward(render);
-                Update(s => s with { Render = render });
-                // Highlight applies to either render carrying the new-side file; result.Diff is null
-                // for full-file placeholders (binary/deleted), which need no highlighting.
-                if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
-                    StartHighlight(repo, diff, commitSha, baseSha);
-            });
+    // Runs on the background worker: no `this` capture, no observable access. Loads the diff (and,
+    // in FullFile mode, the whole new-side file) and packages the render to show.
+    private static (LoadResult? Result, string? Error) LoadDiffAndRender(
+        IGitService git, Repo repo, string path, DiffSide side, string? commitSha, string? baseSha,
+        DiffViewMode mode, string binaryText, string noVersionText)
+    {
+        // A conflicted working-tree file gets the resolution header, not a normal diff — but only
+        // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
+        // (conflict markers and all). GetConflictContext is cheap (one `ls-files -u`) and returns
+        // null for the common non-conflict case.
+        if (side == DiffSide.Unstaged && mode == DiffViewMode.Diff)
+        {
+            var conflict = git.GetConflictContext(repo, path);
+            if (conflict != null)
+                return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
+        }
+
+        var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
+        if (mode == DiffViewMode.Diff)
+            return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
+        var render = BuildFullFile(git, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText);
+        return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
+    }
+
+    private void OnDiffLoaded(LoadResult? result, string? error, Repo repo, string? commitSha, string? baseSha)
+    {
+        var render = error != null ? new DiffRenderState.Placeholder(error) : result!.Render;
+        // Seed the new render with the prior highlight when it's for the same file, so the diff
+        // doesn't blink to plain between this load landing and the async highlight pass finishing.
+        // Staging a file is the common case: the file moves to the other side but its new-side text
+        // — hence the spans — is unchanged, so the body doesn't flash but the highlight would.
+        // StartHighlight below refreshes the spans either way.
+        render = CarryHighlightForward(render);
+        Update(s => s with { Render = render });
+        // Highlight applies to either render carrying the new-side file; result.Diff is null for
+        // full-file placeholders (binary/deleted), which need no highlighting.
+        if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
+            StartHighlight(repo, diff, commitSha, baseSha);
     }
 
     // Result of a load: the render to show plus the source diff (when one should drive a highlight

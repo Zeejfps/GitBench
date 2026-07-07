@@ -296,122 +296,150 @@ internal sealed class DiffContentView : View, IScrollableContent
         if (r.IsBinary) return;
         if (r.Hunks.Count == 0 && !r.IsModeOnly && r.OldPath == null) return;
 
+        AddChangeBanners(r);
+
+        var gaps = DiffGaps.Compute(r, expansion?.Lines.Count);
+        var totalLines = 0;
+        for (var i = 0; i < r.Hunks.Count; i++)
+            totalLines += EmitHunk(r, i, gaps[i], expansion, highlight);
+
+        EmitEofGap(r, gaps[^1], expansion, highlight);
+
+        if (r.Truncated)
+            AddBanner(_loc.Strings.Value.DiffDiffTruncated(totalLines));
+
+        FinalizeGutterAndHunkMap();
+    }
+
+    private void AddChangeBanners(DiffResult r)
+    {
         var s = _loc.Strings.Value;
         if (r.OldPath != null)
             AddBanner(s.DiffRenamed(r.OldPath, r.Path));
         if (r.IsModeOnly)
             AddBanner(s.DiffModeChanged(FormatMode(r.OldMode), FormatMode(r.NewMode)));
+    }
 
-        var gaps = DiffGaps.Compute(r, expansion?.Lines.Count);
-        var totalLines = 0;
+    // Emits one hunk (its leading gap chrome, revealed context, and diff lines) and returns the
+    // hunk's line count for the truncation total.
+    private int EmitHunk(DiffResult r, int hunkIndex, DiffGap gap, ContextExpansion? expansion, DiffHighlight? highlight)
+    {
+        var h = r.Hunks[hunkIndex];
+        var (top, bottom, remaining) = GapState(gap, expansion);
 
-        for (var i = 0; i < r.Hunks.Count; i++)
+        if (top > 0)
+            EmitExpandedRows(gap.NewStart, gap.NewStart + top - 1, gap.OldNewDelta, expansion!, highlight);
+
+        var barRowIndex = EmitGapSeparator(h, gap, top, bottom, remaining);
+
+        if (bottom > 0)
+            EmitExpandedRows(gap.NewEnd - bottom + 1, gap.NewEnd, gap.OldNewDelta, expansion!, highlight);
+
+        // Rows revealed below the bar sit between it and the hunk, so the hover/button range
+        // anchors on the bar only while the two are still adjacent.
+        var firstHunkRow = barRowIndex >= 0 && bottom == 0 ? barRowIndex : _rows.Count;
+
+        EmitHunkLines(h, highlight);
+        _hunkRanges.Add(new HunkRowRange(hunkIndex, firstHunkRow, _rows.Count - 1));
+        return h.Lines.Count;
+    }
+
+    // While lines stay hidden the gap keeps its chrome: a large middle gap splits into a
+    // down-arrow bar hugging the hunk above, a torn "hidden lines" break, and an up-arrow bar
+    // carrying the @@ header — each arrow pointing into the tear it reveals. Small and top-of-file
+    // gaps stay a single bar, an untouched empty gap keeps the plain separator, and a fully
+    // expanded gap drops everything so the hunks read as one continuous block. Returns the row
+    // index of the header bar, or -1 when no separator is emitted.
+    private int EmitGapSeparator(DiffHunk h, DiffGap gap, int top, int bottom, int? remaining)
+    {
+        if (!(remaining > 0 || (top == 0 && bottom == 0)))
+            return -1;
+
+        var s = _loc.Strings.Value;
+        var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
+        var header = string.IsNullOrEmpty(h.Header) ? null : h.Header;
+        var sepCells = VisualCells(range) + (header != null ? VisualCells(header) : 0) + 2;
+        int barRowIndex;
+        if (remaining is int hidden && gap.GapIndex > 0 && hidden > DiffOptions.ContextExpandStep)
         {
-            var h = r.Hunks[i];
-            var gap = gaps[i];
-            var (top, bottom, remaining) = GapState(gap, expansion);
-
-            if (top > 0)
-                EmitExpandedRows(gap.NewStart, gap.NewStart + top - 1, gap.OldNewDelta, expansion!, highlight);
-
-            // While lines stay hidden the gap keeps its chrome: a large middle gap splits into a
-            // down-arrow bar hugging the hunk above, a torn "hidden lines" break, and an
-            // up-arrow bar carrying the @@ header — each arrow pointing into the tear it
-            // reveals. Small and top-of-file gaps stay a single bar, an untouched empty gap
-            // keeps the plain separator, and a fully expanded gap drops everything so the hunks
-            // read as one continuous block.
-            var barRowIndex = -1;
-            if (remaining > 0 || (top == 0 && bottom == 0))
-            {
-                var range = $"@@ -{h.OldStart},{h.OldLines} +{h.NewStart},{h.NewLines} @@";
-                var header = string.IsNullOrEmpty(h.Header) ? null : h.Header;
-                var sepCells = VisualCells(range) + (header != null ? VisualCells(header) : 0) + 2;
-                if (remaining is int hidden && gap.GapIndex > 0 && hidden > DiffOptions.ContextExpandStep)
-                {
-                    _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
-                        new GapBar(gap.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: null)));
-                    _rows.Add(new DiffRow.Tear(
-                        new GapBar(gap.GapIndex, ShowDown: false, ShowUp: false, ShowUnfold: true, HiddenCount: hidden)));
-                    barRowIndex = _rows.Count;
-                    _rows.Add(new DiffRow.HunkSeparator(range, header,
-                        new GapBar(gap.GapIndex, ShowDown: false, ShowUp: true, ShowUnfold: false, HiddenCount: null)));
-                    var tearCells = VisualCells(s.DiffHiddenLines(hidden)) + 10;
-                    if (tearCells > _maxRowCells) _maxRowCells = tearCells;
-                }
-                else
-                {
-                    barRowIndex = _rows.Count;
-                    _rows.Add(new DiffRow.HunkSeparator(range, header,
-                        remaining > 0 ? BarFor(gap.GapIndex, remaining.Value) : null));
-                    if (remaining > 0)
-                        sepCells += VisualCells(s.DiffHiddenLines(remaining.Value)) + 2;
-                }
-                if (sepCells > _maxRowCells) _maxRowCells = sepCells;
-            }
-
-            if (bottom > 0)
-                EmitExpandedRows(gap.NewEnd - bottom + 1, gap.NewEnd, gap.OldNewDelta, expansion!, highlight);
-
-            // Rows revealed below the bar sit between it and the hunk, so the hover/button
-            // range anchors on the bar only while the two are still adjacent.
-            var firstHunkRow = barRowIndex >= 0 && bottom == 0 ? barRowIndex : _rows.Count;
-
-            // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
-            // tab-expanded column space so it aligns with Spans and the glyph grid.
-            var expanded = new string[h.Lines.Count];
-            for (var j = 0; j < h.Lines.Count; j++)
-                expanded[j] = DiffText.ExpandTabs(h.Lines[j].Text);
-            var emphasis = DiffOptions.IntraLineHighlightingEnabled
-                ? IntraLineDiff.ForHunk(h.Lines, expanded)
-                : null;
-
-            for (var j = 0; j < h.Lines.Count; j++)
-            {
-                var l = h.Lines[j];
-                var text = expanded[j];
-                // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
-                var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
-                if (spans != null && spans.Count == 0) spans = null;
-                var row = new DiffRow.Line(
-                    l.Kind,
-                    l.OldLineNumber?.ToString() ?? string.Empty,
-                    l.NewLineNumber?.ToString() ?? string.Empty,
-                    text,
-                    text.Length,
-                    spans,
-                    emphasis?[j]);
-                _rows.Add(row);
-                var cells = VisualCells(text);
-                if (cells > _maxRowCells) _maxRowCells = cells;
-            }
-            _hunkRanges.Add(new HunkRowRange(i, firstHunkRow, _rows.Count - 1));
-            totalLines += h.Lines.Count;
+            _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
+                new GapBar(gap.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: null)));
+            _rows.Add(new DiffRow.Tear(
+                new GapBar(gap.GapIndex, ShowDown: false, ShowUp: false, ShowUnfold: true, HiddenCount: hidden)));
+            barRowIndex = _rows.Count;
+            _rows.Add(new DiffRow.HunkSeparator(range, header,
+                new GapBar(gap.GapIndex, ShowDown: false, ShowUp: true, ShowUnfold: false, HiddenCount: null)));
+            var tearCells = VisualCells(s.DiffHiddenLines(hidden)) + 10;
+            if (tearCells > _maxRowCells) _maxRowCells = tearCells;
         }
+        else
+        {
+            barRowIndex = _rows.Count;
+            _rows.Add(new DiffRow.HunkSeparator(range, header,
+                remaining > 0 ? BarFor(gap.GapIndex, remaining.Value) : null));
+            if (remaining > 0)
+                sepCells += VisualCells(s.DiffHiddenLines(remaining.Value)) + 2;
+        }
+        if (sepCells > _maxRowCells) _maxRowCells = sepCells;
+        return barRowIndex;
+    }
 
-        // The EOF gap: expanded rows grow downward from the last hunk; the trailing bar shows
-        // while lines remain below (before the fetch the count is unknown and the trailing-
-        // context heuristic decides optimistically — the first click's re-flatten corrects it).
-        var eof = gaps[^1];
+    private void EmitHunkLines(DiffHunk h, DiffHighlight? highlight)
+    {
+        // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
+        // tab-expanded column space so it aligns with Spans and the glyph grid.
+        var expanded = new string[h.Lines.Count];
+        for (var j = 0; j < h.Lines.Count; j++)
+            expanded[j] = DiffText.ExpandTabs(h.Lines[j].Text);
+        var emphasis = DiffOptions.IntraLineHighlightingEnabled
+            ? IntraLineDiff.ForHunk(h.Lines, expanded)
+            : null;
+
+        for (var j = 0; j < h.Lines.Count; j++)
+        {
+            var l = h.Lines[j];
+            var text = expanded[j];
+            // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
+            var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
+            if (spans != null && spans.Count == 0) spans = null;
+            _rows.Add(new DiffRow.Line(
+                l.Kind,
+                l.OldLineNumber?.ToString() ?? string.Empty,
+                l.NewLineNumber?.ToString() ?? string.Empty,
+                text,
+                text.Length,
+                spans,
+                emphasis?[j]));
+            var cells = VisualCells(text);
+            if (cells > _maxRowCells) _maxRowCells = cells;
+        }
+    }
+
+    // The EOF gap: expanded rows grow downward from the last hunk; the trailing bar shows while
+    // lines remain below (before the fetch the count is unknown and the trailing-context heuristic
+    // decides optimistically — the first click's re-flatten corrects it).
+    private void EmitEofGap(DiffResult r, DiffGap eof, ContextExpansion? expansion, DiffHighlight? highlight)
+    {
         var (eofTop, _, eofRemaining) = GapState(eof, expansion);
         if (eofTop > 0)
             EmitExpandedRows(eof.NewStart, eof.NewStart + eofTop - 1, eof.OldNewDelta, expansion!, highlight);
+
         var showEofBar = eofRemaining is int rem ? rem > 0 : !DiffGaps.LastHunkReachesEof(r);
-        if (showEofBar)
+        if (!showEofBar) return;
+
+        _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
+            new GapBar(eof.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: eofRemaining)));
+        if (eofRemaining is int n)
         {
-            _rows.Add(new DiffRow.HunkSeparator(string.Empty, null,
-                new GapBar(eof.GapIndex, ShowDown: true, ShowUp: false, ShowUnfold: false, HiddenCount: eofRemaining)));
-            if (eofRemaining is int n)
-            {
-                var eofCells = VisualCells(s.DiffHiddenLines(n)) + 2;
-                if (eofCells > _maxRowCells) _maxRowCells = eofCells;
-            }
+            var eofCells = VisualCells(_loc.Strings.Value.DiffHiddenLines(n)) + 2;
+            if (eofCells > _maxRowCells) _maxRowCells = eofCells;
         }
+    }
 
-        if (r.Truncated)
-            AddBanner(s.DiffDiffTruncated(totalLines));
-
-        // Gutter width from the max digit count, sized after emission so expanded rows'
-        // (possibly larger) line numbers are included.
+    // Gutter width from the max digit count, sized after emission so expanded rows' (possibly
+    // larger) line numbers are included; then map every row to its owning hunk (-1 for chrome).
+    private void FinalizeGutterAndHunkMap()
+    {
         _gutterWidth = Math.Max(1, GutterDigitCount()) * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
 
         _rowToHunk = new int[_rows.Count];
@@ -1096,25 +1124,39 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     private void DrawLineRow(ICanvas c, DiffRow.Line l, float left, float bottom, float width, int z)
     {
-        var (glyph, glyphColor) = l.Kind switch
-        {
-            DiffLineKind.Added => ("+", _styles.LineAddedGlyph),
-            DiffLineKind.Removed => ("-", _styles.LineRemovedGlyph),
-            _ => (" ", _styles.LineContextGlyph),
-        };
+        DrawRowBackground(c, l, left, bottom, width, z);
+        var textLeft = DrawGutterAndGlyph(c, l, left, bottom, z);
+        if (l.Emphasis is { Count: > 0 } ranges)
+            DrawIntraLineEmphasis(c, l, ranges, textLeft, bottom, z);
+        DrawLineText(c, l, textLeft, bottom, left + width, z + 2);
+    }
+
+    private void DrawRowBackground(ICanvas c, DiffRow.Line l, float left, float bottom, float width, int z)
+    {
         var bg = l.Kind switch
         {
             DiffLineKind.Added => _styles.LineAddedBackground,
             DiffLineKind.Removed => _styles.LineRemovedBackground,
             _ => _styles.Background,
         };
-
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(left, bottom, width, _lineHeight),
             Style = SolidBgStyle(bg),
             ZIndex = z,
         });
+    }
+
+    // Draws the line-number gutter(s) and the +/-/space kind glyph, returning the x where the
+    // line text begins.
+    private float DrawGutterAndGlyph(ICanvas c, DiffRow.Line l, float left, float bottom, int z)
+    {
+        var (glyph, glyphColor) = l.Kind switch
+        {
+            DiffLineKind.Added => ("+", _styles.LineAddedGlyph),
+            DiffLineKind.Removed => ("-", _styles.LineRemovedGlyph),
+            _ => (" ", _styles.LineContextGlyph),
+        };
 
         var x = left;
         // Full-file mode shows only the new-side gutter; diff mode shows old|new.
@@ -1128,41 +1170,40 @@ internal sealed class DiffContentView : View, IScrollableContent
             _styles.LineNumberText, TextAlignment.End, z + 2);
         x += _gutterWidth + 4f;
         DrawMonoText(c, glyph, x, bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, z + 2);
-        x += GlyphColumnWidth + 4f;
+        return x + GlyphColumnWidth + 4f;
+    }
 
-        // Intra-line emphasis: a stronger background tint over the changed characters, layered
-        // between the line bg (z) and the text (z + 2). Walk the ranges incrementally, carrying
-        // cx forward exactly as DrawLineText does, never re-measuring from column 0.
-        if (l.Emphasis is { Count: > 0 } ranges)
+    // Intra-line emphasis: a stronger background tint over the changed characters, layered between
+    // the line bg (z) and the text (z + 2). Walk the ranges incrementally, carrying cx forward
+    // exactly as DrawLineText does, never re-measuring from column 0.
+    private void DrawIntraLineEmphasis(
+        ICanvas c, DiffRow.Line l, IReadOnlyList<CharRange> ranges, float textLeft, float bottom, int z)
+    {
+        var emBg = l.Kind == DiffLineKind.Removed
+            ? _styles.LineRemovedEmphasisBackground
+            : _styles.LineAddedEmphasisBackground;
+        var len = l.Text.Length;
+        var col = 0;
+        var cx = textLeft;
+        foreach (var rng in ranges)
         {
-            var emBg = l.Kind == DiffLineKind.Removed
-                ? _styles.LineRemovedEmphasisBackground
-                : _styles.LineAddedEmphasisBackground;
-            var len = l.Text.Length;
-            var col = 0;
-            var cx = x;
-            foreach (var rng in ranges)
+            // ForPair promises sorted, non-overlapping, in-bounds ranges; this clamp is the
+            // backstop so a regression there shows up as a wrong-looking rect, never a per-frame
+            // Substring crash in the render loop.
+            var start = Math.Clamp(rng.Start, col, len);
+            var end = Math.Clamp(rng.Start + rng.Length, start, len);
+            if (start > col)
+                cx += c.MeasureTextWidth(l.Text.Substring(col, start - col), MonoStartStyle);
+            var w = c.MeasureTextWidth(l.Text.Substring(start, end - start), MonoStartStyle);
+            c.DrawRect(new DrawRectInputs
             {
-                // ForPair promises sorted, non-overlapping, in-bounds ranges; this clamp is the
-                // backstop so a regression there shows up as a wrong-looking rect, never a
-                // per-frame Substring crash in the render loop.
-                var start = Math.Clamp(rng.Start, col, len);
-                var end = Math.Clamp(rng.Start + rng.Length, start, len);
-                if (start > col)
-                    cx += c.MeasureTextWidth(l.Text.Substring(col, start - col), MonoStartStyle);
-                var w = c.MeasureTextWidth(l.Text.Substring(start, end - start), MonoStartStyle);
-                c.DrawRect(new DrawRectInputs
-                {
-                    Position = new RectF(cx, bottom, w, _lineHeight),
-                    Style = SolidBgStyle(emBg),
-                    ZIndex = z + 1,
-                });
-                cx += w;
-                col = end;
-            }
+                Position = new RectF(cx, bottom, w, _lineHeight),
+                Style = SolidBgStyle(emBg),
+                ZIndex = z + 1,
+            });
+            cx += w;
+            col = end;
         }
-
-        DrawLineText(c, l, x, bottom, left + width, z + 2);
     }
 
     // Draws the line's text either as one run (no spans → plain, identical to before) or as a

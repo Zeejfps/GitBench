@@ -94,239 +94,312 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
             using var lg = new Repository(repo.Path);
 
-            var headTip = lg.Head?.Tip;
-            var headSha = headTip?.Sha;
-            var isDetached = lg.Info.IsHeadDetached;
-            var currentBranchName = isDetached ? null : lg.Head?.FriendlyName;
+            var head = ReadHead(lg);
+            var scan = ScanRefs(lg, head);
+            var commits = WalkCommits(lg, scan.RefTips, cap, out var truncated);
 
-            var refTips = new List<Commit>();
-            // Tips reachable purely from local refs (branches, HEAD, tags, stashes). A
-            // displayed commit not reachable from any of these is remote-only.
-            var localTips = new List<Commit>();
-            var refsBySha = new Dictionary<string, List<RefBadge>>();
-
-            // Split branches by kind so the local pass can absorb matching remotes. Drop the
-            // remote's symbolic "origin/HEAD" ref — it only ever mirrors the remote's default
-            // branch, so it's pure noise next to the branch it points at.
-            var localBranches = new List<Branch>();
-            var remoteBranches = new List<Branch>();
-            foreach (var branch in lg.Branches)
-            {
-                var tip = branch.Tip;
-                if (tip == null) continue;
-                if (branch.IsRemote)
-                {
-                    if (branch.FriendlyName.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
-                    remoteBranches.Add(branch);
-                }
-                else
-                {
-                    localBranches.Add(branch);
-                    localTips.Add(tip);
-                }
-                refTips.Add(tip);
-            }
-
-            // Remote branches anchored by a local counterpart (a local branch tracks them, or a
-            // local branch shares their short name). The history view's remote filter keeps
-            // commits reachable from these — hiding remote-only branches must not hide e.g.
-            // origin/main's unpulled commits while main exists locally.
-            var localNames = new HashSet<string>(StringComparer.Ordinal);
-            var trackedUpstreams = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var local in localBranches)
-            {
-                localNames.Add(local.FriendlyName);
-                if (local.TrackedBranch is { } upstream) trackedUpstreams.Add(upstream.FriendlyName);
-            }
-            var matchedRemoteTips = new List<Commit>();
-            foreach (var remote in remoteBranches)
-            {
-                if (trackedUpstreams.Contains(remote.FriendlyName) || localNames.Contains(RemoteBranchShortName(remote)))
-                    matchedRemoteTips.Add(remote.Tip!);
-            }
-
-            // A local branch sitting on the same commit as its tracking remote absorbs that
-            // remote into a single "synced" badge; record the absorbed remote names so the
-            // remote pass skips them. The checked-out branch also absorbs the HEAD badge.
-            var absorbedRemotes = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var local in localBranches)
-            {
-                var tip = local.Tip!;
-                var isCurrent = !isDetached && local.FriendlyName == currentBranchName;
-                var tracked = local.TrackedBranch;
-                var hasUpstream = tracked?.Tip != null;
-                BranchSync sync;
-                if (hasUpstream)
-                {
-                    // Equal tips means neither ahead nor behind — in sync. A divergent upstream
-                    // lives on a different commit (its own row), so only fold the remote badge in
-                    // when the two are level.
-                    var inSync = tracked!.Tip.Sha == tip.Sha;
-                    sync = inSync ? BranchSync.InSync : BranchSync.Diverged;
-                    if (inSync) absorbedRemotes.Add(tracked.FriendlyName);
-                }
-                else
-                {
-                    // No upstream configured (e.g. pushed without -u, or the upstream was later
-                    // unset). Git records no relationship, but if a remote branch with the
-                    // conventional "<remote>/<name>" name sits on this exact commit it's
-                    // effectively the same ref — fold it into one synced badge rather than
-                    // showing a redundant local/remote pair on the same commit.
-                    var twin = remoteBranches.FirstOrDefault(r =>
-                        r.Tip!.Sha == tip.Sha && RemoteBranchShortName(r) == local.FriendlyName);
-                    if (twin != null)
-                    {
-                        sync = BranchSync.InSync;
-                        absorbedRemotes.Add(twin.FriendlyName);
-                    }
-                    else
-                    {
-                        sync = BranchSync.Untracked;
-                    }
-                }
-                AddBadge(refsBySha, tip.Sha,
-                    new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, Sync: sync));
-            }
-
-            foreach (var remote in remoteBranches)
-            {
-                if (absorbedRemotes.Contains(remote.FriendlyName)) continue;
-                AddBadge(refsBySha, remote.Tip!.Sha, new RefBadge(remote.FriendlyName, RefKind.RemoteBranch));
-            }
-
-            // HEAD only gets its own badge when detached; otherwise it's represented by the
-            // current branch's badge (IsCurrent above).
-            if (headSha != null && isDetached)
-                AddBadge(refsBySha, headSha, new RefBadge("HEAD", RefKind.Head));
-
-            // Walk stash tips too so stash commits show in the graph. Stash entries are
-            // merge commits whose parents include the index/untracked snapshots — those get
-            // pulled in automatically via the topological walk.
-            var stashIndex = 0;
-            foreach (var stash in lg.Stashes)
-            {
-                var tip = stash.WorkTree;
-                if (tip == null) { stashIndex++; continue; }
-                refTips.Add(tip);
-                localTips.Add(tip);
-                var label = StripStashPrefix(stash.Message ?? string.Empty);
-                if (string.IsNullOrEmpty(label)) label = $"stash@{{{stashIndex}}}";
-                AddBadge(refsBySha, tip.Sha, new RefBadge(label, RefKind.Stash));
-                stashIndex++;
-            }
-
-            // Tags peel to the commit they ultimately reference (annotated tags point at a
-            // tag object, lightweight ones directly at the commit). Adding the commit as a
-            // ref tip keeps tagged history reachable even when no branch points at it.
-            foreach (var tag in lg.Tags)
-            {
-                if (tag.PeeledTarget is not Commit tagged) continue;
-                refTips.Add(tagged);
-                localTips.Add(tagged);
-                AddBadge(refsBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
-            }
-
-            // Always seed the walk from HEAD. On a branch this tip is already in refTips and
-            // libgit2 dedupes by reachability, so it's a no-op. When detached, HEAD's commits
-            // may be reachable from no other ref (ahead of every branch) — without this they'd
-            // be silently excluded from the graph, making committed work look lost.
-            if (headTip != null)
-            {
-                refTips.Add(headTip);
-                localTips.Add(headTip);
-            }
-
-            var filter = new CommitFilter
-            {
-                IncludeReachableFrom = refTips,
-                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
-            };
-
-            var commitsRaw = new List<Commit>(cap);
-            var truncated = false;
-            foreach (var c in lg.Commits.QueryBy(filter))
-            {
-                if (commitsRaw.Count >= cap)
-                {
-                    truncated = true;
-                    break;
-                }
-                commitsRaw.Add(c);
-            }
-
-            var indexBySha = new Dictionary<string, int>(commitsRaw.Count);
-            var parentShasByIndex = new string[commitsRaw.Count][];
-            for (var i = 0; i < commitsRaw.Count; i++)
-            {
-                indexBySha[commitsRaw[i].Sha] = i;
-                parentShasByIndex[i] = commitsRaw[i].Parents.Select(p => p.Sha).ToArray();
-            }
-
+            var (indexBySha, parentShasByIndex) = BuildParentIndex(commits);
             // Remote-only = displayed but not reachable from any local tip. Anchored widens the
             // seeds with the matched remote tips, so !anchored = reachable only from remote
             // branches with no local counterpart (what the history view's remote filter hides).
-            var localReachable = ComputeReachability(indexBySha, parentShasByIndex, localTips);
-            var anchoredReachable = ComputeReachability(indexBySha, parentShasByIndex, localTips.Concat(matchedRemoteTips));
+            var localReachable = ComputeReachability(indexBySha, parentShasByIndex, scan.LocalTips);
+            var anchoredReachable = ComputeReachability(indexBySha, parentShasByIndex, scan.LocalTips.Concat(scan.MatchedRemoteTips));
 
-            var inputs = new LaneAssigner.Input[commitsRaw.Count];
-            for (var i = 0; i < commitsRaw.Count; i++)
-            {
-                var c = commitsRaw[i];
-                var parentShas = parentShasByIndex[i];
-                var auxiliary = !localReachable[i];
-                if (!auxiliary && refsBySha.TryGetValue(c.Sha, out var cBadges))
-                {
-                    foreach (var b in cBadges)
-                    {
-                        if (b.Kind != RefKind.Stash) continue;
-                        auxiliary = true;
-                        break;
-                    }
-                }
-                inputs[i] = new LaneAssigner.Input(c.Sha, parentShas, auxiliary);
-            }
-
+            var inputs = BuildLaneInputs(commits, parentShasByIndex, localReachable, scan.BadgesBySha);
             var (assignments, laneCount) = LaneAssigner.Assign(inputs);
+            var nodes = BuildNodes(commits, inputs, assignments, scan.BadgesBySha, localReachable, anchoredReachable);
 
-            var nodes = new CommitNode[commitsRaw.Count];
-            for (var i = 0; i < commitsRaw.Count; i++)
-            {
-                var c = commitsRaw[i];
-                var a = assignments[i];
-                var parentShas = (IReadOnlyList<string>)inputs[i].ParentShas;
-                refsBySha.TryGetValue(c.Sha, out var badges);
-
-                var inWalkParents = new ParentLink[a.InWalkParentLanes.Length];
-                for (var k = 0; k < a.InWalkParentLanes.Length; k++)
-                {
-                    var p = a.InWalkParentLanes[k];
-                    inWalkParents[k] = new ParentLink(p.ParentIndex, p.Lane);
-                }
-
-                nodes[i] = new CommitNode(
-                    Sha: c.Sha,
-                    Summary: c.MessageShort ?? string.Empty,
-                    Author: c.Author?.Name ?? string.Empty,
-                    When: c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
-                    ParentShas: parentShas,
-                    Lane: a.Lane,
-                    HasIncomingAtCommitLane: a.HasIncomingAtCommitLane,
-                    IncomingAtCommitLaneDashed: a.IncomingAtCommitLaneDashed,
-                    InWalkParentLanes: inWalkParents,
-                    IncomingLanes: a.IncomingLanes,
-                    PassThroughLanes: a.PassThroughLanes,
-                    Refs: badges ?? (IReadOnlyList<RefBadge>)Array.Empty<RefBadge>(),
-                    RemoteOnly: !localReachable[i],
-                    UnmatchedRemoteOnly: !anchoredReachable[i]);
-            }
-
-            var headBranchName = lg.Info.IsHeadDetached ? null : lg.Head?.FriendlyName;
-            return new CommitSnapshot(repo.Id, repo.Path, nodes, laneCount, truncated, headBranchName);
+            return new CommitSnapshot(repo.Id, repo.Path, nodes, laneCount, truncated, head.BranchName);
         }
         catch (Exception ex)
         {
             return new Fetched<CommitSnapshot>.Failed(ex.Message);
         }
+    }
+
+    // BranchName is null when HEAD is detached; otherwise the checked-out branch's friendly name.
+    private readonly record struct HeadState(Commit? Tip, string? Sha, bool IsDetached, string? BranchName);
+
+    // Ref tips and badges gathered from a repo's branches, HEAD, stashes, and tags.
+    private sealed class RefScan
+    {
+        // Seeds for the topological commit walk (all displayed refs).
+        public readonly List<Commit> RefTips = new();
+        // Tips reachable purely from local refs (branches, HEAD, tags, stashes). A displayed
+        // commit not reachable from any of these is remote-only.
+        public readonly List<Commit> LocalTips = new();
+        // Remote tips anchored by a local counterpart; widen the "not remote-only" set.
+        public readonly List<Commit> MatchedRemoteTips = new();
+        public readonly Dictionary<string, List<RefBadge>> BadgesBySha = new();
+        // Remote branches folded into a local branch's synced badge; skipped in the remote pass.
+        public readonly HashSet<string> AbsorbedRemotes = new(StringComparer.Ordinal);
+    }
+
+    private static HeadState ReadHead(Repository lg)
+    {
+        var tip = lg.Head?.Tip;
+        var isDetached = lg.Info.IsHeadDetached;
+        return new HeadState(tip, tip?.Sha, isDetached, isDetached ? null : lg.Head?.FriendlyName);
+    }
+
+    private static RefScan ScanRefs(Repository lg, HeadState head)
+    {
+        var scan = new RefScan();
+        var (localBranches, remoteBranches) = SplitBranches(lg, scan);
+        CollectMatchedRemoteTips(localBranches, remoteBranches, scan);
+        AddLocalBranchBadges(localBranches, remoteBranches, head, scan);
+        AddRemoteBranchBadges(remoteBranches, scan);
+        AddDetachedHeadBadge(head, scan);
+        AddStashRefs(lg, scan);
+        AddTagRefs(lg, scan);
+        SeedHeadTip(head, scan);
+        return scan;
+    }
+
+    // Split branches by kind so the local pass can absorb matching remotes. Drop the remote's
+    // symbolic "origin/HEAD" ref — it only ever mirrors the remote's default branch, so it's
+    // pure noise next to the branch it points at.
+    private static (List<Branch> Local, List<Branch> Remote) SplitBranches(Repository lg, RefScan scan)
+    {
+        var localBranches = new List<Branch>();
+        var remoteBranches = new List<Branch>();
+        foreach (var branch in lg.Branches)
+        {
+            var tip = branch.Tip;
+            if (tip == null) continue;
+            if (branch.IsRemote)
+            {
+                if (branch.FriendlyName.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
+                remoteBranches.Add(branch);
+            }
+            else
+            {
+                localBranches.Add(branch);
+                scan.LocalTips.Add(tip);
+            }
+            scan.RefTips.Add(tip);
+        }
+        return (localBranches, remoteBranches);
+    }
+
+    // Remote branches anchored by a local counterpart (a local branch tracks them, or a local
+    // branch shares their short name). The history view's remote filter keeps commits reachable
+    // from these — hiding remote-only branches must not hide e.g. origin/main's unpulled commits
+    // while main exists locally.
+    private static void CollectMatchedRemoteTips(
+        List<Branch> localBranches, List<Branch> remoteBranches, RefScan scan)
+    {
+        var localNames = new HashSet<string>(StringComparer.Ordinal);
+        var trackedUpstreams = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var local in localBranches)
+        {
+            localNames.Add(local.FriendlyName);
+            if (local.TrackedBranch is { } upstream) trackedUpstreams.Add(upstream.FriendlyName);
+        }
+        foreach (var remote in remoteBranches)
+        {
+            if (trackedUpstreams.Contains(remote.FriendlyName) || localNames.Contains(RemoteBranchShortName(remote)))
+                scan.MatchedRemoteTips.Add(remote.Tip!);
+        }
+    }
+
+    // A local branch sitting on the same commit as its tracking remote absorbs that remote into a
+    // single "synced" badge; the absorbed remote names go into scan.AbsorbedRemotes so the remote
+    // pass skips them. The checked-out branch also absorbs the HEAD badge.
+    private static void AddLocalBranchBadges(
+        List<Branch> localBranches, List<Branch> remoteBranches, HeadState head, RefScan scan)
+    {
+        foreach (var local in localBranches)
+        {
+            var tip = local.Tip!;
+            var isCurrent = !head.IsDetached && local.FriendlyName == head.BranchName;
+            var sync = ResolveBranchSync(local, tip, remoteBranches, scan.AbsorbedRemotes);
+            AddBadge(scan.BadgesBySha, tip.Sha,
+                new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, Sync: sync));
+        }
+    }
+
+    private static BranchSync ResolveBranchSync(
+        Branch local, Commit tip, List<Branch> remoteBranches, HashSet<string> absorbedRemotes)
+    {
+        var tracked = local.TrackedBranch;
+        if (tracked?.Tip != null)
+        {
+            // Equal tips means neither ahead nor behind — in sync. A divergent upstream lives on a
+            // different commit (its own row), so only fold the remote badge in when the two are level.
+            var inSync = tracked.Tip.Sha == tip.Sha;
+            if (inSync) absorbedRemotes.Add(tracked.FriendlyName);
+            return inSync ? BranchSync.InSync : BranchSync.Diverged;
+        }
+
+        // No upstream configured (e.g. pushed without -u, or the upstream was later unset). Git
+        // records no relationship, but if a remote branch with the conventional "<remote>/<name>"
+        // name sits on this exact commit it's effectively the same ref — fold it into one synced
+        // badge rather than showing a redundant local/remote pair on the same commit.
+        var twin = remoteBranches.FirstOrDefault(r =>
+            r.Tip!.Sha == tip.Sha && RemoteBranchShortName(r) == local.FriendlyName);
+        if (twin == null) return BranchSync.Untracked;
+        absorbedRemotes.Add(twin.FriendlyName);
+        return BranchSync.InSync;
+    }
+
+    private static void AddRemoteBranchBadges(List<Branch> remoteBranches, RefScan scan)
+    {
+        foreach (var remote in remoteBranches)
+        {
+            if (scan.AbsorbedRemotes.Contains(remote.FriendlyName)) continue;
+            AddBadge(scan.BadgesBySha, remote.Tip!.Sha, new RefBadge(remote.FriendlyName, RefKind.RemoteBranch));
+        }
+    }
+
+    // HEAD only gets its own badge when detached; otherwise it's represented by the current
+    // branch's badge (IsCurrent).
+    private static void AddDetachedHeadBadge(HeadState head, RefScan scan)
+    {
+        if (head.Sha != null && head.IsDetached)
+            AddBadge(scan.BadgesBySha, head.Sha, new RefBadge("HEAD", RefKind.Head));
+    }
+
+    // Walk stash tips too so stash commits show in the graph. Stash entries are merge commits whose
+    // parents include the index/untracked snapshots — those get pulled in via the topological walk.
+    private static void AddStashRefs(Repository lg, RefScan scan)
+    {
+        var stashIndex = 0;
+        foreach (var stash in lg.Stashes)
+        {
+            var tip = stash.WorkTree;
+            if (tip == null) { stashIndex++; continue; }
+            scan.RefTips.Add(tip);
+            scan.LocalTips.Add(tip);
+            var label = StripStashPrefix(stash.Message ?? string.Empty);
+            if (string.IsNullOrEmpty(label)) label = $"stash@{{{stashIndex}}}";
+            AddBadge(scan.BadgesBySha, tip.Sha, new RefBadge(label, RefKind.Stash));
+            stashIndex++;
+        }
+    }
+
+    // Tags peel to the commit they ultimately reference (annotated tags point at a tag object,
+    // lightweight ones directly at the commit). Adding the commit as a ref tip keeps tagged
+    // history reachable even when no branch points at it.
+    private static void AddTagRefs(Repository lg, RefScan scan)
+    {
+        foreach (var tag in lg.Tags)
+        {
+            if (tag.PeeledTarget is not Commit tagged) continue;
+            scan.RefTips.Add(tagged);
+            scan.LocalTips.Add(tagged);
+            AddBadge(scan.BadgesBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
+        }
+    }
+
+    // Always seed the walk from HEAD. On a branch this tip is already in RefTips and libgit2
+    // dedupes by reachability, so it's a no-op. When detached, HEAD's commits may be reachable
+    // from no other ref (ahead of every branch) — without this they'd be silently excluded from
+    // the graph, making committed work look lost.
+    private static void SeedHeadTip(HeadState head, RefScan scan)
+    {
+        if (head.Tip == null) return;
+        scan.RefTips.Add(head.Tip);
+        scan.LocalTips.Add(head.Tip);
+    }
+
+    private static List<Commit> WalkCommits(Repository lg, List<Commit> refTips, int cap, out bool truncated)
+    {
+        var filter = new CommitFilter
+        {
+            IncludeReachableFrom = refTips,
+            SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
+        };
+
+        var commits = new List<Commit>(cap);
+        truncated = false;
+        foreach (var c in lg.Commits.QueryBy(filter))
+        {
+            if (commits.Count >= cap)
+            {
+                truncated = true;
+                break;
+            }
+            commits.Add(c);
+        }
+        return commits;
+    }
+
+    private static (Dictionary<string, int> IndexBySha, string[][] ParentShasByIndex) BuildParentIndex(
+        List<Commit> commits)
+    {
+        var indexBySha = new Dictionary<string, int>(commits.Count);
+        var parentShasByIndex = new string[commits.Count][];
+        for (var i = 0; i < commits.Count; i++)
+        {
+            indexBySha[commits[i].Sha] = i;
+            parentShasByIndex[i] = commits[i].Parents.Select(p => p.Sha).ToArray();
+        }
+        return (indexBySha, parentShasByIndex);
+    }
+
+    // A commit is auxiliary (off the main lane graph) when it's remote-only or a stash tip.
+    private static LaneAssigner.Input[] BuildLaneInputs(
+        List<Commit> commits, string[][] parentShasByIndex, bool[] localReachable,
+        Dictionary<string, List<RefBadge>> badgesBySha)
+    {
+        var inputs = new LaneAssigner.Input[commits.Count];
+        for (var i = 0; i < commits.Count; i++)
+        {
+            var sha = commits[i].Sha;
+            var auxiliary = !localReachable[i] || HasStashBadge(badgesBySha, sha);
+            inputs[i] = new LaneAssigner.Input(sha, parentShasByIndex[i], auxiliary);
+        }
+        return inputs;
+    }
+
+    private static bool HasStashBadge(Dictionary<string, List<RefBadge>> badgesBySha, string sha)
+    {
+        if (!badgesBySha.TryGetValue(sha, out var badges)) return false;
+        foreach (var b in badges)
+            if (b.Kind == RefKind.Stash) return true;
+        return false;
+    }
+
+    private static CommitNode[] BuildNodes(
+        List<Commit> commits, LaneAssigner.Input[] inputs, LaneAssignment[] assignments,
+        Dictionary<string, List<RefBadge>> badgesBySha, bool[] localReachable, bool[] anchoredReachable)
+    {
+        var nodes = new CommitNode[commits.Count];
+        for (var i = 0; i < commits.Count; i++)
+        {
+            var c = commits[i];
+            var a = assignments[i];
+            badgesBySha.TryGetValue(c.Sha, out var badges);
+
+            nodes[i] = new CommitNode(
+                Sha: c.Sha,
+                Summary: c.MessageShort ?? string.Empty,
+                Author: c.Author?.Name ?? string.Empty,
+                When: c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
+                ParentShas: (IReadOnlyList<string>)inputs[i].ParentShas,
+                Lane: a.Lane,
+                HasIncomingAtCommitLane: a.HasIncomingAtCommitLane,
+                IncomingAtCommitLaneDashed: a.IncomingAtCommitLaneDashed,
+                InWalkParentLanes: MapParentLinks(a),
+                IncomingLanes: a.IncomingLanes,
+                PassThroughLanes: a.PassThroughLanes,
+                Refs: badges ?? (IReadOnlyList<RefBadge>)Array.Empty<RefBadge>(),
+                RemoteOnly: !localReachable[i],
+                UnmatchedRemoteOnly: !anchoredReachable[i]);
+        }
+        return nodes;
+    }
+
+    private static ParentLink[] MapParentLinks(LaneAssignment a)
+    {
+        var links = new ParentLink[a.InWalkParentLanes.Length];
+        for (var k = 0; k < links.Length; k++)
+        {
+            var p = a.InWalkParentLanes[k];
+            links[k] = new ParentLink(p.ParentIndex, p.Lane);
+        }
+        return links;
     }
 
     // Marks every commit reachable from the seed tips. The walk is topologically sorted (a
@@ -555,6 +628,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Same AOT-marshalling story as GetDiff: libgit2 callbacks for branch enumeration trip
     // NativeAOT's reverse-pinvoke stubs, so remote branches don't show in published builds.
     // `git for-each-ref` returns the same data in one shot.
+    private const char BranchFieldSep = '\x1F';
+
+    // %(upstream:track) collapses two distinct cases to "": (a) no upstream configured at all,
+    // (b) upstream is set and we are exactly in sync. So we also pull %(upstream) (the upstream
+    // ref name) to tell them apart. %(HEAD) marks the checked-out branch with "*", folding in
+    // what a separate `symbolic-ref HEAD` call used to report — one fewer git process per load.
+    private static readonly string BranchRefFormat =
+        $"%(HEAD){BranchFieldSep}%(objectname){BranchFieldSep}%(refname){BranchFieldSep}%(upstream:track,nobracket){BranchFieldSep}%(upstream)";
+
     public Fetched<BranchListing> GetBranches(Repo repo)
     {
         try
@@ -562,97 +644,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!IsGitRepo(repo.Path))
                 return new Fetched<BranchListing>.Failed("Not a git repository.");
 
-            // Seed with all configured remotes so groups still show even when a remote has
-            // no branches yet (matches the prior LibGit2Sharp behavior).
-            var remotesByName = new Dictionary<string, List<BranchEntry>>(StringComparer.Ordinal);
-            var remotesOut = RunGit(repo.Path, out var remErr, "remote");
-            if (remotesOut == null)
+            var remotesByName = SeedRemoteGroups(repo.Path, out var remErr);
+            if (remotesByName == null)
                 return new Fetched<BranchListing>.Failed(remErr ?? "git remote failed.");
-            foreach (var rawLine in remotesOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var name = rawLine.Trim();
-                if (name.Length > 0) remotesByName[name] = new List<BranchEntry>();
-            }
 
-            const char Sep = '\x1F';
-            // %(upstream:track) collapses two distinct cases to "": (a) no upstream
-            // configured at all, (b) upstream is set and we are exactly in sync. So we
-            // also pull %(upstream) (the upstream ref name) to tell them apart. %(HEAD)
-            // marks the checked-out branch with "*", folding in what a separate
-            // `symbolic-ref HEAD` call used to report — one fewer git process per load.
-            var fmt = $"%(HEAD){Sep}%(objectname){Sep}%(refname){Sep}%(upstream:track,nobracket){Sep}%(upstream)";
             var branchesOut = RunGit(repo.Path, out var brErr,
-                "for-each-ref", $"--format={fmt}", "refs/heads", "refs/remotes");
+                "for-each-ref", $"--format={BranchRefFormat}", "refs/heads", "refs/remotes");
             if (branchesOut == null)
                 return new Fetched<BranchListing>.Failed(brErr ?? "git for-each-ref failed.");
 
             var locals = new List<BranchEntry>();
             foreach (var line in branchesOut.Split('\n'))
-            {
-                if (line.Length == 0) continue;
-                var parts = line.Split(Sep);
-                if (parts.Length < 3) continue;
-                // parts[0] is %(HEAD): "*" for the checked-out branch, a space otherwise.
-                var sha = parts[1];
-                var refname = parts[2];
-                var track = parts.Length > 3 ? parts[3] : string.Empty;
-                var upstream = parts.Length > 4 ? parts[4] : string.Empty;
+                ParseBranchRefLine(line, locals, remotesByName);
 
-                if (refname.StartsWith("refs/heads/", StringComparison.Ordinal))
-                {
-                    var name = refname["refs/heads/".Length..];
-                    var isHead = parts[0] == "*";
-                    var (ahead, behind, upstreamState) = ParseUpstream(track, upstream);
-                    string? upstreamRemote = null;
-                    string? upstreamBranch = null;
-                    if (upstreamState == BranchUpstreamState.Tracked
-                        && upstream.StartsWith("refs/remotes/", StringComparison.Ordinal))
-                    {
-                        var rest = upstream["refs/remotes/".Length..];
-                        var slash = rest.IndexOf('/');
-                        if (slash > 0)
-                        {
-                            upstreamRemote = rest[..slash];
-                            upstreamBranch = rest[(slash + 1)..];
-                        }
-                    }
-                    locals.Add(new BranchEntry(name, sha, isHead,
-                        AheadBy: ahead, BehindBy: behind,
-                        UpstreamState: upstreamState,
-                        UpstreamRemote: upstreamRemote,
-                        UpstreamBranch: upstreamBranch));
-                }
-                else if (refname.StartsWith("refs/remotes/", StringComparison.Ordinal))
-                {
-                    var rest = refname["refs/remotes/".Length..];
-                    var slash = rest.IndexOf('/');
-                    if (slash <= 0) continue;
-                    var remoteName = rest[..slash];
-                    var display = rest[(slash + 1)..];
-                    // Skip the symbolic origin/HEAD ref; it just mirrors another branch.
-                    if (display == "HEAD") continue;
-                    if (!remotesByName.TryGetValue(remoteName, out var list))
-                    {
-                        list = new List<BranchEntry>();
-                        remotesByName[remoteName] = list;
-                    }
-                    list.Add(new BranchEntry(display, sha, IsHead: false));
-                }
-            }
-
-            locals.Sort((a, b) =>
-            {
-                if (a.IsHead != b.IsHead) return a.IsHead ? -1 : 1;
-                return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
-            });
-
-            var remoteGroups = new List<RemoteGroup>(remotesByName.Count);
-            foreach (var kv in remotesByName.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
-            {
-                kv.Value.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
-                remoteGroups.Add(new RemoteGroup(kv.Key, kv.Value));
-            }
-
+            SortLocalBranches(locals);
+            var remoteGroups = BuildRemoteGroups(remotesByName);
             var stashes = LoadStashes(repo.Path);
             return new BranchListing(repo.Id, locals, remoteGroups, stashes);
         }
@@ -660,6 +666,97 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return new Fetched<BranchListing>.Failed(ex.Message);
         }
+    }
+
+    // Seed with all configured remotes so groups still show even when a remote has no branches
+    // yet (matches the prior LibGit2Sharp behavior). Returns null on a genuine git failure.
+    private Dictionary<string, List<BranchEntry>>? SeedRemoteGroups(string repoPath, out string? error)
+    {
+        var remotesOut = RunGit(repoPath, out error, "remote");
+        if (remotesOut == null) return null;
+        var remotesByName = new Dictionary<string, List<BranchEntry>>(StringComparer.Ordinal);
+        foreach (var rawLine in remotesOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var name = rawLine.Trim();
+            if (name.Length > 0) remotesByName[name] = new List<BranchEntry>();
+        }
+        return remotesByName;
+    }
+
+    private static void ParseBranchRefLine(
+        string line, List<BranchEntry> locals, Dictionary<string, List<BranchEntry>> remotesByName)
+    {
+        if (line.Length == 0) return;
+        var parts = line.Split(BranchFieldSep);
+        if (parts.Length < 3) return;
+        var refname = parts[2];
+        if (refname.StartsWith("refs/heads/", StringComparison.Ordinal))
+            locals.Add(ParseLocalBranch(parts, refname));
+        else if (refname.StartsWith("refs/remotes/", StringComparison.Ordinal))
+            AddRemoteBranch(refname, parts[1], remotesByName);
+    }
+
+    private static BranchEntry ParseLocalBranch(string[] parts, string refname)
+    {
+        // parts[0] is %(HEAD): "*" for the checked-out branch, a space otherwise.
+        var name = refname["refs/heads/".Length..];
+        var isHead = parts[0] == "*";
+        var sha = parts[1];
+        var track = parts.Length > 3 ? parts[3] : string.Empty;
+        var upstream = parts.Length > 4 ? parts[4] : string.Empty;
+        var (ahead, behind, upstreamState) = ParseUpstream(track, upstream);
+        var (upstreamRemote, upstreamBranch) = SplitUpstreamRef(upstream, upstreamState);
+        return new BranchEntry(name, sha, isHead,
+            AheadBy: ahead, BehindBy: behind,
+            UpstreamState: upstreamState,
+            UpstreamRemote: upstreamRemote,
+            UpstreamBranch: upstreamBranch);
+    }
+
+    private static (string? Remote, string? Branch) SplitUpstreamRef(string upstream, BranchUpstreamState state)
+    {
+        if (state != BranchUpstreamState.Tracked || !upstream.StartsWith("refs/remotes/", StringComparison.Ordinal))
+            return (null, null);
+        var rest = upstream["refs/remotes/".Length..];
+        var slash = rest.IndexOf('/');
+        if (slash <= 0) return (null, null);
+        return (rest[..slash], rest[(slash + 1)..]);
+    }
+
+    private static void AddRemoteBranch(
+        string refname, string sha, Dictionary<string, List<BranchEntry>> remotesByName)
+    {
+        var rest = refname["refs/remotes/".Length..];
+        var slash = rest.IndexOf('/');
+        if (slash <= 0) return;
+        var remoteName = rest[..slash];
+        var display = rest[(slash + 1)..];
+        // Skip the symbolic origin/HEAD ref; it just mirrors another branch.
+        if (display == "HEAD") return;
+        if (!remotesByName.TryGetValue(remoteName, out var list))
+        {
+            list = new List<BranchEntry>();
+            remotesByName[remoteName] = list;
+        }
+        list.Add(new BranchEntry(display, sha, IsHead: false));
+    }
+
+    private static void SortLocalBranches(List<BranchEntry> locals) =>
+        locals.Sort((a, b) =>
+        {
+            if (a.IsHead != b.IsHead) return a.IsHead ? -1 : 1;
+            return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        });
+
+    private static List<RemoteGroup> BuildRemoteGroups(Dictionary<string, List<BranchEntry>> remotesByName)
+    {
+        var groups = new List<RemoteGroup>(remotesByName.Count);
+        foreach (var kv in remotesByName.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            kv.Value.Sort((a, b) => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
+            groups.Add(new RemoteGroup(kv.Key, kv.Value));
+        }
+        return groups;
     }
 
     // `git stash list` is the source of truth for stash@{N} indexing; refs/stash only
@@ -734,74 +831,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
             var staged = new List<FileChange>();
             var unstaged = new List<FileChange>();
-
-            // Porcelain v2 with -z is NUL-terminated. Most records are a single
-            // NUL-terminated line; type-2 (rename/copy) records carry an additional
-            // NUL-terminated origPath right after, so we walk byte-by-byte rather than
-            // splitting on NUL up front.
-            var idx = 0;
-            while (idx < output.Length)
-            {
-                var end = output.IndexOf('\0', idx);
-                if (end < 0) break;
-                var record = output[idx..end];
-                idx = end + 1;
-                if (record.Length == 0) continue;
-
-                var kind = record[0];
-
-                if (kind == '?')
-                {
-                    // "? path" — untracked.
-                    var path = record.Length > 2 ? record[2..] : string.Empty;
-                    if (path.Length > 0)
-                        unstaged.Add(new FileChange(path, null, FileChangeStatus.Added));
-                    continue;
-                }
-
-                if (kind == '!')
-                {
-                    // Ignored — not requested, but skip defensively if it ever appears.
-                    continue;
-                }
-
-                if (kind == 'u')
-                {
-                    // "u XY sub m1 m2 m3 mW h1 h2 h3 path" — unmerged. Surface in unstaged
-                    // only; the user has to resolve and stage to clear it. Splitting into
-                    // both panels would invite a half-staged conflict resolution.
-                    var parts = record.Split(' ', 11);
-                    if (parts.Length < 11) continue;
-                    unstaged.Add(new FileChange(parts[10], null, FileChangeStatus.Conflicted));
-                    continue;
-                }
-
-                if (kind == '1')
-                {
-                    // "1 XY sub mH mI mW hH hI path"
-                    var parts = record.Split(' ', 9);
-                    if (parts.Length < 9) continue;
-                    var xy = parts[1];
-                    if (xy.Length < 2) continue;
-                    AddIndexAndWorkdirEntries(staged, unstaged, xy[0], xy[1], parts[8], origPath: null);
-                    continue;
-                }
-
-                if (kind == '2')
-                {
-                    // "2 XY sub mH mI mW hH hI Xscore path"  then  "origPath"
-                    var parts = record.Split(' ', 10);
-                    if (parts.Length < 10) continue;
-                    var xy = parts[1];
-                    if (xy.Length < 2) continue;
-                    var origEnd = output.IndexOf('\0', idx);
-                    if (origEnd < 0) continue;
-                    var origPath = output[idx..origEnd];
-                    idx = origEnd + 1;
-                    AddIndexAndWorkdirEntries(staged, unstaged, xy[0], xy[1], parts[9], origPath);
-                    continue;
-                }
-            }
+            ParseStatusPorcelainV2(output, staged, unstaged);
 
             staged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             unstaged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
@@ -812,6 +842,83 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return new Fetched<LocalChangesSnapshot>.Failed(ex.Message);
         }
+    }
+
+    // Porcelain v2 with -z is NUL-terminated. Most records are a single NUL-terminated line;
+    // type-2 (rename/copy) records carry an additional NUL-terminated origPath right after, so
+    // we walk byte-by-byte rather than splitting on NUL up front.
+    private static void ParseStatusPorcelainV2(string output, List<FileChange> staged, List<FileChange> unstaged)
+    {
+        var idx = 0;
+        while (idx < output.Length)
+        {
+            var end = output.IndexOf('\0', idx);
+            if (end < 0) break;
+            var record = output[idx..end];
+            idx = end + 1;
+            if (record.Length > 0)
+                ParseStatusRecord(record, output, ref idx, staged, unstaged);
+        }
+    }
+
+    private static void ParseStatusRecord(
+        string record, string output, ref int idx, List<FileChange> staged, List<FileChange> unstaged)
+    {
+        switch (record[0])
+        {
+            case '?': // "? path" — untracked.
+                var path = record.Length > 2 ? record[2..] : string.Empty;
+                if (path.Length > 0)
+                    unstaged.Add(new FileChange(path, null, FileChangeStatus.Added));
+                break;
+            case '!': // Ignored — not requested, but skip defensively if it ever appears.
+                break;
+            case 'u':
+                ParseUnmergedRecord(record, unstaged);
+                break;
+            case '1':
+                ParseOrdinaryRecord(record, staged, unstaged);
+                break;
+            case '2':
+                ParseRenameRecord(record, output, ref idx, staged, unstaged);
+                break;
+        }
+    }
+
+    // "u XY sub m1 m2 m3 mW h1 h2 h3 path" — unmerged. Surface in unstaged only; the user has to
+    // resolve and stage to clear it. Splitting into both panels would invite a half-staged
+    // conflict resolution.
+    private static void ParseUnmergedRecord(string record, List<FileChange> unstaged)
+    {
+        var parts = record.Split(' ', 11);
+        if (parts.Length < 11) return;
+        unstaged.Add(new FileChange(parts[10], null, FileChangeStatus.Conflicted));
+    }
+
+    private static void ParseOrdinaryRecord(string record, List<FileChange> staged, List<FileChange> unstaged)
+    {
+        // "1 XY sub mH mI mW hH hI path"
+        var parts = record.Split(' ', 9);
+        if (parts.Length < 9) return;
+        var xy = parts[1];
+        if (xy.Length < 2) return;
+        AddIndexAndWorkdirEntries(staged, unstaged, xy[0], xy[1], parts[8], origPath: null);
+    }
+
+    // "2 XY sub mH mI mW hH hI Xscore path" followed by a NUL-terminated origPath, which this
+    // consumes by advancing idx.
+    private static void ParseRenameRecord(
+        string record, string output, ref int idx, List<FileChange> staged, List<FileChange> unstaged)
+    {
+        var parts = record.Split(' ', 10);
+        if (parts.Length < 10) return;
+        var xy = parts[1];
+        if (xy.Length < 2) return;
+        var origEnd = output.IndexOf('\0', idx);
+        if (origEnd < 0) return;
+        var origPath = output[idx..origEnd];
+        idx = origEnd + 1;
+        AddIndexAndWorkdirEntries(staged, unstaged, xy[0], xy[1], parts[9], origPath);
     }
 
     private static void AddIndexAndWorkdirEntries(
@@ -2346,123 +2453,146 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         try
         {
             if (!IsGitRepo(primary.Path)) return Array.Empty<SubmoduleInfo>();
-
-            var gitmodulesPath = System.IO.Path.Combine(primary.Path, ".gitmodules");
-            if (!File.Exists(gitmodulesPath))
+            if (!File.Exists(System.IO.Path.Combine(primary.Path, ".gitmodules")))
                 return Array.Empty<SubmoduleInfo>();
 
-            // Step 1: enumerate logical entries from .gitmodules. Each `submodule.<name>.path`
-            // row gives us one submodule; .url and .branch hang off the same <name>.
-            var configOut = RunGit(primary.Path, out var cfgErr, "config", "--file", ".gitmodules", "--list");
-            if (cfgErr != null) return Array.Empty<SubmoduleInfo>();
+            var byName = ParseGitmodules(primary.Path);
+            if (byName == null) return Array.Empty<SubmoduleInfo>();
 
-            var byName = new Dictionary<string, (string? Path, string? Url, string? Branch)>(StringComparer.Ordinal);
-            foreach (var raw in configOut.Split('\n'))
-            {
-                var line = raw.TrimEnd('\r');
-                if (!line.StartsWith("submodule.", StringComparison.Ordinal)) continue;
-                var eq = line.IndexOf('=');
-                if (eq < 0) continue;
-                var key = line.Substring(0, eq);
-                var value = line.Substring(eq + 1);
-                var lastDot = key.LastIndexOf('.');
-                if (lastDot < 0) continue;
-                var nameStart = "submodule.".Length;
-                var nameLen = lastDot - nameStart;
-                if (nameLen <= 0) continue;
-                var name = key.Substring(nameStart, nameLen);
-                var field = key.Substring(lastDot + 1);
-                byName.TryGetValue(name, out var entry);
-                entry = field switch
-                {
-                    "path"   => (value, entry.Url, entry.Branch),
-                    "url"    => (entry.Path, value, entry.Branch),
-                    "branch" => (entry.Path, entry.Url, value),
-                    _        => entry,
-                };
-                byName[name] = entry;
-            }
-
-            // Step 2: per-path status + describe + current SHA from `git submodule status`.
-            // Per line: '<flag><sha> <path> (<describe>)'
-            //   flag ' ' = up-to-date, '+' = modified, '-' = not initialized, 'U' = conflict.
-            var statusOut = RunGit(primary.Path, out _, "submodule", "status");
-            var statusByPath = new Dictionary<string, (char Flag, string? Sha, string? Describe)>(StringComparer.Ordinal);
-            foreach (var raw in (statusOut ?? string.Empty).Split('\n'))
-            {
-                if (raw.Length < 2) continue;
-                var flag = raw[0];
-                var rest = raw.Substring(1);
-                var sp = rest.IndexOf(' ');
-                if (sp < 0) continue;
-                var sha = rest.Substring(0, sp);
-                var afterSha = rest.Substring(sp + 1);
-                string pathPart;
-                string? describe = null;
-                var parenIdx = afterSha.LastIndexOf(" (", StringComparison.Ordinal);
-                if (parenIdx >= 0 && afterSha.EndsWith(")", StringComparison.Ordinal))
-                {
-                    pathPart = afterSha.Substring(0, parenIdx);
-                    describe = afterSha.Substring(parenIdx + 2, afterSha.Length - parenIdx - 3);
-                }
-                else
-                {
-                    pathPart = afterSha;
-                }
-                statusByPath[NormalizeRelPath(pathPart)] = (flag, sha, describe);
-            }
-
-            // Step 3: authoritative recorded SHA via `git ls-tree HEAD` — submodule status's
-            // SHA reports the CURRENT checkout (or a leading + when modified), not what the
-            // parent's HEAD tree actually records. ls-tree gives the recorded pointer directly.
-            var lsTreeOut = RunGit(primary.Path, out _, "ls-tree", "-r", "HEAD");
-            var recordedByPath = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var raw in (lsTreeOut ?? string.Empty).Split('\n'))
-            {
-                // <mode> SP <type> SP <sha> TAB <path>; gitlinks have mode 160000.
-                if (!raw.StartsWith("160000 ", StringComparison.Ordinal)) continue;
-                var tab = raw.IndexOf('\t');
-                if (tab < 0) continue;
-                var meta = raw.Substring(0, tab);
-                var pathPart = raw.Substring(tab + 1);
-                var parts = meta.Split(' ');
-                if (parts.Length < 3) continue;
-                recordedByPath[NormalizeRelPath(pathPart)] = parts[2];
-            }
-
-            var results = new List<SubmoduleInfo>(byName.Count);
-            foreach (var (_, entry) in byName)
-            {
-                if (entry.Path is null) continue;
-                var rel = NormalizeRelPath(entry.Path);
-                var abs = System.IO.Path.GetFullPath(System.IO.Path.Combine(primary.Path, rel));
-                recordedByPath.TryGetValue(rel, out var recorded);
-                statusByPath.TryGetValue(rel, out var status);
-                var smStatus = status.Flag switch
-                {
-                    '+' => SubmoduleStatus.Modified,
-                    '-' => SubmoduleStatus.NotInitialized,
-                    'U' => SubmoduleStatus.MergeConflict,
-                    _   => SubmoduleStatus.UpToDate,
-                };
-                results.Add(new SubmoduleInfo(
-                    Path: rel,
-                    AbsolutePath: abs,
-                    Url: entry.Url,
-                    Branch: entry.Branch,
-                    RecordedSha: recorded,
-                    CurrentSha: smStatus == SubmoduleStatus.NotInitialized ? null : status.Sha,
-                    Status: smStatus,
-                    Describe: status.Describe));
-            }
-
-            results.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
-            return results;
+            var statusByPath = ParseSubmoduleStatus(primary.Path);
+            var recordedByPath = ParseRecordedSubmodulePointers(primary.Path);
+            return BuildSubmoduleInfos(primary, byName, statusByPath, recordedByPath);
         }
         catch
         {
             return Array.Empty<SubmoduleInfo>();
         }
+    }
+
+    // Logical entries from .gitmodules. Each `submodule.<name>.path` row gives us one submodule;
+    // .url and .branch hang off the same <name>. Returns null on a git config failure.
+    private Dictionary<string, (string? Path, string? Url, string? Branch)>? ParseGitmodules(string repoPath)
+    {
+        var configOut = RunGit(repoPath, out var cfgErr, "config", "--file", ".gitmodules", "--list");
+        if (cfgErr != null) return null;
+
+        var byName = new Dictionary<string, (string? Path, string? Url, string? Branch)>(StringComparer.Ordinal);
+        foreach (var raw in configOut.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (!line.StartsWith("submodule.", StringComparison.Ordinal)) continue;
+            var eq = line.IndexOf('=');
+            if (eq < 0) continue;
+            var key = line.Substring(0, eq);
+            var value = line.Substring(eq + 1);
+            var lastDot = key.LastIndexOf('.');
+            if (lastDot < 0) continue;
+            var nameStart = "submodule.".Length;
+            var nameLen = lastDot - nameStart;
+            if (nameLen <= 0) continue;
+            var name = key.Substring(nameStart, nameLen);
+            var field = key.Substring(lastDot + 1);
+            byName.TryGetValue(name, out var entry);
+            entry = field switch
+            {
+                "path"   => (value, entry.Url, entry.Branch),
+                "url"    => (entry.Path, value, entry.Branch),
+                "branch" => (entry.Path, entry.Url, value),
+                _        => entry,
+            };
+            byName[name] = entry;
+        }
+        return byName;
+    }
+
+    // Per-path status + describe + current SHA from `git submodule status`. Per line
+    // '<flag><sha> <path> (<describe>)' — flag ' ' = up-to-date, '+' = modified, '-' = not
+    // initialized, 'U' = conflict.
+    private Dictionary<string, (char Flag, string? Sha, string? Describe)> ParseSubmoduleStatus(string repoPath)
+    {
+        var statusOut = RunGit(repoPath, out _, "submodule", "status");
+        var statusByPath = new Dictionary<string, (char Flag, string? Sha, string? Describe)>(StringComparer.Ordinal);
+        foreach (var raw in (statusOut ?? string.Empty).Split('\n'))
+        {
+            if (raw.Length < 2) continue;
+            var flag = raw[0];
+            var rest = raw.Substring(1);
+            var sp = rest.IndexOf(' ');
+            if (sp < 0) continue;
+            var sha = rest.Substring(0, sp);
+            var afterSha = rest.Substring(sp + 1);
+            string pathPart;
+            string? describe = null;
+            var parenIdx = afterSha.LastIndexOf(" (", StringComparison.Ordinal);
+            if (parenIdx >= 0 && afterSha.EndsWith(")", StringComparison.Ordinal))
+            {
+                pathPart = afterSha.Substring(0, parenIdx);
+                describe = afterSha.Substring(parenIdx + 2, afterSha.Length - parenIdx - 3);
+            }
+            else
+            {
+                pathPart = afterSha;
+            }
+            statusByPath[NormalizeRelPath(pathPart)] = (flag, sha, describe);
+        }
+        return statusByPath;
+    }
+
+    // Authoritative recorded SHA via `git ls-tree HEAD` — submodule status's SHA reports the
+    // CURRENT checkout (or a leading + when modified), not what the parent's HEAD tree actually
+    // records. ls-tree gives the recorded pointer directly.
+    private Dictionary<string, string> ParseRecordedSubmodulePointers(string repoPath)
+    {
+        var lsTreeOut = RunGit(repoPath, out _, "ls-tree", "-r", "HEAD");
+        var recordedByPath = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var raw in (lsTreeOut ?? string.Empty).Split('\n'))
+        {
+            // <mode> SP <type> SP <sha> TAB <path>; gitlinks have mode 160000.
+            if (!raw.StartsWith("160000 ", StringComparison.Ordinal)) continue;
+            var tab = raw.IndexOf('\t');
+            if (tab < 0) continue;
+            var meta = raw.Substring(0, tab);
+            var pathPart = raw.Substring(tab + 1);
+            var parts = meta.Split(' ');
+            if (parts.Length < 3) continue;
+            recordedByPath[NormalizeRelPath(pathPart)] = parts[2];
+        }
+        return recordedByPath;
+    }
+
+    private static List<SubmoduleInfo> BuildSubmoduleInfos(
+        Repo primary,
+        Dictionary<string, (string? Path, string? Url, string? Branch)> byName,
+        Dictionary<string, (char Flag, string? Sha, string? Describe)> statusByPath,
+        Dictionary<string, string> recordedByPath)
+    {
+        var results = new List<SubmoduleInfo>(byName.Count);
+        foreach (var (_, entry) in byName)
+        {
+            if (entry.Path is null) continue;
+            var rel = NormalizeRelPath(entry.Path);
+            var abs = System.IO.Path.GetFullPath(System.IO.Path.Combine(primary.Path, rel));
+            recordedByPath.TryGetValue(rel, out var recorded);
+            statusByPath.TryGetValue(rel, out var status);
+            var smStatus = status.Flag switch
+            {
+                '+' => SubmoduleStatus.Modified,
+                '-' => SubmoduleStatus.NotInitialized,
+                'U' => SubmoduleStatus.MergeConflict,
+                _   => SubmoduleStatus.UpToDate,
+            };
+            results.Add(new SubmoduleInfo(
+                Path: rel,
+                AbsolutePath: abs,
+                Url: entry.Url,
+                Branch: entry.Branch,
+                RecordedSha: recorded,
+                CurrentSha: smStatus == SubmoduleStatus.NotInitialized ? null : status.Sha,
+                Status: smStatus,
+                Describe: status.Describe));
+        }
+        results.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
+        return results;
     }
 
     public GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request)
@@ -2582,51 +2712,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             var results = new List<SubmodulePointerChange>();
             foreach (var raw in rawOut.Split('\n'))
             {
-                if (!raw.StartsWith(":", StringComparison.Ordinal)) continue;
-                var tab = raw.IndexOf('\t');
-                if (tab < 0) continue;
-                var meta = raw.Substring(1, tab - 1);
-                var pathPart = raw.Substring(tab + 1);
-                var parts = meta.Split(' ');
-                if (parts.Length < 5) continue;
-                var srcMode = parts[0];
-                var dstMode = parts[1];
-                // Only gitlink entries (160000 on either side).
-                if (srcMode != "160000" && dstMode != "160000") continue;
-                var srcSha = parts[2];
-                var dstSha = parts[3];
-
-                int ahead = 0, behind = 0;
-                string? shortLog = null;
-                var subPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(repo.Path, pathPart));
-                var srcZero = IsAllZeros(srcSha);
-                var dstZero = IsAllZeros(dstSha);
-                // Only resolve range info when the submodule is initialized locally AND both
-                // ends are real commits — added/removed entries have a 40-zero sentinel on
-                // one side that no rev-list query can resolve.
-                if (!srcZero && !dstZero && Directory.Exists(subPath) && IsGitRepo(subPath))
-                {
-                    var rl = RunGit(subPath, out _, "rev-list", "--left-right", "--count", $"{srcSha}...{dstSha}");
-                    if (rl != null)
-                    {
-                        var rlParts = rl.Trim().Split('\t');
-                        if (rlParts.Length == 2)
-                        {
-                            int.TryParse(rlParts[0], out behind);
-                            int.TryParse(rlParts[1], out ahead);
-                        }
-                    }
-                    var log = RunGit(subPath, out _, "log", "--oneline", "--no-decorate", "-n", "20", $"{srcSha}..{dstSha}");
-                    if (!string.IsNullOrWhiteSpace(log)) shortLog = log;
-                }
-
-                results.Add(new SubmodulePointerChange(
-                    Path: NormalizeRelPath(pathPart),
-                    FromSha: srcSha,
-                    ToSha: dstSha,
-                    AheadCount: ahead,
-                    BehindCount: behind,
-                    ShortLog: shortLog));
+                var change = ParseSubmodulePointerLine(repo, raw);
+                if (change != null) results.Add(change);
             }
             return results;
         }
@@ -2634,6 +2721,61 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return Array.Empty<SubmodulePointerChange>();
         }
+    }
+
+    private SubmodulePointerChange? ParseSubmodulePointerLine(Repo repo, string raw)
+    {
+        if (!raw.StartsWith(":", StringComparison.Ordinal)) return null;
+        var tab = raw.IndexOf('\t');
+        if (tab < 0) return null;
+        var meta = raw.Substring(1, tab - 1);
+        var pathPart = raw.Substring(tab + 1);
+        var parts = meta.Split(' ');
+        if (parts.Length < 5) return null;
+        var srcMode = parts[0];
+        var dstMode = parts[1];
+        // Only gitlink entries (160000 on either side).
+        if (srcMode != "160000" && dstMode != "160000") return null;
+        var srcSha = parts[2];
+        var dstSha = parts[3];
+
+        var ahead = 0;
+        var behind = 0;
+        string? shortLog = null;
+        var subPath = System.IO.Path.GetFullPath(System.IO.Path.Combine(repo.Path, pathPart));
+        // Only resolve range info when the submodule is initialized locally AND both ends are real
+        // commits — added/removed entries have a 40-zero sentinel on one side that no rev-list
+        // query can resolve.
+        if (!IsAllZeros(srcSha) && !IsAllZeros(dstSha) && Directory.Exists(subPath) && IsGitRepo(subPath))
+            ResolveSubmoduleRange(subPath, srcSha, dstSha, out ahead, out behind, out shortLog);
+
+        return new SubmodulePointerChange(
+            Path: NormalizeRelPath(pathPart),
+            FromSha: srcSha,
+            ToSha: dstSha,
+            AheadCount: ahead,
+            BehindCount: behind,
+            ShortLog: shortLog);
+    }
+
+    private void ResolveSubmoduleRange(
+        string subPath, string srcSha, string dstSha, out int ahead, out int behind, out string? shortLog)
+    {
+        ahead = 0;
+        behind = 0;
+        shortLog = null;
+        var rl = RunGit(subPath, out _, "rev-list", "--left-right", "--count", $"{srcSha}...{dstSha}");
+        if (rl != null)
+        {
+            var rlParts = rl.Trim().Split('\t');
+            if (rlParts.Length == 2)
+            {
+                int.TryParse(rlParts[0], out behind);
+                int.TryParse(rlParts[1], out ahead);
+            }
+        }
+        var log = RunGit(subPath, out _, "log", "--oneline", "--no-decorate", "-n", "20", $"{srcSha}..{dstSha}");
+        if (!string.IsNullOrWhiteSpace(log)) shortLog = log;
     }
 
     // Writes an identity into the repo's --local config ("pin to repo"). After this the resolver
@@ -2728,57 +2870,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!IsGitRepo(repo.Path))
                 return DiffError(repo, path, side, "Not a git repository.");
 
-            var contextArg = $"--unified={DiffOptions.ContextLines}";
-            string? patchText;
-            string? error;
-
-            if (side == DiffSide.Commit)
-            {
-                if (string.IsNullOrEmpty(commitSha))
-                    return DiffError(repo, path, side, "Commit SHA required for commit diff.");
-
-                // `git show` handles root commits and merges correctly; --format= suppresses
-                // the commit message header so the output is a plain patch parseable by ParseGitDiff.
-                patchText = RunGitDiff(repo.Path, out error,
-                    "show", "--no-color", "--format=", "-M", contextArg, commitSha, "--", path);
-            }
-            else if (side == DiffSide.Range)
-            {
-                if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha))
-                    return DiffError(repo, path, side, "Base and head SHAs required for range diff.");
-
-                // The range's net diff for one file: base→head directly (two-dot). base is already
-                // the resolved merge-base, so this is the sum of the range's increments for this path.
-                patchText = RunGitDiff(repo.Path, out error,
-                    "diff", "--no-color", "-M", contextArg, baseSha, commitSha, "--", path);
-            }
-            else if (side == DiffSide.Staged)
-            {
-                patchText = RunGitDiff(repo.Path, out error,
-                    "diff", "--cached", "--no-color", "-M", contextArg, "--", path);
-            }
-            else if (IsTracked(repo.Path, path))
-            {
-                patchText = RunGitDiff(repo.Path, out error,
-                    "diff", "--no-color", "-M", contextArg, "--", path);
-            }
-            else
-            {
-                // Untracked file: `git diff` ignores it, so render it as an addition by
-                // diffing against the platform null device.
-                var nullPath = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
-                var absPath = Path.IsPathRooted(path) ? path : Path.Combine(repo.Path, path);
-                patchText = RunGitDiff(repo.Path, out error,
-                    "diff", "--no-color", "--no-index", contextArg, "--", nullPath, absPath);
-            }
-
+            var patchText = RunDiffForSide(repo, path, side, commitSha, baseSha, out var error);
             if (patchText == null)
                 return DiffError(repo, path, side, error ?? "git diff failed.");
 
             var result = ParseGitDiff(repo.Id, path, side, patchText);
-            // LFS status only matters for binary files (the diff body is hidden, so the
-            // badge is the only place the user learns how the blob is stored). Querying
-            // check-attr is an extra git invocation, so we skip it for ordinary text diffs.
+            // LFS status only matters for binary files (the diff body is hidden, so the badge is
+            // the only place the user learns how the blob is stored). Querying check-attr is an
+            // extra git invocation, so we skip it for ordinary text diffs.
             if (result.IsBinary)
                 result = result with { IsLfs = IsLfsTracked(repo.Path, path) };
             return result;
@@ -2787,6 +2886,56 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         {
             return DiffError(repo, path, side, ex.Message);
         }
+    }
+
+    // Runs the right git command for the requested diff side and returns its raw patch text, or
+    // null with `error` set on a validation or git failure.
+    private string? RunDiffForSide(
+        Repo repo, string path, DiffSide side, string? commitSha, string? baseSha, out string? error)
+    {
+        error = null;
+        var contextArg = $"--unified={DiffOptions.ContextLines}";
+        switch (side)
+        {
+            case DiffSide.Commit:
+                if (string.IsNullOrEmpty(commitSha))
+                {
+                    error = "Commit SHA required for commit diff.";
+                    return null;
+                }
+                // `git show` handles root commits and merges correctly; --format= suppresses the
+                // commit message header so the output is a plain patch parseable by ParseGitDiff.
+                return RunGitDiff(repo.Path, out error,
+                    "show", "--no-color", "--format=", "-M", contextArg, commitSha, "--", path);
+            case DiffSide.Range:
+                if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha))
+                {
+                    error = "Base and head SHAs required for range diff.";
+                    return null;
+                }
+                // The range's net diff for one file: base→head directly (two-dot). base is already
+                // the resolved merge-base, so this is the sum of the range's increments for this path.
+                return RunGitDiff(repo.Path, out error,
+                    "diff", "--no-color", "-M", contextArg, baseSha, commitSha, "--", path);
+            case DiffSide.Staged:
+                return RunGitDiff(repo.Path, out error,
+                    "diff", "--cached", "--no-color", "-M", contextArg, "--", path);
+            default:
+                if (IsTracked(repo.Path, path))
+                    return RunGitDiff(repo.Path, out error,
+                        "diff", "--no-color", "-M", contextArg, "--", path);
+                return RunUntrackedFileDiff(repo, path, contextArg, out error);
+        }
+    }
+
+    // Untracked file: `git diff` ignores it, so render it as an addition by diffing against the
+    // platform null device.
+    private string? RunUntrackedFileDiff(Repo repo, string path, string contextArg, out string? error)
+    {
+        var nullPath = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
+        var absPath = Path.IsPathRooted(path) ? path : Path.Combine(repo.Path, path);
+        return RunGitDiff(repo.Path, out error,
+            "diff", "--no-color", "--no-index", contextArg, "--", nullPath, absPath);
     }
 
     public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null)
@@ -2979,85 +3128,99 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     private static (IReadOnlyList<DiffHunk> Hunks, bool Truncated) ParsePatch(string patchText)
     {
-        var hunks = new List<DiffHunk>();
         if (string.IsNullOrEmpty(patchText))
-            return (hunks, false);
+            return (Array.Empty<DiffHunk>(), false);
 
-        var totalLines = 0;
-        var truncated = false;
-
-        // Build the current hunk incrementally as we walk the patch text.
-        int curOldStart = 0, curOldLines = 0, curNewStart = 0, curNewLines = 0;
-        string? curHeader = null;
-        List<DiffLine>? curLines = null;
-        int oldLineCursor = 0, newLineCursor = 0;
-        bool inHunk = false;
-
-        void Flush(List<DiffHunk> dst)
-        {
-            if (!inHunk || curLines == null) return;
-            dst.Add(new DiffHunk(curOldStart, curOldLines, curNewStart, curNewLines, curHeader, curLines));
-        }
-
+        var acc = new PatchAccumulator();
         foreach (var raw in patchText.Replace("\r\n", "\n").Split('\n'))
+            acc.Consume(raw);
+        return acc.Finish();
+    }
+
+    // Walks a unified-diff patch line by line, building one hunk at a time. Emitted lines are
+    // capped at DiffOptions.TruncationLineCap; past the cap the rest are counted as truncated.
+    private sealed class PatchAccumulator
+    {
+        private readonly List<DiffHunk> _hunks = new();
+        private bool _truncated;
+        private int _totalLines;
+
+        private int _oldStart, _oldLines, _newStart, _newLines;
+        private string? _header;
+        private List<DiffLine>? _lines;
+        private int _oldCursor, _newCursor;
+        private bool _inHunk;
+
+        public void Consume(string raw)
         {
             if (raw.StartsWith("@@"))
             {
-                Flush(hunks);
-                if (!TryParseHunkHeader(raw, out curOldStart, out curOldLines, out curNewStart, out curNewLines, out curHeader))
-                {
-                    inHunk = false;
-                    continue;
-                }
-                curLines = new List<DiffLine>();
-                oldLineCursor = curOldStart;
-                newLineCursor = curNewStart;
-                inHunk = true;
-                continue;
+                BeginHunk(raw);
+                return;
             }
-
-            if (!inHunk || curLines == null) continue;
-            if (raw.Length == 0) continue;
+            if (!_inHunk || _lines == null || raw.Length == 0) return;
             if (raw[0] == '\\')
             {
-                // "\ No newline at end of file" applies to the line just emitted. Flag it so
-                // the patch builder can reproduce the marker rather than silently appending a
-                // trailing newline when the hunk is staged/discarded.
-                if (curLines.Count > 0)
-                    curLines[^1] = curLines[^1] with { NoNewlineAtEof = true };
-                continue;
+                MarkNoNewlineAtEof();
+                return;
             }
-
-            DiffLine? line = null;
-            switch (raw[0])
-            {
-                case ' ':
-                    line = new DiffLine(DiffLineKind.Context, oldLineCursor, newLineCursor, raw.Length > 1 ? raw[1..] : string.Empty);
-                    oldLineCursor++;
-                    newLineCursor++;
-                    break;
-                case '+':
-                    line = new DiffLine(DiffLineKind.Added, null, newLineCursor, raw.Length > 1 ? raw[1..] : string.Empty);
-                    newLineCursor++;
-                    break;
-                case '-':
-                    line = new DiffLine(DiffLineKind.Removed, oldLineCursor, null, raw.Length > 1 ? raw[1..] : string.Empty);
-                    oldLineCursor++;
-                    break;
-            }
-
-            if (line == null) continue;
-            if (totalLines >= DiffOptions.TruncationLineCap)
-            {
-                truncated = true;
-                continue;
-            }
-            curLines.Add(line);
-            totalLines++;
+            AppendBodyLine(raw);
         }
 
-        Flush(hunks);
-        return (hunks, truncated);
+        public (IReadOnlyList<DiffHunk> Hunks, bool Truncated) Finish()
+        {
+            Flush();
+            return (_hunks, _truncated);
+        }
+
+        private void BeginHunk(string raw)
+        {
+            Flush();
+            if (!TryParseHunkHeader(raw, out _oldStart, out _oldLines, out _newStart, out _newLines, out _header))
+            {
+                _inHunk = false;
+                return;
+            }
+            _lines = new List<DiffLine>();
+            _oldCursor = _oldStart;
+            _newCursor = _newStart;
+            _inHunk = true;
+        }
+
+        // "\ No newline at end of file" applies to the line just emitted. Flag it so the patch
+        // builder can reproduce the marker rather than silently appending a trailing newline when
+        // the hunk is staged/discarded.
+        private void MarkNoNewlineAtEof()
+        {
+            if (_lines!.Count > 0)
+                _lines[^1] = _lines[^1] with { NoNewlineAtEof = true };
+        }
+
+        private void AppendBodyLine(string raw)
+        {
+            var text = raw.Length > 1 ? raw[1..] : string.Empty;
+            DiffLine? line = raw[0] switch
+            {
+                ' ' => new DiffLine(DiffLineKind.Context, _oldCursor++, _newCursor++, text),
+                '+' => new DiffLine(DiffLineKind.Added, null, _newCursor++, text),
+                '-' => new DiffLine(DiffLineKind.Removed, _oldCursor++, null, text),
+                _   => null,
+            };
+            if (line == null) return;
+            if (_totalLines >= DiffOptions.TruncationLineCap)
+            {
+                _truncated = true;
+                return;
+            }
+            _lines!.Add(line);
+            _totalLines++;
+        }
+
+        private void Flush()
+        {
+            if (!_inHunk || _lines == null) return;
+            _hunks.Add(new DiffHunk(_oldStart, _oldLines, _newStart, _newLines, _header, _lines));
+        }
     }
 
     // Parses "@@ -<oldStart>[,<oldLines>] +<newStart>[,<newLines>] @@ <header?>".
