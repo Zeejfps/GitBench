@@ -65,22 +65,6 @@ internal sealed record CommitSearchBarView : Widget
             .WithTooltip(L.T(s => s.CommitsSearchClearTooltip))
             .WithController<KbmController>();
 
-        // Engaged-toggle styling (accent tint while active) so it reads as a filter that stays on,
-        // not a one-shot action.
-        var strings = ctx.Localization().Strings;
-        var remoteFilter = new ButtonWidget
-        {
-            Style = ButtonStyle.Bare(s => Theme.Color(t => RemoteFilterActive.Value
-                ? t.CommitsView.FilterToggleActive
-                : s.Enabled.Value && s.Hovered.Value ? t.CommitsView.RowText : t.CommitsView.RowTextDim)),
-            Command = new Command(OnToggleRemoteFilter),
-            Children = [new ButtonIcon { Value = LucideIcons.ListFilter, FontSize = FontSize.Body }],
-        }
-            .WithTooltip(Prop.Bind(() => (string?)(RemoteFilterActive.Value
-                ? strings.Value.CommitsFilterRemoteShowTooltip
-                : strings.Value.CommitsFilterRemoteHideTooltip)))
-            .WithController<KbmController>();
-
         return new Box
         {
             Height = BarHeight,
@@ -102,50 +86,101 @@ internal sealed record CommitSearchBarView : Widget
                             [
                                 new Grow
                                 {
-                                    Child = new Box
+                                    Child = new SearchInputBox
                                     {
-                                        BorderSize = BorderSizeStyle.All(1),
-                                        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                                        Background = Theme.Color(s => s.TextInput.Background),
-                                        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
-                                        Children =
-                                        [
-                                            new Padding
-                                            {
-                                                Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
-                                                Children =
-                                                [
-                                                    new Row
-                                                    {
-                                                        CrossAxis = CrossAxisAlignment.Center,
-                                                        Gap = Spacing.Md,
-                                                        Children =
-                                                        [
-                                                            new Text
-                                                            {
-                                                                FontFamily = LucideIcons.FontFamily,
-                                                                FontSize = FontSize.Default,
-                                                                Value = LucideIcons.Search,
-                                                                HAlign = TextAlignment.Center,
-                                                                VAlign = TextAlignment.Center,
-                                                                Color = Theme.Color(s => s.CommitsView.RowTextDim),
-                                                            },
-                                                            new Grow { Child = new Raw { View = textInput } },
-                                                            clear,
-                                                        ],
-                                                    },
-                                                ],
-                                            },
-                                        ],
+                                        Input = new Raw { View = textInput },
+                                        Trailing = clear,
                                     },
                                 },
-                                remoteFilter,
+                                new RemoteFilterToggle
+                                {
+                                    Active = RemoteFilterActive,
+                                    OnToggle = OnToggleRemoteFilter,
+                                },
                             ],
                         },
                     ],
                 },
             ],
         };
+    }
+}
+
+/// <summary>
+/// A rounded, bordered search field: a leading search glyph, the growing text input, and an
+/// optional trailing control (e.g. a clear button).
+/// </summary>
+internal sealed record SearchInputBox : Widget
+{
+    public required IWidget Input { get; init; }
+    public IWidget? Trailing { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        IWidget[] rowChildren = Trailing is { } trailing
+            ? [SearchGlyph(), new Grow { Child = Input }, trailing]
+            : [SearchGlyph(), new Grow { Child = Input }];
+
+        return new Box
+        {
+            BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            Background = Theme.Color(s => s.TextInput.Background),
+            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.TextInput.Border)),
+            Children =
+            [
+                new Padding
+                {
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
+                    Children =
+                    [
+                        new Row
+                        {
+                            CrossAxis = CrossAxisAlignment.Center,
+                            Gap = Spacing.Md,
+                            Children = rowChildren,
+                        },
+                    ],
+                },
+            ],
+        };
+    }
+
+    private static IWidget SearchGlyph() => new Text
+    {
+        FontFamily = LucideIcons.FontFamily,
+        FontSize = FontSize.Default,
+        Value = LucideIcons.Search,
+        HAlign = TextAlignment.Center,
+        VAlign = TextAlignment.Center,
+        Color = Theme.Color(s => s.CommitsView.RowTextDim),
+    };
+}
+
+/// <summary>
+/// The remote-only branch filter toggle: accent-tinted while active so it reads as a filter that
+/// stays on, not a one-shot action.
+/// </summary>
+internal sealed record RemoteFilterToggle : Widget
+{
+    public required IReadable<bool> Active { get; init; }
+    public required Action OnToggle { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var strings = ctx.Localization().Strings;
+        return new ButtonWidget
+        {
+            Style = ButtonStyle.Bare(s => Theme.Color(t => Active.Value
+                ? t.CommitsView.FilterToggleActive
+                : s.Enabled.Value && s.Hovered.Value ? t.CommitsView.RowText : t.CommitsView.RowTextDim)),
+            Command = new Command(OnToggle),
+            Children = [new ButtonIcon { Value = LucideIcons.ListFilter, FontSize = FontSize.Body }],
+        }
+            .WithTooltip(Prop.Bind(() => (string?)(Active.Value
+                ? strings.Value.CommitsFilterRemoteShowTooltip
+                : strings.Value.CommitsFilterRemoteHideTooltip)))
+            .WithController<KbmController>();
     }
 }
 
