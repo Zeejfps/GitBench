@@ -362,6 +362,7 @@
   "repos.repo_update_all_submodules": "모든 서브모듈 업데이트…",
   "repos.repo_move_to_group": "이동 위치: {name}",
   "repos.repo_remove": "저장소 제거",
+  "repos.repo_rename": "저장소 이름 변경",
   "repos.worktree_switch_to": "작업 트리로 전환",
   "repos.worktree_remove": "작업 트리 제거…",
   "repos.submodule_switch_to": "서브모듈로 전환",

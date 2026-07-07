@@ -46,6 +46,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly KeyedViewModelList<Repo, Guid, RepoNodeViewModel> _children;
     private readonly Derived<TreeGuides> _guides;
     private readonly Derived<int?> _hotkeyDigit;
+    private readonly Derived<bool> _isRenaming;
 
     public Guid RepoId => _initial.Id;
     public RepoKind Kind => _initial.Kind;
@@ -56,6 +57,9 @@ internal sealed class RepoNodeViewModel : IDisposable
     public Repo Repo => _currentRepo.Value ?? _initial;
 
     public IReadable<string> DisplayName => _displayName;
+    // True while this primary row's name is being edited inline. Always false for worktree/submodule
+    // rows, which aren't renamable.
+    public IReadable<bool> IsRenaming => _isRenaming;
     public IReadable<bool> IsMissing => _isMissing;
     public IReadable<bool> IsActive => _isActive;
     public IReadable<RepoRowBadge> Badge => _badge;
@@ -122,6 +126,7 @@ internal sealed class RepoNodeViewModel : IDisposable
             _ = _registry.HotkeysChanged.Value;
             return _registry.HotkeyFor(RepoId);
         });
+        _isRenaming = new Derived<bool>(() => _registry.RenamingRepoId.Value == RepoId);
 
         ToggleExpand = new Command(() => _registry.SetWorktreeExpanded(RepoId, !IsExpanded.Value), HasChildren);
         Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
@@ -259,6 +264,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (currentSlot is { } assigned)
             items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyClear, () => _registry.ClearHotkey(assigned), LucideIcons.X));
 
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine));
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
         items.Add(new RepoBarContextMenu.Item(
             s.CommonNewGroup,
@@ -324,6 +330,7 @@ internal sealed class RepoNodeViewModel : IDisposable
 
     public void Dispose()
     {
+        _isRenaming.Dispose();
         _hotkeyDigit.Dispose();
         _guides.Dispose();
         _children.Dispose();

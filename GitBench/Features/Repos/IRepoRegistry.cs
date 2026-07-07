@@ -19,6 +19,9 @@ public interface IRepoRegistry
     ObservableList<Group> Groups { get; }
     State<Repo?> Active { get; }
     State<Guid?> RenamingGroupId { get; }
+    // The primary repo whose name is being edited inline in the RepoBar, or null. Only primaries
+    // are renamable — a worktree/submodule name tracks its folder and is re-derived on every sync.
+    State<Guid?> RenamingRepoId { get; }
     // Bumped whenever the set of children (worktrees OR submodules) attached to a primary
     // changes, or a primary's branch is recorded. Watched by BranchesViewModel to refresh the
     // markers for branches a sibling worktree has checked out. (Row expand/collapse is its own
@@ -48,6 +51,11 @@ public interface IRepoRegistry
     void RemoveRepo(Guid repoId);
     void BeginRenameGroup(Guid id);
     void EndRenameGroup();
+    // Overrides a primary repo's display name, decoupling it from its folder name. No-op for
+    // worktrees/submodules and for a blank name (the current name is kept).
+    void RenameRepo(Guid id, string newName);
+    void BeginRenameRepo(Guid id);
+    void EndRenameRepo();
     BranchesUiState GetBranchesUi(Guid repoId);
     void SetBranchesUi(Guid repoId, BranchesUiState state);
     IEnumerable<Repo> GetWorktrees(Guid primaryId);

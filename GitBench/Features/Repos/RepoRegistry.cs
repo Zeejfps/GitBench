@@ -53,6 +53,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
                 : null);
 
         RenamingGroupId = new State<Guid?>(null);
+        RenamingRepoId = new State<Guid?>(null);
         WorktreesChanged = new State<int>(0);
         HotkeysChanged = new State<int>(0);
     }
@@ -61,6 +62,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     public ObservableList<Group> Groups { get; }
     public State<Repo?> Active { get; }
     public State<Guid?> RenamingGroupId { get; }
+    public State<Guid?> RenamingRepoId { get; }
     public State<int> WorktreesChanged { get; }
     public State<int> HotkeysChanged { get; }
 
@@ -325,6 +327,33 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     public void EndRenameGroup()
     {
         RenamingGroupId.Value = null;
+    }
+
+    public void RenameRepo(Guid id, string newName)
+    {
+        var trimmed = (newName ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(trimmed)) return;
+        for (var i = 0; i < Repos.Count; i++)
+        {
+            var r = Repos[i];
+            if (r.Id != id) continue;
+            // A worktree/submodule name mirrors its folder and would be overwritten on the next
+            // sync, so only primaries carry a persisted custom name.
+            if (!r.IsPrimary || r.DisplayName == trimmed) return;
+            Repos.Replace(i, r with { DisplayName = trimmed });
+            Save();
+            return;
+        }
+    }
+
+    public void BeginRenameRepo(Guid id)
+    {
+        RenamingRepoId.Value = id;
+    }
+
+    public void EndRenameRepo()
+    {
+        RenamingRepoId.Value = null;
     }
 
     public BranchesUiState GetBranchesUi(Guid repoId)

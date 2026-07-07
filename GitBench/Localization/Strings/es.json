@@ -362,6 +362,7 @@
   "repos.repo_update_all_submodules": "Actualizar todos los submódulos…",
   "repos.repo_move_to_group": "Mover a: {name}",
   "repos.repo_remove": "Quitar repositorio",
+  "repos.repo_rename": "Renombrar repositorio",
   "repos.worktree_switch_to": "Cambiar al árbol de trabajo",
   "repos.worktree_remove": "Quitar árbol de trabajo…",
   "repos.submodule_switch_to": "Cambiar al submódulo",

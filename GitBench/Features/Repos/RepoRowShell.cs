@@ -61,34 +61,44 @@ internal sealed record RepoRowShell : Widget
             // back to the plain growing name so their long-name truncation is untouched.
             NameSlot = new Grow
             {
-                Child = new Row
+                Child = new Show
                 {
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Children =
-                    [
-                        new Grow
-                        {
-                            Visible = Prop.Bind(() => vm.HotkeyDigit.Value is null),
-                            Child = NameText(),
-                        },
-                        new Row
-                        {
-                            Visible = Prop.Bind(() => vm.HotkeyDigit.Value is not null),
-                            Gap = Spacing.Hair,
-                            CrossAxis = CrossAxisAlignment.Center,
-                            Children =
-                            [
-                                NameText(),
-                                new Text
-                                {
-                                    Value = Prop.Bind<string?>(() => vm.HotkeyDigit.Value is { } d ? $"({d})" : string.Empty),
-                                    FontSize = FontSize.Caption,
-                                    VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(s => s.RepoBarRow.Hotkey(vm.IsActive.Value, vm.IsMissing.Value)),
-                                },
-                            ],
-                        },
-                    ],
+                    When = vm.IsRenaming,
+                    Then = () => new RepoRenameField
+                    {
+                        RepoId = vm.RepoId,
+                        InitialName = vm.DisplayName.Value,
+                        RowHeight = RowHeight,
+                    },
+                    Else = () => new Row
+                    {
+                        CrossAxis = CrossAxisAlignment.Center,
+                        Children =
+                        [
+                            new Grow
+                            {
+                                Visible = Prop.Bind(() => vm.HotkeyDigit.Value is null),
+                                Child = NameText(),
+                            },
+                            new Row
+                            {
+                                Visible = Prop.Bind(() => vm.HotkeyDigit.Value is not null),
+                                Gap = Spacing.Hair,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    NameText(),
+                                    new Text
+                                    {
+                                        Value = Prop.Bind<string?>(() => vm.HotkeyDigit.Value is { } d ? $"({d})" : string.Empty),
+                                        FontSize = FontSize.Caption,
+                                        VAlign = TextAlignment.Center,
+                                        Color = Theme.Color(s => s.RepoBarRow.Hotkey(vm.IsActive.Value, vm.IsMissing.Value)),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
                 },
             },
             Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),

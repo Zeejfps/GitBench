@@ -362,6 +362,7 @@
   "repos.repo_update_all_submodules": "更新所有子模块…",
   "repos.repo_move_to_group": "移动到: {name}",
   "repos.repo_remove": "移除仓库",
+  "repos.repo_rename": "重命名仓库",
   "repos.worktree_switch_to": "切换到工作树",
   "repos.worktree_remove": "移除工作树…",
   "repos.submodule_switch_to": "切换到子模块",

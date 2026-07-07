@@ -362,6 +362,7 @@
   "repos.repo_update_all_submodules": "すべてのサブモジュールを更新…",
   "repos.repo_move_to_group": "移動先: {name}",
   "repos.repo_remove": "リポジトリを削除",
+  "repos.repo_rename": "リポジトリ名を変更",
   "repos.worktree_switch_to": "ワークツリーに切り替え",
   "repos.worktree_remove": "ワークツリーを削除…",
   "repos.submodule_switch_to": "サブモジュールに切り替え",
