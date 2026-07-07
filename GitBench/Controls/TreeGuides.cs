@@ -89,17 +89,18 @@ internal sealed class TreeGuidesView : View
 
         var z = GetDrawZIndex();
         var pos = Position;
+        var rtl = IsRtl;
         var half = LineWidth / 2f;
         var centerY = pos.Bottom + pos.Height / 2f;
         // Where the elbow lands: the chevron column of the row's own indent (its tree depth is levels-1).
-        var contentX = ColumnX(pos.Left, levels);
+        var contentX = ColumnX(pos, levels, rtl);
 
         for (var level = 0; level < levels; level++)
         {
             var kind = _guides.At(level);
             if (kind == TreeGuide.None) continue;
 
-            var colX = ColumnX(pos.Left, level);
+            var colX = ColumnX(pos, level, rtl);
             switch (kind)
             {
                 case TreeGuide.Through:
@@ -109,22 +110,37 @@ internal sealed class TreeGuidesView : View
                 case TreeGuide.Tee:
                     // Connects up to its parent/siblings and on down to the next sibling: overrun both.
                     Fill(c, z, colX - half, pos.Bottom - GapBridge, LineWidth, pos.Height + 2f * GapBridge);
-                    Fill(c, z, colX - half, centerY - half, contentX - (colX - half), LineWidth);
+                    Elbow(c, z, colX, contentX, centerY, half, rtl);
                     break;
                 case TreeGuide.Corner:
                     // Last child: the trunk ends here, so only overrun the gap above to reach its parent.
                     Fill(c, z, colX - half, centerY, LineWidth, pos.Height / 2f + GapBridge);
-                    Fill(c, z, colX - half, centerY - half, contentX - (colX - half), LineWidth);
+                    Elbow(c, z, colX, contentX, centerY, half, rtl);
                     break;
             }
         }
     }
 
-    // The x of a guide level's vertical, relative to the row's left edge. Level 0 is the section/group
-    // header column (outdented to the header's chevron); each deeper level steps in by one tree indent.
-    private static float ColumnX(float left, int level) => level == 0
-        ? left + Spacing.Hair + Sizes.Icon / 2f
-        : left + TreeMetrics.BaseIndent + TreeMetrics.IndentLevel * (level - 1) + TreeMetrics.ChevronWidth / 2f;
+    // The elbow from a level's vertical into the content column, drawn from the trunk's inline-leading
+    // edge to the content column so it reads as a right angle. Under RTL the content sits to the left of
+    // the trunk, so the horizontal runs the other way.
+    private void Elbow(ICanvas c, int z, float colX, float contentX, float centerY, float half, bool rtl)
+    {
+        var trunkEdge = rtl ? colX + half : colX - half;
+        Fill(c, z, MathF.Min(trunkEdge, contentX), centerY - half, MathF.Abs(contentX - trunkEdge), LineWidth);
+    }
+
+    // The x of a guide level's vertical. Level 0 is the section/group header column (outdented to the
+    // header's chevron); each deeper level steps in by one tree indent. The offset is an inline-leading
+    // distance: measured from the row's left edge under LTR, mirrored from the right edge under RTL, so
+    // the guides track the row content (which PaddingView mirrors the same way).
+    private static float ColumnX(RectF pos, int level, bool rtl)
+    {
+        var offset = level == 0
+            ? Spacing.Hair + Sizes.Icon / 2f
+            : TreeMetrics.BaseIndent + TreeMetrics.IndentLevel * (level - 1) + TreeMetrics.ChevronWidth / 2f;
+        return rtl ? pos.Right - offset : pos.Left + offset;
+    }
 
     private void Fill(ICanvas c, int z, float left, float bottom, float w, float h)
     {
