@@ -9,10 +9,11 @@ using ZGF.Observable;
 namespace GitBench.Controls;
 
 /// <summary>
-/// Wraps a sidebar content view and lays a draggable splitter strip on its right edge.
-/// The wrapper itself owns the sidebar's width via <see cref="View.Width"/>, so
-/// the surrounding <c>BorderLayoutView</c> reads the new width on each layout pass after
-/// a drag. Width is clamped to <see cref="MinWidth"/> / <see cref="MaxWidth"/>.
+/// Wraps a sidebar content view and lays a draggable splitter strip on its inline-end edge (its right
+/// edge under LTR, its left edge under RTL — the side facing the main content). The wrapper itself owns
+/// the sidebar's width via <see cref="View.Width"/>, so the surrounding <c>BorderLayoutView</c> reads
+/// the new width on each layout pass after a drag. Width is clamped to <see cref="_minWidth"/> /
+/// <see cref="_maxWidth"/>.
 /// </summary>
 internal sealed class ResizableLeftSidebar : ContainerView
 {
@@ -36,11 +37,13 @@ internal sealed class ResizableLeftSidebar : ContainerView
         AddChildToSelf(_splitter);
     }
 
-    // Positive dx = mouse moved right = sidebar grows. Negative shrinks. Clamping keeps
-    // the sidebar usable at both extremes (it can't disappear or eat the main view).
+    // Dragging the splitter toward the main content grows the sidebar. Under LTR the splitter is on the
+    // right, so a rightward move (positive dx) grows it; under RTL it's on the left, so the sense flips.
+    // Clamping keeps the sidebar usable at both extremes (it can't disappear or eat the main view).
     public void AdjustWidthByPixels(float dx)
     {
-        var newWidth = Math.Clamp((float)Width + dx, _minWidth, _maxWidth);
+        var signed = IsRtl ? -dx : dx;
+        var newWidth = Math.Clamp((float)Width + signed, _minWidth, _maxWidth);
         if (Math.Abs(newWidth - (float)Width) < 0.5f) return;
         Width = newWidth;
         WidthChanged?.Invoke(newWidth);
@@ -52,14 +55,19 @@ internal sealed class ResizableLeftSidebar : ContainerView
         if (pos.Width <= 0f || pos.Height <= 0f) return;
 
         var contentWidth = Math.Max(0f, pos.Width - SplitterThickness);
+        // The splitter takes the inline-end edge (the side facing the main content): the right edge under
+        // LTR, the left edge under RTL, with the content shifted over to make room.
+        var rtl = IsRtl;
+        var contentLeft = rtl ? pos.Left + SplitterThickness : pos.Left;
+        var splitterLeft = rtl ? pos.Left : pos.Left + contentWidth;
 
-        _content.LeftConstraint = pos.Left;
+        _content.LeftConstraint = contentLeft;
         _content.BottomConstraint = pos.Bottom;
         _content.WidthConstraint = contentWidth;
         _content.HeightConstraint = pos.Height;
         _content.LayoutSelf();
 
-        _splitter.LeftConstraint = pos.Left + contentWidth;
+        _splitter.LeftConstraint = splitterLeft;
         _splitter.BottomConstraint = pos.Bottom;
         _splitter.WidthConstraint = SplitterThickness;
         _splitter.HeightConstraint = pos.Height;
