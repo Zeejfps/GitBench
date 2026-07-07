@@ -32,7 +32,7 @@ internal static class PlatformServices
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                context.AddService<IPlatformShell>(new MacOSPlatformShell());
+                context.AddService<IPlatformShell>(new MacOSPlatformShell(context));
                 context.AddService<IClipboard>(new OsxClipboard());
                 context.AddService<IPopupNativeDecorator>(new MacOsPopupDecorator());
                 context.AddService<IWindowChrome>(new MacOsWindowChrome());
@@ -40,7 +40,7 @@ internal static class PlatformServices
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                context.AddService<IPlatformShell>(new LinuxPlatformShell());
+                context.AddService<IPlatformShell>(new LinuxPlatformShell(context));
                 context.AddService<IPopupNativeDecorator>(new NoopPopupDecorator());
                 context.AddService<IWindowChrome>(new LinuxWindowChrome());
                 context.AddService<IAppMenu>(new NoopAppMenu());

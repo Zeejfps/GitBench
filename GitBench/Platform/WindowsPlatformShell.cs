@@ -19,10 +19,19 @@ public sealed class WindowsPlatformShell : IPlatformShell
     // IID_IFileOpenDialog
     private static readonly Guid IidFileOpenDialog = new("d57c7288-d4ad-4768-be02-9d969532d960");
 
+    // Runs on the calling (UI) thread: IFileDialog::Show is modal and pumps its own message
+    // loop, so the app stays responsive, and COM wants the UI thread's STA anyway.
+    public void PickFolder(string title, Action<string> onPicked)
+    {
+        var path = ShowFolderDialog(title);
+        if (!string.IsNullOrEmpty(path))
+            onPicked(path);
+    }
+
     // Calls IFileDialog/IShellItem methods directly through the COM vtable. This avoids
     // the [ComImport] RCW pattern, which depends on runtime IL generation and is disabled
     // when PublishAot is set.
-    public unsafe string? PickFolder(string title)
+    private static unsafe string? ShowFolderDialog(string title)
     {
         CoCreateInstance(in ClsidFileOpenDialog, IntPtr.Zero, CLSCTX_INPROC_SERVER, in IidFileOpenDialog, out var pDialog);
         try

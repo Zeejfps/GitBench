@@ -2,10 +2,9 @@ namespace GitBench.Platform;
 
 public sealed class NoopPlatformShell : IPlatformShell
 {
-    public string? PickFolder(string title)
+    public void PickFolder(string title, Action<string> onPicked)
     {
         Console.WriteLine($"[PlatformShell] No native picker for this OS. Title: {title}");
-        return null;
     }
 
     public void OpenFolder(string path)

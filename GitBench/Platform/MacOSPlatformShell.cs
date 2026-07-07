@@ -1,13 +1,46 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
+using ZGF.Gui;
+using ZGF.Observable;
 
 namespace GitBench.Platform;
 
 [SupportedOSPlatform("macos")]
 public sealed class MacOSPlatformShell : IPlatformShell
 {
-    public string? PickFolder(string title)
+    private readonly Context _context;
+    private int _pickerOpen;
+
+    public MacOSPlatformShell(Context context)
+    {
+        _context = context;
+    }
+
+    public void PickFolder(string title, Action<string> onPicked)
+    {
+        // The picker stays open until it exits — ignore Browse clicks made while one is up.
+        if (Interlocked.CompareExchange(ref _pickerOpen, 1, 0) != 0) return;
+
+        // osascript blocks until the user closes the dialog; waiting for it on the UI thread
+        // stalls the event loop (beachball). Wait on a worker and post the result back.
+        var dispatcher = _context.Require<IUiDispatcher>();
+        Task.Run(() =>
+        {
+            try
+            {
+                var path = RunFolderPicker(title);
+                if (!string.IsNullOrEmpty(path))
+                    dispatcher.Post(() => onPicked(path));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _pickerOpen, 0);
+            }
+        });
+    }
+
+    private static string? RunFolderPicker(string title)
     {
         var escapedTitle = title.Replace("\\", "\\\\").Replace("\"", "\\\"");
         var script =

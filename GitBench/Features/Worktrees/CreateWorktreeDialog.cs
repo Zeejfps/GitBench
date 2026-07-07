@@ -79,10 +79,7 @@ internal sealed record CreateWorktreeDialog : Widget
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)
     {
         var shell = ctx.Get<IPlatformShell>();
-        var picked = shell?.PickFolder(ctx.Localization().Strings.Value.WorktreesCreatePickerTitle);
-        if (!string.IsNullOrEmpty(picked))
-        {
-            vm.Path.Value = picked;
-        }
+        shell?.PickFolder(ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
+            picked => vm.Path.Value = picked);
     }
 }

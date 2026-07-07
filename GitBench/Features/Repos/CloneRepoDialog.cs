@@ -40,12 +40,8 @@ internal sealed record CloneRepoDialog : Widget
         {
             Label = s.CommonBrowse,
             Command = new Command(() =>
-            {
-                var shell = ctx.Get<IPlatformShell>();
-                var picked = shell?.PickFolder(s.ReposPickerChooseClone);
-                if (!string.IsNullOrEmpty(picked))
-                    vm.ParentDir.Value = picked;
-            }),
+                ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerChooseClone, picked =>
+                    vm.ParentDir.Value = picked)),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();
 

@@ -21,14 +21,15 @@ internal static class AddRepoMenu
     private static void OpenFromFolder(Context ctx, Guid? groupId)
     {
         var s = ctx.Localization().Strings.Value;
-        var path = ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository);
-        if (string.IsNullOrEmpty(path)) return;
-        if (ctx.Get<IRepoRegistry>()?.Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
+        ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository, path =>
         {
-            ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
-                s.ReposErrorNotAGitRepoTitle,
-                s.ReposErrorNotAGitRepoMessage(path)));
-        }
+            if (ctx.Get<IRepoRegistry>()?.Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
+            {
+                ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
+                    s.ReposErrorNotAGitRepoTitle,
+                    s.ReposErrorNotAGitRepoMessage(path)));
+            }
+        });
     }
 
     private static void ShowCloneDialog(Context ctx, Guid? groupId)

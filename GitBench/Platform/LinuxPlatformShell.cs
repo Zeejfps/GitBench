@@ -1,19 +1,24 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Text;
+using ZGF.Gui;
+using ZGF.Observable;
 
 namespace GitBench.Platform;
 
 [SupportedOSPlatform("linux")]
 public sealed class LinuxPlatformShell : IPlatformShell
 {
+    private readonly Context _context;
     private readonly string? _zenity;
     private readonly string? _kdialog;
     private readonly string? _opener;
     private readonly string? _terminal;
+    private int _pickerOpen;
 
-    public LinuxPlatformShell()
+    public LinuxPlatformShell(Context context)
     {
+        _context = context;
         _zenity = FindOnPath("zenity");
         _kdialog = FindOnPath("kdialog");
         _opener = FindOnPath("xdg-open");
@@ -23,15 +28,46 @@ public sealed class LinuxPlatformShell : IPlatformShell
             Console.WriteLine("[PlatformShell] No zenity/kdialog found on PATH; folder picker is unavailable.");
     }
 
-    public string? PickFolder(string title)
+    public void PickFolder(string title, Action<string> onPicked)
     {
+        string tool;
+        string[] args;
         if (_zenity != null)
-            return RunPicker(_zenity, ["--file-selection", "--directory", $"--title={title}"]);
-        if (_kdialog != null)
-            return RunPicker(_kdialog, ["--getexistingdirectory", ".", "--title", title]);
+        {
+            tool = _zenity;
+            args = ["--file-selection", "--directory", $"--title={title}"];
+        }
+        else if (_kdialog != null)
+        {
+            tool = _kdialog;
+            args = ["--getexistingdirectory", ".", "--title", title];
+        }
+        else
+        {
+            Console.WriteLine($"[PlatformShell] No native picker available. Title: {title}");
+            return;
+        }
 
-        Console.WriteLine($"[PlatformShell] No native picker available. Title: {title}");
-        return null;
+        // The picker stays open until it exits — ignore Browse clicks made while one is up.
+        if (Interlocked.CompareExchange(ref _pickerOpen, 1, 0) != 0) return;
+
+        // The picker is a separate process the user can leave open indefinitely. Waiting for it
+        // on the UI thread stalls the event loop, so the window manager marks the app
+        // unresponsive and offers to kill it. Wait on a worker and post the result back.
+        var dispatcher = _context.Require<IUiDispatcher>();
+        Task.Run(() =>
+        {
+            try
+            {
+                var path = RunPicker(tool, args);
+                if (!string.IsNullOrEmpty(path))
+                    dispatcher.Post(() => onPicked(path));
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _pickerOpen, 0);
+            }
+        });
     }
 
     public void OpenFolder(string path) => Open(path);
