@@ -367,6 +367,7 @@
   "repos.repo_remove": "リポジトリを削除",
   "repos.repo_rename": "リポジトリ名を変更",
   "repos.repo_copy_path": "パスをコピー",
+  "repos.repo_open_remote": "ブラウザで開く",
   "repos.worktree_switch_to": "ワークツリーに切り替え",
   "repos.worktree_remove": "ワークツリーを削除…",
   "repos.submodule_switch_to": "サブモジュールに切り替え",
@@ -379,6 +380,9 @@
   "repos.error_pull_failed": "プルに失敗しました",
   "repos.error_divergent_branches": "分岐したブランチの調整方法を指定する必要があります。",
   "repos.error_fetch_failed": "フェッチに失敗しました",
+  "repos.error_open_remote_failed": "リモートを開くのに失敗しました",
+  "repos.error_no_remote_url": "このリポジトリにはリモート URL が設定されていません。",
+  "repos.error_remote_url_not_web": "このリモート URL はブラウザで開けません: {url}",
 
   "review.window_title": "レビュー: {label}",
   "review.base_resolving": "ベースを解決中…",

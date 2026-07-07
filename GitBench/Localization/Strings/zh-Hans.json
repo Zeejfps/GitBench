@@ -367,6 +367,7 @@
   "repos.repo_remove": "移除仓库",
   "repos.repo_rename": "重命名仓库",
   "repos.repo_copy_path": "复制路径",
+  "repos.repo_open_remote": "在浏览器中打开",
   "repos.worktree_switch_to": "切换到工作树",
   "repos.worktree_remove": "移除工作树…",
   "repos.submodule_switch_to": "切换到子模块",
@@ -379,6 +380,9 @@
   "repos.error_pull_failed": "拉取失败",
   "repos.error_divergent_branches": "需要指定如何调和分叉的分支。",
   "repos.error_fetch_failed": "获取失败",
+  "repos.error_open_remote_failed": "打开远程仓库失败",
+  "repos.error_no_remote_url": "此仓库未配置远程 URL。",
+  "repos.error_remote_url_not_web": "此远程 URL 无法在浏览器中打开：{url}",
 
   "review.window_title": "审查：{label}",
   "review.base_resolving": "正在解析基线…",

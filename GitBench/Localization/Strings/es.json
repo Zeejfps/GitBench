@@ -367,6 +367,7 @@
   "repos.repo_remove": "Quitar repositorio",
   "repos.repo_rename": "Renombrar repositorio",
   "repos.repo_copy_path": "Copiar ruta",
+  "repos.repo_open_remote": "Abrir en el navegador",
   "repos.worktree_switch_to": "Cambiar al árbol de trabajo",
   "repos.worktree_remove": "Quitar árbol de trabajo…",
   "repos.submodule_switch_to": "Cambiar al submódulo",
@@ -379,6 +380,9 @@
   "repos.error_pull_failed": "Error en el pull",
   "repos.error_divergent_branches": "Es necesario especificar cómo reconciliar las ramas divergentes.",
   "repos.error_fetch_failed": "Error al obtener",
+  "repos.error_open_remote_failed": "Error al abrir el remoto",
+  "repos.error_no_remote_url": "Este repositorio no tiene una URL remota configurada.",
+  "repos.error_remote_url_not_web": "La URL remota no se puede abrir en un navegador: {url}",
 
   "review.window_title": "Revisión: {label}",
   "review.base_resolving": "Resolviendo base…",

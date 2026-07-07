@@ -409,6 +409,7 @@
   "repos.repo_remove": "إزالة المستودع",
   "repos.repo_rename": "إعادة تسمية المستودع",
   "repos.repo_copy_path": "نسخ المسار",
+  "repos.repo_open_remote": "فتح في المتصفح",
   "repos.worktree_switch_to": "التبديل إلى شجرة العمل",
   "repos.worktree_remove": "إزالة شجرة العمل…",
   "repos.submodule_switch_to": "التبديل إلى الوحدة الفرعية",
@@ -421,6 +422,9 @@
   "repos.error_pull_failed": "فشل السحب",
   "repos.error_divergent_branches": "يلزم تحديد كيفية التوفيق بين الفروع المتباعدة.",
   "repos.error_fetch_failed": "فشل الجلب",
+  "repos.error_open_remote_failed": "فشل فتح المستودع البعيد",
+  "repos.error_no_remote_url": "لا يوجد عنوان URL بعيد مُعدّ لهذا المستودع.",
+  "repos.error_remote_url_not_web": "تعذّر فتح عنوان URL البعيد في المتصفح: {url}",
 
   "review.window_title": "مراجعة: {label}",
   "review.base_resolving": "جارٍ تحديد الأساس…",

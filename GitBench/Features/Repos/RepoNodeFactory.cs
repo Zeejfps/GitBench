@@ -3,6 +3,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
+using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
@@ -20,6 +21,7 @@ internal sealed class RepoNodeFactory
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
     private readonly IClipboard? _clipboard;
+    private readonly IUiDispatcher _dispatcher;
 
     public RepoNodeFactory(
         IRepoRegistry registry,
@@ -28,7 +30,8 @@ internal sealed class RepoNodeFactory
         IGitService git,
         IPlatformShell? shell,
         ILocalizationService loc,
-        IClipboard? clipboard)
+        IClipboard? clipboard,
+        IUiDispatcher dispatcher)
     {
         _registry = registry;
         _status = status;
@@ -37,8 +40,9 @@ internal sealed class RepoNodeFactory
         _shell = shell;
         _loc = loc;
         _clipboard = clipboard;
+        _dispatcher = dispatcher;
     }
 
     public RepoNodeViewModel Create(Repo repo, int depth) =>
-        new(repo, depth, _registry, _status, _bus, _git, _shell, _loc, _clipboard, this);
+        new(repo, depth, _registry, _status, _bus, _git, _shell, _loc, _clipboard, _dispatcher, this);
 }

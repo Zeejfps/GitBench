@@ -367,6 +367,7 @@
   "repos.repo_remove": "Remove repo",
   "repos.repo_rename": "Rename repo",
   "repos.repo_copy_path": "Copy Path",
+  "repos.repo_open_remote": "Open in browser",
   "repos.worktree_switch_to": "Switch to worktree",
   "repos.worktree_remove": "Remove worktree…",
   "repos.submodule_switch_to": "Switch to submodule",
@@ -379,6 +380,9 @@
   "repos.error_pull_failed": "Pull failed",
   "repos.error_divergent_branches": "Need to specify how to reconcile divergent branches.",
   "repos.error_fetch_failed": "Fetch failed",
+  "repos.error_open_remote_failed": "Open remote failed",
+  "repos.error_no_remote_url": "This repository has no remote URL configured.",
+  "repos.error_remote_url_not_web": "The remote URL can't be opened in a browser: {url}",
 
   "review.window_title": "Review: {label}",
   "review.base_resolving": "Resolving base…",

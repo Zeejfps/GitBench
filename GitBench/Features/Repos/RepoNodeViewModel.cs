@@ -37,6 +37,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
     private readonly IClipboard? _clipboard;
+    private readonly IUiDispatcher _dispatcher;
 
     private readonly Derived<Repo?> _currentRepo;
     private readonly Derived<string> _displayName;
@@ -96,6 +97,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         IPlatformShell? shell,
         ILocalizationService loc,
         IClipboard? clipboard,
+        IUiDispatcher dispatcher,
         RepoNodeFactory factory)
     {
         _initial = repo;
@@ -107,6 +109,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _shell = shell;
         _loc = loc;
         _clipboard = clipboard;
+        _dispatcher = dispatcher;
 
         IsExpanded = registry.WatchWorktreeExpanded(repo.Id);
 
@@ -235,6 +238,7 @@ internal sealed class RepoNodeViewModel : IDisposable
             items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
+        AddOpenRemoteItem(items, s, repo);
     }
 
     private void AddHotkeyMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
@@ -307,6 +311,39 @@ internal sealed class RepoNodeViewModel : IDisposable
         }
     }
 
+    private void AddOpenRemoteItem(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
+        if (_shell is null) return;
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoOpenRemote, () => OpenRemote(repo), LucideIcons.ExternalLink));
+    }
+
+    // Reads the remote URL off-thread (a git process spawn) and hands it to the browser. "origin"
+    // wins when several remotes exist; a repo with no web-openable remote surfaces the error dialog.
+    private void OpenRemote(Repo repo)
+    {
+        var shell = _shell;
+        if (shell is null) return;
+        Task.Run(() =>
+        {
+            var remotes = _git.GetRemoteNames(repo);
+            var remoteName = remotes.Contains("origin") ? "origin" : remotes.FirstOrDefault();
+            var rawUrl = remoteName is null ? null : _git.GetRemoteUrl(repo, remoteName);
+            var webUrl = rawUrl is null ? null : RemoteWebUrl.FromRemoteUrl(rawUrl);
+            if (webUrl is not null)
+            {
+                shell.OpenUrl(webUrl);
+                return;
+            }
+            _dispatcher.Post(() =>
+            {
+                var s = _loc.Strings.Value;
+                _bus.Broadcast(new ShowOperationErrorMessage(
+                    s.ReposErrorOpenRemoteFailed,
+                    rawUrl is null ? s.ReposErrorNoRemoteUrl : s.ReposErrorRemoteUrlNotWeb(rawUrl)));
+            });
+        });
+    }
+
     private void CopyPath(string path)
     {
         _clipboard?.SetText(path);
@@ -324,6 +361,7 @@ internal sealed class RepoNodeViewModel : IDisposable
 
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
+        AddOpenRemoteItem(items, s, worktree);
 
         if (worktree.ParentRepoId is { } parentId && FindRepo(parentId) is { } primary)
         {
@@ -347,6 +385,8 @@ internal sealed class RepoNodeViewModel : IDisposable
 
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
+        if (!submodule.IsMissing)
+            AddOpenRemoteItem(items, s, submodule);
 
         if (submodule.ParentRepoId is { } parentId && FindRepo(parentId) is { } primary)
         {
