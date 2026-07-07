@@ -44,7 +44,6 @@ internal sealed class DiffContentView : View, IScrollableContent
     private const float ExpanderPadLeft = 4f;
     private const float ExpanderCellWidth = 22f;
     private const float ExpanderChipGap = 2f;
-    private const float ExpanderChipInsetY = 1.5f;
 
     // Shared style instances. TextStyle is a class so DrawTextInputs holds a reference; we
     // mutate the few that need per-row recoloring (banner/glyph/line text in the row body)
@@ -127,7 +126,6 @@ internal sealed class DiffContentView : View, IScrollableContent
     private int _hoveredHunkIndex = -1;
     private HunkAction _hoveredButton = HunkAction.None;
     private int _hoveredExpanderRow = -1;
-    private GapExpandDirection _hoveredExpanderDir;
     private float _stageBtnTextWidth;
     private float _unstageBtnTextWidth;
     private float _discardBtnTextWidth;
@@ -941,10 +939,13 @@ internal sealed class DiffContentView : View, IScrollableContent
     private void DrawHunkSeparatorRow(
         ICanvas c, DiffRow.HunkSeparator s, int rowIndex, float left, float bottom, float width, int z)
     {
+        // The whole bar is the expander's click target, so it tints as one on hover. Only gap
+        // bars are hoverable, so a plain (null-gap) separator never matches _hoveredExpanderRow.
+        var barBg = rowIndex == _hoveredExpanderRow ? _styles.ExpanderHoverBackground : _styles.SectionBackground;
         c.DrawRect(new DrawRectInputs
         {
             Position = new RectF(left, bottom, width, _lineHeight),
-            Style = SolidBgStyle(_styles.SectionBackground),
+            Style = SolidBgStyle(barBg),
             ZIndex = z,
         });
 
@@ -953,7 +954,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         {
             // Expander icon at the far left, over the gutter columns; the bar text shifts
             // right of it.
-            textX = Math.Max(textX, DrawExpanderIcons(c, gap, rowIndex, left, bottom, z) + BannerPaddingX);
+            textX = Math.Max(textX, DrawExpanderIcons(c, gap, left, bottom, z) + BannerPaddingX);
         }
 
         var cursorX = textX;
@@ -987,30 +988,14 @@ internal sealed class DiffContentView : View, IScrollableContent
         }
     }
 
-    // Draws a GapBar's expander icons (accent glyphs, a filled chip under the hovered one) and
-    // returns the x just past the last cell. Shared by the separator bars and the tear row.
-    private float DrawExpanderIcons(ICanvas c, GapBar gap, int rowIndex, float left, float bottom, int z)
+    // Draws a GapBar's accent expander glyphs and returns the x just past the last cell. Shared by
+    // the separator bars and the tear row; hover is a whole-bar tint painted by the row, not here.
+    private float DrawExpanderIcons(ICanvas c, GapBar gap, float left, float bottom, int z)
     {
         var x = left + ExpanderPadLeft;
+        ExpanderIconStyle.TextColor = _styles.ExpanderIcon;
         foreach (var dir in ExpanderIconsFor(gap))
         {
-            var hovered = rowIndex == _hoveredExpanderRow && dir == _hoveredExpanderDir;
-            if (hovered)
-            {
-                c.DrawRect(new DrawRectInputs
-                {
-                    Position = new RectF(
-                        x, bottom + ExpanderChipInsetY,
-                        ExpanderCellWidth - ExpanderChipGap, _lineHeight - ExpanderChipInsetY * 2),
-                    Style = new RectStyle
-                    {
-                        BackgroundColor = _styles.ExpanderHoverBackground,
-                        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                    },
-                    ZIndex = z + 1,
-                });
-            }
-            ExpanderIconStyle.TextColor = hovered ? _styles.ExpanderHoverIcon : _styles.ExpanderIcon;
             c.DrawText(new DrawTextInputs
             {
                 Position = new RectF(x, bottom, ExpanderCellWidth - ExpanderChipGap, _lineHeight),
@@ -1035,7 +1020,18 @@ internal sealed class DiffContentView : View, IScrollableContent
     // strip between them were torn out — plus the unfold-all affordance and the hidden count.
     private void DrawTearRow(ICanvas c, DiffRow.Tear t, int rowIndex, float left, float bottom, float width, int z)
     {
-        var cursorX = DrawExpanderIcons(c, t.Gap, rowIndex, left, bottom, z) + BannerPaddingX;
+        // The tear is a click target too; on hover it tints as a whole bar like the separators
+        // (idle it stays on the plain background so the torn strip reads as empty).
+        if (rowIndex == _hoveredExpanderRow)
+        {
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(left, bottom, width, _lineHeight),
+                Style = SolidBgStyle(_styles.ExpanderHoverBackground),
+                ZIndex = z,
+            });
+        }
+        var cursorX = DrawExpanderIcons(c, t.Gap, left, bottom, z) + BannerPaddingX;
         if (t.Gap.HiddenCount is int hidden)
         {
             var label = _loc.Strings.Value.DiffHiddenLines(hidden);
@@ -1270,8 +1266,7 @@ internal sealed class DiffContentView : View, IScrollableContent
     public void OnHunkPointerMove(PointF point)
     {
         // Expander hover is independent of hunk buttons: it applies to read-only sides too.
-        var expander = HitTestExpander(point);
-        SetExpanderHover(expander?.Row ?? -1, expander?.Dir ?? default);
+        SetExpanderHover(HitTestExpander(point)?.Row ?? -1);
 
         if (!HasHunkButtons()) { SetHunkHover(-1, HunkAction.None); return; }
 
@@ -1288,7 +1283,7 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     public void OnHunkPointerExit()
     {
-        SetExpanderHover(-1, default);
+        SetExpanderHover(-1);
         SetHunkHover(-1, HunkAction.None);
     }
 
@@ -1299,8 +1294,9 @@ internal sealed class DiffContentView : View, IScrollableContent
         return true;
     }
 
-    // The expander icon under the pointer, if any: row hit first (full row height), then the
-    // per-icon cell check mirroring DrawExpanderIcons' geometry.
+    // The expander a click on a bar row targets. A single-expander bar (every bar in practice) is
+    // clickable across its whole width, so the tiny arrow isn't the only target; a multi-expander
+    // bar keeps per-icon cells so each arrow still maps to its own direction.
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
     {
         if (_lineHeight <= 0) return null;
@@ -1309,8 +1305,12 @@ internal sealed class DiffContentView : View, IScrollableContent
         var rowIndex = HitTestListRow(point);
         if (rowIndex < 0 || GapBarOf(_rows[rowIndex]) is not { } gap) return null;
 
+        var icons = ExpanderIconsFor(gap);
+        if (icons.Length == 0) return null;
+        if (icons.Length == 1) return (rowIndex, gap.GapIndex, icons[0]);
+
         var x = listPos.Left - _scrollX + ExpanderPadLeft;
-        foreach (var dir in ExpanderIconsFor(gap))
+        foreach (var dir in icons)
         {
             if (point.X >= x && point.X <= x + ExpanderCellWidth) return (rowIndex, gap.GapIndex, dir);
             x += ExpanderCellWidth;
@@ -1325,11 +1325,10 @@ internal sealed class DiffContentView : View, IScrollableContent
         _ => null,
     };
 
-    private void SetExpanderHover(int rowIndex, GapExpandDirection dir)
+    private void SetExpanderHover(int rowIndex)
     {
-        if (_hoveredExpanderRow == rowIndex && _hoveredExpanderDir == dir) return;
+        if (_hoveredExpanderRow == rowIndex) return;
         _hoveredExpanderRow = rowIndex;
-        _hoveredExpanderDir = dir;
         SetDirty();
     }
 

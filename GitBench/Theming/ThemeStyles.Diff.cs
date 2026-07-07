@@ -45,7 +45,6 @@ public sealed record DiffContentStyles(
     uint HunkOutline,
     uint ExpanderIcon,
     uint ExpanderHoverBackground,
-    uint ExpanderHoverIcon,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -128,11 +127,10 @@ public partial record ThemeStyles
             SectionMutedText: p.TextSecondary,
             HunkSeparatorRangeText: p.TextMuted,
             HunkOutline: p.HunkOutline,
-            // Gap expanders read as links, not gutter chrome: accent glyphs idle, a filled
-            // accent chip behind the hovered one.
+            // Gap-expander bars: accent glyphs always, and the whole bar tints on hover the same
+            // way the diff header strip does — the entire bar is the click target, not the glyph.
             ExpanderIcon: p.Accent,
-            ExpanderHoverBackground: p.Accent,
-            ExpanderHoverIcon: p.TextOnAccent,
+            ExpanderHoverBackground: p.SurfaceHoverStrong,
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

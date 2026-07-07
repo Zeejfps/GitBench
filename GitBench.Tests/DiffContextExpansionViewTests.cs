@@ -187,6 +187,36 @@ public class DiffContextExpansionViewTests
     }
 
     [Fact]
+    public void ClickingAnywhereOnABarExpandsIt()
+    {
+        var (h, view) = Create();
+        using (h)
+        {
+            var calls = new List<(int Gap, GapExpandDirection Dir)>();
+            view.OnExpandGap = (gap, dir) => calls.Add((gap, dir));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            h.Render();
+
+            // Same bars as ClickingExpanderIconsReportsGapAndDirection, but clicked far to the
+            // right of the arrow — the whole bar is the hit target, not just the icon cell.
+            h.Click(400f, RowCenterY(0));   // top-of-file bar: up
+            h.Click(400f, RowCenterY(6));   // split gap, top bar: down
+            h.Click(400f, RowCenterY(7));   // split gap, tear: unfold-all
+            h.Click(400f, RowCenterY(8));   // split gap, bottom bar: up
+            h.Click(400f, RowCenterY(14));  // EOF bar: down
+
+            Assert.Equal(new[]
+            {
+                (0, GapExpandDirection.Up),
+                (1, GapExpandDirection.Down),
+                (1, GapExpandDirection.All),
+                (1, GapExpandDirection.Up),
+                (2, GapExpandDirection.Down),
+            }, calls);
+        }
+    }
+
+    [Fact]
     public void ExpandedRowsRenderBetweenBarAndHunkWithBothGutterNumbers()
     {
         var (h, view) = Create();
