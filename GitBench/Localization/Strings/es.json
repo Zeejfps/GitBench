@@ -12,6 +12,9 @@
   "toast.changes_stashed": "Cambios guardados en stash",
   "toast.tag_created": "Etiqueta creada",
   "toast.dismiss": "Cerrar",
+  "toast.copied_path": "Ruta copiada",
+  "toast.copied_full_path": "Ruta completa copiada",
+  "toast.copied_file_name": "Nombre de archivo copiado",
 
   "files.stage": { "one": "Preparar", "other": "Preparar {count} archivos" },
   "files.unstage": { "one": "Quitar de preparados", "other": "Quitar {count} archivos de preparados" },

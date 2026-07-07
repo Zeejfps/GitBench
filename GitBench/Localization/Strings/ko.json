@@ -12,6 +12,9 @@
   "toast.changes_stashed": "변경 사항 스태시됨",
   "toast.tag_created": "태그 생성됨",
   "toast.dismiss": "닫기",
+  "toast.copied_path": "경로가 복사됨",
+  "toast.copied_full_path": "전체 경로가 복사됨",
+  "toast.copied_file_name": "파일 이름이 복사됨",
 
   "files.stage": { "one": "스테이징", "other": "파일 {count}개 스테이징" },
   "files.unstage": { "one": "스테이징 해제", "other": "파일 {count}개 스테이징 해제" },

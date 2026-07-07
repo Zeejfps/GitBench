@@ -12,6 +12,9 @@
   "toast.changes_stashed": "変更をスタッシュしました",
   "toast.tag_created": "タグを作成しました",
   "toast.dismiss": "閉じる",
+  "toast.copied_path": "パスをコピーしました",
+  "toast.copied_full_path": "フルパスをコピーしました",
+  "toast.copied_file_name": "ファイル名をコピーしました",
 
   "files.stage": { "one": "ステージ", "other": "{count}個のファイルをステージ" },
   "files.unstage": { "one": "ステージ解除", "other": "{count}個のファイルをステージ解除" },

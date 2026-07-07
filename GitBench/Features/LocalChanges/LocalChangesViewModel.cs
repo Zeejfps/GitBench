@@ -727,6 +727,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     {
         if (paths.Count == 0) return;
         _clipboard.SetText(string.Join(Environment.NewLine, paths));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCopiedPath)));
     }
 
     public void CopyAbsolutePaths(IReadOnlyList<string> paths)
@@ -735,12 +736,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         var repo = _registry.Active.Value;
         if (repo == null) return;
         _clipboard.SetText(string.Join(Environment.NewLine, paths.Select(p => Path.Combine(repo.Path, p))));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCopiedFullPath)));
     }
 
     public void CopyFileNames(IReadOnlyList<string> paths)
     {
         if (paths.Count == 0) return;
         _clipboard.SetText(string.Join(Environment.NewLine, paths.Select(Path.GetFileName)));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCopiedFileName)));
     }
 
     public void OpenContainingFolder(string path)

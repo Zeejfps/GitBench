@@ -12,6 +12,9 @@
   "toast.changes_stashed": "تم إخفاء التغييرات",
   "toast.tag_created": "تم إنشاء الوسم",
   "toast.dismiss": "إغلاق",
+  "toast.copied_path": "تم نسخ المسار",
+  "toast.copied_full_path": "تم نسخ المسار الكامل",
+  "toast.copied_file_name": "تم نسخ اسم الملف",
 
   "files.stage": {
     "one": "تجهيز",

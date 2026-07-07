@@ -12,6 +12,9 @@
   "toast.changes_stashed": "已贮藏更改",
   "toast.tag_created": "已创建标签",
   "toast.dismiss": "关闭",
+  "toast.copied_path": "已复制路径",
+  "toast.copied_full_path": "已复制完整路径",
+  "toast.copied_file_name": "已复制文件名",
 
   "files.stage": { "one": "暂存", "other": "暂存 {count} 个文件" },
   "files.unstage": { "one": "取消暂存", "other": "取消暂存 {count} 个文件" },

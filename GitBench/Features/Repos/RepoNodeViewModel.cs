@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Notifications;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
@@ -225,7 +226,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         };
 
         if (_clipboard is not null)
-            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => _clipboard.SetText(repo.Path), LucideIcons.Copy));
+            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
 
@@ -291,6 +292,12 @@ internal sealed class RepoNodeViewModel : IDisposable
         }
 
         return items;
+    }
+
+    private void CopyPath(string path)
+    {
+        _clipboard?.SetText(path);
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCopiedPath)));
     }
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildWorktreeMenu()

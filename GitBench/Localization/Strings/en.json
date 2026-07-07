@@ -12,6 +12,9 @@
   "toast.changes_stashed": "Changes stashed",
   "toast.tag_created": "Tag created",
   "toast.dismiss": "Dismiss",
+  "toast.copied_path": "Path copied",
+  "toast.copied_full_path": "Full path copied",
+  "toast.copied_file_name": "File name copied",
 
   "files.stage": { "one": "Stage", "other": "Stage {count} Files" },
   "files.unstage": { "one": "Unstage", "other": "Unstage {count} Files" },
