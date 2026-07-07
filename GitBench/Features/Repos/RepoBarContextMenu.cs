@@ -148,10 +148,7 @@ public static class RepoBarContextMenu
             });
             var captured = item;
             menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
-            {
-                manager.RequestCloseAll();
-                captured.OnSelected();
-            }));
+                manager.CloseAllAndThen(captured.OnSelected)));
             itemsColumn.Children.Add(menuItem);
             rows.Add(new MenuRow(menuItem, captured.OnSelected, item.Label));
         }
@@ -206,8 +203,7 @@ public static class RepoBarContextMenu
             foreach (var row in rows)
                 if (row.RowView.IsVisible)
                 {
-                    manager.RequestCloseAll();
-                    row.OnSelected();
+                    manager.CloseAllAndThen(row.OnSelected);
                     return;
                 }
         }
@@ -404,13 +400,12 @@ public static class RepoBarContextMenu
             else
             {
                 menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
-                {
-                    // Dismiss the entire menu chain (parent + any open submenus), then act.
-                    // Deferred close — a synchronous teardown here would unregister controllers
-                    // mid-dispatch and mutate the input system's focus queue while it iterates.
-                    manager.RequestCloseAll();
-                    captured.OnSelected();
-                }));
+                    // Dismiss the entire menu chain (parent + any open submenus), then act — the
+                    // action runs only once the popups are actually hidden, so a blocking picker
+                    // never opens behind a still-visible menu. Deferred close: a synchronous
+                    // teardown here would unregister controllers mid-dispatch and mutate the input
+                    // system's focus queue while it iterates.
+                    manager.CloseAllAndThen(captured.OnSelected)));
             }
             menu.Children.Add(menuItem);
         }
