@@ -3,8 +3,11 @@ using GitBench.Features.StatusBar;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
+using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
+using ZGF.Gui.Desktop.Widgets;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -60,7 +63,7 @@ internal sealed record ToastCard : Widget<ToastCardState>
         if (vm.HasAction) row.Add(ActionButton(vm));
         if (vm.ShowDismiss) row.Add(DismissButton(vm));
 
-        return new Box
+        var card = new Box
         {
             MinWidth = MinCardWidth,
             Background = Theme.Color(s => s.Palette.SurfaceRaised),
@@ -91,6 +94,14 @@ internal sealed record ToastCard : Widget<ToastCardState>
                     ],
                 },
             ],
+        };
+
+        // Clicking anywhere on the card dismisses it. Inner buttons (action / dismiss) sit deeper in
+        // the tree, so they still win their own clicks; only the body forwards here.
+        return new KbmInput
+        {
+            Controller = _ => new ToastDismissController(vm.Dismiss),
+            Child = card,
         };
     }
 
@@ -128,6 +139,28 @@ internal sealed record ToastCard : Widget<ToastCardState>
         ToastSeverity.Error => static s => s.Status.Danger,
         _ => static s => s.Status.Info,
     };
+
+    // Dismisses the toast on a left click anywhere on the card body, and shows a hand cursor while
+    // hovered so the card reads as clickable. Mirrors the framework's semantic click (left press on
+    // the bubble phase) and consumes it. Dismiss is idempotent, so an inner button that also dismisses
+    // (or lets the click bubble) causes no double-dismissal.
+    private sealed class ToastDismissController : KeyboardMouseController, IProvidesCursor
+    {
+        private readonly ICommand _dismiss;
+
+        public ToastDismissController(ICommand dismiss) => _dismiss = dismiss;
+
+        public MouseCursor Cursor => MouseCursor.Hand;
+
+        public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
+        {
+            if (e.Phase != EventPhase.Bubbling) return;
+            if (e.Button != MouseButton.Left) return;
+            if (e.State != InputState.Pressed) return;
+            _dismiss.Execute();
+            e.Consume();
+        }
+    }
 }
 
 /// <summary>
