@@ -212,36 +212,15 @@ internal sealed class RepoNodeViewModel : IDisposable
         var repo = Repo;
         var sourceGroup = _registry.FindGroupContaining(repo.Id);
         var s = _loc.Strings.Value;
+
+        // Primary actions first — the common ones a right-click is usually reaching for.
         var items = new List<RepoBarContextMenu.Item>
         {
-            new(s.ReposRepoNewWorktree,
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog { Primary = repo, OnClose = onClose })),
-                LucideIcons.Branch),
-            new(s.ReposRepoPruneWorktrees,
-                () =>
-                {
-                    Task.Run(() => _git.PruneWorktrees(repo));
-                    _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
-                },
-                LucideIcons.Trash),
-            new(s.ReposRepoAddSubmodule,
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog { Primary = repo, OnClose = onClose })),
-                LucideIcons.Package),
-            new(s.ReposRepoUpdateAllSubmodules,
-                () => _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose })),
-                LucideIcons.Pull),
+            new(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine),
+            new(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash),
         };
 
-        foreach (var group in _registry.Groups)
-        {
-            if (sourceGroup != null && group.Id == sourceGroup.Id) continue;
-            var captured = group;
-            items.Add(new RepoBarContextMenu.Item(
-                s.ReposRepoMoveToGroup(captured.Name.Value),
-                () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
-                LucideIcons.FolderInput));
-        }
-
+        // Hotkey assignment.
         var currentSlot = _registry.HotkeyFor(repo.Id);
         var slotItems = new List<RepoBarContextMenu.Item>(9);
         for (var n = 1; n <= 9; n++)
@@ -264,16 +243,43 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (currentSlot is { } assigned)
             items.Add(new RepoBarContextMenu.Item(s.ReposHotkeyClear, () => _registry.ClearHotkey(assigned), LucideIcons.X));
 
-        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine));
-        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
-        items.Add(new RepoBarContextMenu.Item(
-            s.CommonNewGroup,
+        // Worktrees.
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoNewWorktree,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new CreateWorktreeDialog { Primary = repo, OnClose = onClose })),
+            LucideIcons.Branch));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoPruneWorktrees,
             () =>
             {
-                var id = _registry.CreateGroup(s.ReposGroupNewDefault);
-                _registry.BeginRenameGroup(id);
+                Task.Run(() => _git.PruneWorktrees(repo));
+                _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
             },
-            LucideIcons.FolderPlus));
+            LucideIcons.Trash));
+
+        // Submodules.
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoAddSubmodule,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new AddSubmoduleDialog { Primary = repo, OnClose = onClose })),
+            LucideIcons.Package));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoUpdateAllSubmodules,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new UpdateSubmodulesDialog { Primary = repo, Target = null, OnClose = onClose })),
+            LucideIcons.Pull));
+
+        // "Move to <group>" last, in its own section — this list grows and shrinks with the group set,
+        // so keeping it at the bottom leaves the fixed actions above it stable.
+        var moveTargets = _registry.Groups.Where(g => sourceGroup == null || g.Id != sourceGroup.Id).ToList();
+        if (moveTargets.Count > 0)
+        {
+            items.Add(RepoBarContextMenu.Separator);
+            foreach (var group in moveTargets)
+            {
+                var captured = group;
+                items.Add(new RepoBarContextMenu.Item(
+                    s.ReposRepoMoveToGroup(captured.Name.Value),
+                    () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
+                    LucideIcons.FolderInput));
+            }
+        }
 
         return items;
     }
