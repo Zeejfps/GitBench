@@ -405,6 +405,7 @@
   "repos.repo_move_to_group": "النقل إلى: {name}",
   "repos.repo_remove": "إزالة المستودع",
   "repos.repo_rename": "إعادة تسمية المستودع",
+  "repos.repo_copy_path": "نسخ المسار",
   "repos.worktree_switch_to": "التبديل إلى شجرة العمل",
   "repos.worktree_remove": "إزالة شجرة العمل…",
   "repos.submodule_switch_to": "التبديل إلى الوحدة الفرعية",

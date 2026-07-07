@@ -363,6 +363,7 @@
   "repos.repo_move_to_group": "Mover a: {name}",
   "repos.repo_remove": "Quitar repositorio",
   "repos.repo_rename": "Renombrar repositorio",
+  "repos.repo_copy_path": "Copiar ruta",
   "repos.worktree_switch_to": "Cambiar al árbol de trabajo",
   "repos.worktree_remove": "Quitar árbol de trabajo…",
   "repos.submodule_switch_to": "Cambiar al submódulo",

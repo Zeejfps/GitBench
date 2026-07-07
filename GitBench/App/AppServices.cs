@@ -72,7 +72,8 @@ internal static class AppServices
             ctx.Require<IMessageBus>(),
             ctx.Require<IGitService>(),
             ctx.Get<IPlatformShell>(),
-            ctx.Require<ILocalizationService>()));
+            ctx.Require<ILocalizationService>(),
+            ctx.Get<IClipboard>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<OperationViewModel>();
         // Shared so the Local Changes file list and the workspace-footer merge bar drive the same

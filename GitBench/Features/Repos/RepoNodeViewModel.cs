@@ -6,6 +6,7 @@ using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -34,6 +35,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly IGitService _git;
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
+    private readonly IClipboard? _clipboard;
 
     private readonly Derived<Repo?> _currentRepo;
     private readonly Derived<string> _displayName;
@@ -92,6 +94,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         IGitService git,
         IPlatformShell? shell,
         ILocalizationService loc,
+        IClipboard? clipboard,
         RepoNodeFactory factory)
     {
         _initial = repo;
@@ -102,6 +105,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _git = git;
         _shell = shell;
         _loc = loc;
+        _clipboard = clipboard;
 
         IsExpanded = registry.WatchWorktreeExpanded(repo.Id);
 
@@ -219,6 +223,11 @@ internal sealed class RepoNodeViewModel : IDisposable
             new(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine),
             new(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash),
         };
+
+        if (_clipboard is not null)
+            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => _clipboard.SetText(repo.Path), LucideIcons.Copy));
+        if (_shell is not null)
+            items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
 
         // Hotkey assignment.
         var currentSlot = _registry.HotkeyFor(repo.Id);

@@ -363,6 +363,7 @@
   "repos.repo_move_to_group": "Move to: {name}",
   "repos.repo_remove": "Remove repo",
   "repos.repo_rename": "Rename repo",
+  "repos.repo_copy_path": "Copy Path",
   "repos.worktree_switch_to": "Switch to worktree",
   "repos.worktree_remove": "Remove worktree…",
   "repos.submodule_switch_to": "Switch to submodule",
