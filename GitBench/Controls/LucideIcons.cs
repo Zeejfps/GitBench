@@ -24,6 +24,7 @@ internal static class LucideIcons
     public const string ChevronsRight = "";// chevrons-right
     public const string Square = "";        // square (checkbox unchecked)
     public const string CheckSquare = "";   // check-square (checkbox checked)
+    public const string Check = "";   // check (active-selection mark)
     public const string Trash = "";         // trash-2
     public const string SquareTerminal = ""; // square-terminal
     public const string PencilLine = "";    // pencil-line

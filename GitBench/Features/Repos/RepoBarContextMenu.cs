@@ -25,6 +25,10 @@ public static class RepoBarContextMenu
         Action OnSelected,
         string? Icon = null,
         bool Enabled = true,
+        // Marks this item as the menu's current selection (e.g. the active identity or
+        // language). Rendered with a tinted pill, a leading check, and bold accent text; the
+        // whole menu then reserves the check column so unchecked rows align instead of jumping.
+        bool Checked = false,
         IReadOnlyList<MenuLabelSegment>? LabelSegments = null,
         bool IsSeparator = false,
         string? Shortcut = null,
@@ -355,6 +359,12 @@ public static class RepoBarContextMenu
             menu.BorderColor = BorderColorStyle.All(s.ContextMenu.Border);
         });
 
+        // A menu that carries a current selection reserves the check column and rounds every
+        // row's fill, so the active item's tinted pill and the plain rows share one column.
+        var hasSelection = false;
+        foreach (var item in items)
+            if (!item.IsSeparator && item.Checked) { hasSelection = true; break; }
+
         foreach (var item in items)
         {
             if (item.IsSeparator)
@@ -368,22 +378,30 @@ public static class RepoBarContextMenu
             var menuItem = new ContextMenuItem(ctx.Canvas)
             {
                 Text = item.Label,
-                Icon = item.Icon,
+                Icon = item.Checked ? LucideIcons.Check : item.Icon,
                 IconFontFamily = LucideIcons.FontFamily,
                 NormalBackgroundColor = 0x00000000,
                 IsEnabled = item.Enabled,
                 Shortcut = item.Shortcut,
+                ReserveIconColumn = hasSelection,
+                BackgroundCornerRadius = hasSelection ? BorderRadiusStyle.All(Radius.Sm) : default,
             };
+            var isChecked = item.Checked;
             menuItem.BindThemed(theme, s =>
             {
                 menuItem.SelectedBackgroundColor = s.ContextMenu.ItemSelectedBackground;
+                menuItem.NormalBackgroundColor = isChecked ? s.ContextMenu.ItemActiveBackground : 0x00000000;
                 menuItem.TextColor = s.ContextMenu.ItemText;
                 menuItem.DisabledTextColor = s.ContextMenu.ItemTextDisabled;
                 menuItem.ShortcutColor = s.ContextMenu.ItemTextDisabled;
             });
 
+            // The active row's label reads bold in the accent text color; explicit segments
+            // still win when a caller supplies them.
             if (item.LabelSegments is { Count: > 0 } segs)
                 menuItem.SetLabelView(BuildSegmentsView(ctx, segs, item.Enabled));
+            else if (isChecked)
+                menuItem.SetLabelView(BuildSegmentsView(ctx, [new MenuLabelSegment(item.Label, Bold: true)], item.Enabled));
 
             var captured = item;
             if (captured.Submenu is { Count: > 0 } submenu)

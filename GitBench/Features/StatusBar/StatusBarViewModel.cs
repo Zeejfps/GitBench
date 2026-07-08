@@ -246,7 +246,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             items.Add(new RepoBarContextMenu.Item(
                 name,
                 () => _locale.Value = target,
-                Icon: active == locale ? LucideIcons.CheckSquare : null));
+                Checked: active == locale));
         }
 
         return items;
@@ -271,7 +271,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
             items.Add(new RepoBarContextMenu.Item(
                 profile.DisplayName,
                 () => ApplyOverride(repo, profile.Id),
-                Icon: activeProfileId == profile.Id ? LucideIcons.CheckSquare : null));
+                Checked: activeProfileId == profile.Id));
         }
 
         if (_profiles.Profiles.Count > 0) items.Add(RepoBarContextMenu.Separator);

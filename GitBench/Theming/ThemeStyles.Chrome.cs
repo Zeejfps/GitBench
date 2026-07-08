@@ -65,6 +65,7 @@ public sealed record ContextMenuStyles(
     uint Background,
     uint Border,
     uint ItemSelectedBackground,
+    uint ItemActiveBackground,
     uint ItemText,
     uint ItemTextDisabled,
     uint AccentText);
@@ -130,6 +131,7 @@ public partial record ThemeStyles
             Background: p.Surface,
             Border: p.Border,
             ItemSelectedBackground: p.SurfaceHover,
+            ItemActiveBackground: p.SurfaceSelectedSubtle,
             ItemText: p.TextSecondary,
             ItemTextDisabled: p.TextDisabled,
             AccentText: p.TextStrong);
