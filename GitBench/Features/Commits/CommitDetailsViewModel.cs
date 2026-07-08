@@ -121,6 +121,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>
     public void ActivateTab(string? path) => Update(s => s with { SelectedPath = path });
 
+    /// <summary>
+    /// Enters the loading state immediately, before the next range is resolved — the Review window's
+    /// optimistic base switch flips its columns to their loading treatment the instant the reviewer
+    /// picks a new base, without waiting for the range resolution to return. A following
+    /// <see cref="ShowRange"/> supplies the resolved endpoints.
+    /// </summary>
+    public void EnterLoading() =>
+        Update(s => s with { SelectedPath = null, Render = new CommitDetailsRenderState.Loading() });
+
     /// <summary>Closes a file tab and disposes its diff. If it was active, the neighbouring tab (or
     /// the Details tab when none remain) becomes active.</summary>
     public void CloseTab(string path)

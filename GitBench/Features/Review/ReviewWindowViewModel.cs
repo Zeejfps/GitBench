@@ -80,6 +80,12 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // (stale-while-revalidate).
     private readonly State<bool> _detailsEverLoaded = new(false);
 
+    // True from the moment the reviewer picks a new base until the new range's files land. Unlike a
+    // background refs-change reload (stale-while-revalidate), an explicit base switch is deliberate
+    // navigation: the chip shows the new selection at once and the split's columns drop to their
+    // loading treatment (tree skeleton + files loading) instead of holding the old range on screen.
+    private readonly State<bool> _baseSwitching = new(false);
+
     // The file the reviewer is currently on: the section the stacked diff list is scrolled to
     // (scrollspy), retargeted by a tree click or j/k. Anchors the Viewed toggle, the primary
     // action, and the tree's highlighted row.
@@ -89,6 +95,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public string Title { get; }
 
     public IReadable<bool> CheatsheetOpen => _cheatsheetOpen;
+
+    // While true the split shows its loading columns (tree skeleton + files loading) for an
+    // in-flight base switch. The views bind this to swap their content optimistically.
+    public IReadable<bool> IsSwitchingBase => _baseSwitching;
 
     // Per-window store of marked-Viewed files, provided into the window subtree so the reused
     // diff-pane header and Changes list show their Viewed marks. Owned (and disposed) here.
@@ -153,6 +163,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         Subscriptions.Add(_cheatsheetOpen);
         Subscriptions.Add(_baseOverride);
         Subscriptions.Add(_detailsEverLoaded);
+        Subscriptions.Add(_baseSwitching);
         Subscriptions.Add(_activeFile);
         Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
 
@@ -190,6 +201,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
         Subscriptions.Add(_details.RenderState.Subscribe(r =>
         {
+            // Any terminal state (files in, or a load error) ends the base switch — drop the loading
+            // columns; a stuck flag would otherwise pin the skeleton up.
+            if (r is not CommitDetailsRenderState.Loading) _baseSwitching.Value = false;
             if (r is not CommitDetailsRenderState.Loaded loaded) return;
             if (!_detailsEverLoaded.Value) _detailsEverLoaded.Value = true;
             // Seed the active file on first load; prune it when a reload drops it from the range.
@@ -211,13 +225,45 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     }
 
     // Re-resolves the range against a new base (null = auto) without re-pinning the window's repo or
-    // head. Reuses the refs-change reload lane: stale-while-revalidate (the current range stays on
-    // screen until the new one arrives).
+    // head. An explicit base pick is deliberate navigation, so it's optimistic rather than
+    // stale-while-revalidate: the chip shows the new selection at once and the split drops to its
+    // loading columns until the new range resolves.
     public void SetBase(string? baseRef)
     {
         if (_baseOverride.Value == baseRef) return;
         _baseOverride.Value = baseRef;
-        Reload();
+        SwitchBase();
+    }
+
+    // The optimistic base switch: flag the switch (chip + loading columns react immediately), drop the
+    // details surface to loading now — before the range resolves — then resolve the new range on the
+    // reload lane and show it. A resolution failure / empty range surfaces as the window message.
+    private void SwitchBase()
+    {
+        _baseSwitching.Value = true;
+        _details.EnterLoading();
+        var session = EffectiveSession();
+        RunBackground<ReviewStack>(
+            work: () => (_source.LoadAsync(session, StackCap).GetAwaiter().GetResult(), null),
+            onResult: (stack, error) =>
+            {
+                if (error != null)
+                {
+                    _baseSwitching.Value = false;
+                    Update(s => s with { Render = new ReviewRenderState.Placeholder(error) });
+                    return;
+                }
+                if (stack == null || stack.Increments.Count == 0)
+                {
+                    _baseSwitching.Value = false;
+                    Update(s => s with { Render = new ReviewRenderState.Placeholder(_loc.Strings.Value.ReviewEmptyRange) });
+                    return;
+                }
+
+                _details.ShowRange(Session.RepoId, stack.BaseSha, stack.HeadSha);
+                Update(s => s with { Render = new ReviewRenderState.Loaded(stack) });
+            },
+            lane: _reloadLane);
     }
 
     // Candidate bases for the header dropdown: Auto (the smart default), then the repo's local and
@@ -471,6 +517,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // rather than a bare "auto"/SHA.
     private string BuildBaseChipLabel(ReviewState s)
     {
+        // Mid-switch the loaded stack is the *old* base — show the reviewer's pick at once instead
+        // (an explicit branch by name; "resolving" for Auto, whose real label isn't known yet).
+        if (_baseSwitching.Value)
+            return _baseOverride.Value ?? _loc.Strings.Value.ReviewBaseResolving;
         if (s.Render is ReviewRenderState.Loaded l) return l.Stack.BaseLabel;
         return _baseOverride.Value ?? Session.BaseLabel ?? _loc.Strings.Value.ReviewBaseResolving;
     }

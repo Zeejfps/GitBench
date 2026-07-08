@@ -97,16 +97,31 @@ internal sealed record ReviewWindowRootView : Widget
                 {
                     West = new ResizableSidebar
                     {
-                        Content = new CommitChangesPanel
+                        // Optimistic base switch: the old range's tree gives way to a skeleton the
+                        // instant the reviewer picks a new base, until the new files land.
+                        Content = new Switch<bool>
                         {
-                            SelectedPath = Model.ActiveFile,
-                            OnActivate = Model.ActivateFile,
+                            Value = Model.IsSwitchingBase,
+                            Case = switching => switching
+                                ? new FadeIn { Bloom = true, Child = new ReviewTreeSkeleton() }
+                                : new CommitChangesPanel
+                                {
+                                    SelectedPath = Model.ActiveFile,
+                                    OnActivate = Model.ActivateFile,
+                                },
                         },
                         InitialWidth = 340f,
                         MinResizeWidth = 240f,
                         MaxResizeWidth = 600f,
                     },
-                    Center = new ReviewDiffPanel(),
+                    // The stacked diff surface, or a loading indicator while a base switch resolves.
+                    Center = new Switch<bool>
+                    {
+                        Value = Model.IsSwitchingBase,
+                        Case = switching => switching
+                            ? new FadeIn { Bloom = true, Child = Centered(L.T(s => s.CommonLoading)) }
+                            : new ReviewDiffPanel(),
+                    },
                 },
             ],
         },
