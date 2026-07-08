@@ -188,19 +188,24 @@ internal sealed class DialogShell
 
     /// <summary>
     /// Attaches the text-input keyboard controller (Enter performs the action, Esc cancels) to
-    /// each input. The first input becomes the one <see cref="BeginEditing"/> focuses. Controllers
-    /// go on the inputs rather than the dialog because the text-input controller consumes
-    /// left-press inside its view, which would otherwise swallow clicks meant for the buttons.
+    /// each input, in order. The first input becomes the one <see cref="BeginEditing"/> focuses, and
+    /// Tab / Shift+Tab cycle focus between them through a shared <see cref="FocusRing"/> (wrapping at
+    /// the ends). Controllers go on the inputs rather than the dialog because the text-input controller
+    /// consumes left-press inside its view, which would otherwise swallow clicks meant for the buttons.
     /// </summary>
     public void SubmitFrom(params TextInputView[] inputs)
     {
         EnsureBuilt();
         var inputSystem = _ctx.Require<InputSystem>();
         var clipboard = _ctx.Get<IClipboard>();
+        var ring = new FocusRing();
         foreach (var input in inputs)
         {
             var controller = new CheckoutDialogKbmController(
                 input, inputSystem, clipboard, PerformAction, _onClose);
+            var stop = ring.Add(controller.BeginEditing, controller.EndEditing);
+            controller.OnTab = () => ring.Next(stop);
+            controller.OnShiftTab = () => ring.Previous(stop);
             input.UseController(inputSystem, controller);
             _firstInputController ??= controller;
         }
