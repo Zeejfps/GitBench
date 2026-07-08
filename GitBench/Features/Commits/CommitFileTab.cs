@@ -37,8 +37,8 @@ internal sealed class CommitFileTab : IDisposable
         Path = path;
         FileName = LastSegment(path);
         // Combined range tab (baseSha set): the diff is base→head and the reviewed-state identity is
-        // the synthetic range key, kept distinct from the tip commit's own sha so marks never collide.
-        Sha = baseSha == null ? sha : $"{baseSha}..{sha}";
+        // the shared range key, kept distinct from the tip commit's own sha so marks never collide.
+        Sha = baseSha == null ? sha : ReviewFileKey.ForRange(baseSha, sha);
         _target = new State<DiffTarget?>(baseSha == null
             ? new DiffTarget(path, DiffSide.Commit, sha)
             : new DiffTarget(path, DiffSide.Range, sha, baseSha));

@@ -6,16 +6,16 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Review;
 
 /// <summary>
 /// Root widget hosted inside a review window: the <see cref="ReviewHeaderBar"/> across the top and,
-/// below it, the body — a resizable split of the <see cref="ReviewStackList"/> rail on the left and
-/// the reused <see cref="CommitDetailsView"/> on the right, driven by the window's own
-/// <see cref="CommitDetailsViewModel"/>. While the stack loads the body shows a loading state; an
+/// below it, the range's combined change list as a PR-style two-column split — the reused
+/// <see cref="CommitChangesPanel"/> file tree in a resizable sidebar on the left, the reused
+/// <see cref="CommitDiffTabsPanel"/> diff surface on the right — both driven by the window's own
+/// <see cref="CommitDetailsViewModel"/>. While the range loads the body shows a loading state; an
 /// empty range / load error shows a centered message. Bound to the
 /// <see cref="ReviewWindowViewModel"/> supplied by the opening <see cref="ReviewWindowsView"/>, which
 /// it also provides into the subtree.
@@ -37,10 +37,9 @@ internal sealed record ReviewWindowRootView : Widget
             },
         };
 
-        // Window-level keyboard for the review loop ([ ] increments, j/k files, Space primary action,
-        // v viewed, n next-unreviewed, ? cheatsheet). Attached to the main box so it sits in the
-        // hover/bubble path for the whole window; it never steals focus, so the file list keeps its
-        // own arrow-key focus.
+        // Window-level keyboard for the review loop (j/k files, Space primary action, v viewed,
+        // ? cheatsheet). Attached to the main box so it sits in the hover/bubble path for the whole
+        // window; it never steals focus, so the file list keeps its own arrow-key focus.
         var input = ctx.Require<InputSystem>();
         var main = new Box
         {
@@ -72,8 +71,8 @@ internal sealed record ReviewWindowRootView : Widget
             ],
         };
 
-        // The Viewed tracker is provided across the whole window so the reused diff-pane header (deep in
-        // the right pane's tabs) resolves it and shows its per-file Viewed toggle.
+        // The Viewed tracker is provided across the whole window so the reused Changes list, tab
+        // strip, and diff-pane headers resolve it and show their per-file Viewed marks.
         return new Provide<IReviewedFileTracker>
         {
             Value = Model.ReviewedFiles,
@@ -81,30 +80,29 @@ internal sealed record ReviewWindowRootView : Widget
         };
     }
 
-    private IWidget Split() => new BorderLayout
+    // The combined change list, PR-style: file tree in a resizable sidebar on the left, the tabbed
+    // diff surface filling the rest. Both columns build against the Provide scope so they resolve
+    // the window's own CommitDetailsViewModel rather than the main window's.
+    private IWidget Split() => new Provide<CommitDetailsViewModel>
     {
-        West = new ResizableSidebar
+        Value = Model.Details,
+        Child = new Box
         {
-            Content = new ReviewStackList(),
-            InitialWidth = 340f,
-            MinResizeWidth = 240f,
-            MaxResizeWidth = 600f,
-        },
-        // The reused details surface with the review action bar pinned beneath it — the explicit
-        // "Next" the review loop turns on. Combined mode is a read-only overview, so the increment
-        // advance bar collapses away (Empty.Widget yields a zero-height South).
-        Center = new Provide<CommitDetailsViewModel>
-        {
-            Value = Model.Details,
-            Child = new BorderLayout
-            {
-                Center = new CommitDetailsHost(),
-                South = new Switch<ReviewDiffMode>
+            Background = Theme.Color(s => s.CommitDetailsView.Background),
+            Children =
+            [
+                new BorderLayout
                 {
-                    Value = Model.Mode,
-                    Case = mode => mode == ReviewDiffMode.ByIncrement ? new ReviewActionBar() : Empty.Widget,
+                    West = new ResizableSidebar
+                    {
+                        Content = new CommitChangesPanel(),
+                        InitialWidth = 340f,
+                        MinResizeWidth = 240f,
+                        MaxResizeWidth = 600f,
+                    },
+                    Center = new CommitDiffTabsPanel(),
                 },
-            },
+            ],
         },
     };
 
@@ -121,11 +119,4 @@ internal sealed record ReviewWindowRootView : Widget
             Color = Theme.Color(s => s.Palette.TextSecondary),
         },
     };
-
-    // Builds the reused commit-details view against the scope the surrounding Provide created, so it
-    // resolves the window's own CommitDetailsViewModel rather than the main window's.
-    private sealed record CommitDetailsHost : IWidget
-    {
-        public View BuildView(Context ctx) => new CommitDetailsView(ctx);
-    }
 }

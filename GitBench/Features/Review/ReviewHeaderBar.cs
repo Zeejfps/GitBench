@@ -11,9 +11,10 @@ using ZGF.Observable;
 namespace GitBench.Features.Review;
 
 /// <summary>
-/// The review window's top bar: the range (<c>base → head</c>) on the leading edge, then the increment
-/// nav cluster (<c>‹ Increment N of M ›</c>) and the stack-level progress meter ("N / M reviewed", or a
-/// "Review complete" badge once every increment is done) on the trailing edge. Reads the pinned
+/// The review window's top bar: the range (<c>base → head</c>) on the leading edge and, on the
+/// trailing edge, the review progress ("N / M files viewed" with a meter, or a "Review complete"
+/// badge once every file is viewed) and the one adaptive primary action — "Mark viewed → next file"
+/// while files remain, the explicit advance the review loop turns on. Reads the pinned
 /// <see cref="ReviewWindowViewModel"/> from the build context.
 /// </summary>
 internal sealed record ReviewHeaderBar : Widget
@@ -44,9 +45,8 @@ internal sealed record ReviewHeaderBar : Widget
                             Children =
                             [
                                 new Grow { Child = BaseRange(vm, ctx) },
-                                new ReviewModeToggle(),
-                                NavCluster(vm),
                                 ProgressGroup(vm),
+                                PrimaryButton(vm),
                                 HelpButton(vm),
                             ],
                         },
@@ -90,37 +90,8 @@ internal sealed record ReviewHeaderBar : Widget
         ],
     };
 
-    // ‹ Increment N of M › — the bracket buttons turn the position readout into sequential nav.
-    private static IWidget NavCluster(ReviewWindowViewModel vm) => new Row
-    {
-        Gap = Spacing.Xs,
-        CrossAxis = CrossAxisAlignment.Center,
-        Children =
-        [
-            NavButton(LucideIcons.ChevronLeft, vm.SelectPrevIncrement, vm.CanSelectPrev),
-            new Text
-            {
-                Value = Prop.Bind(vm.IncrementLabel),
-                FontSize = FontSize.Caption,
-                Color = Theme.Color(s => s.Palette.TextSecondary),
-                VAlign = TextAlignment.Center,
-            },
-            NavButton(LucideIcons.ChevronRight, vm.SelectNextIncrement, vm.CanSelectNext),
-        ],
-    };
-
-    private static IWidget NavButton(string glyph, Action onClick, IReadable<bool> canExec) =>
-        new ButtonWidget
-        {
-            Style = ButtonStyle.Bare(state => Theme.Color(t =>
-                state.Enabled.Value ? t.Palette.TextSecondary : t.Palette.TextDisabled)),
-            Command = new Command(onClick, canExec),
-            ContentInset = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
-            Children = [new ButtonIcon { Value = glyph, FontSize = FontSize.Body }],
-        }.WithController<KbmController>();
-
-    // The stack-level progress: a meter + "N / M reviewed" while there's work left; a success badge
-    // once every increment is reviewed.
+    // The range-level progress: a meter + "N / M files viewed" while there's work left; a success
+    // badge once every file is viewed.
     private static IWidget ProgressGroup(ReviewWindowViewModel vm) => new Row
     {
         Gap = Spacing.Sm,
@@ -131,17 +102,17 @@ internal sealed record ReviewHeaderBar : Widget
             {
                 Gap = Spacing.Sm,
                 CrossAxis = CrossAxisAlignment.Center,
-                Visible = Prop.Bind(() => !vm.Hud.Value.IsComplete),
+                Visible = Prop.Bind(() => vm.Hud.Value.HasFiles && !vm.Hud.Value.IsComplete),
                 Children =
                 [
                     new ReviewProgressMeter
                     {
-                        Fraction = vm.IncrementsFraction,
-                        Fill = Theme.Color(s => s.Palette.Accent),
+                        Fraction = vm.FilesFraction,
+                        Fill = Theme.Color(s => s.Status.Success),
                     },
                     new Text
                     {
-                        Value = Prop.Bind(vm.ReviewedLabel),
+                        Value = Prop.Bind(vm.FilesViewedLabel),
                         FontSize = FontSize.Caption,
                         Color = Theme.Color(s => s.Palette.TextSecondary),
                         VAlign = TextAlignment.Center,
@@ -172,6 +143,33 @@ internal sealed record ReviewHeaderBar : Widget
                     },
                 ],
             },
+        ],
+    };
+
+    // The one adaptive primary action — "Mark viewed → next file" while reviewing a file ("Review
+    // files" when sitting on the Details tab), "Review complete" (disabled) at the end. Space / Enter
+    // run the same command. Hidden until the range's file list is up (nothing to advance through).
+    private static IWidget PrimaryButton(ReviewWindowViewModel vm) => new Box
+    {
+        Visible = Prop.Bind(() => vm.ContentKind.Value == ReviewContentKind.Loaded),
+        Children =
+        [
+            new ButtonWidget
+            {
+                Style = ButtonStyle.Filled(s => s.Palette.Accent),
+                Command = new Command(vm.RunPrimaryAction, vm.PrimaryActionEnabled),
+                Children =
+                [
+                    new ButtonIcon
+                    {
+                        FontSize = FontSize.Body,
+                        Value = Prop.Bind<string?>(() => vm.Hud.Value.Primary == ReviewPrimaryAction.ViewFile
+                            ? LucideIcons.CheckSquare
+                            : LucideIcons.CircleCheck),
+                    },
+                    new ButtonLabel { Value = Prop.Bind<string?>(() => vm.PrimaryActionLabel.Value) },
+                ],
+            }.WithController<KbmController>(),
         ],
     };
 

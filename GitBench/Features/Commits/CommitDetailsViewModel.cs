@@ -252,14 +252,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     }
 
     // A synthetic CommitDetails for a combined range so the shared details view renders it unchanged:
-    // a labelled "Combined diff" header, a file-count subject, and base shown as the parent. Sha is a
-    // short "base..head" key (Combined suppresses per-file Viewed, so it's display-only).
+    // a labelled "Combined diff" header, a file-count subject, and base shown as the parent. Sha is
+    // the shared "base..head" range key, so the Changes list's per-file Viewed marks land under the
+    // same identity the open tabs and diff headers use.
     private CommitDetails BuildRangeDetails(Guid repoId, string baseSha, string headSha, IReadOnlyList<FileChange> files)
     {
         var s = _loc.Strings.Value;
         return new CommitDetails(
             RepoId: repoId,
-            Sha: $"{ShortSha(baseSha)}..{ShortSha(headSha)}",
+            Sha: ReviewFileKey.ForRange(baseSha, headSha),
             AuthorName: s.ReviewCombinedDiffTitle,
             AuthorEmail: string.Empty,
             AuthorWhen: default,
@@ -271,8 +272,6 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             ParentShas: new[] { baseSha },
             Files: files);
     }
-
-    private static string ShortSha(string sha) => sha.Length >= 7 ? sha[..7] : sha;
 
     private Repo? ResolveRepo(Guid repoId)
     {

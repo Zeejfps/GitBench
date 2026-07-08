@@ -91,9 +91,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             FullFileToggleButton(vm),
             OpenInWindowButton(vm),
         };
-        // Combined (range) diffs are a read-only overview — no per-file Viewed toggle (it would also
-        // collide with the tip commit's headSha-keyed marks). The pinned target's Side is fixed per tab.
-        if (reviewed != null && vm.Target.Value?.Side != DiffSide.Range)
+        if (reviewed != null)
             trailing.Add(ViewedToggleButton(vm, reviewed));
 
         if (!Collapsible) return trailing.ToArray();
@@ -136,13 +134,14 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 
     // The GitHub-style per-file "Viewed" toggle, shown only when a reviewed-file tracker is in scope
     // (the review window). Tints success and flips the checkbox glyph once the file is marked viewed.
+    // Marks key off ReviewFileKey so commit and combined-range diffs each track their own identity.
     private static IWidget ViewedToggleButton(DiffViewModel vm, IReviewedFileTracker reviewed)
     {
         bool IsViewed()
         {
             _ = reviewed.Revision.Value;
             var target = vm.Target.Value;
-            return target?.CommitSha is { } sha && reviewed.IsViewed(sha, target.Path);
+            return ReviewFileKey.ForTarget(target) is { } key && reviewed.IsViewed(key, target!.Path);
         }
 
         return new ButtonWidget
@@ -153,7 +152,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             Command = new Command(() =>
             {
                 var target = vm.Target.Value;
-                if (target?.CommitSha is { } sha) reviewed.ToggleViewed(sha, target.Path);
+                if (ReviewFileKey.ForTarget(target) is { } key) reviewed.ToggleViewed(key, target!.Path);
             }),
             Children =
             [
