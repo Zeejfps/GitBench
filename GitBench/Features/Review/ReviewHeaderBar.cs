@@ -56,17 +56,26 @@ internal sealed record ReviewHeaderBar : Widget
         };
     }
 
-    // The comparison range: an interactive base chip (ref name + chevron) that opens the base
-    // dropdown, then "→ head". The dropdown is a searchable context-menu popup (max height + scrollbar
-    // + a top search box), summoned from this (secondary) window's context — its anchor is converted
-    // through the window's own coordinates, so it lands under the chip regardless of which window is
-    // active.
+    // The comparison range, read the way the work flows: "head → base" — the branch under review
+    // on the left, then the interactive base chip (ref name + chevron) it lands on. Purely a
+    // display order; the diff itself stays base→head. The chip's dropdown is a searchable
+    // context-menu popup (max height + scrollbar + a top search box), summoned from this
+    // (secondary) window's context — its anchor is converted through the window's own
+    // coordinates, so it lands under the chip regardless of which window is active.
     private static IWidget BaseRange(ReviewWindowViewModel vm, Context ctx) => new Row
     {
         Gap = Spacing.Sm,
         CrossAxis = CrossAxisAlignment.Center,
         Children =
         [
+            new Text
+            {
+                Value = $"{vm.Session.HeadLabel} →",
+                FontSize = FontSize.Body,
+                Color = Theme.Color(s => s.Palette.TextPrimary),
+                Overflow = TextOverflow.Ellipsis,
+                VAlign = TextAlignment.Center,
+            },
             new ReviewBaseChip { Label = Prop.Bind(vm.BaseChipLabel) }
                 .WithTooltip(Prop.Bind(vm.BaseTooltip))
                 .WithMenuController(rect =>
@@ -76,17 +85,7 @@ internal sealed record ReviewHeaderBar : Widget
                         ctx, rect.BottomLeft, vm.BuildBaseMenuItems(),
                         s.ReviewBaseSearchPlaceholder, s.ReviewBaseNoMatches);
                 }),
-            new Grow
-            {
-                Child = new Text
-                {
-                    Value = $"→ {vm.Session.HeadLabel}",
-                    FontSize = FontSize.Body,
-                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                    Overflow = TextOverflow.Ellipsis,
-                    VAlign = TextAlignment.Center,
-                },
-            },
+            new Grow { Child = new Box() },
         ],
     };
 
