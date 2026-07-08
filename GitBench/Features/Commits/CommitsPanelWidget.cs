@@ -11,12 +11,12 @@ namespace GitBench.Features.Commits;
 
 public sealed record CommitsPanelWidget : Widget
 {
-    private const float WarningBarHeight = 24f;
+    internal const float WarningBarHeight = 24f;
 
     protected override IWidget Build(Context ctx)
     {
         var styles = ctx.Theme().Styles;
-        var truncated = new State<bool>(false);
+        var showBanner = new State<bool>(false);
 
         var commits = new CommitsView.Core(ctx);
         var scrollBar = ScrollBars.CreateVertical(ctx);
@@ -33,10 +33,10 @@ public sealed record CommitsPanelWidget : Widget
             East = new Raw { View = scrollBar },
             South = new Box
             {
-                Height = truncated.Bind(t => t ? WarningBarHeight : 0f),
-                BorderSize = truncated.Bind(t => t ? new BorderSizeStyle { Top = 1 } : new BorderSizeStyle()),
-                Background = Prop.Bind(() => truncated.Value ? styles.Value.Banner.Background : 0u),
-                BorderColor = Prop.Bind(() => truncated.Value
+                Height = showBanner.Bind(t => t ? WarningBarHeight : 0f),
+                BorderSize = showBanner.Bind(t => t ? new BorderSizeStyle { Top = 1 } : new BorderSizeStyle()),
+                Background = Prop.Bind(() => showBanner.Value ? styles.Value.Banner.Background : 0u),
+                BorderColor = Prop.Bind(() => showBanner.Value
                     ? new BorderColorStyle { Top = styles.Value.Banner.Border }
                     : new BorderColorStyle()),
                 Children =
@@ -44,7 +44,7 @@ public sealed record CommitsPanelWidget : Widget
                     new Text
                     {
                         Value = L.T(s => s.CommitsTruncatedBanner),
-                        Visible = truncated.Bind(t => t),
+                        Visible = showBanner.Bind(t => t),
                         HAlign = TextAlignment.Center,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.Banner.Text),
@@ -52,22 +52,25 @@ public sealed record CommitsPanelWidget : Widget
                 ],
             },
         }
-        .Use(_ => new CommitsPanelController(commits, scrollBar, truncated));
+        .Use(_ => new CommitsPanelController(commits, scrollBar, showBanner));
     }
 }
 
 internal sealed class CommitsPanelController : IDisposable
 {
+    private const float BottomSlack = 8f;
+
     private readonly CommitsView.Core _commits;
     private readonly VerticalScrollBarView _scrollBar;
-    private readonly State<bool> _truncated;
+    private readonly State<bool> _showBanner;
+    private bool _isTruncated;
 
     public CommitsPanelController(
-        CommitsView.Core commits, VerticalScrollBarView scrollBar, State<bool> truncated)
+        CommitsView.Core commits, VerticalScrollBarView scrollBar, State<bool> showBanner)
     {
         _commits = commits;
         _scrollBar = scrollBar;
-        _truncated = truncated;
+        _showBanner = showBanner;
 
         _commits.ScrollPositionChanged += OnCommitsScrollChanged;
         _commits.ScaleChanged += OnCommitsScaleChanged;
@@ -88,12 +91,14 @@ internal sealed class CommitsPanelController : IDisposable
     private void OnCommitsScrollChanged(float normalized)
     {
         _scrollBar.SetNormalizedScrollPosition(normalized);
+        UpdateBanner();
     }
 
     private void OnCommitsScaleChanged(float scale)
     {
         _scrollBar.Width = scale < 1f ? ScrollBarSync.Thickness : 0f;
         _scrollBar.Scale = scale;
+        UpdateBanner();
     }
 
     private void OnScrollBarScrollChanged(float normalized)
@@ -101,5 +106,20 @@ internal sealed class CommitsPanelController : IDisposable
         _commits.SetNormalizedScrollPosition(normalized);
     }
 
-    private void OnTruncatedChanged(bool truncated) => _truncated.Value = truncated;
+    private void OnTruncatedChanged(bool truncated)
+    {
+        _isTruncated = truncated;
+        UpdateBanner();
+    }
+
+    // The banner only appears once the user scrolls to the end of the list. Showing it
+    // steals its height from the list, pushing "the bottom" further away — so while
+    // visible, the at-bottom test gets that much extra slack (hysteresis, no flicker).
+    private void UpdateBanner()
+    {
+        var threshold = _showBanner.Value
+            ? CommitsPanelWidget.WarningBarHeight + BottomSlack
+            : BottomSlack;
+        _showBanner.Value = _isTruncated && _commits.DistanceFromBottom <= threshold;
+    }
 }

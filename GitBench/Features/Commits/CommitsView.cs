@@ -433,6 +433,19 @@ internal sealed record CommitsView : Widget
             }
         }
 
+        public float DistanceFromBottom
+        {
+            get
+            {
+                var snap = _snapshot;
+                if (snap == null || snap.Commits.Count == 0) return 0f;
+                var bodyHeight = _list.Position.Height;
+                var contentHeight = snap.Commits.Count * RowHeight;
+                var maxScroll = Math.Max(0f, contentHeight - bodyHeight);
+                return Math.Max(0f, maxScroll - _list.ScrollY);
+            }
+        }
+
         public void SetNormalizedScrollPosition(float normalized)
         {
             var snap = _snapshot;
