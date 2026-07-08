@@ -115,11 +115,24 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Subscriptions.Add(_registry.Active.Subscribe(_ => OnActiveRepoChanged()));
         Subscriptions.Add(store.Branches.Subscribe(OnStoreBranches));
         Subscriptions.Add(_bus.SubscribeScoped<CommitSelectedMessage>(OnCommitSelected));
+        Subscriptions.Add(_bus.SubscribeScoped<CheckoutRequestedMessage>(OnCheckoutRequested));
         Subscriptions.Add(_bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged));
         Subscriptions.Add(_registry.WorktreesChanged.Subscribe(_ => RefreshWorktreeBranches()));
     }
 
     private void OnWorktreesChanged(WorktreesChangedMessage _) => RefreshWorktreeBranches();
+
+    // Checkout requests raised elsewhere (history badge clicks) funnel into the same activation
+    // paths as sidebar double-clicks, so every guard applies identically.
+    private void OnCheckoutRequested(CheckoutRequestedMessage msg)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != msg.RepoId) return;
+        if (msg.RemoteName != null)
+            ActivateRemoteBranch(msg.RemoteName, msg.BranchName);
+        else
+            ActivateLocalBranch(msg.BranchName, isHead: false);
+    }
 
     // Set of local-branch names that are checked out somewhere other than the active row.
     // Used by BranchesView to annotate those branches so the user knows trying to check

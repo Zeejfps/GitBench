@@ -4,6 +4,7 @@ using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
+using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -162,6 +163,9 @@ internal sealed record CommitsView : Widget
 
             AddChildToSelf(_list);
             _list.UseController(input, () => new VirtualRowListController(_list));
+            _list.CursorAt = p => HitTestBadge(p) is { } hit && IsBadgeInteractive(hit.Badge)
+                ? MouseCursor.Hand
+                : MouseCursor.Default;
 
             this.BindThemed(theme, s =>
             {
@@ -713,7 +717,7 @@ internal sealed record CommitsView : Widget
 
             var textTop = rowBottom;
             var summaryStartX = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
-            var refsEndX = DrawBadges(c, node, summaryStartX, textTop, authorPanelLeft, z + 2);
+            var refsEndX = DrawBadges(c, node, rowIndex, summaryStartX, textTop, authorPanelLeft, z + 2);
             // Clip the message at the metadata edge (DrawText clips to its box) instead of masking
             // the overflow with opaque column rects, so the selection bar shows through uniformly.
             var summaryDraw = Math.Max(0, authorPanelLeft - refsEndX);
@@ -736,7 +740,7 @@ internal sealed record CommitsView : Widget
             RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
         }
 
-        private float DrawBadges(ICanvas c, CommitNode node, float left, float rowBottom, float rightBoundary, int z)
+        private float DrawBadges(ICanvas c, CommitNode node, int rowIndex, float left, float rowBottom, float rightBoundary, int z)
         {
             if (node.Refs.Count == 0) return left;
 
@@ -746,8 +750,11 @@ internal sealed record CommitsView : Widget
 
             var x = left;
             var badgeY = rowBottom + (RowHeight - BadgeHeight) * 0.5f;
-            foreach (var badge in node.Refs)
-                x += DrawBadge(c, badge, x, badgeY, z) + BadgeGap;
+            for (var i = 0; i < node.Refs.Count; i++)
+            {
+                var hovered = _hoveredBadge == (rowIndex, i);
+                x += DrawBadge(c, node.Refs[i], x, badgeY, hovered, z) + BadgeGap;
+            }
 
             c.PopClip();
             return x + BadgeGap;
@@ -755,25 +762,41 @@ internal sealed record CommitsView : Widget
 
         private const float BadgeIconGap = 4f;
 
+        // One measurement source for draw and hit-test, so the clickable rect can't drift from
+        // the drawn pill.
+        private (float Width, float IconWidth, float TextWidth) MeasureBadge(RefBadge badge)
+        {
+            var icon = BadgeIcon(badge.Kind);
+            var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
+            var iconWidth = icon != null ? _canvas.MeasureTextWidth(icon, BadgeIconStyle(badge.Sync)) : 0f;
+            var textWidth = _canvas.MeasureTextWidth(badge.Name, nameStyle);
+            return (BadgePaddingX * 2 + textWidth + (icon != null ? iconWidth + BadgeIconGap : 0f), iconWidth, textWidth);
+        }
+
         // Draws one ref badge (background pill, optional kind icon, name) and returns its width.
-        private float DrawBadge(ICanvas c, RefBadge badge, float x, float badgeY, int z)
+        private float DrawBadge(ICanvas c, RefBadge badge, float x, float badgeY, bool hovered, int z)
         {
             var icon = BadgeIcon(badge.Kind);
             var iconStyle = BadgeIconStyle(badge.Sync);
             // The checked-out branch's name is bolded (like the Branches view) rather than carrying
             // a separate HEAD marker.
             var nameStyle = badge.IsCurrent ? _badgeTextBoldStyle : _badgeTextStyle;
-            var iconWidth = icon != null ? _canvas.MeasureTextWidth(icon, iconStyle) : 0f;
-            var textWidth = _canvas.MeasureTextWidth(badge.Name, nameStyle);
-            var badgeW = BadgePaddingX * 2 + textWidth + (icon != null ? iconWidth + BadgeIconGap : 0f);
+            var (badgeW, iconWidth, textWidth) = MeasureBadge(badge);
 
             _badgeRectStyle.BackgroundColor = BadgeBackground(badge.Kind);
+            if (hovered)
+            {
+                _badgeRectStyle.BorderSize = BorderSizeStyle.All(1f);
+                _badgeRectStyle.BorderColor = BorderColorStyle.All(FadeColor(_styles.BadgeText, 0.55f));
+            }
             c.DrawRect(new DrawRectInputs
             {
                 Position = Place(x, badgeY, badgeW, BadgeHeight),
                 Style = _badgeRectStyle,
                 ZIndex = z,
             });
+            if (hovered)
+                _badgeRectStyle.BorderSize = default;
 
             var contentX = x + BadgePaddingX;
             if (icon != null)
@@ -919,12 +942,119 @@ internal sealed record CommitsView : Widget
             _hoveredDivider = kind;
         }
 
-        private void OnRowClicked(int rowIndex, InputModifiers _, PointF __)
+        private readonly record struct BadgeHit(int RowIndex, int BadgeIndex, RefBadge Badge);
+
+        private (int Row, int Badge)? _hoveredBadge;
+
+        // Mirrors DrawBadges' layout math — same measured widths, same LTR x-walk reflected
+        // via Place — so a hit lands exactly on the pill that was drawn.
+        private BadgeHit? HitTestBadge(PointF point)
+        {
+            var snap = _snapshot;
+            if (snap == null) return null;
+            var rowIndex = _list.RowIndexAt(point);
+            if (rowIndex < 0 || rowIndex >= snap.Commits.Count) return null;
+            var node = snap.Commits[rowIndex];
+            if (node.Refs.Count == 0) return null;
+            if (!_list.TryGetRowRect(rowIndex, out var rowRect)) return null;
+
+            var badgeY = rowRect.Bottom + (RowHeight - BadgeHeight) * 0.5f;
+            if (point.Y < badgeY || point.Y > badgeY + BadgeHeight) return null;
+
+            GetEffectiveColumnWidths(out var authorW, out var hashW, out var dateW);
+            var hashX = rowRect.Right - dateW - hashW - ColumnGap * 2f;
+            var authorPanelLeft = hashX - authorW - ColumnGap * 2f;
+
+            var px = IsRtl ? Position.Left + Position.Right - point.X : point.X;
+            if (px >= authorPanelLeft) return null;
+
+            var graphStartX = rowRect.Left + CommitGraphRenderer.PaddingLeft;
+            var x = _filtering ? graphStartX : CommitGraphRenderer.SummaryStartX(graphStartX, node, snap.LaneCount);
+            for (var i = 0; i < node.Refs.Count; i++)
+            {
+                var badge = node.Refs[i];
+                var w = MeasureBadge(badge).Width;
+                if (px >= x && px <= x + w) return new BadgeHit(rowIndex, i, badge);
+                x += w + BadgeGap;
+                if (x >= authorPanelLeft) return null;
+            }
+            return null;
+        }
+
+        private static bool IsBadgeInteractive(RefBadge badge) => badge.Kind switch
+        {
+            RefKind.LocalBranch => !badge.IsCurrent,
+            RefKind.RemoteBranch or RefKind.Tag => true,
+            _ => false,
+        };
+
+        internal void UpdateBadgeHover(PointF point)
+        {
+            (int, int)? next = HitTestBadge(point) is { } hit && IsBadgeInteractive(hit.Badge)
+                ? (hit.RowIndex, hit.BadgeIndex)
+                : null;
+            if (next == _hoveredBadge) return;
+            _hoveredBadge = next;
+            SetDirty();
+        }
+
+        internal void ClearBadgeHover()
+        {
+            if (_hoveredBadge == null) return;
+            _hoveredBadge = null;
+            SetDirty();
+        }
+
+        private void OnRowClicked(int rowIndex, InputModifiers _, PointF point)
         {
             var snap = _snapshot;
             if (snap == null || rowIndex < 0 || rowIndex >= snap.Commits.Count) return;
-            _vm.SelectCommit(snap.Commits[rowIndex].Sha);
+            var node = snap.Commits[rowIndex];
+            _vm.SelectCommit(node.Sha);
             _arrowController.TakeFocus();
+
+            if (HitTestBadge(point) is { } hit && hit.RowIndex == rowIndex && IsBadgeInteractive(hit.Badge))
+                OnBadgeClicked(node, hit.Badge, rowIndex, point);
+        }
+
+        // A badge click acts on the ref the user aimed at: local branch checks out, remote branch
+        // goes through the tracking-branch flow, a tag (ambiguous target) offers its actions in a
+        // menu. The row click above still selects the commit either way.
+        private void OnBadgeClicked(CommitNode node, RefBadge badge, int rowIndex, PointF point)
+        {
+            switch (badge.Kind)
+            {
+                case RefKind.LocalBranch:
+                    _vm.RequestCheckout(badge.Name);
+                    break;
+                case RefKind.RemoteBranch:
+                    var slash = badge.Name.IndexOf('/');
+                    if (slash > 0 && slash < badge.Name.Length - 1)
+                        _vm.RequestCheckout(badge.Name[(slash + 1)..], badge.Name[..slash]);
+                    break;
+                case RefKind.Tag:
+                    ShowTagBadgeMenu(node, badge.Name, rowIndex, point);
+                    break;
+            }
+        }
+
+        private void ShowTagBadgeMenu(CommitNode node, string tagName, int rowIndex, PointF point)
+        {
+            var s = _loc.Strings.Value;
+            var actions = CommitActionsFor(node.Sha);
+            var items = new List<RepoBarContextMenu.Item>
+            {
+                RepoBarContextMenu.ToItem(actions.CreateBranch),
+                new(s.CommitsContextDeleteTag, () => _vm.RequestDeleteTag(tagName), LucideIcons.Trash),
+            };
+            _list.SetContextHighlight(rowIndex);
+            var opened = RepoBarContextMenu.Show(_ctx, point, items);
+            if (opened == null)
+            {
+                _list.SetContextHighlight(null);
+                return;
+            }
+            opened.Closed += () => _list.SetContextHighlight(null);
         }
 
         private void OnRowContextRequested(int rowIndex, PointF point)

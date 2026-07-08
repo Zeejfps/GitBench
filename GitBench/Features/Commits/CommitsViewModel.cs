@@ -151,6 +151,19 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         Update(s => s with { SelectedSha = msg.Sha });
     }
 
+    // ---- checkout from a badge click ----
+
+    // Routed over the bus to the branches sidebar's live view model, which owns the checkout
+    // machinery (op lanes, worktree-sibling redirect, tracking-branch dialog).
+    public void RequestCheckout(string branchName, string? remoteName = null)
+    {
+        var snap = _snapshot;
+        if (snap == null) return;
+        var repo = _registry.Active.Value;
+        if (repo == null || repo.Id != snap.RepoId) return;
+        _bus.Broadcast(new CheckoutRequestedMessage(repo.Id, branchName, remoteName));
+    }
+
     // ---- reset to commit ----
 
     // Smart flow for "Reset <branch> to here":

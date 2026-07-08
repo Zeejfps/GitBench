@@ -77,6 +77,7 @@ internal sealed class CommitsViewController : KeyboardMouseController
             return;
         }
         _view.SetHoveredDivider(_view.HitTestDivider(e.Mouse.Point));
+        _view.UpdateBadgeHover(e.Mouse.Point);
     }
 
     public override void OnMouseExit(ref MouseExitEvent e)
@@ -85,5 +86,6 @@ internal sealed class CommitsViewController : KeyboardMouseController
         {
             _view.SetHoveredDivider(CommitsView.DividerKind.None);
         }
+        _view.ClearBadgeHover();
     }
 }
