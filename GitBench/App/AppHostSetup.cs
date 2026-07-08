@@ -50,7 +50,8 @@ internal static class AppHostSetup
 
         public void LoadPlatformIcons()
         {
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            // macOS is excluded: GLFW can't set the Dock icon there; it comes from the .app bundle.
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 appHost.SetIcon("Assets/commit_bench_icon.rgba");
 
             // The About dialog shows the app icon, so load it into the canvas up front. Scoped to
