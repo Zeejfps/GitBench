@@ -40,22 +40,29 @@ internal sealed record ReviewDiffPanel : IWidget
 }
 
 /// <summary>
-/// One scrolling, virtualized surface holding every file of the review range: a foldable header
-/// row per file (fold chevron, status, path, Viewed checkbox) over that file's diff rows. Cost
-/// tracks the viewport, not the file count: rows are drawn through one
-/// <see cref="VirtualRowListView"/> (variable heights), and a file's diff is loaded only when its
-/// section nears the viewport — until then it holds a fixed-height loading stub, and loads that
-/// finish above the viewport are scroll-anchored so the reading position never jumps. Marking a
-/// file Viewed folds its section; the tree's activation scrolls here, and scroll position reports
-/// the active file back for the tree highlight and the keyboard loop.
+/// One scrolling, virtualized surface holding every file of the review range as an inset card —
+/// a foldable header band (fold chevron, status, path, Viewed checkbox) over that file's diff
+/// rows, with a breathing gap between files. Cost tracks the viewport, not the file count: rows
+/// are drawn through one <see cref="VirtualRowListView"/> (variable heights), and a file's diff
+/// is loaded only when its section nears the viewport — until then it holds a fixed-height
+/// loading stub, and loads that finish above the viewport are scroll-anchored so the reading
+/// position never jumps. Marking a file Viewed folds its section; the tree's activation scrolls
+/// here, and scroll position reports the active file back for the tree highlight and the
+/// keyboard loop.
 /// </summary>
 internal sealed class ReviewDiffListView : View, IScrollableContent
 {
     private const float AssumedFontSize = FontSize.Body;
     private const float FallbackMonoAdvanceRatio = 0.6f;
-    private const float HeaderRowHeight = 36f;
-    private const float MessageRowHeight = 40f;
-    private const float HeaderPaddingX = 8f;
+
+    // Card geometry: each file draws as an inset card on the panel surface — side margins, a
+    // 1px outline, and a gap band above every header so files never touch.
+    private const float PanelPaddingX = 12f;
+    private const float SectionGap = 12f;
+    private const float HeaderBandHeight = 38f;
+    private const float HeaderRowHeight = SectionGap + HeaderBandHeight;
+    private const float MessageRowHeight = 44f;
+    private const float HeaderPaddingX = 10f;
     private const float ChevronWidth = 16f;
     private const float StatusIconWidth = 18f;
     private const float ActiveBarWidth = 3f;
@@ -85,9 +92,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         VerticalAlignment = TextAlignment.Center,
     };
 
-    // One file's slice of the flattened surface: the header row plus its body rows — the built
-    // diff rows once loaded, a single message row (loading / binary / error / empty) otherwise,
-    // nothing while folded.
+    // One file's slice of the flattened surface: the header row (gap band + header) plus its body
+    // rows — the built diff rows once loaded, a single message row (loading / binary / error /
+    // empty) otherwise, nothing while folded.
     private sealed class Section
     {
         public required FileChange File { get; init; }
@@ -155,6 +162,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         _list.RowClicked += OnRowClicked;
 
         AddChildToSelf(_list);
+        // Horizontally-scrolled diff rows are clipped only to the list bounds, so long lines would
+        // bleed into the card margins; the overlay repaints the margin strips above row content.
+        AddChildToSelf(new MarginOverlay(this));
         _list.UseController(input, () => new VirtualRowListController(_list));
 
         this.BindThemed(ctx.Theme(), s =>
@@ -198,6 +208,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         // Per-file diff view models are owned here; drop them with the view.
         this.Use(() => new ActionDisposable(ClearSections));
     }
+
+    // ---- card geometry ----
+
+    private float CardLeft() => _list.Position.Left + PanelPaddingX;
+    private float CardRight() => _list.Position.Right - PanelPaddingX;
+    private float CardViewportWidth() => Math.Max(0f, Position.Width - PanelPaddingX * 2);
 
     // ---- section structure ----
 
@@ -463,8 +479,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
         if (local == 0)
         {
-            // The trailing zone is the Viewed checkbox; anywhere else on the header toggles the fold.
-            if (point.X >= _list.Position.Right - ViewedZoneWidth)
+            // The row's top slice is the gap between cards — a click there targets nothing.
+            if (!_list.TryGetRowRect(index, out var rowRect)) return;
+            if (point.Y > rowRect.Top - SectionGap) return;
+            // The trailing zone is the Viewed checkbox; anywhere else on the band toggles the fold.
+            if (point.X >= CardRight() - ViewedZoneWidth)
                 _vm.ToggleFileViewed(s.File.Path);
             else
                 SetFolded(s, !s.Folded);
@@ -475,7 +494,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         if (s.RowSet.Rows.Count == 0) return;
         var row = s.RowSet.Rows[local - 1];
         if (DiffRowPainter.GapBarOf(row) is not { } gap) return;
-        var contentLeft = _list.Position.Left - _scrollX;
+        var contentLeft = CardLeft() - _scrollX;
         if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is { } dir)
             s.Diff?.Diff.ExpandGap(gap.GapIndex, dir);
     }
@@ -486,7 +505,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         if (index < 0) return MouseCursor.Default;
         var s = Locate(index, out var local);
         if (s == null) return MouseCursor.Default;
-        if (local == 0) return MouseCursor.Hand;
+        if (local == 0)
+        {
+            if (!_list.TryGetRowRect(index, out var rowRect)) return MouseCursor.Default;
+            return point.Y > rowRect.Top - SectionGap ? MouseCursor.Default : MouseCursor.Hand;
+        }
         if (s.RowSet.Rows.Count > 0 && DiffRowPainter.GapBarOf(s.RowSet.Rows[local - 1]) != null)
             return MouseCursor.Hand;
         return MouseCursor.Default;
@@ -501,7 +524,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         c.DrawRect(new DrawRectInputs
         {
             Position = pos,
-            Style = new RectStyle { BackgroundColor = _theme.DiffContent.Background },
+            Style = new RectStyle { BackgroundColor = _theme.Palette.Surface },
             ZIndex = z,
         });
 
@@ -543,39 +566,78 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             return;
         }
 
+        var cardLeft = rowRect.Left + PanelPaddingX;
+        var cardWidth = Math.Max(0f, rowRect.Width - PanelPaddingX * 2);
+
         if (s.RowSet.Rows.Count == 0)
         {
-            DrawMessageRow(c, s, rowRect, z);
-            return;
+            DrawMessageRow(c, s, rowRect, cardLeft, cardWidth, z);
+        }
+        else
+        {
+            var row = s.RowSet.Rows[local - 1];
+            _painter.DrawRow(c, row, new DiffRowPaint(
+                cardLeft - _scrollX,
+                rowRect.Bottom,
+                ContentWidth(),
+                s.GutterWidth,
+                s.RowSet.SingleGutter,
+                ExpanderHovered: state.IsHovered && DiffRowPainter.GapBarOf(row) != null,
+                Viewport: _list.Position,
+                Z: z));
         }
 
-        var row = s.RowSet.Rows[local - 1];
-        _painter.DrawRow(c, row, new DiffRowPaint(
-            rowRect.Left - _scrollX,
-            rowRect.Bottom,
-            ContentWidth(),
-            s.GutterWidth,
-            s.RowSet.SingleGutter,
-            ExpanderHovered: state.IsHovered && DiffRowPainter.GapBarOf(row) != null,
-            Viewport: _list.Position,
-            Z: z));
+        // Card outline: 1px sides on every body row, closed by a bottom edge on the last one.
+        // Drawn above the row content (long scrolled lines pass beneath; the margin overlay masks
+        // whatever escapes the card).
+        DrawCardSides(c, cardLeft, cardWidth, rowRect.Bottom, rowRect.Height, z + 6);
+        if (local == s.BodyRows)
+        {
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(cardLeft, rowRect.Bottom, cardWidth, 1f),
+                Style = new RectStyle { BackgroundColor = _theme.Palette.Border },
+                ZIndex = z + 6,
+            });
+        }
     }
 
-    // A file's header band: fold chevron, status icon, path (dimmed once viewed), and the Viewed
-    // checkbox on the trailing edge. The active file carries a leading accent bar so the tree's
-    // highlight has a visible counterpart while scrolling.
+    private void DrawCardSides(ICanvas c, float cardLeft, float cardWidth, float bottom, float height, int z)
+    {
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(cardLeft, bottom, 1f, height),
+            Style = new RectStyle { BackgroundColor = _theme.Palette.Border },
+            ZIndex = z,
+        });
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(cardLeft + cardWidth - 1f, bottom, 1f, height),
+            Style = new RectStyle { BackgroundColor = _theme.Palette.Border },
+            ZIndex = z,
+        });
+    }
+
+    // A file's header: the gap band above (panel surface, untouched) and the card's header band —
+    // fold chevron, status icon, path (dimmed once viewed), and the Viewed checkbox on the
+    // trailing edge. The active file carries a leading accent bar so the tree's highlight has a
+    // visible counterpart while scrolling. A folded card is just this band, closed by its own
+    // bottom edge.
     private void DrawHeader(ICanvas c, Section s, RectF rowRect, bool hovered, int z)
     {
         var viewed = _vm.IsFileViewed(s.File.Path);
-        var styles = _theme.FileChangesSection;
+        var cardLeft = rowRect.Left + PanelPaddingX;
+        var cardWidth = Math.Max(0f, rowRect.Width - PanelPaddingX * 2);
+        var band = new RectF(cardLeft, rowRect.Bottom, cardWidth, HeaderBandHeight);
+
         c.DrawRect(new DrawRectInputs
         {
-            Position = rowRect,
+            Position = band,
             Style = new RectStyle
             {
-                BackgroundColor = hovered ? _theme.RowSelection.FillHover : styles.HeaderBackground,
-                BorderColor = new BorderColorStyle { Top = styles.HeaderBorder, Bottom = styles.HeaderBorder },
-                BorderSize = new BorderSizeStyle { Top = 1, Bottom = 1 },
+                BackgroundColor = hovered ? _theme.RowSelection.FillHover : _theme.FileChangesSection.HeaderBackground,
+                BorderColor = BorderColorStyle.All(_theme.Palette.Border),
+                BorderSize = BorderSizeStyle.All(1),
             },
             ZIndex = z,
         });
@@ -584,34 +646,34 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         {
             c.DrawRect(new DrawRectInputs
             {
-                Position = new RectF(rowRect.Left, rowRect.Bottom, ActiveBarWidth, rowRect.Height),
+                Position = new RectF(cardLeft, band.Bottom, ActiveBarWidth, band.Height),
                 Style = new RectStyle { BackgroundColor = _theme.RowSelection.AccentBar },
                 ZIndex = z + 1,
             });
         }
 
-        var x = rowRect.Left + HeaderPaddingX;
+        var x = cardLeft + HeaderPaddingX;
         HeaderGlyphStyle.TextColor = _theme.Palette.TextSecondary;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(x, rowRect.Bottom, ChevronWidth, rowRect.Height),
+            Position = new RectF(x, band.Bottom, ChevronWidth, band.Height),
             Text = s.Folded ? LucideIcons.ChevronRight : LucideIcons.ChevronDown,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
         });
-        x += ChevronWidth + 4f;
+        x += ChevronWidth + 6f;
 
         HeaderGlyphStyle.TextColor = _theme.FileChangeRow.StatusColor(s.File.Status);
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(x, rowRect.Bottom, StatusIconWidth, rowRect.Height),
+            Position = new RectF(x, band.Bottom, StatusIconWidth, band.Height),
             Text = FileChangeFormatting.StatusIcon(s.File.Status),
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
         });
-        x += StatusIconWidth + 6f;
+        x += StatusIconWidth + 8f;
 
-        var viewedLeft = rowRect.Right - ViewedZoneWidth;
+        var viewedLeft = cardLeft + cardWidth - ViewedZoneWidth;
         var textWidth = Math.Max(0f, viewedLeft - x - HeaderPaddingX);
         if (textWidth > 0)
         {
@@ -621,7 +683,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             var text = TextMeasure.TruncateToFit(FileChangeFormatting.FormatPath(s.File), HeaderPathStyle, textWidth, c);
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(x, rowRect.Bottom, textWidth, rowRect.Height),
+                Position = new RectF(x, band.Bottom, textWidth, band.Height),
                 Text = text,
                 Style = HeaderPathStyle,
                 ZIndex = z + 2,
@@ -633,7 +695,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         HeaderGlyphStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(viewedLeft, rowRect.Bottom, 18f, rowRect.Height),
+            Position = new RectF(viewedLeft, band.Bottom, 18f, band.Height),
             Text = viewed ? LucideIcons.CheckSquare : LucideIcons.Square,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
@@ -641,16 +703,24 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         ViewedLabelStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(viewedLeft + 22f, rowRect.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, rowRect.Height),
+            Position = new RectF(viewedLeft + 22f, band.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, band.Height),
             Text = _loc.Strings.Value.ReviewViewed,
             Style = ViewedLabelStyle,
             ZIndex = z + 2,
         });
     }
 
-    // The single body row of an unloaded / binary / errored / empty section.
-    private void DrawMessageRow(ICanvas c, Section s, RectF rowRect, int z)
+    // The single body row of an unloaded / binary / errored / empty section: the card's body
+    // surface with a muted message.
+    private void DrawMessageRow(ICanvas c, Section s, RectF rowRect, float cardLeft, float cardWidth, int z)
     {
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(cardLeft, rowRect.Bottom, cardWidth, rowRect.Height),
+            Style = new RectStyle { BackgroundColor = _theme.DiffContent.Background },
+            ZIndex = z,
+        });
+
         var str = _loc.Strings.Value;
         var (text, color) = s.Render switch
         {
@@ -664,24 +734,61 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         MessageStyle.TextColor = color;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(rowRect.Left + HeaderPaddingX * 3, rowRect.Bottom,
-                Math.Max(0f, rowRect.Width - HeaderPaddingX * 6), rowRect.Height),
+            Position = new RectF(cardLeft + HeaderPaddingX * 2, rowRect.Bottom,
+                Math.Max(0f, cardWidth - HeaderPaddingX * 4), rowRect.Height),
             Text = text,
             Style = MessageStyle,
             ZIndex = z + 1,
         });
     }
 
+    // Repaints the margin strips beside the cards so horizontally-scrolled diff rows never bleed
+    // past the card edges. Runs from the overlay child, whose elevated ZIndex puts it above all
+    // row content while staying inside the panel.
+    private void DrawMargins(ICanvas c, int z)
+    {
+        var pos = _list.Position;
+        if (pos.Width <= 0 || pos.Height <= 0) return;
+        var style = new RectStyle { BackgroundColor = _theme.Palette.Surface };
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(pos.Left, pos.Bottom, PanelPaddingX, pos.Height),
+            Style = style,
+            ZIndex = z,
+        });
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(pos.Right - PanelPaddingX, pos.Bottom, PanelPaddingX, pos.Height),
+            Style = style,
+            ZIndex = z,
+        });
+    }
+
     // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
     private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
 
+    // Logic-free sibling of the row list: its raised ZIndex lets the margin strips paint over row
+    // content, which the list itself (rows draw above their own view) cannot do.
+    private sealed class MarginOverlay : View
+    {
+        private readonly ReviewDiffListView _owner;
+
+        public MarginOverlay(ReviewDiffListView owner)
+        {
+            _owner = owner;
+            ZIndex = 100;
+        }
+
+        protected override void OnDrawSelf(ICanvas c) => _owner.DrawMargins(c, GetDrawZIndex());
+    }
+
     // ---- scrolling ----
 
-    private float ContentWidth() => Math.Max(Position.Width, _naturalWidth);
+    private float ContentWidth() => Math.Max(CardViewportWidth(), _naturalWidth);
 
     private void ClampHorizontalScroll()
     {
-        var maxX = Math.Max(0f, ContentWidth() - Position.Width);
+        var maxX = Math.Max(0f, ContentWidth() - CardViewportWidth());
         if (_scrollX < 0f) _scrollX = 0f;
         else if (_scrollX > maxX) _scrollX = maxX;
     }
@@ -715,7 +822,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     public void SetHorizontalNormalizedScrollPosition(float normalized)
     {
-        var range = ContentWidth() - Position.Width;
+        var range = ContentWidth() - CardViewportWidth();
         if (range <= 0) { _scrollX = 0; }
         else { _scrollX = Math.Clamp(normalized, 0f, 1f) * range; }
         SetDirty();
@@ -736,7 +843,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             var contentH = _list.ContentHeight;
             var contentW = ContentWidth();
             var vph = Position.Height;
-            var vpw = Position.Width;
+            var vpw = CardViewportWidth();
 
             if (contentH <= vph || vph <= 0)
             {
