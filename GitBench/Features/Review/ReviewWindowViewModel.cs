@@ -107,6 +107,11 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // from scroll position via ReportActiveFile.
     public IReadable<string?> ActiveFile => _activeFile;
 
+    // The file next in line for review: the first (in range order) not yet marked Viewed, or null
+    // once everything is. The review proceeds in order — the stacked list pins the primary action
+    // button to this file's header no matter where the reviewer scrolls or clicks.
+    public IReadable<string?> QueuedFile { get; }
+
     // Raised when a navigation (tree click, j/k, mark-viewed advance) wants the stacked diff list
     // to scroll a file's section into view. Scrollspy updates never raise it.
     public event Action<string>? ScrollToFileRequested;
@@ -128,13 +133,6 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     // 0..1 progress of the header meter: files viewed across the combined range.
     public IReadable<float> FilesFraction { get; }
-
-    // Gates the header's primary button: disabled once every file is viewed (nothing to do).
-    public IReadable<bool> PrimaryActionEnabled { get; }
-
-    // The adaptive primary action's localized label, derived off the HUD so it tracks the active tab
-    // and every Viewed toggle. The icon stays in the view (glyphs aren't localized).
-    public IReadable<string> PrimaryActionLabel { get; }
 
     public ReviewWindowViewModel(
         ReviewSession session,
@@ -186,13 +184,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         FilesFraction = filesFraction;
         Subscriptions.Add(filesFraction);
 
-        var primaryEnabled = new Derived<bool>(() => hud.Value.Primary != ReviewPrimaryAction.Complete);
-        PrimaryActionEnabled = primaryEnabled;
-        Subscriptions.Add(primaryEnabled);
-
-        var primaryLabel = new Derived<string>(() => BuildPrimaryActionLabel(hud.Value));
-        PrimaryActionLabel = primaryLabel;
-        Subscriptions.Add(primaryLabel);
+        var queuedFile = new Derived<string?>(() => RangeKey() is { } key ? FirstUnviewed(key) : null);
+        QueuedFile = queuedFile;
+        Subscriptions.Add(queuedFile);
 
         Subscriptions.Add(_details.RenderState.Subscribe(r =>
         {
@@ -338,59 +332,38 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         ActivateFile(files[next].Path);
     }
 
-    // The one adaptive control (the header button and Enter/Space): mark-and-advance through the
-    // unviewed files, or do nothing once the whole range is viewed.
+    // The one adaptive control (the queued header's button and Enter/Space): mark-and-advance
+    // through the queue, or do nothing once the whole range is viewed.
     public void RunPrimaryAction()
     {
         if (Hud.Value.Primary == ReviewPrimaryAction.ViewFile)
-            MarkActiveFileViewedAndAdvance();
+            MarkQueuedFileViewedAndAdvance();
     }
 
-    // Marks the active file Viewed, then navigates to the next unviewed file — the stacked-list
+    // Marks the queued file Viewed and rides to the new head of the queue — the stacked-list
     // analog of GitHub's collapse-and-move-on: the marked section folds (the diff list folds on
-    // the Viewed change) and the viewport lands on what's left. When no unviewed file remains the
-    // cursor stays put and the primary action flips to "Review complete". The reviewed state lives
-    // in the tracker, so the file still reads checked/dimmed in the tree and unfolds on demand.
-    public void MarkActiveFileViewedAndAdvance()
+    // the Viewed change) and the viewport lands on what's next. The queue is strictly in range
+    // order, independent of where the reviewer scrolled or clicked; a file unchecked earlier in
+    // the range becomes the queue head again. When nothing unviewed remains the header flips to
+    // "Review complete".
+    public void MarkQueuedFileViewedAndAdvance()
     {
         var key = RangeKey();
         if (key == null) return;
-        var active = _activeFile.Value;
-        if (active == null)
-        {
-            AdvanceToNextUnviewedFile();
-            return;
-        }
-        if (!_reviewedFiles.IsViewed(key, active))
-            _reviewedFiles.ToggleViewed(key, active);
+        var queued = FirstUnviewed(key);
+        if (queued == null) return;
+        _reviewedFiles.ToggleViewed(key, queued);
 
-        var next = NextUnviewedFile(key, active);
-        if (next != null) ActivateFile(next);
+        if (FirstUnviewed(key) is { } next) ActivateFile(next);
     }
 
-    // Navigates to the next unviewed file. No-op (stay put) when every file is already viewed.
-    public void AdvanceToNextUnviewedFile()
+    // The head of the review queue: the first file in range order without a Viewed mark.
+    private string? FirstUnviewed(string key)
     {
-        var key = RangeKey();
-        if (key == null) return;
-        var next = NextUnviewedFile(key, _activeFile.Value);
-        if (next != null) ActivateFile(next);
-    }
-
-    // The next unviewed file's path, searching forward from anchorPath and wrapping once within the
-    // range. Null when the range has no files or all are viewed.
-    private string? NextUnviewedFile(string key, string? anchorPath)
-    {
-        var files = Files();
-        if (files.Count == 0) return null;
-        var start = anchorPath == null ? -1 : IndexOfFile(files, anchorPath);
-        for (var step = 1; step <= files.Count; step++)
-        {
-            var i = (start + step) % files.Count;
-            if (i < 0) i += files.Count;
-            if (!_reviewedFiles.IsViewed(key, files[i].Path))
-                return files[i].Path;
-        }
+        _ = _reviewedFiles.Revision.Value;
+        foreach (var f in Files())
+            if (!_reviewedFiles.IsViewed(key, f.Path))
+                return f.Path;
         return null;
     }
 
@@ -529,18 +502,6 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         var files = Files();
         if (files.Count == 0) return string.Empty;
         return _loc.Strings.Value.ReviewFilesViewed(CountViewed(key, files), files.Count);
-    }
-
-    // The adaptive primary action's localized label. "Mark viewed → next file" while reviewing a
-    // file (or "Review files" when sitting on the Details tab), "Review complete" at the end.
-    private string BuildPrimaryActionLabel(ReviewHud hud)
-    {
-        var s = _loc.Strings.Value;
-        return hud.Primary switch
-        {
-            ReviewPrimaryAction.ViewFile => hud.HasActiveFile ? s.ReviewActionMarkViewedNext : s.ReviewActionReviewFiles,
-            _ => s.ReviewComplete,
-        };
     }
 
     private ReviewHud BuildHud()

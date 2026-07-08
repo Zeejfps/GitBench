@@ -68,6 +68,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private const float ActiveBarWidth = 3f;
     // The clickable Viewed zone at the header's trailing edge (checkbox glyph + label).
     private const float ViewedZoneWidth = 96f;
+    // The primary action button that replaces the checkbox on the active file's header.
+    private const float ActionButtonHeight = 26f;
+    private const float ActionButtonPaddingX = 10f;
+    private const float ActionButtonIconWidth = 16f;
+    private const float ActionButtonIconGap = 6f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
 
@@ -85,6 +90,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private static readonly TextStyle ViewedLabelStyle = new()
     {
         FontSize = FontSize.Caption,
+        VerticalAlignment = TextAlignment.Center,
+    };
+    private static readonly TextStyle ActionLabelStyle = new()
+    {
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
     private static readonly TextStyle MessageStyle = new()
@@ -124,6 +135,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private float _monoAdvance;
     private bool _metricsResolved;
     private float _naturalWidth;
+    // Measured label width of the header's primary action button; re-measured after a language
+    // switch so the pill resizes with its text.
+    private float _actionLabelWidth;
+    private bool _actionMetricsResolved;
 
     private float _scrollX;
     // A programmatic vertical scroll target re-asserted for a few frames — same guard as
@@ -193,9 +208,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         // whether the toggle came from a header checkbox, the 'v' key, or the primary action.
         this.Bind(_vm.ReviewedFiles.Revision, _ => SyncViewedFolds());
 
-        // Repaint on active-file moves (the header accent) and language switches (message rows).
+        // Repaint on active-file moves (the header accent), queue-head moves (the action button),
+        // and language switches (message rows; the action label re-measures in the new language).
         this.Bind(_vm.ActiveFile, _ => SetDirty());
-        this.Bind(_loc.Strings, _ => SetDirty());
+        this.Bind(_vm.QueuedFile, _ => SetDirty());
+        this.Bind(_loc.Strings, _ => { _actionMetricsResolved = false; SetDirty(); });
 
         // Navigation (tree click, j/k, mark-viewed advance) scrolls the file's section here.
         this.Use(() =>
@@ -214,6 +231,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private float CardLeft() => _list.Position.Left + PanelPaddingX;
     private float CardRight() => _list.Position.Right - PanelPaddingX;
     private float CardViewportWidth() => Math.Max(0f, Position.Width - PanelPaddingX * 2);
+
+    // The queued file's header — the first unviewed file in range order, wherever the reviewer
+    // happens to be — carries the primary action button in place of its Viewed checkbox: mark it,
+    // fold it, and ride to the new head of the queue in one click.
+    private bool ShowsActionButton(Section s) =>
+        _vm.QueuedFile.Value == s.File.Path;
+
+    private float ActionButtonWidth() =>
+        ActionButtonPaddingX * 2 + ActionButtonIconWidth + ActionButtonIconGap + _actionLabelWidth;
+
+    // The clickable trailing zone of a header: the action button on the active header, the Viewed
+    // checkbox everywhere else. Draw and hit-test share this width.
+    private float TrailingZoneWidth(Section s) =>
+        ShowsActionButton(s) ? ActionButtonWidth() + HeaderPaddingX : ViewedZoneWidth;
 
     // ---- section structure ----
 
@@ -482,11 +513,23 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             // The row's top slice is the gap between cards — a click there targets nothing.
             if (!_list.TryGetRowRect(index, out var rowRect)) return;
             if (point.Y > rowRect.Top - SectionGap) return;
-            // The trailing zone is the Viewed checkbox; anywhere else on the band toggles the fold.
-            if (point.X >= CardRight() - ViewedZoneWidth)
+            // The trailing zone is the action button (active header) or the Viewed checkbox;
+            // anywhere else on the band toggles the fold.
+            if (point.X >= CardRight() - TrailingZoneWidth(s))
+            {
+                if (ShowsActionButton(s))
+                {
+                    // Marks + folds the queue head and scrolls to the next unviewed file, where
+                    // the button reappears.
+                    _vm.MarkQueuedFileViewedAndAdvance();
+                    return;
+                }
                 _vm.ToggleFileViewed(s.File.Path);
+            }
             else
+            {
                 SetFolded(s, !s.Folded);
+            }
             _vm.ReportActiveFile(s.File.Path);
             return;
         }
@@ -673,8 +716,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         });
         x += StatusIconWidth + 8f;
 
-        var viewedLeft = cardLeft + cardWidth - ViewedZoneWidth;
-        var textWidth = Math.Max(0f, viewedLeft - x - HeaderPaddingX);
+        EnsureActionMetrics(c);
+        var zoneWidth = TrailingZoneWidth(s);
+        var zoneLeft = cardLeft + cardWidth - zoneWidth;
+        var textWidth = Math.Max(0f, zoneLeft - x - HeaderPaddingX);
         if (textWidth > 0)
         {
             // A viewed file is "done" — dim its path (half alpha) so the eye skips to what's left.
@@ -690,12 +735,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             });
         }
 
-        // The Viewed checkbox: glyph + label, success-tinted once checked.
+        if (ShowsActionButton(s))
+            DrawActionButton(c, band, z);
+        else
+            DrawViewedCheckbox(c, s.File.Path, band, zoneLeft, viewed, z);
+    }
+
+    // The Viewed checkbox on a header's trailing edge: glyph + label, success-tinted once checked.
+    private void DrawViewedCheckbox(ICanvas c, string path, RectF band, float zoneLeft, bool viewed, int z)
+    {
         var viewedColor = viewed ? _theme.Status.Success : _theme.Palette.TextSecondary;
         HeaderGlyphStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(viewedLeft, band.Bottom, 18f, band.Height),
+            Position = new RectF(zoneLeft, band.Bottom, 18f, band.Height),
             Text = viewed ? LucideIcons.CheckSquare : LucideIcons.Square,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
@@ -703,11 +756,58 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         ViewedLabelStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(viewedLeft + 22f, band.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, band.Height),
+            Position = new RectF(zoneLeft + 22f, band.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, band.Height),
             Text = _loc.Strings.Value.ReviewViewed,
             Style = ViewedLabelStyle,
             ZIndex = z + 2,
         });
+    }
+
+    // The primary action pill on the queued file's header — the review loop's one button, always
+    // on the first unviewed file: check it off and ride to the next one.
+    private void DrawActionButton(ICanvas c, RectF band, int z)
+    {
+        var width = ActionButtonWidth();
+        var left = band.Left + band.Width - HeaderPaddingX - width;
+        var bottom = band.Bottom + (band.Height - ActionButtonHeight) / 2f;
+        var rect = new RectF(left, bottom, width, ActionButtonHeight);
+
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = rect,
+            Style = new RectStyle
+            {
+                BackgroundColor = _theme.Palette.Accent,
+                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            },
+            ZIndex = z + 2,
+        });
+
+        HeaderGlyphStyle.TextColor = _theme.Palette.TextOnAccent;
+        c.DrawText(new DrawTextInputs
+        {
+            Position = new RectF(left + ActionButtonPaddingX, bottom, ActionButtonIconWidth, ActionButtonHeight),
+            Text = LucideIcons.CheckSquare,
+            Style = HeaderGlyphStyle,
+            ZIndex = z + 3,
+        });
+        ActionLabelStyle.TextColor = _theme.Palette.TextOnAccent;
+        c.DrawText(new DrawTextInputs
+        {
+            Position = new RectF(
+                left + ActionButtonPaddingX + ActionButtonIconWidth + ActionButtonIconGap, bottom,
+                _actionLabelWidth, ActionButtonHeight),
+            Text = _loc.Strings.Value.ReviewActionMarkViewedNext,
+            Style = ActionLabelStyle,
+            ZIndex = z + 3,
+        });
+    }
+
+    private void EnsureActionMetrics(ICanvas c)
+    {
+        if (_actionMetricsResolved) return;
+        _actionLabelWidth = c.MeasureTextWidth(_loc.Strings.Value.ReviewActionMarkViewedNext, ActionLabelStyle);
+        _actionMetricsResolved = _actionLabelWidth > 0;
     }
 
     // The single body row of an unloaded / binary / errored / empty section: the card's body

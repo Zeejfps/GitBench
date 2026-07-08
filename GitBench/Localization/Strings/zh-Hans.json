@@ -397,7 +397,6 @@
   "review.complete": "审查完成",
   "review.files_viewed": "{viewed} / {total} 个文件已查看",
   "review.action_mark_viewed_next": "标记已查看 → 下一个文件",
-  "review.action_review_files": "审查文件",
   "review.loading": "加载中…",
   "review.empty_range": "此范围内没有可审查的提交。",
   "review.error_repo_unavailable": "仓库已不可用。",

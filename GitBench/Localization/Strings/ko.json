@@ -397,7 +397,6 @@
   "review.complete": "리뷰 완료",
   "review.files_viewed": "{viewed} / {total} 파일 확인됨",
   "review.action_mark_viewed_next": "확인 표시 → 다음 파일",
-  "review.action_review_files": "파일 검토",
   "review.loading": "불러오는 중…",
   "review.empty_range": "이 범위에 검토할 커밋이 없습니다.",
   "review.error_repo_unavailable": "저장소를 더 이상 사용할 수 없습니다.",

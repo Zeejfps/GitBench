@@ -397,7 +397,6 @@
   "review.complete": "レビュー完了",
   "review.files_viewed": "{viewed} / {total} ファイル表示済み",
   "review.action_mark_viewed_next": "表示済みにして次のファイルへ",
-  "review.action_review_files": "ファイルをレビュー",
   "review.loading": "読み込み中…",
   "review.empty_range": "この範囲にレビューするコミットはありません。",
   "review.error_repo_unavailable": "リポジトリは利用できなくなりました。",

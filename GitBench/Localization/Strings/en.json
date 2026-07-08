@@ -397,7 +397,6 @@
   "review.complete": "Review complete",
   "review.files_viewed": "{viewed} / {total} files viewed",
   "review.action_mark_viewed_next": "Mark viewed → next file",
-  "review.action_review_files": "Review files",
   "review.loading": "Loading…",
   "review.empty_range": "No commits to review in this range.",
   "review.error_repo_unavailable": "The repository is no longer available.",

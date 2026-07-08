@@ -439,7 +439,6 @@
   "review.complete": "اكتملت المراجعة",
   "review.files_viewed": "{viewed} / {total} ملفات تم عرضها",
   "review.action_mark_viewed_next": "وضع علامة مُراجَع → الملف التالي",
-  "review.action_review_files": "مراجعة الملفات",
   "review.loading": "جارٍ التحميل…",
   "review.empty_range": "لا توجد إيداعات للمراجعة في هذا النطاق.",
   "review.error_repo_unavailable": "لم يعد المستودع متاحًا.",

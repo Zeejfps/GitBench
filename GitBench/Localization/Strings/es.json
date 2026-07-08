@@ -397,7 +397,6 @@
   "review.complete": "Revisión completa",
   "review.files_viewed": "{viewed} / {total} archivos vistos",
   "review.action_mark_viewed_next": "Marcar visto → siguiente archivo",
-  "review.action_review_files": "Revisar archivos",
   "review.loading": "Cargando…",
   "review.empty_range": "No hay commits para revisar en este rango.",
   "review.error_repo_unavailable": "El repositorio ya no está disponible.",

@@ -11,11 +11,11 @@ using ZGF.Observable;
 namespace GitBench.Features.Review;
 
 /// <summary>
-/// The review window's top bar: the range (<c>base → head</c>) on the leading edge and, on the
+/// The review window's top bar: the range (<c>head → base</c>) on the leading edge and, on the
 /// trailing edge, the review progress ("N / M files viewed" with a meter, or a "Review complete"
-/// badge once every file is viewed) and the one adaptive primary action — "Mark viewed → next file"
-/// while files remain, the explicit advance the review loop turns on. Reads the pinned
-/// <see cref="ReviewWindowViewModel"/> from the build context.
+/// badge once every file is viewed). The primary action lives on the active file's header in the
+/// stacked diff list, not here. Reads the pinned <see cref="ReviewWindowViewModel"/> from the
+/// build context.
 /// </summary>
 internal sealed record ReviewHeaderBar : Widget
 {
@@ -46,7 +46,6 @@ internal sealed record ReviewHeaderBar : Widget
                             [
                                 new Grow { Child = BaseRange(vm, ctx) },
                                 ProgressGroup(vm),
-                                PrimaryButton(vm),
                                 HelpButton(vm),
                             ],
                         },
@@ -142,33 +141,6 @@ internal sealed record ReviewHeaderBar : Widget
                     },
                 ],
             },
-        ],
-    };
-
-    // The one adaptive primary action — "Mark viewed → next file" while reviewing a file ("Review
-    // files" when sitting on the Details tab), "Review complete" (disabled) at the end. Space / Enter
-    // run the same command. Hidden until the range's file list is up (nothing to advance through).
-    private static IWidget PrimaryButton(ReviewWindowViewModel vm) => new Box
-    {
-        Visible = Prop.Bind(() => vm.ContentKind.Value == ReviewContentKind.Loaded),
-        Children =
-        [
-            new ButtonWidget
-            {
-                Style = ButtonStyle.Filled(s => s.Palette.Accent),
-                Command = new Command(vm.RunPrimaryAction, vm.PrimaryActionEnabled),
-                Children =
-                [
-                    new ButtonIcon
-                    {
-                        FontSize = FontSize.Body,
-                        Value = Prop.Bind<string?>(() => vm.Hud.Value.Primary == ReviewPrimaryAction.ViewFile
-                            ? LucideIcons.CheckSquare
-                            : LucideIcons.CircleCheck),
-                    },
-                    new ButtonLabel { Value = Prop.Bind<string?>(() => vm.PrimaryActionLabel.Value) },
-                ],
-            }.WithController<KbmController>(),
         ],
     };
 
