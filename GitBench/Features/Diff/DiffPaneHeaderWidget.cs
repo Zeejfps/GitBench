@@ -141,8 +141,8 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 
     // The GitHub-style per-file "Viewed" toggle: a bordered pill compact enough for the 24px header
     // strip (the stock chip buttons are ControlHeight-tall), subtle-bordered while unviewed and
-    // success-tinted once the file is marked viewed. Marks key off ReviewFileKey so commit and
-    // combined-range diffs each track their own identity.
+    // success-tinted once the file is marked viewed. The tracker addresses the file by path within
+    // the window's branch and tracks its content identity, so the mark clears when the file changes.
     private sealed record ViewedChip : Widget<ButtonState>
     {
         public required DiffViewModel Vm { get; init; }
@@ -150,8 +150,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 
         protected override ButtonState CreateState(Context ctx) => new(new Command(() =>
         {
-            var target = Vm.Target.Value;
-            if (ReviewFileKey.ForTarget(target) is { } key) Reviewed.ToggleViewed(key, target!.Path);
+            if (Vm.Target.Value is { } target) Reviewed.ToggleViewed(target.Path);
         }));
 
         protected override IWidget Build(Context ctx, ButtonState state)
@@ -159,8 +158,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             bool IsViewed()
             {
                 _ = Reviewed.Revision.Value;
-                var target = Vm.Target.Value;
-                return ReviewFileKey.ForTarget(target) is { } key && Reviewed.IsViewed(key, target!.Path);
+                return Vm.Target.Value is { } target && Reviewed.IsViewed(target.Path);
             }
 
             return new Box

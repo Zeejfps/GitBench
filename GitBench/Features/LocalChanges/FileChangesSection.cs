@@ -346,7 +346,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         var file = row.File!;
         var isSelected = _selectedPath?.Value == file.Path;
         var reviewMode = _reviewedFiles != null && _reviewSha != null;
-        var isViewed = reviewMode && _reviewedFiles!.IsViewed(_reviewSha!, file.Path);
+        var isViewed = reviewMode && _reviewedFiles!.IsViewed(file.Path);
         FileChangesUI.DrawFileRow(
             _canvas,
             rowRect,

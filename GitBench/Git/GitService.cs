@@ -537,14 +537,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (!IsGitRepo(repo.Path))
                 return new Fetched<IReadOnlyList<FileChange>>.Failed("Not a git repository.");
 
-            // The combined net file list of base→head (two-dot, base is already the merge-base). Same
-            // NUL `--name-status` format as diff-tree, so ParseDiffTreeNameStatusZ is reused verbatim;
-            // a file touched in several increments appears once, an add-then-delete nets out.
-            var diffOutput = RunGit(repo.Path, out var error, "diff", "-M", "--name-status", "-z", baseSha, headSha);
+            // The combined net file list of base→head (two-dot, base is already the merge-base). The
+            // `--raw` format additionally carries each file's after-side blob OID, which the review's
+            // Viewed marks fingerprint on to re-open a file that changed since it was marked; a file
+            // touched in several increments appears once, an add-then-delete nets out.
+            var diffOutput = RunGit(repo.Path, out var error, "diff", "-M", "--raw", "-z", baseSha, headSha);
             if (diffOutput == null)
                 return new Fetched<IReadOnlyList<FileChange>>.Failed(error ?? "git diff failed.");
 
-            var files = ParseDiffTreeNameStatusZ(diffOutput);
+            var files = ParseDiffRawZ(diffOutput);
             files.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             return new Fetched<IReadOnlyList<FileChange>>.Ok(files);
         }
@@ -633,6 +634,46 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // "<status>\0<path>\0", except R/C records which carry a similarity score on the
     // status and a second path: "R100\0<old>\0<new>\0". Status letters map via the same
     // table as porcelain v2 (M/A/D/R/C/T).
+    // Parses the NUL-separated output of `git diff -M --raw -z`. Each entry is a metadata record
+    // ":<srcmode> <dstmode> <srcsha> <dstsha> <status>" followed by one path (two for R/C: old then
+    // new). The after-side blob (<dstsha>) becomes the file's ContentId — the all-zero OID for a
+    // deletion. Kept separate from ParseDiffTreeNameStatusZ so the shared name-status callers are
+    // untouched.
+    private static List<FileChange> ParseDiffRawZ(string output)
+    {
+        var files = new List<FileChange>();
+        if (string.IsNullOrEmpty(output)) return files;
+        var parts = output.Split('\0');
+        var i = 0;
+        while (i < parts.Length)
+        {
+            var meta = parts[i];
+            if (string.IsNullOrEmpty(meta) || meta[0] != ':') { i++; continue; }
+
+            // ":<srcmode> <dstmode> <srcsha> <dstsha> <status>" — dstsha is field 3, status field 4.
+            var fields = meta.Split(' ');
+            if (fields.Length < 5) { i++; continue; }
+            var dstSha = fields[3];
+            var status = fields[4];
+            var letter = status[0];
+            var kind = MapPorcelainCode(letter) ?? FileChangeStatus.Modified;
+
+            if (letter is 'R' or 'C')
+            {
+                if (i + 2 >= parts.Length) break;
+                files.Add(new FileChange(parts[i + 2], parts[i + 1], kind) { ContentId = dstSha });
+                i += 3;
+            }
+            else
+            {
+                if (i + 1 >= parts.Length) break;
+                files.Add(new FileChange(parts[i + 1], null, kind) { ContentId = dstSha });
+                i += 2;
+            }
+        }
+        return files;
+    }
+
     private static List<FileChange> ParseDiffTreeNameStatusZ(string output)
     {
         var files = new List<FileChange>();

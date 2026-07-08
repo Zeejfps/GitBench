@@ -86,6 +86,10 @@ internal static class AppServices
         // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
         context.AddSingleton<IReviewStackSource, GitReviewStackSource>();
 
+        // Review progress (marked-Viewed files) lives for the app session, shared across review
+        // windows so closing and reopening a branch's review keeps its progress.
+        context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
+
         context.AddSingleton<IRepoSnapshotStore>(ctx =>
         {
             var store = ctx.Require<RepoSnapshotStore>();

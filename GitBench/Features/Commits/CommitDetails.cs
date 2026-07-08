@@ -26,6 +26,11 @@ public sealed record FileChange(
     // commit moved the submodule between, so the row can render "abc..def (+N commits)"
     // and a click can activate the submodule's own history at that range.
     public SubmodulePointerChange? PointerChange { get; init; }
+
+    // The file's content identity on the after-side (its git blob OID at head). Populated for
+    // combined-range loads so a review's Viewed mark can tell when a file's content changed since it
+    // was marked; null for surfaces that don't carry it. Deletions carry the all-zero blank OID.
+    public string? ContentId { get; init; }
 }
 
 public sealed record CommitDetails(

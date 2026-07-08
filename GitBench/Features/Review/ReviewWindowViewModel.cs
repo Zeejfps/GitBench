@@ -59,7 +59,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     private readonly CommitDetailsViewModel _details;
     private readonly ILocalizationService _loc;
     private readonly IRepoSnapshotStore _snapshots;
-    private readonly ReviewedFileTracker _reviewedFiles = new();
+    private readonly BranchReviewedFiles _reviewedFiles;
 
     // The reviewer's in-window base override (the header base dropdown); null = auto-resolve. Only
     // the base varies — the window stays pinned to its repo + head. Setting it re-resolves the range
@@ -100,8 +100,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // in-flight base switch. The views bind this to swap their content optimistically.
     public IReadable<bool> IsSwitchingBase => _baseSwitching;
 
-    // Per-window store of marked-Viewed files, provided into the window subtree so the reused
-    // diff-pane header and Changes list show their Viewed marks. Owned (and disposed) here.
+    // This branch's view of marked-Viewed files, provided into the window subtree so the reused
+    // diff-pane header and Changes list show their Viewed marks. Backed by the app-session
+    // IReviewProgressStore, so the marks survive this window. Owned (and disposed) here.
     public IReviewedFileTracker ReviewedFiles => _reviewedFiles;
 
     // The window's own commit-details VM, provided into the split's sub-context; both columns (the
@@ -151,7 +152,8 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         CommitDetailsViewModel details,
         ILocalizationService loc,
         IMessageBus bus,
-        IRepoSnapshotStore snapshots)
+        IRepoSnapshotStore snapshots,
+        IReviewProgressStore reviewProgress)
         : base(dispatcher, new ReviewState(new ReviewRenderState.Loading()))
     {
         Session = session;
@@ -159,6 +161,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         _details = details;
         _loc = loc;
         _snapshots = snapshots;
+        _reviewedFiles = new BranchReviewedFiles(reviewProgress, session.RepoId, session.HeadRef);
         _reloadLane = CreateLane();
         Subscriptions.Add(_cheatsheetOpen);
         Subscriptions.Add(_baseOverride);
@@ -195,7 +198,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         FilesFraction = filesFraction;
         Subscriptions.Add(filesFraction);
 
-        var queuedFile = new Derived<string?>(() => RangeKey() is { } key ? FirstUnviewed(key) : null);
+        var queuedFile = new Derived<string?>(FirstUnviewed);
         QueuedFile = queuedFile;
         Subscriptions.Add(queuedFile);
 
@@ -206,6 +209,9 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             if (r is not CommitDetailsRenderState.Loading) _baseSwitching.Value = false;
             if (r is not CommitDetailsRenderState.Loaded loaded) return;
             if (!_detailsEverLoaded.Value) _detailsEverLoaded.Value = true;
+            // Hand the tracker the new range's per-file content identities so a file changed since it
+            // was viewed re-opens for review while its unchanged neighbours stay viewed.
+            _reviewedFiles.SetFingerprints(FingerprintsOf(loaded.Details.Files));
             // Seed the active file on first load; prune it when a reload drops it from the range.
             var files = loaded.Details.Files;
             var active = _activeFile.Value;
@@ -323,14 +329,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     /// <summary>Whether a file of the loaded range is marked Viewed — the section header
     /// checkboxes in the stacked diff list read through here.</summary>
-    public bool IsFileViewed(string path) =>
-        RangeKey() is { } key && _reviewedFiles.IsViewed(key, path);
+    public bool IsFileViewed(string path) => _reviewedFiles.IsViewed(path);
 
     /// <summary>Flips a file's Viewed mark (a section header checkbox click).</summary>
-    public void ToggleFileViewed(string path)
-    {
-        if (RangeKey() is { } key) _reviewedFiles.ToggleViewed(key, path);
-    }
+    public void ToggleFileViewed(string path) => _reviewedFiles.ToggleViewed(path);
 
     // Flips the active file's Viewed mark — the 'v' key's reversible toggle, the same one the
     // section header checkbox drives.
@@ -394,21 +396,19 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // "Review complete".
     public void MarkQueuedFileViewedAndAdvance()
     {
-        var key = RangeKey();
-        if (key == null) return;
-        var queued = FirstUnviewed(key);
+        var queued = FirstUnviewed();
         if (queued == null) return;
-        _reviewedFiles.ToggleViewed(key, queued);
+        _reviewedFiles.ToggleViewed(queued);
 
-        if (FirstUnviewed(key) is { } next) ActivateFile(next);
+        if (FirstUnviewed() is { } next) ActivateFile(next);
     }
 
     // The head of the review queue: the first file in range order without a Viewed mark.
-    private string? FirstUnviewed(string key)
+    private string? FirstUnviewed()
     {
         _ = _reviewedFiles.Revision.Value;
         foreach (var f in Files())
-            if (!_reviewedFiles.IsViewed(key, f.Path))
+            if (!_reviewedFiles.IsViewed(f.Path))
                 return f.Path;
         return null;
     }
@@ -547,18 +547,15 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // "X / Y files viewed" for the combined range. Empty until a non-empty file list is loaded.
     private string BuildFilesViewedLabel()
     {
-        var key = RangeKey();
-        if (key == null) return string.Empty;
         var files = Files();
         if (files.Count == 0) return string.Empty;
-        return _loc.Strings.Value.ReviewFilesViewed(CountViewed(key, files), files.Count);
+        return _loc.Strings.Value.ReviewFilesViewed(CountViewed(files), files.Count);
     }
 
     private ReviewHud BuildHud()
     {
-        var key = RangeKey();
         var files = Files();
-        var viewed = key == null ? 0 : CountViewed(key, files);
+        var viewed = CountViewed(files);
         var complete = files.Count > 0 && viewed >= files.Count;
         var detailsLoading = _details.RenderState.Value is CommitDetailsRenderState.Loading;
         var hasActiveFile = _activeFile.Value != null;
@@ -577,22 +574,26 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             HasActiveFile: hasActiveFile);
     }
 
-    private int CountViewed(string key, IReadOnlyList<FileChange> files)
+    private int CountViewed(IReadOnlyList<FileChange> files)
     {
         _ = _reviewedFiles.Revision.Value;
         var viewed = 0;
         foreach (var f in files)
-            if (_reviewedFiles.IsViewed(key, f.Path)) viewed++;
+            if (_reviewedFiles.IsViewed(f.Path)) viewed++;
         return viewed;
     }
 
     private ReviewStack? CurrentStack() =>
         State.Value.Render is ReviewRenderState.Loaded l ? l.Stack : null;
 
-    // The tracker key for the loaded range's per-file Viewed marks — the same base..head key the open
-    // tabs and diff headers derive, so every surface reads and writes the same mark.
-    private string? RangeKey() =>
-        CurrentStack() is { } stack ? ReviewFileKey.ForRange(stack.BaseSha, stack.HeadSha) : null;
+    // The current range's after-side content identity per file path — the fingerprint the tracker
+    // marks against, so a file that changed since it was viewed re-opens for review.
+    private static IReadOnlyDictionary<string, string?> FingerprintsOf(IReadOnlyList<FileChange> files)
+    {
+        var map = new Dictionary<string, string?>(files.Count, StringComparer.Ordinal);
+        foreach (var f in files) map[f.Path] = f.ContentId;
+        return map;
+    }
 
     // The combined range's files, available once the details surface has loaded them.
     private IReadOnlyList<FileChange> Files() =>

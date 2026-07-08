@@ -84,7 +84,7 @@ internal sealed record CommitFileTabButton : Widget
                 : () =>
                 {
                     _ = reviewed.Revision.Value;
-                    return reviewed.IsViewed(tab.Sha, tab.Path);
+                    return reviewed.IsViewed(tab.Path);
                 },
         };
     }
