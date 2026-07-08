@@ -4,70 +4,70 @@ using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
 namespace GitBench.Features.Identity;
 
-// Add/edit form for a single identity profile: a display name, the author name/email injected
-// per commit, an optional SSH key, and a single host/owner match rule. Power users can add
-// multiple match rules by editing identity-profiles.json directly; the form keeps to one.
-internal sealed record IdentityProfileEditDialog : Widget
+/// <summary>
+/// The identity-profile field set — display name, author name/email, an optional SSH key with a
+/// Browse… picker, and a single host/owner match rule — bound to caller-owned state. Shared by the
+/// add/edit dialog and the profile manager so both edit identical fields with one layout. Its
+/// <see cref="LabeledInput"/>s register with the surrounding dialog's submit/focus wiring.
+/// </summary>
+internal sealed record IdentityProfileFields : Widget
 {
-    public required IdentityProfile? Existing { get; init; }
-    public required Action OnClose { get; init; }
+    public required State<string> DisplayName { get; init; }
+    public required State<string> AuthorName { get; init; }
+    public required State<string> AuthorEmail { get; init; }
+    public required State<string> SshKeyPath { get; init; }
+    public required State<string> MatchHost { get; init; }
+    public required State<string> MatchOwner { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var vm = new IdentityProfileEditDialogViewModel(
-            Existing,
-            ctx.Require<IdentityProfileService>(),
-            ctx.Require<IUiDispatcher>());
-
-        var add = Existing == null;
         var s = ctx.Localization().Strings.Value;
 
         var browseSshKey = new SecondaryDialogButton
         {
             Label = s.CommonBrowse,
             Command = new Command(() =>
-                ctx.Get<IPlatformShell>()?.PickFile(s.IdentityPickerChooseSshKey, vm.InitialSshKeyDirectory(), picked =>
-                    vm.SshKeyPath.Value = picked)),
+                ctx.Get<IPlatformShell>()?.PickFile(
+                    s.IdentityPickerChooseSshKey,
+                    IdentityProfileEditing.InitialSshKeyDirectory(SshKeyPath.Value),
+                    picked => SshKeyPath.Value = picked)),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();
 
-        return new Dialog
+        return new Column
         {
-            Title = add ? s.IdentityTitleNew : s.IdentityTitleEdit,
-            OnClose = OnClose,
-            ViewModel = vm,
-            Width = DialogFrame.WidthWide,
-            Action = (add ? s.CommonAdd : s.CommonSave, DialogButtonRole.Primary),
-            Command = vm.Save,
-            Body =
+            Gap = 12f,
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children =
             [
                 new LabeledInput
                 {
                     Label = s.IdentityProfileNameLabel,
-                    Value = vm.DisplayName,
+                    Value = DisplayName,
                     Placeholder = s.IdentityProfileNamePlaceholder,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentityAuthorNameLabel,
-                    Value = vm.AuthorName,
+                    Value = AuthorName,
                     Placeholder = s.IdentityAuthorNamePlaceholder,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentityAuthorEmailLabel,
-                    Value = vm.AuthorEmail,
+                    Value = AuthorEmail,
                     Placeholder = s.IdentityAuthorEmailPlaceholder,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentitySshKeyLabel,
-                    Value = vm.SshKeyPath,
+                    Value = SshKeyPath,
                     Placeholder = s.IdentitySshKeyPlaceholder,
                     Hint = s.IdentitySshKeyHint,
                     Accessory = browseSshKey,
@@ -75,14 +75,14 @@ internal sealed record IdentityProfileEditDialog : Widget
                 new LabeledInput
                 {
                     Label = s.IdentityMatchHostLabel,
-                    Value = vm.MatchHost,
+                    Value = MatchHost,
                     Placeholder = s.IdentityMatchHostPlaceholder,
                     Hint = s.IdentityMatchHostHint,
                 },
                 new LabeledInput
                 {
                     Label = s.IdentityMatchOwnerLabel,
-                    Value = vm.MatchOwner,
+                    Value = MatchOwner,
                     Placeholder = s.IdentityMatchOwnerPlaceholder,
                     Hint = s.IdentityMatchOwnerHint,
                 },

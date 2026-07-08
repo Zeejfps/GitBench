@@ -28,6 +28,7 @@ internal static class LucideIcons
     public const string Trash = "";         // trash-2
     public const string SquareTerminal = ""; // square-terminal
     public const string PencilLine = "";    // pencil-line
+    public const string Plus = "";          // plus
     public const string FolderPlus = "";    // folder-plus
     public const string FolderInput = "";  // folder-input
     public const string X = "";             // x
