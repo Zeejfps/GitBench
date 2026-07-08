@@ -101,6 +101,8 @@ internal sealed record GroupHeaderRow : Widget
         var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
+            new(s.ReposAddButton, static () => { }, LucideIcons.FolderPlus,
+                Submenu: AddRepoMenu.Items(ctx, vm.Group.Id)),
             new(s.ReposGroupRename, vm.BeginRename.Execute, LucideIcons.PencilLine),
         };
 
