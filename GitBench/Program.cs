@@ -23,6 +23,8 @@ var builder = GuiApp.CreateBuilder(new StartupConfig
     WindowTitle = "GitBench",
     WindowWidth = preferences.Current.WindowWidth,
     WindowHeight = preferences.Current.WindowHeight,
+    WindowX = preferences.Current.WindowX,
+    WindowY = preferences.Current.WindowY,
     IsUndecorated = false
 });
 using var services = builder.Services;
@@ -30,6 +32,7 @@ services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json")
 
 using var appHost = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
 appHost.OnWindowResized += preferences.SetWindowSize;
+appHost.OnWindowMoved += preferences.SetWindowPosition;
 
 // The dispatcher is registered during Build, so background services (watchers, sync, stores)
 // can only spin up now.

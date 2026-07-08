@@ -41,6 +41,8 @@ public sealed class PreferencesService : IDisposable
         Mutate(p => p with { WindowWidth = width, WindowHeight = height });
     }
 
+    public void SetWindowPosition(int x, int y) => Mutate(p => p with { WindowX = x, WindowY = y });
+
     public void SetReviewWindowSize(int width, int height)
     {
         if (width <= 0 || height <= 0) return;

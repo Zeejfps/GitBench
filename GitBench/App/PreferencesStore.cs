@@ -22,6 +22,11 @@ public static class PreferencesStore
         public string? Language { get; set; } = nameof(Locale.En);
         public int? WindowWidth { get; set; } = 1400;
         public int? WindowHeight { get; set; } = 900;
+
+        // Null (the default) means "never placed" — the window is centered. Stored verbatim,
+        // including negatives, since a saved spot may sit on a monitor left of the primary.
+        public int? WindowX { get; set; }
+        public int? WindowY { get; set; }
         public int? ReviewWindowWidth { get; set; } = 1100;
         public int? ReviewWindowHeight { get; set; } = 800;
         public float? RepoBarWidth { get; set; } = 220f;
@@ -51,6 +56,8 @@ public static class PreferencesStore
                 Language = ParseLocale(file.Language) ?? defaults.Language,
                 WindowWidth = file.WindowWidth is > 0 ? file.WindowWidth.Value : defaults.WindowWidth,
                 WindowHeight = file.WindowHeight is > 0 ? file.WindowHeight.Value : defaults.WindowHeight,
+                WindowX = file.WindowX,
+                WindowY = file.WindowY,
                 ReviewWindowWidth = file.ReviewWindowWidth is > 0 ? file.ReviewWindowWidth.Value : defaults.ReviewWindowWidth,
                 ReviewWindowHeight = file.ReviewWindowHeight is > 0 ? file.ReviewWindowHeight.Value : defaults.ReviewWindowHeight,
                 RepoBarWidth = file.RepoBarWidth is > 0 ? file.RepoBarWidth.Value : defaults.RepoBarWidth,
@@ -77,6 +84,8 @@ public static class PreferencesStore
             Language = preferences.Language.ToString(),
             WindowWidth = preferences.WindowWidth,
             WindowHeight = preferences.WindowHeight,
+            WindowX = preferences.WindowX,
+            WindowY = preferences.WindowY,
             ReviewWindowWidth = preferences.ReviewWindowWidth,
             ReviewWindowHeight = preferences.ReviewWindowHeight,
             RepoBarWidth = preferences.RepoBarWidth,

@@ -10,6 +10,11 @@ public sealed record Preferences
     public Locale Language { get; init; } = Locale.En;
     public int WindowWidth { get; init; } = 1400;
     public int WindowHeight { get; init; } = 900;
+
+    // Null until the window has been placed once; then the last on-screen top-left, restored
+    // (clamped back on-screen) on next launch. May be negative on a multi-monitor layout.
+    public int? WindowX { get; init; }
+    public int? WindowY { get; init; }
     public int ReviewWindowWidth { get; init; } = 1100;
     public int ReviewWindowHeight { get; init; } = 800;
     public float RepoBarWidth { get; init; } = 220f;
