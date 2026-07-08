@@ -15,13 +15,22 @@ namespace GitBench.Features.Commits;
 
 /// <summary>
 /// The "Changes" file-list panel of a commit-details surface, bound to a
-/// <see cref="CommitDetailsViewModel"/>: clicking (or arrow-keying) a row opens the file's diff tab
-/// through the view model. Reused wherever that surface appears — the History pane stacks it above
-/// the tabbed diff region, the review window puts it in the left column.
+/// <see cref="CommitDetailsViewModel"/>: clicking (or arrow-keying) a row activates the file.
+/// Activation defaults to opening the file's diff tab through the view model; a host can override
+/// both the activation and the highlighted row — the review window routes activation to
+/// scroll-to-file and highlights the file currently read. Reused by the History pane (top of its
+/// split) and the review window (left column).
 /// </summary>
 internal sealed record CommitChangesPanel : IWidget
 {
-    public View BuildView(Context ctx) => new CommitChangesPanelView(ctx, ctx.Require<CommitDetailsViewModel>());
+    /// <summary>Overrides the highlighted row; null follows the view model's active tab.</summary>
+    public IReadable<string?>? SelectedPath { get; init; }
+
+    /// <summary>Overrides what activating a file does; null opens its diff tab.</summary>
+    public Action<string>? OnActivate { get; init; }
+
+    public View BuildView(Context ctx) =>
+        new CommitChangesPanelView(ctx, ctx.Require<CommitDetailsViewModel>(), SelectedPath, OnActivate);
 }
 
 internal sealed class CommitChangesPanelView : ContainerView
@@ -30,9 +39,15 @@ internal sealed class CommitChangesPanelView : ContainerView
     private readonly ListArrowKbmController _arrowController;
     private readonly State<string?> _selectedPath = new(null);
 
-    public CommitChangesPanelView(Context ctx, CommitDetailsViewModel vm)
+    public CommitChangesPanelView(
+        Context ctx,
+        CommitDetailsViewModel vm,
+        IReadable<string?>? selectedPath = null,
+        Action<string>? onActivate = null)
     {
         var input = ctx.Require<InputSystem>();
+        var selection = selectedPath ?? vm.SelectedPath;
+        var activate = onActivate ?? vm.SelectFile;
 
         var viewModeIcon = Prop.Bind<string?>(() =>
             vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
@@ -49,7 +64,7 @@ internal sealed class CommitChangesPanelView : ContainerView
             selectedPath: _selectedPath,
             onRowClicked: f =>
             {
-                vm.SelectFile(f.Path);
+                activate(f.Path);
                 _arrowController.TakeFocus();
             },
             headerActions: [viewModeButton]);
@@ -64,7 +79,7 @@ internal sealed class CommitChangesPanelView : ContainerView
             (delta, _) =>
             {
                 var next = _changesSection.NextFilePath(_selectedPath.Value, delta);
-                if (next != null) vm.SelectFile(next);
+                if (next != null) activate(next);
             },
             _ => { },
             () => { },
@@ -73,7 +88,7 @@ internal sealed class CommitChangesPanelView : ContainerView
         this.UseController(input, _arrowController);
 
         this.Bind(vm.ViewMode, _changesSection.SetViewMode);
-        this.Bind(vm.SelectedPath, path =>
+        this.Bind(selection, path =>
         {
             _selectedPath.Value = path;
             if (path != null) _changesSection.EnsureRowVisible(path);

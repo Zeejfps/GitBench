@@ -202,7 +202,11 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var active = ResolveRepo();
         if (active == null || active.Id != msg.RepoId) return;
         _deferReloadToWorkingTreeChange = false;
-        if (_target.Value == null) return;
+        if (_target.Value is not { } target) return;
+        // Commit/range targets are pinned to shas — their content is immutable, so a working-tree
+        // change has nothing to refresh. Matters in the review window, where many per-file diff
+        // panes are alive at once and a blanket reload would refetch all of them on every edit.
+        if (target.Side is DiffSide.Commit or DiffSide.Range) return;
         StartLoad();
     }
 

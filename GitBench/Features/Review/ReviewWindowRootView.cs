@@ -13,10 +13,10 @@ namespace GitBench.Features.Review;
 /// <summary>
 /// Root widget hosted inside a review window: the <see cref="ReviewHeaderBar"/> across the top and,
 /// below it, the range's combined change list as a PR-style two-column split — the reused
-/// <see cref="CommitChangesPanel"/> file tree in a resizable sidebar on the left, the reused
-/// <see cref="CommitDiffTabsPanel"/> diff surface on the right — both driven by the window's own
-/// <see cref="CommitDetailsViewModel"/>. While the range loads the body shows a loading state; an
-/// empty range / load error shows a centered message. Bound to the
+/// <see cref="CommitChangesPanel"/> file tree in a resizable sidebar on the left, the
+/// <see cref="ReviewDiffPanel"/> stacked diff surface on the right — both driven by the window's
+/// own <see cref="CommitDetailsViewModel"/>. While the range loads the body shows a loading state;
+/// an empty range / load error shows a centered message. Bound to the
 /// <see cref="ReviewWindowViewModel"/> supplied by the opening <see cref="ReviewWindowsView"/>, which
 /// it also provides into the subtree.
 /// </summary>
@@ -80,9 +80,11 @@ internal sealed record ReviewWindowRootView : Widget
         };
     }
 
-    // The combined change list, PR-style: file tree in a resizable sidebar on the left, the tabbed
-    // diff surface filling the rest. Both columns build against the Provide scope so they resolve
-    // the window's own CommitDetailsViewModel rather than the main window's.
+    // The combined change list, PR-style: file tree in a resizable sidebar on the left, every
+    // file's diff stacked in one scrolling surface on the right. Both columns build against the
+    // Provide scope so they resolve the window's own CommitDetailsViewModel rather than the main
+    // window's. Tree activation scrolls the stacked list (instead of opening tabs), and the tree's
+    // highlight follows the file being read via the view model's active file.
     private IWidget Split() => new Provide<CommitDetailsViewModel>
     {
         Value = Model.Details,
@@ -95,12 +97,16 @@ internal sealed record ReviewWindowRootView : Widget
                 {
                     West = new ResizableSidebar
                     {
-                        Content = new CommitChangesPanel(),
+                        Content = new CommitChangesPanel
+                        {
+                            SelectedPath = Model.ActiveFile,
+                            OnActivate = Model.ActivateFile,
+                        },
                         InitialWidth = 340f,
                         MinResizeWidth = 240f,
                         MaxResizeWidth = 600f,
                     },
-                    Center = new CommitDiffTabsPanel(),
+                    Center = new ReviewDiffPanel(),
                 },
             ],
         },

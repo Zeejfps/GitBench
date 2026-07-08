@@ -106,6 +106,18 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Update(s => s with { SelectedPath = path });
     }
 
+    /// <summary>
+    /// Creates a standalone diff handle for a file of the current commit/range — the same target
+    /// resolution an open tab gets, but never added to <see cref="OpenTabs"/>. The review window's
+    /// stacked diff list creates these lazily per file; the caller owns disposal. Null when no
+    /// commit/range is loaded.
+    /// </summary>
+    public CommitFileTab? CreateFileDiff(string path)
+    {
+        if (string.IsNullOrEmpty(_currentSha)) return null;
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha);
+    }
+
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>
     public void ActivateTab(string? path) => Update(s => s with { SelectedPath = path });
 

@@ -80,6 +80,11 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // (stale-while-revalidate).
     private readonly State<bool> _detailsEverLoaded = new(false);
 
+    // The file the reviewer is currently on: the section the stacked diff list is scrolled to
+    // (scrollspy), retargeted by a tree click or j/k. Anchors the Viewed toggle, the primary
+    // action, and the tree's highlighted row.
+    private readonly State<string?> _activeFile = new(null);
+
     public ReviewSession Session { get; }
     public string Title { get; }
 
@@ -90,12 +95,21 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public IReviewedFileTracker ReviewedFiles => _reviewedFiles;
 
     // The window's own commit-details VM, provided into the split's sub-context; both columns (the
-    // file tree and the diff tabs) bind to it. It does not subscribe to commit selection, so the
-    // History pane can never drive it. Owned here and disposed with the window.
+    // file tree and the stacked diff list) bind its loaded file list, and the diff list mints its
+    // per-file diff handles through it. It does not subscribe to commit selection, so the History
+    // pane can never drive it. Owned here and disposed with the window.
     public CommitDetailsViewModel Details => _details;
 
     public IReadable<ReviewContentKind> ContentKind { get; }
     public IReadable<string> PlaceholderText { get; }
+
+    // The file the reviewer is on. The tree highlights it; the stacked diff list reports it back
+    // from scroll position via ReportActiveFile.
+    public IReadable<string?> ActiveFile => _activeFile;
+
+    // Raised when a navigation (tree click, j/k, mark-viewed advance) wants the stacked diff list
+    // to scroll a file's section into view. Scrollspy updates never raise it.
+    public event Action<string>? ScrollToFileRequested;
 
     // The base side of the header range: the resolved ref name (e.g. "origin/main") once loaded, or
     // "Resolving base…" while the first stack loads. Rendered as a clickable chip that opens the base
@@ -141,6 +155,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         Subscriptions.Add(_cheatsheetOpen);
         Subscriptions.Add(_baseOverride);
         Subscriptions.Add(_detailsEverLoaded);
+        Subscriptions.Add(_activeFile);
         Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
 
         // ContentKind and PlaceholderText fold in the combined file list's own load phase: the window
@@ -181,8 +196,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
         Subscriptions.Add(_details.RenderState.Subscribe(r =>
         {
-            if (r is CommitDetailsRenderState.Loaded && !_detailsEverLoaded.Value)
-                _detailsEverLoaded.Value = true;
+            if (r is not CommitDetailsRenderState.Loaded loaded) return;
+            if (!_detailsEverLoaded.Value) _detailsEverLoaded.Value = true;
+            // Seed the active file on first load; prune it when a reload drops it from the range.
+            var files = loaded.Details.Files;
+            var active = _activeFile.Value;
+            if (active == null || IndexOfFile(files, active) < 0)
+                _activeFile.Value = files.Count > 0 ? files[0].Path : null;
         }));
 
         // A ref change in the reviewed repo (amend, rebase, push, branch move) reshapes the range;
@@ -261,20 +281,43 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             : Session with { BaseRef = baseRef, BaseLabel = baseRef };
     }
 
+    /// <summary>Whether a file of the loaded range is marked Viewed — the section header
+    /// checkboxes in the stacked diff list read through here.</summary>
+    public bool IsFileViewed(string path) =>
+        RangeKey() is { } key && _reviewedFiles.IsViewed(key, path);
+
+    /// <summary>Flips a file's Viewed mark (a section header checkbox click).</summary>
+    public void ToggleFileViewed(string path)
+    {
+        if (RangeKey() is { } key) _reviewedFiles.ToggleViewed(key, path);
+    }
+
     // Flips the active file's Viewed mark — the 'v' key's reversible toggle, the same one the
-    // diff-pane header button drives. No-op when no file tab is open.
+    // section header checkbox drives.
     public void ToggleActiveFileViewed()
     {
-        var key = RangeKey();
-        var active = _details.SelectedPath.Value;
-        if (key == null || active == null) return;
-        _reviewedFiles.ToggleViewed(key, active);
+        if (_activeFile.Value is { } active) ToggleFileViewed(active);
     }
 
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
-    // Opens the next / previous file's tab within the range (the j / k keys). Clamped at the
+    /// <summary>Navigates to a file: makes it active and asks the stacked diff list to scroll its
+    /// section into view (a tree click, j/k, or a mark-viewed advance).</summary>
+    public void ActivateFile(string path)
+    {
+        _activeFile.Value = path;
+        ScrollToFileRequested?.Invoke(path);
+    }
+
+    /// <summary>Scrollspy: the stacked diff list reports the file its viewport sits on, so the tree
+    /// highlight and the keyboard anchor follow the reading position without echoing a scroll back.</summary>
+    public void ReportActiveFile(string path)
+    {
+        _activeFile.Value = path;
+    }
+
+    // Navigates to the next / previous file in the range (the j / k keys). Clamped at the
     // first/last file; no-op while the file list hasn't loaded.
     public void NextFile() => StepFile(+1);
     public void PrevFile() => StepFile(-1);
@@ -283,7 +326,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     {
         var files = Files();
         if (files.Count == 0) return;
-        var active = _details.SelectedPath.Value;
+        var active = _activeFile.Value;
         int next;
         if (active == null)
             next = delta > 0 ? 0 : files.Count - 1;
@@ -292,7 +335,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             var index = IndexOfFile(files, active);
             next = index < 0 ? 0 : Math.Clamp(index + delta, 0, files.Count - 1);
         }
-        _details.SelectFile(files[next].Path);
+        ActivateFile(files[next].Path);
     }
 
     // The one adaptive control (the header button and Enter/Space): mark-and-advance through the
@@ -303,17 +346,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             MarkActiveFileViewedAndAdvance();
     }
 
-    // Marks the active file Viewed, opens the next unviewed file's tab, then closes the just-reviewed
-    // file's tab — the tabbed analog of GitHub's collapse-and-move-on: a reviewed file gets out of the
-    // way. Selecting the next tab before closing the old one avoids a transient flash back to Details.
-    // When no unviewed file remains the cursor falls to a neighbouring tab (or Details) and the
-    // primary action flips to "Review complete". The reviewed state lives in the tracker, so the file
-    // still reads checked/dimmed in the Changes list and reopens on demand.
+    // Marks the active file Viewed, then navigates to the next unviewed file — the stacked-list
+    // analog of GitHub's collapse-and-move-on: the marked section folds (the diff list folds on
+    // the Viewed change) and the viewport lands on what's left. When no unviewed file remains the
+    // cursor stays put and the primary action flips to "Review complete". The reviewed state lives
+    // in the tracker, so the file still reads checked/dimmed in the tree and unfolds on demand.
     public void MarkActiveFileViewedAndAdvance()
     {
         var key = RangeKey();
         if (key == null) return;
-        var active = _details.SelectedPath.Value;
+        var active = _activeFile.Value;
         if (active == null)
         {
             AdvanceToNextUnviewedFile();
@@ -323,18 +365,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             _reviewedFiles.ToggleViewed(key, active);
 
         var next = NextUnviewedFile(key, active);
-        if (next != null) _details.SelectFile(next);
-        _details.CloseTab(active);
+        if (next != null) ActivateFile(next);
     }
 
-    // Opens the next unviewed file's tab without touching the current one. No-op (stay put) when
-    // every file is already viewed.
+    // Navigates to the next unviewed file. No-op (stay put) when every file is already viewed.
     public void AdvanceToNextUnviewedFile()
     {
         var key = RangeKey();
         if (key == null) return;
-        var next = NextUnviewedFile(key, _details.SelectedPath.Value);
-        if (next != null) _details.SelectFile(next);
+        var next = NextUnviewedFile(key, _activeFile.Value);
+        if (next != null) ActivateFile(next);
     }
 
     // The next unviewed file's path, searching forward from anchorPath and wrapping once within the
@@ -510,7 +550,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         var viewed = key == null ? 0 : CountViewed(key, files);
         var complete = files.Count > 0 && viewed >= files.Count;
         var detailsLoading = _details.RenderState.Value is CommitDetailsRenderState.Loading;
-        var hasActiveFile = _details.SelectedPath.Value != null;
+        var hasActiveFile = _activeFile.Value != null;
 
         // While the file list is still loading hold on ViewFile so the button doesn't flash
         // "complete" mid-load; a genuinely empty net diff has nothing left to do.

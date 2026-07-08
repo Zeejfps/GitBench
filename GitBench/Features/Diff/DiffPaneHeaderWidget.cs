@@ -74,25 +74,32 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
 
     private IWidget[] RowChildren(DiffViewModel vm, ButtonState state, IReviewedFileTracker? reviewed)
     {
-        var title = new Grow
-        {
-            Child = new Text
-            {
-                Value = L.T(s => s.DiffHeaderTitle),
-                FontSize = FontSize.Body,
-                VAlign = TextAlignment.Center,
-                Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
-            },
-        };
-        var trailing = new List<IWidget>
-        {
-            title,
-            new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) },
-            FullFileToggleButton(vm),
-            OpenInWindowButton(vm),
-        };
+        var trailing = new List<IWidget>();
+        // On the reviewed (tabbed) surface the Viewed pill replaces the "Diff View" title: the tab
+        // already names the file, and the review loop clicks the toggle constantly right after
+        // picking a file in the list / tab strip on the left — so it takes the leading edge, by the
+        // pointer instead of across the pane.
         if (reviewed != null)
-            trailing.Add(ViewedToggleButton(vm, reviewed));
+        {
+            trailing.Add(new ViewedChip { Vm = vm, Reviewed = reviewed }.WithController<KbmController>());
+            trailing.Add(new Grow { Child = new Box() });
+        }
+        else
+        {
+            trailing.Add(new Grow
+            {
+                Child = new Text
+                {
+                    Value = L.T(s => s.DiffHeaderTitle),
+                    FontSize = FontSize.Body,
+                    VAlign = TextAlignment.Center,
+                    Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
+                },
+            });
+        }
+        trailing.Add(new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) });
+        trailing.Add(FullFileToggleButton(vm));
+        trailing.Add(OpenInWindowButton(vm));
 
         if (!Collapsible) return trailing.ToArray();
 
@@ -132,37 +139,77 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
         }.WithTooltip(L.T(s => s.DiffOpenWindowTooltip))
             .WithController<KbmController>();
 
-    // The GitHub-style per-file "Viewed" toggle, shown only when a reviewed-file tracker is in scope
-    // (the review window). Tints success and flips the checkbox glyph once the file is marked viewed.
-    // Marks key off ReviewFileKey so commit and combined-range diffs each track their own identity.
-    private static IWidget ViewedToggleButton(DiffViewModel vm, IReviewedFileTracker reviewed)
+    // The GitHub-style per-file "Viewed" toggle: a bordered pill compact enough for the 24px header
+    // strip (the stock chip buttons are ControlHeight-tall), subtle-bordered while unviewed and
+    // success-tinted once the file is marked viewed. Marks key off ReviewFileKey so commit and
+    // combined-range diffs each track their own identity.
+    private sealed record ViewedChip : Widget<ButtonState>
     {
-        bool IsViewed()
-        {
-            _ = reviewed.Revision.Value;
-            var target = vm.Target.Value;
-            return ReviewFileKey.ForTarget(target) is { } key && reviewed.IsViewed(key, target!.Path);
-        }
+        public required DiffViewModel Vm { get; init; }
+        public required IReviewedFileTracker Reviewed { get; init; }
 
-        return new ButtonWidget
+        protected override ButtonState CreateState(Context ctx) => new(new Command(() =>
         {
-            Style = ButtonStyle.Bare(s => Theme.Color(t => IsViewed()
-                ? t.Status.Success
-                : t.DiffView.HeaderButtonColor(s))),
-            Command = new Command(() =>
+            var target = Vm.Target.Value;
+            if (ReviewFileKey.ForTarget(target) is { } key) Reviewed.ToggleViewed(key, target!.Path);
+        }));
+
+        protected override IWidget Build(Context ctx, ButtonState state)
+        {
+            bool IsViewed()
             {
-                var target = vm.Target.Value;
-                if (ReviewFileKey.ForTarget(target) is { } key) reviewed.ToggleViewed(key, target!.Path);
-            }),
-            Children =
-            [
-                new ButtonIcon
-                {
-                    FontSize = FontSize.Body,
-                    Value = Prop.Bind<string?>(() => IsViewed() ? LucideIcons.CheckSquare : LucideIcons.Square),
-                },
-                new ButtonLabel { Value = L.T(s => s.ReviewViewed) },
-            ],
-        }.WithController<KbmController>();
+                _ = Reviewed.Revision.Value;
+                var target = Vm.Target.Value;
+                return ReviewFileKey.ForTarget(target) is { } key && Reviewed.IsViewed(key, target!.Path);
+            }
+
+            return new Box
+            {
+                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+                BorderSize = BorderSizeStyle.All(1),
+                BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
+                    IsViewed() ? s.Status.Success : s.Palette.Border)),
+                Background = Theme.Color(s => state.Hovered.Value ? s.RowSelection.FillHover : 0u),
+                Children =
+                [
+                    new Padding
+                    {
+                        Amount = new PaddingStyle
+                        {
+                            Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair,
+                        },
+                        Children =
+                        [
+                            new Row
+                            {
+                                Gap = Spacing.Xs,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    new Text
+                                    {
+                                        FontFamily = LucideIcons.FontFamily,
+                                        FontSize = FontSize.Caption,
+                                        VAlign = TextAlignment.Center,
+                                        Value = Prop.Bind<string?>(() =>
+                                            IsViewed() ? LucideIcons.CheckSquare : LucideIcons.Square),
+                                        Color = Theme.Color(s =>
+                                            IsViewed() ? s.Status.Success : s.Palette.TextSecondary),
+                                    },
+                                    new Text
+                                    {
+                                        Value = L.T(s => s.ReviewViewed),
+                                        FontSize = FontSize.Caption,
+                                        VAlign = TextAlignment.Center,
+                                        Color = Theme.Color(s =>
+                                            IsViewed() ? s.Status.Success : s.Palette.TextSecondary),
+                                    },
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            };
+        }
     }
 }
