@@ -18,7 +18,7 @@ internal static class AddRepoMenu
         ];
     }
 
-    private static void OpenFromFolder(Context ctx, Guid? groupId)
+    public static void OpenFromFolder(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
         ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository, path =>
@@ -32,7 +32,7 @@ internal static class AddRepoMenu
         });
     }
 
-    private static void ShowCloneDialog(Context ctx, Guid? groupId)
+    public static void ShowCloneDialog(Context ctx, Guid? groupId = null)
         => ctx.Get<IMessageBus>()?.Broadcast(
             new ShowDialogMessage(onClose => new CloneRepoDialog { OnClose = onClose, TargetGroupId = groupId }));
 }

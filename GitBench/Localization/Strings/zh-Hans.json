@@ -2,6 +2,8 @@
   "about.view_on_github": "在 GitHub 上查看",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "打开电脑上的仓库，或克隆一个仓库开始使用。",
+
   "toast.pushed": "已推送",
   "toast.pulled": "已拉取",
   "toast.fetched": "已获取",

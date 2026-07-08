@@ -19,13 +19,6 @@ internal sealed record AboutDialog : Widget<DialogState>
 {
     private const string RepoUrl = "https://github.com/Zeejfps/GitBench";
 
-    /// <summary>
-    /// Image id of the app icon, set by startup once it's loaded into the canvas. Null when the
-    /// icon couldn't be loaded — the dialog then falls back to a glyph rather than referencing an
-    /// unknown id (which would throw when the ImageView measures).
-    /// </summary>
-    public static string? IconImageId { get; set; }
-
     public required Action OnClose { get; init; }
 
     protected override DialogState CreateState(Context ctx) => new(OnClose);
@@ -65,7 +58,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                     CrossAxis = CrossAxisAlignment.Center,
                                     Children =
                                     [
-                                        BuildLogo(),
+                                        new AppLogo(),
                                         new Text
                                         {
                                             Value = "GitBench",
@@ -106,27 +99,4 @@ internal sealed record AboutDialog : Widget<DialogState>
         };
     }
 
-    private static IWidget BuildLogo()
-    {
-        if (IconImageId != null)
-            return new Image { ImageId = IconImageId, Width = 84, Height = 84 };
-
-        return new Box
-        {
-            Width = 84,
-            Height = 84,
-            Children =
-            [
-                new Text
-                {
-                    Value = LucideIcons.FolderGit2,
-                    FontFamily = LucideIcons.FontFamily,
-                    FontSize = FontSize.Hero,
-                    HAlign = TextAlignment.Center,
-                    VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.Palette.Accent),
-                },
-            ],
-        };
-    }
 }

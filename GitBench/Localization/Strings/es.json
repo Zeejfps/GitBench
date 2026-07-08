@@ -2,6 +2,8 @@
   "about.view_on_github": "Ver en GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "Abre un repositorio de tu equipo o clona uno para empezar.",
+
   "toast.pushed": "Enviado",
   "toast.pulled": "Extraído",
   "toast.fetched": "Obtenido",

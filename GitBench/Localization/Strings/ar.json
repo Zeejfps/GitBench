@@ -2,6 +2,8 @@
   "about.view_on_github": "العرض على GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "افتح مستودعًا من جهازك أو استنسخ واحدًا للبدء.",
+
   "toast.pushed": "تم الدفع",
   "toast.pulled": "تم السحب",
   "toast.fetched": "تم الجلب",

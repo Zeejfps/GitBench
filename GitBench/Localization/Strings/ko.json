@@ -2,6 +2,8 @@
   "about.view_on_github": "GitHub에서 보기",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "컴퓨터의 저장소를 열거나 복제하여 시작하세요.",
+
   "toast.pushed": "푸시 완료",
   "toast.pulled": "풀 완료",
   "toast.fetched": "가져오기 완료",

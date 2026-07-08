@@ -2,6 +2,8 @@
   "about.view_on_github": "GitHubで表示",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "コンピューター上のリポジトリを開くか、クローンして始めましょう。",
+
   "toast.pushed": "プッシュしました",
   "toast.pulled": "プルしました",
   "toast.fetched": "フェッチしました",

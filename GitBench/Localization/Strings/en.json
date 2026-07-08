@@ -2,6 +2,8 @@
   "about.view_on_github": "View on GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
+  "welcome.greeting": "Open a repository from your computer, or clone one to get started.",
+
   "toast.pushed": "Pushed",
   "toast.pulled": "Pulled",
   "toast.fetched": "Fetched",

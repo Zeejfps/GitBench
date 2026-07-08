@@ -54,14 +54,18 @@ internal static class AppHostSetup
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 appHost.SetIcon("Assets/commit_bench_icon.rgba");
 
-            // The About dialog shows the app icon, so load it into the canvas up front. Scoped to
-            // macOS — the only place the dialog is currently reachable — where Metal texture upload
-            // needs no current GL context. A load failure just falls back to a glyph.
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            // The About dialog and welcome screen show the app icon, so load it into the canvas up
+            // front. GL texture upload needs the main context current (a no-op on Metal). macOS
+            // gets the bundle-style artwork. A load failure just falls back to a glyph.
+            var iconPng = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                ? "Assets/commit_bench_icon_mac.png"
+                : "Assets/commit_bench_icon.png";
+            try
             {
-                try { AboutDialog.IconImageId = appHost.LoadImage("Assets/commit_bench_icon_mac.png"); }
-                catch (Exception ex) { Console.WriteLine($"[About] icon load failed: {ex.Message}"); }
+                appHost.MakeMainContextCurrent();
+                AppLogo.IconImageId.Value = appHost.LoadImage(iconPng);
             }
+            catch (Exception ex) { Console.WriteLine($"[AppLogo] icon load failed: {ex.Message}"); }
         }
     }
 
