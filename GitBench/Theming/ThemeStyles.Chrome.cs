@@ -52,8 +52,8 @@ public sealed record SidebarSplitterStyles(
     uint Hover);
 
 public sealed record HistorySplitterStyles(
-    uint HoverFill,
-    uint HoverLine);
+    uint Idle,
+    uint Hover);
 
 public sealed record TooltipStyles(
     uint Background,
@@ -115,8 +115,8 @@ public partial record ThemeStyles
 
     private static HistorySplitterStyles BuildHistorySplitter(ThemePalette p) =>
         new(
-            HoverFill: p.BorderHoverFill,
-            HoverLine: p.BorderHoverLine);
+            Idle: p.Border,
+            Hover: p.BorderHoverFill);
 
     private static TooltipStyles BuildTooltip(ThemePalette p, TooltipPalette tooltip) =>
         new(

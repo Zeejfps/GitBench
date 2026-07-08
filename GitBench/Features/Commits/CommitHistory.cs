@@ -1,19 +1,19 @@
 using ZGF.Gui.Views;
 using GitBench.App;
-using GitBench.Theming;
+using GitBench.Controls;
 using GitBench.Widgets;
-using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
 
 /// <summary>
 /// The commit-history pane: the commits list on the left and a resizable commit details panel
-/// on the right, with a draggable divider between them.
+/// on the right, with a draggable splitter between them.
 /// </summary>
 public sealed record CommitHistory : Widget
 {
@@ -22,19 +22,16 @@ public sealed record CommitHistory : Widget
 
 internal sealed class HistoryView : ContainerView
 {
+    private const float SplitterThickness = 5f;
     private const float MinDetailsWidth = 240f;
     private const float MinCenterWidth = 320f;
     private const float DefaultDetailsWidth = 380f;
-    private const float DividerHitWidth = 6f;
-    private const float DividerThickness = 1f;
 
     private readonly View _commits;
     private readonly CommitDetailsView _details;
+    private readonly View _splitter;
     private readonly PreferencesService? _preferences;
     private float _detailsWidth = DefaultDetailsWidth;
-    private bool _dividerHovered;
-
-    private HistorySplitterStyles _splitterStyles = ThemeStyles.Dark.HistorySplitter;
 
     public HistoryView(Context ctx)
     {
@@ -46,15 +43,21 @@ internal sealed class HistoryView : ContainerView
         // selection, which the details panel must already be listening for to open on it.
         _details = new CommitDetailsView(ctx);
         _commits = new CommitsPanelWidget().BuildView(ctx);
-        AddChildToSelf(_commits);
-        AddChildToSelf(_details);
-        this.UseController(input, () => new HistoryViewController(this, input));
 
-        this.BindThemed(ctx.Theme(), s =>
-        {
-            _splitterStyles = s.HistorySplitter;
-            SetDirty();
-        });
+        var splitterHovered = new State<bool>(false);
+        var splitter = new RectView();
+        splitter.BindThemedBackgroundColor(ctx.Theme(), s =>
+            splitterHovered.Value ? s.HistorySplitter.Hover : s.HistorySplitter.Idle);
+        splitter.UseController(input, () => new SplitterController(
+            ctx,
+            DragAxis.X,
+            ResizeDetails,
+            h => splitterHovered.Value = h));
+        _splitter = splitter;
+
+        AddChildToSelf(_commits);
+        AddChildToSelf(_splitter);
+        AddChildToSelf(_details);
 
         _preferences = ctx.Get<PreferencesService>();
         if (_preferences is not null)
@@ -63,27 +66,40 @@ internal sealed class HistoryView : ContainerView
 
     // The details panel may grow until the commits list reaches its minimum — no fixed upper cap, so a
     // wide window can give the details panel as much room as the user drags for.
-    private float MaxDetailsWidthForLayout() => Math.Max(MinDetailsWidth, Position.Width - MinCenterWidth);
+    private float MaxDetailsWidthForLayout() =>
+        Math.Max(MinDetailsWidth, Position.Width - SplitterThickness - MinCenterWidth);
 
     protected override void OnLayoutChildren()
     {
         var pos = Position;
+        var available = Math.Max(0f, pos.Width - SplitterThickness);
         var detailsWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
-        var centerWidth = Math.Max(MinCenterWidth, pos.Width - detailsWidth);
-        if (centerWidth + detailsWidth > pos.Width)
+        var centerWidth = Math.Max(MinCenterWidth, available - detailsWidth);
+        if (centerWidth + detailsWidth > available)
         {
-            detailsWidth = Math.Max(MinDetailsWidth, pos.Width - centerWidth);
+            detailsWidth = Math.Max(MinDetailsWidth, available - centerWidth);
         }
         _detailsWidth = detailsWidth;
 
         // Under RTL the details panel moves to the left and the commits list to the right.
-        _commits.LeftConstraint = IsRtl ? pos.Left + detailsWidth : pos.Left;
+        var rtl = IsRtl;
+        var commitsLeft = rtl ? pos.Left + detailsWidth + SplitterThickness : pos.Left;
+        var splitterLeft = rtl ? pos.Left + detailsWidth : pos.Left + centerWidth;
+        var detailsLeft = rtl ? pos.Left : pos.Right - detailsWidth;
+
+        _commits.LeftConstraint = commitsLeft;
         _commits.BottomConstraint = pos.Bottom;
         _commits.WidthConstraint = centerWidth;
         _commits.HeightConstraint = pos.Height;
         _commits.LayoutSelf();
 
-        _details.LeftConstraint = IsRtl ? pos.Left : pos.Right - detailsWidth;
+        _splitter.LeftConstraint = splitterLeft;
+        _splitter.BottomConstraint = pos.Bottom;
+        _splitter.WidthConstraint = SplitterThickness;
+        _splitter.HeightConstraint = pos.Height;
+        _splitter.LayoutSelf();
+
+        _details.LeftConstraint = detailsLeft;
         _details.BottomConstraint = pos.Bottom;
         _details.Width = detailsWidth;
         _details.WidthConstraint = detailsWidth;
@@ -91,44 +107,7 @@ internal sealed class HistoryView : ContainerView
         _details.LayoutSelf();
     }
 
-    protected override void OnDrawSelf(ICanvas c)
-    {
-        if (!_dividerHovered) return;
-        var pos = Position;
-        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
-        var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
-        var z = GetDrawZIndex();
-        c.DrawRect(new DrawRectInputs
-        {
-            Position = new RectF(dividerX - DividerHitWidth * 0.5f, pos.Bottom, DividerHitWidth, pos.Height),
-            Style = new RectStyle { BackgroundColor = _splitterStyles.HoverFill },
-            ZIndex = z + 999,
-        });
-        c.DrawRect(new DrawRectInputs
-        {
-            Position = new RectF(dividerX - DividerThickness * 0.5f, pos.Bottom, DividerThickness, pos.Height),
-            Style = new RectStyle { BackgroundColor = _splitterStyles.HoverLine },
-            ZIndex = z + 1000,
-        });
-    }
-
-    internal bool HitTestDivider(PointF point)
-    {
-        var pos = Position;
-        if (point.Y < pos.Bottom || point.Y > pos.Top) return false;
-        var clampedWidth = Math.Clamp(_detailsWidth, MinDetailsWidth, MaxDetailsWidthForLayout());
-        var dividerX = IsRtl ? pos.Left + clampedWidth : pos.Right - clampedWidth;
-        return Math.Abs(point.X - dividerX) <= DividerHitWidth * 0.5f;
-    }
-
-    internal void SetDividerHovered(bool hovered)
-    {
-        if (_dividerHovered == hovered) return;
-        _dividerHovered = hovered;
-        SetDirty();
-    }
-
-    internal void ResizeDetails(float mouseDeltaX)
+    private void ResizeDetails(float mouseDeltaX)
     {
         // Dragging right (positive delta) shrinks the right panel and grows the center; under RTL the
         // details panel is on the left, so the drag direction flips.
@@ -138,62 +117,5 @@ internal sealed class HistoryView : ContainerView
         _detailsWidth = newWidth;
         _preferences?.SetCommitDetailsWidth(newWidth);
         SetDirty();
-    }
-}
-
-internal sealed class HistoryViewController : KeyboardMouseController
-{
-    private readonly HistoryView _view;
-    private readonly InputSystem _input;
-    private bool _dragging;
-    private float _lastDragX;
-
-    public HistoryViewController(HistoryView view, InputSystem input)
-    {
-        _view = view;
-        _input = input;
-    }
-
-    public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
-    {
-        if (e.Button != MouseButton.Left) return;
-
-        if (e.State == InputState.Pressed)
-        {
-            if (_view.HitTestDivider(e.Mouse.Point))
-            {
-                _dragging = true;
-                _lastDragX = e.Mouse.Point.X;
-                _input.StealFocus(this);
-                e.Consume();
-            }
-            return;
-        }
-
-        if (e.State == InputState.Released && _dragging)
-        {
-            _dragging = false;
-            _input.Blur(this);
-            e.Consume();
-        }
-    }
-
-    public override void OnMouseMoved(ref MouseMoveEvent e)
-    {
-        if (_dragging)
-        {
-            var dx = e.Mouse.Point.X - _lastDragX;
-            _lastDragX = e.Mouse.Point.X;
-            _view.ResizeDetails(dx);
-            e.Consume();
-            return;
-        }
-        _view.SetDividerHovered(_view.HitTestDivider(e.Mouse.Point));
-    }
-
-    public override void OnMouseExit(ref MouseExitEvent e)
-    {
-        if (!_dragging)
-            _view.SetDividerHovered(false);
     }
 }
