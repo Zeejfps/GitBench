@@ -3,6 +3,10 @@
     "gitbench-gui": {
       "type": "http",
       "url": "http://127.0.0.1:5577/mcp"
+    },
+    "rider": {
+      "type": "sse",
+      "url": "http://localhost:64342/sse"
     }
   }
 }
