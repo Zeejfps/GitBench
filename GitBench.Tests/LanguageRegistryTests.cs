@@ -25,8 +25,19 @@ public class LanguageRegistryTests
         => Assert.Equal(expected, LanguageRegistry.DetectLanguageId(path));
 
     [Theory]
+    [InlineData("Makefile", "makefile")]
+    [InlineData("src/Dockerfile", "dockerfile")]
+    [InlineData("ci/Jenkinsfile", "groovy")]
+    [InlineData("Gemfile", "ruby")]
+    [InlineData("tsconfig.json", "jsonc")]   // filename beats the .json extension
+    [InlineData(".gitignore", "ignore")]
+    [InlineData(".bashrc", "shellscript")]
+    public void DetectsByFileName(string path, string expected)
+        => Assert.Equal(expected, LanguageRegistry.DetectLanguageId(path));
+
+    [Theory]
     [InlineData("notes.txt")]
-    [InlineData("Makefile")]      // no extension
+    [InlineData("LICENSE")]        // no extension, not a known filename
     [InlineData("archive.cs.bak")] // extension is .bak, not .cs
     [InlineData("")]
     public void ReturnsNullForUnsupported(string path)

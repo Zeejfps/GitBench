@@ -153,6 +153,15 @@ public class SyntaxHighlighterTests
         => Assert.Null(Highlighter.Highlight("int x = 1;", "no-such-language"));
 
     [Fact]
+    public void EveryRegisteredLanguage_ResolvesToAGrammar()
+    {
+        // Guards the LanguageRegistry table against language ids TextMateSharp can't resolve —
+        // a typo'd id would silently render that language plain.
+        foreach (var id in LanguageRegistry.AllLanguageIds)
+            Assert.True(Highlighter.Highlight("x", id) is not null, $"language id '{id}' did not resolve to a grammar");
+    }
+
+    [Fact]
     public void LineCountMatchesSourceLines()
     {
         var src = "a\nb\nc"; // 3 lines, no trailing newline
