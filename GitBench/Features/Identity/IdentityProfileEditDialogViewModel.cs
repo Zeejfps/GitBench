@@ -46,6 +46,31 @@ internal sealed class IdentityProfileEditDialogViewModel : IDialogViewModel
         Save = new AsyncCommand(dispatcher, work: () => null, onSuccess: DoSave, gate: gate);
     }
 
+    // Where the SSH-key file picker should open: the folder of the current value if it exists,
+    // otherwise the user's ~/.ssh folder when present. Null lets the OS choose its default.
+    public string? InitialSshKeyDirectory()
+    {
+        var current = SshKeyPath.Value.Trim();
+        if (current.Length > 0)
+        {
+            var dir = Path.GetDirectoryName(ExpandHome(current));
+            if (!string.IsNullOrEmpty(dir) && Directory.Exists(dir)) return dir;
+        }
+
+        var ssh = Path.Combine(Home, ".ssh");
+        return Directory.Exists(ssh) ? ssh : null;
+    }
+
+    private static string Home => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+    private static string ExpandHome(string path)
+    {
+        if (path == "~") return Home;
+        if (path.StartsWith("~/", StringComparison.Ordinal) || path.StartsWith("~\\", StringComparison.Ordinal))
+            return Path.Combine(Home, path[2..]);
+        return path;
+    }
+
     private void DoSave()
     {
         var host = MatchHost.Value.Trim();

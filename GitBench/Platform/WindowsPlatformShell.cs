@@ -18,12 +18,23 @@ public sealed class WindowsPlatformShell : IPlatformShell
     private static readonly Guid ClsidFileOpenDialog = new("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7");
     // IID_IFileOpenDialog
     private static readonly Guid IidFileOpenDialog = new("d57c7288-d4ad-4768-be02-9d969532d960");
+    // IID_IShellItem2. Requesting the base IID_IShellItem from SHCreateItemFromParsingName
+    // returns E_NOINTERFACE on some systems; IShellItem2 derives from IShellItem, so the pointer
+    // is vtable-compatible with SetFolder (which only needs an IShellItem).
+    private static readonly Guid IidShellItem2 = new("7e9fb0d3-919f-4307-ab2e-9b1860310c93");
 
     // Runs on the calling (UI) thread: IFileDialog::Show is modal and pumps its own message
     // loop, so the app stays responsive, and COM wants the UI thread's STA anyway.
     public void PickFolder(string title, Action<string> onPicked)
     {
-        var path = ShowFolderDialog(title);
+        var path = ShowFileDialog(title, pickFolder: true);
+        if (!string.IsNullOrEmpty(path))
+            onPicked(path);
+    }
+
+    public void PickFile(string title, string? initialDirectory, Action<string> onPicked)
+    {
+        var path = ShowFileDialog(title, pickFolder: false, initialDirectory);
         if (!string.IsNullOrEmpty(path))
             onPicked(path);
     }
@@ -31,7 +42,7 @@ public sealed class WindowsPlatformShell : IPlatformShell
     // Calls IFileDialog/IShellItem methods directly through the COM vtable. This avoids
     // the [ComImport] RCW pattern, which depends on runtime IL generation and is disabled
     // when PublishAot is set.
-    private static unsafe string? ShowFolderDialog(string title)
+    private static unsafe string? ShowFileDialog(string title, bool pickFolder, string? initialDirectory = null)
     {
         CoCreateInstance(in ClsidFileOpenDialog, IntPtr.Zero, CLSCTX_INPROC_SERVER, in IidFileOpenDialog, out var pDialog);
         try
@@ -39,16 +50,27 @@ public sealed class WindowsPlatformShell : IPlatformShell
             var vtbl = *(IntPtr**)pDialog;
 
             // IFileDialog vtable (after IUnknown 0..2):
-            //   3 Show, 9 SetOptions, 10 GetOptions, 17 SetTitle, 20 GetResult
+            //   3 Show, 9 SetOptions, 10 GetOptions, 12 SetFolder, 17 SetTitle, 20 GetResult
             var show       = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, int>)vtbl[3];
             var setOptions = (delegate* unmanaged[Stdcall]<IntPtr, uint, int>)vtbl[9];
             var getOptions = (delegate* unmanaged[Stdcall]<IntPtr, uint*, int>)vtbl[10];
+            var setFolder  = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr, int>)vtbl[12];
             var setTitle   = (delegate* unmanaged[Stdcall]<IntPtr, char*, int>)vtbl[17];
             var getResult  = (delegate* unmanaged[Stdcall]<IntPtr, IntPtr*, int>)vtbl[20];
 
+            var extraOptions = FOS_FORCEFILESYSTEM | (pickFolder ? FOS_PICKFOLDERS : 0);
             uint options;
             Marshal.ThrowExceptionForHR(getOptions(pDialog, &options));
-            Marshal.ThrowExceptionForHR(setOptions(pDialog, options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM));
+            Marshal.ThrowExceptionForHR(setOptions(pDialog, options | extraOptions));
+
+            // Best-effort: an unopenable path just leaves the dialog at its default location.
+            if (!string.IsNullOrEmpty(initialDirectory)
+                && SHCreateItemFromParsingName(initialDirectory, IntPtr.Zero, in IidShellItem2, out var pFolder) == 0
+                && pFolder != IntPtr.Zero)
+            {
+                try { setFolder(pDialog, pFolder); }
+                finally { Release(pFolder); }
+            }
 
             fixed (char* pTitle = title)
             {
@@ -102,6 +124,13 @@ public sealed class WindowsPlatformShell : IPlatformShell
         in Guid rclsid,
         IntPtr pUnkOuter,
         uint dwClsContext,
+        in Guid riid,
+        out IntPtr ppv);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = true)]
+    private static extern int SHCreateItemFromParsingName(
+        string pszPath,
+        IntPtr pbc,
         in Guid riid,
         out IntPtr ppv);
 

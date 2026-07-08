@@ -120,6 +120,7 @@
   "identity.author_email_label": "作成者メールアドレス",
   "identity.ssh_key_label": "SSHキー（任意）",
   "identity.ssh_key_hint": "このプロファイルに一致するリポジトリのフェッチ/プッシュに使用します。",
+  "identity.picker_choose_ssh_key": "SSHキーを選択",
   "identity.match_host_label": "一致条件: ホスト",
   "identity.match_host_hint": "リモートがこのホスト上にあるリポジトリでこのプロファイルを使用します。",
   "identity.match_owner_label": "一致条件: オーナー（任意）",

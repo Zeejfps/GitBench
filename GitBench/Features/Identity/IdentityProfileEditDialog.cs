@@ -1,7 +1,9 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Localization;
+using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -24,6 +26,16 @@ internal sealed record IdentityProfileEditDialog : Widget
 
         var add = Existing == null;
         var s = ctx.Localization().Strings.Value;
+
+        var browseSshKey = new SecondaryDialogButton
+        {
+            Label = s.CommonBrowse,
+            Command = new Command(() =>
+                ctx.Get<IPlatformShell>()?.PickFile(s.IdentityPickerChooseSshKey, vm.InitialSshKeyDirectory(), picked =>
+                    vm.SshKeyPath.Value = picked)),
+            Height = DialogFrame.DefaultButtonHeight,
+        }.WithController<KbmController>();
+
         return new Dialog
         {
             Title = add ? s.IdentityTitleNew : s.IdentityTitleEdit,
@@ -58,6 +70,7 @@ internal sealed record IdentityProfileEditDialog : Widget
                     Value = vm.SshKeyPath,
                     Placeholder = s.IdentitySshKeyPlaceholder,
                     Hint = s.IdentitySshKeyHint,
+                    Accessory = browseSshKey,
                 },
                 new LabeledInput
                 {

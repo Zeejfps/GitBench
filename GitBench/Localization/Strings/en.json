@@ -120,6 +120,7 @@
   "identity.author_email_label": "Author email",
   "identity.ssh_key_label": "SSH key (optional)",
   "identity.ssh_key_hint": "Used for fetch/push from repos matched by this profile.",
+  "identity.picker_choose_ssh_key": "Choose SSH key",
   "identity.match_host_label": "Match: host",
   "identity.match_host_hint": "Repos whose remote is on this host use this profile.",
   "identity.match_owner_label": "Match: owner (optional)",

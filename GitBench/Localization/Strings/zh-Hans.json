@@ -120,6 +120,7 @@
   "identity.author_email_label": "作者邮箱",
   "identity.ssh_key_label": "SSH 密钥 (可选)",
   "identity.ssh_key_hint": "用于与此配置文件匹配的仓库的获取/推送。",
+  "identity.picker_choose_ssh_key": "选择 SSH 密钥",
   "identity.match_host_label": "匹配: 主机",
   "identity.match_host_hint": "远程位于此主机上的仓库使用此配置文件。",
   "identity.match_owner_label": "匹配: 所有者 (可选)",

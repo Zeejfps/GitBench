@@ -28,19 +28,34 @@ public sealed class LinuxPlatformShell : IPlatformShell
             Console.WriteLine("[PlatformShell] No zenity/kdialog found on PATH; folder picker is unavailable.");
     }
 
-    public void PickFolder(string title, Action<string> onPicked)
+    public void PickFolder(string title, Action<string> onPicked) => Pick(title, folder: true, null, onPicked);
+
+    public void PickFile(string title, string? initialDirectory, Action<string> onPicked) =>
+        Pick(title, folder: false, initialDirectory, onPicked);
+
+    private void Pick(string title, bool folder, string? initialDirectory, Action<string> onPicked)
     {
+        var hasStart = !string.IsNullOrEmpty(initialDirectory);
+        // zenity treats a --filename ending in '/' as a starting directory; kdialog takes a start
+        // path positionally.
+        var kdialogStart = hasStart ? initialDirectory! : ".";
+
         string tool;
         string[] args;
         if (_zenity != null)
         {
             tool = _zenity;
-            args = ["--file-selection", "--directory", $"--title={title}"];
+            List<string> zenityArgs = ["--file-selection", $"--title={title}"];
+            if (folder) zenityArgs.Add("--directory");
+            if (hasStart) zenityArgs.Add($"--filename={initialDirectory!.TrimEnd('/')}/");
+            args = [.. zenityArgs];
         }
         else if (_kdialog != null)
         {
             tool = _kdialog;
-            args = ["--getexistingdirectory", ".", "--title", title];
+            args = folder
+                ? ["--getexistingdirectory", kdialogStart, "--title", title]
+                : ["--getopenfilename", kdialogStart, "--title", title];
         }
         else
         {

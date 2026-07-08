@@ -120,6 +120,7 @@
   "identity.author_email_label": "작성자 이메일",
   "identity.ssh_key_label": "SSH 키 (선택 사항)",
   "identity.ssh_key_hint": "이 프로필에 일치하는 저장소의 가져오기/푸시에 사용됩니다.",
+  "identity.picker_choose_ssh_key": "SSH 키 선택",
   "identity.match_host_label": "일치: 호스트",
   "identity.match_host_hint": "원격이 이 호스트에 있는 저장소가 이 프로필을 사용합니다.",
   "identity.match_owner_label": "일치: 소유자 (선택 사항)",

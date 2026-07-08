@@ -162,6 +162,7 @@
   "identity.author_email_label": "البريد الإلكتروني للمؤلف",
   "identity.ssh_key_label": "مفتاح SSH (اختياري)",
   "identity.ssh_key_hint": "يُستخدم للجلب/الدفع من المستودعات المطابقة لهذا الملف التعريفي.",
+  "identity.picker_choose_ssh_key": "اختر مفتاح SSH",
   "identity.match_host_label": "المطابقة: المضيف",
   "identity.match_host_hint": "المستودعات التي يقع مستودعها البعيد على هذا المضيف تستخدم هذا الملف التعريفي.",
   "identity.match_owner_label": "المطابقة: المالك (اختياري)",

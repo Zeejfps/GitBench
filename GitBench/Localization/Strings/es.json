@@ -120,6 +120,7 @@
   "identity.author_email_label": "Correo del autor",
   "identity.ssh_key_label": "Clave SSH (opcional)",
   "identity.ssh_key_hint": "Se usa para obtener/enviar desde los repositorios que coincidan con este perfil.",
+  "identity.picker_choose_ssh_key": "Elegir clave SSH",
   "identity.match_host_label": "Coincidencia: host",
   "identity.match_host_hint": "Los repositorios cuyo remoto esté en este host usan este perfil.",
   "identity.match_owner_label": "Coincidencia: propietario (opcional)",

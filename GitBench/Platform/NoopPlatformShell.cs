@@ -7,6 +7,11 @@ public sealed class NoopPlatformShell : IPlatformShell
         Console.WriteLine($"[PlatformShell] No native picker for this OS. Title: {title}");
     }
 
+    public void PickFile(string title, string? initialDirectory, Action<string> onPicked)
+    {
+        Console.WriteLine($"[PlatformShell] No native picker for this OS. Title: {title}");
+    }
+
     public void OpenFolder(string path)
     {
         Console.WriteLine($"[PlatformShell] No native OpenFolder for this OS. Path: {path}");

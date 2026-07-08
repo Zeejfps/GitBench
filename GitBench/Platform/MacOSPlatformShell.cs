@@ -17,7 +17,12 @@ public sealed class MacOSPlatformShell : IPlatformShell
         _context = context;
     }
 
-    public void PickFolder(string title, Action<string> onPicked)
+    public void PickFolder(string title, Action<string> onPicked) => Pick(title, folder: true, null, onPicked);
+
+    public void PickFile(string title, string? initialDirectory, Action<string> onPicked) =>
+        Pick(title, folder: false, initialDirectory, onPicked);
+
+    private void Pick(string title, bool folder, string? initialDirectory, Action<string> onPicked)
     {
         // The picker stays open until it exits — ignore Browse clicks made while one is up.
         if (Interlocked.CompareExchange(ref _pickerOpen, 1, 0) != 0) return;
@@ -29,7 +34,7 @@ public sealed class MacOSPlatformShell : IPlatformShell
         {
             try
             {
-                var path = RunFolderPicker(title);
+                var path = RunPicker(title, folder, initialDirectory);
                 if (!string.IsNullOrEmpty(path))
                     dispatcher.Post(() => onPicked(path));
             }
@@ -40,11 +45,14 @@ public sealed class MacOSPlatformShell : IPlatformShell
         });
     }
 
-    private static string? RunFolderPicker(string title)
+    private static string? RunPicker(string title, bool folder, string? initialDirectory)
     {
-        var escapedTitle = title.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        var chooser = folder ? "choose folder" : "choose file";
+        var location = string.IsNullOrEmpty(initialDirectory)
+            ? ""
+            : $" default location (POSIX file \"{EscapeForAppleScript(initialDirectory)}\")";
         var script =
-            $"set chosen to choose folder with prompt \"{escapedTitle}\"\n" +
+            $"set chosen to {chooser} with prompt \"{EscapeForAppleScript(title)}\"{location}\n" +
             "return POSIX path of chosen";
 
         var psi = new ProcessStartInfo
@@ -83,6 +91,9 @@ public sealed class MacOSPlatformShell : IPlatformShell
 
         return path;
     }
+
+    private static string EscapeForAppleScript(string value) =>
+        value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
     public void OpenFolder(string path)
     {
