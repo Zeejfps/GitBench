@@ -8,11 +8,12 @@ namespace GitBench.Controls;
 // Click → run the activate command; right-click → context menu. Used for rows that don't participate
 // in drag-to-reorder (worktrees, submodules — they follow their parent). The command's CanExecute
 // vetoes activation (e.g. a missing submodule has no working tree to navigate to), so a vetoed click
-// is left unconsumed.
+// is left unconsumed. Activation fires on release, but only when the press armed on this row.
 public sealed class NavigableRowController : KeyboardMouseController
 {
     private readonly INavigableRow _target;
     private readonly Context _context;
+    private bool _armed;
 
     public NavigableRowController(INavigableRow target, Context context)
     {
@@ -21,7 +22,12 @@ public sealed class NavigableRowController : KeyboardMouseController
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _target.Hovered.Value = true;
-    public override void OnMouseExit(ref MouseExitEvent e) => _target.Hovered.Value = false;
+
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _target.Hovered.Value = false;
+        _armed = false;
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
@@ -39,7 +45,17 @@ public sealed class NavigableRowController : KeyboardMouseController
         }
 
         if (e.Button != MouseButton.Left) return;
-        if (e.State != InputState.Released) return;
+
+        if (e.State == InputState.Pressed)
+        {
+            if (!_target.Activate.CanExecute.Value) return;
+            _armed = true;
+            e.Consume();
+            return;
+        }
+
+        if (e.State != InputState.Released || !_armed) return;
+        _armed = false;
         if (!_target.Activate.CanExecute.Value) return;
 
         _target.Activate.Execute();

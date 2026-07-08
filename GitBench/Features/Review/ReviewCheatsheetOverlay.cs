@@ -146,13 +146,26 @@ internal sealed record ReviewCheatsheetOverlay : Widget
 internal sealed class ScrimController : KeyboardMouseController
 {
     private readonly Action _onClose;
+    private bool _armed;
 
     public ScrimController(Action onClose) => _onClose = onClose;
+
+    public override void OnMouseExit(ref MouseExitEvent e) => _armed = false;
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (e.Button == MouseButton.Left && e.State == InputState.Released) _onClose();
+        if (e.Button == MouseButton.Left)
+        {
+            // Dismiss on a full click (press armed on the scrim + release), so a stray release —
+            // e.g. the tail of a click that started elsewhere — can't close the overlay.
+            if (e.State == InputState.Pressed) _armed = true;
+            else if (e.State == InputState.Released && _armed)
+            {
+                _armed = false;
+                _onClose();
+            }
+        }
         e.Consume();
     }
 

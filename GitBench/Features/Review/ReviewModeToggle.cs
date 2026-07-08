@@ -83,11 +83,13 @@ internal sealed record ReviewModeToggle : Widget
     }
 }
 
-// Hover tracking + left-click selection for one toggle segment.
+// Hover tracking + left-click selection for one toggle segment. Selection fires on release, but only
+// when the press armed on this segment.
 internal sealed class SegmentClickController : KeyboardMouseController
 {
     private readonly State<bool> _hover;
     private readonly Action _onClick;
+    private bool _armed;
 
     public SegmentClickController(State<bool> hover, Action onClick)
     {
@@ -96,12 +98,27 @@ internal sealed class SegmentClickController : KeyboardMouseController
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
-    public override void OnMouseExit(ref MouseExitEvent e) => _hover.Value = false;
+
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _hover.Value = false;
+        _armed = false;
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
+        if (e.Button != MouseButton.Left) return;
+
+        if (e.State == InputState.Pressed)
+        {
+            _armed = true;
+            e.Consume();
+            return;
+        }
+
+        if (e.State != InputState.Released || !_armed) return;
+        _armed = false;
         _onClick();
         e.Consume();
     }

@@ -188,13 +188,15 @@ internal sealed record CommitTabChrome : Widget
 }
 
 // Hover tracking + left-click activation for a tab pill, plus middle-click to close (closable tabs
-// only). The close button consumes its own click first (bubbling), so pressing it closes the tab
-// without also activating it.
+// only). The close button consumes its own press first (bubbling), so pressing it closes the tab
+// without also arming it here. Activation fires on release, but only when the press armed on this
+// tab with the same button.
 internal sealed class TabClickController : KeyboardMouseController
 {
     private readonly State<bool> _hover;
     private readonly Action _onClick;
     private readonly Action? _onClose;
+    private MouseButton? _armed;
 
     public TabClickController(State<bool> hover, Action onClick, Action? onClose)
     {
@@ -204,20 +206,29 @@ internal sealed class TabClickController : KeyboardMouseController
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
-    public override void OnMouseExit(ref MouseExitEvent e) => _hover.Value = false;
+
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _hover.Value = false;
+        _armed = null;
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
-        if (e.Phase != EventPhase.Bubbling || e.State != InputState.Released) return;
-        if (e.Button == MouseButton.Left)
+        if (e.Phase != EventPhase.Bubbling) return;
+        if (e.Button != MouseButton.Left && (e.Button != MouseButton.Middle || _onClose == null)) return;
+
+        if (e.State == InputState.Pressed)
         {
-            _onClick();
+            _armed = e.Button;
             e.Consume();
+            return;
         }
-        else if (e.Button == MouseButton.Middle && _onClose is { } close)
-        {
-            close();
-            e.Consume();
-        }
+
+        if (e.State != InputState.Released || _armed != e.Button) return;
+        _armed = null;
+        if (e.Button == MouseButton.Left) _onClick();
+        else _onClose!();
+        e.Consume();
     }
 }

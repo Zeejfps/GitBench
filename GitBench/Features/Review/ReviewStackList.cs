@@ -213,27 +213,44 @@ internal sealed record ReviewStackRow : Widget
 }
 
 // Left-click on the leading indicator toggles the increment's reviewed mark. It sits deeper than the
-// row, so it consumes the click on bubbling before the row's selection controller sees it.
+// row, so it consumes the press on bubbling before the row's selection controller sees it. A click is
+// press + release both on the indicator: the press arms, and a release without an arming press (e.g.
+// the tail of a menu-dismiss click) does nothing.
 internal sealed class ReviewToggleController : KeyboardMouseController
 {
     private readonly Action _onToggle;
+    private bool _armed;
 
     public ReviewToggleController(Action onToggle) => _onToggle = onToggle;
+
+    public override void OnMouseExit(ref MouseExitEvent e) => _armed = false;
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
+        if (e.Button != MouseButton.Left) return;
+
+        if (e.State == InputState.Pressed)
+        {
+            _armed = true;
+            e.Consume();
+            return;
+        }
+
+        if (e.State != InputState.Released || !_armed) return;
+        _armed = false;
         _onToggle();
         e.Consume();
     }
 }
 
 // Hover tracking + left-click selection for a stack row. Right-click context menu is a later phase.
+// Selection fires on release, but only when the press armed on this row.
 internal sealed class ReviewRowController : KeyboardMouseController
 {
     private readonly State<bool> _hover;
     private readonly Action _onClick;
+    private bool _armed;
 
     public ReviewRowController(State<bool> hover, Action onClick)
     {
@@ -242,12 +259,27 @@ internal sealed class ReviewRowController : KeyboardMouseController
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
-    public override void OnMouseExit(ref MouseExitEvent e) => _hover.Value = false;
+
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _hover.Value = false;
+        _armed = false;
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
+        if (e.Button != MouseButton.Left) return;
+
+        if (e.State == InputState.Pressed)
+        {
+            _armed = true;
+            e.Consume();
+            return;
+        }
+
+        if (e.State != InputState.Released || !_armed) return;
+        _armed = false;
         _onClick();
         e.Consume();
     }

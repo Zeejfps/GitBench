@@ -19,6 +19,7 @@ internal sealed class BranchRowController : KeyboardMouseController
     private readonly Context _context;
     private int _lastClickTickMs;
     private bool _hasLastClick;
+    private bool _armed;
 
     public BranchRowController(IBranchRowInteraction target, Context context)
     {
@@ -27,7 +28,12 @@ internal sealed class BranchRowController : KeyboardMouseController
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _target.Hovered.Value = true;
-    public override void OnMouseExit(ref MouseExitEvent e) => _target.Hovered.Value = false;
+
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _target.Hovered.Value = false;
+        _armed = false;
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
@@ -39,7 +45,17 @@ internal sealed class BranchRowController : KeyboardMouseController
             return;
         }
 
-        if (e.Button != MouseButton.Left || e.State != InputState.Released) return;
+        if (e.Button != MouseButton.Left) return;
+
+        if (e.State == InputState.Pressed)
+        {
+            _armed = true;
+            e.Consume();
+            return;
+        }
+
+        if (e.State != InputState.Released || !_armed) return;
+        _armed = false;
 
         var now = Environment.TickCount;
         var isDouble = _hasLastClick && unchecked(now - _lastClickTickMs) <= DoubleClickThresholdMs;
