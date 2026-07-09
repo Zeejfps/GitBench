@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -126,6 +127,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         public float GutterWidth;
     }
 
+    private readonly Context _ctx;
     private readonly ILocalizationService _loc;
     private readonly ReviewWindowViewModel _vm;
     private readonly CommitDetailsViewModel _details;
@@ -166,6 +168,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     public ReviewDiffListView(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
+        _ctx = ctx;
         _loc = ctx.Localization();
         _vm = ctx.Require<ReviewWindowViewModel>();
         _details = ctx.Require<CommitDetailsViewModel>();
@@ -182,6 +185,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         _list.ScrollChanged += OnScrolled;
         _list.HorizontalWheelHandler = OnHorizontalWheel;
         _list.RowClicked += OnRowClicked;
+        _list.RowContextRequested += OnRowContextRequested;
 
         AddChildToSelf(_list);
         // Horizontally-scrolled diff rows are clipped only to the list bounds, so long lines would
@@ -622,6 +626,30 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         var contentLeft = CardLeft() - _scrollX;
         if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is { } dir)
             s.Diff?.Diff.ExpandGap(gap.GapIndex, dir);
+    }
+
+    // Right-click anywhere on a file's card — its header (pinned or not) or its diff rows — opens
+    // the per-file menu (mark Viewed / not Viewed). The gap band and the padding rows belong to no
+    // file, so they open nothing.
+    private void OnRowContextRequested(int index, PointF point)
+    {
+        if (point.Y > _list.Position.Top - PanelPaddingY) return;
+        Section? s;
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point))
+        {
+            s = sticky.Section;
+        }
+        else
+        {
+            s = Locate(index, out var local);
+            if (s != null && local == 0)
+            {
+                if (!_list.TryGetRowRect(index, out var rowRect)) return;
+                if (point.Y > rowRect.Top - SectionGap) return;
+            }
+        }
+        if (s == null) return;
+        RepoBarContextMenu.Show(_ctx, point, _vm.BuildFileContextMenuItems(s.File.Path));
     }
 
     private MouseCursor CursorAt(PointF point)

@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -33,7 +34,7 @@ internal sealed record ReviewWindowRootView : Widget
             {
                 ReviewContentKind.Loading => new FadeIn { Bloom = true, Child = Centered(L.T(s => s.ReviewLoading)) },
                 ReviewContentKind.Message => new FadeIn { Bloom = true, Child = Message() },
-                _ => new FadeIn { Child = Split() },
+                _ => new FadeIn { Child = Split(ctx) },
             },
         };
 
@@ -85,7 +86,7 @@ internal sealed record ReviewWindowRootView : Widget
     // Provide scope so they resolve the window's own CommitDetailsViewModel rather than the main
     // window's. Tree activation scrolls the stacked list (instead of opening tabs), and the tree's
     // highlight follows the file being read via the view model's active file.
-    private IWidget Split() => new Provide<CommitDetailsViewModel>
+    private IWidget Split(Context ctx) => new Provide<CommitDetailsViewModel>
     {
         Value = Model.Details,
         Child = new Box
@@ -108,6 +109,8 @@ internal sealed record ReviewWindowRootView : Widget
                                 {
                                     SelectedPath = Model.ActiveFile,
                                     OnActivate = Model.ActivateFile,
+                                    OnFileContextMenu = (file, point) =>
+                                        RepoBarContextMenu.Show(ctx, point, Model.BuildFileContextMenuItems(file.Path)),
                                 },
                         },
                         InitialWidth = 340f,

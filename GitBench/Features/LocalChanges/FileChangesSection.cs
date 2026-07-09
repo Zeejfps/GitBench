@@ -49,6 +49,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly HorizontalScrollBarView _hScrollBar;
     private readonly IReadable<string?>? _selectedPath;
     private readonly Action<FileChange>? _onRowClicked;
+    private readonly Action<FileChange, PointF>? _onFileContextMenu;
 
     // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
     // so the History pane and Local Changes stay clean). When present, rows whose (sha, path) is viewed
@@ -132,7 +133,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         string emptyText = "(none)",
         IReadable<string?>? selectedPath = null,
         Action<FileChange>? onRowClicked = null,
-        IReadOnlyList<View>? headerActions = null)
+        IReadOnlyList<View>? headerActions = null,
+        Action<FileChange, PointF>? onFileContextMenu = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -141,6 +143,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _reviewedFiles = ctx.Get<IReviewedFileTracker>();
         _selectedPath = selectedPath;
         _onRowClicked = onRowClicked;
+        _onFileContextMenu = onFileContextMenu;
         var input = ctx.Require<InputSystem>();
         _headerText = FileChangesUI.CreateHeaderText(ctx, title);
         _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
@@ -157,6 +160,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.RowClicked += OnRowClicked;
+        if (_onFileContextMenu != null)
+            _list.RowContextRequested += OnRowContextRequested;
         _list.ScrollChanged += NotifyScrollChanged;
 
         _bodyContainer = new PaddingView
@@ -459,6 +464,14 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             return;
         }
         _onRowClicked?.Invoke(file);
+    }
+
+    private void OnRowContextRequested(int rowIndex, PointF point)
+    {
+        if (rowIndex < 0 || rowIndex >= _rows.Count) return;
+        var row = _rows[rowIndex];
+        if (row.Kind != FileRowKind.File) return;
+        _onFileContextMenu!(row.File!, point);
     }
 
     private void ToggleFolder(FileRow row)

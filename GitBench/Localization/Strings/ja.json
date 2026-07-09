@@ -413,6 +413,8 @@
   "review.error_no_base": "比較するベースを特定できませんでした（アップストリームや既定のブランチがありません）。",
   "review.error_load_failed": "レビュー範囲を読み込めませんでした。",
   "review.viewed": "表示済み",
+  "review.context_mark_viewed": "表示済みにする",
+  "review.context_mark_not_viewed": "未表示にする",
   "review.shortcuts_title": "キーボードショートカット",
   "review.shortcut_file_nav": "前 / 次のファイル",
   "review.shortcut_primary": "表示済みにして進む",

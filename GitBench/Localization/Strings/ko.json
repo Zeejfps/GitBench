@@ -413,6 +413,8 @@
   "review.error_no_base": "비교할 기준을 확인할 수 없습니다(업스트림 또는 기본 브랜치 없음).",
   "review.error_load_failed": "리뷰 범위를 불러오지 못했습니다.",
   "review.viewed": "확인됨",
+  "review.context_mark_viewed": "확인됨으로 표시",
+  "review.context_mark_not_viewed": "확인 안 함으로 표시",
   "review.shortcuts_title": "키보드 단축키",
   "review.shortcut_file_nav": "이전 / 다음 파일",
   "review.shortcut_primary": "확인 표시 → 진행",

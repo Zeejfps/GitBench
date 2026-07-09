@@ -3,6 +3,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
@@ -29,8 +30,11 @@ internal sealed record CommitChangesPanel : IWidget
     /// <summary>Overrides what activating a file does; null opens its diff tab.</summary>
     public Action<string>? OnActivate { get; init; }
 
+    /// <summary>Optional right-click handler for file rows; null means no context menu.</summary>
+    public Action<FileChange, PointF>? OnFileContextMenu { get; init; }
+
     public View BuildView(Context ctx) =>
-        new CommitChangesPanelView(ctx, ctx.Require<CommitDetailsViewModel>(), SelectedPath, OnActivate);
+        new CommitChangesPanelView(ctx, ctx.Require<CommitDetailsViewModel>(), SelectedPath, OnActivate, OnFileContextMenu);
 }
 
 internal sealed class CommitChangesPanelView : ContainerView
@@ -43,7 +47,8 @@ internal sealed class CommitChangesPanelView : ContainerView
         Context ctx,
         CommitDetailsViewModel vm,
         IReadable<string?>? selectedPath = null,
-        Action<string>? onActivate = null)
+        Action<string>? onActivate = null,
+        Action<FileChange, PointF>? onFileContextMenu = null)
     {
         var input = ctx.Require<InputSystem>();
         var selection = selectedPath ?? vm.SelectedPath;
@@ -67,7 +72,8 @@ internal sealed class CommitChangesPanelView : ContainerView
                 activate(f.Path);
                 _arrowController.TakeFocus();
             },
-            headerActions: [viewModeButton]);
+            headerActions: [viewModeButton],
+            onFileContextMenu: onFileContextMenu);
         AddChildToSelf(_changesSection);
 
         // Up/Down arrow navigation over the file rows, mirroring the local-changes panels.

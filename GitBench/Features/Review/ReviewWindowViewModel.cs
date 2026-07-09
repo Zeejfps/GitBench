@@ -324,6 +324,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         return items;
     }
 
+    // A file row's right-click menu (the tree sidebar and the stacked diff cards): one toggle whose
+    // label reflects the file's Viewed state at open time.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
+    {
+        var s = _loc.Strings.Value;
+        return IsFileViewed(path)
+            ? [new RepoBarContextMenu.Item(s.ReviewContextMarkNotViewed, () => ToggleFileViewed(path))]
+            : [new RepoBarContextMenu.Item(s.ReviewContextMarkViewed, () => ToggleFileViewed(path))];
+    }
+
     // The base the window currently reviews against: the in-window override (the dropdown), falling
     // back to the session's pinned base, else null = auto-resolve. Only the base varies.
     private ReviewSession EffectiveSession()

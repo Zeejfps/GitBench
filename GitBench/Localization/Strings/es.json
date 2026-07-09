@@ -413,6 +413,8 @@
   "review.error_no_base": "No se pudo determinar una base para comparar (sin upstream ni rama predeterminada).",
   "review.error_load_failed": "No se pudo cargar el rango de revisión.",
   "review.viewed": "Visto",
+  "review.context_mark_viewed": "Marcar como visto",
+  "review.context_mark_not_viewed": "Marcar como no visto",
   "review.shortcuts_title": "Atajos de teclado",
   "review.shortcut_file_nav": "Archivo anterior / siguiente",
   "review.shortcut_primary": "Marcar visto → avanzar",

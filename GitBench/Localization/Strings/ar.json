@@ -455,6 +455,8 @@
   "review.error_no_base": "تعذّر تحديد أساس للمقارنة (لا يوجد upstream أو فرع افتراضي).",
   "review.error_load_failed": "تعذّر تحميل نطاق المراجعة.",
   "review.viewed": "تم العرض",
+  "review.context_mark_viewed": "وضع علامة مُراجَع",
+  "review.context_mark_not_viewed": "إزالة علامة مُراجَع",
   "review.shortcuts_title": "اختصارات لوحة المفاتيح",
   "review.shortcut_file_nav": "الملف السابق / التالي",
   "review.shortcut_primary": "وضع علامة مُراجَع → متابعة",
