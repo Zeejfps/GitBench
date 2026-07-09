@@ -59,12 +59,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     private readonly CommitDetailsViewModel _details;
     private readonly ILocalizationService _loc;
     private readonly IRepoSnapshotStore _snapshots;
+    private readonly IReviewProgressStore _reviewProgress;
     private readonly BranchReviewedFiles _reviewedFiles;
 
     // The reviewer's in-window base override (the header base dropdown); null = auto-resolve. Only
     // the base varies — the window stays pinned to its repo + head. Setting it re-resolves the range
-    // through the reload lane.
-    private readonly State<string?> _baseOverride = new(null);
+    // through the reload lane. Seeded from the branch's remembered base pick, so a reopened review
+    // defaults to the base it was last reviewed against.
+    private readonly State<string?> _baseOverride;
 
     // Refs-driven reload runs on its own lane so it never invalidates an in-flight first load (or
     // vice versa), and stale-while-revalidate: it keeps the current range on screen until the new
@@ -161,6 +163,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         _details = details;
         _loc = loc;
         _snapshots = snapshots;
+        _reviewProgress = reviewProgress;
+        // A base pinned by the opener wins; otherwise start from the branch's remembered pick.
+        _baseOverride = new State<string?>(
+            session.BaseRef == null ? reviewProgress.PreferredBase(session.RepoId, session.HeadRef) : null);
         _reviewedFiles = new BranchReviewedFiles(reviewProgress, session.RepoId, session.HeadRef);
         _reloadLane = CreateLane();
         Subscriptions.Add(_cheatsheetOpen);
@@ -236,6 +242,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // loading columns until the new range resolves.
     public void SetBase(string? baseRef)
     {
+        _reviewProgress.SetPreferredBase(Session.RepoId, Session.HeadRef, baseRef);
         if (_baseOverride.Value == baseRef) return;
         _baseOverride.Value = baseRef;
         SwitchBase();

@@ -6,6 +6,8 @@ namespace GitBench.Features.Review;
 /// file's content identity at the moment it was viewed, so a file whose content later changes reads
 /// as unviewed again (it needs re-reviewing) while its unchanged neighbours stay viewed. Keyed by
 /// <c>(repo, head ref)</c> — the branch under review, independent of the base it's compared against.
+/// Also remembers the reviewer's last explicit base pick per branch, so reopening a review defaults
+/// to the base it was last reviewed against instead of re-guessing.
 /// </summary>
 internal interface IReviewProgressStore
 {
@@ -16,12 +18,22 @@ internal interface IReviewProgressStore
     /// <summary>Records or clears a file's Viewed mark. Marking stores <paramref name="contentId"/> as
     /// the reviewed content; unmarking forgets it.</summary>
     void SetViewed(Guid repoId, string headRef, string path, string? contentId, bool viewed);
+
+    /// <summary>The base ref the reviewer last explicitly picked for this branch, or null when they
+    /// never picked one (or last picked Auto).</summary>
+    string? PreferredBase(Guid repoId, string headRef);
+
+    /// <summary>Remembers an explicit base pick for this branch; null (Auto) forgets it.</summary>
+    void SetPreferredBase(Guid repoId, string headRef, string? baseRef);
 }
 
 internal sealed class ReviewProgressStore : IReviewProgressStore
 {
     // (repo, head ref) → (path → the content identity the file was Viewed at).
     private readonly Dictionary<(Guid RepoId, string HeadRef), Dictionary<string, string?>> _byBranch = new();
+
+    // (repo, head ref) → the base ref the reviewer last explicitly picked for that branch.
+    private readonly Dictionary<(Guid RepoId, string HeadRef), string> _preferredBases = new();
 
     public bool IsViewed(Guid repoId, string headRef, string path, string? contentId) =>
         _byBranch.TryGetValue((repoId, headRef), out var marks)
@@ -41,5 +53,16 @@ internal sealed class ReviewProgressStore : IReviewProgressStore
         {
             marks.Remove(path);
         }
+    }
+
+    public string? PreferredBase(Guid repoId, string headRef) =>
+        _preferredBases.TryGetValue((repoId, headRef), out var baseRef) ? baseRef : null;
+
+    public void SetPreferredBase(Guid repoId, string headRef, string? baseRef)
+    {
+        if (baseRef == null)
+            _preferredBases.Remove((repoId, headRef));
+        else
+            _preferredBases[(repoId, headRef)] = baseRef;
     }
 }
