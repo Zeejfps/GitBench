@@ -84,6 +84,13 @@ add_remote() { # add_remote [refspec ...]   (default: --all) push to a fresh bar
   if [ "$#" -gt 0 ]; then git push -q -u origin "$@"; else git push -q origin --all; fi
 }
 
+sub_upstream() { # sub_upstream <name> <n>   build $ROOT/.subs/<name> with n commits on main
+  local dir="$ROOT/.subs/$1" n="$2" i
+  rm -rf "$dir"; mkdir -p "$dir"
+  ( cd "$dir"; init_repo
+    for ((i = 1; i <= n; i++)); do printf 'v%d\n' "$i" > lib.txt; git add -A; stamp; git commit -q -m "lib v$i"; done )
+}
+
 # ---------------------------------------------------------------------------
 # scenarios
 # ---------------------------------------------------------------------------
@@ -534,6 +541,70 @@ gen_worktrees() {                               # 51-worktrees
   printf 'wip in linked worktree\n' >> "$ROOT/51-worktrees.wt-feature-x/main.txt"
 }
 
+gen_submodule_detached() {                      # 52-submodule-detached
+  # Four submodules, each parked in a distinct detached-HEAD state, to exercise the
+  # detached-HEAD banner's two shapes (Switch-to-branch vs at-risk Create-branch) and
+  # the reachable-but-not-a-tip case that shows nothing. Activate each submodule in
+  # GitBench to see its banner.
+  sub_upstream sd-on-tip   2
+  sub_upstream sd-behind   3
+  sub_upstream sd-stranded 2
+  sub_upstream sd-pinned   3
+
+  new_repo 52-submodule-detached
+  commit "Initial" README.md "detached-submodule banner demo"
+  git -c protocol.file.allow=always submodule add -q "$ROOT/.subs/sd-on-tip"   subs/on-tip
+  git -c protocol.file.allow=always submodule add -q "$ROOT/.subs/sd-behind"   subs/behind
+  git -c protocol.file.allow=always submodule add -q "$ROOT/.subs/sd-stranded" subs/stranded
+  git -c protocol.file.allow=always submodule add -q "$ROOT/.subs/sd-pinned"   subs/pinned-old
+  stamp; git commit -q -m "Add submodules"
+  git config protocol.file.allow always
+
+  # on a local branch tip                       -> banner: Switch to main
+  git -C subs/on-tip checkout -q --detach main
+
+  # local main behind, HEAD on origin/main tip  -> banner: Switch to main (fast-forwards)
+  git -C subs/behind checkout -q --detach origin/main
+  git -C subs/behind branch -f main HEAD~1
+
+  # a commit made on the detached HEAD, on no branch -> banner: Create branch (at-risk)
+  git -C subs/stranded checkout -q --detach main
+  ( cd subs/stranded; printf 'orphan\n' >> lib.txt; git add -A; stamp; git commit -q -m "work with nowhere to go" )
+
+  # pinned to an older commit (reachable, not a tip) -> no banner (control)
+  git -C subs/pinned-old checkout -q --detach origin/main~1
+  git -C subs/pinned-old branch -q -D main 2>/dev/null || true
+}
+
+gen_submodule_reattach() {                      # 53-submodule-reattach
+  # A superproject one commit behind its origin, where the pending commit bumps a
+  # submodule forward. Pulling detaches the submodule on origin/main's tip; GitBench
+  # then auto-reattaches it onto its branch. Re-run this scenario to reset it.
+  local lib="$ROOT/.subs/sr-lib"
+  rm -rf "$lib"; mkdir -p "$lib"
+  ( cd "$lib"; init_repo
+    printf 'v1\n' > lib.txt; git add -A; stamp; git commit -q -m "lib v1"
+    printf 'v2\n' > lib.txt; git add -A; stamp; git commit -q -m "lib v2" )
+
+  new_repo 53-submodule-reattach
+  commit "Initial" README.md "pull-reattach demo"
+  git -c protocol.file.allow=always submodule add -q "$lib" vendor/lib
+  stamp; git commit -q -m "Add vendor/lib (v2)"
+  git config protocol.file.allow always
+  add_remote main                                    # origin/main = this commit (C1)
+
+  # advance lib to v3, bump the recorded pointer, and publish as C2
+  ( cd "$lib"; printf 'v3\n' > lib.txt; git add -A; stamp; git commit -q -m "lib v3" )
+  git -C vendor/lib -c protocol.file.allow=always fetch -q origin
+  git -C vendor/lib checkout -q --detach origin/main
+  git add vendor/lib; stamp; git commit -q -m "Bump vendor/lib to v3"
+  git push -q origin main                            # origin/main = C2
+
+  # rewind this working copy so it's one commit behind origin, submodule back on v2
+  git reset -q --hard HEAD~1
+  git -c protocol.file.allow=always submodule update -q
+}
+
 gen_long_paths() {                              # 60-long-paths
   new_repo 60-long-paths
 
@@ -643,6 +714,8 @@ REGISTRY=(
   "41-stash-conflict|gen_stash_conflict|A stash that conflicts when popped"
   "50-submodules|gen_submodules|One initialised + one uninitialised submodule"
   "51-worktrees|gen_worktrees|Two linked worktrees, one with a local edit"
+  "52-submodule-detached|gen_submodule_detached|Submodules parked in each detached-HEAD banner state"
+  "53-submodule-reattach|gen_submodule_reattach|Behind superproject; pulling auto-reattaches a submodule"
   "60-long-paths|gen_long_paths|Many long deeply-nested paths (M/A/D/R), mostly unstaged"
   "90-big-history|gen_big_history|Large history for perf (COUNT_BIG, default 800)"
   "91-wide-graph|gen_wide_graph|Many concurrent lanes with periodic merges"

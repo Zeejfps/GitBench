@@ -1731,23 +1731,142 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    public bool IsHeadDetachedAtRisk(Repo repo)
+    public DetachedHeadReport GetDetachedHeadReport(Repo repo)
     {
         try
         {
-            if (!IsGitRepo(repo.Path)) return false;
-            if (GetOperationState(repo) != RepoOperationState.None) return false;
-            if (!GetHeadInfo(repo.Path).IsDetached) return false;
-            // Detached, but if any branch/tag already points at the HEAD commit it's reachable
+            if (!IsGitRepo(repo.Path)) return DetachedHeadReport.None;
+            if (GetOperationState(repo) != RepoOperationState.None) return DetachedHeadReport.None;
+            if (!GetHeadInfo(repo.Path).IsDetached) return DetachedHeadReport.None;
+
+            var path = repo.Path;
+
+            // Submodules are routinely parked on a detached HEAD by the superproject, usually
+            // right on a branch tip. Offer to attach onto that branch rather than nagging.
+            if (repo.IsSubmodule)
+            {
+                // A local branch already at HEAD → plain checkout.
+                var localAtHead = FirstLine(RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
+                    "--format=%(refname:short)", "refs/heads"));
+                if (localAtHead != null)
+                    return new DetachedHeadReport(DetachedHeadKind.OnBranchTip, localAtHead);
+
+                // A remote branch at HEAD whose local counterpart is absent (create it) or merely
+                // behind (fast-forward it). A diverged local counterpart isn't safely attachable,
+                // so skip that candidate.
+                foreach (var remoteRef in RemoteBranchesAtHead(path))
+                {
+                    var slash = remoteRef.IndexOf('/');
+                    if (slash <= 0 || slash == remoteRef.Length - 1) continue;
+                    var shortName = remoteRef[(slash + 1)..];
+                    var localRef = $"refs/heads/{shortName}";
+                    if (!RefExists(path, localRef) || IsAncestor(path, localRef, "HEAD"))
+                        return new DetachedHeadReport(DetachedHeadKind.OnBranchTip, shortName);
+                }
+
+                // Not on a switchable tip. Only warn when the HEAD commit is contained in no
+                // branch at all — genuinely stranded commits. A submodule merely pinned to an
+                // older commit (an ancestor of a branch) is reachable, so stay silent.
+                var containing = RunGit(path, out _, "for-each-ref", "--contains=HEAD",
+                    "--format=%(refname)", "refs/heads", "refs/remotes");
+                return string.IsNullOrWhiteSpace(containing)
+                    ? new DetachedHeadReport(DetachedHeadKind.AtRisk)
+                    : DetachedHeadReport.None;
+            }
+
+            // Top-level repo: if any branch/tag already points at the HEAD commit it's reachable
             // by name — nothing to lose. Only when no named ref lands on HEAD are these commits
             // reachable solely from HEAD and orphaned by a checkout.
-            var pointed = RunGit(repo.Path, out _, "for-each-ref", "--points-at=HEAD",
+            var pointed = RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
                 "--format=%(refname)", "refs/heads", "refs/remotes", "refs/tags");
-            return string.IsNullOrWhiteSpace(pointed);
+            return string.IsNullOrWhiteSpace(pointed)
+                ? new DetachedHeadReport(DetachedHeadKind.AtRisk)
+                : DetachedHeadReport.None;
         }
         catch
         {
-            return false;
+            return DetachedHeadReport.None;
+        }
+    }
+
+    // Attach a detached HEAD onto `branch`: checks it out when its tip is already at HEAD,
+    // fast-forwards it onto HEAD when it's behind, or creates it tracking a remote branch that
+    // sits at HEAD. Refuses when a local branch of that name has diverged from HEAD (would drop
+    // commits). Intended for the cases GetDetachedHeadReport flags as OnBranchTip.
+    public GitOutcome AttachDetachedHead(Repo repo, string branch)
+        => RunOperation(repo, () =>
+        {
+            var path = repo.Path;
+            var localRef = $"refs/heads/{branch}";
+            if (RefExists(path, localRef))
+            {
+                if (!IsAncestor(path, localRef, "HEAD"))
+                    return new GitOutcome.Failed($"Local branch '{branch}' has diverged from HEAD.");
+                // -B resets the branch to HEAD (a no-op when already there, a fast-forward when
+                // behind) and checks it out in one step.
+                return RunGitCheckout(path, new[] { "checkout", "-B", branch, "HEAD" });
+            }
+
+            var remote = RemoteBranchesAtHead(path)
+                .Select(r => r.IndexOf('/') is var i && i > 0 && r[(i + 1)..] == branch ? r[..i] : null)
+                .FirstOrDefault(r => r != null);
+            if (remote == null)
+                return new GitOutcome.Failed($"No branch '{branch}' at HEAD to switch to.");
+            return RunGitCheckout(path, new[]
+                { "checkout", "-b", branch, "--track", $"{remote}/{branch}" });
+        });
+
+    private IEnumerable<string> RemoteBranchesAtHead(string path)
+    {
+        var raw = RunGit(path, out _, "for-each-ref", "--points-at=HEAD",
+            "--format=%(refname:short)", "refs/remotes");
+        foreach (var line in raw.Split('\n'))
+        {
+            var name = line.Trim();
+            // Skip the symbolic "origin/HEAD" pointer — it's not a branch to attach to.
+            if (name.Length == 0 || name.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
+            yield return name;
+        }
+    }
+
+    private static string? FirstLine(string raw)
+    {
+        foreach (var line in raw.Split('\n'))
+        {
+            var t = line.Trim();
+            if (t.Length > 0) return t;
+        }
+        return null;
+    }
+
+    private bool RefExists(string path, string fullRef)
+        => !string.IsNullOrWhiteSpace(RunGit(path, out _, "rev-parse", "--verify", "--quiet", fullRef));
+
+    private bool IsAncestor(string path, string maybeAncestor, string descendant)
+        => _runner.Run(path, new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant }).Ok;
+
+    // After the superproject moves submodule working trees, `git submodule update` parks each
+    // submodule on a detached HEAD even when the recorded commit is a branch tip. Land those back
+    // on their branch so the user isn't left detached (and can't accidentally strand commits).
+    // Best-effort: only touches submodules cleanly attachable onto a tip (see AttachDetachedHead)
+    // and never fails the caller. Runs inside the caller's superproject lock; each attach takes
+    // the submodule's own (distinct) lock.
+    private void ReattachSubmodulesOnBranchTip(Repo primary)
+    {
+        try
+        {
+            foreach (var sub in ListSubmodules(primary))
+            {
+                if (sub.Status == SubmoduleStatus.NotInitialized) continue;
+                var subRepo = new Repo(Guid.NewGuid(), sub.AbsolutePath, sub.Path) { Kind = RepoKind.Submodule };
+                var report = GetDetachedHeadReport(subRepo);
+                if (report.Kind == DetachedHeadKind.OnBranchTip && report.Branch is { } branch)
+                    AttachDetachedHead(subRepo, branch);
+            }
+        }
+        catch
+        {
+            // Reattachment is a convenience; a failure here must not fail the pull/update.
         }
     }
 
@@ -1888,7 +2007,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             args.Add("--recurse-submodules");
 
             var result = _runner.Run(repo.Path, args);
-            if (result.Ok) return PullOutcome.Ok;
+            if (result.Ok)
+            {
+                ReattachSubmodulesOnBranchTip(repo);
+                return PullOutcome.Ok;
+            }
 
             if (strategy is null && result.PreferredStream.Contains("divergent branches", StringComparison.OrdinalIgnoreCase))
                 return new PullOutcome.Diverged();
@@ -2710,7 +2833,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             }
 
             var result = _runner.Run(primary.Path, args);
-            if (result.Ok) return MergeLikeOutcome.Ok;
+            if (result.Ok)
+            {
+                ReattachSubmodulesOnBranchTip(primary);
+                return MergeLikeOutcome.Ok;
+            }
             // Merge/rebase strategies surface CONFLICT markers in stdout when they fail —
             // hand that signal up so the dialog can show a "see Operation banner" hint
             // instead of just a raw error.

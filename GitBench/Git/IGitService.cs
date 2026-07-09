@@ -39,7 +39,8 @@ public interface IGitService
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
     IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo);
     PushStatus GetPushStatus(Repo repo);
-    bool IsHeadDetachedAtRisk(Repo repo);
+    DetachedHeadReport GetDetachedHeadReport(Repo repo);
+    GitOutcome AttachDetachedHead(Repo repo, string branch);
     GitOutcome Push(Repo repo, bool force = false);
     GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
     IReadOnlyList<string> GetRemoteNames(Repo repo);
