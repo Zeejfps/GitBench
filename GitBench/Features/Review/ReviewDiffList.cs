@@ -46,9 +46,10 @@ internal sealed record ReviewDiffPanel : IWidget
 /// are drawn through one <see cref="VirtualRowListView"/> (variable heights), and a file's diff
 /// is loaded only when its section nears the viewport — until then it holds a fixed-height
 /// loading stub, and loads that finish above the viewport are scroll-anchored so the reading
-/// position never jumps. Marking a file Viewed folds its section; the tree's activation scrolls
-/// here, and scroll position reports the active file back for the tree highlight and the
-/// keyboard loop.
+/// position never jumps. The file being read keeps its header pinned to the viewport top,
+/// GitHub-style, so the path and the Viewed toggle stay reachable mid-file. Marking a file
+/// Viewed folds its section; the tree's activation scrolls here, and scroll position reports
+/// the active file back for the tree highlight and the keyboard loop.
 /// </summary>
 internal sealed class ReviewDiffListView : View, IScrollableContent
 {
@@ -59,6 +60,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     // 1px outline, and a gap band above every header so files never touch.
     private const float PanelPaddingX = 12f;
     private const float SectionGap = 12f;
+    // Breathing room above the first card and below the last, as phantom padding rows in the
+    // flattened surface. The top pad rides on the first header's own gap band, so both edges
+    // read as the same visible padding. The sticky header pins this far below the viewport top
+    // and the strip above it stays panel surface, so the padding survives stickiness.
+    private const float PanelPaddingY = 24f;
+    private const float TopPadRowHeight = PanelPaddingY - SectionGap;
     private const float HeaderBandHeight = 38f;
     private const float HeaderRowHeight = SectionGap + HeaderBandHeight;
     private const float MessageRowHeight = 44f;
@@ -178,8 +185,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
         AddChildToSelf(_list);
         // Horizontally-scrolled diff rows are clipped only to the list bounds, so long lines would
-        // bleed into the card margins; the overlay repaints the margin strips above row content.
-        AddChildToSelf(new MarginOverlay(this));
+        // bleed into the card margins; the overlay repaints the margin strips above row content,
+        // and floats the sticky header over the rows.
+        AddChildToSelf(new PanelOverlay(this));
         _list.UseController(input, () => new VirtualRowListController(_list));
 
         this.BindThemed(ctx.Theme(), s =>
@@ -278,9 +286,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     }
 
     // Reassigns the flattened row indices after any structural change (fold, load, rebuild).
+    // Row 0 is the top padding row and the last row the bottom one; sections fill the space
+    // between.
     private void RebuildIndex()
     {
-        var row = 0;
+        var row = 1;
         foreach (var s in _sections)
         {
             s.StartRow = row;
@@ -288,12 +298,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             row += 1 + s.BodyRows;
         }
         _heightCursor = 0;
-        _list.ItemCount = row;
+        _list.ItemCount = _sections.Count == 0 ? 0 : row + 1;
         _list.NotifyItemsChanged();
     }
 
     // The section containing a flattened row (binary search over the start indices), with the
-    // row's index within it: 0 = the header, 1..BodyRows = body rows.
+    // row's index within it: 0 = the header, 1..BodyRows = body rows. The padding rows at either
+    // end belong to no section.
     private Section? Locate(int row, out int local)
     {
         local = 0;
@@ -307,7 +318,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         }
         var s = _sections[lo];
         local = row - s.StartRow;
-        return local <= s.BodyRows ? s : null;
+        return local >= 0 && local <= s.BodyRows ? s : null;
     }
 
     // Row height for the virtual list. The list's offset table rebuild queries indices in
@@ -316,6 +327,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private float RowHeightAt(int i)
     {
         if (_sections.Count == 0) return LineHeight();
+        if (i == 0) return TopPadRowHeight;
+        if (i == _list.ItemCount - 1) return PanelPaddingY;
         if (_heightCursor >= _sections.Count || i < _sections[_heightCursor].StartRow) _heightCursor = 0;
         while (_heightCursor + 1 < _sections.Count && _sections[_heightCursor + 1].StartRow <= i) _heightCursor++;
         var s = _sections[_heightCursor];
@@ -334,7 +347,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     private float SectionTopOffset(Section target)
     {
-        var y = 0f;
+        var y = TopPadRowHeight;
         foreach (var s in _sections)
         {
             if (ReferenceEquals(s, target)) break;
@@ -355,7 +368,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
         var top = _list.ScrollY - LoadMarginPx;
         var bottom = _list.ScrollY + pos.Height + LoadMarginPx;
-        var y = 0f;
+        var y = TopPadRowHeight;
         foreach (var s in _sections)
         {
             var h = HeaderRowHeight + BodyHeight(s);
@@ -456,21 +469,22 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         SetDirty();
     }
 
-    // Scrolls a file's header to the top of the viewport, unfolding it so the diff is readable —
-    // explicit navigation means the reviewer wants to see it, viewed or not.
+    // Scrolls a file's header band exactly onto the pin line, unfolding it so the diff is
+    // readable — explicit navigation means the reviewer wants to see it, viewed or not.
     private void ScrollToFile(string path)
     {
         if (!_byPath.TryGetValue(path, out var s)) return;
         SetFolded(s, false);
-        SetScrollTarget(SectionTopOffset(s));
+        SetScrollTarget(SectionTopOffset(s) - TopPadRowHeight);
     }
 
-    // Scrollspy: the file whose section spans the viewport's top edge is the one being read.
+    // Scrollspy: the file whose section spans the pin line — the first content edge visible
+    // below the top padding — is the one being read.
     private void ReportActiveFromScroll()
     {
         if (_sections.Count == 0) return;
-        var y = _list.ScrollY + 1f;
-        var acc = 0f;
+        var y = _list.ScrollY + PanelPaddingY + 1f;
+        var acc = TopPadRowHeight;
         var current = _sections[0];
         foreach (var s in _sections)
         {
@@ -481,6 +495,65 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         }
         if (_vm.ActiveFile.Value != current.File.Path)
             _vm.ReportActiveFile(current.File.Path);
+    }
+
+    // ---- sticky header ----
+
+    // The header of the file being read rides the viewport top once its own band scrolls off,
+    // so the reviewer always sees which file they're in and can mark it Viewed on reaching the
+    // end. The next file's header pushes it out as it arrives (the push-off shrinks the band's
+    // visible slice until the incoming band takes over seamlessly). Folded files never pin —
+    // their band is all they have, and it scrolls off like any row.
+    private (Section Section, RectF Band)? FindStickyHeader()
+    {
+        if (_sections.Count == 0) return null;
+        var pos = _list.Position;
+        if (pos.Height <= 0) return null;
+
+        // The sticky candidate is the last section whose header band has scrolled past the pin
+        // line (PanelPaddingY below the viewport top, so the resting top padding is preserved);
+        // nextTop ends up at the content offset of the section after it.
+        var pinY = _list.ScrollY + PanelPaddingY;
+        Section? sticky = null;
+        var nextTop = TopPadRowHeight;
+        foreach (var s in _sections)
+        {
+            if (nextTop + SectionGap >= pinY) break;
+            sticky = s;
+            nextTop += HeaderRowHeight + BodyHeight(s);
+        }
+        if (sticky == null || sticky.Folded) return null;
+
+        // The section's own end does the pushing — the band is shoved up at the rate its last
+        // rows run out, so the gap band between files stays visible under the outgoing header
+        // instead of the next header riding glued against it.
+        var pushOff = Math.Max(0f, pinY + HeaderBandHeight - nextTop);
+        if (pushOff >= HeaderBandHeight) return null;
+
+        var band = new RectF(CardLeft(), pos.Top - PanelPaddingY + pushOff - HeaderBandHeight,
+            CardViewportWidth(), HeaderBandHeight);
+        return (sticky, band);
+    }
+
+    // A click on the pinned band acts like one on the real header: the trailing zone marks
+    // Viewed (or fires the queue action), anywhere else folds the file — which also snaps the
+    // viewport back to its header.
+    private void OnStickyHeaderClicked(Section s, PointF point)
+    {
+        if (point.X >= CardRight() - TrailingZoneWidth(s))
+        {
+            if (ShowsActionButton(s))
+            {
+                _vm.MarkQueuedFileViewedAndAdvance();
+                return;
+            }
+            _vm.ToggleFileViewed(s.File.Path);
+        }
+        else
+        {
+            SetFolded(s, true);
+        }
+        _vm.ReportActiveFile(s.File.Path);
     }
 
     // ---- input ----
@@ -505,6 +578,15 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     private void OnRowClicked(int index, InputModifiers modifiers, PointF point)
     {
+        // Rows under the top padding strip are hidden; clicks there target nothing.
+        if (point.Y > _list.Position.Top - PanelPaddingY) return;
+        // The pinned header covers whatever row scrolled beneath it; it owns clicks there.
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point))
+        {
+            OnStickyHeaderClicked(sticky.Section, point);
+            return;
+        }
+
         var s = Locate(index, out var local);
         if (s == null) return;
 
@@ -544,6 +626,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     private MouseCursor CursorAt(PointF point)
     {
+        if (point.Y > _list.Position.Top - PanelPaddingY) return MouseCursor.Default;
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point))
+            return MouseCursor.Hand;
         var index = _list.RowIndexAt(point);
         if (index < 0) return MouseCursor.Default;
         var s = Locate(index, out var local);
@@ -864,22 +949,58 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         });
     }
 
+    // The pinned copy of the active file's header, drawn at the viewport top over the scrolled
+    // rows. Its fake row rect puts the band's bottom where FindStickyHeader pinned it; the clip
+    // hides the slice a push-off shoves past the viewport edge. No hover — the list's hover state
+    // belongs to the row underneath.
+    private void DrawStickyHeader(ICanvas c, int z)
+    {
+        if (FindStickyHeader() is not { } sticky) return;
+        var pos = _list.Position;
+        c.PushClip(pos);
+        var rowRect = new RectF(pos.Left, sticky.Band.Bottom, pos.Width, HeaderRowHeight);
+        DrawHeader(c, sticky.Section, rowRect, hovered: false, z);
+        c.PopClip();
+    }
+
+    // The padding strip above the pin line stays panel surface while content scrolls beneath it,
+    // so the sticky header keeps the resting layout's top breathing room. Drawn above the sticky
+    // band: a pushed-off header slides up under the padding, not over it.
+    private void DrawTopPad(ICanvas c, int z)
+    {
+        var pos = _list.Position;
+        if (pos.Width <= 0 || pos.Height <= 0) return;
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(pos.Left, pos.Top - PanelPaddingY, pos.Width, PanelPaddingY),
+            Style = new RectStyle { BackgroundColor = _theme.Palette.Surface },
+            ZIndex = z,
+        });
+    }
+
     // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
     private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
 
-    // Logic-free sibling of the row list: its raised ZIndex lets the margin strips paint over row
-    // content, which the list itself (rows draw above their own view) cannot do.
-    private sealed class MarginOverlay : View
+    // Logic-free sibling of the row list: its raised ZIndex lets the margin strips and the sticky
+    // header paint over row content, which the list itself (rows draw above their own view)
+    // cannot do.
+    private sealed class PanelOverlay : View
     {
         private readonly ReviewDiffListView _owner;
 
-        public MarginOverlay(ReviewDiffListView owner)
+        public PanelOverlay(ReviewDiffListView owner)
         {
             _owner = owner;
             ZIndex = 100;
         }
 
-        protected override void OnDrawSelf(ICanvas c) => _owner.DrawMargins(c, GetDrawZIndex());
+        protected override void OnDrawSelf(ICanvas c)
+        {
+            var z = GetDrawZIndex();
+            _owner.DrawMargins(c, z);
+            _owner.DrawStickyHeader(c, z + 2);
+            _owner.DrawTopPad(c, z + 8);
+        }
     }
 
     // ---- scrolling ----
