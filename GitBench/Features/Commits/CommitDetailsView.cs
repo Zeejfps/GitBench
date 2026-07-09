@@ -44,7 +44,7 @@ internal sealed class CommitDetailsView : ContainerView
         var preferences = ctx.Require<PreferencesService>();
         var vm = ctx.Require<CommitDetailsViewModel>();
 
-        var changesPanel = new CommitChangesPanelView(ctx, vm);
+        var changesPanel = new CommitChangesPanelView(new CommitChangesPanel(), ctx, vm);
         var tabbedRegion = new CommitDiffTabsPanelView(ctx, vm);
 
         var splitterHovered = new State<bool>(false);

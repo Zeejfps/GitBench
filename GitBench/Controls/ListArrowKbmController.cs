@@ -37,6 +37,10 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     // diff pane (e.g. the commit history list), where F should do nothing.
     public Action? OnToggleFullFile { get; set; }
 
+    // Optional Ctrl/Cmd+A "select all rows". Left null on single-select lists, where the key
+    // passes through.
+    public Action? OnSelectAll { get; set; }
+
     // Per-row action shortcuts for the *selected* row, consulted before the built-in navigation
     // keys. Returns the actions for whatever row is currently selected (empty when nothing is).
     // Left null on lists with no row actions. The same list backs the row's context-menu hints, so
@@ -80,7 +84,14 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
             }
         }
 
-        if (e.Key == KeyboardKey.Tab && (OnTab != null || OnShiftTab != null))
+        if (e.Key == KeyboardKey.A
+            && (e.Modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0
+            && OnSelectAll != null)
+        {
+            OnSelectAll();
+            e.Consume();
+        }
+        else if (e.Key == KeyboardKey.Tab && (OnTab != null || OnShiftTab != null))
         {
             if (shift) OnShiftTab?.Invoke();
             else OnTab?.Invoke();

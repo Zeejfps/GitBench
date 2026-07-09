@@ -21,20 +21,38 @@ namespace GitBench.Features.Commits;
 /// both the activation and the highlighted row — the review window routes activation to
 /// scroll-to-file and highlights the file currently read. Reused by the History pane (top of its
 /// split) and the review window (left column).
+///
+/// Single-select by default. A host that supplies <see cref="OnSelect"/> takes over the row gestures
+/// with their modifiers (Ctrl/Cmd toggle, Shift range) and paints its own <see cref="SelectedPaths"/>
+/// set; the review window does this so a group of files can be marked Viewed at once.
 /// </summary>
 internal sealed record CommitChangesPanel : IWidget
 {
     /// <summary>Overrides the highlighted row; null follows the view model's active tab.</summary>
     public IReadable<string?>? SelectedPath { get; init; }
 
+    /// <summary>Every selected row, for a multi-select host; null highlights only <see cref="SelectedPath"/>.</summary>
+    public IReadable<IReadOnlySet<string>>? SelectedPaths { get; init; }
+
+    /// <summary>The row arrow keys step on from; null steps from <see cref="SelectedPath"/>.</summary>
+    public IReadable<string?>? CursorPath { get; init; }
+
     /// <summary>Overrides what activating a file does; null opens its diff tab.</summary>
     public Action<string>? OnActivate { get; init; }
+
+    /// <summary>
+    /// Takes over row gestures — the clicked (or arrow-resolved) path, its modifiers, and the file
+    /// rows the tree currently shows. Null falls back to a plain <see cref="OnActivate"/>.
+    /// </summary>
+    public Action<string, InputModifiers, IReadOnlyList<string>>? OnSelect { get; init; }
+
+    /// <summary>Ctrl/Cmd+A over the visible file rows; null leaves the key unhandled.</summary>
+    public Action<IReadOnlyList<string>>? OnSelectAll { get; init; }
 
     /// <summary>Optional right-click handler for file rows; null means no context menu.</summary>
     public Action<FileChange, PointF>? OnFileContextMenu { get; init; }
 
-    public View BuildView(Context ctx) =>
-        new CommitChangesPanelView(ctx, ctx.Require<CommitDetailsViewModel>(), SelectedPath, OnActivate, OnFileContextMenu);
+    public View BuildView(Context ctx) => new CommitChangesPanelView(this, ctx, ctx.Require<CommitDetailsViewModel>());
 }
 
 internal sealed class CommitChangesPanelView : ContainerView
@@ -43,16 +61,13 @@ internal sealed class CommitChangesPanelView : ContainerView
     private readonly ListArrowKbmController _arrowController;
     private readonly State<string?> _selectedPath = new(null);
 
-    public CommitChangesPanelView(
-        Context ctx,
-        CommitDetailsViewModel vm,
-        IReadable<string?>? selectedPath = null,
-        Action<string>? onActivate = null,
-        Action<FileChange, PointF>? onFileContextMenu = null)
+    public CommitChangesPanelView(CommitChangesPanel props, Context ctx, CommitDetailsViewModel vm)
     {
         var input = ctx.Require<InputSystem>();
-        var selection = selectedPath ?? vm.SelectedPath;
-        var activate = onActivate ?? vm.SelectFile;
+        var selection = props.SelectedPath ?? vm.SelectedPath;
+        var activate = props.OnActivate ?? vm.SelectFile;
+        var onSelect = props.OnSelect;
+        var cursor = props.CursorPath ?? selection;
 
         var viewModeIcon = Prop.Bind<string?>(() =>
             vm.ViewMode.Value == FileViewMode.Tree ? LucideIcons.ListTree : LucideIcons.List);
@@ -67,31 +82,43 @@ internal sealed class CommitChangesPanelView : ContainerView
             ctx,
             "Changes",
             selectedPath: _selectedPath,
-            onRowClicked: f =>
+            onRowClicked: (f, modifiers) =>
             {
-                activate(f.Path);
+                Gesture(f.Path, modifiers);
                 _arrowController.TakeFocus();
             },
             headerActions: [viewModeButton],
-            onFileContextMenu: onFileContextMenu);
+            onFileContextMenu: props.OnFileContextMenu,
+            selectedPaths: props.SelectedPaths);
         AddChildToSelf(_changesSection);
 
-        // Up/Down arrow navigation over the file rows, mirroring the local-changes panels.
-        // Single-select with no stage/discard actions; arrows step through the visible file
-        // rows only (folder rows are toggled by mouse, skipped by the keyboard).
+        // Up/Down arrow navigation over the file rows, mirroring the local-changes panels. Arrows
+        // step through the visible file rows only (folder rows are toggled by mouse, skipped by the
+        // keyboard), starting from the cursor so a Shift-extend continues where the last one landed.
         _arrowController = new ListArrowKbmController(
             this,
             input,
-            (delta, _) =>
+            (delta, shift) =>
             {
-                var next = _changesSection.NextFilePath(_selectedPath.Value, delta);
-                if (next != null) activate(next);
+                var next = _changesSection.NextFilePath(cursor.Value, delta);
+                if (next == null) return;
+                Gesture(next, shift ? InputModifiers.Shift : InputModifiers.None);
+                _changesSection.EnsureRowVisible(next);
             },
             _ => { },
             () => { },
             () => { });
         _arrowController.OnToggleFullFile = () => vm.ActiveDiff?.ToggleFullFile();
+        if (props.OnSelectAll is { } selectAll)
+            _arrowController.OnSelectAll = () => selectAll(_changesSection.VisibleFilePaths);
         this.UseController(input, _arrowController);
+
+        // A multi-select host owns the gesture (modifiers, ranges); everyone else just activates.
+        void Gesture(string path, InputModifiers modifiers)
+        {
+            if (onSelect != null) onSelect(path, modifiers, _changesSection.VisibleFilePaths);
+            else activate(path);
+        }
 
         this.Bind(vm.ViewMode, _changesSection.SetViewMode);
         this.Bind(selection, path =>

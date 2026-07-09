@@ -19,4 +19,7 @@ internal interface IReviewedFileTracker
     bool IsViewed(string path);
 
     void ToggleViewed(string path);
+
+    /// <summary>Marks every given path viewed / not viewed, bumping <see cref="Revision"/> once.</summary>
+    void SetViewed(IReadOnlyList<string> paths, bool viewed);
 }

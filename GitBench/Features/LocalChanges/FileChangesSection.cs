@@ -31,8 +31,10 @@ namespace GitBench.Features.LocalChanges;
 /// match the local-changes panels. Collapse state is kept locally on the view.
 ///
 /// Optionally selectable: pass <paramref name="selectedPath"/> + <paramref name="onRowClicked"/>
-/// to make rows highlight against an external selection and dispatch clicks back. Submodule
-/// pointer rows handle their own click (activate the submodule + broadcast
+/// to make rows highlight against an external selection and dispatch clicks (with their modifiers)
+/// back. A host that supports multi-select also passes <paramref name="selectedPaths"/>: every row in
+/// that set fills, while <paramref name="selectedPath"/> stays the one the floating bar and its accent
+/// mark. Submodule pointer rows handle their own click (activate the submodule + broadcast
 /// <see cref="JumpToSubmoduleCommitMessage"/>) without going through the callback.
 /// </summary>
 public sealed class FileChangesSection : ContainerView, IScrollableContent
@@ -48,7 +50,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly VerticalScrollBarView _scrollBar;
     private readonly HorizontalScrollBarView _hScrollBar;
     private readonly IReadable<string?>? _selectedPath;
-    private readonly Action<FileChange>? _onRowClicked;
+    private readonly IReadable<IReadOnlySet<string>>? _selectedPaths;
+    private readonly Action<FileChange, InputModifiers>? _onRowClicked;
     private readonly Action<FileChange, PointF>? _onFileContextMenu;
 
     // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
@@ -66,6 +69,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     private IReadOnlyList<FileChange> _files = Array.Empty<FileChange>();
     private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
+    private IReadOnlyList<string> _visibleFilePaths = Array.Empty<string>();
     private FileViewMode _viewMode = FileViewMode.Flat;
     private readonly HashSet<string> _collapsed = new();
 
@@ -132,9 +136,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         string title,
         string emptyText = "(none)",
         IReadable<string?>? selectedPath = null,
-        Action<FileChange>? onRowClicked = null,
+        Action<FileChange, InputModifiers>? onRowClicked = null,
         IReadOnlyList<View>? headerActions = null,
-        Action<FileChange, PointF>? onFileContextMenu = null)
+        Action<FileChange, PointF>? onFileContextMenu = null,
+        IReadable<IReadOnlySet<string>>? selectedPaths = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -142,6 +147,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _bus = ctx.Get<IMessageBus>();
         _reviewedFiles = ctx.Get<IReviewedFileTracker>();
         _selectedPath = selectedPath;
+        _selectedPaths = selectedPaths;
         _onRowClicked = onRowClicked;
         _onFileContextMenu = onFileContextMenu;
         var input = ctx.Require<InputSystem>();
@@ -219,6 +225,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             this.Use(() => tween);
         }
 
+        // Rows outside the floating bar's row paint their own fill, so repaint when the set changes.
+        if (_selectedPaths != null)
+            this.Bind(_selectedPaths, _ => SetDirty());
+
         this.BindThemed(ctx.Theme(), s =>
         {
             _rowStyles = s.FileChangeRow;
@@ -268,6 +278,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private void RebuildRows()
     {
         _rows = FileTreeBuilder.BuildRows(_files, DiffSide.Commit, _viewMode, _collapsed);
+        var visible = new List<string>(_rows.Count);
+        foreach (var row in _rows)
+            if (row.Kind == FileRowKind.File) visible.Add(row.FullPath);
+        _visibleFilePaths = visible;
         // Only swap the body on a real empty↔non-empty transition. Re-adding the list view
         // churns its InputSystem controller registration and drops the hover path, so clicks
         // stop landing until the cursor physically re-enters — keep it mounted across collapses.
@@ -303,17 +317,26 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         }
     }
 
+    /// <summary>The file rows the list currently shows, in row order (folders and anything under a
+    /// collapsed one excluded) — the universe an arrow key or a Shift-range gesture moves over.</summary>
+    public IReadOnlyList<string> VisibleFilePaths => _visibleFilePaths;
+
     // Next file path for an Up/Down press, over the visible file rows only (so a file hidden
     // under a collapsed folder is skipped). Null when there are no file rows.
     public string? NextFilePath(string? current, int delta)
     {
-        var paths = new List<string>(_rows.Count);
-        foreach (var row in _rows)
-            if (row.Kind == FileRowKind.File) paths.Add(row.FullPath);
+        var paths = _visibleFilePaths;
         if (paths.Count == 0) return null;
 
-        var index = current == null ? -1 : paths.IndexOf(current);
+        var index = current == null ? -1 : IndexOfVisible(current);
         return paths[ListNavigation.NextIndex(paths.Count, index, delta)];
+    }
+
+    private int IndexOfVisible(string path)
+    {
+        for (var i = 0; i < _visibleFilePaths.Count; i++)
+            if (_visibleFilePaths[i] == path) return i;
+        return -1;
     }
 
     protected override void OnDrawSelf(ICanvas c)
@@ -349,7 +372,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         }
 
         var file = row.File!;
-        var isSelected = _selectedPath?.Value == file.Path;
+        // The lead row's fill is the floating bar's job; any other selected row paints its own, and
+        // wears no accent bar so the lead stays the one the eye (and the diff view) is anchored to.
+        var isLead = _selectedPath?.Value == file.Path;
+        var isSelected = _selectedPaths != null ? _selectedPaths.Value.Contains(file.Path) : isLead;
         var reviewMode = _reviewedFiles != null && _reviewSha != null;
         var isViewed = reviewMode && _reviewedFiles!.IsViewed(file.Path);
         FileChangesUI.DrawFileRow(
@@ -368,10 +394,11 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             row.Indent,
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl,
-            drawSelectionBackground: _selectionTween == null,
+            drawSelectionBackground: _selectionTween == null || !isLead,
             reserveViewedColumn: reviewMode,
             isViewed: isViewed,
-            viewedIconStyle: _viewedIconStyle);
+            viewedIconStyle: _viewedIconStyle,
+            drawSelectionAccent: isLead);
     }
 
     // Retargets the floating selection bar. Slides only between two real rows; first-select and
@@ -430,7 +457,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
     }
 
-    private void OnRowClicked(int rowIndex, InputModifiers _, PointF point)
+    private void OnRowClicked(int rowIndex, InputModifiers modifiers, PointF point)
     {
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
         var row = _rows[rowIndex];
@@ -463,7 +490,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             ActivateSubmoduleAndJump(file.Path, pc);
             return;
         }
-        _onRowClicked?.Invoke(file);
+        _onRowClicked?.Invoke(file, modifiers);
     }
 
     private void OnRowContextRequested(int rowIndex, PointF point)

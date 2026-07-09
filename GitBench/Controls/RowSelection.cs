@@ -24,7 +24,8 @@ internal static class RowSelection
         bool isHovered,
         RowSelectionStyles styles,
         int z,
-        bool isRtl = false)
+        bool isRtl = false,
+        bool drawAccentBar = true)
     {
         var bg = isSelected
             ? styles.Fill
@@ -39,7 +40,7 @@ internal static class RowSelection
             ZIndex = z,
         });
 
-        if (!isSelected) return;
+        if (!isSelected || !drawAccentBar) return;
 
         // Accent bar down the selection's leading edge — the repo bar's active-row marker.
         var barLeft = isRtl ? rowRect.Right - PillInset - AccentBarWidth : rowRect.Left + PillInset;

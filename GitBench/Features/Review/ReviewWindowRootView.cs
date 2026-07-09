@@ -108,7 +108,11 @@ internal sealed record ReviewWindowRootView : Widget
                                 : new CommitChangesPanel
                                 {
                                     SelectedPath = Model.ActiveFile,
+                                    SelectedPaths = Model.SelectedPaths,
+                                    CursorPath = Model.SelectionCursor,
                                     OnActivate = Model.ActivateFile,
+                                    OnSelect = Model.SelectFile,
+                                    OnSelectAll = Model.SelectAllFiles,
                                     OnFileContextMenu = (file, point) =>
                                         RepoBarContextMenu.Show(ctx, point, Model.BuildFileContextMenuItems(file.Path)),
                                 },

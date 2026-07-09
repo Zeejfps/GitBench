@@ -455,8 +455,20 @@
   "review.error_no_base": "تعذّر تحديد أساس للمقارنة (لا يوجد upstream أو فرع افتراضي).",
   "review.error_load_failed": "تعذّر تحميل نطاق المراجعة.",
   "review.viewed": "تم العرض",
-  "review.context_mark_viewed": "وضع علامة مُراجَع",
-  "review.context_mark_not_viewed": "إزالة علامة مُراجَع",
+  "review.context_mark_viewed": {
+    "one": "وضع علامة مُراجَع",
+    "two": "وضع علامة مُراجَع على ملفين",
+    "few": "وضع علامة مُراجَع على {count} ملفات",
+    "many": "وضع علامة مُراجَع على {count} ملفًا",
+    "other": "وضع علامة مُراجَع على {count} ملف"
+  },
+  "review.context_mark_not_viewed": {
+    "one": "إزالة علامة مُراجَع",
+    "two": "إزالة علامة مُراجَع عن ملفين",
+    "few": "إزالة علامة مُراجَع عن {count} ملفات",
+    "many": "إزالة علامة مُراجَع عن {count} ملفًا",
+    "other": "إزالة علامة مُراجَع عن {count} ملف"
+  },
   "review.shortcuts_title": "اختصارات لوحة المفاتيح",
   "review.shortcut_file_nav": "الملف السابق / التالي",
   "review.shortcut_primary": "وضع علامة مُراجَع → متابعة",

@@ -7,6 +7,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
 namespace GitBench.Features.Review;
@@ -90,8 +91,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     // The file the reviewer is currently on: the section the stacked diff list is scrolled to
     // (scrollspy), retargeted by a tree click or j/k. Anchors the Viewed toggle, the primary
-    // action, and the tree's highlighted row.
+    // action, and the tree's highlighted row. Always the lead of _selection while that is non-empty.
     private readonly State<string?> _activeFile = new(null);
+
+    // The tree's selected files. Multi-select (Ctrl/Cmd toggle, Shift range) exists so a group of
+    // files can be marked Viewed in one go; the lead — the first selected file in range order — is
+    // what _activeFile tracks, so the diff surface always focuses the top of the selection.
+    private readonly State<ReviewSelection> _selection = new(ReviewSelection.Empty);
 
     public ReviewSession Session { get; }
     public string Title { get; }
@@ -119,6 +125,11 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     // The file the reviewer is on. The tree highlights it; the stacked diff list reports it back
     // from scroll position via ReportActiveFile.
     public IReadable<string?> ActiveFile => _activeFile;
+
+    // Every selected file (the tree fills their rows; the active one also gets the accent bar), and
+    // the row the last gesture landed on so arrow keys step on from there.
+    public IReadable<IReadOnlySet<string>> SelectedPaths { get; }
+    public IReadable<string?> SelectionCursor { get; }
 
     // The file next in line for review: the first (in range order) not yet marked Viewed, or null
     // once everything is. The review proceeds in order — the stacked list pins the primary action
@@ -174,7 +185,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         Subscriptions.Add(_detailsEverLoaded);
         Subscriptions.Add(_baseSwitching);
         Subscriptions.Add(_activeFile);
+        Subscriptions.Add(_selection);
         Title = loc.Strings.Value.ReviewWindowTitle(session.HeadLabel);
+
+        var selectedPaths = new Derived<IReadOnlySet<string>>(() => _selection.Value.Set);
+        SelectedPaths = selectedPaths;
+        Subscriptions.Add(selectedPaths);
+
+        var selectionCursor = new Derived<string?>(() => _selection.Value.Cursor);
+        SelectionCursor = selectionCursor;
+        Subscriptions.Add(selectionCursor);
 
         // ContentKind and PlaceholderText fold in the combined file list's own load phase: the window
         // stays on its loading state until the first list lands, surfaces a load failure as the
@@ -222,7 +242,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             var files = loaded.Details.Files;
             var active = _activeFile.Value;
             if (active == null || IndexOfFile(files, active) < 0)
-                _activeFile.Value = files.Count > 0 ? files[0].Path : null;
+                active = files.Count > 0 ? files[0].Path : null;
+            _activeFile.Value = active;
+
+            // Drop selected files the new range no longer has. If that strands the active file
+            // outside the selection, the selection collapses back onto it.
+            var s = _selection.Value;
+            var pruned = ReviewSelection.Create(s.Paths, s.Anchor, s.Cursor, files);
+            _selection.Value = active != null && !pruned.Contains(active)
+                ? ReviewSelection.Single(active, files)
+                : pruned;
         }));
 
         // A ref change in the reviewed repo (amend, rebase, push, branch move) reshapes the range;
@@ -324,14 +353,35 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         return items;
     }
 
-    // A file row's right-click menu (the tree sidebar and the stacked diff cards): one toggle whose
-    // label reflects the file's Viewed state at open time.
+    // A file row's right-click menu (the tree sidebar and the stacked diff cards). Right-clicking
+    // inside the selection acts on the whole of it, so a mixed group offers both directions; a single
+    // file (or a right-click outside the selection) offers only the one its state allows.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
     {
         var s = _loc.Strings.Value;
-        return IsFileViewed(path)
-            ? [new RepoBarContextMenu.Item(s.ReviewContextMarkNotViewed, () => ToggleFileViewed(path))]
-            : [new RepoBarContextMenu.Item(s.ReviewContextMarkViewed, () => ToggleFileViewed(path))];
+        var targets = ResolveTargetPaths(path);
+
+        var unviewed = new List<string>(targets.Count);
+        var viewed = new List<string>(targets.Count);
+        foreach (var p in targets)
+            (IsFileViewed(p) ? viewed : unviewed).Add(p);
+
+        var items = new List<RepoBarContextMenu.Item>(2);
+        if (unviewed.Count > 0)
+            items.Add(new RepoBarContextMenu.Item(
+                s.ReviewContextMarkViewed(unviewed.Count), () => _reviewedFiles.SetViewed(unviewed, true)));
+        if (viewed.Count > 0)
+            items.Add(new RepoBarContextMenu.Item(
+                s.ReviewContextMarkNotViewed(viewed.Count), () => _reviewedFiles.SetViewed(viewed, false)));
+        return items;
+    }
+
+    // The files a row action applies to: the whole selection when the row is part of it, else just
+    // that row (right-clicking elsewhere never silently retargets the selection).
+    private IReadOnlyList<string> ResolveTargetPaths(string path)
+    {
+        var selection = _selection.Value;
+        return selection.Contains(path) ? selection.Paths : [path];
     }
 
     // The base the window currently reviews against: the in-window override (the dropdown), falling
@@ -361,19 +411,104 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
-    /// <summary>Navigates to a file: makes it active and asks the stacked diff list to scroll its
-    /// section into view (a tree click, j/k, or a mark-viewed advance).</summary>
+    /// <summary>Navigates to a file: selects it alone, makes it active, and asks the stacked diff
+    /// list to scroll its section into view (j/k, or a mark-viewed advance).</summary>
     public void ActivateFile(string path)
     {
-        _activeFile.Value = path;
-        ScrollToFileRequested?.Invoke(path);
+        ApplySelection(ReviewSelection.Single(path, Files()), scroll: true);
+    }
+
+    /// <summary>
+    /// Updates the selection for a tree row gesture (a click, or an arrow key that resolved to
+    /// <paramref name="path"/>). A plain gesture selects just that row; Ctrl/Cmd toggles it; Shift
+    /// extends the range from the anchor over <paramref name="visiblePaths"/> — the file rows the
+    /// tree currently shows, so a file hidden under a collapsed folder is never swept in. The anchor
+    /// moves on plain/toggle gestures and stays put on a shift-extend.
+    /// </summary>
+    public void SelectFile(string path, InputModifiers modifiers, IReadOnlyList<string> visiblePaths)
+    {
+        var files = Files();
+        if (files.Count == 0) return;
+
+        var current = _selection.Value;
+        var shift = (modifiers & InputModifiers.Shift) != 0;
+        var toggle = (modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0;
+
+        if (shift && current.Anchor is { } anchor && IndexOf(visiblePaths, anchor) >= 0)
+        {
+            ApplySelection(
+                ReviewSelection.Create(Range(visiblePaths, anchor, path), anchor, path, files),
+                scroll: false);
+            return;
+        }
+
+        if (toggle)
+        {
+            var next = new List<string>(current.Count + 1);
+            foreach (var p in current.Paths)
+                if (p != path) next.Add(p);
+            if (next.Count == current.Count) next.Add(path);
+            ApplySelection(ReviewSelection.Create(next, path, path, files), scroll: false);
+            return;
+        }
+
+        ApplySelection(ReviewSelection.Single(path, files), scroll: true);
+    }
+
+    /// <summary>Selects every file row the tree currently shows (Ctrl/Cmd+A).</summary>
+    public void SelectAllFiles(IReadOnlyList<string> visiblePaths)
+    {
+        var files = Files();
+        if (files.Count == 0 || visiblePaths.Count == 0) return;
+        ApplySelection(
+            ReviewSelection.Create(visiblePaths, visiblePaths[0], visiblePaths[^1], files),
+            scroll: false);
     }
 
     /// <summary>Scrollspy: the stacked diff list reports the file its viewport sits on, so the tree
-    /// highlight and the keyboard anchor follow the reading position without echoing a scroll back.</summary>
+    /// highlight and the keyboard anchor follow the reading position without echoing a scroll back.
+    /// Scrolling within a multi-selection keeps it; scrolling out of one collapses it onto the file
+    /// now being read.</summary>
     public void ReportActiveFile(string path)
     {
         _activeFile.Value = path;
+        if (!_selection.Value.Contains(path))
+            _selection.Value = ReviewSelection.Single(path, Files());
+    }
+
+    // Publishes a new selection and re-focuses the diff surface on its lead. Scrolling is implicit
+    // whenever the lead moves; `scroll` additionally forces it for a deliberate navigation onto the
+    // file already active (a click on the current row still recenters it).
+    private void ApplySelection(ReviewSelection next, bool scroll)
+    {
+        _selection.Value = next;
+        var lead = next.Lead;
+        if (lead == null)
+        {
+            _activeFile.Value = null;
+            return;
+        }
+        var moved = lead != _activeFile.Value;
+        _activeFile.Value = lead;
+        if (scroll || moved) ScrollToFileRequested?.Invoke(lead);
+    }
+
+    private static IReadOnlyList<string> Range(IReadOnlyList<string> visible, string from, string to)
+    {
+        var a = IndexOf(visible, from);
+        var b = IndexOf(visible, to);
+        if (a < 0 || b < 0) return [to];
+        var (lo, hi) = a <= b ? (a, b) : (b, a);
+        var range = new List<string>(hi - lo + 1);
+        for (var i = lo; i <= hi; i++) range.Add(visible[i]);
+        return range;
+    }
+
+    private static int IndexOf(IReadOnlyList<string> paths, string path)
+    {
+        for (var i = 0; i < paths.Count; i++)
+            if (paths[i] == path) return i;
+        return -1;
     }
 
     // Navigates to the next / previous file in the range (the j / k keys). Clamped at the

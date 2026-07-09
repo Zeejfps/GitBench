@@ -41,6 +41,14 @@ internal sealed class BranchReviewedFiles : IReviewedFileTracker, IDisposable
         _revision.Value++;
     }
 
+    public void SetViewed(IReadOnlyList<string> paths, bool viewed)
+    {
+        if (paths.Count == 0) return;
+        foreach (var path in paths)
+            _store.SetViewed(_repoId, _headRef, path, Fingerprint(path), viewed);
+        _revision.Value++;
+    }
+
     // Adopts the loaded range's per-file content identities. A file whose identity shifted (or dropped
     // out of the range) is re-evaluated against the store, so it flips back to unviewed when changed;
     // the revision bump refreshes every bound Viewed mark.
