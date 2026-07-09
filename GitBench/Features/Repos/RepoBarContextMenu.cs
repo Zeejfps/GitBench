@@ -124,6 +124,7 @@ public static class RepoBarContextMenu
         var itemsColumn = new ColumnView { Gap = Spacing.Hair };
         var rows = new List<MenuRow>();
         var separators = new List<View>();
+        var hasSelection = AnyChecked(items);
 
         foreach (var item in items)
         {
@@ -136,20 +137,7 @@ public static class RepoBarContextMenu
                 continue;
             }
 
-            var menuItem = new ContextMenuItem(ctx.Canvas)
-            {
-                Text = item.Label,
-                Icon = item.Icon,
-                IconFontFamily = LucideIcons.FontFamily,
-                NormalBackgroundColor = 0x00000000,
-                IsEnabled = item.Enabled,
-            };
-            menuItem.BindThemed(theme, s =>
-            {
-                menuItem.SelectedBackgroundColor = s.ContextMenu.ItemSelectedBackground;
-                menuItem.TextColor = s.ContextMenu.ItemText;
-                menuItem.DisabledTextColor = s.ContextMenu.ItemTextDisabled;
-            });
+            var menuItem = CreateItemView(ctx, item, hasSelection);
             var captured = item;
             menuItem.UseController(input, () => new ContextMenuItemDefaultKbmController(menuItem, ctx, () =>
                 manager.CloseAllAndThen(captured.OnSelected)));
@@ -359,11 +347,7 @@ public static class RepoBarContextMenu
             menu.BorderColor = BorderColorStyle.All(s.ContextMenu.Border);
         });
 
-        // A menu that carries a current selection reserves the check column and rounds every
-        // row's fill, so the active item's tinted pill and the plain rows share one column.
-        var hasSelection = false;
-        foreach (var item in items)
-            if (!item.IsSeparator && item.Checked) { hasSelection = true; break; }
+        var hasSelection = AnyChecked(items);
 
         foreach (var item in items)
         {
@@ -375,34 +359,7 @@ public static class RepoBarContextMenu
                 continue;
             }
 
-            var menuItem = new ContextMenuItem(ctx.Canvas)
-            {
-                Text = item.Label,
-                Icon = item.Checked ? LucideIcons.Check : item.Icon,
-                IconFontFamily = LucideIcons.FontFamily,
-                NormalBackgroundColor = 0x00000000,
-                IsEnabled = item.Enabled,
-                Shortcut = item.Shortcut,
-                ReserveIconColumn = hasSelection,
-                BackgroundCornerRadius = hasSelection ? BorderRadiusStyle.All(Radius.Sm) : default,
-            };
-            var isChecked = item.Checked;
-            menuItem.BindThemed(theme, s =>
-            {
-                menuItem.SelectedBackgroundColor = s.ContextMenu.ItemSelectedBackground;
-                menuItem.NormalBackgroundColor = isChecked ? s.ContextMenu.ItemActiveBackground : 0x00000000;
-                menuItem.TextColor = s.ContextMenu.ItemText;
-                menuItem.DisabledTextColor = s.ContextMenu.ItemTextDisabled;
-                menuItem.ShortcutColor = s.ContextMenu.ItemTextDisabled;
-            });
-
-            // The active row's label reads bold in the accent text color; explicit segments
-            // still win when a caller supplies them.
-            if (item.LabelSegments is { Count: > 0 } segs)
-                menuItem.SetLabelView(BuildSegmentsView(ctx, segs, item.Enabled));
-            else if (isChecked)
-                menuItem.SetLabelView(BuildSegmentsView(ctx, [new MenuLabelSegment(item.Label, Bold: true)], item.Enabled));
-
+            var menuItem = CreateItemView(ctx, item, hasSelection);
             var captured = item;
             if (captured.Submenu is { Count: > 0 } submenu)
             {
@@ -429,6 +386,51 @@ public static class RepoBarContextMenu
         }
 
         return menu;
+    }
+
+    // A menu that carries a current selection reserves the check column and rounds every row's fill,
+    // so the active item's tinted pill and the plain rows share one column.
+    private static bool AnyChecked(IReadOnlyList<Item> items)
+    {
+        foreach (var item in items)
+            if (!item.IsSeparator && item.Checked) return true;
+        return false;
+    }
+
+    // One themed row, shared by the flat and searchable menus so a checked item looks the same in
+    // both: a leading check in the reserved column, a tinted pill behind it, and a bold accent label.
+    private static ContextMenuItem CreateItemView(Context ctx, Item item, bool hasSelection)
+    {
+        var theme = ctx.Theme();
+        var menuItem = new ContextMenuItem(ctx.Canvas)
+        {
+            Text = item.Label,
+            Icon = item.Checked ? LucideIcons.Check : item.Icon,
+            IconFontFamily = LucideIcons.FontFamily,
+            NormalBackgroundColor = 0x00000000,
+            IsEnabled = item.Enabled,
+            Shortcut = item.Shortcut,
+            ReserveIconColumn = hasSelection,
+            BackgroundCornerRadius = hasSelection ? BorderRadiusStyle.All(Radius.Sm) : default,
+        };
+        var isChecked = item.Checked;
+        menuItem.BindThemed(theme, s =>
+        {
+            menuItem.SelectedBackgroundColor = s.ContextMenu.ItemSelectedBackground;
+            menuItem.NormalBackgroundColor = isChecked ? s.ContextMenu.ItemActiveBackground : 0x00000000;
+            menuItem.TextColor = s.ContextMenu.ItemText;
+            menuItem.DisabledTextColor = s.ContextMenu.ItemTextDisabled;
+            menuItem.ShortcutColor = s.ContextMenu.ItemTextDisabled;
+        });
+
+        // The active row's label reads bold in the accent text color; explicit segments still win
+        // when a caller supplies them.
+        if (item.LabelSegments is { Count: > 0 } segs)
+            menuItem.SetLabelView(BuildSegmentsView(ctx, segs, item.Enabled));
+        else if (isChecked)
+            menuItem.SetLabelView(BuildSegmentsView(ctx, [new MenuLabelSegment(item.Label, Bold: true)], item.Enabled));
+
+        return menuItem;
     }
 
     private static View BuildSegmentsView(Context ctx, IReadOnlyList<MenuLabelSegment> segments, bool enabled)

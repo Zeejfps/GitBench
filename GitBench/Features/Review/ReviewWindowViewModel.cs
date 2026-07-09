@@ -319,8 +319,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
         var current = _baseOverride.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
-            new(s.ReviewBaseMenuAuto, () => SetBase(null),
-                Icon: current == null ? LucideIcons.CircleCheck : null),
+            new(s.ReviewBaseMenuAuto, () => SetBase(null), Checked: current == null),
         };
 
         if ((_snapshots.Branches.Value as Fetched<BranchListing>.Ok)?.Value is not { } listing)
@@ -333,8 +332,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             foreach (var b in locals)
             {
                 var name = b.Name;
-                items.Add(new RepoBarContextMenu.Item(name, () => SetBase(name),
-                    Icon: current == name ? LucideIcons.CircleCheck : null));
+                items.Add(new RepoBarContextMenu.Item(name, () => SetBase(name), Checked: current == name));
             }
         }
 
@@ -345,8 +343,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
             foreach (var b in group.Branches)
             {
                 var refName = $"{group.Name}/{b.Name}";
-                items.Add(new RepoBarContextMenu.Item(refName, () => SetBase(refName),
-                    Icon: current == refName ? LucideIcons.CircleCheck : null));
+                items.Add(new RepoBarContextMenu.Item(refName, () => SetBase(refName), Checked: current == refName));
             }
         }
 
