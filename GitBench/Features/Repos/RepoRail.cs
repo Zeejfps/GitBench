@@ -44,30 +44,43 @@ internal sealed record RepoRail : Widget
             ],
         }.BuildView(ctx));
 
-        return new Box
+        // The content/rail separator is a real 1px element rather than a Right border: flex rows
+        // mirror under RTL, so it lands on the content-facing edge either way — Box border edges
+        // don't mirror.
+        return new Row
         {
-            Width = RailWidth,
-            BorderSize = new BorderSizeStyle { Right = 1 },
-            Background = Theme.Color(s => s.RepoBar.Background),
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Right = s.RepoBar.RightBorder }),
+            CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new Column
+                new Box
                 {
-                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Width = RailWidth - 1,
+                    Background = Theme.Color(s => s.RepoBar.Background),
                     Children =
                     [
-                        BuildHeader(collapse),
-                        new Grow
+                        new Column
                         {
-                            Child = new KbmInput
-                            {
-                                Controller = _ => new RailWheelController(pane),
-                                Child = new Raw { View = pane },
-                            },
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                BuildHeader(collapse),
+                                new Grow
+                                {
+                                    Child = new KbmInput
+                                    {
+                                        Controller = _ => new RailWheelController(pane),
+                                        Child = new Raw { View = pane },
+                                    },
+                                },
+                                BuildFooter(ctx),
+                            ],
                         },
-                        BuildFooter(ctx),
                     ],
+                },
+                new Box
+                {
+                    Width = 1,
+                    Background = Theme.Color(s => s.RepoBar.RightBorder),
                 },
             ],
         }.BindVm(vm);
