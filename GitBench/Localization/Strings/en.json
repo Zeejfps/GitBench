@@ -302,6 +302,8 @@
   "localchanges.unstage_all_tooltip": "Unstage all",
   "localchanges.unstage_selected_tooltip": "Unstage selected",
   "localchanges.toggle_view_tooltip": "Toggle list / tree view",
+  "localchanges.layout_list": "List",
+  "localchanges.layout_review": "Review",
   "localchanges.layout_list_tooltip": "File lists with a diff pane",
   "localchanges.layout_review_tooltip": "Every change stacked in one scroll; check a file to stage it",
   "localchanges.unstaged_panel_title": "Unstaged",

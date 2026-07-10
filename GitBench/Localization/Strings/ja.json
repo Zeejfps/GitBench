@@ -302,6 +302,8 @@
   "localchanges.unstage_all_tooltip": "すべてステージ解除",
   "localchanges.unstage_selected_tooltip": "選択をステージ解除",
   "localchanges.toggle_view_tooltip": "リスト/ツリー表示を切り替え",
+  "localchanges.layout_list": "リスト",
+  "localchanges.layout_review": "レビュー",
   "localchanges.layout_list_tooltip": "ファイル一覧と差分ペイン",
   "localchanges.layout_review_tooltip": "すべての変更を1つのスクロールに積み重ね。チェックでステージ",
   "localchanges.unstaged_panel_title": "未ステージ",

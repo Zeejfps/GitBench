@@ -302,6 +302,8 @@
   "localchanges.unstage_all_tooltip": "Quitar todo de preparados",
   "localchanges.unstage_selected_tooltip": "Quitar lo seleccionado de preparados",
   "localchanges.toggle_view_tooltip": "Alternar vista de lista / árbol",
+  "localchanges.layout_list": "Lista",
+  "localchanges.layout_review": "Revisión",
   "localchanges.layout_list_tooltip": "Listas de archivos con panel de diferencias",
   "localchanges.layout_review_tooltip": "Todos los cambios en un solo desplazamiento; marca un archivo para prepararlo",
   "localchanges.unstaged_panel_title": "Sin preparar",

@@ -104,11 +104,8 @@ internal sealed record CommitBarWidget : Widget
 
         IWidget[] ColumnRows()
         {
-            var rows = new List<IWidget>(6);
+            var rows = new List<IWidget>(5);
             if (ShowOperationChrome) rows.Add(new OperationStatusHeader());
-            // Staging progress heads the normal bar in the Review layout; the merge bar's own status
-            // header owns that slot instead.
-            else rows.Add(new StagingProgressRow());
             rows.Add(new ErrorBarView { Message = vm.OpError });
             rows.Add(TitleBox(titleInput));
             rows.Add(new Raw { View = descriptionField });

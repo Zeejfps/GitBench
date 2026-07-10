@@ -344,6 +344,8 @@
   "localchanges.unstage_all_tooltip": "إلغاء تجهيز الكل",
   "localchanges.unstage_selected_tooltip": "إلغاء تجهيز المحدد",
   "localchanges.toggle_view_tooltip": "تبديل عرض القائمة/الشجرة",
+  "localchanges.layout_list": "قائمة",
+  "localchanges.layout_review": "مراجعة",
   "localchanges.layout_list_tooltip": "قوائم الملفات مع لوحة الفروق",
   "localchanges.layout_review_tooltip": "كل التغييرات في تمرير واحد؛ حدّد ملفًا لتجهيزه",
   "localchanges.unstaged_panel_title": "غير مجهّز",

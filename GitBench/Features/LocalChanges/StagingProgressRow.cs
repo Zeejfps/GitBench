@@ -10,10 +10,10 @@ using ZGF.Observable;
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
-/// "N / M files staged" with a meter, or a success badge once everything is staged. Sits at the top of
-/// the commit bar in the Review layout, where the reviewer is heading anyway: the walk down the stacked
-/// diffs ends here, and the meter says how close the commit is to capturing everything. Hidden in the
-/// List layout, whose panel headers already carry per-side counts, and while the working tree is clean.
+/// "N / M files staged" with a meter, or a success badge once everything is staged. Rides the trailing
+/// edge of the <see cref="WorkingChangesTabStrip"/>, directly above the commit bar the reviewer is
+/// walking toward. Hidden in the List layout, whose panel headers already carry per-side counts, and
+/// while the working tree is clean.
 /// </summary>
 internal sealed record StagingProgressRow : Widget
 {
@@ -77,7 +77,6 @@ internal sealed record StagingProgressRow : Widget
                         },
                     ],
                 },
-                new Grow { Child = new Box() },
             ],
         };
     }

@@ -76,6 +76,14 @@ internal sealed class LocalChangesView : ContainerView
             },
         }.BuildView(ctx);
 
+        // The layout tabs sit above the footer, not inside it: the footer swaps itself out for the
+        // merge bar and the operation panel, and the pane's presentation is still switchable then.
+        var south = new Column
+        {
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children = [new WorkingChangesTabStrip(), new Raw { View = footer }],
+        }.BuildView(ctx);
+
         var bg = new RectView
         {
             Children =
@@ -83,7 +91,7 @@ internal sealed class LocalChangesView : ContainerView
                 new BorderLayoutView
                 {
                     Center = body,
-                    South = footer,
+                    South = south,
                 },
             },
         };

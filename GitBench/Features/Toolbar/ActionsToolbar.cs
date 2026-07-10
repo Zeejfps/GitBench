@@ -54,7 +54,6 @@ internal sealed record ActionsToolbar : Widget
     [
         new ModeSwitcherView(),
         new SeparatorSpacer(),
-        new WorkingChangesLayoutToggle(),
         new ToolbarSyncButton
         {
             Command = vm.Fetch,

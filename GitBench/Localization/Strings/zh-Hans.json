@@ -302,6 +302,8 @@
   "localchanges.unstage_all_tooltip": "全部取消暂存",
   "localchanges.unstage_selected_tooltip": "取消暂存所选",
   "localchanges.toggle_view_tooltip": "切换列表/树形视图",
+  "localchanges.layout_list": "列表",
+  "localchanges.layout_review": "审查",
   "localchanges.layout_list_tooltip": "文件列表与差异面板",
   "localchanges.layout_review_tooltip": "所有更改堆叠在一个滚动视图中；勾选文件即可暂存",
   "localchanges.unstaged_panel_title": "未暂存",

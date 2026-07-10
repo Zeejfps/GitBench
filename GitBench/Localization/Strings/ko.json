@@ -302,6 +302,8 @@
   "localchanges.unstage_all_tooltip": "모두 스테이징 해제",
   "localchanges.unstage_selected_tooltip": "선택 항목 스테이징 해제",
   "localchanges.toggle_view_tooltip": "목록/트리 보기 전환",
+  "localchanges.layout_list": "목록",
+  "localchanges.layout_review": "검토",
   "localchanges.layout_list_tooltip": "파일 목록과 diff 창",
   "localchanges.layout_review_tooltip": "모든 변경을 한 스크롤에 쌓아 표시. 체크하면 스테이징",
   "localchanges.unstaged_panel_title": "스테이징 안 됨",

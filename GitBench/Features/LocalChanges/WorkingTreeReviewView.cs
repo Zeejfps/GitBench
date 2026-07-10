@@ -33,7 +33,7 @@ internal sealed record WorkingTreeReviewView : Widget
         {
             When = model.HasFiles,
             Then = () => Split(ctx, model),
-            Else = () => Centered(L.T(s => s.ReviewNoLocalChanges)),
+            Else = () => TopRuled(Centered(L.T(s => s.ReviewNoLocalChanges))),
         };
 
         // The review loop's keys (j/k, Space, v, ?) live on the surface, not the window: the History
@@ -101,9 +101,20 @@ internal sealed record WorkingTreeReviewView : Widget
                     MinResizeWidth = 220f,
                     MaxResizeWidth = 560f,
                 },
-                Center = new ReviewDiffPanel(),
+                // The sidebar's file-list header carries its own top border, but the stacked diff
+                // surface has no header — without this the rule under the toolbar would die at the
+                // sidebar's edge. In the review *window* the header bar spans both columns instead.
+                Center = TopRuled(new ReviewDiffPanel()),
             },
         ],
+    };
+
+    // A 1px rule along the top edge, in the file-list header's border color so it continues that line.
+    private static IWidget TopRuled(IWidget child) => new Box
+    {
+        BorderSize = new BorderSizeStyle { Top = 1 },
+        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.FileChangesSection.HeaderBorder }),
+        Children = [child],
     };
 
     private static IWidget Centered(Prop<string?> text) => new Center
