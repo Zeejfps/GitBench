@@ -59,10 +59,10 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
 
         // The working tree changes on every editor save and every index op. Re-push the merged file
         // list each time; the details surface keeps its open diffs and the stacked list reconciles in
-        // place, so the reviewer's scroll and loaded diffs survive.
-        _subscriptions.Add(_local.Unstaged.Subscribe(_ => PushFiles()));
-        _subscriptions.Add(_local.Staged.Subscribe(_ => PushFiles()));
-        PushFiles();
+        // place, so the reviewer's scroll and loaded diffs survive. Subscribed to the atomic pair —
+        // reading the two side slices from a handler of either can catch the other mid-update, and the
+        // resulting file-less transient knocks the cursor off the active file.
+        _subscriptions.Add(_local.WorkingTreeLists.Subscribe(PushFiles));
     }
 
     public ReviewMarkKind MarkKind => ReviewMarkKind.Staged;
@@ -158,7 +158,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     // Re-projects the working tree into the details surface as one file list. A path present on both
     // sides (staged, then edited again) takes its staged entry: that status is the one measured
     // against HEAD, which is what the file's diff shows.
-    private void PushFiles()
+    private void PushFiles((IReadOnlyList<FileChange> Unstaged, IReadOnlyList<FileChange> Staged) lists)
     {
         if (_registry.Active.Value is not { } repo)
         {
@@ -167,8 +167,8 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         }
 
         var merged = new Dictionary<string, FileChange>(StringComparer.Ordinal);
-        foreach (var f in _local.Unstaged.Value) merged[f.Path] = f;
-        foreach (var f in _local.Staged.Value) merged[f.Path] = f;
+        foreach (var f in lists.Unstaged) merged[f.Path] = f;
+        foreach (var f in lists.Staged) merged[f.Path] = f;
 
         var files = new List<FileChange>(merged.Values);
         files.Sort(static (a, b) => string.CompareOrdinal(a.Path, b.Path));

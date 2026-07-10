@@ -1,3 +1,4 @@
+using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using ZGF.Observable;
 
@@ -25,9 +26,9 @@ internal sealed class StagedFileTracker : IReviewedFileTracker, IDisposable
     public StagedFileTracker(LocalChangesViewModel local)
     {
         _local = local;
-        _subscriptions.Add(_local.Staged.Subscribe(_ => Recompute()));
-        _subscriptions.Add(_local.Unstaged.Subscribe(_ => Recompute()));
-        Recompute();
+        // The atomic pair, not the two side slices — a handler fired by one slice can read the
+        // other pre-update, which would transiently mark a mid-stage file as neither staged nor partial.
+        _subscriptions.Add(_local.WorkingTreeLists.Subscribe(Recompute));
     }
 
     public IReadable<int> Revision => _revision;
@@ -66,14 +67,14 @@ internal sealed class StagedFileTracker : IReviewedFileTracker, IDisposable
         else _local.Unstage(targets);
     }
 
-    private void Recompute()
+    private void Recompute((IReadOnlyList<FileChange> Unstaged, IReadOnlyList<FileChange> Staged) lists)
     {
         var unstaged = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var f in _local.Unstaged.Value) unstaged.Add(f.Path);
+        foreach (var f in lists.Unstaged) unstaged.Add(f.Path);
 
         var full = new HashSet<string>(StringComparer.Ordinal);
         var partial = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var f in _local.Staged.Value)
+        foreach (var f in lists.Staged)
             (unstaged.Contains(f.Path) ? partial : full).Add(f.Path);
 
         if (full.SetEquals(_fullyStaged) && partial.SetEquals(_partlyStaged)) return;

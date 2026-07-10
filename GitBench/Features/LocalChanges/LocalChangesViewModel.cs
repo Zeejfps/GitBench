@@ -48,6 +48,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public IReadable<string?> LoadErrorDetail { get; }
     public IReadable<IReadOnlyList<FileChange>> Unstaged { get; }
     public IReadable<IReadOnlyList<FileChange>> Staged { get; }
+    // Both sides as one atomic pair. Subscribing to Unstaged and Staged separately is glitchy: the
+    // slices recompute one at a time, so a handler fired by one can read the other's pre-update value
+    // — during a stage, that transient shows the file on neither side. Consumers that merge the two
+    // (the working-tree review surface) subscribe here instead.
+    public IReadable<(IReadOnlyList<FileChange> Unstaged, IReadOnlyList<FileChange> Staged)> WorkingTreeLists { get; }
     public IReadable<IReadOnlyList<SubmoduleInfo>> DriftedSubmodules { get; }
     public IReadable<bool> IsMerging { get; }
     public IReadable<Selection> Selection { get; }
@@ -126,6 +131,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Placeholder = Slice(s => s.Placeholder);
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
+        WorkingTreeLists = Slice(s => (s.Unstaged, s.Staged));
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
         IsMerging = Slice(s => s.IsMerging);
         Selection = Slice(s => s.Selection);

@@ -251,12 +251,14 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
     }
 
-    public void SetFiles(IReadOnlyList<FileChange> files)
+    // preserveScroll marks an in-place refresh of the same list (the working-tree review re-pushes on
+    // every index op): the scroll survives, re-clamped in case the list shrank. A new list scrolls to top.
+    public void SetFiles(IReadOnlyList<FileChange> files, bool preserveScroll = false)
     {
         _files = files;
         _headerText.Text = FileChangesUI.FormatHeader(_title, files.Count);
         RebuildRows();
-        _list.SetScrollY(0f);
+        _list.SetScrollY(preserveScroll ? _list.ScrollY : 0f);
         NotifyScrollChanged();
     }
 

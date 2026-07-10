@@ -69,6 +69,7 @@ internal sealed class CommitChangesPanelView : ContainerView
     private readonly FileChangesSection _changesSection;
     private readonly ListArrowKbmController _arrowController;
     private readonly State<string?> _selectedPath = new(null);
+    private string? _loadedSha;
 
     public CommitChangesPanelView(CommitChangesPanel props, Context ctx, CommitDetailsViewModel vm)
     {
@@ -141,17 +142,21 @@ internal sealed class CommitChangesPanelView : ContainerView
             if (path != null) _changesSection.EnsureRowVisible(path);
         });
         // Loaded fills the list; a placeholder clears it. Loading deliberately keeps the previous
-        // list up (stale-while-revalidate), matching the details host's skeleton rules.
+        // list up (stale-while-revalidate), matching the details host's skeleton rules. A reload of
+        // the same details identity (the working-tree review re-pushes its list on every index op)
+        // refreshes in place, keeping the scroll; only a genuinely new selection scrolls to top.
         this.Bind(vm.RenderState, state =>
         {
             switch (state)
             {
                 case CommitDetailsRenderState.Loaded l:
-                    _changesSection.SetFiles(l.Details.Files);
+                    _changesSection.SetFiles(l.Details.Files, preserveScroll: l.Details.Sha == _loadedSha);
+                    _loadedSha = l.Details.Sha;
                     _changesSection.SetReviewSha(l.Details.Sha);
                     break;
                 case CommitDetailsRenderState.Placeholder:
                     _changesSection.SetFiles(Array.Empty<FileChange>());
+                    _loadedSha = null;
                     _changesSection.SetReviewSha(null);
                     break;
             }
