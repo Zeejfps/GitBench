@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -28,7 +29,8 @@ internal sealed class FileRow
         string fullPath,
         DiffSide side,
         FileChange? file,
-        IReadOnlyList<string> files)
+        IReadOnlyList<string> files,
+        TreeGuides guides)
     {
         Kind = kind;
         DisplayName = displayName;
@@ -38,6 +40,7 @@ internal sealed class FileRow
         Side = side;
         File = file;
         Files = files;
+        Guides = guides;
     }
 
     public FileRowKind Kind { get; }
@@ -49,14 +52,19 @@ internal sealed class FileRow
     public FileChange? File { get; }
     public IReadOnlyList<string> Files { get; }
 
+    // The ancestry connectors drawn behind the row in tree mode (trunks + the elbow into it).
+    // Empty for flat mode and top-level rows — they are the tree's roots.
+    public TreeGuides Guides { get; }
+
     public FileRowRef Ref => new(Side, FullPath, Kind == FileRowKind.Folder);
 
-    public static FileRow ForFile(FileChange file, string displayName, float indent, DiffSide side)
-        => new(FileRowKind.File, displayName, indent, isOpen: false, file.Path, side, file, new[] { file.Path });
+    public static FileRow ForFile(FileChange file, string displayName, float indent, DiffSide side, TreeGuides guides = default)
+        => new(FileRowKind.File, displayName, indent, isOpen: false, file.Path, side, file, new[] { file.Path }, guides);
 
     public static FileRow ForFolder(
-        string displayName, string fullPath, float indent, bool isOpen, IReadOnlyList<string> files, DiffSide side)
-        => new(FileRowKind.Folder, displayName, indent, isOpen, fullPath, side, file: null, files);
+        string displayName, string fullPath, float indent, bool isOpen, IReadOnlyList<string> files, DiffSide side,
+        TreeGuides guides = default)
+        => new(FileRowKind.Folder, displayName, indent, isOpen, fullPath, side, file: null, files, guides);
 }
 
 /// <summary>
@@ -101,27 +109,46 @@ internal static class FileTreeBuilder
 
         var tree = PathTree.Build(files, f => f.Path, compact: true);
         var rows = new List<FileRow>();
-        EmitTreeRows(rows, tree, side, collapsed, depth: 0);
+        EmitTreeRows(rows, tree, side, collapsed, depth: 0, trunkMask: 0);
         return rows;
     }
 
+    // trunkMask carries the ancestors' passthrough trunks for guide levels [1, depth-1]; each row sets
+    // its own connector at level depth (its parent folder's chevron column) on top of those. Top-level
+    // rows are the tree's roots — there is no in-list header to hang off, so they carry no guides and
+    // level 0 (the section-header column the widget trees use) stays unset.
     private static void EmitTreeRows(
-        List<FileRow> rows, IReadOnlyList<PathNode<FileChange>> nodes, DiffSide side, IReadOnlySet<string> collapsed, int depth)
+        List<FileRow> rows, IReadOnlyList<PathNode<FileChange>> nodes, DiffSide side, IReadOnlySet<string> collapsed, int depth, long trunkMask)
     {
         var indent = depth * IndentLevel;
-        foreach (var node in nodes)
+        var count = nodes.Count;
+        for (var i = 0; i < count; i++)
         {
+            var node = nodes[i];
+            var isLast = i == count - 1;
+            var guides = depth == 0
+                ? default
+                : new TreeGuides(TreeGuides.SetKind(trunkMask, depth, isLast ? TreeGuide.Corner : TreeGuide.Tee), depth + 1);
+
             if (node.Leaf is { } file)
             {
-                rows.Add(FileRow.ForFile(file, FileChangeFormatting.FormatLeaf(file), indent, side));
+                rows.Add(FileRow.ForFile(file, FileChangeFormatting.FormatLeaf(file), indent, side, guides));
                 continue;
             }
 
             var open = !collapsed.Contains(node.FullPath);
             var leaves = new List<string>();
             CollectLeaves(node, leaves);
-            rows.Add(FileRow.ForFolder(node.Segment, node.FullPath, indent, open, leaves, side));
-            if (open) EmitTreeRows(rows, node.Children, side, collapsed, depth + 1);
+            rows.Add(FileRow.ForFolder(node.Segment, node.FullPath, indent, open, leaves, side, guides));
+            if (open)
+            {
+                // The folder's children inherit its trunk at its own column — a passthrough while the
+                // folder has a sibling below it, nothing once it is the last.
+                var childTrunk = depth == 0
+                    ? 0L
+                    : TreeGuides.SetKind(trunkMask, depth, isLast ? TreeGuide.None : TreeGuide.Through);
+                EmitTreeRows(rows, node.Children, side, collapsed, depth + 1, childTrunk);
+            }
         }
     }
 

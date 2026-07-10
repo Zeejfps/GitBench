@@ -408,7 +408,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
                 _pathTextActiveStyle,
                 z,
                 isRtl: IsRtl,
-                drawSelectionBackground: !floatsBar);
+                drawSelectionBackground: !floatsBar,
+                guides: row.Guides);
             return;
         }
 
@@ -429,7 +430,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             row.Indent,
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl,
-            drawSelectionBackground: !floatsBar);
+            drawSelectionBackground: !floatsBar,
+            guides: row.Guides);
     }
 
     // Retargets the floating bar from the current selection: the lone selected row's index when

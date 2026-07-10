@@ -372,7 +372,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
                 _pathTextStyle,
                 _pathTextActiveStyle,
                 z,
-                isRtl: IsRtl);
+                isRtl: IsRtl,
+                guides: row.Guides);
             return;
         }
 
@@ -403,7 +404,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             reserveViewedColumn: reviewMode,
             isViewed: isViewed,
             viewedIconStyle: _viewedIconStyle,
-            drawSelectionAccent: isLead);
+            drawSelectionAccent: isLead,
+            guides: row.Guides);
     }
 
     // Retargets the floating selection bar. Slides only between two real rows; first-select and

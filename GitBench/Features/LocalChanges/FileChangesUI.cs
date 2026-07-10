@@ -158,7 +158,8 @@ internal static class FileChangesUI
         bool reserveViewedColumn = false,
         bool isViewed = false,
         TextStyle? viewedIconStyle = null,
-        bool drawSelectionAccent = true)
+        bool drawSelectionAccent = true,
+        TreeGuides guides = default)
     {
         // When the host floats an animated selection bar it owns the selected row's fill; skip the
         // static one so the two don't double-paint, but still draw hover on non-selected rows.
@@ -166,6 +167,9 @@ internal static class FileChangesUI
             RowSelection.DrawBackground(
                 canvas, rowRect, isSelected, isHovered, selection, z,
                 isRtl: isRtl, drawAccentBar: drawSelectionAccent);
+
+        // Rows in these lists sit flush against each other (no inter-row gap), so no bridging overrun.
+        TreeGuidePainter.Draw(canvas, rowRect, guides, selection.IndentGuide, z + 1, isRtl, gapBridge: 0f);
 
         // In tree mode, reserve the same chevron column folder rows draw into so a file's
         // icon lines up under sibling folder icons (and one level right of its parent's).
@@ -251,10 +255,13 @@ internal static class FileChangesUI
         TextStyle textActiveStyle,
         int z,
         bool isRtl = false,
-        bool drawSelectionBackground = true)
+        bool drawSelectionBackground = true,
+        TreeGuides guides = default)
     {
         if (drawSelectionBackground || !isSelected)
             RowSelection.DrawBackground(canvas, rowRect, isSelected, isHovered, selection, z, isRtl: isRtl);
+
+        TreeGuidePainter.Draw(canvas, rowRect, guides, selection.IndentGuide, z + 1, isRtl, gapBridge: 0f);
 
         var left = rowRect.Left + RowPaddingLeft + indent;
 
