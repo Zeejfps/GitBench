@@ -31,17 +31,15 @@ internal interface IReviewSurfaceModel
     /// <summary>Per-file marks, also provided into the subtree so the file tree paints them.</summary>
     IReviewedFileTracker ReviewedFiles { get; }
 
-    /// <summary>The file being read: the section the stacked list is scrolled to.</summary>
+    /// <summary>The selected file — the lead of the selection, moved by the tree, j/k, or a click on a
+    /// card's header. Scrolling past a file does not select it.</summary>
     IReadable<string?> ActiveFile { get; }
 
     /// <summary>The tree's selected files, and the row arrow keys step on from.</summary>
     IReadable<IReadOnlySet<string>> SelectedPaths { get; }
     IReadable<string?> SelectionCursor { get; }
 
-    /// <summary>The first unmarked file in list order — it carries the primary action button.</summary>
-    IReadable<string?> QueuedFile { get; }
-
-    /// <summary>Progress + primary action, for the header.</summary>
+    /// <summary>Progress, for the header.</summary>
     IReadable<ReviewHud> Hud { get; }
 
     IReadable<bool> CheatsheetOpen { get; }
@@ -59,11 +57,8 @@ internal interface IReviewSurfaceModel
     void ToggleFileViewed(string path);
     void ToggleActiveFileViewed();
 
-    /// <summary>Marks the queued file and rides to the new head of the queue.</summary>
-    void MarkQueuedFileViewedAndAdvance();
-    void RunPrimaryAction();
-
-    /// <summary>Scrollspy: the stacked list reports the file its viewport sits on.</summary>
+    /// <summary>The stacked list reports the file a click landed on, so the tree highlight follows it.
+    /// Never raised by scrolling — the reader's position is not a selection.</summary>
     void ReportActiveFile(string path);
 
     void ActivateFile(string path);

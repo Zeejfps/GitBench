@@ -6,10 +6,9 @@ using ZGF.Observable;
 namespace GitBench.Features.Review;
 
 /// <summary>
-/// The review loop's cursor over a file list: which file is being read, which are selected, and which
-/// is next in the queue (the first unmarked file, in list order). Owns nothing about *where* the files
-/// come from — a <c>base..head</c> range or the working tree — so both review surfaces share one
-/// implementation of stepping, selecting, scrollspy and mark-and-advance.
+/// The review loop's cursor over a file list: which file is being read and which are selected. Owns
+/// nothing about *where* the files come from — a <c>base..head</c> range or the working tree — so both
+/// review surfaces share one implementation of stepping, selecting and scrollspy.
 ///
 /// The host supplies the current file list and the mark tracker; every derived signal reads through
 /// them, so it refreshes on a file-list reload and on every mark toggle.
@@ -23,7 +22,6 @@ internal sealed class ReviewFileCursor : IDisposable
     private readonly State<ReviewSelection> _selection = new(ReviewSelection.Empty);
     private readonly Derived<IReadOnlySet<string>> _selectedPaths;
     private readonly Derived<string?> _selectionCursor;
-    private readonly Derived<string?> _queuedFile;
 
     /// <summary>Raised when a navigation (tree click, j/k, mark-and-advance) wants the stacked diff
     /// list to scroll a file's section into view. Scrollspy updates never raise it.</summary>
@@ -35,13 +33,11 @@ internal sealed class ReviewFileCursor : IDisposable
         _marks = marks;
         _selectedPaths = new Derived<IReadOnlySet<string>>(() => _selection.Value.Set);
         _selectionCursor = new Derived<string?>(() => _selection.Value.Cursor);
-        _queuedFile = new Derived<string?>(FirstUnmarked);
     }
 
     public IReadable<string?> ActiveFile => _activeFile;
     public IReadable<IReadOnlySet<string>> SelectedPaths => _selectedPaths;
     public IReadable<string?> SelectionCursor => _selectionCursor;
-    public IReadable<string?> QueuedFile => _queuedFile;
 
     /// <summary>Adopts a freshly loaded file list: seeds the active file on the first load, and prunes
     /// the active file and the selection of paths the list no longer carries.</summary>
@@ -109,10 +105,9 @@ internal sealed class ReviewFileCursor : IDisposable
             scroll: false);
     }
 
-    /// <summary>Scrollspy: the stacked diff list reports the file its viewport sits on, so the tree
-    /// highlight and the keyboard anchor follow the reading position without echoing a scroll back.
-    /// Scrolling within a multi-selection keeps it; scrolling out of one collapses it onto the file
-    /// now being read.</summary>
+    /// <summary>The stacked diff list reports the file a click landed on, so the tree highlight follows
+    /// without echoing a scroll back. Clicking inside a multi-selection keeps it; clicking outside one
+    /// collapses it onto that file. Scrolling never calls this — reading is not selecting.</summary>
     public void ReportActiveFile(string path)
     {
         _activeFile.Value = path;
@@ -127,17 +122,6 @@ internal sealed class ReviewFileCursor : IDisposable
     public void ToggleActiveFileMarked()
     {
         if (_activeFile.Value is { } active) _marks.ToggleViewed(active);
-    }
-
-    /// <summary>Marks the queued file and rides to the new head of the queue. The queue is strictly in
-    /// list order, independent of where the reviewer scrolled or clicked, so a file unmarked earlier
-    /// in the list becomes the queue head again.</summary>
-    public void MarkQueuedFileAndAdvance()
-    {
-        var queued = FirstUnmarked();
-        if (queued == null) return;
-        _marks.ToggleViewed(queued);
-        if (FirstUnmarked() is { } next) ActivateFile(next);
     }
 
     /// <summary>The files a row action applies to: the whole selection when the row is part of it, else
@@ -157,15 +141,6 @@ internal sealed class ReviewFileCursor : IDisposable
         foreach (var f in files)
             if (_marks.IsViewed(f.Path)) marked++;
         return marked;
-    }
-
-    // The head of the review queue: the first file in list order without a mark.
-    private string? FirstUnmarked()
-    {
-        _ = _marks.Revision.Value;
-        foreach (var f in _files())
-            if (!_marks.IsViewed(f.Path)) return f.Path;
-        return null;
     }
 
     private void StepFile(int delta)
@@ -230,7 +205,6 @@ internal sealed class ReviewFileCursor : IDisposable
 
     public void Dispose()
     {
-        _queuedFile.Dispose();
         _selectionCursor.Dispose();
         _selectedPaths.Dispose();
         _selection.Dispose();

@@ -11,8 +11,7 @@ namespace GitBench.Features.LocalChanges;
 /// <summary>
 /// The Changes tab's Review layout: the working tree's changed files stacked in one scrolling diff
 /// surface, the same one a branch review uses. A file's header checkbox is its staged state — checking
-/// it stages the file, and the primary action stages the queued file and rides to the next unstaged
-/// one, so the whole review reads as a walk down to an empty queue and a ready commit.
+/// it stages the file.
 ///
 /// Files come from <see cref="LocalChangesViewModel"/> (which already owns the working-tree snapshot
 /// and the index ops), not from git directly. Each file diffs HEAD→disk, so staging it never changes
@@ -67,7 +66,6 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public IReadable<string?> ActiveFile => _cursor.ActiveFile;
     public IReadable<IReadOnlySet<string>> SelectedPaths => _cursor.SelectedPaths;
     public IReadable<string?> SelectionCursor => _cursor.SelectionCursor;
-    public IReadable<string?> QueuedFile => _cursor.QueuedFile;
     public IReadable<ReviewHud> Hud => _hud;
     public IReadable<bool> CheatsheetOpen => _cheatsheetOpen;
 
@@ -90,13 +88,6 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public bool IsFilePartiallyMarked(string path) => _marks.IsPartiallyStaged(path);
     public void ToggleFileViewed(string path) => _marks.ToggleViewed(path);
     public void ToggleActiveFileViewed() => _cursor.ToggleActiveFileMarked();
-    public void MarkQueuedFileViewedAndAdvance() => _cursor.MarkQueuedFileAndAdvance();
-
-    public void RunPrimaryAction()
-    {
-        if (_hud.Value.Primary == ReviewPrimaryAction.ViewFile)
-            MarkQueuedFileViewedAndAdvance();
-    }
 
     public void ReportActiveFile(string path) => _cursor.ReportActiveFile(path);
     public void ActivateFile(string path) => _cursor.ActivateFile(path);
@@ -172,13 +163,10 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     {
         var files = Files();
         var staged = _cursor.CountMarked(files);
-        var complete = files.Count > 0 && staged >= files.Count;
         return new ReviewHud(
             FilesViewed: staged,
             FilesTotal: files.Count,
-            IsComplete: complete,
-            Primary: complete || files.Count == 0 ? ReviewPrimaryAction.Complete : ReviewPrimaryAction.ViewFile,
-            HasActiveFile: _cursor.ActiveFile.Value != null);
+            IsComplete: files.Count > 0 && staged >= files.Count);
     }
 
     private string BuildFilesStagedLabel()

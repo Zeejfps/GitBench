@@ -61,10 +61,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
                                 },
                                 ShortcutRow(["j", "k"], L.T(s => s.ReviewShortcutFileNav)),
-                                ShortcutRow(["Space"], staged
-                                    ? L.T(s => s.ReviewShortcutPrimaryStage)
-                                    : L.T(s => s.ReviewShortcutPrimary)),
-                                ShortcutRow(["v"], staged
+                                ShortcutRow(["v", "Space"], staged
                                     ? L.T(s => s.ReviewShortcutToggleStaged)
                                     : L.T(s => s.ReviewShortcutToggleViewed)),
                                 ShortcutRow(["?"], L.T(s => s.ReviewShortcutHelp)),

@@ -11,8 +11,7 @@ namespace GitBench.Features.Review;
 /// file list (which only consumes its own arrow/enter keys), so navigation there is untouched:
 /// <list type="bullet">
 /// <item><c>j</c> / <c>k</c> — next / previous file in the range.</item>
-/// <item><c>Space</c> / <c>Enter</c> — run the primary action (mark viewed → next file).</item>
-/// <item><c>v</c> — toggle the active file's Viewed mark.</item>
+/// <item><c>v</c> / <c>Space</c> / <c>Enter</c> — toggle the selected file's mark.</item>
 /// <item><c>?</c> — show / hide the keyboard cheatsheet; <c>Esc</c> dismisses it.</item>
 /// </list>
 /// It never steals focus, so the file list keeps the focus it needs for its own Up/Down arrows. While
@@ -56,13 +55,10 @@ internal sealed class ReviewKeyController : KeyboardMouseController
                 e.Consume();
                 break;
             case KeyboardKey.V:
-                _vm.ToggleActiveFileViewed();
-                e.Consume();
-                break;
             case KeyboardKey.Space:
             case KeyboardKey.Enter:
             case KeyboardKey.NumpadEnter:
-                _vm.RunPrimaryAction();
+                _vm.ToggleActiveFileViewed();
                 e.Consume();
                 break;
         }

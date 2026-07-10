@@ -25,21 +25,15 @@ internal abstract record ReviewRenderState
 // load phase into one signal for the view's Switch.
 internal enum ReviewContentKind { Loading, Message, Loaded }
 
-// The single adaptive primary action. ViewFile = "mark this file viewed and open the next unviewed
-// one"; Complete = every file in the range is viewed, nothing left to do.
-internal enum ReviewPrimaryAction { ViewFile, Complete }
-
 internal sealed record ReviewState(ReviewRenderState Render);
 
-// A snapshot of everything the header HUD renders: how many of the range's files are viewed, whether
-// the review is complete, and which primary action applies. Recomputed (as a Derived) from the loaded
-// file list, the Viewed tracker, and the active tab — so it refreshes on load and on every toggle.
+// A snapshot of everything the header HUD renders: how many of the surface's files are marked and
+// whether every one of them is. Recomputed (as a Derived) from the loaded file list and the mark
+// tracker, so it refreshes on load and on every toggle.
 internal sealed record ReviewHud(
     int FilesViewed,
     int FilesTotal,
-    bool IsComplete,
-    ReviewPrimaryAction Primary,
-    bool HasActiveFile)
+    bool IsComplete)
 {
     public float FilesFraction => FilesTotal == 0 ? 0f : (float)FilesViewed / FilesTotal;
     public bool HasFiles => FilesTotal > 0;
@@ -127,12 +121,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     public IReadable<IReadOnlySet<string>> SelectedPaths => _cursor.SelectedPaths;
     public IReadable<string?> SelectionCursor => _cursor.SelectionCursor;
 
-    // The file next in line for review: the first (in range order) not yet marked Viewed, or null
-    // once everything is. The review proceeds in order — the stacked list pins the primary action
-    // button to this file's header no matter where the reviewer scrolls or clicks.
-    public IReadable<string?> QueuedFile => _cursor.QueuedFile;
-
-    // Raised when a navigation (tree click, j/k, mark-viewed advance) wants the stacked diff list
+    // Raised when a navigation (tree click, j/k) wants the stacked diff list
     // to scroll a file's section into view. Scrollspy updates never raise it.
     public event Action<string>? ScrollToFileRequested
     {
@@ -393,19 +382,6 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     public void NextFile() => _cursor.NextFile();
     public void PrevFile() => _cursor.PrevFile();
 
-    // The one adaptive control (the queued header's button and Enter/Space): mark-and-advance
-    // through the queue, or do nothing once the whole range is viewed.
-    public void RunPrimaryAction()
-    {
-        if (Hud.Value.Primary == ReviewPrimaryAction.ViewFile)
-            MarkQueuedFileViewedAndAdvance();
-    }
-
-    // Marks the queued file Viewed and rides to the new head of the queue — the stacked-list
-    // analog of GitHub's collapse-and-move-on: the marked section folds (the diff list folds on
-    // the Viewed change) and the viewport lands on what's next.
-    public void MarkQueuedFileViewedAndAdvance() => _cursor.MarkQueuedFileAndAdvance();
-
     // Disposes the owned Viewed tracker and the window's commit-details VM (no view owns it in the
     // two-column layout), then the base (slices/subscriptions).
     public override void Dispose()
@@ -549,22 +525,10 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     {
         var files = Files();
         var viewed = CountViewed(files);
-        var complete = files.Count > 0 && viewed >= files.Count;
-        var detailsLoading = _details.RenderState.Value is CommitDetailsRenderState.Loading;
-        var hasActiveFile = _cursor.ActiveFile.Value != null;
-
-        // While the file list is still loading hold on ViewFile so the button doesn't flash
-        // "complete" mid-load; a genuinely empty net diff has nothing left to do.
-        var primary = complete || (files.Count == 0 && !detailsLoading)
-            ? ReviewPrimaryAction.Complete
-            : ReviewPrimaryAction.ViewFile;
-
         return new ReviewHud(
             FilesViewed: viewed,
             FilesTotal: files.Count,
-            IsComplete: complete,
-            Primary: primary,
-            HasActiveFile: hasActiveFile);
+            IsComplete: files.Count > 0 && viewed >= files.Count);
     }
 
     private int CountViewed(IReadOnlyList<FileChange> files) => _cursor.CountMarked(files);

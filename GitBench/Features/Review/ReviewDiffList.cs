@@ -49,8 +49,8 @@ internal sealed record ReviewDiffPanel : IWidget
 /// loading stub, and loads that finish above the viewport are scroll-anchored so the reading
 /// position never jumps. The file being read keeps its header pinned to the viewport top,
 /// GitHub-style, so the path and the Viewed toggle stay reachable mid-file. Marking a file
-/// Viewed folds its section; the tree's activation scrolls here, and scroll position reports
-/// the active file back for the tree highlight and the keyboard loop.
+/// Viewed folds its section, and the tree's activation scrolls here. Scrolling does not change
+/// the selection — only a click on a card, the tree, or j/k does.
 /// </summary>
 internal sealed class ReviewDiffListView : View, IScrollableContent
 {
@@ -76,11 +76,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private const float ActiveBarWidth = 3f;
     // The clickable Viewed zone at the header's trailing edge (checkbox glyph + label).
     private const float ViewedZoneWidth = 96f;
-    // The primary action button that replaces the checkbox on the active file's header.
-    private const float ActionButtonHeight = 26f;
-    private const float ActionButtonPaddingX = 10f;
-    private const float ActionButtonIconWidth = 16f;
-    private const float ActionButtonIconGap = 6f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
 
@@ -98,12 +93,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private static readonly TextStyle ViewedLabelStyle = new()
     {
         FontSize = FontSize.Caption,
-        VerticalAlignment = TextAlignment.Center,
-    };
-    private static readonly TextStyle ActionLabelStyle = new()
-    {
-        FontSize = FontSize.Caption,
-        HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
     private static readonly TextStyle MessageStyle = new()
@@ -150,10 +139,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private float _monoAdvance;
     private bool _metricsResolved;
     private float _naturalWidth;
-    // Measured label width of the header's primary action button; re-measured after a language
-    // switch so the pill resizes with its text.
-    private float _actionLabelWidth;
-    private bool _actionMetricsResolved;
 
     private float _scrollX;
     // A programmatic vertical scroll target re-asserted for a few frames — same guard as
@@ -226,11 +211,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         // whether the toggle came from a header checkbox, the 'v' key, or the primary action.
         this.Bind(_vm.ReviewedFiles.Revision, _ => SyncViewedFolds());
 
-        // Repaint on active-file moves (the header accent), queue-head moves (the action button),
-        // and language switches (message rows; the action label re-measures in the new language).
+        // Repaint on active-file moves (the header accent) and language switches (message rows).
         this.Bind(_vm.ActiveFile, _ => SetDirty());
-        this.Bind(_vm.QueuedFile, _ => SetDirty());
-        this.Bind(_loc.Strings, _ => { _actionMetricsResolved = false; SetDirty(); });
+        this.Bind(_loc.Strings, _ => SetDirty());
 
         // Navigation (tree click, j/k, mark-viewed advance) scrolls the file's section here.
         this.Use(() =>
@@ -249,20 +232,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private float CardLeft() => _list.Position.Left + PanelPaddingX;
     private float CardRight() => _list.Position.Right - PanelPaddingX;
     private float CardViewportWidth() => Math.Max(0f, Position.Width - PanelPaddingX * 2);
-
-    // The queued file's header — the first unviewed file in range order, wherever the reviewer
-    // happens to be — carries the primary action button in place of its Viewed checkbox: mark it,
-    // fold it, and ride to the new head of the queue in one click.
-    private bool ShowsActionButton(Section s) =>
-        _vm.QueuedFile.Value == s.File.Path;
-
-    private float ActionButtonWidth() =>
-        ActionButtonPaddingX * 2 + ActionButtonIconWidth + ActionButtonIconGap + _actionLabelWidth;
-
-    // The clickable trailing zone of a header: the action button on the active header, the Viewed
-    // checkbox everywhere else. Draw and hit-test share this width.
-    private float TrailingZoneWidth(Section s) =>
-        ShowsActionButton(s) ? ActionButtonWidth() + HeaderPaddingX : ViewedZoneWidth;
 
     // ---- section structure ----
 
@@ -549,25 +518,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         SetScrollTarget(SectionTopOffset(s) - TopPadRowHeight);
     }
 
-    // Scrollspy: the file whose section spans the pin line — the first content edge visible
-    // below the top padding — is the one being read.
-    private void ReportActiveFromScroll()
-    {
-        if (_sections.Count == 0) return;
-        var y = _list.ScrollY + PanelPaddingY + 1f;
-        var acc = TopPadRowHeight;
-        var current = _sections[0];
-        foreach (var s in _sections)
-        {
-            current = s;
-            var h = HeaderRowHeight + BodyHeight(s);
-            if (y < acc + h) break;
-            acc += h;
-        }
-        if (_vm.ActiveFile.Value != current.File.Path)
-            _vm.ReportActiveFile(current.File.Path);
-    }
-
     // ---- sticky header ----
 
     // The header of the file being read rides the viewport top once its own band scrolls off,
@@ -606,34 +556,23 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         return (sticky, band);
     }
 
-    // A click on the pinned band acts like one on the real header: the trailing zone marks
-    // Viewed (or fires the queue action), anywhere else folds the file — which also snaps the
-    // viewport back to its header.
+    // A click on the pinned band acts like one on the real header: the trailing zone toggles the
+    // file's mark, anywhere else folds the file — which also snaps the viewport back to its header.
     private void OnStickyHeaderClicked(Section s, PointF point)
     {
-        if (point.X >= CardRight() - TrailingZoneWidth(s))
-        {
-            if (ShowsActionButton(s))
-            {
-                _vm.MarkQueuedFileViewedAndAdvance();
-                return;
-            }
+        if (point.X >= CardRight() - ViewedZoneWidth)
             _vm.ToggleFileViewed(s.File.Path);
-        }
         else
-        {
             SetFolded(s, true);
-        }
         _vm.ReportActiveFile(s.File.Path);
     }
 
     // ---- input ----
 
-    private void OnScrolled()
-    {
-        ReportActiveFromScroll();
-        NotifyScrollChanged(viewportFits: false);
-    }
+    // Scrolling moves the reader, not the selection: the tree's highlight stays on the file the user
+    // actually picked. The sticky header derives the file being read from the scroll offset directly,
+    // so it still follows along.
+    private void OnScrolled() => NotifyScrollChanged(viewportFits: false);
 
     private void OnHorizontalWheel(float deltaX)
     {
@@ -666,23 +605,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             // The row's top slice is the gap between cards — a click there targets nothing.
             if (!_list.TryGetRowRect(index, out var rowRect)) return;
             if (point.Y > rowRect.Top - SectionGap) return;
-            // The trailing zone is the action button (active header) or the Viewed checkbox;
-            // anywhere else on the band toggles the fold.
-            if (point.X >= CardRight() - TrailingZoneWidth(s))
-            {
-                if (ShowsActionButton(s))
-                {
-                    // Marks + folds the queue head and scrolls to the next unviewed file, where
-                    // the button reappears.
-                    _vm.MarkQueuedFileViewedAndAdvance();
-                    return;
-                }
+            // The trailing zone is the mark checkbox; anywhere else on the band toggles the fold.
+            if (point.X >= CardRight() - ViewedZoneWidth)
                 _vm.ToggleFileViewed(s.File.Path);
-            }
             else
-            {
                 SetFolded(s, !s.Folded);
-            }
             _vm.ReportActiveFile(s.File.Path);
             return;
         }
@@ -896,9 +823,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         });
         x += StatusIconWidth + 8f;
 
-        EnsureActionMetrics(c);
-        var zoneWidth = TrailingZoneWidth(s);
-        var zoneLeft = cardLeft + cardWidth - zoneWidth;
+        var zoneLeft = cardLeft + cardWidth - ViewedZoneWidth;
         var textWidth = Math.Max(0f, zoneLeft - x - HeaderPaddingX);
         if (textWidth > 0)
         {
@@ -915,10 +840,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             });
         }
 
-        if (ShowsActionButton(s))
-            DrawActionButton(c, band, z);
-        else
-            DrawViewedCheckbox(c, s.File.Path, band, zoneLeft, viewed, z);
+        DrawViewedCheckbox(c, s.File.Path, band, zoneLeft, viewed, z);
     }
 
     // The mark checkbox on a header's trailing edge: glyph + label, success-tinted once checked. A
@@ -951,62 +873,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         });
     }
 
-    // The primary action pill on the queued file's header — the review loop's one button, always
-    // on the first unviewed file: check it off and ride to the next one.
-    private void DrawActionButton(ICanvas c, RectF band, int z)
-    {
-        var width = ActionButtonWidth();
-        var left = band.Left + band.Width - HeaderPaddingX - width;
-        var bottom = band.Bottom + (band.Height - ActionButtonHeight) / 2f;
-        var rect = new RectF(left, bottom, width, ActionButtonHeight);
-
-        c.DrawRect(new DrawRectInputs
-        {
-            Position = rect,
-            Style = new RectStyle
-            {
-                BackgroundColor = _theme.Palette.Accent,
-                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            },
-            ZIndex = z + 2,
-        });
-
-        HeaderGlyphStyle.TextColor = _theme.Palette.TextOnAccent;
-        c.DrawText(new DrawTextInputs
-        {
-            Position = new RectF(left + ActionButtonPaddingX, bottom, ActionButtonIconWidth, ActionButtonHeight),
-            Text = LucideIcons.CheckSquare,
-            Style = HeaderGlyphStyle,
-            ZIndex = z + 3,
-        });
-        ActionLabelStyle.TextColor = _theme.Palette.TextOnAccent;
-        c.DrawText(new DrawTextInputs
-        {
-            Position = new RectF(
-                left + ActionButtonPaddingX + ActionButtonIconWidth + ActionButtonIconGap, bottom,
-                _actionLabelWidth, ActionButtonHeight),
-            Text = ActionLabel(),
-            Style = ActionLabelStyle,
-            ZIndex = z + 3,
-        });
-    }
-
     // Checking a file's box marks it viewed on a branch review and stages it on the working-tree
-    // review, so both the checkbox label and the primary action say which.
+    // review, so the checkbox label says which.
     private string MarkLabel() => _vm.MarkKind == ReviewMarkKind.Staged
         ? _loc.Strings.Value.ReviewStaged
         : _loc.Strings.Value.ReviewViewed;
-
-    private string ActionLabel() => _vm.MarkKind == ReviewMarkKind.Staged
-        ? _loc.Strings.Value.ReviewActionStageNext
-        : _loc.Strings.Value.ReviewActionMarkViewedNext;
-
-    private void EnsureActionMetrics(ICanvas c)
-    {
-        if (_actionMetricsResolved) return;
-        _actionLabelWidth = c.MeasureTextWidth(ActionLabel(), ActionLabelStyle);
-        _actionMetricsResolved = _actionLabelWidth > 0;
-    }
 
     // The single body row of an unloaded / binary / errored / empty section: the card's body
     // surface with a muted message.
