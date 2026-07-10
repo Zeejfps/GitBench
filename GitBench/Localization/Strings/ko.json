@@ -362,6 +362,8 @@
 
   "repos.add_button": "저장소 추가",
   "repos.panel_title": "저장소",
+  "repos.collapse_button": "사이드바 접기",
+  "repos.expand_button": "사이드바 펼치기",
   "repos.clone_title": "저장소 복제",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "복제 위치",

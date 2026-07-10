@@ -362,6 +362,8 @@
 
   "repos.add_button": "リポジトリを追加",
   "repos.panel_title": "リポジトリ",
+  "repos.collapse_button": "サイドバーを折りたたむ",
+  "repos.expand_button": "サイドバーを展開",
   "repos.clone_title": "リポジトリをクローン",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "クローン先",

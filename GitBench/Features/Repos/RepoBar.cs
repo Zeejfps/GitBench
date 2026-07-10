@@ -112,18 +112,38 @@ internal sealed record RepoBar : Widget
                                 VAlign = TextAlignment.Center,
                                 Color = Theme.Color(s => s.Palette.TextStrong),
                             },
-                            new IconButtonWidget
+                            new Row
                             {
-                                Icon = LucideIcons.FolderPlus,
-                                IconSize = 15f,
-                                Width = 24,
-                                Height = 24,
-                                Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
-                                Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
-                            }
-                                .WithTooltip(L.T(s => s.ReposAddButton))
-                                .WithMenuController(rect =>
-                                    RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenu.Items(ctx), MenuPlacement.Below)),
+                                Gap = Spacing.Xs,
+                                CrossAxis = CrossAxisAlignment.Center,
+                                Children =
+                                [
+                                    new IconButtonWidget
+                                    {
+                                        Icon = LucideIcons.PanelLeftClose,
+                                        IconSize = 15f,
+                                        Width = 24,
+                                        Height = 24,
+                                        Command = new Command(ctx.Require<RepoBarCollapseState>().Toggle),
+                                        Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+                                        Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+                                    }
+                                        .WithTooltip(L.T(s => s.ReposCollapseButton))
+                                        .WithController<KbmController>(),
+                                    new IconButtonWidget
+                                    {
+                                        Icon = LucideIcons.FolderPlus,
+                                        IconSize = 15f,
+                                        Width = 24,
+                                        Height = 24,
+                                        Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+                                        Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+                                    }
+                                        .WithTooltip(L.T(s => s.ReposAddButton))
+                                        .WithMenuController(rect =>
+                                            RepoBarContextMenu.Show(ctx, rect.BottomLeft, AddRepoMenu.Items(ctx), MenuPlacement.Below)),
+                                ],
+                            },
                         ],
                     },
                 ],

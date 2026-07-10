@@ -20,13 +20,20 @@ internal sealed class AppKeybindController : KeyboardMouseController
 
     private readonly IRepoRegistry _registry;
     private readonly RepoHoverState _hover;
+    private readonly RepoBarCollapseState _repoBarCollapse;
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
 
-    public AppKeybindController(IRepoRegistry registry, RepoHoverState hover, ILocalizationService loc, IMessageBus bus)
+    public AppKeybindController(
+        IRepoRegistry registry,
+        RepoHoverState hover,
+        RepoBarCollapseState repoBarCollapse,
+        ILocalizationService loc,
+        IMessageBus bus)
     {
         _registry = registry;
         _hover = hover;
+        _repoBarCollapse = repoBarCollapse;
         _loc = loc;
         _bus = bus;
     }
@@ -38,6 +45,13 @@ internal sealed class AppKeybindController : KeyboardMouseController
         if (e.Key == KeyboardKey.F5)
         {
             ForceRefresh();
+            e.Consume();
+            return;
+        }
+
+        if (e.Key == KeyboardKey.B && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        {
+            _repoBarCollapse.Toggle();
             e.Consume();
             return;
         }

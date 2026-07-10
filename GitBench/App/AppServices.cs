@@ -73,6 +73,7 @@ internal static class AppServices
         }, eager: true);
         context.AddSingleton<IDragController, DragController>();
         context.AddSingleton<RepoHoverState>();
+        context.AddSingleton<RepoBarCollapseState>();
         context.AddSingleton(ctx => new RepoNodeFactory(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IRepoStatusStore>(),

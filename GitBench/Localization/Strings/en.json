@@ -362,6 +362,8 @@
 
   "repos.add_button": "Add Repository",
   "repos.panel_title": "Repositories",
+  "repos.collapse_button": "Collapse sidebar",
+  "repos.expand_button": "Expand sidebar",
   "repos.clone_title": "Clone repository",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "Clone into",

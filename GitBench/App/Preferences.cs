@@ -18,6 +18,7 @@ public sealed record Preferences
     public int ReviewWindowWidth { get; init; } = 1100;
     public int ReviewWindowHeight { get; init; } = 800;
     public float RepoBarWidth { get; init; } = 220f;
+    public bool RepoBarCollapsed { get; init; }
     public float BranchesWidth { get; init; } = 220f;
     public float CommitDetailsWidth { get; init; } = 380f;
     public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;

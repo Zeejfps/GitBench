@@ -51,6 +51,8 @@ public sealed class PreferencesService : IDisposable
 
     public void SetRepoBarWidth(float width) => Mutate(p => p with { RepoBarWidth = width });
 
+    public void SetRepoBarCollapsed(bool collapsed) => Mutate(p => p with { RepoBarCollapsed = collapsed });
+
     public void SetBranchesWidth(float width) => Mutate(p => p with { BranchesWidth = width });
 
     public void SetCommitDetailsWidth(float width) => Mutate(p => p with { CommitDetailsWidth = width });

@@ -362,6 +362,8 @@
 
   "repos.add_button": "添加仓库",
   "repos.panel_title": "仓库",
+  "repos.collapse_button": "折叠侧边栏",
+  "repos.expand_button": "展开侧边栏",
   "repos.clone_title": "克隆仓库",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "克隆到",

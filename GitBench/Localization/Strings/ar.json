@@ -404,6 +404,8 @@
 
   "repos.add_button": "إضافة مستودع",
   "repos.panel_title": "المستودعات",
+  "repos.collapse_button": "طي الشريط الجانبي",
+  "repos.expand_button": "توسيع الشريط الجانبي",
   "repos.clone_title": "استنساخ مستودع",
   "repos.clone_url_placeholder": "https://github.com/user/repo.git",
   "repos.clone_parent_dir_label": "الاستنساخ إلى",

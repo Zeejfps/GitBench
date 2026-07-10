@@ -50,6 +50,8 @@ internal static class LucideIcons
     public const string ListFilter = ""; // list-filter (hide remote-only branches)
     public const string LayoutList = "";   // layout-list (Changes: file lists + diff pane)
     public const string ScrollText = "";   // scroll-text (Changes: every diff in one stacked scroll)
+    public const string PanelLeftClose = ""; // panel-left-close (collapse the repo bar)
+    public const string PanelLeftOpen = "";  // panel-left-open (expand the repo bar)
 
     public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
     public const string Inbox = "";        // inbox (empty state: nothing staged)
