@@ -16,20 +16,29 @@ internal enum DragAxis { X, Y }
 /// </summary>
 internal sealed class SplitterController : KeyboardMouseController, IProvidesCursor, IDisposable
 {
+    private const int DoubleClickThresholdMs = 400;
+    private const float ClickSlopPixels = 3f;
+
     private readonly DragAxis _axis;
     private readonly Action<float> _onDelta;
     private readonly Action<bool> _onHoverChanged;
+    private readonly Action? _onDoubleClick;
     private readonly InputSystem _inputSystem;
 
     private bool _dragging;
     private bool _hovered;
     private PointF _lastPoint;
+    private float _dragDistance;
+    private int _lastClickTickMs;
+    private bool _hasLastClick;
 
-    public SplitterController(Context context, DragAxis axis, Action<float> onDelta, Action<bool> onHoverChanged)
+    public SplitterController(Context context, DragAxis axis, Action<float> onDelta, Action<bool> onHoverChanged,
+        Action? onDoubleClick = null)
     {
         _axis = axis;
         _onDelta = onDelta;
         _onHoverChanged = onHoverChanged;
+        _onDoubleClick = onDoubleClick;
         _inputSystem = context.Get<InputSystem>()!;
     }
 
@@ -66,6 +75,7 @@ internal sealed class SplitterController : KeyboardMouseController, IProvidesCur
         if (e.State == InputState.Pressed)
         {
             _dragging = true;
+            _dragDistance = 0f;
             _lastPoint = e.Mouse.Point;
             _inputSystem.StealFocus(this);
             e.Consume();
@@ -77,7 +87,34 @@ internal sealed class SplitterController : KeyboardMouseController, IProvidesCur
             _dragging = false;
             _inputSystem.Blur(this);
             if (!_hovered) _onHoverChanged(false);
+            DetectDoubleClick();
             e.Consume();
+        }
+    }
+
+    // Double-click is detected by tick stamp like the row controllers (the event carries no click
+    // count), and only a press released within the slop counts as a click — a quick pair of drags
+    // must not trigger it.
+    private void DetectDoubleClick()
+    {
+        if (_onDoubleClick == null) return;
+
+        if (_dragDistance > ClickSlopPixels)
+        {
+            _hasLastClick = false;
+            return;
+        }
+
+        var now = Environment.TickCount;
+        if (_hasLastClick && unchecked(now - _lastClickTickMs) <= DoubleClickThresholdMs)
+        {
+            _hasLastClick = false;
+            _onDoubleClick();
+        }
+        else
+        {
+            _lastClickTickMs = now;
+            _hasLastClick = true;
         }
     }
 
@@ -87,6 +124,7 @@ internal sealed class SplitterController : KeyboardMouseController, IProvidesCur
         var delta = e.Mouse.Point - _lastPoint;
         _lastPoint = e.Mouse.Point;
         var d = _axis == DragAxis.X ? delta.X : delta.Y;
+        _dragDistance += MathF.Abs(d);
         if (d != 0f) _onDelta(d);
         e.Consume();
     }

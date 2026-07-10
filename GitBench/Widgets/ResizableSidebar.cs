@@ -16,6 +16,7 @@ public sealed record ResizableSidebar : Widget
     public float MinResizeWidth { get; init; } = 140f;
     public float MaxResizeWidth { get; init; } = 600f;
     public Action<float>? OnWidthChanged { get; init; }
+    public Action? OnSplitterDoubleClick { get; init; }
 
     protected override View CreateView(Context ctx) => ResizableLeftSidebar.Build(
         ctx,
@@ -23,5 +24,6 @@ public sealed record ResizableSidebar : Widget
         initialWidth: InitialWidth,
         minWidth: MinResizeWidth,
         maxWidth: MaxResizeWidth,
-        onWidthChanged: OnWidthChanged);
+        onWidthChanged: OnWidthChanged,
+        onSplitterDoubleClick: OnSplitterDoubleClick);
 }

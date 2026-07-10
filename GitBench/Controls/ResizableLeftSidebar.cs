@@ -84,7 +84,8 @@ internal sealed class ResizableLeftSidebar : ContainerView
         float initialWidth,
         float minWidth = 140f,
         float maxWidth = 600f,
-        Action<float>? onWidthChanged = null)
+        Action<float>? onWidthChanged = null,
+        Action? onSplitterDoubleClick = null)
     {
         var splitterHovered = new State<bool>(false);
         var splitter = new RectView();
@@ -100,7 +101,8 @@ internal sealed class ResizableLeftSidebar : ContainerView
             ctx,
             DragAxis.X,
             sidebar.AdjustWidthByPixels,
-            h => splitterHovered.Value = h));
+            h => splitterHovered.Value = h,
+            onSplitterDoubleClick));
 
         return sidebar;
     }
