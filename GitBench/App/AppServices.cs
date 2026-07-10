@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
@@ -31,6 +32,12 @@ internal static class AppServices
 
         context.AddSingleton<IMessageBus, MessageBus>();
         context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
+
+        // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
+        // switches on it, and the commit bar shows staging progress only in the Review layout.
+        var workingChangesLayout = new State<WorkingChangesLayout>(preferences.Current.WorkingChangesLayout);
+        workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
+        context.AddService(workingChangesLayout);
 
         var themeMode = new State<ThemeMode>(preferences.Current.Theme);
         themeMode.Changed += preferences.SetTheme;
@@ -80,6 +87,22 @@ internal static class AppServices
         // Shared so the Local Changes file list and the workspace-footer merge bar drive the same
         // staging / commit state from either tab.
         context.AddSingleton<LocalChangesViewModel>();
+
+        // The Changes tab's Review layout. Its commit-details VM is its own — opted out of the
+        // selection bus so the History pane's commit selection can never drive the working-tree
+        // review's file list.
+        context.AddSingleton(ctx => new WorkingTreeReviewViewModel(
+            ctx.Require<LocalChangesViewModel>(),
+            new CommitDetailsViewModel(
+                ctx.Require<IGitService>(),
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IUiDispatcher>(),
+                ctx.Require<IMessageBus>(),
+                ctx.Require<ILocalizationService>(),
+                preferences,
+                subscribeToSelection: false),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<ILocalizationService>()));
         context.AddSingleton<UpdateService>();
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base

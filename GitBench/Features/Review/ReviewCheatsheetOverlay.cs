@@ -26,9 +26,13 @@ internal sealed record ReviewCheatsheetOverlay : Widget
 
     public required Action OnClose { get; init; }
 
+    /// <summary>What the surface's marks mean, so the two mark rows read "viewed" or "staged".</summary>
+    public ReviewMarkKind MarkKind { get; init; } = ReviewMarkKind.Viewed;
+
     protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
+        var staged = MarkKind == ReviewMarkKind.Staged;
 
         var card = new Box
         {
@@ -57,8 +61,12 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
                                 },
                                 ShortcutRow(["j", "k"], L.T(s => s.ReviewShortcutFileNav)),
-                                ShortcutRow(["Space"], L.T(s => s.ReviewShortcutPrimary)),
-                                ShortcutRow(["v"], L.T(s => s.ReviewShortcutToggleViewed)),
+                                ShortcutRow(["Space"], staged
+                                    ? L.T(s => s.ReviewShortcutPrimaryStage)
+                                    : L.T(s => s.ReviewShortcutPrimary)),
+                                ShortcutRow(["v"], staged
+                                    ? L.T(s => s.ReviewShortcutToggleStaged)
+                                    : L.T(s => s.ReviewShortcutToggleViewed)),
                                 ShortcutRow(["?"], L.T(s => s.ReviewShortcutHelp)),
                                 ShortcutRow(["Esc"], L.T(s => s.ReviewShortcutClose)),
                             ],

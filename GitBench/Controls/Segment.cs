@@ -14,7 +14,7 @@ internal sealed record Segment : Widget<ButtonState>
 
     public required Prop<string?> Label { get; init; }
     public required BorderRadiusStyle Radius { get; init; }
-    public required SegmentViewModel Model { get; init; }
+    public required ISegmentModel Model { get; init; }
 
     protected override ButtonState CreateState(Context ctx) => new(new Command(Model.Activate));
 

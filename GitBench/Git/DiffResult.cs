@@ -2,7 +2,10 @@ namespace GitBench.Git;
 
 // Range = the combined "net diff" of a review range: base→head as one diff (DiffTarget carries both
 // SHAs — CommitSha = head, BaseSha = base). Renders like Commit (read-only, not stageable).
-public enum DiffSide { Unstaged, Staged, Commit, Range }
+// WorkingTree = HEAD→working tree for one path, staged and unstaged content together. The working-tree
+// review surface shows one diff per file whatever its index state, so the file's card doesn't split or
+// re-target as it is staged.
+public enum DiffSide { Unstaged, Staged, Commit, Range, WorkingTree }
 
 public enum DiffLineKind { Context, Added, Removed }
 

@@ -3124,6 +3124,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             case DiffSide.Staged:
                 return RunGitDiff(repo.Path, out error,
                     "diff", "--cached", "--no-color", "-M", contextArg, "--", path);
+            case DiffSide.WorkingTree:
+                // Everything the file has changed since HEAD, index state ignored, so staging a
+                // file leaves its diff untouched.
+                if (IsTracked(repo.Path, path))
+                    return RunGitDiff(repo.Path, out error,
+                        "diff", "HEAD", "--no-color", "-M", contextArg, "--", path);
+                return RunUntrackedFileDiff(repo, path, contextArg, out error);
             default:
                 if (IsTracked(repo.Path, path))
                     return RunGitDiff(repo.Path, out error,
@@ -3164,6 +3171,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 case DiffSide.Staged:
                     // Staged diff is index-vs-HEAD: old = HEAD blob, new = staged (index) blob.
                     return ShowBlob(repo.Path, oldSide ? $"HEAD:{path}" : $":{path}");
+
+                case DiffSide.WorkingTree:
+                    // HEAD-vs-disk: old = HEAD blob, new = file on disk.
+                    return oldSide ? ShowBlob(repo.Path, $"HEAD:{path}") : ReadWorkingFile(repo.Path, path);
 
                 default: // Unstaged: working-tree-vs-index. old = index blob, new = file on disk.
                     return oldSide ? ShowBlob(repo.Path, $":{path}") : ReadWorkingFile(repo.Path, path);

@@ -22,6 +22,7 @@ public sealed record Preferences
     public float CommitDetailsWidth { get; init; } = 380f;
     public float CommitDetailsSplitFraction { get; init; } = 2f / 3f;
     public FileViewMode FileViewMode { get; init; } = FileViewMode.Flat;
+    public WorkingChangesLayout WorkingChangesLayout { get; init; } = WorkingChangesLayout.List;
     public bool HideRemoteOnlyBranches { get; init; }
 
     public static Preferences Default { get; } = new();

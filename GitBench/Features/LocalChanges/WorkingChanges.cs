@@ -10,8 +10,11 @@ using ZGF.Observable;
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
-/// The working-tree pane: the staged/unstaged file panels and diff above an animated footer that holds
-/// the commit bar, or — while an operation is in progress — the merge bar or operation panel in its place.
+/// The working-tree pane: the chosen presentation of the working tree — file lists over a diff pane, or
+/// every diff stacked in one scroll — above an animated footer that holds the commit bar, or — while an
+/// operation is in progress — the merge bar or operation panel in its place. Both layouts stage into the
+/// same index and commit through the same bar; the choice lives in the toolbar
+/// (<c>WorkingChangesLayoutToggle</c>) and is remembered across launches.
 /// </summary>
 internal sealed record WorkingChanges : Widget
 {
@@ -30,6 +33,7 @@ internal sealed class LocalChangesView : ContainerView
     {
         var vm = ctx.Require<LocalChangesViewModel>();
         var operation = ctx.Require<OperationViewModel>();
+        var layout = ctx.Require<State<WorkingChangesLayout>>();
         var content = new LocalChangesContentView(ctx, vm);
 
         // Tab cycles unstaged files → commit title → commit description → commit button
@@ -37,6 +41,20 @@ internal sealed class LocalChangesView : ContainerView
         // cycle; the commit bar appends its own stops the first time the footer builds it.
         var focusRing = new FocusRing();
         content.RegisterFocusStops(focusRing);
+
+        // Keep-alive: the list layout's view owns the focus ring and its panels' scroll state, and the
+        // review layout's stacked diffs are expensive to re-mint. Switching layouts only toggles which
+        // is shown.
+        var body = new Switch<WorkingChangesLayout>
+        {
+            Value = layout,
+            KeepAlive = true,
+            Case = l => l switch
+            {
+                WorkingChangesLayout.Review => new WorkingTreeReviewView(),
+                _ => new Raw { View = content },
+            },
+        }.BuildView(ctx);
 
         // The footer swaps between the commit bar (no operation), the merge bar (an operation that
         // carries a commit), and the operation panel (the sequencer operations). Each gates its own
@@ -64,7 +82,7 @@ internal sealed class LocalChangesView : ContainerView
             {
                 new BorderLayoutView
                 {
-                    Center = content,
+                    Center = body,
                     South = footer,
                 },
             },

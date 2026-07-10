@@ -116,7 +116,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     // empty) otherwise, nothing while folded.
     private sealed class Section
     {
-        public required FileChange File { get; init; }
+        // Settable: a working-tree reconcile re-points a surviving section at the refreshed
+        // FileChange (its status can shift as the file is staged or edited).
+        public required FileChange File { get; set; }
         public CommitFileTab? Diff;
         public IDisposable? Subscription;
         public DiffRenderState? Render;
@@ -129,7 +131,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     private readonly Context _ctx;
     private readonly ILocalizationService _loc;
-    private readonly ReviewWindowViewModel _vm;
+    private readonly IReviewSurfaceModel _vm;
     private readonly CommitDetailsViewModel _details;
     private readonly DiffRowPainter _painter;
     private readonly VirtualRowListView _list;
@@ -138,6 +140,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private readonly Dictionary<string, Section> _byPath = new(StringComparer.Ordinal);
     private HashSet<string> _viewedSnapshot = new(StringComparer.Ordinal);
     private int _heightCursor;
+    // Identity of the file list on screen (the details surface's Sha: a commit, a base..head key, or
+    // the working-tree sentinel). A new identity is new content — rebuild and reset the scroll; the
+    // same identity means the same surface refreshed, so reconcile in place.
+    private string? _contentKey;
 
     private ThemeStyles _theme = ThemeStyles.Dark;
     private float _lineHeight;
@@ -170,7 +176,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         var input = ctx.Require<InputSystem>();
         _ctx = ctx;
         _loc = ctx.Localization();
-        _vm = ctx.Require<ReviewWindowViewModel>();
+        _vm = ctx.Require<IReviewSurfaceModel>();
         _details = ctx.Require<CommitDetailsViewModel>();
         _painter = new DiffRowPainter(_loc);
 
@@ -201,17 +207,17 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             SetDirty();
         });
 
-        // The combined range's file list drives the sections. Loading keeps the current sections
-        // up (stale-while-revalidate); a placeholder clears them.
+        // The file list drives the sections. Loading keeps the current sections up
+        // (stale-while-revalidate); a placeholder clears them.
         this.Bind(_details.RenderState, state =>
         {
             switch (state)
             {
                 case CommitDetailsRenderState.Loaded l:
-                    RebuildSections(l.Details.Files);
+                    SetFiles(l.Details.Sha, l.Details.Files);
                     break;
                 case CommitDetailsRenderState.Placeholder:
-                    RebuildSections(Array.Empty<FileChange>());
+                    SetFiles(null, Array.Empty<FileChange>());
                     break;
             }
         });
@@ -260,6 +266,21 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
 
     // ---- section structure ----
 
+    // Adopts a file list. A different content key is different content — start over at the top. The
+    // same key is the same surface refreshed (an editor save under the working-tree review, a range
+    // reload that resolved to the same endpoints), so the sections reconcile in place: surviving
+    // files keep their loaded diff, fold state and scroll offset, and the file being read stays put.
+    private void SetFiles(string? contentKey, IReadOnlyList<FileChange> files)
+    {
+        if (contentKey == null || contentKey != _contentKey)
+        {
+            _contentKey = contentKey;
+            RebuildSections(files);
+            return;
+        }
+        ReconcileSections(files);
+    }
+
     private void RebuildSections(IReadOnlyList<FileChange> files)
     {
         ClearSections();
@@ -273,6 +294,52 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         _viewedSnapshot = CurrentViewedSet();
         RebuildIndex();
         _list.SetScrollY(0f);
+        SetDirty();
+    }
+
+    // Re-lays the sections over a refreshed file list without disturbing the reader: surviving
+    // sections are moved, not recreated (their DiffViewModel reloads itself on the working-tree
+    // change), vanished ones are disposed, and new ones arrive folded if already marked. The scroll
+    // offset is corrected by however much content shifted above the file being read, so files
+    // appearing or disappearing higher up don't slide it out from under the cursor.
+    private void ReconcileSections(IReadOnlyList<FileChange> files)
+    {
+        var anchor = _vm.ActiveFile.Value is { } path && _byPath.TryGetValue(path, out var a) ? a : null;
+        var anchorBefore = anchor == null ? 0f : SectionTopOffset(anchor);
+
+        var next = new List<Section>(files.Count);
+        var kept = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var f in files)
+        {
+            if (_byPath.TryGetValue(f.Path, out var existing))
+            {
+                existing.File = f;
+                next.Add(existing);
+            }
+            else
+            {
+                next.Add(new Section { File = f, Folded = _vm.IsFileViewed(f.Path) });
+            }
+            kept.Add(f.Path);
+        }
+
+        foreach (var s in _sections)
+        {
+            if (kept.Contains(s.File.Path)) continue;
+            s.Subscription?.Dispose();
+            s.Diff?.Dispose();
+        }
+
+        _sections.Clear();
+        _sections.AddRange(next);
+        _byPath.Clear();
+        foreach (var s in _sections) _byPath[s.File.Path] = s;
+
+        _viewedSnapshot = CurrentViewedSet();
+        var scroll = _list.ScrollY;
+        RebuildIndex();
+        if (anchor != null && _byPath.ContainsKey(anchor.File.Path))
+            _list.SetScrollY(Math.Max(0f, scroll + (SectionTopOffset(anchor) - anchorBefore)));
         SetDirty();
     }
 
@@ -854,15 +921,23 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             DrawViewedCheckbox(c, s.File.Path, band, zoneLeft, viewed, z);
     }
 
-    // The Viewed checkbox on a header's trailing edge: glyph + label, success-tinted once checked.
+    // The mark checkbox on a header's trailing edge: glyph + label, success-tinted once checked. A
+    // partially staged file gets the indeterminate glyph in the warning tint — it has staged content
+    // and unstaged edits on top, so it is neither.
     private void DrawViewedCheckbox(ICanvas c, string path, RectF band, float zoneLeft, bool viewed, int z)
     {
-        var viewedColor = viewed ? _theme.Status.Success : _theme.Palette.TextSecondary;
+        var partial = !viewed && _vm.IsFilePartiallyMarked(path);
+        var (glyph, viewedColor) = (viewed, partial) switch
+        {
+            (true, _) => (LucideIcons.CheckSquare, _theme.Status.Success),
+            (_, true) => (LucideIcons.MinusSquare, _theme.Status.Warning),
+            _ => (LucideIcons.Square, _theme.Palette.TextSecondary),
+        };
         HeaderGlyphStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
             Position = new RectF(zoneLeft, band.Bottom, 18f, band.Height),
-            Text = viewed ? LucideIcons.CheckSquare : LucideIcons.Square,
+            Text = glyph,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
         });
@@ -870,7 +945,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         c.DrawText(new DrawTextInputs
         {
             Position = new RectF(zoneLeft + 22f, band.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, band.Height),
-            Text = _loc.Strings.Value.ReviewViewed,
+            Text = MarkLabel(),
             Style = ViewedLabelStyle,
             ZIndex = z + 2,
         });
@@ -910,16 +985,26 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             Position = new RectF(
                 left + ActionButtonPaddingX + ActionButtonIconWidth + ActionButtonIconGap, bottom,
                 _actionLabelWidth, ActionButtonHeight),
-            Text = _loc.Strings.Value.ReviewActionMarkViewedNext,
+            Text = ActionLabel(),
             Style = ActionLabelStyle,
             ZIndex = z + 3,
         });
     }
 
+    // Checking a file's box marks it viewed on a branch review and stages it on the working-tree
+    // review, so both the checkbox label and the primary action say which.
+    private string MarkLabel() => _vm.MarkKind == ReviewMarkKind.Staged
+        ? _loc.Strings.Value.ReviewStaged
+        : _loc.Strings.Value.ReviewViewed;
+
+    private string ActionLabel() => _vm.MarkKind == ReviewMarkKind.Staged
+        ? _loc.Strings.Value.ReviewActionStageNext
+        : _loc.Strings.Value.ReviewActionMarkViewedNext;
+
     private void EnsureActionMetrics(ICanvas c)
     {
         if (_actionMetricsResolved) return;
-        _actionLabelWidth = c.MeasureTextWidth(_loc.Strings.Value.ReviewActionMarkViewedNext, ActionLabelStyle);
+        _actionLabelWidth = c.MeasureTextWidth(ActionLabel(), ActionLabelStyle);
         _actionMetricsResolved = _actionLabelWidth > 0;
     }
 

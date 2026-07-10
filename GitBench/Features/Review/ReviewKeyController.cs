@@ -20,9 +20,9 @@ namespace GitBench.Features.Review;
 /// </summary>
 internal sealed class ReviewKeyController : KeyboardMouseController
 {
-    private readonly ReviewWindowViewModel _vm;
+    private readonly IReviewSurfaceModel _vm;
 
-    public ReviewKeyController(ReviewWindowViewModel vm) => _vm = vm;
+    public ReviewKeyController(IReviewSurfaceModel vm) => _vm = vm;
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {

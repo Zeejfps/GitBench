@@ -207,6 +207,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // change has nothing to refresh. Matters in the review window, where many per-file diff
         // panes are alive at once and a blanket reload would refetch all of them on every edit.
         if (target.Side is DiffSide.Commit or DiffSide.Range) return;
+        // A stage / unstage moves content between HEAD and the index; a HEAD→disk diff is the same
+        // bytes afterwards. Matters in the working-tree review, where every loaded file's pane would
+        // otherwise refetch on every checkbox click.
+        if (msg.IndexOnly && target.Side is DiffSide.WorkingTree) return;
         StartLoad();
     }
 
@@ -562,7 +566,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
         // (conflict markers and all). GetConflictContext is cheap (one `ls-files -u`) and returns
         // null for the common non-conflict case.
-        if (side == DiffSide.Unstaged && mode == DiffViewMode.Diff)
+        if (side is DiffSide.Unstaged or DiffSide.WorkingTree && mode == DiffViewMode.Diff)
         {
             var conflict = git.GetConflictContext(repo, path);
             if (conflict != null)

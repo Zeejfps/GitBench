@@ -24,6 +24,7 @@ internal static class LucideIcons
     public const string ChevronsRight = "";// chevrons-right
     public const string Square = "";        // square (checkbox unchecked)
     public const string CheckSquare = "";   // check-square (checkbox checked)
+    public const string MinusSquare = "";   // minus-square (checkbox indeterminate: partially staged)
     public const string Check = "";   // check (active-selection mark)
     public const string Trash = "";         // trash-2
     public const string SquareTerminal = ""; // square-terminal
@@ -47,6 +48,8 @@ internal static class LucideIcons
     public const string List = "";         // list (flat file view)
     public const string ListTree = "";     // list-tree (tree file view)
     public const string ListFilter = ""; // list-filter (hide remote-only branches)
+    public const string LayoutList = "";   // layout-list (Changes: file lists + diff pane)
+    public const string ScrollText = "";   // scroll-text (Changes: every diff in one stacked scroll)
 
     public const string CircleCheck = "";  // check-circle (empty state: working tree clean)
     public const string Inbox = "";        // inbox (empty state: nothing staged)

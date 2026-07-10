@@ -73,11 +73,17 @@ internal sealed record ReviewWindowRootView : Widget
         };
 
         // The Viewed tracker is provided across the whole window so the reused Changes list, tab
-        // strip, and diff-pane headers resolve it and show their per-file Viewed marks.
+        // strip, and diff-pane headers resolve it and show their per-file Viewed marks. The stacked
+        // list and the key controller bind the surface seam, which the header bar's base chip and
+        // window chrome sit beneath as the concrete window model.
         return new Provide<IReviewedFileTracker>
         {
             Value = Model.ReviewedFiles,
-            Child = new Provide<ReviewWindowViewModel> { Value = Model, Child = content },
+            Child = new Provide<IReviewSurfaceModel>
+            {
+                Value = Model,
+                Child = new Provide<ReviewWindowViewModel> { Value = Model, Child = content },
+            },
         };
     }
 

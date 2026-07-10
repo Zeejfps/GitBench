@@ -1068,7 +1068,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             work: mutate,
             onResult: outcome =>
             {
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
+                // Nothing on disk moved — only the index. Lets the working-tree review's stacked
+                // diffs (HEAD→disk, invariant here) skip a refetch per loaded file per click.
+                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id, IndexOnly: true));
                 Update(s => s with { OpError = (outcome as GitOutcome.Failed)?.Message });
             },
             lane: _opGen);

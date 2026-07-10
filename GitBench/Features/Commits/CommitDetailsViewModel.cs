@@ -37,6 +37,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     // range tabs (base→head) rather than commit-vs-parent. Null for every commit/History selection.
     private string? _currentBaseSha;
     private Guid _currentRepoId;
+    // Set only by ShowWorkingTree: opened files diff HEAD→disk and the file list is pushed in by the
+    // host rather than loaded from a sha.
+    private bool _workingTree;
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
 
@@ -114,6 +117,8 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     /// </summary>
     public CommitFileTab? CreateFileDiff(string path)
     {
+        if (_workingTree)
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc);
         if (string.IsNullOrEmpty(_currentSha)) return null;
         return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha);
     }
@@ -187,6 +192,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Gen.Bump();
         _currentSha = null;
         _currentBaseSha = null;
+        _workingTree = false;
         CloseAllTabs();
         Update(s => s with
         {
@@ -207,6 +213,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
         _currentSha = sha;
         _currentBaseSha = null;
+        _workingTree = false;
         _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
@@ -247,6 +254,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 
         _currentSha = headSha;
         _currentBaseSha = baseSha;
+        _workingTree = false;
         _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
@@ -270,6 +278,44 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
                 {
                     Render = error != null ? new CommitDetailsRenderState.Placeholder(error) : result!,
                 }));
+    }
+
+    /// <summary>
+    /// Shows the working tree's changed files as one list, for the working-tree review surface.
+    /// Unlike <see cref="Show"/> / <see cref="ShowRange"/> the files are pushed in by the host (which
+    /// already has them from the working-tree snapshot), so this is synchronous — and it deliberately
+    /// leaves the open tabs alone: the working tree changes on every editor save, and tearing the
+    /// surface down each time would throw away the reviewer's scroll and loaded diffs. Opened files
+    /// diff HEAD→disk (<see cref="DiffSide.WorkingTree"/>), so staging never re-targets them.
+    /// </summary>
+    public void ShowWorkingTree(Guid repoId, IReadOnlyList<FileChange> files)
+    {
+        if (ResolveRepo(repoId) == null) return;
+
+        // A cross-repo switch has nothing in common with what's on screen; drop the tabs.
+        if (!_workingTree || _currentRepoId != repoId) CloseAllTabs();
+
+        _workingTree = true;
+        _currentSha = null;
+        _currentBaseSha = null;
+        _currentRepoId = repoId;
+
+        var s = _loc.Strings.Value;
+        var details = new CommitDetails(
+            RepoId: repoId,
+            Sha: CommitFileTab.WorkingTreeKey(repoId),
+            AuthorName: s.ReviewWorkingTreeTitle,
+            AuthorEmail: string.Empty,
+            AuthorWhen: default,
+            CommitterName: string.Empty,
+            CommitterEmail: string.Empty,
+            CommitterWhen: default,
+            Message: s.ReviewCombinedSummary(files.Count),
+            MessageShort: s.ReviewCombinedSummary(files.Count),
+            ParentShas: ["HEAD"],
+            Files: files);
+
+        Update(state => state with { Render = new CommitDetailsRenderState.Loaded(details) });
     }
 
     // A synthetic CommitDetails for a combined range so the shared details view renders it unchanged:
