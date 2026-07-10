@@ -12,6 +12,8 @@ using static GitBench.App.AppPaths;
 // can leave an update half-applied. No callbacks here — the DI container doesn't exist yet.
 VelopackApp.Build().Run();
 
+CrashLog.Install(AppDataPath("crash.log"));
+
 var prefsPath = AppDataPath("preferences.json");
 using var preferences = new PreferencesService(PreferencesStore.Load(prefsPath), prefsPath);
 
