@@ -12,7 +12,8 @@ namespace GitBench.Features.Diff;
 /// <summary>
 /// Per-row paint parameters: the row's placement (Left is already horizontal-scroll adjusted,
 /// Width is the full content width), the file's gutter geometry, whether the row's gap bar is
-/// hovered, and the list viewport (for clipping the tear pattern to visible segments).
+/// hovered, the list viewport (for clipping the tear pattern to visible segments), and the slice
+/// of the row's text covered by the text selection, if any.
 /// </summary>
 internal readonly record struct DiffRowPaint(
     float Left,
@@ -22,7 +23,8 @@ internal readonly record struct DiffRowPaint(
     bool SingleGutter,
     bool ExpanderHovered,
     RectF Viewport,
-    int Z);
+    int Z,
+    DiffRowSelection? Selection = null);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -36,6 +38,11 @@ internal sealed class DiffRowPainter
     public const float GlyphColumnWidth = 18f;
     public const float BannerPaddingX = 8f;
     private const float HunkHeaderGap = 12f;
+    // Breathing space after each gutter column and after the kind glyph.
+    private const float ColumnGap = 4f;
+    // How far a selection runs past the last glyph on a row whose newline it swallows, so a
+    // multi-line selection reads as continuous instead of stopping ragged at each line's end.
+    private const float SelectionEolWidth = 0.5f;
 
     // Gap-expander icons on the separator bars: fixed-width clickable cells at the far left of
     // the bar, over the gutter columns. Draw and hit-test share this geometry.
@@ -115,6 +122,17 @@ internal sealed class DiffRowPainter
                 DrawLineRow(c, l, p);
                 break;
         }
+    }
+
+    /// <summary>
+    /// The x where a line row's text begins: past the line-number gutter(s) and the +/- glyph
+    /// column. The hit-test maps a pointer back to a character against this same origin, so the
+    /// caret lands where the glyph is drawn.
+    /// </summary>
+    public static float LineTextOriginX(float left, float gutterWidth, bool singleGutter)
+    {
+        var gutters = singleGutter ? 1 : 2;
+        return left + gutters * (gutterWidth + ColumnGap) + GlyphColumnWidth + ColumnGap;
     }
 
     /// <summary>The gap bar a row carries, or null for rows that aren't expander targets.</summary>
@@ -313,7 +331,30 @@ internal sealed class DiffRowPainter
         var textLeft = DrawGutterAndGlyph(c, l, p);
         if (l.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, l, ranges, textLeft, p.Bottom, p.Z);
+        // Above the emphasis wash (same layer, drawn after) and below the text, which stays
+        // fully legible through the selection tint.
+        if (p.Selection is { } selection)
+            DrawSelection(c, l.Text, selection, textLeft, p.Bottom, p.Z + 1);
         DrawLineText(c, l, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
+    }
+
+    // The selected slice as one rect on the monospace cell grid — the same grid the hit-test
+    // inverts, so the highlight's edges land exactly where a click would put the caret.
+    private void DrawSelection(
+        ICanvas c, string text, in DiffRowSelection selection, float textLeft, float bottom, int z)
+    {
+        var startCell = DiffText.CellsBefore(text, selection.StartChar);
+        var endCell = DiffText.CellsBefore(text, selection.EndChar);
+        var width = (endCell - startCell) * MonoAdvance;
+        if (selection.IncludesEol) width += MonoAdvance * SelectionEolWidth;
+        if (width <= 0f) return;
+
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(textLeft + startCell * MonoAdvance, bottom, width, LineHeight),
+            Style = SolidBgStyle(Styles.SelectionBackground),
+            ZIndex = z,
+        });
     }
 
     private void DrawRowBackground(ICanvas c, DiffRow.Line l, in DiffRowPaint p)
@@ -349,13 +390,13 @@ internal sealed class DiffRowPainter
         {
             DrawMonoText(c, l.OldNumber, x, p.Bottom, p.GutterWidth,
                 Styles.LineNumberText, TextAlignment.End, p.Z + 2);
-            x += p.GutterWidth + 4f;
+            x += p.GutterWidth + ColumnGap;
         }
         DrawMonoText(c, l.NewNumber, x, p.Bottom, p.GutterWidth,
             Styles.LineNumberText, TextAlignment.End, p.Z + 2);
-        x += p.GutterWidth + 4f;
+        x += p.GutterWidth + ColumnGap;
         DrawMonoText(c, glyph, x, p.Bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, p.Z + 2);
-        return x + GlyphColumnWidth + 4f;
+        return LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter);
     }
 
     // Intra-line emphasis: a stronger background tint over the changed characters, layered between

@@ -24,24 +24,59 @@ internal static class DiffText
     public static int VisualCells(string text)
     {
         var cells = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            int cp;
-            if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
-            {
-                cp = char.ConvertToUtf32(c, text[i + 1]);
-                i++;
-            }
-            else
-            {
-                cp = c;
-            }
-
-            cells += IsWideCodePoint(cp) ? 2 : 1;
-        }
-
+        var i = 0;
+        while (i < text.Length) cells += StepCells(text, ref i);
         return cells;
+    }
+
+    /// <summary>Cells occupied by <c>text[0..charIndex)</c> — the column a caret at that offset
+    /// sits in. The x of a text position is <c>origin + CellsBefore(...) * monoAdvance</c>.</summary>
+    public static int CellsBefore(string text, int charIndex)
+    {
+        var limit = Math.Clamp(charIndex, 0, text.Length);
+        var cells = 0;
+        var i = 0;
+        while (i < limit) cells += StepCells(text, ref i);
+        return cells;
+    }
+
+    /// <summary>
+    /// The character offset nearest the given column, for turning a pointer x into a caret. A
+    /// column landing in a glyph's leading half snaps before it and its trailing half after, so
+    /// clicks read as "between characters"; a surrogate pair or a two-cell CJK glyph is never
+    /// split.
+    /// </summary>
+    public static int CharIndexAtCell(string text, float cell)
+    {
+        if (cell <= 0f) return 0;
+        var cells = 0;
+        var i = 0;
+        while (i < text.Length)
+        {
+            var start = i;
+            var width = StepCells(text, ref i);
+            if (cell < cells + width / 2f) return start;
+            cells += width;
+        }
+        return text.Length;
+    }
+
+    // Cells of the code point at i, advancing i past it (surrogate pairs count as one glyph).
+    private static int StepCells(string text, ref int i)
+    {
+        var c = text[i];
+        int cp;
+        if (char.IsHighSurrogate(c) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+        {
+            cp = char.ConvertToUtf32(c, text[i + 1]);
+            i += 2;
+        }
+        else
+        {
+            cp = c;
+            i++;
+        }
+        return IsWideCodePoint(cp) ? 2 : 1;
     }
 
     private static bool IsWideCodePoint(int cp) =>

@@ -52,7 +52,7 @@ internal sealed record ReviewDiffPanel : IWidget
 /// Viewed folds its section, and the tree's activation scrolls here. Scrolling does not change
 /// the selection — only a click on a card, the tree, or j/k does.
 /// </summary>
-internal sealed class ReviewDiffListView : View, IScrollableContent
+internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelectionSurface
 {
     private const float AssumedFontSize = FontSize.Body;
     private const float FallbackMonoAdvanceRatio = 0.6f;
@@ -124,6 +124,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private readonly CommitDetailsViewModel _details;
     private readonly DiffRowPainter _painter;
     private readonly VirtualRowListView _list;
+    // Selections are scoped to one file's card: the scope is its path, so a drag that runs onto
+    // the neighbouring card stops at the card it started in.
+    private readonly DiffSelectionModel _selection = new();
+    private readonly DiffSelectionController _selectionController;
 
     private readonly List<Section> _sections = new();
     private readonly Dictionary<string, Section> _byPath = new(StringComparer.Ordinal);
@@ -184,6 +188,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         // and floats the sticky header over the rows.
         AddChildToSelf(new PanelOverlay(this));
         _list.UseController(input, () => new VirtualRowListController(_list));
+        _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
+        this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
         this.BindThemed(ctx.Theme(), s =>
         {
@@ -303,6 +309,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         _sections.AddRange(next);
         _byPath.Clear();
         foreach (var s in _sections) _byPath[s.File.Path] = s;
+        if (_selection.Scope is string selectedPath && !_byPath.ContainsKey(selectedPath))
+            _selection.Clear();
 
         _viewedSnapshot = CurrentViewedSet();
         var scroll = _list.ScrollY;
@@ -321,6 +329,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         }
         _sections.Clear();
         _byPath.Clear();
+        _selection.Clear();
         _naturalWidth = 0f;
         _heightCursor = 0;
     }
@@ -430,8 +439,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
     private void OnSectionRender(Section s, DiffRenderState state)
     {
         var oldHeight = BodyHeight(s);
+        var oldRowCount = s.RowSet.Rows.Count;
         s.Render = state;
         s.RowSet = DiffRowSet.Build(state, _loc);
+        // Row indices moved under a selection in this file (a gap expanded, the diff arrived). A
+        // same-shape re-emit — the syntax highlight attaching — leaves them valid.
+        if (s.RowSet.Rows.Count != oldRowCount) ClearSelectionIn(s.File.Path);
         s.GutterWidth = ComputeGutterWidth(s);
         GrowNaturalWidth(s);
         var newHeight = BodyHeight(s);
@@ -481,7 +494,15 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         if (s.Folded == folded) return;
         var oldHeight = BodyHeight(s);
         s.Folded = folded;
+        ClearSelectionIn(s.File.Path);
         ReindexWithAnchor(s, oldHeight, BodyHeight(s));
+    }
+
+    // Drops a text selection that belonged to a file whose rows just moved or vanished.
+    private void ClearSelectionIn(string path)
+    {
+        if (!Equals(_selection.Scope, path)) return;
+        _selection.Clear();
     }
 
     private HashSet<string> CurrentViewedSet()
@@ -660,9 +681,85 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
             if (!_list.TryGetRowRect(index, out var rowRect)) return MouseCursor.Default;
             return point.Y > rowRect.Top - SectionGap ? MouseCursor.Default : MouseCursor.Hand;
         }
-        if (s.RowSet.Rows.Count > 0 && DiffRowPainter.GapBarOf(s.RowSet.Rows[local - 1]) != null)
-            return MouseCursor.Hand;
-        return MouseCursor.Default;
+        if (s.RowSet.Rows.Count == 0) return MouseCursor.Default;
+        var row = s.RowSet.Rows[local - 1];
+        if (DiffRowPainter.GapBarOf(row) != null) return MouseCursor.Hand;
+        return row is DiffRow.Line ? MouseCursor.Text : MouseCursor.Default;
+    }
+
+    // ---- text selection ----
+
+    DiffSelectionModel IDiffSelectionSurface.Selection => _selection;
+    RectF IDiffSelectionSurface.SelectionViewport => _list.Position;
+    void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
+    void IDiffSelectionSurface.RequestRedraw() => SetDirty();
+
+    IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) =>
+        scope is string path && _byPath.TryGetValue(path, out var s) && s.RowSet.Rows.Count > 0
+            ? s.RowSet.Rows
+            : null;
+
+    // Everything that isn't a code line: the padding strips, the pinned band, a card header, and
+    // the gap-expander bars, each of which already owns its click.
+    bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
+    {
+        if (point.Y > _list.Position.Top - PanelPaddingY) return true;
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point)) return true;
+
+        var index = _list.RowIndexAt(point);
+        if (index < 0) return false;
+        var s = Locate(index, out var local);
+        if (s == null) return false;
+        if (local == 0) return true;
+        return s.RowSet.Rows.Count > 0 && DiffRowPainter.GapBarOf(s.RowSet.Rows[local - 1]) != null;
+    }
+
+    DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point)
+    {
+        if (!_metricsResolved || point.Y > _list.Position.Top - PanelPaddingY) return null;
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point)) return null;
+        if (!_list.Position.ContainsPoint(point)) return null;
+
+        var index = _list.RowIndexAt(point);
+        if (index < 0) return null;
+        var s = Locate(index, out var local);
+        if (s == null || local == 0 || s.RowSet.Rows.Count == 0) return null;
+        if (s.RowSet.Rows[local - 1] is not DiffRow.Line line) return null;
+
+        return new DiffTextHit(s.File.Path, new DiffTextPos(local - 1, CharIndexAt(s, line.Text, point.X)));
+    }
+
+    DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
+    {
+        var s = ResolveScope(point, scope);
+        if (s == null || s.Folded || s.RowSet.Rows.Count == 0) return null;
+
+        // Content-space y of the pointer, measured down from the top of the scrolling surface.
+        var contentY = _list.Position.Top - point.Y + _list.ScrollY;
+        var bodyTop = SectionTopOffset(s) + HeaderRowHeight;
+        var row = (int)MathF.Floor((contentY - bodyTop) / LineHeight());
+        row = Math.Clamp(row, 0, s.RowSet.Rows.Count - 1);
+
+        var text = s.RowSet.Rows[row] is DiffRow.Line line ? line.Text : string.Empty;
+        return new DiffTextHit(s.File.Path, new DiffTextPos(row, CharIndexAt(s, text, point.X)));
+    }
+
+    // A named scope pins the drag to its card however far the pointer strays; an unnamed one is
+    // resolved from the point, which is how Select All picks the card under the cursor.
+    private Section? ResolveScope(PointF point, object? scope)
+    {
+        if (scope is string path) return _byPath.GetValueOrDefault(path);
+        var index = _list.RowIndexAt(point);
+        if (index < 0) return null;
+        var s = Locate(index, out var local);
+        return s != null && local > 0 ? s : null;
+    }
+
+    private int CharIndexAt(Section s, string text, float x)
+    {
+        if (_monoAdvance <= 0) return 0;
+        var origin = DiffRowPainter.LineTextOriginX(CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter);
+        return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
     }
 
     // ---- drawing ----
@@ -682,6 +779,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         ClampHorizontalScroll();
         ReassertPendingScroll();
         EnsureVisibleLoaded();
+        _selectionController.Tick();
         NotifyScrollChanged(viewportFits: false);
     }
 
@@ -726,6 +824,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
         else
         {
             var row = s.RowSet.Rows[local - 1];
+            DiffRowSelection? selection = null;
+            if (row is DiffRow.Line line
+                && _selection.TryRowSpan(s.File.Path, local - 1, line.Text.Length, out var span))
+                selection = span;
+
             _painter.DrawRow(c, row, new DiffRowPaint(
                 cardLeft - _scrollX,
                 rowRect.Bottom,
@@ -734,7 +837,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent
                 s.RowSet.SingleGutter,
                 ExpanderHovered: state.IsHovered && DiffRowPainter.GapBarOf(row) != null,
                 Viewport: _list.Position,
-                Z: z));
+                Z: z,
+                Selection: selection));
         }
 
         // Card outline: 1px sides on every body row, closed by a bottom edge on the last one.

@@ -45,6 +45,7 @@ public sealed record DiffContentStyles(
     uint HunkOutline,
     uint ExpanderIcon,
     uint ExpanderHoverBackground,
+    uint SelectionBackground,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -106,6 +107,9 @@ public partial record ThemeStyles
     private const double DiffEmphasisMix = 0.38;
     private const byte DiffEmphasisAlpha = 0xC8;
 
+    // Text-selection wash over the diff body. Low enough that syntax colors survive it.
+    private const byte DiffSelectionAlpha = 0x4D;
+
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
@@ -131,6 +135,9 @@ public partial record ThemeStyles
             // way the diff header strip does — the entire bar is the click target, not the glyph.
             ExpanderIcon: p.Accent,
             ExpanderHoverBackground: p.SurfaceHoverStrong,
+            // Translucent so the add/remove row tint and the changed-character box stay readable
+            // underneath — a selection marks text, it doesn't replace what the row was saying.
+            SelectionBackground: WithAlpha(p.Accent, DiffSelectionAlpha),
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

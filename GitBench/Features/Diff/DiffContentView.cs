@@ -3,6 +3,7 @@ using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
+using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -23,7 +24,7 @@ namespace GitBench.Features.Diff;
 /// </summary>
 internal enum HunkAction { None, Stage, Unstage, Discard }
 
-internal sealed class DiffContentView : View, IScrollableContent
+internal sealed class DiffContentView : View, IScrollableContent, IDiffSelectionSurface
 {
     private const float AssumedFontSize = FontSize.Body;
     // Fallback mono advance ratio if the canvas isn't available yet to measure a glyph.
@@ -83,6 +84,8 @@ internal sealed class DiffContentView : View, IScrollableContent
 
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
+    private readonly DiffSelectionModel _selection = new();
+    private readonly DiffSelectionController _selectionController;
 
     private float _scrollX;
     // A programmatic vertical scroll target that must be re-asserted across frames. Setting a
@@ -114,13 +117,18 @@ internal sealed class DiffContentView : View, IScrollableContent
             RowHeight = AssumedFontSize, // placeholder until canvas-derived metrics resolve
             ItemBuilder = DrawDiffRowAt,
             ScrollWheelStep = Scrolling.WheelStep,
+            CursorAt = CursorAt,
         };
         _list.ScrollChanged += () => NotifyScrollChanged(viewportFits: false);
         _list.HorizontalWheelHandler = OnHorizontalWheel;
 
         AddChildToSelf(_list);
         _list.UseController(input, () => new VirtualRowListController(_list));
+        // Ordered: the hunk controller claims expander and button presses first, in the same
+        // capture pass, so a click on either never starts a text selection.
         this.UseController(input, () => new DiffMouseController(this), EventPhaseFilter.Capture);
+        _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
+        this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
         this.BindThemed(theme, s =>
         {
@@ -156,6 +164,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         var (prevPath, prevWasFullFile) = DescribeState(_renderState);
         var hadTopLine = TryGetTopVisibleNewLine(out var prevTopLine);
         var prevScrollY = _list.ScrollY;
+        var prevRowCount = _rowSet.Rows.Count;
 
         _renderState = state;
         _scrollX = 0;
@@ -179,6 +188,13 @@ internal sealed class DiffContentView : View, IScrollableContent
             _diffSide = fullFile.Side;
         }
         _gutterWidth = _rowSet.GutterDigits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
+
+        // Selection positions are row indices into the old row stream. A different file or a
+        // different row count (a gap expanded, the mode toggled) invalidates them. A same-shape
+        // re-emit — the async syntax highlight attaching — leaves them meaning what they meant.
+        var (newPath, _) = DescribeState(state);
+        if (newPath != prevPath || _rowSet.Rows.Count != prevRowCount)
+            _selection.Clear();
 
         _list.ItemCount = _rowSet.Rows.Count;
         _list.NotifyItemsChanged();
@@ -406,6 +422,7 @@ internal sealed class DiffContentView : View, IScrollableContent
         EnsureMetrics(c);
         ClampHorizontalScroll();
         ReassertPendingScroll();
+        _selectionController.Tick();
         NotifyScrollChanged(viewportFits: false);
     }
 
@@ -452,11 +469,17 @@ internal sealed class DiffContentView : View, IScrollableContent
         var isHoveredHunk = hunkIndex >= 0 && hunkIndex == _hoveredHunkIndex;
         var showButtons = isHoveredHunk && rowIndex == ButtonRowFor(hunkIndex) && HasHunkButtons();
 
+        DiffRowSelection? selection = null;
+        if (rows[rowIndex] is DiffRow.Line line
+            && _selection.TryRowSpan(null, rowIndex, line.Text.Length, out var span))
+            selection = span;
+
         _painter.DrawRow(c, rows[rowIndex], new DiffRowPaint(
             rowLeft, rowRect.Bottom, rowWidth, _gutterWidth, _rowSet.SingleGutter,
             ExpanderHovered: rowIndex == _hoveredExpanderRow,
             Viewport: _list.Position,
-            Z: z));
+            Z: z,
+            Selection: selection));
 
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
@@ -690,11 +713,68 @@ internal sealed class DiffContentView : View, IScrollableContent
     private int HitTestListRow(PointF point)
     {
         if (_lineHeight <= 0) return -1;
-        var listPos = _list.Position;
-        var distFromTop = listPos.Top - point.Y;
-        var idx = (int)((distFromTop + _list.ScrollY) / _lineHeight);
+        var idx = RawRowIndex(point);
         if (idx < 0 || idx >= _rowSet.Rows.Count) return -1;
         return idx;
+    }
+
+    // The row a point falls on, unbounded: negative above the first row, past the count below the
+    // last. Clamping it is how a drag that runs off either end keeps extending to the extremes.
+    private int RawRowIndex(PointF point)
+    {
+        var distFromTop = _list.Position.Top - point.Y;
+        return (int)MathF.Floor((distFromTop + _list.ScrollY) / _lineHeight);
+    }
+
+    // ---- text selection ----
+
+    // One file, so every position shares the single implicit scope: null.
+    DiffSelectionModel IDiffSelectionSurface.Selection => _selection;
+    RectF IDiffSelectionSurface.SelectionViewport => _list.Position;
+    IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) => _rowSet.Rows;
+    void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
+    void IDiffSelectionSurface.RequestRedraw() => SetDirty();
+
+    bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
+    {
+        if (HitTestExpander(point) != null) return true;
+        if (!HasHunkButtons()) return false;
+        var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
+        return hunkIndex >= 0 && HitTestButton(point, ButtonRowFor(hunkIndex)) != HunkAction.None;
+    }
+
+    DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point)
+    {
+        if (_lineHeight <= 0 || !_list.Position.ContainsPoint(point)) return null;
+        var rowIndex = HitTestListRow(point);
+        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
+        return new DiffTextHit(null, new DiffTextPos(rowIndex, CharIndexAt(line.Text, point.X)));
+    }
+
+    DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
+    {
+        if (_lineHeight <= 0 || _rowSet.Rows.Count == 0) return null;
+        var rowIndex = Math.Clamp(RawRowIndex(point), 0, _rowSet.Rows.Count - 1);
+        // A drag crossing a banner or a hunk bar keeps extending through it; those rows carry no
+        // selectable text, so they contribute nothing to the copy.
+        var text = _rowSet.Rows[rowIndex] is DiffRow.Line line ? line.Text : string.Empty;
+        return new DiffTextHit(null, new DiffTextPos(rowIndex, CharIndexAt(text, point.X)));
+    }
+
+    private int CharIndexAt(string text, float x)
+    {
+        if (_monoAdvance <= 0) return 0;
+        var origin = DiffRowPainter.LineTextOriginX(
+            _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter);
+        return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
+    }
+
+    private MouseCursor CursorAt(PointF point)
+    {
+        if (((IDiffSelectionSurface)this).IsInteractiveAt(point)) return MouseCursor.Hand;
+        return ((IDiffSelectionSurface)this).HitTestText(point) != null
+            ? MouseCursor.Text
+            : MouseCursor.Default;
     }
 
     private HunkAction HitTestButton(PointF point, int buttonRowIndex)
