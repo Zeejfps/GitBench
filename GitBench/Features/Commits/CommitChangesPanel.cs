@@ -52,6 +52,12 @@ internal sealed record CommitChangesPanel : IWidget
     /// <summary>Optional right-click handler for file rows; null means no context menu.</summary>
     public Action<FileChange, PointF>? OnFileContextMenu { get; init; }
 
+    /// <summary>
+    /// Optional right-click handler for folder rows, receiving every file beneath the folder; null
+    /// means no context menu. Only tree mode ever shows folder rows.
+    /// </summary>
+    public Action<IReadOnlyList<string>, PointF>? OnFolderContextMenu { get; init; }
+
     public View BuildView(Context ctx) => new CommitChangesPanelView(this, ctx, ctx.Require<CommitDetailsViewModel>());
 }
 
@@ -89,7 +95,8 @@ internal sealed class CommitChangesPanelView : ContainerView
             },
             headerActions: [viewModeButton],
             onFileContextMenu: props.OnFileContextMenu,
-            selectedPaths: props.SelectedPaths);
+            selectedPaths: props.SelectedPaths,
+            onFolderContextMenu: props.OnFolderContextMenu);
         AddChildToSelf(_changesSection);
 
         // Up/Down arrow navigation over the file rows, mirroring the local-changes panels. Arrows

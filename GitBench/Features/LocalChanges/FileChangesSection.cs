@@ -53,6 +53,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly IReadable<IReadOnlySet<string>>? _selectedPaths;
     private readonly Action<FileChange, InputModifiers>? _onRowClicked;
     private readonly Action<FileChange, PointF>? _onFileContextMenu;
+    private readonly Action<IReadOnlyList<string>, PointF>? _onFolderContextMenu;
 
     // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
     // so the History pane and Local Changes stay clean). When present, rows whose (sha, path) is viewed
@@ -139,7 +140,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         Action<FileChange, InputModifiers>? onRowClicked = null,
         IReadOnlyList<View>? headerActions = null,
         Action<FileChange, PointF>? onFileContextMenu = null,
-        IReadable<IReadOnlySet<string>>? selectedPaths = null)
+        IReadable<IReadOnlySet<string>>? selectedPaths = null,
+        Action<IReadOnlyList<string>, PointF>? onFolderContextMenu = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -150,6 +152,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _selectedPaths = selectedPaths;
         _onRowClicked = onRowClicked;
         _onFileContextMenu = onFileContextMenu;
+        _onFolderContextMenu = onFolderContextMenu;
         var input = ctx.Require<InputSystem>();
         _headerText = FileChangesUI.CreateHeaderText(ctx, title);
         _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
@@ -166,7 +169,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.RowClicked += OnRowClicked;
-        if (_onFileContextMenu != null)
+        if (_onFileContextMenu != null || _onFolderContextMenu != null)
             _list.RowContextRequested += OnRowContextRequested;
         _list.ScrollChanged += NotifyScrollChanged;
 
@@ -497,8 +500,13 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     {
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
         var row = _rows[rowIndex];
-        if (row.Kind != FileRowKind.File) return;
-        _onFileContextMenu!(row.File!, point);
+        // A folder row acts on every file beneath it, so it hands over its descendant leaves.
+        if (row.Kind == FileRowKind.Folder)
+        {
+            _onFolderContextMenu?.Invoke(row.Files, point);
+            return;
+        }
+        _onFileContextMenu?.Invoke(row.File!, point);
     }
 
     private void ToggleFolder(FileRow row)

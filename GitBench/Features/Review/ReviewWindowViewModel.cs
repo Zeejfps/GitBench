@@ -352,11 +352,20 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>
 
     // A file row's right-click menu (the tree sidebar and the stacked diff cards). Right-clicking
     // inside the selection acts on the whole of it, so a mixed group offers both directions; a single
-    // file (or a right-click outside the selection) offers only the one its state allows.
+    // file (or a right-click outside the selection) offers only the one its state allows. Folders go
+    // through BuildFolderContextMenuItems.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
+        => BuildViewedContextMenuItems(ResolveTargetPaths(path));
+
+    // A folder row's right-click menu (the tree sidebar): the same Viewed actions over every file
+    // beneath the folder. Folders are never part of the selection, so they only ever act on
+    // themselves — collapsed subfolders included, since the row carries all its descendant leaves.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(IReadOnlyList<string> paths)
+        => BuildViewedContextMenuItems(paths);
+
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildViewedContextMenuItems(IReadOnlyList<string> targets)
     {
         var s = _loc.Strings.Value;
-        var targets = ResolveTargetPaths(path);
 
         var unviewed = new List<string>(targets.Count);
         var viewed = new List<string>(targets.Count);
