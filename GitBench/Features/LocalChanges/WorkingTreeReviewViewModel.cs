@@ -31,6 +31,8 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     private readonly Derived<float> _filesFraction;
     private readonly Derived<string> _filesStagedLabel;
     private readonly Derived<bool> _hasFiles;
+    private readonly Derived<bool> _canStageSelected;
+    private readonly Derived<bool> _canUnstageSelected;
     private readonly List<IDisposable> _subscriptions = new();
 
     public WorkingTreeReviewViewModel(
@@ -50,6 +52,10 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _filesFraction = new Derived<float>(() => _hud.Value.FilesFraction);
         _filesStagedLabel = new Derived<string>(BuildFilesStagedLabel);
         _hasFiles = new Derived<bool>(() => Files().Count > 0);
+        _canStageSelected = new Derived<bool>(() => AnySelected(p => !_marks.IsViewed(p)));
+        _canUnstageSelected = new Derived<bool>(() => AnySelected(_marks.HasStagedContent));
+        StageSelected = new Command(() => SetSelectedStaged(true), _canStageSelected);
+        UnstageSelected = new Command(() => SetSelectedStaged(false), _canUnstageSelected);
 
         // The working tree changes on every editor save and every index op. Re-push the merged file
         // list each time; the details surface keeps its open diffs and the stacked list reconciles in
@@ -68,6 +74,18 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public IReadable<string?> SelectionCursor => _cursor.SelectionCursor;
     public IReadable<ReviewHud> Hud => _hud;
     public IReadable<bool> CheatsheetOpen => _cheatsheetOpen;
+
+    /// <summary>Stages every selected file that isn't fully staged yet; a partially staged one has more
+    /// to capture, so it still counts.</summary>
+    public Command StageSelected { get; }
+
+    /// <summary>Unstages every selected file carrying any staged content, partial ones included.</summary>
+    public Command UnstageSelected { get; }
+
+    // The review surface's file list is the whole working tree, so the list layout's all-files commands
+    // already cover exactly the right paths — gate and action both.
+    public Command StageAll => _local.StageAll;
+    public Command UnstageAll => _local.UnstageAll;
 
     /// <summary>0..1 progress of the header meter: files staged across the working tree.</summary>
     public IReadable<float> FilesFraction => _filesFraction;
@@ -159,6 +177,18 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _cursor.OnFilesLoaded(files);
     }
 
+    // Reads the tracker's revision as well as the selection so the gate re-evaluates after an index op.
+    private bool AnySelected(Func<string, bool> predicate)
+    {
+        _ = _marks.Revision.Value;
+        foreach (var p in _cursor.SelectedPaths.Value)
+            if (predicate(p)) return true;
+        return false;
+    }
+
+    private void SetSelectedStaged(bool staged)
+        => _marks.SetViewed([.. _cursor.SelectedPaths.Value], staged);
+
     private ReviewHud BuildHud()
     {
         var files = Files();
@@ -186,6 +216,8 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     {
         foreach (var s in _subscriptions) s.Dispose();
         _subscriptions.Clear();
+        _canUnstageSelected.Dispose();
+        _canStageSelected.Dispose();
         _hasFiles.Dispose();
         _filesStagedLabel.Dispose();
         _filesFraction.Dispose();

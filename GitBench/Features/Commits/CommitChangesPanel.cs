@@ -49,6 +49,9 @@ internal sealed record CommitChangesPanel : IWidget
     /// <summary>Ctrl/Cmd+A over the visible file rows; null leaves the key unhandled.</summary>
     public Action<IReadOnlyList<string>>? OnSelectAll { get; init; }
 
+    /// <summary>Buttons appended to the header toolbar, after the view-mode toggle.</summary>
+    public IReadOnlyList<IWidget>? HeaderActions { get; init; }
+
     /// <summary>Optional right-click handler for file rows; null means no context menu.</summary>
     public Action<FileChange, PointF>? OnFileContextMenu { get; init; }
 
@@ -84,6 +87,10 @@ internal sealed class CommitChangesPanelView : ContainerView
             Tooltip = L.T(s => s.LocalchangesToggleViewTooltip),
         }.BuildView(ctx);
 
+        var headerActions = new List<View> { viewModeButton };
+        if (props.HeaderActions is { } extra)
+            foreach (var action in extra) headerActions.Add(action.BuildView(ctx));
+
         _changesSection = new FileChangesSection(
             ctx,
             "Changes",
@@ -93,7 +100,7 @@ internal sealed class CommitChangesPanelView : ContainerView
                 Gesture(f.Path, modifiers);
                 _arrowController.TakeFocus();
             },
-            headerActions: [viewModeButton],
+            headerActions: headerActions,
             onFileContextMenu: props.OnFileContextMenu,
             selectedPaths: props.SelectedPaths,
             onFolderContextMenu: props.OnFolderContextMenu);

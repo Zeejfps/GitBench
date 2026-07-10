@@ -96,6 +96,33 @@ internal sealed record WorkingTreeReviewView : Widget
                             RepoBarContextMenu.Show(ctx, point, model.BuildFileContextMenuItems(file.Path)),
                         OnFolderContextMenu = (paths, point) =>
                             RepoBarContextMenu.Show(ctx, point, model.BuildFolderContextMenuItems(paths)),
+                        HeaderActions =
+                        [
+                            new LocalChangesHeaderActionButton
+                            {
+                                Icon = LucideIcons.ChevronRight,
+                                Command = model.StageSelected,
+                                Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
+                            },
+                            new LocalChangesHeaderActionButton
+                            {
+                                Icon = LucideIcons.ChevronsRight,
+                                Command = model.StageAll,
+                                Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
+                            },
+                            new LocalChangesHeaderActionButton
+                            {
+                                Icon = LucideIcons.ChevronsLeft,
+                                Command = model.UnstageAll,
+                                Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
+                            },
+                            new LocalChangesHeaderActionButton
+                            {
+                                Icon = LucideIcons.ChevronLeft,
+                                Command = model.UnstageSelected,
+                                Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
+                            },
+                        ],
                     },
                     InitialWidth = 300f,
                     MinResizeWidth = 220f,
