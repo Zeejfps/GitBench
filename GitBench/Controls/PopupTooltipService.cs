@@ -1,3 +1,4 @@
+using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
@@ -36,7 +37,7 @@ public sealed class PopupTooltipService : ITooltipService
         _currentOwner = owner;
         _currentPopup = _factory.Acquire(new PopupRequest
         {
-            BuildRoot = ctx => new TooltipView { Text = text }.BuildView(ctx),
+            BuildRoot = ctx => Direction.Wrap(new TooltipView { Text = text }).BuildView(ctx),
             Place = (width, height) =>
             {
                 var centerX = anchorScreen.X + anchorScreen.Width / 2;

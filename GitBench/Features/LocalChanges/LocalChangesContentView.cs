@@ -67,19 +67,19 @@ internal sealed class LocalChangesContentView : ContainerView
         }.BuildView(ctx);
         var stageSelectedButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronRight, Command = vm.StageSelected, Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
+            Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft), Command = vm.StageSelected, Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
         }.BuildView(ctx);
         var stageAllButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronsRight, Command = vm.StageAll, Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
+            Icon = Direction.Glyph(ctx, LucideIcons.ChevronsRight, LucideIcons.ChevronsLeft), Command = vm.StageAll, Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
         }.BuildView(ctx);
         var unstageAllButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronsLeft, Command = vm.UnstageAll, Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
+            Icon = Direction.Glyph(ctx, LucideIcons.ChevronsLeft, LucideIcons.ChevronsRight), Command = vm.UnstageAll, Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
         }.BuildView(ctx);
         var unstageSelectedButton = new LocalChangesHeaderActionButton
         {
-            Icon = LucideIcons.ChevronLeft, Command = vm.UnstageSelected, Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
+            Icon = Direction.Glyph(ctx, LucideIcons.ChevronLeft, LucideIcons.ChevronRight), Command = vm.UnstageSelected, Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
         }.BuildView(ctx);
         var viewModeButtonUnstaged = new LocalChangesHeaderActionButton
         {

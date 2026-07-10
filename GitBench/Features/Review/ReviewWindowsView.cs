@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
@@ -100,7 +101,7 @@ internal sealed record ReviewWindowsView : Widget
 
             var win = _windowFactory.Open(new SecondaryWindowRequest
             {
-                BuildRoot = ctx => new ReviewWindowRootView { Model = windowVm }.BuildView(ctx),
+                BuildRoot = ctx => Direction.Wrap(new ReviewWindowRootView { Model = windowVm }).BuildView(ctx),
                 Title = windowVm.Title,
                 Width = _preferences.Current.ReviewWindowWidth,
                 Height = _preferences.Current.ReviewWindowHeight,

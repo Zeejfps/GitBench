@@ -6,6 +6,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.StatusBar;
 using GitBench.Localization;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
@@ -64,10 +65,6 @@ internal sealed record AppView : Widget
 
         // Establish the UI writing direction for the whole tree from the active locale, so RTL
         // locales (Arabic) mirror Row/Column and swap the BorderLayout sidebar to the right.
-        return new UiDirection
-        {
-            Rtl = Prop.Deferred(c => c.Localization().Strings.Bind(s => s.Culture.TextInfo.IsRightToLeft)),
-            Child = content,
-        };
+        return Direction.Wrap(content);
     }
 }

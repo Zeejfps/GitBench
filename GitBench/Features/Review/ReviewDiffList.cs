@@ -30,6 +30,9 @@ internal sealed record ReviewDiffPanel : IWidget
         var content = new ReviewDiffListView(ctx);
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
+        // The code grid it scrolls is pinned LTR (see DiffRowPainter), so the bar must not mirror:
+        // normalized 0 stays the left edge in every locale.
+        hScrollBar.IsRtl = false;
         content.Use(() => new ScrollSyncController(content, vScrollBar, hScrollBar));
         return new BorderLayoutView
         {
@@ -581,12 +584,17 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     // file's mark, anywhere else folds the file — which also snaps the viewport back to its header.
     private void OnStickyHeaderClicked(Section s, PointF point)
     {
-        if (point.X >= CardRight() - ViewedZoneWidth)
+        if (IsInViewedZone(point))
             _vm.ToggleFileViewed(s.File.Path);
         else
             SetFolded(s, true);
         _vm.ReportActiveFile(s.File.Path);
     }
+
+    // The Viewed toggle sits on the header's trailing edge — the card's right in LTR, left in RTL.
+    private bool IsInViewedZone(PointF point) => IsRtl
+        ? point.X <= CardLeft() + ViewedZoneWidth
+        : point.X >= CardRight() - ViewedZoneWidth;
 
     // ---- input ----
 
@@ -627,7 +635,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             if (!_list.TryGetRowRect(index, out var rowRect)) return;
             if (point.Y > rowRect.Top - SectionGap) return;
             // The trailing zone is the mark checkbox; anywhere else on the band toggles the fold.
-            if (point.X >= CardRight() - ViewedZoneWidth)
+            if (IsInViewedZone(point))
                 _vm.ToggleFileViewed(s.File.Path);
             else
                 SetFolded(s, !s.Folded);
@@ -900,7 +908,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         {
             c.DrawRect(new DrawRectInputs
             {
-                Position = new RectF(cardLeft, band.Bottom, ActiveBarWidth, band.Height),
+                Position = Place(band, cardLeft, ActiveBarWidth),
                 Style = new RectStyle { BackgroundColor = _theme.RowSelection.AccentBar },
                 ZIndex = z + 1,
             });
@@ -910,8 +918,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         HeaderGlyphStyle.TextColor = _theme.Palette.TextSecondary;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(x, band.Bottom, ChevronWidth, band.Height),
-            Text = s.Folded ? LucideIcons.ChevronRight : LucideIcons.ChevronDown,
+            Position = Place(band, x, ChevronWidth),
+            Text = s.Folded
+                ? IsRtl ? LucideIcons.ChevronLeft : LucideIcons.ChevronRight
+                : LucideIcons.ChevronDown,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
         });
@@ -920,7 +930,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         HeaderGlyphStyle.TextColor = _theme.FileChangeRow.StatusColor(s.File.Status);
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(x, band.Bottom, StatusIconWidth, band.Height),
+            Position = Place(band, x, StatusIconWidth),
             Text = FileChangeFormatting.StatusIcon(s.File.Status),
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
@@ -937,7 +947,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             var text = TextMeasure.TruncateToFit(FileChangeFormatting.FormatPath(s.File), HeaderPathStyle, textWidth, c);
             c.DrawText(new DrawTextInputs
             {
-                Position = new RectF(x, band.Bottom, textWidth, band.Height),
+                Position = Place(band, x, textWidth),
                 Text = text,
                 Style = HeaderPathStyle,
                 ZIndex = z + 2,
@@ -962,7 +972,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         HeaderGlyphStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(zoneLeft, band.Bottom, 18f, band.Height),
+            Position = Place(band, zoneLeft, 18f),
             Text = glyph,
             Style = HeaderGlyphStyle,
             ZIndex = z + 2,
@@ -970,12 +980,19 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         ViewedLabelStyle.TextColor = viewedColor;
         c.DrawText(new DrawTextInputs
         {
-            Position = new RectF(zoneLeft + 22f, band.Bottom, ViewedZoneWidth - 22f - HeaderPaddingX, band.Height),
+            Position = Place(band, zoneLeft + 22f, ViewedZoneWidth - 22f - HeaderPaddingX),
             Text = MarkLabel(),
             Style = ViewedLabelStyle,
             ZIndex = z + 2,
         });
     }
+
+    // Reflects a header element's horizontal extent across the band when the UI is right-to-left,
+    // so the left-origin header layout mirrors (chevron and status to the right, the Viewed zone on
+    // the left) without rewriting it. In-box text right-aligns via the canvas text base.
+    private RectF Place(in RectF band, float left, float width) => IsRtl
+        ? new RectF(band.Left + band.Right - left - width, band.Bottom, width, band.Height)
+        : new RectF(left, band.Bottom, width, band.Height);
 
     // Checking a file's box marks it viewed on a branch review and stages it on the working-tree
     // review, so the checkbox label says which.

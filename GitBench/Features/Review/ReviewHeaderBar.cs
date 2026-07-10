@@ -69,7 +69,9 @@ internal sealed record ReviewHeaderBar : Widget
         [
             new Text
             {
-                Value = $"{vm.Session.HeadLabel} →",
+                // The arrow points at the base chip, which the mirrored Row puts on the other side
+                // in RTL; U+2192 is not bidi-mirrored, so it has to be picked by direction.
+                Value = Prop.Bind(() => $"{vm.Session.HeadLabel} {(Direction.IsRtl(ctx) ? "←" : "→")}"),
                 FontSize = FontSize.Body,
                 Color = Theme.Color(s => s.Palette.TextPrimary),
                 Overflow = TextOverflow.Ellipsis,

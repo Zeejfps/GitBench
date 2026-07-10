@@ -1,5 +1,6 @@
 using ZGF.Gui.Views;
 using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop;
@@ -88,7 +89,7 @@ internal sealed record DiffWindowsView : Widget
 
             var win = _windowFactory.Open(new SecondaryWindowRequest
             {
-                BuildRoot = ctx => new DiffWindowRootView { Model = windowVm }.BuildView(ctx),
+                BuildRoot = ctx => Direction.Wrap(new DiffWindowRootView { Model = windowVm }).BuildView(ctx),
                 Title = windowVm.Title,
                 Width = 900,
                 Height = 700,

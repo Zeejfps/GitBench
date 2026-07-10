@@ -100,25 +100,25 @@ internal sealed record WorkingTreeReviewView : Widget
                         [
                             new LocalChangesHeaderActionButton
                             {
-                                Icon = LucideIcons.ChevronRight,
+                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft),
                                 Command = model.StageSelected,
                                 Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
                             },
                             new LocalChangesHeaderActionButton
                             {
-                                Icon = LucideIcons.ChevronsRight,
+                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronsRight, LucideIcons.ChevronsLeft),
                                 Command = model.StageAll,
                                 Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
                             },
                             new LocalChangesHeaderActionButton
                             {
-                                Icon = LucideIcons.ChevronsLeft,
+                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronsLeft, LucideIcons.ChevronsRight),
                                 Command = model.UnstageAll,
                                 Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
                             },
                             new LocalChangesHeaderActionButton
                             {
-                                Icon = LucideIcons.ChevronLeft,
+                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronLeft, LucideIcons.ChevronRight),
                                 Command = model.UnstageSelected,
                                 Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
                             },

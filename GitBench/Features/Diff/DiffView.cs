@@ -33,6 +33,9 @@ internal sealed record DiffView : Widget
         };
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);
+        // The code grid it scrolls is pinned LTR (see DiffRowPainter), so the bar must not mirror:
+        // normalized 0 stays the left edge in every locale.
+        hScrollBar.IsRtl = false;
         content.Use(() => new ScrollSyncController(content, vScrollBar, hScrollBar));
 
         // Every non-conflict render is pushed into the persistent content view; a Conflict state
