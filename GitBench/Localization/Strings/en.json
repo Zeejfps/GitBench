@@ -95,8 +95,9 @@
   "toolbar.push": "Push",
   "toolbar.pushing": "Pushing",
   "toolbar.stash": "Stash",
-  "toolbar.discard_all": "Discard All",
+  "toolbar.discard": "Discard",
   "toolbar.branch": "Branch",
+  "toolbar.review": "Review",
   "toolbar.open_folder_tooltip": "Open in file explorer",
   "toolbar.open_terminal_tooltip": "Open in terminal",
 

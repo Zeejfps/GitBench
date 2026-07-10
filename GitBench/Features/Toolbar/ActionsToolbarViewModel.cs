@@ -30,6 +30,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     public Command Pull { get; }
     public Command Fetch { get; }
     public Command Branch { get; }
+    public Command Review { get; }
     public Command Stash { get; }
     public Command DiscardAll { get; }
     public Command OpenFolder { get; }
@@ -72,6 +73,8 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Pull = new Command(DoPull, Slice(ComputePullEnabled));
         Fetch = new Command(DoFetch, Slice(s => !s.IsFetching && s.HasActiveRepo));
         Branch = new Command(DoBranch, repoActionsEnabled);
+        Review = new Command(DoReview, Slice(s =>
+            s.HasActiveRepo && !s.Status.IsDetached && !string.IsNullOrEmpty(s.Status.CurrentBranchName)));
         Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
         DiscardAll = new Command(DoDiscardAll, Slice(s => s.HasUnstaged));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);
@@ -196,6 +199,15 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             SuggestedStartPoint = suggested,
             OnClose = onClose,
         }));
+    }
+
+    private void DoReview()
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        var branch = State.Value.Status.CurrentBranchName;
+        if (string.IsNullOrEmpty(branch)) return;
+        _bus.Broadcast(new OpenReviewWindowMessage(repo.Id, branch, branch, BaseRef: null));
     }
 
     private void DoStash()

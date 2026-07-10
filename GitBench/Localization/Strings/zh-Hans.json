@@ -95,8 +95,9 @@
   "toolbar.push": "推送",
   "toolbar.pushing": "正在推送",
   "toolbar.stash": "贮藏",
-  "toolbar.discard_all": "全部丢弃",
+  "toolbar.discard": "丢弃",
   "toolbar.branch": "分支",
+  "toolbar.review": "审阅",
   "toolbar.open_folder_tooltip": "在文件资源管理器中打开",
   "toolbar.open_terminal_tooltip": "在终端中打开",
 

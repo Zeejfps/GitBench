@@ -83,10 +83,11 @@ internal sealed record ActionsToolbar : Widget
             BadgeAccent = s => s.ActionsToolbar.BadgeAhead,
         },
         new SeparatorSpacer(),
-        new ToolbarButton { Command = vm.Stash, Icon = LucideIcons.Stash, Label = L.T(s => s.ToolbarStash) },
-        new ToolbarButton { Command = vm.DiscardAll, Icon = LucideIcons.Trash, Label = L.T(s => s.ToolbarDiscardAll) },
-        new SeparatorSpacer(),
         new ToolbarButton { Command = vm.Branch, Icon = LucideIcons.Branch, Label = L.T(s => s.ToolbarBranch) },
+        new ToolbarButton { Command = vm.Review, Icon = LucideIcons.Search, Label = L.T(s => s.ToolbarReview) },
+        new SeparatorSpacer(),
+        new ToolbarButton { Command = vm.Stash, Icon = LucideIcons.Stash, Label = L.T(s => s.ToolbarStash) },
+        new ToolbarButton { Command = vm.DiscardAll, Icon = LucideIcons.Trash, Label = L.T(s => s.ToolbarDiscard) },
         new Spacer(),
         new ToolbarIconButton
         {

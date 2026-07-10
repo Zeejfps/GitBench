@@ -95,8 +95,9 @@
   "toolbar.push": "プッシュ",
   "toolbar.pushing": "プッシュ中",
   "toolbar.stash": "スタッシュ",
-  "toolbar.discard_all": "すべて破棄",
+  "toolbar.discard": "破棄",
   "toolbar.branch": "ブランチ",
+  "toolbar.review": "レビュー",
   "toolbar.open_folder_tooltip": "ファイルマネージャで開く",
   "toolbar.open_terminal_tooltip": "ターミナルで開く",
 
