@@ -32,7 +32,9 @@ internal sealed class CommitFileTab : IDisposable
     public DiffViewModel Diff { get; }
 
     /// <summary>A tab over a file's whole working-tree change (HEAD→disk), for the working-tree
-    /// review surface. Staging the file never re-targets it.</summary>
+    /// review surface. Staging the file never re-targets it. The cross-repo working-tree surface
+    /// identifies a file by a repo-qualified path but diffs the bare repo-relative path in the member
+    /// repo: <paramref name="displayPath"/> is the tab's identity, <paramref name="path"/> the git target.</summary>
     public static CommitFileTab ForWorkingTree(
         string path,
         Guid repoId,
@@ -41,8 +43,9 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        IPlatformShell? shell = null)
-        => new(path, repoId, registry, gitService, dispatcher, bus, loc, shell);
+        IPlatformShell? shell = null,
+        string? displayPath = null)
+        => new(path, repoId, registry, gitService, dispatcher, bus, loc, shell, displayPath);
 
     private CommitFileTab(
         string path,
@@ -52,9 +55,10 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        IPlatformShell? shell)
+        IPlatformShell? shell,
+        string? displayPath = null)
     {
-        Path = path;
+        Path = displayPath ?? path;
         FileName = LastSegment(path);
         Sha = WorkingTreeSha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.WorkingTree));

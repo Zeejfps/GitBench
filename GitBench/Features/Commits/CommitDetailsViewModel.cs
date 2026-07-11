@@ -41,6 +41,22 @@ public abstract record DetailsRangeSection(Guid RepoId, string RepoKey)
         : DetailsRangeSection(RepoId, RepoKey);
 }
 
+/// <summary>
+/// One member section of a cross-repo combined working-tree surface (<see cref="CommitDetailsViewModel.ShowWorkingTrees"/>):
+/// either a member repo's working-tree <see cref="Files"/> (each diffs HEAD→disk and is qualified under
+/// <see cref="RepoKey"/> in the tree), or an inline load <see cref="Failed"/> rendered as that repo's
+/// error group. The Phase-5.1 twin of <see cref="DetailsRangeSection"/> — the files are pushed in by the
+/// host (the aggregating view model already holds them) rather than loaded from a sha, so it is synchronous.
+/// </summary>
+public abstract record DetailsWorkingTreeSection(Guid RepoId, string RepoKey)
+{
+    public sealed record Files(Guid RepoId, string RepoKey, IReadOnlyList<FileChange> Changes)
+        : DetailsWorkingTreeSection(RepoId, RepoKey);
+
+    public sealed record Failed(Guid RepoId, string RepoKey, string Message)
+        : DetailsWorkingTreeSection(RepoId, RepoKey);
+}
+
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 {
     private readonly IGitService _gitService;
@@ -64,7 +80,15 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     // the tab strip stay repo-blind. Null for every single-repo commit/range/working-tree surface.
     private IReadOnlyDictionary<string, QualifiedFileRef>? _rangeFiles;
 
+    // Non-null only in the cross-repo working-tree's WorkingTrees mode (Phase 5.1): qualified path → the
+    // member repo + bare path its HEAD→disk diff resolves against. The working-tree twin of _rangeFiles;
+    // when set, SelectFile/CreateFileDiff route per-file through it. Mutually exclusive with the other
+    // modes — every Show* entry nulls it, and it nulls the others.
+    private IReadOnlyDictionary<string, QualifiedWorkingRef>? _workingTrees;
+
     private readonly record struct QualifiedFileRef(Guid RepoId, string Path, string BaseSha, string HeadSha);
+
+    private readonly record struct QualifiedWorkingRef(Guid RepoId, string Path);
 
     private string DefaultPlaceholder => _loc.Strings.Value.CommitsDetailsNoSelection;
 
@@ -137,6 +161,14 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             Update(s => s with { SelectedPath = path });
             return;
         }
+        if (_workingTrees != null)
+        {
+            if (FindTab(path) == null && _workingTrees.TryGetValue(path, out var w))
+                OpenTabs.Add(CommitFileTab.ForWorkingTree(
+                    w.Path, w.RepoId, _registry, _gitService, Dispatcher, _bus, _loc, displayPath: path));
+            Update(s => s with { SelectedPath = path });
+            return;
+        }
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
             OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha));
@@ -159,6 +191,14 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             return new CommitFileTab(
                 r.Path, r.HeadSha, r.RepoId, _registry, _gitService, Dispatcher, _bus, _loc,
                 baseSha: r.BaseSha, displayPath: path);
+        }
+        if (_workingTrees != null)
+        {
+            // Cross-repo WorkingTrees mode: resolve the qualified path to its member repo + bare path so
+            // the diff loads HEAD→disk in that member. Error-group rows have no entry and get no diff.
+            if (!_workingTrees.TryGetValue(path, out var w)) return null;
+            return CommitFileTab.ForWorkingTree(
+                w.Path, w.RepoId, _registry, _gitService, Dispatcher, _bus, _loc, displayPath: path);
         }
         if (_workingTree)
             return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc);
@@ -237,6 +277,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _currentBaseSha = null;
         _workingTree = false;
         _rangeFiles = null;
+        _workingTrees = null;
         CloseAllTabs();
         Update(s => s with
         {
@@ -259,6 +300,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _currentBaseSha = null;
         _workingTree = false;
         _rangeFiles = null;
+        _workingTrees = null;
         _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
@@ -301,6 +343,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _currentBaseSha = baseSha;
         _workingTree = false;
         _rangeFiles = null;
+        _workingTrees = null;
         _currentRepoId = repoId;
         CloseAllTabs();
         Update(s => s with
@@ -338,6 +381,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public void ShowRanges(IReadOnlyList<DetailsRangeSection> sections)
     {
         _workingTree = false;
+        _workingTrees = null;
         _currentSha = null;
         _currentBaseSha = null;
         // Enter Ranges mode immediately so any diff handle minted before the load returns resolves
@@ -460,10 +504,11 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         if (ResolveRepo(repoId) == null) return;
 
         // A cross-repo switch has nothing in common with what's on screen; drop the tabs.
-        if (_rangeFiles != null || !_workingTree || _currentRepoId != repoId) CloseAllTabs();
+        if (_rangeFiles != null || _workingTrees != null || !_workingTree || _currentRepoId != repoId) CloseAllTabs();
 
         _workingTree = true;
         _rangeFiles = null;
+        _workingTrees = null;
         _currentSha = null;
         _currentBaseSha = null;
         _currentRepoId = repoId;
@@ -472,6 +517,76 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         var details = new CommitDetails(
             RepoId: repoId,
             Sha: CommitFileTab.WorkingTreeKey(repoId),
+            AuthorName: s.ReviewWorkingTreeTitle,
+            AuthorEmail: string.Empty,
+            AuthorWhen: default,
+            CommitterName: string.Empty,
+            CommitterEmail: string.Empty,
+            CommitterWhen: default,
+            Message: s.ReviewCombinedSummary(files.Count),
+            MessageShort: s.ReviewCombinedSummary(files.Count),
+            ParentShas: ["HEAD"],
+            Files: files);
+
+        Update(state => state with { Render = new CommitDetailsRenderState.Loaded(details) });
+    }
+
+    /// <summary>
+    /// Widens <see cref="ShowWorkingTree"/> to N members for the cross-repo working-tree surface (Phase
+    /// 5.1, the twin of <see cref="ShowRanges"/>): each member's changed files (already loaded by the
+    /// aggregating host) are repo-qualified (Locked decision #4) and merged into one file list grouped by
+    /// repo, with a <c>qualified → (member repo, bare path)</c> resolver so opening a file diffs HEAD→disk
+    /// in the owning member. A member whose load failed renders as an inline error group under its repo
+    /// folder. Synchronous and — like <see cref="ShowWorkingTree"/> — it deliberately keeps the open tabs
+    /// alive across the frequent working-tree refreshes, dropping them only when switching in from another
+    /// surface. Existing single-repo <see cref="ShowWorkingTree"/> callers are untouched.
+    /// </summary>
+    public void ShowWorkingTrees(IReadOnlyList<DetailsWorkingTreeSection> sections)
+    {
+        // Switching in from any other surface has nothing in common on screen — drop the tabs. Staying in
+        // WorkingTrees mode across a refresh keeps them (the working tree changes on every editor save).
+        if (_workingTrees == null) CloseAllTabs();
+
+        _workingTree = false;
+        _currentSha = null;
+        _currentBaseSha = null;
+        _currentRepoId = Guid.Empty;
+
+        var resolver = new Dictionary<string, QualifiedWorkingRef>(StringComparer.Ordinal);
+        var files = new List<FileChange>();
+        var keyParts = new List<string>(sections.Count);
+
+        foreach (var section in sections)
+        {
+            switch (section)
+            {
+                case DetailsWorkingTreeSection.Files f:
+                    foreach (var c in f.Changes)
+                    {
+                        var qualified = RepoQualifiedPaths.Qualify(f.RepoKey, c.Path);
+                        files.Add(c with
+                        {
+                            Path = qualified,
+                            OldPath = c.OldPath == null ? null : RepoQualifiedPaths.Qualify(f.RepoKey, c.OldPath),
+                        });
+                        resolver[qualified] = new QualifiedWorkingRef(f.RepoId, c.Path);
+                    }
+                    keyParts.Add($"{f.RepoKey}:{f.Changes.Count}");
+                    break;
+
+                case DetailsWorkingTreeSection.Failed fl:
+                    AddErrorRow(files, fl.RepoKey, fl.Message);
+                    keyParts.Add($"{fl.RepoKey}:failed");
+                    break;
+            }
+        }
+
+        _workingTrees = resolver;
+
+        var s = _loc.Strings.Value;
+        var details = new CommitDetails(
+            RepoId: Guid.Empty,
+            Sha: "working-trees:" + string.Join("|", keyParts),
             AuthorName: s.ReviewWorkingTreeTitle,
             AuthorEmail: string.Empty,
             AuthorWhen: default,

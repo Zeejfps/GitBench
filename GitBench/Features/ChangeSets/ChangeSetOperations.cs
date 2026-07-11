@@ -1,4 +1,5 @@
 using System.Text;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -149,6 +150,75 @@ internal sealed class ChangeSetOperations
     internal static string ResolveStartPoint(IReadOnlyDictionary<Guid, string> startById, Guid repoId) =>
         startById.TryGetValue(repoId, out var sp) && sp.Trim().Length > 0 ? sp.Trim() : "HEAD";
 
+    /// <summary>
+    /// Batch commit across a change set (Phase 5.4): commits <paramref name="message"/> — stamped with
+    /// the <c>Change-Set: &lt;name&gt;</c> trailer (Locked decision #6) — in every member that has
+    /// staged changes. Members with nothing staged simply don't commit (5.5: no auto-staging), and a
+    /// member whose commit fails never blocks the rest (Locked decision #5, no rollback). Fire-and-forget
+    /// with the shared per-repo summary reporting; the durable trailer outlives branch deletion and is the
+    /// hook any future PR/submit integration keys off.
+    /// </summary>
+    public void CommitInAll(IReadOnlyList<Guid> repoIds, string message, string changeSetName)
+    {
+        var members = Resolve(repoIds);
+        if (members.Count == 0) return;
+        var full = StampTrailer(message, changeSetName);
+
+        Task.Run(() =>
+        {
+            var result = CommitOverMembers(members, HasStagedChanges, r => _git.Commit(r, full, amend: false));
+            _dispatcher.Post(() => Report(
+                result,
+                success: (s, count) => s.ChangesetsToastCommit(changeSetName, count),
+                touchesWorkingTree: true,
+                commitCreated: true));
+        });
+    }
+
+    /// <summary>
+    /// Appends the <c>Change-Set: &lt;name&gt;</c> trailer to a commit message (Locked decision #6): the
+    /// existing message, its trailing whitespace trimmed, then a blank line and the trailer. Pure, so the
+    /// trailer stamping is unit-testable directly (the coordinator itself being fire-and-forget).
+    /// </summary>
+    internal static string StampTrailer(string message, string changeSetName) =>
+        $"{message.TrimEnd()}\n\nChange-Set: {changeSetName}";
+
+    /// <summary>
+    /// The per-member commit core (Phase 5.4): commits only the members that have staged changes, folding
+    /// a thrown call into that member's <see cref="GitOutcome.Failed"/> so one failure never aborts the
+    /// loop and never rolls anything back (Locked decision #5). A member with nothing staged is skipped —
+    /// it contributes no outcome at all (it didn't commit), so it isn't counted as a success or a failure.
+    /// Pure and synchronous, so the skip-unstaged and no-rollback guarantees are unit-testable directly.
+    /// </summary>
+    internal static ChangeSetOpResult CommitOverMembers(
+        IReadOnlyList<Repo> members, Func<Repo, bool> hasStaged, Func<Repo, GitOutcome> commit)
+    {
+        var results = new List<(Guid, GitOutcome)>(members.Count);
+        foreach (var repo in members)
+        {
+            if (!hasStaged(repo)) continue; // nothing staged → don't commit (5.5: no auto-staging)
+            GitOutcome outcome;
+            try { outcome = commit(repo); }
+            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
+            results.Add((repo.Id, outcome));
+        }
+        return new ChangeSetOpResult(results);
+    }
+
+    // Whether the repo has anything in its index to commit. A failed probe reads as "nothing staged" so
+    // the member is skipped rather than committed blindly.
+    private bool HasStagedChanges(Repo repo)
+    {
+        try
+        {
+            return _git.GetLocalChanges(repo) is Fetched<LocalChangesSnapshot>.Ok ok && ok.Value.Staged.Count > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void Run(
         IReadOnlyList<Guid> repoIds,
         Func<Repo, GitOutcome> op,
@@ -175,7 +245,11 @@ internal sealed class ChangeSetOperations
         return repos;
     }
 
-    private void Report(ChangeSetOpResult result, Func<Strings, int, string> success, bool touchesWorkingTree)
+    private void Report(
+        ChangeSetOpResult result,
+        Func<Strings, int, string> success,
+        bool touchesWorkingTree,
+        bool commitCreated = false)
     {
         // Every member reloads whether it succeeded or failed: a reload just re-reads git, so it
         // reflects reality either way (and a failed op may still have moved something).
@@ -184,6 +258,10 @@ internal sealed class ChangeSetOperations
             _bus.Broadcast(new RefsChangedMessage(repoId));
             if (touchesWorkingTree)
                 _bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+            // A batch commit folds each member's staged files into a new commit — the same signal a
+            // single-repo commit broadcasts, so History and the review surfaces pick up the increment.
+            if (commitCreated)
+                _bus.Broadcast(new CommitCreatedMessage(repoId));
         }
 
         var s = _loc.Strings.Value;
