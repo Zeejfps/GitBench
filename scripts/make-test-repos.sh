@@ -2,7 +2,8 @@
 # Generates a whole suite of git repos parked in specific states so GitBench's
 # flows can be stress-tested: working-tree variety, conflicts and *in-progress*
 # operations (merge / rebase / cherry-pick / revert / bisect), branch & remote
-# states, stashes, submodules, worktrees, and large-history perf.
+# states, stashes, submodules, worktrees, cross-repo change sets (same-named
+# branches linked across sibling repos), and large-history perf.
 #
 # Each scenario lands in its own folder under the root, so you can add the whole
 # root to GitBench (or pick individual repos). Bare remotes used to fake
@@ -651,6 +652,62 @@ gen_long_paths() {                              # 60-long-paths
           "packages/frontend/src/components/dashboard/widgets/analytics"
 }
 
+# Three sibling repos wired the way the cross-repo change-set feature
+# (docs/plans/cross-repo-change-sets.md) expects to find them, in one folder
+# meant to be added to GitBench as a single group:
+#   - feature/cross-repo in ALL THREE repos            -> the change set
+#   - bugfix/shared-logging in service-b + service-c   -> a second, smaller set
+#   - feature/only-in-a in service-a alone             -> decoy, never a set
+#   - defaults are main/main/MASTER and must never read as a set
+#     (exclusion is by each repo's default branch, not the literal name "main")
+# plus per-repo variety the plan's phases test against: overlapping file paths
+# across repos (src/index.ts), differing base resolution (published upstream vs
+# default-branch fallback), and parked drift states (mismatched checkout, an
+# unpushed commit, a moved base, a dirty tree, a member with no remote).
+gen_change_set() {                              # 70-change-set
+  rm -rf "$ROOT/70-change-set"
+
+  # service-a — set branch CHECKED OUT, published with an upstream, then one
+  # more local commit so it sits 1 ahead of origin (push-all / drift: unpushed).
+  new_repo 70-change-set/service-a
+  mkdir -p src api
+  commit "a: initial"    src/index.ts   "export const a = 1;"
+  commit "a: api schema" api/schema.txt "v1"
+  git switch -q -c feature/cross-repo
+  commit "cross-repo: extend schema" api/schema.txt "v2 shared-field"
+  add_remote main feature/cross-repo
+  commit "cross-repo: adopt shared field" src/index.ts "export const shared = true;"
+  git branch feature/only-in-a                 # decoy: exists in this repo only
+
+  # service-b — has the set branch but main is checked out (drift: mismatched
+  # checkout). The branch was never published, so base resolution falls back to
+  # the default branch — whose tip then moves on (drift: behind its base).
+  # src/index.ts collides with service-a's path (repo-qualified tree case).
+  new_repo 70-change-set/service-b
+  mkdir -p src
+  commit "b: initial" src/index.ts "export const b = 1;"
+  commit "b: logging" src/log.txt  "log v1"
+  git switch -q -c feature/cross-repo
+  commit "cross-repo: consume shared field" src/index.ts "import { shared } from 'service-a';"
+  commit "cross-repo: wire logging"         src/log.txt  "log shared-field"
+  git switch -q -c bugfix/shared-logging main
+  commit "shared-logging: fix double write" src/log.txt "log fix"
+  git switch -q main
+  add_remote main
+  commit "b: main moves on" src/log.txt "log v2"
+
+  # service-c — default branch named MASTER, no remote (push-all reports this
+  # member's failure honestly), set branch checked out with a DIRTY tree.
+  new_repo 70-change-set/service-c
+  git symbolic-ref HEAD refs/heads/master      # default branch named master
+  commit "c: initial" config.toml "name = \"service-c\""
+  git switch -q -c bugfix/shared-logging
+  commit "shared-logging: propagate fix" config.toml "log_fix = true"
+  git switch -q -c feature/cross-repo master
+  commit "cross-repo: read shared field" config.toml "shared_field = true"
+  append config.toml "wip = true"              # uncommitted edit on the set branch
+}
+
 gen_big_history() {                             # 90-big-history
   new_repo 90-big-history
   local count="${COUNT_BIG:-800}" i
@@ -717,6 +774,7 @@ REGISTRY=(
   "52-submodule-detached|gen_submodule_detached|Submodules parked in each detached-HEAD banner state"
   "53-submodule-reattach|gen_submodule_reattach|Behind superproject; pulling auto-reattaches a submodule"
   "60-long-paths|gen_long_paths|Many long deeply-nested paths (M/A/D/R), mostly unstaged"
+  "70-change-set|gen_change_set|Three repos linked by same-named branches (change set + decoys)"
   "90-big-history|gen_big_history|Large history for perf (COUNT_BIG, default 800)"
   "91-wide-graph|gen_wide_graph|Many concurrent lanes with periodic merges"
 )
@@ -752,6 +810,15 @@ for entry in "${REGISTRY[@]}"; do
   fi
 done
 
+# One summary line per repo. A scenario is usually its own repo, but a
+# repo-family scenario (70-change-set) is a plain folder of sibling repos —
+# list each nested repo instead of poking git at the folder itself.
+summary_line() { # summary_line <label> <repo-dir>
+  local head_line
+  head_line=$(git -C "$2" status -sb 2>/dev/null | head -1) || true
+  printf '  %-24s %s\n' "$1" "$head_line"
+}
+
 # Index file at the root.
 {
   echo "GitBench test repos"
@@ -771,8 +838,14 @@ echo
 echo "Summary:"
 for folder in "${CREATED[@]}"; do
   dir="$ROOT/$folder"
-  head_line=$(git -C "$dir" status -sb 2>/dev/null | head -1)
-  printf '  %-24s %s\n' "$folder" "$head_line"
+  if [ -e "$dir/.git" ]; then
+    summary_line "$folder" "$dir"
+  else
+    for sub in "$dir"/*/; do
+      [ -e "$sub.git" ] || continue
+      summary_line "$folder/$(basename "$sub")" "$sub"
+    done
+  fi
 done
 echo
 echo "Done. ${#CREATED[@]} repos created under $ROOT"
