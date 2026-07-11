@@ -207,6 +207,9 @@ public sealed record ChangeSetOpResult(
    primaries of one group form a change set implicitly. No new persisted entity until Phase 6
    proves the need. (Worktrees/submodules are excluded from detection — sets are between
    *primaries*; a submodule pointer bump is the parent repo's change.)
+   **Each repo's default branch and detached HEADs are excluded** — `main` existing everywhere
+   is not a change set; a set must be a *feature* branch name. Exclusion is by each repo's own
+   default (a repo whose default is `master` excludes `master`), not the literal name `main`.
 2. **A change set review = N independent `ReviewSession`s aggregated behind one
    `IReviewSurfaceModel`.** Each member resolves its own base (upstream → default → preferred),
    loads through the existing `GitReviewStackSource`, and keeps its own
@@ -254,10 +257,14 @@ Make the convention *visible* with zero write operations and no new window.
   (tooltip lists the other repos).
 - **Localization**: new keys in all 6 `Strings/*.json` (`changesets.also_on`,
   `changesets.review_across`, …).
-- **Ship / test locally:** create `feature/x` by hand in two grouped repos → right-click it →
-  the "Also on" caption and "Review across 2 repos…" appear; clicking flashes the placeholder
-  toast; branches not shared show neither. Unit tests for the index's grouping/diffing logic
-  (real-git fixture repos, precedent: `ReviewStackTests`).
+- **Ship / test locally:** generate the fixture — `scripts/make-test-repos.sh 70-change-set`
+  builds three sibling repos linked by `feature/cross-repo` (all three) and
+  `bugfix/shared-logging` (two), plus the decoys detection must ignore: a branch that exists in
+  one repo only, and default branches (`main`/`main`/`master` — exclusion is per-repo default,
+  not the literal name). Add the folder as one group → right-click `feature/cross-repo` → the
+  "Also on" caption and "Review across 3 repos…" appear; the decoy branch and the defaults show
+  neither. Unit tests for the index's grouping/diffing logic (real-git fixture repos,
+  precedent: `ReviewStackTests`).
 
 ### Phase 2 — Batch actions on a synced branch
 
@@ -360,6 +367,9 @@ The most write-sensitive piece, deliberately after the review surface exists to 
   reporting.
 - Manual pass on a 3-repo set: full authoring loop (start → edit → review across → commit →
   push all) and the drift cases (delete the branch in one repo, force-move a base, dirty tree).
+  The `70-change-set` scenario in `scripts/make-test-repos.sh` generates the standing fixture —
+  it already parks the drift states (mismatched checkout, unpushed commit, moved base, dirty
+  tree, a member with no remote) and the path-collision case (`src/index.ts` in two members).
 
 ## Open decisions (recommend, but worth confirming)
 
@@ -367,19 +377,16 @@ The most write-sensitive piece, deliberately after the review surface exists to 
    user's own statement of "these belong together", and it bounds index cost) vs any two repos
    in the registry. Escape hatch: an "Add repos…" step on the review-window header if a set ever
    spans groups.
-2. **Default-branch names as sets.** `main` existing everywhere technically matches the
-   convention. Recommendation: exclude each repo's default branch (and detached HEADs) from
-   detection — a set must be a *feature* branch name.
-3. **Repo-qualified path scheme.** `"<DisplayName>/<path>"` with display names de-duplicated by
+2. **Repo-qualified path scheme.** `"<DisplayName>/<path>"` with display names de-duplicated by
    suffixing (recommended — human-readable tree folders for free) vs a structured
    `(Guid, path)` key threaded through the widgets (cleaner, but breaks the "widgets stay
    repo-blind" property and touches every shared surface).
-4. **Cross-repo increments rail (per-repo commit stacks in the window).** Skip for MVP
+3. **Cross-repo increments rail (per-repo commit stacks in the window).** Skip for MVP
    (recommended; net-diff mode is the shipped default for single-repo review too) vs build a
    two-level rail (repo → increments) in Phase 6.
-5. **Where batch actions live long-term.** Context menu only (recommended for MVP) vs a
+4. **Where batch actions live long-term.** Context menu only (recommended for MVP) vs a
    dedicated "Change sets" sidebar section listing active sets with inline actions — revisit
    after Phase 2 usage.
-6. **Trailer format.** `Change-Set: <branch-name>` (recommended — human-readable, greppable,
+5. **Trailer format.** `Change-Set: <branch-name>` (recommended — human-readable, greppable,
    matches the convention key) vs a generated id (survives branch renames, but opaque; only
    needed if Phase 6.2's persisted entity lands).
