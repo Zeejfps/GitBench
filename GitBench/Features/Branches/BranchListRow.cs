@@ -6,6 +6,7 @@ using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
@@ -85,7 +86,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
             SpacingBefore = row is RemotesHeaderRow or StashesHeaderRow ? Spacing.Lg : 0,
             Background = Prop.Bind(() =>
                 !Selected() && (state.Hovered.Value || state.ContextHighlighted.Value) ? RS().FillHover : 0u),
-            Trailing = TrailingFor(row),
+            Trailing = TrailingFor(row, ctx, state),
         };
 
         return key is { } selKey
@@ -144,17 +145,40 @@ internal sealed record BranchListRow : Widget<BranchRowState>
         };
     }
 
-    private static IWidget? TrailingFor(BranchRow row)
+    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
+
+    private static IWidget? TrailingFor(BranchRow row, Context ctx, BranchRowState state)
     {
         if (row is not LocalBranchRow lb) return null;
+
+        var groups = new List<IWidget>(3);
+        // The change-set (synced) glyph leads the trailing group so it reads before the ahead/behind
+        // counts; it's absent unless this branch is part of a cross-repo set.
+        if (lb.SyncedWith is { } synced) groups.Add(SyncedBadge(ctx, state, synced));
         var ahead = lb.AheadBy.GetValueOrDefault();
         var behind = lb.BehindBy.GetValueOrDefault();
-        if (ahead == 0 && behind == 0) return null;
-
-        var groups = new List<IWidget>(2);
         if (ahead > 0) groups.Add(BadgeGroup(LucideIcons.Push, ahead, s => s.BranchesView.AheadColor));
         if (behind > 0) groups.Add(BadgeGroup(LucideIcons.Pull, behind, s => s.BranchesView.BehindColor));
+
+        if (groups.Count == 0) return null;
         return new Row { Gap = 8f, CrossAxis = CrossAxisAlignment.Center, Children = groups.ToArray() };
+    }
+
+    // Marks a branch that is part of a cross-repo change set (same name across group members).
+    // Hovering the row shows a tooltip naming the other repos; it rides the row's own hover state, so
+    // no extra interactable is introduced.
+    private static IWidget SyncedBadge(Context ctx, BranchRowState state, string others)
+    {
+        var tooltip = ctx.Localization().Strings.Value.ChangesetsSyncedTooltip(others);
+        var glyph = new Text
+        {
+            Value = LucideIcons.FolderGit2,
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = FontSize.Caption,
+            VAlign = TextAlignment.Center,
+            Color = Theme.Color(s => s.BranchesView.RowTextDim),
+        };
+        return glyph.Use(view => new Tooltip(view, ctx, tooltip, state.Hovered, AlwaysEnabled));
     }
 
     private static IWidget BadgeGroup(string icon, int count, Func<ThemeStyles, uint> color) => new Row

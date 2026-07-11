@@ -2216,6 +2216,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     private static readonly string[] DefaultBranchCandidates = { "main", "master" };
 
+    // The repo's default branch as a bare local branch name, for change-set correlation (which
+    // excludes each repo's own default). origin/HEAD's target ("origin/main") has its remote prefix
+    // stripped to the local branch name; the local main/master fallback is already bare. Null when
+    // neither resolves. Exclusion is thus by each repo's actual default, not the literal name "main".
+    public string? GetDefaultBranchName(Repo repo)
+    {
+        if (!IsGitRepo(repo.Path)) return null;
+        var refName = GetDefaultBranchRef(repo.Path);
+        if (refName == null) return null;
+        var slash = refName.IndexOf('/');
+        return slash >= 0 && slash < refName.Length - 1 ? refName.Substring(slash + 1) : refName;
+    }
+
     // Creates an annotated tag when a message is supplied (`git tag -a <name> -m <msg> <sha>`),
     // otherwise a lightweight tag (`git tag <name> <sha>`). When pushToAllRemotes is set, the new
     // tag ref is pushed to every configured remote; the first push failure aborts and is reported

@@ -30,6 +30,11 @@ public interface IGitService
     // Unknown = not a repo; null = the probe failed (caller keeps its last known value).
     GitStatusSummary? GetStatusSummary(Repo repo);
     Fetched<BranchListing> GetBranches(Repo repo);
+    // The repo's default branch as a bare local branch name ("main" / "master" / …): origin/HEAD's
+    // target with its remote prefix stripped, else a local main/master. Null when neither resolves.
+    // Used by the change-set index to exclude each repo's own default from same-name correlation
+    // (Locked decision #1: `main` existing everywhere is not a change set).
+    string? GetDefaultBranchName(Repo repo);
     GitOutcome Stage(Repo repo, IReadOnlyList<string> paths);
     GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths);
     GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths);

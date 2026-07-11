@@ -21,8 +21,13 @@ internal static class BranchTreeBuilder
     private const int RemoteTreeBaseDepth = 1;
     private const int StashDepth = 0;
 
-    public static IReadOnlyList<BranchRow> BuildRows(BranchListing? listing, BranchesUiState ui)
+    // syncedByBranch maps a local branch name to the comma-joined display names of the OTHER group
+    // members that carry the same branch (an implicit cross-repo change set), for the sidebar's
+    // "synced" glyph. Empty when the active repo isn't a primary in a group.
+    public static IReadOnlyList<BranchRow> BuildRows(
+        BranchListing? listing, BranchesUiState ui, IReadOnlyDictionary<string, string>? syncedByBranch = null)
     {
+        var synced = syncedByBranch ?? EmptySynced;
         var rows = new List<BranchRow>();
         if (listing == null) return rows;
 
@@ -30,7 +35,7 @@ internal static class BranchTreeBuilder
         if (ui.LocalOpen)
         {
             var localTree = PathTree.Build(listing.LocalBranches, b => b.Name);
-            EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, LocalTreeBaseDepth, depth: 0, trunkMask: 0);
+            EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, LocalTreeBaseDepth, depth: 0, trunkMask: 0, synced);
         }
 
         rows.Add(new RemotesHeaderRow(Depth: 0, ui.RemotesOpen));
@@ -49,7 +54,7 @@ internal static class BranchTreeBuilder
                 if (!isOpen) continue;
                 var childTrunk = TreeGuides.SetKind(0, RemoteHeaderDepth, isLast ? TreeGuide.None : TreeGuide.Through);
                 var remoteTree = PathTree.Build(rg.Branches, b => b.Name);
-                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, childTrunk);
+                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, childTrunk, EmptySynced);
             }
         }
 
@@ -74,7 +79,10 @@ internal static class BranchTreeBuilder
     // trunkMask carries the ancestors' passthrough trunks for guide levels [0, rowDepth-1] — level 0 is
     // the section/remote header (the root), each deeper level a tree depth in. Each row sets its own
     // connector at level rowDepth (its parent's column) on top of those.
-    private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth, long trunkMask)
+    private static readonly IReadOnlyDictionary<string, string> EmptySynced =
+        new Dictionary<string, string>();
+
+    private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth, long trunkMask, IReadOnlyDictionary<string, string> syncedByBranch)
     {
         var rowDepth = treeBaseDepth + depth;
         var scope = isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local;
@@ -89,7 +97,7 @@ internal static class BranchTreeBuilder
             {
                 rows.Add(isRemote
                     ? new RemoteBranchRow(rowDepth, remoteName!, entry.Name, node.Segment, entry.TipSha) { GuideMask = mask }
-                    : new LocalBranchRow(rowDepth, entry.Name, node.Segment, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState) { GuideMask = mask });
+                    : new LocalBranchRow(rowDepth, entry.Name, node.Segment, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState, syncedByBranch.GetValueOrDefault(entry.Name)) { GuideMask = mask });
             }
             else
             {
@@ -101,7 +109,7 @@ internal static class BranchTreeBuilder
                     // The folder's children inherit its trunk at its own column — a passthrough while the
                     // folder has a sibling below it, nothing once it is the last.
                     var childTrunk = TreeGuides.SetKind(trunkMask, rowDepth, isLast ? TreeGuide.None : TreeGuide.Through);
-                    EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1, childTrunk);
+                    EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1, childTrunk, syncedByBranch);
                 }
             }
         }

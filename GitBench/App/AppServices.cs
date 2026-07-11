@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.ChangeSets;
 using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
@@ -143,6 +144,20 @@ internal static class AppServices
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
             ctx.Require<IPopupWindowFactory>(),
             ctx.Require<IWindowCoordinates>()));
+
+        // Detects cross-repo change sets (same-named branches across a group's primaries). Started
+        // like the status store so its background detection runs even before the branches sidebar
+        // resolves it; the branch context menu and the sidebar's synced glyph read it.
+        context.AddSingleton<SyncedBranchIndex>(ctx =>
+        {
+            var index = new SyncedBranchIndex(
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IGitService>(),
+                ctx.Require<IMessageBus>(),
+                ctx.Require<IStartupSweepCoordinator>());
+            index.Start(ctx.Require<IUiDispatcher>());
+            return index;
+        }, eager: true);
 
         context.AddSingleton<RepoWatcherService>(eager: true);
         context.AddSingleton<WorktreeSyncService>(eager: true);

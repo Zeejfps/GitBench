@@ -8,6 +8,62 @@
 > `stacked-diffs.md` discipline) so every phase produces something runnable and locally testable
 > before the next one starts.
 
+## State of the world
+
+> Kept current for the next phase's agent. Update it when you finish a phase.
+
+**Phases done:** Phase 1 (detection + entry-point affordance). Phases 2-7: not started.
+
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **293** tests
+(286 baseline + 7 new in `GitBench.Tests/SyncedBranchIndexTests.cs`).
+
+**What Phase 1 added (all under `GitBench/`):**
+
+- **`Features/ChangeSets/SyncedBranch.cs`** — public records `SyncedBranch(string BranchName,
+  IReadOnlyList<Guid> RepoIds)` and `RepoBranchSnapshot(string? DefaultBranch,
+  IReadOnlyCollection<string> LocalBranchNames)`, plus the **pure** `internal static
+  SyncedBranchCorrelator.Correlate(orderedRepoIds, byRepo)` — same-name correlation with per-repo
+  default exclusion. This is the unit the tests drive; the index just wraps it.
+- **`Features/ChangeSets/SyncedBranchIndex.cs`** — `internal sealed class SyncedBranchIndex`, the
+  app singleton. Registered **eager** in `App/AppServices.cs` via a factory that calls
+  `Start(dispatcher)` (mirrors `RepoStatusStore`). Loops `IGitService.GetBranches` +
+  `GetDefaultBranchName` over each group's primaries on the deferred startup sweep and refreshes a
+  repo on `RefsChangedMessage`. Reads: `SyncedReposFor(repoId, branchName)` (menu-facing) and
+  `SetsForGroup(groupId)`; `IReadable<int> Revision` bumps on any snapshot change so bound views
+  re-derive. Snapshots + epoch are UI-thread-only; git work runs under `IStartupSweepCoordinator`.
+- **`IGitService.GetDefaultBranchName(Repo)`** (new interface method + `GitService` impl near
+  `GetDefaultBranchRef`) — returns the repo's default as a **bare local branch name**
+  (`origin/HEAD`'s target with the remote prefix stripped, else local `main`/`master`). No other
+  `IGitService` implementations or test fakes exist, so this was a safe addition.
+- **Entry point (1.2):** `BranchesViewModel` now takes a `SyncedBranchIndex` ctor param and
+  `AddChangeSetMenuItems` appends, for a synced local branch, a disabled **"Also on: …"** caption +
+  **"Review across N repos…"** action. The action is a **placeholder toast**
+  (`ShowToastMessage(ToastIntent.Info(...))`) this phase — see Deviations.
+- **Sidebar glyph (1.3):** `LocalBranchRow` gained `string? SyncedWith`; `BranchTreeBuilder.BuildRows`
+  takes an optional `IReadOnlyDictionary<string,string> syncedByBranch` (branch → other members'
+  display names) threaded from `BranchesViewModel.BuildSyncedInfo()` (reads `_index.Revision` so rows
+  re-derive on detection change). `BranchListRow.TrailingFor` renders a `FolderGit2` glyph with a
+  hover tooltip for synced branches.
+- **Localization:** keys `changesets.also_on`, `changesets.review_across`,
+  `changesets.review_placeholder`, `changesets.synced_tooltip` added to **all 6** `Localization/Strings/*.json`.
+- **Fixture:** `scripts/make-test-repos.sh 70-change-set` (`gen_change_set`) already present and
+  validated — service-a/b/c with `feature/cross-repo` (all 3), `bugfix/shared-logging` (b+c),
+  `feature/only-in-a` decoy, defaults main/main/master.
+
+**Gotchas / notes for the next agent:**
+
+- The `Strings` type is **source-generated** from the JSON by `framework/ZGF.Gui.Generator`
+  (`LocalizationGenerator`). A missing key in any locale is a **build error** (LOC004), so add new
+  keys to all 6 files. Key→identifier: `changesets.review_across` → `ChangesetsReviewAcross`;
+  `{count}`/`{repos}` become method params (`object`).
+- `OpenChangeSetReviewMessage` and `ChangeSetSession` (listed under "New types") are **not yet
+  defined** — Phase 3 introduces them and swaps the placeholder toast for the real broadcast
+  (`BranchesViewModel.AddChangeSetMenuItems`).
+- Correlation is scoped to a repo's group via `IRepoRegistryExtensions.FindGroupContaining`; only
+  primaries appear in a `Group.RepoIds`, so worktrees/submodules are excluded for free.
+- `SyncedBranchIndex.Revision` is the reactive hook; `SyncedReposFor`/`SetsForGroup` themselves are
+  plain reads (fine for the on-open menu, and paired with a `Revision` read for the row projection).
+
 ## What a "change set" means here (scope)
 
 - **In scope — correlation by branch name.** A change set is *the same branch name existing in
@@ -257,9 +313,26 @@ public sealed record ChangeSetOpResult(
 
 ## Implementation plan — outside-in (each phase runs + is testable)
 
-### Phase 1 — Detect synced branches + the entry-point affordance
+### Phase 1 — Detect synced branches + the entry-point affordance ✅ DONE
 
 Make the convention *visible* with zero write operations and no new window.
+
+**Deviations from the plan text:**
+
+- **Menu action is a placeholder toast, not an `OpenChangeSetReviewMessage` broadcast.** 1.2's text
+  mentions broadcasting `OpenChangeSetReviewMessage` "in this phase, a placeholder toast". Taken
+  literally (and matching stacked-diffs Phase 1), the action shows a toast
+  (`changesets.review_placeholder`) and the message type / `ChangeSetSession` are **deferred to
+  Phase 3**, where the real broadcast + window land — so Phase 1 ships no unused types.
+- **Added `IGitService.GetDefaultBranchName(Repo)`.** The per-repo default-branch exclusion needs
+  each repo's default as a bare local name, and no public accessor existed (`GetDefaultBranchRef`
+  was private and returned `origin/main`). Added a small public method beside it.
+- **1.3 glyph reuses `LucideIcons.FolderGit2`** (no dedicated "link/synced" glyph exists in the
+  embedded Lucide font) and its tooltip rides the branch row's existing hover state rather than
+  introducing a new interactable widget.
+- **Correlation logic extracted to a pure `SyncedBranchCorrelator`** the index wraps, so the
+  grouping/exclusion logic is unit-tested directly against real-git fixtures (per the plan's
+  ReviewStackTests precedent) without standing up the stateful service.
 
 - **1.1** `SyncedBranchIndex` (`Features/ChangeSets/`) — an app singleton that maintains, per
   group, `branch name → repo ids`. Data source: `IGitService.GetBranches(repo)` looped over the
