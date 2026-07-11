@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.ChangeSets;
 using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
@@ -38,6 +39,11 @@ internal static class AppServices
         var workingChangesLayout = new State<WorkingChangesLayout>(preferences.Current.WorkingChangesLayout);
         workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
         context.AddService(workingChangesLayout);
+
+        // Whose working tree the Review layout shows: this repo, or all members of the active branch's
+        // change set (Phase 5.3). Session-scoped, not persisted — the toggle only appears when the
+        // cross-repo surface is available and defaults back to this repo otherwise.
+        context.AddService(new State<ChangeSetPanelScope>(ChangeSetPanelScope.ThisRepo));
 
         var themeMode = new State<ThemeMode>(preferences.Current.Theme);
         themeMode.Changed += preferences.SetTheme;
@@ -104,6 +110,27 @@ internal static class AppServices
                 subscribeToSelection: false),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<ILocalizationService>()));
+
+        // The Changes tab's cross-repo "All repos" mode (Phase 5): the working-tree review surface
+        // aggregated over every member of the active branch's change set. Its commit-details VM is its
+        // own (opted out of the selection bus), like the single-repo working-tree review's.
+        context.AddSingleton(ctx => new ChangeSetWorkingTreeReviewViewModel(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>(),
+            ctx.Require<SyncedBranchIndex>(),
+            ctx.Require<IRepoStatusStore>(),
+            ctx.Require<ChangeSetOperations>(),
+            new CommitDetailsViewModel(
+                ctx.Require<IGitService>(),
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IUiDispatcher>(),
+                ctx.Require<IMessageBus>(),
+                ctx.Require<ILocalizationService>(),
+                preferences,
+                subscribeToSelection: false)));
         context.AddSingleton<UpdateService>();
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
@@ -143,6 +170,25 @@ internal static class AppServices
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
             ctx.Require<IPopupWindowFactory>(),
             ctx.Require<IWindowCoordinates>()));
+
+        // Detects cross-repo change sets (same-named branches across a group's primaries). Started
+        // like the status store so its background detection runs even before the branches sidebar
+        // resolves it; the branch context menu and the sidebar's synced glyph read it.
+        context.AddSingleton<SyncedBranchIndex>(ctx =>
+        {
+            var index = new SyncedBranchIndex(
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IGitService>(),
+                ctx.Require<IMessageBus>(),
+                ctx.Require<IStartupSweepCoordinator>());
+            index.Start(ctx.Require<IUiDispatcher>());
+            return index;
+        }, eager: true);
+
+        // Batch actions over a synced branch's members (checkout/push/pull/fetch/delete in all).
+        // A plain coordinator — loops IGitService per member off-thread and reports per-repo
+        // outcomes; the branch context menu and the checkout guardrail drive it.
+        context.AddSingleton<ChangeSetOperations>();
 
         context.AddSingleton<RepoWatcherService>(eager: true);
         context.AddSingleton<WorktreeSyncService>(eager: true);

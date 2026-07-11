@@ -49,7 +49,11 @@ public sealed record LocalBranchRow(
     bool IsHead,
     int? AheadBy,
     int? BehindBy,
-    BranchUpstreamState UpstreamState) : BranchRow(Depth)
+    BranchUpstreamState UpstreamState,
+    // Non-null when this branch is part of a cross-repo change set: the comma-joined display names
+    // of the OTHER group members that carry the same branch. Drives the sidebar's "synced" glyph;
+    // part of the row's value identity, so the glyph appears/updates when detection changes.
+    string? SyncedWith = null) : BranchRow(Depth)
 {
     public override BranchRowKey? SelectionKey => new(IsRemote: false, IsStash: false, RemoteName: null, Name);
 }

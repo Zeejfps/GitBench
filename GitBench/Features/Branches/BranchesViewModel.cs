@@ -1,7 +1,10 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.ChangeSets;
+using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
+using GitBench.Features.Review;
 using GitBench.Features.Stash;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -36,6 +39,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly IMessageBus _bus;
     private readonly State<MainViewMode> _mode;
     private readonly ILocalizationService _loc;
+    private readonly SyncedBranchIndex _index;
+    private readonly ChangeSetOperations _changeSetOps;
 
     public IReadable<BranchListing?> Listing { get; }
     public IReadable<BranchesUiState> Ui { get; }
@@ -78,7 +83,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IMessageBus bus,
         State<MainViewMode> mode,
         IRepoSnapshotStore store,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        SyncedBranchIndex index,
+        ChangeSetOperations changeSetOps)
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
@@ -86,6 +93,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _bus = bus;
         _mode = mode;
         _loc = loc;
+        _index = index;
+        _changeSetOps = changeSetOps;
 
         _branchOpGen = CreateLane();
         _stashGen = CreateLane();
@@ -99,7 +108,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
 
-        _rowModels = new Derived<IReadOnlyList<BranchRow>>(() => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value));
+        _rowModels = new Derived<IReadOnlyList<BranchRow>>(() => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value, BuildSyncedInfo()));
         _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
         _placeholderText = new Derived<string?>(() =>
             LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err) : null);
@@ -567,6 +576,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                 if (failed != null)
                     _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
+                else
+                    OfferSwitchOtherMembers(repo.Id, branchName);
             },
             lane: _branchOpGen);
     }
@@ -772,6 +783,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         var items = new List<RepoBarContextMenu.Item>();
         AddCheckoutMenuItems(items, menu);
+        AddChangeSetMenuItems(items, menu);
         AddFastForwardMenuItem(items, menu);
         AddMergeRebaseMenuItems(items, menu);
         AddRenameDeleteMenuItems(items, menu);
@@ -799,6 +811,137 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             s.BranchesContextReviewChanges,
             () => StartReview(name, name),
             LucideIcons.Search));
+    }
+
+    // Cross-repo change-set section (Phase 1): when the clicked branch is the same-named local branch
+    // in two or more primaries of this repo's group, append a disabled caption listing the other repos
+    // and a "Review across N repos…" action. The action is a placeholder toast in this phase — the
+    // real cross-repo review window lands in a later phase.
+    private void AddChangeSetMenuItems(List<RepoBarContextMenu.Item> items, LocalBranchMenu m)
+    {
+        var members = _index.SyncedReposFor(m.Repo.Id, m.Name);
+        if (members.Count < 2) return;
+
+        var others = new List<string>();
+        foreach (var id in members)
+        {
+            if (id == m.Repo.Id) continue;
+            if (DisplayNameOf(id) is { } name) others.Add(name);
+        }
+        if (others.Count == 0) return;
+
+        var s = m.S;
+        var branchName = m.Name;
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsAlsoOn(string.Join(", ", others)),
+            static () => { },
+            Enabled: false));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsReviewAcross(members.Count),
+            () => OpenChangeSetReview(branchName, members),
+            LucideIcons.Search));
+
+        // Phase 2: batch actions over the set's members — plain loops over IGitService with per-repo
+        // outcomes (a member's failure never blocks the rest). A fresh member-id snapshot is captured
+        // per action so it survives the menu closing.
+        var setMembers = members.ToArray();
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsCheckoutAll,
+            () => _changeSetOps.CheckoutInAll(setMembers, branchName),
+            LucideIcons.Branch));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsPushAll,
+            () => _changeSetOps.PushInAll(setMembers),
+            LucideIcons.Push));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsPullAll,
+            () => _changeSetOps.PullInAll(setMembers),
+            LucideIcons.Pull));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsFetchAll,
+            () => _changeSetOps.FetchInAll(setMembers),
+            LucideIcons.Fetch));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsDeleteAll,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteChangeSetBranchDialog
+            {
+                RepoIds = setMembers,
+                BranchName = branchName,
+                OnClose = onClose,
+            })),
+            LucideIcons.Trash));
+    }
+
+    private string? DisplayNameOf(Guid repoId)
+    {
+        foreach (var r in _registry.Repos)
+            if (r.Id == repoId) return r.DisplayName;
+        return null;
+    }
+
+    // Broadcasts the real cross-repo review request (Phase 3): one pinned ReviewSession per member
+    // (each auto-resolving its own base), wrapped in a ChangeSetSession named for the shared branch.
+    // ChangeSetReviewWindowsViewModel picks it up and reflects it into one review window over the union
+    // of the members' diffs. The membership is snapshotted here so it survives the menu closing.
+    private void OpenChangeSetReview(string branchName, IReadOnlyList<Guid> members)
+    {
+        var sessions = new List<ReviewSession>(members.Count);
+        foreach (var id in members)
+            sessions.Add(new ReviewSession(id, branchName, branchName, null, null));
+        _bus.Broadcast(new OpenChangeSetReviewMessage(new ChangeSetSession(branchName, sessions)));
+    }
+
+    // Guardrail (Phase 2.3): a plain single-repo checkout of a synced set branch is the most common
+    // way cross-repo work drifts. After it lands, offer a one-shot toast to bring the other members
+    // onto the same branch in one action — declined by simply letting the toast expire.
+    private void OfferSwitchOtherMembers(Guid repoId, string branchName)
+    {
+        var members = _index.SyncedReposFor(repoId, branchName);
+        if (members.Count < 2) return;
+
+        var others = new List<Guid>(members.Count - 1);
+        foreach (var id in members)
+            if (id != repoId) others.Add(id);
+        if (others.Count == 0) return;
+
+        var s = _loc.Strings.Value;
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Info(
+            s.ChangesetsSwitchPrompt(branchName, others.Count),
+            new ToastAction(
+                s.ChangesetsSwitchOthers,
+                () => _changeSetOps.CheckoutInAll(others, branchName)))));
+    }
+
+    private static readonly IReadOnlyDictionary<string, string> EmptySyncedInfo =
+        new Dictionary<string, string>();
+
+    // Local branch name -> comma-joined display names of the OTHER group members carrying the same
+    // branch, for the active repo — the sidebar's synced-glyph source. Reads the index's Revision so
+    // the row projection recomputes when detection changes; empty when the active repo isn't a
+    // primary in a group.
+    private IReadOnlyDictionary<string, string> BuildSyncedInfo()
+    {
+        _ = _index.Revision.Value; // track: rebuild rows when detection changes
+        var repo = _registry.Active.Value;
+        if (repo == null) return EmptySyncedInfo;
+        var group = _registry.FindGroupContaining(repo.Id);
+        if (group == null) return EmptySyncedInfo;
+
+        Dictionary<string, string>? result = null;
+        foreach (var set in _index.SetsForGroup(group.Id))
+        {
+            if (!set.RepoIds.Contains(repo.Id)) continue;
+            var others = new List<string>();
+            foreach (var id in set.RepoIds)
+            {
+                if (id == repo.Id) continue;
+                if (DisplayNameOf(id) is { } name) others.Add(name);
+            }
+            if (others.Count == 0) continue;
+            (result ??= new Dictionary<string, string>(StringComparer.Ordinal))[set.BranchName] = string.Join(", ", others);
+        }
+        return result ?? EmptySyncedInfo;
     }
 
     private void AddFastForwardMenuItem(List<RepoBarContextMenu.Item> items, LocalBranchMenu m)

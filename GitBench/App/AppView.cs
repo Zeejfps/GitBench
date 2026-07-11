@@ -58,6 +58,7 @@ internal sealed record AppView : Widget
                 new DialogSurface(),
                 new DiffWindowsView(),
                 new ReviewWindowsView(),
+                new ChangeSetReviewWindowsView(),
             ],
         }
         .WithController<AppKeybindController>(ctx)

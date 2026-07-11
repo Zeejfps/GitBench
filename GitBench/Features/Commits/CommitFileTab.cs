@@ -32,7 +32,9 @@ internal sealed class CommitFileTab : IDisposable
     public DiffViewModel Diff { get; }
 
     /// <summary>A tab over a file's whole working-tree change (HEAD→disk), for the working-tree
-    /// review surface. Staging the file never re-targets it.</summary>
+    /// review surface. Staging the file never re-targets it. The cross-repo working-tree surface
+    /// identifies a file by a repo-qualified path but diffs the bare repo-relative path in the member
+    /// repo: <paramref name="displayPath"/> is the tab's identity, <paramref name="path"/> the git target.</summary>
     public static CommitFileTab ForWorkingTree(
         string path,
         Guid repoId,
@@ -41,8 +43,9 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        IPlatformShell? shell = null)
-        => new(path, repoId, registry, gitService, dispatcher, bus, loc, shell);
+        IPlatformShell? shell = null,
+        string? displayPath = null)
+        => new(path, repoId, registry, gitService, dispatcher, bus, loc, shell, displayPath);
 
     private CommitFileTab(
         string path,
@@ -52,9 +55,10 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        IPlatformShell? shell)
+        IPlatformShell? shell,
+        string? displayPath = null)
     {
-        Path = path;
+        Path = displayPath ?? path;
         FileName = LastSegment(path);
         Sha = WorkingTreeSha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.WorkingTree));
@@ -70,9 +74,12 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        string? baseSha = null)
+        string? baseSha = null,
+        string? displayPath = null)
     {
-        Path = path;
+        // The cross-repo review surface identifies a file by a repo-qualified path but diffs the bare
+        // repo-relative path in the member repo: displayPath is the tab's identity, path the git target.
+        Path = displayPath ?? path;
         FileName = LastSegment(path);
         // Combined range tab (baseSha set): the diff is base→head and the reviewed-state identity is
         // the shared range key, kept distinct from the tip commit's own sha so marks never collide.

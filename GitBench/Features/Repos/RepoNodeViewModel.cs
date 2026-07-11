@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.ChangeSets;
 using GitBench.Features.Notifications;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
@@ -222,6 +223,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         var items = new List<RepoBarContextMenu.Item>();
 
         AddPrimaryRepoActions(items, s, repo);
+        AddStartChangeSetItem(items, s, repo);
         AddHotkeyMenu(items, s, repo);
         AddWorktreeMenu(items, s, repo);
         AddSubmoduleMenu(items, s, repo);
@@ -239,6 +241,24 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
         AddOpenRemoteItem(items, s, repo);
+    }
+
+    // Start change set… — create a same-named branch across this repo's group primaries (Phase 4.1).
+    // Offered only when the containing group has two or more primaries; opens the same dialog as the
+    // group header, its checklist defaulting to all of them.
+    private void AddStartChangeSetItem(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
+    {
+        var group = _registry.FindGroupContaining(repo.Id);
+        if (group is null) return;
+        var primaries = _registry.PrimariesOfGroup(group);
+        if (primaries.Count < 2) return;
+
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsStartMenu,
+            () => _bus.Broadcast(new ShowDialogMessage(
+                onClose => new StartChangeSetDialog { Repos = primaries, OnClose = onClose })),
+            LucideIcons.FolderGit2));
     }
 
     private void AddHotkeyMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
