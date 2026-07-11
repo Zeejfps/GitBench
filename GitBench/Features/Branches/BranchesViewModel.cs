@@ -4,6 +4,7 @@ using GitBench.Features.ChangeSets;
 using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
+using GitBench.Features.Review;
 using GitBench.Features.Stash;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -838,7 +839,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             Enabled: false));
         items.Add(new RepoBarContextMenu.Item(
             s.ChangesetsReviewAcross(members.Count),
-            () => _bus.Broadcast(new ShowToastMessage(ToastIntent.Info(s.ChangesetsReviewPlaceholder))),
+            () => OpenChangeSetReview(branchName, members),
             LucideIcons.Search));
 
         // Phase 2: batch actions over the set's members — plain loops over IGitService with per-repo
@@ -877,6 +878,18 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         foreach (var r in _registry.Repos)
             if (r.Id == repoId) return r.DisplayName;
         return null;
+    }
+
+    // Broadcasts the real cross-repo review request (Phase 3): one pinned ReviewSession per member
+    // (each auto-resolving its own base), wrapped in a ChangeSetSession named for the shared branch.
+    // ChangeSetReviewWindowsViewModel picks it up and reflects it into one review window over the union
+    // of the members' diffs. The membership is snapshotted here so it survives the menu closing.
+    private void OpenChangeSetReview(string branchName, IReadOnlyList<Guid> members)
+    {
+        var sessions = new List<ReviewSession>(members.Count);
+        foreach (var id in members)
+            sessions.Add(new ReviewSession(id, branchName, branchName, null, null));
+        _bus.Broadcast(new OpenChangeSetReviewMessage(new ChangeSetSession(branchName, sessions)));
     }
 
     // Guardrail (Phase 2.3): a plain single-repo checkout of a synced set branch is the most common

@@ -12,11 +12,12 @@
 
 > Kept current for the next phase's agent. Update it when you finish a phase.
 
-**Phases done:** Phase 1 (detection + entry-point affordance) and Phase 2 (batch actions on a
-synced branch). Phases 3-7: not started.
+**Phases done:** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
+synced branch), and Phase 3 (the cross-repo review surface — the headline). Phases 4-7: not started.
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **298** tests
-(286 baseline + 7 in `SyncedBranchIndexTests.cs` + 5 new in `GitBench.Tests/ChangeSetOperationsTests.cs`).
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **305** tests
+(286 baseline + 7 in `SyncedBranchIndexTests.cs` + 5 in `GitBench.Tests/ChangeSetOperationsTests.cs`
++ 7 new in `GitBench.Tests/ChangeSetReviewTests.cs`).
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -87,6 +88,61 @@ synced branch). Phases 3-7: not started.
   thrown call folds into `Failed` and the loop continues, all-fail is partial (not an exception),
   empty members is vacuous success.
 
+**What Phase 3 added (all under `GitBench/`):**
+
+- **New types (the plan's "New types" section), in `Features/Review/ChangeSetSession.cs`:** public
+  `ChangeSetSession(string Name, IReadOnlyList<ReviewSession> Members)` and the
+  `OpenChangeSetReviewMessage(ChangeSetSession Session)` broadcast. Both live in `Features.Review`
+  (not `Messages/`) so the `ChangeSetSession`→`ReviewSession` dependency stays inside the feature.
+- **`Features/Review/RepoQualifiedPaths.cs`** — the pure repo-qualified path scheme (Locked decision
+  #4). `BuildKeys(members)` → a stable, unique, **slash-free** key per member (display name, dup names
+  suffixed `" (2)"`); `Qualify(key, path)` prefixes; `TryResolve(qualified, byKey, out member, out
+  path)` splits back off the leading segment. This is the "resolver" the plan calls for, as a pure unit.
+- **`Features/Review/ChangeSetAggregator.cs`** — `ChangeSetMemberLoad` (`Ok(…, ReviewStack)` /
+  `Failed(…, message)`) + the pure `ChangeSetAggregator.LoadAll/LoadMember` that resolves each member
+  through the **existing** `IReviewStackSource.LoadAsync` (per-repo base resolution, no new git
+  plumbing) and **folds a thrown load into that member's `Failed`** so one member never sinks the rest.
+  This is the unit-tested core (two-stub-stack aggregation; per-member failure isolation).
+- **`Features/Review/ChangeSetReviewedFiles.cs`** — `IReviewedFileTracker` #3: aggregates N members'
+  Viewed state keyed by **qualified path**, resolving each mark back to its member's `(RepoId, HeadRef)`
+  key in the shared `IReviewProgressStore` (so marks compose with single-repo reviews for free), with
+  per-(qualified)path fingerprints for change-detection.
+- **`Features/Review/ChangeSetReviewViewModel.cs`** — **implementation #3 of `IReviewSurfaceModel`**
+  (the headline). Pinned to a `ChangeSetSession`; resolves all members off-thread via the aggregator,
+  drives its own `CommitDetailsViewModel.ShowRanges`, aggregates the `ReviewHud`, owns the cursor +
+  marks tracker, and reloads a single member on its `RefsChangedMessage` (small per-member cache).
+  A plain `IReviewSurfaceModel`/`IDisposable` (mirrors `WorkingTreeReviewViewModel`, **not** a
+  `ViewModelBase`) — it hand-rolls `Task.Run`→`IUiDispatcher.Post` since the aggregator can't throw.
+- **`CommitDetailsViewModel.ShowRanges(...)` (3.1)** — the widening. New public
+  `DetailsRangeSection` (`Range`/`Failed`) input; loads each member's `LoadRangeFiles`, maps results to
+  **repo-qualified paths** (incl. qualified `OldPath` for renames), keeps a private `qualified → (RepoId,
+  bare path, base, head)` resolver (`_rangeFiles`, non-null ⇒ Ranges mode) that `CreateFileDiff`/
+  `SelectFile` route through, and synthesizes one combined `CommitDetails` (aggregate range key as
+  `Sha`, `RepoId = Guid.Empty`). **`ShowRange` and every existing caller are untouched** — the four
+  single-repo entry points now also null `_rangeFiles` so switching surfaces is clean.
+- **`CommitFileTab`** gained an optional `displayPath` (tab identity = qualified path, git target = bare
+  path) so a range tab can carry a repo-qualified identity without the diff widgets learning about repos.
+- **Window plumbing (3.3):** `ChangeSetReviewWindowsViewModel` (auto-wired singleton, mirrors
+  `ReviewWindowsViewModel`; **dedupe key = sorted member `(RepoId, HeadRef)` pairs**, focus-existing on
+  repeat) → `ChangeSetReviewWindowsView` (zero-sized presenter, mounted in `AppView` right after
+  `ReviewWindowsView`) → `ChangeSetReviewRootView` (`ChangeSetReviewHeaderBar` + reused
+  `CommitChangesPanel`/`ReviewDiffPanel` split, `ReviewKeyController`, `ReviewCheatsheetOverlay`).
+- **Entry point (3.3):** `BranchesViewModel.AddChangeSetMenuItems` — the Phase-1 placeholder toast is
+  **replaced** by `OpenChangeSetReview(branchName, members)`, which builds one auto-base `ReviewSession`
+  per member and broadcasts `OpenChangeSetReviewMessage`. (`changesets.review_placeholder` key is now
+  unused but left in the JSONs — unused keys are not a build error.)
+- **Keyboard (3.4):** free — `ReviewKeyController` binds the surface via `IReviewSurfaceModel`, and the
+  aggregated file list orders members' files contiguously, so `j`/`k`/`v`/`?` walk across repo
+  boundaries with no new work.
+- **Localization:** 3 new `changesets.*` keys (`review_window_title`, `review_repos`,
+  `review_member_failed`) added to **all 6** `Localization/Strings/*.json`.
+- **Tests:** `GitBench.Tests/ChangeSetReviewTests.cs` (7) — qualified-path round-trip (incl. duplicate
+  display names and the `src/index.ts`-in-two-repos collision), unknown-key echo, the marks tracker
+  routing a qualified mark to the owning member's progress key, two-stub-stack aggregation in session
+  order, one-member-throws isolation, all-members-throw.
+
+**Deviations (Phase 3):** see the "Deviations from the plan text" block under the Phase 3 heading.
+
 **Deviations (Phase 2):**
 
 - **Push/Pull/Fetch-all map to each member's existing `IGitService.Push/Pull/Fetch`** (current
@@ -123,6 +179,32 @@ synced branch). Phases 3-7: not started.
   whose per-repo call returns (or can be mapped to) a `GitOutcome` is testable without touching the
   index or the UI. Non-`GitOutcome` results (like `Pull`'s `PullOutcome`) are mapped inside the
   op lambda before entering the loop — see `PullInAll`.
+- **Phase 5 reuses Phase 3's shared plumbing.** `RepoQualifiedPaths` (the qualified-path scheme) and
+  `ChangeSetReviewedFiles` (aggregate `IReviewedFileTracker` over qualified paths) are surface-kind
+  agnostic — the working-tree surface #4 reuses both verbatim (`ChangeSetReviewedFiles` just wraps a
+  `StagedFileTracker`-style store instead of `IReviewProgressStore`, or is generalized). The Phase-3.1
+  twin the plan asks for — `ShowWorkingTree(repoId, files)` → `ShowWorkingTrees(sections)` — mirrors
+  `ShowRanges` exactly: build a `_rangeFiles`-style resolver keyed by qualified path, thread the bare
+  path + member repo into `CommitFileTab.ForWorkingTree` (add a `displayPath` there too, like the range
+  ctor already has), and qualify the pushed file list. `_workingTree`/`_rangeFiles` are the two mode
+  flags in `CommitDetailsViewModel`; a working-trees mode would be a third (keep them mutually
+  exclusive — every entry point already nulls the other two).
+- **`CommitDetailsViewModel` now has three surface modes**, gated by two fields: single-repo
+  (`_currentSha`/`_currentBaseSha`/`_currentRepoId`), working-tree (`_workingTree`), and cross-repo
+  ranges (`_rangeFiles != null`). `SelectFile`/`CreateFileDiff` branch on `_rangeFiles` first. When you
+  add the working-trees twin, branch it the same way and reset all mode state in every `Show*` entry.
+- **Cross-repo review keys progress by `(RepoId, HeadRef)` per member — unchanged from single-repo.**
+  A mark made in the cross-repo window pre-ticks the same file in that repo's single-repo review and
+  vice versa (shared `IReviewProgressStore`). This falls out of `ChangeSetReviewedFiles` resolving the
+  qualified path back to the member key; don't "fix" it.
+- **The cross-repo review window never overrides a member's base** (no per-member base dropdown in
+  MVP). Each member auto-resolves (upstream → default → its remembered `PreferredBase`) through the
+  same `GitReviewStackSource` a single-repo review uses. If Phase 6's drift/health work wants per-member
+  base control, it goes on the header's `ReviewBaseChip` (currently read-only, tooltip-only).
+- **A failed member is a `Conflicted` file row, not a window state.** `ChangeSetReviewViewModel` always
+  ends in `_details` Loaded (even all-members-failed), so the window is never a dead placeholder. If a
+  later phase needs to distinguish "member failed" rows from real conflicts, give them a dedicated
+  `FileChangeStatus` rather than overloading `Conflicted`.
 
 ## What a "change set" means here (scope)
 
@@ -442,9 +524,30 @@ failure breakdown reuses the existing `OperationErrorDialog` behind the toast's 
   legibly; delete-in-all confirms then removes both. Coordinator unit tests over a fake
   `IGitService`.
 
-### Phase 3 — The cross-repo review surface (the headline)
+### Phase 3 — The cross-repo review surface (the headline) ✅ DONE
 
 One window, one tree grouped by repo, one progress meter, one keyboard loop.
+
+**Deviations from the plan text:**
+
+- **`ShowRange` was kept byte-for-byte; `ShowRanges` is a new sibling, not a refactor of it.** The
+  plan says "`ShowRange` becomes the 1-section case". Taken literally that would qualify the
+  single-repo review window's paths (a visible behavior change — a repo-name top folder where there
+  was none). To hold "zero behavior change for existing callers", `ShowRange` stays exactly as it was
+  (bare paths, one repo pin) and `ShowRanges(IReadOnlyList<DetailsRangeSection>)` is the additive
+  N-section path that qualifies. The two share nothing but the surrounding VM.
+- **The header uses one compact `ReviewBaseChip` ("N repos") with a per-member bases tooltip**, rather
+  than a row of per-member base chips or an interactive bases dropdown. Per-member base *override* is
+  not offered on the cross-repo surface (each member still auto-resolves its own base); the chip is
+  read-only. The compact form is the plan's stated alternative ("a compact 'bases' dropdown").
+- **A failed member renders as one red `Conflicted` row under its repo folder** whose path *is* the
+  error message (`changesets.review_member_failed`), rather than a bespoke error-group widget. It
+  carries no resolver entry, so it has no diff to open. This keeps the tree/diff widgets repo-blind and
+  the window alive; the failed member still counts toward the "files total", so "Review complete" is
+  honestly unreachable while a member is broken.
+- **A member's `RefsChangedMessage` reloads just that member** (its cached range is replaced and the
+  combined list re-driven), reusing the other members' cached stacks — the plan's intent, implemented
+  with a small per-member cache rather than reloading the whole set.
 
 - **3.1** **Widen `CommitDetailsViewModel` from one range to N sections.** Add
   `ShowRanges(IReadOnlyList<(Guid RepoId, string BaseSha, string HeadSha)> sections)`;

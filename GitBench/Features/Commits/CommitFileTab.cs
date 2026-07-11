@@ -70,9 +70,12 @@ internal sealed class CommitFileTab : IDisposable
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
-        string? baseSha = null)
+        string? baseSha = null,
+        string? displayPath = null)
     {
-        Path = path;
+        // The cross-repo review surface identifies a file by a repo-qualified path but diffs the bare
+        // repo-relative path in the member repo: displayPath is the tab's identity, path the git target.
+        Path = displayPath ?? path;
         FileName = LastSegment(path);
         // Combined range tab (baseSha set): the diff is base→head and the reviewed-state identity is
         // the shared range key, kept distinct from the tip commit's own sha so marks never collide.
