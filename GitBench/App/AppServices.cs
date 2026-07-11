@@ -159,6 +159,11 @@ internal static class AppServices
             return index;
         }, eager: true);
 
+        // Batch actions over a synced branch's members (checkout/push/pull/fetch/delete in all).
+        // A plain coordinator — loops IGitService per member off-thread and reports per-repo
+        // outcomes; the branch context menu and the checkout guardrail drive it.
+        context.AddSingleton<ChangeSetOperations>();
+
         context.AddSingleton<RepoWatcherService>(eager: true);
         context.AddSingleton<WorktreeSyncService>(eager: true);
         context.AddSingleton<SubmoduleSyncService>(eager: true);

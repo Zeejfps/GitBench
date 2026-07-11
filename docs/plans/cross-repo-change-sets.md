@@ -12,10 +12,11 @@
 
 > Kept current for the next phase's agent. Update it when you finish a phase.
 
-**Phases done:** Phase 1 (detection + entry-point affordance). Phases 2-7: not started.
+**Phases done:** Phase 1 (detection + entry-point affordance) and Phase 2 (batch actions on a
+synced branch). Phases 3-7: not started.
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **293** tests
-(286 baseline + 7 new in `GitBench.Tests/SyncedBranchIndexTests.cs`).
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **298** tests
+(286 baseline + 7 in `SyncedBranchIndexTests.cs` + 5 new in `GitBench.Tests/ChangeSetOperationsTests.cs`).
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -50,6 +51,55 @@
   validated — service-a/b/c with `feature/cross-repo` (all 3), `bugfix/shared-logging` (b+c),
   `feature/only-in-a` decoy, defaults main/main/master.
 
+**What Phase 2 added (all under `GitBench/`):**
+
+- **`Features/ChangeSets/ChangeSetOperations.cs`** — `internal sealed class ChangeSetOperations`, the
+  batch coordinator. Registered as a plain (non-eager) singleton in `App/AppServices.cs`
+  (`context.AddSingleton<ChangeSetOperations>()`, auto-wired). Public fire-and-forget methods
+  `CheckoutInAll(repoIds, branch)`, `PushInAll(repoIds)`, `PullInAll(repoIds)`, `FetchInAll(repoIds)`,
+  `DeleteInAll(repoIds, branch, force)` each loop one `IGitService` call per member off-thread
+  (`Task.Run` → `IUiDispatcher.Post`, the `RunBackground` convention — the coordinator is **not** a
+  `ViewModelBase`), broadcast `RefsChangedMessage` (+ `WorkingTreeChangedMessage` for checkout/pull)
+  per member, and report one toast: `ToastIntent.Success` when all succeed, else a
+  `ToastIntent.Warning` whose "Details" `ToastAction` broadcasts `ShowOperationErrorMessage` with a
+  per-repo `name: message` failure breakdown. The **pure static** `RunOverMembers(members, op)` is the
+  unit-tested core — folds a thrown call into that member's `GitOutcome.Failed`, no rollback, a failed
+  member never blocks the rest (Locked decision #5).
+- **`ChangeSetOpResult`** (public record in the same file) — `IReadOnlyList<(Guid RepoId, GitOutcome
+  Outcome)> Results` plus `SuccessCount` / `AllSucceeded` helpers. The honest per-repo outcome list.
+- **`Features/ChangeSets/DeleteChangeSetBranchDialog.cs`** — `internal sealed record` Widget confirm
+  dialog for "Delete in all…" (the `MergeBranchDialog`/`Dialog` pattern, `ShowDialogMessage`); a force
+  checkbox, inline `Action` OnClick → `ChangeSetOperations.DeleteInAll`. No dialog VM (the op is
+  fire-and-forget; the dialog only confirms).
+- **Batch menu (2.2):** `BranchesViewModel.AddChangeSetMenuItems` appends, under the Phase-1 section,
+  **Checkout in all / Push all / Pull all / Fetch all / Delete in all…** wired to `ChangeSetOperations`
+  (`BranchesViewModel` gained a `ChangeSetOperations` ctor param — auto-wired by the Context).
+- **Checkout guardrail (2.3):** `BranchesViewModel.OfferSwitchOtherMembers` — after a successful
+  single-repo `StartCheckoutLocal` of a synced branch, shows a one-shot `Info` toast whose action
+  batch-checks-out the other members (`CheckoutInAll(others, branch)`). Bypasses `StartCheckoutLocal`,
+  so no recursion.
+- **Localization:** 20 new `changesets.*` keys (menu labels, per-op success toasts, `toast_partial`,
+  `op_failed_title`, `details`, `pull_diverged`, delete-dialog `delete_title`/`delete_body`/
+  `delete_force_label`, guardrail `switch_prompt`/`switch_others`) added to **all 6**
+  `Localization/Strings/*.json`.
+- **Tests:** `GitBench.Tests/ChangeSetOperationsTests.cs` — 5 tests over a `FakeGitService : IGitService`
+  driving `RunOverMembers`: per-repo outcomes in member order, one failure doesn't block others, a
+  thrown call folds into `Failed` and the loop continues, all-fail is partial (not an exception),
+  empty members is vacuous success.
+
+**Deviations (Phase 2):**
+
+- **Push/Pull/Fetch-all map to each member's existing `IGitService.Push/Pull/Fetch`** (current
+  checkout), per the plan's direct mapping — most useful after "Checkout in all" aligns the members.
+- **Pull returns `PullOutcome`**; the coordinator maps `Diverged`/`Failed` → a per-repo
+  `GitOutcome.Failed` (batch has no interactive strategy prompt — `Diverged` becomes an honest
+  per-repo failure using the `changesets.pull_diverged` message).
+- **Delete-in-all does not pre-filter** checked-out/unmerged members — non-force deletes of those fail
+  per-repo and are reported (no rollback), matching Locked decision #5. A force checkbox is offered.
+- **The failure summary reuses the existing scrollable `OperationErrorDialog`** (via
+  `ShowOperationErrorMessage`) behind the toast's "Details" action rather than introducing a new
+  summary dialog.
+
 **Gotchas / notes for the next agent:**
 
 - The `Strings` type is **source-generated** from the JSON by `framework/ZGF.Gui.Generator`
@@ -63,6 +113,16 @@
   primaries appear in a `Group.RepoIds`, so worktrees/submodules are excluded for free.
 - `SyncedBranchIndex.Revision` is the reactive hook; `SyncedReposFor`/`SetsForGroup` themselves are
   plain reads (fine for the on-open menu, and paired with a `Revision` read for the row projection).
+- **`ChangeSetOperations` is the reusable batch seam for Phases 4 and 5.** Phase 4's "Start change
+  set…" is another `CreateBranch(repo, name, startPoint, checkout: true)` loop; Phase 5's batch
+  commit is a `Commit(repo, message + trailer, amend: false)` loop — both fit the existing
+  `RunOverMembers` + summary-toast shape (add a `CreateInAll`/`CommitInAll` method following the
+  five present ops). The reporting (success toast / warning-toast-with-Details) is already generic
+  over `Func<Strings,int,string>`; only the success-message key differs.
+- **`ChangeSetOperations.RunOverMembers` is `static`** and takes `Func<Repo, GitOutcome>`, so any op
+  whose per-repo call returns (or can be mapped to) a `GitOutcome` is testable without touching the
+  index or the UI. Non-`GitOutcome` results (like `Pull`'s `PullOutcome`) are mapped inside the
+  op lambda before entering the loop — see `PullInAll`.
 
 ## What a "change set" means here (scope)
 
@@ -357,9 +417,15 @@ Make the convention *visible* with zero write operations and no new window.
   neither. Unit tests for the index's grouping/diffing logic (real-git fixture repos,
   precedent: `ReviewStackTests`).
 
-### Phase 2 — Batch actions on a synced branch
+### Phase 2 — Batch actions on a synced branch ✅ DONE
 
 The cheap, immediately useful wins — before the big review surface.
+
+**Deviations from the plan text:** see the "Deviations (Phase 2)" block in `## State of the world`
+above — Push/Pull/Fetch-all use each member's current-checkout `IGitService` call (direct mapping),
+`Pull`'s `Diverged`/`Failed` fold into a per-repo `GitOutcome.Failed`, delete-in-all reports
+checked-out/unmerged members as honest per-repo failures instead of pre-filtering them, and the
+failure breakdown reuses the existing `OperationErrorDialog` behind the toast's "Details" action.
 
 - **2.1** `ChangeSetOperations` (`Features/ChangeSets/`) — a coordinator that runs one
   `IGitService` call per member off-thread (the `RunBackground` conventions), collects

@@ -39,6 +39,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly State<MainViewMode> _mode;
     private readonly ILocalizationService _loc;
     private readonly SyncedBranchIndex _index;
+    private readonly ChangeSetOperations _changeSetOps;
 
     public IReadable<BranchListing?> Listing { get; }
     public IReadable<BranchesUiState> Ui { get; }
@@ -82,7 +83,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         State<MainViewMode> mode,
         IRepoSnapshotStore store,
         ILocalizationService loc,
-        SyncedBranchIndex index)
+        SyncedBranchIndex index,
+        ChangeSetOperations changeSetOps)
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
@@ -91,6 +93,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _mode = mode;
         _loc = loc;
         _index = index;
+        _changeSetOps = changeSetOps;
 
         _branchOpGen = CreateLane();
         _stashGen = CreateLane();
@@ -572,6 +575,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
                 if (failed != null)
                     _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
+                else
+                    OfferSwitchOtherMembers(repo.Id, branchName);
             },
             lane: _branchOpGen);
     }
@@ -825,6 +830,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (others.Count == 0) return;
 
         var s = m.S;
+        var branchName = m.Name;
         items.Add(RepoBarContextMenu.Separator);
         items.Add(new RepoBarContextMenu.Item(
             s.ChangesetsAlsoOn(string.Join(", ", others)),
@@ -834,6 +840,36 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             s.ChangesetsReviewAcross(members.Count),
             () => _bus.Broadcast(new ShowToastMessage(ToastIntent.Info(s.ChangesetsReviewPlaceholder))),
             LucideIcons.Search));
+
+        // Phase 2: batch actions over the set's members — plain loops over IGitService with per-repo
+        // outcomes (a member's failure never blocks the rest). A fresh member-id snapshot is captured
+        // per action so it survives the menu closing.
+        var setMembers = members.ToArray();
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsCheckoutAll,
+            () => _changeSetOps.CheckoutInAll(setMembers, branchName),
+            LucideIcons.Branch));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsPushAll,
+            () => _changeSetOps.PushInAll(setMembers),
+            LucideIcons.Push));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsPullAll,
+            () => _changeSetOps.PullInAll(setMembers),
+            LucideIcons.Pull));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsFetchAll,
+            () => _changeSetOps.FetchInAll(setMembers),
+            LucideIcons.Fetch));
+        items.Add(new RepoBarContextMenu.Item(
+            s.ChangesetsDeleteAll,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteChangeSetBranchDialog
+            {
+                RepoIds = setMembers,
+                BranchName = branchName,
+                OnClose = onClose,
+            })),
+            LucideIcons.Trash));
     }
 
     private string? DisplayNameOf(Guid repoId)
@@ -841,6 +877,27 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         foreach (var r in _registry.Repos)
             if (r.Id == repoId) return r.DisplayName;
         return null;
+    }
+
+    // Guardrail (Phase 2.3): a plain single-repo checkout of a synced set branch is the most common
+    // way cross-repo work drifts. After it lands, offer a one-shot toast to bring the other members
+    // onto the same branch in one action — declined by simply letting the toast expire.
+    private void OfferSwitchOtherMembers(Guid repoId, string branchName)
+    {
+        var members = _index.SyncedReposFor(repoId, branchName);
+        if (members.Count < 2) return;
+
+        var others = new List<Guid>(members.Count - 1);
+        foreach (var id in members)
+            if (id != repoId) others.Add(id);
+        if (others.Count == 0) return;
+
+        var s = _loc.Strings.Value;
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Info(
+            s.ChangesetsSwitchPrompt(branchName, others.Count),
+            new ToastAction(
+                s.ChangesetsSwitchOthers,
+                () => _changeSetOps.CheckoutInAll(others, branchName)))));
     }
 
     private static readonly IReadOnlyDictionary<string, string> EmptySyncedInfo =
