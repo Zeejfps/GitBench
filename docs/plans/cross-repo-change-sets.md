@@ -13,13 +13,18 @@
 > Kept current for the next phase's agent. Update it when you finish a phase.
 
 **Phases done:** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
-synced branch), Phase 3 (the cross-repo review surface — the headline), and Phase 4 (start a change
-set — authoring). Phases 5-7: not started.
+synced branch), Phase 3 (the cross-repo review surface — the headline), Phase 4 (start a change
+set — authoring), and Phase 5 (cross-repo working-tree review + batch commit — the Changes panel).
+Phases 6-7: not started.
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **308** tests
-(286 baseline + 7 in `SyncedBranchIndexTests.cs` + **8** in `GitBench.Tests/ChangeSetOperationsTests.cs`
-+ 7 in `GitBench.Tests/ChangeSetReviewTests.cs`). Phase 4 added **3** to `ChangeSetOperationsTests.cs`
-(per-repo start-point mapping, name-collision isolation, `ResolveStartPoint` fallback).
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **317** tests
+(286 baseline + 7 in `SyncedBranchIndexTests.cs` + **11** in `GitBench.Tests/ChangeSetOperationsTests.cs`
++ 7 in `GitBench.Tests/ChangeSetReviewTests.cs` + **5** in
+`GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs`). Phase 5 added **3** to `ChangeSetOperationsTests.cs`
+(`StampTrailer` format, `CommitOverMembers` skip-unstaged + trailer, `CommitOverMembers` partial failure)
+and the **5** new working-tree tests (aggregate → qualified list, staged/partial marks, `PlanStage`
+staging + unstaging, staged-tracker routing). **No display available** — the Phase-5 GUI wiring (scope
+toggle, body switch, commit bar, confirm dialog) is manual-pass only.
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -185,6 +190,67 @@ set — authoring). Phases 5-7: not started.
   values and falls back to `HEAD` for blank/missing. The `FakeGitService` now implements `CreateBranch`
   (records `(RepoId, Name, StartPoint, Checkout)` in `CreateCalls`).
 
+**What Phase 5 added (all under `GitBench/`):**
+
+- **`CommitDetailsViewModel.ShowWorkingTrees(IReadOnlyList<DetailsWorkingTreeSection>)` (5.1)** — the
+  working-tree twin of `ShowRanges`. New public `DetailsWorkingTreeSection` (`Files`/`Failed`). Adds a
+  **fourth** mode field `_workingTrees` (a `qualified → (RepoId, bare path)` resolver, the working-tree
+  analogue of `_rangeFiles`); `SelectFile`/`CreateFileDiff` branch on it (opening `CommitFileTab.ForWorkingTree`
+  with the qualified `displayPath`), and every `Show*`/`Clear` now nulls all four mode flags. Synchronous
+  (files pushed in by the host) and it keeps open tabs across refreshes, like `ShowWorkingTree`.
+- **`CommitFileTab.ForWorkingTree(..., string? displayPath = null)`** — the tab's identity is `displayPath`
+  (the repo-qualified path), the git target the bare path; the diff widgets stay repo-blind.
+- **`Features/Review/ChangeSetWorkingTreeAggregator.cs`** — the **pure** aggregation core (unit-tested).
+  `MemberWorkingTree` (repo + key + unstaged/staged) → `Aggregate(...)` returns the merged qualified file
+  list (grouped by repo, member order), the resolver, and the per-qualified-path `FullyStaged`/`PartlyStaged`
+  sets (a path in Staged-only is fully staged; a path in both is the indeterminate mark — `StagedFileTracker`'s
+  rule, per member). `PlanStage(paths, stage, fully, partly, resolver)` groups a stage/unstage request into
+  per-member bare-path batches, skipping paths already in the requested state. `MergeStagedWins(unstaged,
+  staged)` is the shared "staged wins, sort by path" merge used by both `Aggregate` and the VM's section build.
+- **`Features/Review/ChangeSetStagedFileTracker.cs`** — `IReviewedFileTracker` **#4** (`MarkKind = Staged`),
+  the N-repo twin of `StagedFileTracker`. Holds the aggregated `FullyStaged`/`PartlyStaged`/resolver (fed by
+  `SetState`); `IsViewed`/`IsPartiallyStaged`/`HasStagedContent` read them; `SetViewed` routes through
+  `PlanStage` to per-repo `Action<Guid, IReadOnlyList<string>>` stage/unstage delegates the host supplies.
+- **`Features/Review/ChangeSetWorkingTreeReviewViewModel.cs`** — **implementation #4 of `IReviewSurfaceModel`**
+  (5.2). A **live singleton** (like `WorkingTreeReviewViewModel`, not pinned): tracks the active repo + set
+  membership (the synced-branch members that have the branch *checked out* — 5.3), aggregates their working
+  trees via `GetLocalChanges` per member off-thread, drives its own `CommitDetailsViewModel.ShowWorkingTrees`,
+  owns the cursor + the staged tracker. Membership recomputes on active-repo/`RefsChangedMessage`/`index.Revision`;
+  each member reloads on its `WorkingTreeChangedMessage`/`CommitCreatedMessage`. Exposes `IsAvailable`
+  (≥2 members on the set branch, gates the toggle) + `BranchName`, and a title-only commit box
+  (`CommitTitle`/`SetCommitTitle`/`Commit`) that opens the confirm dialog → `ChangeSetOperations.CommitInAll`.
+- **`Features/LocalChanges/ChangeSetPanelScope.cs`** — `enum ChangeSetPanelScope { ThisRepo, AllRepos }`,
+  a **session-scoped** (not persisted) `State<ChangeSetPanelScope>` registered in `AppServices`.
+- **`Features/LocalChanges/ChangeSetWorkingTreeReviewView.cs`** — the cross-repo Review layout: the reused
+  `CommitChangesPanel`/`ReviewDiffPanel` split + `ReviewKeyController` + cheatsheet, plus its **own compact
+  commit bar** (title input + Commit button), provides its own `IReviewSurfaceModel`/`IReviewedFileTracker`/
+  `CommitDetailsViewModel` into the subtree.
+- **Panel wiring (5.3):** `WorkingChanges.cs` (`LocalChangesView`) — the body is now a 3-way `Switch<int>`
+  (List / single-repo Review / cross-repo Review) keyed on `layout` + `scope` + `crossVm.IsAvailable`; the
+  shared footer's `kind` returns `NoFooter` in cross mode (the cross view owns its commit bar).
+  `WorkingChangesTabStrip` gained a **scope toggle** (`UnderlineTab` was made generic `UnderlineTab<T>`),
+  shown only in the Review layout while `crossVm.IsAvailable` — "This repo / All repos on `<branch>`".
+- **`ChangeSetOperations.CommitInAll(repoIds, message, changeSetName)` (5.4)** — the seventh batch op.
+  Stamps the `Change-Set: <name>` trailer (`StampTrailer`, pure), commits only members with staged changes
+  (`CommitOverMembers`, pure — skipped members contribute no outcome), no rollback (Locked #5/#6). Reuses the
+  shared `Report` (now with a `commitCreated` flag that also broadcasts `CommitCreatedMessage` per committed
+  member). Success key `changesets.toast_commit`.
+- **`Features/ChangeSets/CommitChangeSetDialog.cs`** — the confirm step: the up-front per-repo staged summary
+  (`changesets.commit_repo_staged` per member) + a Primary "Commit all" action → `CommitInAll` (the
+  `DeleteChangeSetBranchDialog` VM-less pattern).
+- **Localization:** 9 new `changesets.*` keys (`toast_commit`, `scope_this_repo`, `scope_all_repos`,
+  `commit_title`, `commit_body`, `commit_repo_staged`, `commit_confirm`, `commit_button`, `commit_none`)
+  added to **all 6** `Localization/Strings/*.json`.
+- **Tests:** `GitBench.Tests/ChangeSetOperationsTests.cs` +3 (now 11) and
+  `GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs` (5). The `FakeGitService` now implements `Commit`
+  (records `(RepoId, Message, Amend)`) and `GetLocalChanges` (staged count per repo).
+
+**Deviations (Phase 5):** see the "Deviations from the plan text" block under the Phase 5 heading — a live
+singleton (not a pinned session) since it *is* the Changes panel; a sibling `ChangeSetStagedFileTracker`
+(the git index has no progress store to reuse); a self-contained compact commit bar (title-only, no
+amend/description) rather than re-binding the shared `CommitBarWidget`; `CommitInAll` skips unstaged members
+by omission; and the GUI wiring is manual-pass only (no display).
+
 **Deviations (Phase 4):** see the "Deviations from the plan text" block under the Phase 4 heading —
 the dialog has a small VM (unlike Phase 2's VM-less delete dialog) for off-thread default resolution +
 gating; the confirm `AsyncCommand`'s work is a no-op that exists only to gate/close (the real create is
@@ -230,6 +296,36 @@ blank → `HEAD`; both entry points gate on ≥2 primaries.
   `Commit` also validates staged state up front per the plan). `CreateInAll` takes per-member
   `(RepoId, StartPoint)` and maps start points via the pure `ResolveStartPoint` (blank → `HEAD`); mirror
   that if a later op needs per-member arguments.
+- **Phase 5 shipped `CommitInAll` as the seventh batch op.** It does **not** use `RunOverMembers` (which
+  runs every member) — it uses the pure `CommitOverMembers(members, hasStaged, commit)` so members with
+  nothing staged are *omitted* from the result (skipped, not a no-op success). The trailer is stamped by
+  the pure `StampTrailer(message, name)`. Both are `internal static` and unit-tested directly. `Report`
+  grew a `commitCreated` flag (broadcasts `CommitCreatedMessage` per committed member); pass it for any
+  future op that produces commits.
+- **`CommitDetailsViewModel` now has FOUR surface modes** (was three): single-repo
+  (`_currentSha`/`_currentBaseSha`/`_currentRepoId`), single working-tree (`_workingTree` bool), cross-repo
+  ranges (`_rangeFiles != null`), and **cross-repo working-trees (`_workingTrees != null`)**.
+  `SelectFile`/`CreateFileDiff` branch `_rangeFiles` → `_workingTrees` → `_workingTree` → single. Every
+  `Show*` entry and `Clear` must reset **all four** — if you add a fifth mode, thread it through all of
+  them the same way (the modes are mutually exclusive).
+- **The cross-repo working-tree surface (`ChangeSetWorkingTreeReviewViewModel`) is a live singleton, not a
+  pinned session.** It is the one place in the change-set code that tracks the *live* active repo + index
+  (every other cross-repo surface is pinned per Locked decision #7) — because it *is* the Changes panel.
+  If Phase 6's drift/health work wants a set-health strip in the Changes panel, hang it off this VM's
+  `IsAvailable`/`BranchName`/membership; the strip in the review *window* hangs off `ChangeSetReviewViewModel`.
+- **Cross-repo staging routes through delegates, not a shared VM.** `ChangeSetStagedFileTracker` takes two
+  `Action<Guid, IReadOnlyList<string>>` (stage/unstage) the VM wires to `IGitService.Stage`/`Unstage` +
+  a `WorkingTreeChangedMessage` broadcast; the message round-trips back to reload that member (no optimistic
+  bump, unlike the single-repo `StagedFileTracker` which drives `LocalChangesViewModel` directly). If a mark
+  feels laggy, that's the round-trip — add an optimistic path in `SetViewed` if it matters.
+- **The scope toggle + body switch live in `WorkingChanges.cs` / `WorkingChangesTabStrip.cs`.** The body is a
+  3-way `Switch<int>` over `layout`+`scope`+`crossVm.IsAvailable`; the footer suppresses itself in cross
+  mode. `UnderlineTab` is now generic (`UnderlineTab<T>`). The scope `State<ChangeSetPanelScope>` is
+  **session-scoped, not persisted** — if Phase 6 wants it remembered, add it to `PreferencesService` like
+  `WorkingChangesLayout`.
+- **`ChangeSetWorkingTreeReviewViewModel` runs its aggregation even when the cross view is hidden** (scope =
+  ThisRepo) as long as the active branch is a set — every member's `GetLocalChanges` reloads on any member's
+  working-tree change. Cheap for small sets; if a big set is a problem, gate the reloads on `scope == AllRepos`.
 - **The `StartChangeSetDialog` is the template for future authoring dialogs** that fire-and-forget through
   the coordinator but still want a gated confirm button: give the dialog an `IDialogViewModel` with a
   `Create` `AsyncCommand` whose `work` is `() => null` and whose `onSuccess` does the real work + close,
@@ -672,12 +768,51 @@ One window, one tree grouped by repo, one progress meter, one keyboard loop.
   branch row shows the synced glyph; one repo having a name collision reports that repo's
   failure and still creates the others.
 
-### Phase 5 — Cross-repo working-tree review + batch commit (the Changes panel)
+### Phase 5 — Cross-repo working-tree review + batch commit (the Changes panel) ✅ DONE
 
 The write side of the headline: the review panel under Changes learns the same aggregation the
 window got in Phase 3, so "review → stage → commit" works across the set from one surface.
 Deliberately after Phase 3, which lands the shared plumbing (`ShowRanges`, the qualified-path
 resolver) this phase reuses.
+
+**Deviations from the plan text:**
+
+- **`ShowWorkingTree` was kept byte-for-byte; `ShowWorkingTrees` is a new sibling** (mirroring the
+  Phase-3 `ShowRange`/`ShowRanges` deviation exactly). It is a **fourth** mutually-exclusive mode field
+  on `CommitDetailsViewModel` — `_workingTrees` (a qualified-path resolver, the working-tree twin of
+  `_rangeFiles`) — not a rewrite of the single-repo `_workingTree` bool. Every `Show*` entry + `Clear`
+  now nulls all the other mode flags; `SelectFile`/`CreateFileDiff` branch `_rangeFiles` → `_workingTrees`
+  → `_workingTree` → single-repo. `CommitFileTab.ForWorkingTree` gained an optional `displayPath` (tab
+  identity = qualified path, git target = bare path), like the range ctor already had.
+- **The cross-repo working-tree surface is a live singleton, not a pinned session.** Unlike the Phase-3
+  review *window* (`ChangeSetReviewViewModel`, pinned to a `ChangeSetSession`), the Changes-panel surface
+  (`ChangeSetWorkingTreeReviewViewModel`) tracks the **live** active repo + set membership — because it
+  *is* the Changes panel, which always follows the active repo. Membership recomputes on active-repo /
+  `RefsChangedMessage` / detection-revision changes; each member's working tree reloads on its
+  `WorkingTreeChangedMessage`/`CommitCreatedMessage`. It reuses `RepoQualifiedPaths` verbatim.
+- **`ChangeSetReviewedFiles` was *not* reused; a sibling `ChangeSetStagedFileTracker` was written.** The
+  Phase-3 tracker wraps `IReviewProgressStore` (Viewed marks); the working-tree mark is the git index,
+  which has no store — so the staged tracker holds the aggregated per-qualified-path staged/partial sets
+  and routes stage/unstage through the pure `ChangeSetWorkingTreeAggregator.PlanStage` to the owning
+  repo's `IGitService.Stage`/`Unstage`. Both trackers are surface-kind-agnostic *shapes*; they don't
+  share code because their backing store differs (as the Phase-3 gotcha anticipated: "wraps a
+  `StagedFileTracker`-style store instead of `IReviewProgressStore`").
+- **The cross-repo surface owns its own compact commit bar** (title + Commit button) rather than
+  re-binding the shared `CommitBarWidget`. `CommitBarWidget.Vm` is a concrete `LocalChangesViewModel`,
+  and generalizing it to an interface + hiding amend/description would touch a heavily-shared widget with
+  no way to visually verify; a self-contained bar in `ChangeSetWorkingTreeReviewView` keeps the blast
+  radius to the new mode. It is still "the panel's commit box" (same Changes tab, the shared footer
+  steps aside in cross mode). The box is **title-only** (no description/amend — amend is out of scope
+  per 5.5); the message is `title + "\n\nChange-Set: <name>"`.
+- **`CommitInAll` skips unstaged members by *omitting* them from the result, not recording a no-op.** The
+  pure core `CommitOverMembers(members, hasStaged, commit)` filters to members with staged changes before
+  committing, so a skipped member contributes no `GitOutcome` at all (it isn't a success *or* a failure);
+  the success toast counts only members that actually committed. Staged validation is up-front (in the
+  confirm dialog's per-repo summary) *and* re-checked inside `CommitInAll` (via `GetLocalChanges`).
+- **No display was available**, so the pure cores are unit-tested (aggregation, stage routing, trailer
+  stamping, skip-unstaged, partial-failure) and the GUI wiring (the scope toggle, the body switch, the
+  commit bar, the confirm dialog) is **manual-pass only** — it compiles and is wired, but was not
+  exercised in a running app.
 
 - **5.1** **Widen the working-tree details path**: `ShowWorkingTree(repoId, files)` →
   `ShowWorkingTrees(sections)` (the Phase-3.1 twin; single-section call unchanged for the

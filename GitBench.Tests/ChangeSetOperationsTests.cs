@@ -183,6 +183,94 @@ public sealed class ChangeSetOperationsTests
         Assert.Equal("HEAD", ChangeSetOperations.ResolveStartPoint(map, Guid.NewGuid()));
     }
 
+    // Phase 5.4: batch commit. CommitOverMembers is the pure core CommitInAll runs — commit only the
+    // members with staged changes (5.5: no auto-staging), stamp the Change-Set trailer (Locked #6), and
+    // fold a member's failure into its own outcome without blocking or rolling back the rest (Locked #5).
+
+    [Fact]
+    public void StampTrailer_AppendsChangeSetTrailer_AfterABlankLine()
+    {
+        Assert.Equal(
+            "Fix the thing\n\nChange-Set: feature/x",
+            ChangeSetOperations.StampTrailer("Fix the thing", "feature/x"));
+        // Trailing whitespace on the body is trimmed so the trailer always sits after exactly one blank line.
+        Assert.Equal(
+            "subject\n\nbody\n\nChange-Set: feature/x",
+            ChangeSetOperations.StampTrailer("subject\n\nbody\n\n", "feature/x"));
+    }
+
+    [Fact]
+    public void CommitOverMembers_StampsTrailer_AndSkipsMembersWithNothingStaged()
+    {
+        var git = new FakeGitService();
+        var a = Repo("a");
+        var b = Repo("b");
+        var c = Repo("c");
+        // b has nothing staged — it must be skipped, not committed.
+        git.Staged[a.Id] = 2;
+        git.Staged[b.Id] = 0;
+        git.Staged[c.Id] = 1;
+        var full = ChangeSetOperations.StampTrailer("shared message", "feature/x");
+
+        var result = ChangeSetOperations.CommitOverMembers(
+            new[] { a, b, c },
+            hasStaged: r => git.Staged.TryGetValue(r.Id, out var n) && n > 0,
+            commit: r => git.Commit(r, full, amend: false));
+
+        // Only a and c committed; b contributed no outcome at all (it didn't commit).
+        Assert.True(result.AllSucceeded);
+        Assert.Equal(new[] { a.Id, c.Id }, result.Results.Select(x => x.RepoId));
+        Assert.Equal(new[] { a.Id, c.Id }, git.CommitCalls.Select(x => x.RepoId));
+        // Every commit carries the Change-Set trailer.
+        Assert.All(git.CommitCalls, x => Assert.Contains("\n\nChange-Set: feature/x", x.Message));
+        Assert.All(git.CommitCalls, x => Assert.False(x.Amend)); // 5.5: never amends across repos
+    }
+
+    [Fact]
+    public void CommitOverMembers_OneCommitFails_OthersStillCommit_NoRollback()
+    {
+        var git = new FakeGitService();
+        var a = Repo("a");
+        var b = Repo("b");
+        var c = Repo("c");
+        git.Staged[a.Id] = 1;
+        git.Staged[b.Id] = 1;
+        git.Staged[c.Id] = 1;
+        git.Results[b.Id] = new GitOutcome.Failed("pre-commit hook failed");
+        var full = ChangeSetOperations.StampTrailer("msg", "feature/x");
+
+        var result = ChangeSetOperations.CommitOverMembers(
+            new[] { a, b, c },
+            hasStaged: r => git.Staged.TryGetValue(r.Id, out var n) && n > 0,
+            commit: r => git.Commit(r, full, amend: false));
+
+        Assert.False(result.AllSucceeded);
+        Assert.Equal(2, result.SuccessCount);
+        Assert.IsType<GitOutcome.Success>(result.Results[0].Outcome);
+        var failed = Assert.IsType<GitOutcome.Failed>(result.Results[1].Outcome);
+        Assert.Contains("hook failed", failed.Message);
+        Assert.IsType<GitOutcome.Success>(result.Results[2].Outcome);
+        // c committed despite b's failure — no rollback, a failed member never blocks the rest.
+        Assert.Contains(git.CommitCalls, x => x.RepoId == c.Id);
+    }
+
+    [Fact]
+    public void CommitOverMembers_NothingStagedAnywhere_IsVacuousSuccess_NoCommits()
+    {
+        var git = new FakeGitService();
+        var a = Repo("a");
+        var b = Repo("b");
+
+        var result = ChangeSetOperations.CommitOverMembers(
+            new[] { a, b },
+            hasStaged: _ => false,
+            commit: r => git.Commit(r, "m", amend: false));
+
+        Assert.Empty(result.Results);
+        Assert.True(result.AllSucceeded);
+        Assert.Empty(git.CommitCalls);
+    }
+
     // A fake IGitService whose batch calls (Push / Fetch / CheckoutLocalBranch / DeleteBranch) return
     // a scripted per-repo GitOutcome (Ok by default) and record the call, so tests can assert both the
     // outcome mapping and that every member was actually invoked. Any repo id in ThrowFor makes its
@@ -197,6 +285,11 @@ public sealed class ChangeSetOperationsTests
         // Full-argument capture for CreateBranch, so the Phase-4 create tests can assert the per-repo
         // start point the coordinator maps in (not just that the member was touched).
         public List<(Guid RepoId, string Name, string StartPoint, bool Checkout)> CreateCalls { get; } = new();
+
+        // Phase 5.4: staged-file count per repo (drives skip-unstaged) and captured commit calls (so the
+        // trailer stamping and per-repo commit are assertable).
+        public Dictionary<Guid, int> Staged { get; } = new();
+        public List<(Guid RepoId, string Message, bool Amend)> CommitCalls { get; } = new();
 
         private GitOutcome Record(string op, Repo repo)
         {
@@ -222,7 +315,13 @@ public sealed class ChangeSetOperationsTests
         public string? MergeBase(Repo repo, string a, string b) => throw new NotImplementedException();
         public ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef) => throw new NotImplementedException();
         public Fetched<CommitDetails> LoadDetails(Repo repo, string sha) => throw new NotImplementedException();
-        public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo) => throw new NotImplementedException();
+        public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo)
+        {
+            var count = Staged.TryGetValue(repo.Id, out var n) ? n : 0;
+            var staged = new List<FileChange>(count);
+            for (var i = 0; i < count; i++) staged.Add(new FileChange($"file{i}.cs", null, FileChangeStatus.Modified));
+            return new LocalChangesSnapshot(repo.Id, staged, Array.Empty<FileChange>());
+        }
         public GitStatusSummary? GetStatusSummary(Repo repo) => throw new NotImplementedException();
         public Fetched<BranchListing> GetBranches(Repo repo) => throw new NotImplementedException();
         public string? GetDefaultBranchName(Repo repo) => throw new NotImplementedException();
@@ -231,7 +330,11 @@ public sealed class ChangeSetOperationsTests
         public GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths) => throw new NotImplementedException();
         public GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths) => throw new NotImplementedException();
         public GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse) => throw new NotImplementedException();
-        public GitOutcome Commit(Repo repo, string message, bool amend) => throw new NotImplementedException();
+        public GitOutcome Commit(Repo repo, string message, bool amend)
+        {
+            CommitCalls.Add((repo.Id, message, amend));
+            return Record("commit", repo);
+        }
         public HeadCommitMessage? GetHeadCommitMessage(Repo repo) => throw new NotImplementedException();
         public IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo) => throw new NotImplementedException();
         public PushStatus GetPushStatus(Repo repo) => throw new NotImplementedException();
