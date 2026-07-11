@@ -12,21 +12,24 @@
 
 > Kept current for the next phase's agent. Update it when you finish a phase.
 
-**Phases done:** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
+**Phases done: ALL (1-7).** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
 synced branch), Phase 3 (the cross-repo review surface — the headline), Phase 4 (start a change
-set — authoring), Phase 5 (cross-repo working-tree review + batch commit — the Changes panel), and
-Phase 6 (set health strip + localization/cheatsheet sweep; persistence evaluated and skipped).
-Phase 7 (verification): not started.
+set — authoring), Phase 5 (cross-repo working-tree review + batch commit — the Changes panel),
+Phase 6 (set health strip + localization/cheatsheet sweep; persistence evaluated and skipped), and
+Phase 7 (verification — real-git integration tests + the headless substitution for the manual pass).
+**The feature is complete for the MVP scoped by this plan.**
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **325** tests
-(286 baseline + 7 in `SyncedBranchIndexTests.cs` + **11** in `GitBench.Tests/ChangeSetOperationsTests.cs`
-+ 7 in `GitBench.Tests/ChangeSetReviewTests.cs` + **5** in
-`GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs` + **8** in
-`GitBench.Tests/ChangeSetHealthTests.cs`). Phase 6 added the **8** new health tests (pure drift
-computation: tracked-clean → in sync, unpushed/behind/dirty → attention, ahead-of-base is not drift,
-no-upstream informational, detached-HEAD not mislabeled, failed-load → unavailable, roll-up tally).
-**No display available** — the Phase-5 GUI wiring and the Phase-6 header health strip are manual-pass
-only; see the consolidated manual-verification list at the end of this section.
+**Build/test status:** `dotnet build GitBench.sln` clean (0 warnings, 0 errors); `dotnet test` green at
+**340** tests (286 baseline + 7 in `SyncedBranchIndexTests.cs` + **11** in
+`GitBench.Tests/ChangeSetOperationsTests.cs` + 7 in `GitBench.Tests/ChangeSetReviewTests.cs` + **5** in
+`GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs` + **8** in `GitBench.Tests/ChangeSetHealthTests.cs`
++ **15** in `GitBench.Tests/ChangeSetIntegrationTests.cs`). Phase 7 added the **15** real-git integration
+tests (see the Phase-7 heading + the final inventory below). **Bugs found & fixed during verification:
+none** — the integration matrix all passed on the existing Phase 1-6 code; the ChangeSets/Review cores
+were correct as shipped. **No display available in any phase** — the GUI wiring (Phase 3/4/5 windows +
+Changes panel) and the Phase-6 header health strip compile and are wired but were never exercised in a
+running app; the residual human checks are the "Remaining human manual-verification checklist" at the
+end of this section.
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -281,6 +284,45 @@ only; see the consolidated manual-verification list at the end of this section.
   global shortcut registry exists to register with.
 - **Tests:** `GitBench.Tests/ChangeSetHealthTests.cs` (**8**) over the pure `ChangeSetHealth` core.
 
+**What Phase 7 added (verification — all test-only, no production code changed):**
+
+- **`GitBench.Tests/ChangeSetIntegrationTests.cs`** (**15** real-git tests) — throwaway sibling repos
+  built with the `git` CLI (the `ReviewStackTests`/`SyncedBranchIndexTests` fixture pattern), driven
+  through the *real* `GitService` / `GitReviewStackSource` / `RepoRegistry` / `LocalizationService` and
+  the pure change-set cores. Covers the plan's Phase-7 matrix end to end:
+  - **Index detection across add/delete/rename** — a shared branch appearing in a second repo forms a set;
+    deleting it in one member of two dissolves the set (falls below the ≥2 threshold); deleting in one of
+    three shrinks to the remaining two in group order; a rename breaks the old correlation and (renamed in
+    a second member) forms a new set. Drives `SyncedBranchCorrelator` over live `GetBranches` +
+    `GetDefaultBranchName` reads after each real mutation.
+  - **Batch create/checkout/delete** — `RunOverMembers` over the real `GitService`: `CreateBranch` with
+    per-member start points (`main`/`main`/`master`) creates + checks out the branch in every repo;
+    `CheckoutLocalBranch` switches all members; `DeleteBranch` removes it everywhere — each verified against
+    the repos' actual `rev-parse`/branch-list state.
+  - **Batch commit trailer** — `CommitOverMembers` + `StampTrailer` over real `Commit`: the
+    `Change-Set: <name>` trailer lands in each staged member's real commit message (verified via `git log
+    -1 --format=%B`, trailer after exactly one blank line), and a member with nothing staged is skipped
+    (its `HEAD` doesn't move). `hasStaged` reads the real `GetLocalChanges` index probe.
+  - **Cross-repo range aggregation with per-member base resolution** — `ChangeSetAggregator.LoadAll` over
+    the real `GitReviewStackSource`: two members whose defaults are `main` vs `master` each auto-resolve
+    their base to their *own* default (`BaseRef`/`BaseKind = DefaultBranch`), with the right increment
+    counts, folded into one ordered list.
+  - **Partial-failure reporting** — a real `git`-refused delete of a *checked-out* branch in one member is
+    recorded as that member's `GitOutcome.Failed` beside the two siblings that deleted cleanly (no
+    rollback, honest per-repo outcome); a name collision in one repo fails that repo alone while the others
+    are still created.
+  - **Drift/health cases through the real status layer** — the states the manual pass would eyeball,
+    asserted headlessly: a dirty working tree, an unpushed commit (1 ahead of a real bare-remote upstream,
+    with ahead-of-base proven *not* to be drift), a no-upstream fresh branch (informational, not
+    attention), and a branch deleted in one repo (a real failed stack load → `ChangeSetMemberHealth`
+    `Unavailable`/`NeedsAttention`). Built from the real `GetStatusSummary` probe → `RepoStatus` →
+    `ChangeSetMemberHealth.From`.
+- **No production code changed in Phase 7** — the ChangeSets/Review cores were correct as shipped; the
+  only defects surfaced were in the test scaffolding (real `git branch -d` semantics: it refuses to delete
+  an unmerged *or* a checked-out branch — the partial-failure test now leans on the checked-out refusal
+  deliberately, and points the deletable branches at their default-branch tip so the non-force delete is
+  allowed where it should be).
+
 **Why 6.2 (persisted `ChangeSet`) was skipped (for the Phase-7 agent):** the plan gates it on convention
 proving insufficient. It didn't. Detection (`SyncedBranchIndex`), batch ops (`ChangeSetOperations`), both
 review surfaces, authoring (`StartChangeSetDialog`), and the Phase-6 health strip all run on live
@@ -419,20 +461,79 @@ blank → `HEAD`; both entry points gate on ≥2 primaries.
   signals describe that repo's live state, not the pinned head. That's an accepted best-effort limitation
   of "mostly presentation over `RepoStatusStore`"; a real integration test would checkout-in-all first.
 
-**Consolidated manual-verification list (no display in any phase — everything below compiles + is wired
-but was never exercised in a running app; Phase 7's manual pass owns these):**
+**Remaining human manual-verification checklist (needs a display — Phase 7 covered every service /
+view-model / pure-core behavior it could headlessly; what is left is what genuinely requires a human
+eyeballing a live window). Set up: run `scripts/make-test-repos.sh 70-change-set`, then in GitBench add
+the `70-change-set` folder as one group (`service-a` / `service-b` / `service-c`, defaults
+`main`/`main`/`master`). The fixture already parks the drift states — mismatched checkout, an unpushed
+commit, a moved base, a dirty tree, a member with no remote — and the `src/index.ts`-in-two-repos path
+collision. What the integration tests already prove headlessly is called out per item so a human knows
+they're checking *rendering*, not *logic*.**
 
-- **Phase 3/4/5 GUI:** the cross-repo review *window* (header, tree grouped by repo, stacked diff,
-  `j`/`k`/`v`/`?` loop, member-failed rows), the "Also on…" / "Review across N repos…" menu, the "Start
-  change set…" dialog, and the Changes-panel cross-repo mode (scope toggle, 3-way body switch, compact
-  commit bar, commit confirm dialog).
-- **Phase 6 health strip:** the badge glyph/color per severity (green check / amber alert / red), the
-  aggregate label ("All repos in sync" vs "N of M need attention"), the per-member hover tooltip, and that
-  it updates live as a member goes dirty / gains an unpushed commit / has its branch deleted. The
-  `70-change-set` fixture already parks these drift states (mismatched checkout, unpushed commit, moved
-  base, dirty tree, a member with no remote).
-- **Localization:** the 9 new `changesets.health_*` strings render sensibly in all 6 locales (translations
-  were authored, not machine-verified in situ).
+*Phase 1 — detection affordance (visual):*
+
+1. Right-click `feature/cross-repo` in `service-a`'s branch list → the disabled **"Also on: service-b,
+   service-c"** caption and the **"Review across 3 repos…"** item appear; right-click the decoy
+   `feature/only-in-a` and a default branch (`main`) → neither appears. *(Correlation logic is proven by
+   `SyncedBranchIndexTests` + `ChangeSetIntegrationTests`; this is the menu rendering.)*
+2. The synced-branch rows show the `FolderGit2` glyph with a hover tooltip listing the other members.
+
+*Phase 2 — batch actions + guardrail (visual + toast):*
+
+3. "Checkout in all" on `feature/cross-repo` → all three sidebar rows flip to it; the summary toast reads
+   success. Kill/omit a remote (service-c has none) and "Push all" → a legible one-success/one-failure
+   toast whose **"Details"** opens the per-repo breakdown dialog. *(Per-repo outcome + partial-failure
+   reporting is proven by the integration tests; this is the toast/dialog rendering.)*
+4. Single-repo checkout of a synced branch → the one-shot "Switch the other N repos too" toast appears and
+   its action switches the others.
+
+*Phase 3 — the cross-repo review window (the headline, visual + keyboard):*
+
+5. "Review across 3 repos…" opens ONE window: header shows the set name + "3 repos" + a combined progress
+   meter; the tree has three top-level repo folders; `src/index.ts` under `service-a` and `service-b`
+   read as two distinct rows. *(Aggregation + qualified paths are proven headlessly; this is the tree
+   layout.)*
+6. `j`/`k` walk the file cursor straight across the repo-folder boundary; `v`/`Space` toggles Viewed and
+   the meter advances; `?` shows the cheatsheet; `Esc` closes it. Marking a file Viewed here pre-ticks the
+   same file in that repo's single-repo review window (shared progress keys).
+7. Delete `feature/cross-repo` in one member, then trigger its `RefsChangedMessage` (e.g. a fetch) → that
+   member renders as a single red "member failed" row, and the window stays alive. *(The failed-load →
+   inline-failure path is proven by `Aggregation_MemberWhoseBranchWasDeleted…`; this is its rendering.)*
+
+*Phase 4 — start a change set (dialog):*
+
+8. "Start change set…" from the group-header and the primary-repo context menus (both gated on ≥2
+   primaries) opens the dialog: branch-name field with live validation, a repo checklist defaulting to all
+   primaries, each row's start point seeded to that repo's default branch. Confirm → all selected members
+   switch to the new branch and show the synced glyph. A name collision in one repo surfaces that repo's
+   failure while the others are created. *(The create loop + collision isolation is proven by the
+   integration tests; this is the dialog + gating.)*
+
+*Phase 5 — Changes-panel cross-repo mode (visual + commit):*
+
+9. Checkout-in-all `feature/cross-repo`, edit files in all three members → the Changes panel shows the
+   **"This repo / All repos on `feature/cross-repo`"** scope toggle (only in the Review layout, only when
+   ≥2 members are on the branch). Toggle to "All repos" → one tree with three repo groups.
+10. Tick a file → it stages in *its own* repo (confirm via that repo's sidebar badge); the partial-stage
+    indeterminate mark renders for a file staged-then-edited. Type a commit title, Commit → the confirm
+    dialog lists each member's staged summary; confirm → each staged member gets the commit with the
+    `Change-Set:` trailer, unstaged members are skipped. *(Trailer stamping + skip-unstaged + stage
+    routing are proven headlessly; this is the panel/commit-bar/confirm-dialog rendering.)*
+
+*Phase 6 — set health strip (visual, live):*
+
+11. In the review window header, the health chip renders: green check + "All repos in sync" when quiet;
+    amber alert + "N of M need attention" when a member is dirty / has an unpushed commit; red when a
+    member's branch is deleted. The hover tooltip lists every member's state line-by-line, incl. the
+    informational "no upstream" line for an unpushed set. Confirm it updates *live* as a member goes dirty
+    or gains an unpushed commit. *(Every severity/threshold decision is proven by `ChangeSetHealthTests` +
+    the integration health tests; this is the chip glyph/color/label/tooltip rendering and live reactivity.)*
+
+*Localization (visual):*
+
+12. Switch the app through all 6 locales and confirm the `changesets.*` strings (menu labels, toasts,
+    dialogs, the 9 `health_*` strings) render sensibly in situ (translations were authored, not
+    machine-verified in a running window).
 
 ## What a "change set" means here (scope)
 
@@ -959,7 +1060,7 @@ resolver) this phase reuses.
   Everything in Phases 1-5 is designed to not require it.
 - **6.3** Localization sweep + keyboard/cheatsheet entries for the new window.
 
-### Phase 7 — Verification
+### Phase 7 — Verification ✅ DONE
 
 - Real-git integration tests (the `ReviewStackTests` fixture pattern: throwaway repos via the
   `git` CLI): index detection across add/delete/rename; batch create/checkout/delete; batch
@@ -970,6 +1071,35 @@ resolver) this phase reuses.
   The `70-change-set` scenario in `scripts/make-test-repos.sh` generates the standing fixture —
   it already parks the drift states (mismatched checkout, unpushed commit, moved base, dirty
   tree, a member with no remote) and the path-collision case (`src/index.ts` in two members).
+
+**Deviations from the plan text:**
+
+- **The manual GUI pass was substituted with headless integration tests, because this environment
+  has no display** — the app cannot be launched, so the plan's "manual pass on a 3-repo set" (a human
+  driving a running window) was impossible. Everything that can be exercised *through the service /
+  view-model / pure-core layer* was pushed down into `GitBench.Tests/ChangeSetIntegrationTests.cs`
+  (**15** real-git tests): the authoring loop (batch create → checkout → batch commit with the
+  `Change-Set:` trailer), cross-repo range aggregation with per-member base resolution
+  (`main` vs `master` defaults, through the real `GitReviewStackSource`), partial-failure reporting
+  (a real `git`-refused delete of a checked-out branch, isolated from its successful siblings), and
+  the drift cases the health strip reads — dirty tree, unpushed commit, no-upstream, and a
+  branch-deleted-in-one-repo member (a real failed stack load → `Unavailable`) — all asserted against
+  the real `GitService` status probe / aggregator, not fakes. The parts that genuinely need a human at
+  a display (pixel layout, glyph colors, tooltip rendering, keyboard walking a live window) are written
+  up as the **"Remaining human manual-verification checklist"** in `## State of the world` above, keyed
+  to the `70-change-set` fixture.
+- **No production bugs were uncovered.** The five-item integration matrix all passed on the existing
+  Phase 1-6 code; the only defects found were in the *test scaffolding itself* (a non-force `git branch
+  -d` refuses to delete an unmerged branch, and refuses a checked-out branch — both are real git
+  semantics the partial-failure test now relies on deliberately). So the "Deviations" bug list is:
+  **none in `ChangeSets/`/`Review/` code**.
+- **The integration tests are real-git, not view-model harness tests.** Standing up the GUI view models
+  (`ChangeSetReviewWindowsViewModel`, the Changes-panel switch) requires a windowing context that a
+  headless box can't provide, so the tests drive one layer below the view: the pure cores
+  (`ChangeSetOperations.RunOverMembers`/`CommitOverMembers`/`StampTrailer`/`ResolveStartPoint`,
+  `SyncedBranchCorrelator`, `ChangeSetAggregator`, `ChangeSetMemberHealth`) fed by real repositories and
+  the real `GitService`/`GitReviewStackSource`. This is the same seam every prior phase's tests use and
+  the one the plan's `ReviewStackTests` precedent points at.
 
 ## Open decisions (recommend, but worth confirming)
 
