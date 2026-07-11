@@ -15,10 +15,13 @@
   manifest, no new ontology, and it matches how people already do this by hand (and how Gerrit
   topics / `repo start <topic>` model it). GitBench detects it, surfaces it, batches operations
   over it, and reviews it as one surface.
-- **In scope — a cross-repo review surface.** One Review window over N `(repo, base..head)`
-  ranges: one file tree grouped by repo, one combined progress meter, one keyboard flow
-  (`j`/`k`/`n` walk straight from the last file of repo A into the first file of repo B). This is
-  the thing no web UI can do and the headline of the plan.
+- **In scope — a cross-repo review surface, in BOTH review homes.** (1) The Review *window*
+  over N `(repo, base..head)` ranges: one file tree grouped by repo, one combined progress
+  meter, one keyboard flow (`j`/`k`/`n` walk straight from the last file of repo A into the
+  first file of repo B). (2) The review *panel under Changes* over N working trees: when the
+  set branch is checked out across members, review, stage (checkbox = stage in that file's
+  repo), and commit the whole set from one surface. This is the thing no web UI can do and the
+  headline of the plan.
 - **In scope — batch authoring.** Create the branch in N repos in one action; checkout / push /
   pull / delete across the set; commit across the set with a shared message.
 
@@ -111,9 +114,17 @@ sequel and reuses its machinery wholesale.
   model behind a stacked review surface (file tree + `ReviewDiffPanel` + `ReviewKeyController`),
   explicitly "independent of where its files come from". Two implementations already prove the
   decoupling: `ReviewWindowViewModel` (a `base..head` range, `MarkKind = Viewed`) and
-  `WorkingTreeReviewViewModel` (the working tree, `MarkKind = Staged`). The cross-repo surface is
-  implementation #3 — the tree, diff list, key controller, progress meter, cheatsheet, and
-  Viewed-tracking all come along for free.
+  `WorkingTreeReviewViewModel` (the working tree, `MarkKind = Staged`). The cross-repo surfaces
+  are implementations #3 (ranges, Phase 3) and #4 (working trees, Phase 5) — the tree, diff
+  list, key controller, progress meter, cheatsheet, and mark-tracking all come along for free.
+- **The working-tree review panel has the same shape and the same single-repo pin.**
+  `WorkingTreeReviewViewModel` (`Features/LocalChanges/WorkingTreeReviewViewModel.cs:20`) wraps
+  the *active repo's* `LocalChangesViewModel` + a `StagedFileTracker`; its checkbox routes to
+  stage/unstage (`MarkKind = Staged`, `:68`), partial staging renders as an indeterminate mark
+  (`IsFilePartiallyMarked`, `:106`), and it drives the same details surface via
+  `_details.ShowWorkingTree(repo.Id, files)` (`:176`) — one repo id, exactly like `ShowRange`.
+  So the Phase-3 widening (`ShowRange` → sections) has a working-tree twin, and the cross-repo
+  working-tree surface aggregates N of these sources the same way Phase 3 aggregates N stacks.
 - **Window plumbing template**: `OpenReviewWindowMessage` → `ReviewWindowsViewModel` (owns
   `ObservableList<ReviewWindowViewModel>`, dedupes per `(RepoId, HeadRef)` and focuses the
   existing window, `ReviewWindowsViewModel.cs:59-66`) → `ReviewWindowsView` (zero-sized presenter
@@ -166,12 +177,19 @@ ChangeSetReviewWindowsView  → ISecondaryWindowFactory (the DiffWindows templat
 ChangeSetReviewRootView:  ReviewHeaderBar' (set name · N repos · combined progress)
    └── body split: CommitChangesPanel (tree, grouped by repo)  |  ReviewDiffPanel
                          both driven by the window's CommitDetailsViewModel
-        │                                    (extended: ShowRanges — N sections)
+        │                  (extended: ShowRange/ShowWorkingTree → N-section twins)
 ChangeSetReviewViewModel : IReviewSurfaceModel     ← implementation #3 of the seam
    • pinned ChangeSetSession = name + IReadOnlyList<ReviewSession>
    • loads N stacks via IReviewStackSource (one per member, per-repo base resolution)
    • aggregates: repo-qualified paths, combined Hud, one cursor/key flow
    • per-member ReviewProgressStore keys (RepoId, HeadRef) — unchanged
+
+ChangeSetWorkingTreeReviewViewModel : IReviewSurfaceModel   ← implementation #4 (Phase 5)
+   • the Changes panel's set mode ("This repo / All repos on <branch>") — no new window
+   • same aggregation over N working trees (GetLocalChanges per member,
+     refresh on each member's WorkingTreeChangedMessage)
+   • checkbox = Stage/Unstage on the owning repo (MarkKind = Staged, partial marks kept)
+   • commit box = batch commit, one message + "Change-Set:" trailer, per-repo outcomes
 
                          ┌─ Phases 2/5: batch ops ─────────────────────────────┐
 ChangeSetOperations      │ loop IGitService over members (Checkout/Push/Pull/  │
@@ -331,21 +349,37 @@ One window, one tree grouped by repo, one progress meter, one keyboard loop.
   branch row shows the synced glyph; one repo having a name collision reports that repo's
   failure and still creates the others.
 
-### Phase 5 — Batch commit with a shared message
+### Phase 5 — Cross-repo working-tree review + batch commit (the Changes panel)
 
-The most write-sensitive piece, deliberately after the review surface exists to check it with.
+The write side of the headline: the review panel under Changes learns the same aggregation the
+window got in Phase 3, so "review → stage → commit" works across the set from one surface.
+Deliberately after Phase 3, which lands the shared plumbing (`ShowRanges`, the qualified-path
+resolver) this phase reuses.
 
-- **5.1** A **"Commit to change set…"** action (set section of the branch menu; later maybe a
-  LocalChanges affordance). Dialog: one message box + a per-repo summary of *staged* changes
-  (from `RepoStatusStore`/`GetLocalChanges`), members with nothing staged shown unchecked.
-  Validation up front: only members with staged changes participate.
-- **5.2** On confirm: per member, `Commit(repo, message + "\n\nChange-Set: <name>", amend: false)`
-  (locked decision #6). Per-repo outcomes as ever; no rollback.
-- **5.3** Explicitly **not** doing: auto-staging, cross-repo hunk selection, amend-across-repos.
-  Staging stays a per-repo activity in LocalChanges — the batch is only the message + the act.
-- **Ship / test locally:** stage edits in 2 of 3 members → dialog pre-checks those two → commit →
-  both repos show the commit with the trailer; the cross-repo review window reflects the new
-  increments after `RefsChangedMessage`.
+- **5.1** **Widen the working-tree details path**: `ShowWorkingTree(repoId, files)` →
+  `ShowWorkingTrees(sections)` (the Phase-3.1 twin; single-section call unchanged for the
+  existing panel). Same qualified-path resolver, same per-tab repo threading.
+- **5.2** `ChangeSetWorkingTreeReviewViewModel : IReviewSurfaceModel` — implementation #4
+  (`MarkKind = Staged`). Aggregates per-member working-tree sources (each member's changes via
+  `GetLocalChanges(repo)`, refreshed on its `WorkingTreeChangedMessage`); the checkbox routes
+  through the resolver to `Stage`/`Unstage` on the *owning* repo, partial-staging indeterminate
+  marks included. Per-file hunk staging keeps working — the diff widgets are repo-blind and each
+  tab already carries its repo.
+- **5.3** **Surface it as a set mode of the Changes panel**: when the active repo's checked-out
+  branch is a synced set branch, offer a toggle — **"This repo / All repos on <branch>"** (only
+  members that have the branch *checked out* participate; the Phase-2 checkout guardrail is how
+  you get there). No new window; it's the same panel with more sources.
+- **5.4** **Batch commit through the panel's commit box**: one message, committed per member
+  that has staged changes — `Commit(repo, message + "\n\nChange-Set: <name>")` (locked decision
+  #6) — with an up-front per-repo staged summary in the confirm step, per-repo outcomes, no
+  rollback. Members with nothing staged simply don't commit.
+- **5.5** Explicitly **not** doing: auto-staging, amend-across-repos, committing members whose
+  checkout doesn't match the set branch.
+- **Ship / test locally:** on the `70-change-set` fixture, checkout-in-all `feature/cross-repo`,
+  edit files in all three members → toggle "All repos" → one tree with three repo groups; tick
+  a file → it stages in its own repo (verify per-repo in the sidebar badges); commit with one
+  message → each member with staged changes gets the commit with the trailer; the cross-repo
+  review window reflects the new increments after `RefsChangedMessage`.
 
 ### Phase 6 — Drift panel + (only if needed) persistence
 
