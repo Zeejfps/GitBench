@@ -117,6 +117,38 @@ internal sealed class ChangeSetOperations
             success: (s, count) => s.ChangesetsToastDelete(branchName, count),
             touchesWorkingTree: false);
 
+    /// <summary>
+    /// Starts a change set (Phase 4): creates a branch named <paramref name="branchName"/> in every
+    /// selected member, each from its own start point, checking it out (<c>checkout: true</c>) so all
+    /// members switch to the new branch at once. Same per-repo, no-rollback semantics as the other ops
+    /// (Locked decision #5) — a name collision in one repo fails that repo alone and still creates the
+    /// branch in the others. Reporting broadcasts <see cref="RefsChangedMessage"/> per member, so
+    /// <c>SyncedBranchIndex</c> re-detects the fresh set immediately (4.2) rather than on a timer.
+    /// </summary>
+    public void CreateInAll(IReadOnlyList<(Guid RepoId, string StartPoint)> members, string branchName)
+    {
+        var startById = new Dictionary<Guid, string>(members.Count);
+        var ids = new List<Guid>(members.Count);
+        foreach (var (id, startPoint) in members)
+        {
+            startById[id] = startPoint;
+            ids.Add(id);
+        }
+        Run(ids,
+            op: r => _git.CreateBranch(r, branchName, ResolveStartPoint(startById, r.Id), checkout: true),
+            success: (s, count) => s.ChangesetsToastCreate(branchName, count),
+            touchesWorkingTree: true);
+    }
+
+    /// <summary>
+    /// The start point for a member, trimmed, falling back to <c>HEAD</c> when the field was left blank
+    /// — matching <c>CreateBranchDialog</c>'s single-repo behavior. Pure, so <see cref="CreateInAll"/>'s
+    /// per-repo start-point mapping is unit-testable directly (the coordinator itself being
+    /// fire-and-forget).
+    /// </summary>
+    internal static string ResolveStartPoint(IReadOnlyDictionary<Guid, string> startById, Guid repoId) =>
+        startById.TryGetValue(repoId, out var sp) && sp.Trim().Length > 0 ? sp.Trim() : "HEAD";
+
     private void Run(
         IReadOnlyList<Guid> repoIds,
         Func<Repo, GitOutcome> op,

@@ -108,6 +108,81 @@ public sealed class ChangeSetOperationsTests
         Assert.Equal(0, result.SuccessCount);
     }
 
+    // Phase 4: "Start change set" is a CreateBranch loop. These drive the same op CreateInAll builds
+    // (RunOverMembers + ResolveStartPoint over the fake) so the per-repo start-point mapping and the
+    // name-collision isolation are pinned without standing up the fire-and-forget coordinator.
+
+    [Fact]
+    public void Create_MapsPerRepoStartPoints_AndCreatesEveryMember()
+    {
+        var git = new FakeGitService();
+        var a = Repo("a");
+        var b = Repo("b");
+        var c = Repo("c");
+        // Each member starts from its own default branch (main/main/master) — the reason per-repo
+        // start points exist at all.
+        var startById = new Dictionary<Guid, string>
+        {
+            [a.Id] = "main",
+            [b.Id] = "main",
+            [c.Id] = "master",
+        };
+
+        var result = ChangeSetOperations.RunOverMembers(
+            new[] { a, b, c },
+            r => git.CreateBranch(r, "feature/y", ChangeSetOperations.ResolveStartPoint(startById, r.Id), checkout: true));
+
+        Assert.True(result.AllSucceeded);
+        Assert.Equal(3, result.SuccessCount);
+        Assert.Equal(new[] { a.Id, b.Id, c.Id }, git.CreateCalls.Select(x => x.RepoId));
+        Assert.All(git.CreateCalls, x => Assert.Equal("feature/y", x.Name));
+        Assert.All(git.CreateCalls, x => Assert.True(x.Checkout)); // checkout: true — all members switch
+        Assert.Equal("main", git.CreateCalls.Single(x => x.RepoId == a.Id).StartPoint);
+        Assert.Equal("master", git.CreateCalls.Single(x => x.RepoId == c.Id).StartPoint);
+    }
+
+    [Fact]
+    public void Create_NameCollisionInOneRepo_ReportsThatRepo_StillCreatesOthers()
+    {
+        var git = new FakeGitService();
+        var a = Repo("a");
+        var b = Repo("b");
+        var c = Repo("c");
+        git.Results[b.Id] = new GitOutcome.Failed("a branch named 'feature/y' already exists");
+        var startById = new Dictionary<Guid, string>(); // all blank → HEAD
+
+        var result = ChangeSetOperations.RunOverMembers(
+            new[] { a, b, c },
+            r => git.CreateBranch(r, "feature/y", ChangeSetOperations.ResolveStartPoint(startById, r.Id), checkout: true));
+
+        Assert.False(result.AllSucceeded);
+        Assert.Equal(2, result.SuccessCount);
+        Assert.IsType<GitOutcome.Success>(result.Results[0].Outcome);
+        var failed = Assert.IsType<GitOutcome.Failed>(result.Results[1].Outcome);
+        Assert.Contains("already exists", failed.Message);
+        Assert.IsType<GitOutcome.Success>(result.Results[2].Outcome);
+        // c was still created despite b's collision — no rollback, a failed member never blocks the rest.
+        Assert.Contains(git.CreateCalls, x => x.RepoId == c.Id);
+        // A blank start-point map falls back to HEAD for every member.
+        Assert.All(git.CreateCalls, x => Assert.Equal("HEAD", x.StartPoint));
+    }
+
+    [Fact]
+    public void ResolveStartPoint_TrimsExplicit_FallsBackToHeadWhenBlankOrMissing()
+    {
+        var withValue = Guid.NewGuid();
+        var blank = Guid.NewGuid();
+        var map = new Dictionary<Guid, string>
+        {
+            [withValue] = "  develop  ",
+            [blank] = "   ",
+        };
+
+        Assert.Equal("develop", ChangeSetOperations.ResolveStartPoint(map, withValue));
+        Assert.Equal("HEAD", ChangeSetOperations.ResolveStartPoint(map, blank));
+        Assert.Equal("HEAD", ChangeSetOperations.ResolveStartPoint(map, Guid.NewGuid()));
+    }
+
     // A fake IGitService whose batch calls (Push / Fetch / CheckoutLocalBranch / DeleteBranch) return
     // a scripted per-repo GitOutcome (Ok by default) and record the call, so tests can assert both the
     // outcome mapping and that every member was actually invoked. Any repo id in ThrowFor makes its
@@ -118,6 +193,10 @@ public sealed class ChangeSetOperationsTests
         public Dictionary<Guid, GitOutcome> Results { get; } = new();
         public HashSet<Guid> ThrowFor { get; } = new();
         public List<(string Op, Guid RepoId)> Calls { get; } = new();
+
+        // Full-argument capture for CreateBranch, so the Phase-4 create tests can assert the per-repo
+        // start point the coordinator maps in (not just that the member was touched).
+        public List<(Guid RepoId, string Name, string StartPoint, bool Checkout)> CreateCalls { get; } = new();
 
         private GitOutcome Record(string op, Repo repo)
         {
@@ -130,6 +209,11 @@ public sealed class ChangeSetOperationsTests
         public GitOutcome Fetch(Repo repo) => Record("fetch", repo);
         public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => Record("checkout", repo);
         public GitOutcome DeleteBranch(Repo repo, string name, bool force) => Record("delete", repo);
+        public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout)
+        {
+            CreateCalls.Add((repo.Id, name, startPoint, checkout));
+            return Record("create", repo);
+        }
 
         // --- everything else is outside the batch surface ---
         public Fetched<CommitSnapshot> Load(Repo repo, int cap) => throw new NotImplementedException();
@@ -164,7 +248,6 @@ public sealed class ChangeSetOperationsTests
         public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null) => throw new NotImplementedException();
         public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => throw new NotImplementedException();
         public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode) => throw new NotImplementedException();
-        public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout) => throw new NotImplementedException();
         public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => throw new NotImplementedException();
         public bool IsAncestor(Repo repo, string maybeAncestor, string descendant) => throw new NotImplementedException();
         public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes) => throw new NotImplementedException();

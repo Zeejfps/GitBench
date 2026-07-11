@@ -13,11 +13,13 @@
 > Kept current for the next phase's agent. Update it when you finish a phase.
 
 **Phases done:** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
-synced branch), and Phase 3 (the cross-repo review surface — the headline). Phases 4-7: not started.
+synced branch), Phase 3 (the cross-repo review surface — the headline), and Phase 4 (start a change
+set — authoring). Phases 5-7: not started.
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **305** tests
-(286 baseline + 7 in `SyncedBranchIndexTests.cs` + 5 in `GitBench.Tests/ChangeSetOperationsTests.cs`
-+ 7 new in `GitBench.Tests/ChangeSetReviewTests.cs`).
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **308** tests
+(286 baseline + 7 in `SyncedBranchIndexTests.cs` + **8** in `GitBench.Tests/ChangeSetOperationsTests.cs`
++ 7 in `GitBench.Tests/ChangeSetReviewTests.cs`). Phase 4 added **3** to `ChangeSetOperationsTests.cs`
+(per-repo start-point mapping, name-collision isolation, `ResolveStartPoint` fallback).
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -141,6 +143,54 @@ synced branch), and Phase 3 (the cross-repo review surface — the headline). Ph
   routing a qualified mark to the owning member's progress key, two-stub-stack aggregation in session
   order, one-member-throws isolation, all-members-throw.
 
+**What Phase 4 added (all under `GitBench/`):**
+
+- **`ChangeSetOperations.CreateInAll(IReadOnlyList<(Guid RepoId, string StartPoint)> members,
+  string branchName)`** — the sixth batch op, following the existing five. Loops
+  `CreateBranch(repo, name, startPoint, checkout: true)` per member through the shared `Run` →
+  `RunOverMembers` seam with the Phase-2 summary reporting (success toast / warning-toast-with-Details),
+  so a name collision in one repo fails that repo alone and still creates the others (Locked decision
+  #5). `touchesWorkingTree: true` (checkout switches each member). Success key `changesets.toast_create`.
+- **`ChangeSetOperations.ResolveStartPoint(startById, repoId)`** — pure `internal static`; trims the
+  member's start point, falling back to `HEAD` when blank (matches `CreateBranchDialog`). This is the
+  unit-tested per-repo mapping seam (`CreateInAll` itself is fire-and-forget).
+- **`Features/ChangeSets/StartChangeSetDialog.cs`** — `internal sealed record` Widget (the
+  `CreateBranchDialog`/`MergeBranchDialog` pattern): a branch-name `LabeledInput` (live `RefNameRules`
+  validation) + a two-column "Repositories / Start point" checklist, one row per group primary
+  (name checkbox + bare start-point input built via `DialogFrame.TextInput`/`WrapInput`, registered
+  with the dialog's `DialogInputRegistry`). Takes `IReadOnlyList<Repo> Repos` (the group's primaries,
+  resolved at menu-build time).
+- **`Features/ChangeSets/StartChangeSetDialogViewModel.cs`** — `IDialogViewModel`. Holds `Name`, a
+  `RepoRow` per primary (`Included` default on, `StartPoint` seeded blank then filled off-thread from
+  `IGitService.GetDefaultBranchName`), `NameStatus`, and the `Create` `AsyncCommand`. `Create`'s work
+  is a no-op; the gate is "valid non-empty name **and** ≥1 member checked" (a `Derived` reading each
+  row's `Included`, so it re-gates as checkboxes toggle); `onSuccess` gathers the selection, calls
+  `ChangeSetOperations.CreateInAll`, and closes.
+- **Entry points (4.1):** **"Start change set…"** on the **group-header** context menu
+  (`Features/Repos/GroupHeaderRow.BuildMenuItems`) and the **primary repo** context menu
+  (`Features/Repos/RepoNodeViewModel.AddStartChangeSetItem`, called from `BuildPrimaryMenu`). Both
+  gate on the group holding ≥2 primaries and broadcast `ShowDialogMessage(new StartChangeSetDialog{…})`
+  with `LucideIcons.FolderGit2` (the change-set glyph).
+- **`IRepoRegistryExtensions.PrimariesOfGroup(group)`** — new helper returning a group's primary
+  `Repo`s in membership order (both menu sites use it).
+- **Immediate visibility (4.2):** falls out for free — `CreateInAll`'s `Report` broadcasts
+  `RefsChangedMessage` per member, and `SyncedBranchIndex` already refreshes a repo on that message, so
+  the just-created set is detected (synced glyph, "Also on…", batch menu) with no timer.
+- **Localization:** 6 new `changesets.*` keys (`start_menu`, `start_title`, `start_name_label`,
+  `start_repos_label`, `start_start_point_label`, `toast_create`) added to **all 6**
+  `Localization/Strings/*.json`.
+- **Tests:** `GitBench.Tests/ChangeSetOperationsTests.cs` +3 (now 8) — per-repo start-point mapping
+  creates every member with the mapped start point + `checkout: true`; a name collision in one repo is
+  reported per-repo while the others are still created (no rollback); `ResolveStartPoint` trims explicit
+  values and falls back to `HEAD` for blank/missing. The `FakeGitService` now implements `CreateBranch`
+  (records `(RepoId, Name, StartPoint, Checkout)` in `CreateCalls`).
+
+**Deviations (Phase 4):** see the "Deviations from the plan text" block under the Phase 4 heading —
+the dialog has a small VM (unlike Phase 2's VM-less delete dialog) for off-thread default resolution +
+gating; the confirm `AsyncCommand`'s work is a no-op that exists only to gate/close (the real create is
+fire-and-forget through `CreateInAll`); per-repo start points default to each repo's default branch,
+blank → `HEAD`; both entry points gate on ≥2 primaries.
+
 **Deviations (Phase 3):** see the "Deviations from the plan text" block under the Phase 3 heading.
 
 **Deviations (Phase 2):**
@@ -175,6 +225,16 @@ synced branch), and Phase 3 (the cross-repo review surface — the headline). Ph
   `RunOverMembers` + summary-toast shape (add a `CreateInAll`/`CommitInAll` method following the
   five present ops). The reporting (success toast / warning-toast-with-Details) is already generic
   over `Func<Strings,int,string>`; only the success-message key differs.
+- **Phase 4 shipped `CreateInAll` as the sixth batch op** — Phase 5's `CommitInAll` is the next one,
+  same `Run`→`RunOverMembers`+summary-toast shape (only the success key and `touchesWorkingTree` differ;
+  `Commit` also validates staged state up front per the plan). `CreateInAll` takes per-member
+  `(RepoId, StartPoint)` and maps start points via the pure `ResolveStartPoint` (blank → `HEAD`); mirror
+  that if a later op needs per-member arguments.
+- **The `StartChangeSetDialog` is the template for future authoring dialogs** that fire-and-forget through
+  the coordinator but still want a gated confirm button: give the dialog an `IDialogViewModel` with a
+  `Create` `AsyncCommand` whose `work` is `() => null` and whose `onSuccess` does the real work + close,
+  gated by a `Derived<bool>`. The empty async hop is the only way to reuse `DialogShell`'s gate/busy
+  wiring while keeping the git work inside `ChangeSetOperations` (which owns threading + per-repo toasts).
 - **`ChangeSetOperations.RunOverMembers` is `static`** and takes `Func<Repo, GitOutcome>`, so any op
   whose per-repo call returns (or can be mapped to) a `GitOutcome` is testable without touching the
   index or the UI. Non-`GitOutcome` results (like `Pull`'s `PullOutcome`) are mapped inside the
@@ -578,7 +638,28 @@ One window, one tree grouped by repo, one progress meter, one keyboard loop.
   in that repo's single-repo review (shared progress keys). Tests: qualified-path resolver
   round-trip; aggregation of two stub stacks; per-member failure isolation.
 
-### Phase 4 — Start a change set (authoring)
+### Phase 4 — Start a change set (authoring) ✅ DONE
+
+**Deviations from the plan text:**
+
+- **The dialog has a small view model (`StartChangeSetDialogViewModel`), unlike Phase 2's VM-less
+  `DeleteChangeSetBranchDialog`.** It needs off-thread per-repo default-branch resolution, live
+  name validation, and confirm-button gating — the `CreateBranchDialog`/`CleanBranchesDialog`
+  shape — so a plain inline-`Action` widget wasn't enough.
+- **The confirm button is wired through an `AsyncCommand` whose work is a no-op (`() => null`).** The
+  actual create is fire-and-forget through `ChangeSetOperations.CreateInAll` (the plan's "summary
+  reporting as in Phase 2"), so the command exists only to reuse the dialog shell's gate/busy wiring;
+  the real action runs in `onSuccess` (gather selection → `CreateInAll` → close). The gate is
+  "valid, non-empty branch name **and** ≥1 member checked".
+- **Per-repo start points default to each repo's default branch, resolved off-thread and seeded into
+  the fields**; a field left blank falls back to `HEAD` at create time (`ResolveStartPoint`), matching
+  `CreateBranchDialog`. The resolution is fire-once on open and won't clobber a field the user already
+  edited.
+- **Both entry points are gated on the group holding ≥2 primaries** (a change set spans ≥2 repos), and
+  both open the *same* dialog with the checklist defaulting to all of the group's primaries.
+- **Coordinator tests drive the create through `RunOverMembers` + `ResolveStartPoint` over the fake**
+  (the same op `CreateInAll` builds), rather than the fire-and-forget instance method — matching the
+  existing `RunOverMembers` test precedent. `ResolveStartPoint` is a pure static, tested directly.
 
 - **4.1** **"Start change set…"** — entry points: group header context menu + repo context menu.
   A `ShowDialogMessage` dialog (the `MergeBranchDialog` pattern): branch-name field + a repo

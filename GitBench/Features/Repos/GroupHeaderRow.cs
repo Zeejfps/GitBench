@@ -1,5 +1,7 @@
 using GitBench.Controls;
+using GitBench.Features.ChangeSets;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -105,6 +107,16 @@ internal sealed record GroupHeaderRow : Widget
                 Submenu: AddRepoMenu.Items(ctx, vm.Group.Id)),
             new(s.ReposGroupRename, vm.BeginRename.Execute, LucideIcons.PencilLine),
         };
+
+        // Start change set… — create a same-named branch across the group's primaries (Phase 4.1).
+        // Only meaningful when the group holds two or more primaries (a set spans ≥2 repos).
+        var primaries = ctx.Require<IRepoRegistry>().PrimariesOfGroup(vm.Group);
+        if (primaries.Count >= 2)
+            items.Add(new RepoBarContextMenu.Item(
+                s.ChangesetsStartMenu,
+                () => ctx.Require<IMessageBus>().Broadcast(new ShowDialogMessage(
+                    onClose => new StartChangeSetDialog { Repos = primaries, OnClose = onClose })),
+                LucideIcons.FolderGit2));
 
         if (vm.CanDelete)
             items.Add(new RepoBarContextMenu.Item(s.ReposGroupDelete, vm.Delete.Execute, LucideIcons.Trash));
