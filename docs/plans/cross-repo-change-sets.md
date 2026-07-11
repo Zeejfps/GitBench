@@ -14,17 +14,19 @@
 
 **Phases done:** Phase 1 (detection + entry-point affordance), Phase 2 (batch actions on a
 synced branch), Phase 3 (the cross-repo review surface — the headline), Phase 4 (start a change
-set — authoring), and Phase 5 (cross-repo working-tree review + batch commit — the Changes panel).
-Phases 6-7: not started.
+set — authoring), Phase 5 (cross-repo working-tree review + batch commit — the Changes panel), and
+Phase 6 (set health strip + localization/cheatsheet sweep; persistence evaluated and skipped).
+Phase 7 (verification): not started.
 
-**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **317** tests
+**Build/test status:** `dotnet build GitBench.sln` clean; `dotnet test` green at **325** tests
 (286 baseline + 7 in `SyncedBranchIndexTests.cs` + **11** in `GitBench.Tests/ChangeSetOperationsTests.cs`
 + 7 in `GitBench.Tests/ChangeSetReviewTests.cs` + **5** in
-`GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs`). Phase 5 added **3** to `ChangeSetOperationsTests.cs`
-(`StampTrailer` format, `CommitOverMembers` skip-unstaged + trailer, `CommitOverMembers` partial failure)
-and the **5** new working-tree tests (aggregate → qualified list, staged/partial marks, `PlanStage`
-staging + unstaging, staged-tracker routing). **No display available** — the Phase-5 GUI wiring (scope
-toggle, body switch, commit bar, confirm dialog) is manual-pass only.
+`GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs` + **8** in
+`GitBench.Tests/ChangeSetHealthTests.cs`). Phase 6 added the **8** new health tests (pure drift
+computation: tracked-clean → in sync, unpushed/behind/dirty → attention, ahead-of-base is not drift,
+no-upstream informational, detached-HEAD not mislabeled, failed-load → unavailable, roll-up tally).
+**No display available** — the Phase-5 GUI wiring and the Phase-6 header health strip are manual-pass
+only; see the consolidated manual-verification list at the end of this section.
 
 **What Phase 1 added (all under `GitBench/`):**
 
@@ -245,6 +247,54 @@ toggle, body switch, commit bar, confirm dialog) is manual-pass only.
   `GitBench.Tests/ChangeSetWorkingTreeReviewTests.cs` (5). The `FakeGitService` now implements `Commit`
   (records `(RepoId, Message, Amend)`) and `GetLocalChanges` (staged count per repo).
 
+**What Phase 6 added (all under `GitBench/`):**
+
+- **`Features/Review/ChangeSetHealth.cs`** — the **pure** drift core (unit-tested). Public
+  `readonly record struct ChangeSetMemberHealth(RepoKey, Unavailable, AheadOfBase, Unpushed, Behind,
+  NoUpstream, Dirty)` with `NeedsAttention` (Unavailable || Unpushed>0 || Behind>0 || Dirty) and `IsQuiet`;
+  its static factory `From(repoKey, loadFailed, aheadOfBase, RepoStatus)` folds a member's loaded stack
+  (ahead-of-base = increment count; failed load ⇒ `Unavailable`, other fields zeroed) and its live
+  `RepoStatus` probe into one record. `AheadOfBase` is **not** drift (it's the reviewed range); `NoUpstream`
+  is informational (excluded from `NeedsAttention`, and not flagged for a detached HEAD). Public
+  `sealed record ChangeSetHealth(Members)` rolls up `AllClear` / `AttentionCount`. Depends only on the
+  public `RepoStatus` record — no git, no UI.
+- **`ChangeSetReviewViewModel`** gained an **`IRepoStatusStore` ctor param** (threaded from
+  `ChangeSetReviewWindowsViewModel`, which also gained it — auto-wired) and five members: `MemberHealth()`
+  (builds a `ChangeSetHealth` from `_loads` + `_status.For(repoId)`, reactive via a `_loadRevision` read so
+  it re-projects on both range reloads and live status-probe changes), `HealthSeverity()` (0 in sync /
+  1 attention / 2 unavailable), `HealthLabel()` (aggregate string), `HealthTooltip()` (title + per-member
+  lines), and a private `FormatHealthLine`.
+- **`Features/Review/ChangeSetReviewHeaderBar.cs`** — a **set health strip** inserted between the set-name
+  chip and the progress group: `ChangeSetHealthChip` (a new `Widget<ButtonState>` in the same file, so the
+  hover tooltip can attach) renders a status glyph (`CircleCheck`/`TriangleAlert`) colored by severity
+  (Success/Warning/Danger) + `HealthLabel`, with `HealthTooltip` on hover. All bindings read the VM's live
+  health so the strip updates as probes land. **The Changes-panel twin was intentionally not built** (see
+  Phase 6 Deviations); the pure core is ready if it's wanted later.
+- **6.2 persisted `ChangeSet` entity: evaluated, NOT built** — convention proved sufficient (see below).
+  `RepoStateStore.CurrentSchemaVersion` stays **6**; no migration added.
+- **Localization sweep:** all 6 `Localization/Strings/*.json` verified key-identical (**603** keys each).
+  Removed 2 orphans (`changesets.review_placeholder`, `changesets.commit_none`). Added 9 health keys
+  (`health_title`, `health_all_clear`, `health_attention`, `health_in_sync`, `health_missing`,
+  `health_dirty`, `health_no_upstream`, `health_unpushed`, `health_behind`) to all 6.
+- **Cheatsheet/keyboard:** verified parity — the cross-repo review window already reuses the single-repo
+  `ReviewKeyController` + `ReviewCheatsheetOverlay` via `IReviewSurfaceModel` (Phase 3), so no new work; no
+  global shortcut registry exists to register with.
+- **Tests:** `GitBench.Tests/ChangeSetHealthTests.cs` (**8**) over the pure `ChangeSetHealth` core.
+
+**Why 6.2 (persisted `ChangeSet`) was skipped (for the Phase-7 agent):** the plan gates it on convention
+proving insufficient. It didn't. Detection (`SyncedBranchIndex`), batch ops (`ChangeSetOperations`), both
+review surfaces, authoring (`StartChangeSetDialog`), and the Phase-6 health strip all run on live
+branch-name correlation + `RepoStatusStore` + each member's auto-resolved base — no set needs a stored
+identity, pinned per-set bases, cross-group membership, or set-scoped notes in the MVP. If Phase 7 (or a
+later feature) introduces any of those, the paved path is a `Group`-sibling entity in `RepoStateStore.State`
+with `CurrentSchemaVersion` 6 → 7 + a migration, exactly as the plan sketches.
+
+**Deviations (Phase 6):** see the "Deviations from the plan text" block under the Phase 6 heading — health
+strip on the review *window* header only (Changes-panel twin scoped out, no display to verify it); one
+aggregate badge + per-member tooltip rather than per-member chips; ahead-of-base shown but not drift;
+no-upstream informational; branch-missing = failed stack load; 6.2 skipped per the plan's own criterion;
+6.3 cheatsheet/keyboard parity was already delivered by Phase 3 (verified only).
+
 **Deviations (Phase 5):** see the "Deviations from the plan text" block under the Phase 5 heading — a live
 singleton (not a pinned session) since it *is* the Changes panel; a sibling `ChangeSetStagedFileTracker`
 (the git index has no progress store to reuse); a self-contained compact commit bar (title-only, no
@@ -361,6 +411,28 @@ blank → `HEAD`; both entry points gate on ≥2 primaries.
   ends in `_details` Loaded (even all-members-failed), so the window is never a dead placeholder. If a
   later phase needs to distinguish "member failed" rows from real conflicts, give them a dedicated
   `FileChangeStatus` rather than overloading `Conflicted`.
+- **Phase 6 health strip reactivity (for the Phase-7 agent).** The strip re-derives when a member's
+  status probe (`RepoStatusStore`) changes (its `State<GitStatusSummary>.Value` read inside the header's
+  `Prop.Bind` is auto-tracked) and when a member's range reloads (`MemberHealth()` reads `_loadRevision`).
+  Note the review *window* is **pinned** (Locked #7) but `RepoStatus` reflects each member repo's **live
+  active checkout** — so if a member repo is not currently on the reviewed branch, its unpushed/behind/dirty
+  signals describe that repo's live state, not the pinned head. That's an accepted best-effort limitation
+  of "mostly presentation over `RepoStatusStore`"; a real integration test would checkout-in-all first.
+
+**Consolidated manual-verification list (no display in any phase — everything below compiles + is wired
+but was never exercised in a running app; Phase 7's manual pass owns these):**
+
+- **Phase 3/4/5 GUI:** the cross-repo review *window* (header, tree grouped by repo, stacked diff,
+  `j`/`k`/`v`/`?` loop, member-failed rows), the "Also on…" / "Review across N repos…" menu, the "Start
+  change set…" dialog, and the Changes-panel cross-repo mode (scope toggle, 3-way body switch, compact
+  commit bar, commit confirm dialog).
+- **Phase 6 health strip:** the badge glyph/color per severity (green check / amber alert / red), the
+  aggregate label ("All repos in sync" vs "N of M need attention"), the per-member hover tooltip, and that
+  it updates live as a member goes dirty / gains an unpushed commit / has its branch deleted. The
+  `70-change-set` fixture already parks these drift states (mismatched checkout, unpushed commit, moved
+  base, dirty tree, a member with no remote).
+- **Localization:** the 9 new `changesets.health_*` strings render sensibly in all 6 locales (translations
+  were authored, not machine-verified in situ).
 
 ## What a "change set" means here (scope)
 
@@ -839,7 +911,43 @@ resolver) this phase reuses.
   message → each member with staged changes gets the commit with the trailer; the cross-repo
   review window reflects the new increments after `RefsChangedMessage`.
 
-### Phase 6 — Drift panel + (only if needed) persistence
+### Phase 6 — Drift panel + (only if needed) persistence ✅ DONE
+
+**Deviations from the plan text:**
+
+- **6.1 landed on the cross-repo review *window* header only** (`ChangeSetReviewHeaderBar`), the
+  plan's stated primary target. The Phase-5 agent's suggested Changes-panel strip
+  (hanging off `ChangeSetWorkingTreeReviewViewModel.IsAvailable`) was **deliberately scoped out**:
+  the review window is where a reviewer weighs whole-set drift, the Changes panel already carries
+  per-repo sidebar badges + its own commit summary, and with no display the extra surface couldn't
+  be visually verified. The pure `ChangeSetHealth` core is reusable if a later phase wants that strip.
+- **The strip is one aggregate badge with a per-member tooltip**, not a row of per-member chips. A
+  green check / "All repos in sync", an amber alert / "N of M need attention", or red when a member's
+  branch/range is unavailable; the tooltip lists every member's state line-by-line. Compact form keeps
+  the header uncluttered and dodges horizontal-overflow risk (untestable without a display).
+- **"Ahead of base" is shown but is not treated as drift.** A member's `base..head` increment count is
+  the change under review — the normal case — so it never flips the badge; only unpushed/behind commits,
+  a dirty tree, or an unavailable member do. **"No upstream" is informational** (surfaced in the tooltip,
+  a distinct per-member line) but not counted as attention, so a freshly-started, not-yet-pushed set
+  still reads "in sync" rather than lighting up the whole strip.
+- **"Branch missing" is detected as a member whose stack failed to resolve** (`ChangeSetMemberLoad.Failed`),
+  which is what a deleted branch produces on that member's `RefsChangedMessage` reload — rather than a
+  separate branch-existence probe. It renders as the strongest (red) severity.
+- **6.2 (persisted `ChangeSet` entity) was evaluated and skipped** per the plan's own criterion
+  ("only if convention proves insufficient"). Nothing shipped in Phases 1-6 needs it: detection,
+  batch ops, both review surfaces, authoring, and the health strip all run on live branch-name
+  correlation + `RepoStatusStore` + each member's auto-resolved base. None of the plan's named triggers
+  (pinned bases per set, cross-group membership, set-scoped notes) is in scope for the MVP, so
+  `RepoStateStore` stays at `CurrentSchemaVersion = 6` with no migration. See the consolidated note below.
+- **6.3 keyboard/cheatsheet parity was already delivered by Phase 3's design** (verified, not rebuilt):
+  the cross-repo review window's `ChangeSetReviewRootView` uses the *same* `ReviewKeyController` +
+  `ReviewCheatsheetOverlay` the single-repo `ReviewWindowRootView` does, both bound through
+  `IReviewSurfaceModel`, so `j`/`k`/`v`/`Space`/`?`/`Esc` and the shortcuts card are identical. There is
+  no global/app-level shortcut registry to also register with — the cheatsheet is per-window. The
+  localization sweep verified all 6 locales are key-identical (603 keys each) and removed two genuine
+  orphans (`changesets.review_placeholder`, dead since Phase 3 replaced the placeholder toast, and
+  `changesets.commit_none`, added in Phase 5 but never wired — the commit button is gated so it is
+  unreachable).
 
 - **6.1** A **set health strip** in the cross-repo review header (and/or the "Also on" tooltip):
   per member — ahead/behind its base, unpushed commits, dirty working tree, *branch missing*
