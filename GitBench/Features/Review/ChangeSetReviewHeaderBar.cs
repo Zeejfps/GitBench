@@ -42,6 +42,7 @@ internal sealed record ChangeSetReviewHeaderBar : Widget
                             Children =
                             [
                                 new Grow { Child = SetLabel(vm) },
+                                HealthStrip(vm),
                                 ProgressGroup(vm),
                                 HelpButton(vm),
                             ],
@@ -77,6 +78,11 @@ internal sealed record ChangeSetReviewHeaderBar : Widget
             new Grow { Child = new Box() },
         ],
     };
+
+    // The set health strip (Phase 6.1): a single aggregate badge summarizing per-member drift, with a
+    // tooltip that enumerates each member's state. A stateful chip so the hover tooltip can attach.
+    private static IWidget HealthStrip(ChangeSetReviewViewModel vm) =>
+        new ChangeSetHealthChip { Vm = vm }.WithTooltip(Prop.Bind(vm.HealthTooltip));
 
     // The combined progress: a meter + "N / M files viewed" across every member while work remains; a
     // success badge once every file is viewed.
@@ -141,4 +147,61 @@ internal sealed record ChangeSetReviewHeaderBar : Widget
         ContentInset = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
         Children = [new ButtonLabel { Value = "?" }],
     }.WithTooltip(L.T(s => s.ReviewShortcutsTitle)).WithController<KbmController>();
+}
+
+/// <summary>
+/// The set health strip's badge (Phase 6.1): a small chip carrying a status glyph (a green check when
+/// every member is in sync, an amber alert when some member has drift, red when a member's branch is
+/// gone) and the aggregate label. A stateful widget (<see cref="ButtonState"/>) so the header can attach
+/// a hover tooltip enumerating each member's state. All three read the view model's live health, so the
+/// chip re-derives as status probes land and members' ranges reload.
+/// </summary>
+internal sealed record ChangeSetHealthChip : Widget<ButtonState>
+{
+    public required ChangeSetReviewViewModel Vm { get; init; }
+
+    protected override ButtonState CreateState(Context ctx) => new();
+
+    protected override IWidget Build(Context ctx, ButtonState state) => new Box
+    {
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+        Children =
+        [
+            new Padding
+            {
+                Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = Spacing.Hair, Bottom = Spacing.Hair },
+                Children =
+                [
+                    new Row
+                    {
+                        Gap = Spacing.Xs,
+                        CrossAxis = CrossAxisAlignment.Center,
+                        Children =
+                        [
+                            new Text
+                            {
+                                FontFamily = LucideIcons.FontFamily,
+                                FontSize = FontSize.Caption,
+                                VAlign = TextAlignment.Center,
+                                Value = Prop.Bind(() => Vm.HealthSeverity() == 0 ? LucideIcons.CircleCheck : LucideIcons.TriangleAlert),
+                                Color = Theme.Color(s => Vm.HealthSeverity() switch
+                                {
+                                    0 => s.Status.Success,
+                                    1 => s.Status.Warning,
+                                    _ => s.Status.Danger,
+                                }),
+                            },
+                            new Text
+                            {
+                                Value = Prop.Bind(Vm.HealthLabel),
+                                FontSize = FontSize.Caption,
+                                VAlign = TextAlignment.Center,
+                                Color = Theme.Color(s => s.Palette.TextSecondary),
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    };
 }

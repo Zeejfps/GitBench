@@ -27,6 +27,7 @@ internal sealed class ChangeSetReviewWindowsViewModel : IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
+    private readonly IRepoStatusStore _status;
     private readonly IDisposable _subscription;
 
     public ObservableList<ChangeSetReviewViewModel> Windows { get; } = new();
@@ -43,7 +44,8 @@ internal sealed class ChangeSetReviewWindowsViewModel : IDisposable
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
         ILocalizationService loc,
-        PreferencesService preferences)
+        PreferencesService preferences,
+        IRepoStatusStore status)
     {
         _bus = bus;
         _source = source;
@@ -53,6 +55,7 @@ internal sealed class ChangeSetReviewWindowsViewModel : IDisposable
         _dispatcher = dispatcher;
         _loc = loc;
         _preferences = preferences;
+        _status = status;
         _subscription = _bus.SubscribeScoped<OpenChangeSetReviewMessage>(OnOpenRequested);
     }
 
@@ -69,7 +72,7 @@ internal sealed class ChangeSetReviewWindowsViewModel : IDisposable
         var details = new CommitDetailsViewModel(
             _gitService, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
         Windows.Add(new ChangeSetReviewViewModel(
-            m.Session, _source, _dispatcher, details, _loc, _bus, _reviewProgress, _registry));
+            m.Session, _source, _dispatcher, details, _loc, _bus, _reviewProgress, _registry, _status));
     }
 
     private ChangeSetReviewViewModel? FindOpenWindow(string key)

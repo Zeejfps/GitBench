@@ -33,6 +33,7 @@ internal sealed class ChangeSetReviewViewModel : IReviewSurfaceModel, IDisposabl
     private readonly IUiDispatcher _dispatcher;
     private readonly CommitDetailsViewModel _details;
     private readonly ILocalizationService _loc;
+    private readonly IRepoStatusStore _status;
     private readonly ChangeSetReviewedFiles _reviewedFiles;
     private readonly ReviewFileCursor _cursor;
 
@@ -66,13 +67,15 @@ internal sealed class ChangeSetReviewViewModel : IReviewSurfaceModel, IDisposabl
         ILocalizationService loc,
         IMessageBus bus,
         IReviewProgressStore reviewProgress,
-        IRepoRegistry registry)
+        IRepoRegistry registry,
+        IRepoStatusStore status)
     {
         _session = session;
         _source = source;
         _dispatcher = dispatcher;
         _details = details;
         _loc = loc;
+        _status = status;
 
         // Deterministic repo keys (de-duplicated display names) drive both the tree's top-level folders
         // (via the qualified paths ShowRanges builds) and the marks tracker's reverse resolution.
@@ -159,6 +162,77 @@ internal sealed class ChangeSetReviewViewModel : IReviewSurfaceModel, IDisposabl
             list.Add((key, detail));
         }
         return list;
+    }
+
+    /// <summary>The set health strip's data (Phase 6.1): one <see cref="ChangeSetMemberHealth"/> per member,
+    /// composed from that member's loaded stack (ahead-of-base count / whether it resolved) and its live
+    /// <see cref="RepoStatus"/> probe (unpushed / behind / dirty). Call inside a reactive binding paired with
+    /// a <see cref="LoadRevision"/> read: the per-repo status reads are auto-tracked so the strip updates
+    /// live as probes land, and the loads re-project when a member's range reloads.</summary>
+    public ChangeSetHealth MemberHealth()
+    {
+        _ = _loadRevision.Value; // re-project when a member's range (re)loads
+        var list = new List<ChangeSetMemberHealth>(_session.Members.Count);
+        foreach (var m in _session.Members)
+        {
+            var key = _repoKeys[m.RepoId];
+            var status = _status.For(m.RepoId);
+            var (loadFailed, aheadOfBase) = _loads.TryGetValue(m.RepoId, out var load)
+                ? load switch
+                {
+                    ChangeSetMemberLoad.Ok ok => (false, ok.Stack.Increments.Count),
+                    ChangeSetMemberLoad.Failed => (true, 0),
+                    _ => (false, 0),
+                }
+                : (false, 0); // still loading — no drift asserted yet, but the status probe still shows
+            list.Add(ChangeSetMemberHealth.From(key, loadFailed, aheadOfBase, status));
+        }
+        return new ChangeSetHealth(list);
+    }
+
+    /// <summary>The strip's severity, for the badge glyph + color: 0 = every member in sync, 1 = some
+    /// member has actionable drift, 2 = a member's branch/range is unavailable (the strongest signal).
+    /// Reactive: reads <see cref="LoadRevision"/> and the per-member status probes.</summary>
+    public int HealthSeverity()
+    {
+        var health = MemberHealth();
+        foreach (var m in health.Members)
+            if (m.Unavailable) return 2;
+        return health.AttentionCount > 0 ? 1 : 0;
+    }
+
+    /// <summary>The strip's aggregate label: "All repos in sync" or "N of M need attention".</summary>
+    public string HealthLabel()
+    {
+        var health = MemberHealth();
+        var s = _loc.Strings.Value;
+        return health.AllClear
+            ? s.ChangesetsHealthAllClear
+            : s.ChangesetsHealthAttention(health.AttentionCount, health.Members.Count);
+    }
+
+    /// <summary>The strip's tooltip: a title line then one line per member ("repo-key: signals").</summary>
+    public string HealthTooltip()
+    {
+        var health = MemberHealth();
+        var lines = new List<string>(health.Members.Count + 1) { _loc.Strings.Value.ChangesetsHealthTitle };
+        foreach (var m in health.Members)
+            lines.Add($"{m.RepoKey}: {FormatHealthLine(m)}");
+        return string.Join("\n", lines);
+    }
+
+    // A one-line, human-readable drift summary for a member: the applicable signals joined, or "in sync"
+    // when nothing is noteworthy.
+    private string FormatHealthLine(in ChangeSetMemberHealth m)
+    {
+        var s = _loc.Strings.Value;
+        if (m.Unavailable) return s.ChangesetsHealthMissing;
+        var parts = new List<string>(4);
+        if (m.Unpushed > 0) parts.Add(s.ChangesetsHealthUnpushed(m.Unpushed));
+        if (m.Behind > 0) parts.Add(s.ChangesetsHealthBehind(m.Behind));
+        if (m.Dirty) parts.Add(s.ChangesetsHealthDirty);
+        if (m.NoUpstream) parts.Add(s.ChangesetsHealthNoUpstream);
+        return parts.Count == 0 ? s.ChangesetsHealthInSync : string.Join(", ", parts);
     }
 
     public event Action<string>? ScrollToFileRequested
