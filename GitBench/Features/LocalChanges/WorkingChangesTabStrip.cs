@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Review;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -25,6 +26,8 @@ internal sealed record WorkingChangesTabStrip : Widget
     protected override IWidget Build(Context ctx)
     {
         var layout = ctx.Require<State<WorkingChangesLayout>>();
+        var scope = ctx.Require<State<ChangeSetPanelScope>>();
+        var crossVm = ctx.Require<ChangeSetWorkingTreeReviewViewModel>();
 
         return new Box
         {
@@ -52,6 +55,16 @@ internal sealed record WorkingChangesTabStrip : Widget
                                     L.T(s => s.LocalchangesLayoutReview),
                                     L.T(s => s.LocalchangesLayoutReviewTooltip)),
                                 new Grow { Child = new Box() },
+                                // The change-set scope toggle rides here (Phase 5.3): shown only in the
+                                // Review layout while the active branch is a synced set with members
+                                // checked out. Picking "All repos" flips the body to the cross-repo review.
+                                new Show
+                                {
+                                    When = new Derived<bool>(() =>
+                                        layout.Value == WorkingChangesLayout.Review && crossVm.IsAvailable.Value),
+                                    Then = () => ScopeToggle(scope, crossVm),
+                                    Else = () => Empty.Widget,
+                                },
                                 new StagingProgressRow(),
                             ],
                         },
@@ -59,6 +72,28 @@ internal sealed record WorkingChangesTabStrip : Widget
                 },
             ],
         };
+    }
+
+    private static IWidget ScopeToggle(
+        State<ChangeSetPanelScope> scope, ChangeSetWorkingTreeReviewViewModel crossVm) => new Row
+    {
+        Gap = Spacing.Xs,
+        CrossAxis = CrossAxisAlignment.Stretch,
+        Children =
+        [
+            ScopeTab(scope, ChangeSetPanelScope.ThisRepo, LucideIcons.Branch,
+                L.T(s => s.ChangesetsScopeThisRepo)),
+            ScopeTab(scope, ChangeSetPanelScope.AllRepos, LucideIcons.FolderGit2,
+                L.T(s => s.ChangesetsScopeAllRepos(crossVm.BranchName.Value))),
+        ],
+    };
+
+    private static IWidget ScopeTab(
+        State<ChangeSetPanelScope> scope, ChangeSetPanelScope value, string icon, Prop<string?> label)
+    {
+        var model = new SegmentViewModel<ChangeSetPanelScope>(scope, value);
+        return new UnderlineTab<ChangeSetPanelScope> { Icon = icon, Label = label, Model = model }
+            .WithController<KbmController>();
     }
 
     private static IWidget Tab(
@@ -69,7 +104,7 @@ internal sealed record WorkingChangesTabStrip : Widget
         Prop<string?> tooltip)
     {
         var model = new SegmentViewModel<WorkingChangesLayout>(layout, value);
-        return new UnderlineTab { Icon = icon, Label = label, Model = model }
+        return new UnderlineTab<WorkingChangesLayout> { Icon = icon, Label = label, Model = model }
             .WithTooltip(tooltip)
             .WithController<KbmController>();
     }
@@ -80,14 +115,14 @@ internal sealed record WorkingChangesTabStrip : Widget
 /// The rule is always laid out (a transparent bottom border when inactive) so selecting a tab never
 /// shifts the text.
 /// </summary>
-internal sealed record UnderlineTab : Widget<ButtonState>
+internal sealed record UnderlineTab<T> : Widget<ButtonState>
 {
     private const float UnderlineHeight = 2f;
     private const float IconWidth = 16f;
 
     public required string Icon { get; init; }
     public required Prop<string?> Label { get; init; }
-    public required SegmentViewModel<WorkingChangesLayout> Model { get; init; }
+    public required SegmentViewModel<T> Model { get; init; }
 
     protected override ButtonState CreateState(Context ctx) => new(new Command(Model.Activate));
 

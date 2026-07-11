@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Operations;
+using GitBench.Features.Review;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -29,11 +30,18 @@ internal sealed class LocalChangesView : ContainerView
     private const int MergeBar = 2;
     private const int OperationPanel = 3;
 
+    // Body presentations: file lists, the single-repo review, or the cross-repo "All repos" review.
+    private const int ListLayout = 0;
+    private const int SingleReview = 1;
+    private const int CrossReview = 2;
+
     public LocalChangesView(Context ctx)
     {
         var vm = ctx.Require<LocalChangesViewModel>();
         var operation = ctx.Require<OperationViewModel>();
         var layout = ctx.Require<State<WorkingChangesLayout>>();
+        var scope = ctx.Require<State<ChangeSetPanelScope>>();
+        var crossVm = ctx.Require<ChangeSetWorkingTreeReviewViewModel>();
         var content = new LocalChangesContentView(ctx, vm);
 
         // Tab cycles unstaged files → commit title → commit description → commit button
@@ -42,16 +50,28 @@ internal sealed class LocalChangesView : ContainerView
         var focusRing = new FocusRing();
         content.RegisterFocusStops(focusRing);
 
-        // Keep-alive: the list layout's view owns the focus ring and its panels' scroll state, and the
-        // review layout's stacked diffs are expensive to re-mint. Switching layouts only toggles which
-        // is shown.
-        var body = new Switch<WorkingChangesLayout>
+        // The body is the file lists, the single-repo review, or — when "All repos" is chosen and the
+        // active branch is a synced set with members checked out — the cross-repo review (Phase 5.3).
+        // Switching away from such a branch drops crossVm.IsAvailable, so this falls back to the
+        // single-repo review with no extra state.
+        var bodyMode = new Derived<int>(() =>
         {
-            Value = layout,
+            if (layout.Value != WorkingChangesLayout.Review) return ListLayout;
+            return scope.Value == ChangeSetPanelScope.AllRepos && crossVm.IsAvailable.Value
+                ? CrossReview
+                : SingleReview;
+        });
+
+        // Keep-alive: the list layout's view owns the focus ring and its panels' scroll state, and the
+        // review layouts' stacked diffs are expensive to re-mint. Switching only toggles which is shown.
+        var body = new Switch<int>
+        {
+            Value = bodyMode,
             KeepAlive = true,
-            Case = l => l switch
+            Case = m => m switch
             {
-                WorkingChangesLayout.Review => new WorkingTreeReviewView(),
+                SingleReview => new WorkingTreeReviewView(),
+                CrossReview => new ChangeSetWorkingTreeReviewView(),
                 _ => new Raw { View = content },
             },
         }.BuildView(ctx);
@@ -61,9 +81,15 @@ internal sealed class LocalChangesView : ContainerView
         // commit / focus on whether it is the surface currently on screen.
         var normalCommit = new Derived<bool>(() => operation.ShowsCommitBox.Value && !operation.IsActive.Value);
         var mergeActive = new Derived<bool>(() => operation.ShowsCommitBox.Value && operation.IsActive.Value);
-        var kind = new Derived<int>(() => operation.IsActive.Value
-            ? (operation.ShowsCommitBox.Value ? MergeBar : OperationPanel)
-            : (operation.ShowsCommitBox.Value ? CommitBar : NoFooter));
+        var kind = new Derived<int>(() =>
+        {
+            // The cross-repo review owns its own commit bar (batch commit across the set), so the shared
+            // footer steps aside while it is on screen.
+            if (bodyMode.Value == CrossReview) return NoFooter;
+            return operation.IsActive.Value
+                ? (operation.ShowsCommitBox.Value ? MergeBar : OperationPanel)
+                : (operation.ShowsCommitBox.Value ? CommitBar : NoFooter);
+        });
 
         var footer = new FooterSlot
         {

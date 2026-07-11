@@ -40,6 +40,11 @@ internal static class AppServices
         workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
         context.AddService(workingChangesLayout);
 
+        // Whose working tree the Review layout shows: this repo, or all members of the active branch's
+        // change set (Phase 5.3). Session-scoped, not persisted — the toggle only appears when the
+        // cross-repo surface is available and defaults back to this repo otherwise.
+        context.AddService(new State<ChangeSetPanelScope>(ChangeSetPanelScope.ThisRepo));
+
         var themeMode = new State<ThemeMode>(preferences.Current.Theme);
         themeMode.Changed += preferences.SetTheme;
         context.AddService(themeMode);
@@ -105,6 +110,27 @@ internal static class AppServices
                 subscribeToSelection: false),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<ILocalizationService>()));
+
+        // The Changes tab's cross-repo "All repos" mode (Phase 5): the working-tree review surface
+        // aggregated over every member of the active branch's change set. Its commit-details VM is its
+        // own (opted out of the selection bus), like the single-repo working-tree review's.
+        context.AddSingleton(ctx => new ChangeSetWorkingTreeReviewViewModel(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<ILocalizationService>(),
+            ctx.Require<SyncedBranchIndex>(),
+            ctx.Require<IRepoStatusStore>(),
+            ctx.Require<ChangeSetOperations>(),
+            new CommitDetailsViewModel(
+                ctx.Require<IGitService>(),
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IUiDispatcher>(),
+                ctx.Require<IMessageBus>(),
+                ctx.Require<ILocalizationService>(),
+                preferences,
+                subscribeToSelection: false)));
         context.AddSingleton<UpdateService>();
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
