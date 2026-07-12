@@ -56,10 +56,10 @@ internal sealed record CommitChangesPanel : IWidget
     public Action<FileChange, PointF>? OnFileContextMenu { get; init; }
 
     /// <summary>
-    /// Optional right-click handler for folder rows, receiving every file beneath the folder; null
-    /// means no context menu. Only tree mode ever shows folder rows.
+    /// Optional right-click handler for folder rows, receiving the folder's path and every file
+    /// beneath it; null means no context menu. Only tree mode ever shows folder rows.
     /// </summary>
-    public Action<IReadOnlyList<string>, PointF>? OnFolderContextMenu { get; init; }
+    public Action<string, IReadOnlyList<string>, PointF>? OnFolderContextMenu { get; init; }
 
     public View BuildView(Context ctx) => new CommitChangesPanelView(this, ctx, ctx.Require<CommitDetailsViewModel>());
 }

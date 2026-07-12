@@ -94,8 +94,8 @@ internal sealed record WorkingTreeReviewView : Widget
                         OnSelectAll = model.SelectAllFiles,
                         OnFileContextMenu = (file, point) =>
                             RepoBarContextMenu.Show(ctx, point, model.BuildFileContextMenuItems(file.Path)),
-                        OnFolderContextMenu = (paths, point) =>
-                            RepoBarContextMenu.Show(ctx, point, model.BuildFolderContextMenuItems(paths)),
+                        OnFolderContextMenu = (folderPath, paths, point) =>
+                            RepoBarContextMenu.Show(ctx, point, model.BuildFolderContextMenuItems(folderPath, paths)),
                         HeaderActions =
                         [
                             new LocalChangesHeaderActionButton

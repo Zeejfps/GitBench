@@ -41,6 +41,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
     private readonly ILocalizationService _loc;
+    private readonly FileOpsContextMenu _fileOps;
     private string? _rawPlaceholder;
 
     // The snapshot panels fade up as a repo's working tree arrives from a placeholder; the
@@ -52,6 +53,7 @@ internal sealed class LocalChangesContentView : ContainerView
     {
         _vm = vm;
         _loc = ctx.Localization();
+        _fileOps = new FileOpsContextMenu(vm, _loc);
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
         var ticker = ctx.Require<IFrameTicker>();
@@ -386,30 +388,8 @@ internal sealed class LocalChangesContentView : ContainerView
         if (target != null)
         {
             var paths = ResolveTargetPaths(target);
-            var n = paths.Count;
-            var conflicted = _vm.ConflictedAmong(paths);
-            if (conflicted.Count > 0)
-            {
-                items.Add(new RepoBarContextMenu.Item(
-                    s.FilesMarkResolved(conflicted.Count),
-                    () => _vm.MarkResolved(conflicted),
-                    LucideIcons.CheckSquare));
-            }
-            items.Add(new RepoBarContextMenu.Item(
-                s.FilesStage(n),
-                () => _vm.Stage(paths),
-                LucideIcons.ChevronRight,
-                Shortcut: "Enter"));
-            items.Add(new RepoBarContextMenu.Item(
-                s.FilesDiscard(n),
-                () => _vm.RequestDiscard(paths),
-                LucideIcons.Trash,
-                Shortcut: "Delete"));
-            items.Add(new RepoBarContextMenu.Item(
-                s.FilesStash(n),
-                () => _vm.StashSelected(paths),
-                LucideIcons.Stash));
-            AppendFileUtilityItems(items, target);
+            _fileOps.AppendFileOps(items, paths, stageShortcut: "Enter", discardShortcut: "Delete");
+            _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
         items.Add(new RepoBarContextMenu.Item(
@@ -445,13 +425,8 @@ internal sealed class LocalChangesContentView : ContainerView
         if (target != null)
         {
             var paths = ResolveTargetPaths(target);
-            var n = paths.Count;
-            items.Add(new RepoBarContextMenu.Item(
-                _loc.Strings.Value.FilesUnstage(n),
-                () => _vm.Unstage(paths),
-                LucideIcons.ChevronLeft,
-                Shortcut: "Enter"));
-            AppendFileUtilityItems(items, target);
+            _fileOps.AppendFileOps(items, paths, unstageShortcut: "Enter");
+            _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
         items.Add(new RepoBarContextMenu.Item(
@@ -463,26 +438,10 @@ internal sealed class LocalChangesContentView : ContainerView
         return items;
     }
 
-    // Copy acts on the resolved selection; open-folder / terminal target the clicked row
-    // (the folder itself for a folder row, otherwise the file).
-    private void AppendFileUtilityItems(List<RepoBarContextMenu.Item> items, FileRow target)
-    {
-        var s = _loc.Strings.Value;
-        var paths = ResolveTargetPaths(target);
-        var representative = target.Kind == FileRowKind.Folder ? target.FullPath : target.File!.Path;
-        items.Add(RepoBarContextMenu.Separator);
-        items.Add(new RepoBarContextMenu.Item(
-            s.LocalchangesCopyPathMenu, () => _vm.CopyPaths(paths), LucideIcons.Copy));
-        items.Add(new RepoBarContextMenu.Item(
-            s.LocalchangesCopyFullPathMenu, () => _vm.CopyAbsolutePaths(paths), LucideIcons.Copy));
-        items.Add(new RepoBarContextMenu.Item(
-            s.LocalchangesCopyFileNameMenu, () => _vm.CopyFileNames(paths), LucideIcons.Copy));
-        items.Add(RepoBarContextMenu.Separator);
-        items.Add(new RepoBarContextMenu.Item(
-            s.LocalchangesOpenContainingFolderMenu, () => _vm.OpenContainingFolder(representative), LucideIcons.FolderOpen));
-        items.Add(new RepoBarContextMenu.Item(
-            s.LocalchangesOpenInTerminalMenu, () => _vm.OpenInTerminal(representative), LucideIcons.SquareTerminal));
-    }
+    // Open-folder / terminal target the clicked row: the folder itself for a folder row,
+    // otherwise the file.
+    private static string Representative(FileRow target)
+        => target.Kind == FileRowKind.Folder ? target.FullPath : target.File!.Path;
 
     // Right-clicking a row that's part of the current selection acts on the whole
     // selection's files; right-clicking any other row acts on just that row's files

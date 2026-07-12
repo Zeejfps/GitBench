@@ -424,8 +424,6 @@
   "review.files_staged": "已暂存 {staged} / {total} 个文件",
   "review.working_tree_title": "工作区",
   "review.no_local_changes": "没有可审查的本地更改。",
-  "review.context_stage": { "one": "暂存文件", "other": "暂存 {count} 个文件" },
-  "review.context_unstage": { "one": "取消暂存文件", "other": "取消暂存 {count} 个文件" },
   "review.context_mark_viewed": { "one": "标记为已查看", "other": "将 {count} 个文件标记为已查看" },
   "review.context_mark_not_viewed": { "one": "标记为未查看", "other": "将 {count} 个文件标记为未查看" },
   "review.shortcuts_title": "键盘快捷键",

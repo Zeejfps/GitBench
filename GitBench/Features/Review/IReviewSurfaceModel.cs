@@ -71,5 +71,5 @@ internal interface IReviewSurfaceModel
     void CloseCheatsheet();
 
     IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path);
-    IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(IReadOnlyList<string> paths);
+    IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths);
 }

@@ -424,8 +424,6 @@
   "review.files_staged": "{staged} / {total} archivos preparados",
   "review.working_tree_title": "Árbol de trabajo",
   "review.no_local_changes": "No hay cambios locales que revisar.",
-  "review.context_stage": { "one": "Preparar archivo", "other": "Preparar {count} archivos" },
-  "review.context_unstage": { "one": "Quitar archivo del área", "other": "Quitar {count} archivos del área" },
   "review.context_mark_viewed": { "one": "Marcar como visto", "other": "Marcar {count} archivos como vistos" },
   "review.context_mark_not_viewed": { "one": "Marcar como no visto", "other": "Marcar {count} archivos como no vistos" },
   "review.shortcuts_title": "Atajos de teclado",

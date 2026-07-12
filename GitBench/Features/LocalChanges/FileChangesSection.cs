@@ -53,7 +53,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly IReadable<IReadOnlySet<string>>? _selectedPaths;
     private readonly Action<FileChange, InputModifiers>? _onRowClicked;
     private readonly Action<FileChange, PointF>? _onFileContextMenu;
-    private readonly Action<IReadOnlyList<string>, PointF>? _onFolderContextMenu;
+    private readonly Action<string, IReadOnlyList<string>, PointF>? _onFolderContextMenu;
 
     // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
     // so the History pane and Local Changes stay clean). When present, rows whose (sha, path) is viewed
@@ -141,7 +141,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         IReadOnlyList<View>? headerActions = null,
         Action<FileChange, PointF>? onFileContextMenu = null,
         IReadable<IReadOnlySet<string>>? selectedPaths = null,
-        Action<IReadOnlyList<string>, PointF>? onFolderContextMenu = null)
+        Action<string, IReadOnlyList<string>, PointF>? onFolderContextMenu = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -507,7 +507,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         // A folder row acts on every file beneath it, so it hands over its descendant leaves.
         if (row.Kind == FileRowKind.Folder)
         {
-            _onFolderContextMenu?.Invoke(row.Files, point);
+            _onFolderContextMenu?.Invoke(row.FullPath, row.Files, point);
             return;
         }
         _onFileContextMenu?.Invoke(row.File!, point);

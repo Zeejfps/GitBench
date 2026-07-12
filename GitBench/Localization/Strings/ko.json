@@ -424,8 +424,6 @@
   "review.files_staged": "{total}개 중 {staged}개 스테이징됨",
   "review.working_tree_title": "작업 트리",
   "review.no_local_changes": "검토할 로컬 변경 사항이 없습니다.",
-  "review.context_stage": { "one": "파일 스테이징", "other": "파일 {count}개 스테이징" },
-  "review.context_unstage": { "one": "파일 스테이징 해제", "other": "파일 {count}개 스테이징 해제" },
   "review.context_mark_viewed": { "one": "확인됨으로 표시", "other": "파일 {count}개를 확인됨으로 표시" },
   "review.context_mark_not_viewed": { "one": "확인 안 함으로 표시", "other": "파일 {count}개를 확인 안 함으로 표시" },
   "review.shortcuts_title": "키보드 단축키",

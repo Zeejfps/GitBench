@@ -25,6 +25,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     private readonly ILocalizationService _loc;
     private readonly StagedFileTracker _marks;
     private readonly ReviewFileCursor _cursor;
+    private readonly FileOpsContextMenu _fileOps;
 
     private readonly State<bool> _cheatsheetOpen = new(false);
     private readonly Derived<ReviewHud> _hud;
@@ -48,6 +49,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _loc = loc;
         _marks = new StagedFileTracker(local);
         _cursor = new ReviewFileCursor(Files, _marks);
+        _fileOps = new FileOpsContextMenu(local, loc);
 
         _hud = new Derived<ReviewHud>(BuildHud);
         _filesFraction = new Derived<float>(() => _hud.Value.FilesFraction);
@@ -127,37 +129,21 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
-    /// <summary>A file row's right-click menu: stage / unstage, over the whole selection when the row
-    /// is part of it.</summary>
+    /// <summary>A file row's right-click menu: the same file operations the list layout offers, over
+    /// the whole selection when the row is part of it.</summary>
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
-        => BuildStageContextMenuItems(_cursor.ResolveTargetPaths(path));
+        => BuildFileOpsMenuItems(_cursor.ResolveTargetPaths(path), path);
 
-    /// <summary>A folder row's right-click menu: the same actions over every file beneath it.</summary>
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(IReadOnlyList<string> paths)
-        => BuildStageContextMenuItems(paths);
+    /// <summary>A folder row's right-click menu: the same operations over every file beneath it, with
+    /// the folder itself as the open-folder / terminal target.</summary>
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
+        => BuildFileOpsMenuItems(paths, folderPath);
 
-    // A partially staged file belongs in both buckets: it has more to stage *and* something to unstage.
-    // So the two are computed independently rather than as a partition — right-clicking one offers both
-    // directions, which is the only way to empty its staged content from this surface.
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildStageContextMenuItems(IReadOnlyList<string> targets)
+    private IReadOnlyList<RepoBarContextMenu.Item> BuildFileOpsMenuItems(IReadOnlyList<string> targets, string representative)
     {
-        var s = _loc.Strings.Value;
-
-        var toStage = new List<string>(targets.Count);
-        var toUnstage = new List<string>(targets.Count);
-        foreach (var p in targets)
-        {
-            if (!_marks.IsViewed(p)) toStage.Add(p);
-            if (_marks.HasStagedContent(p)) toUnstage.Add(p);
-        }
-
-        var items = new List<RepoBarContextMenu.Item>(2);
-        if (toStage.Count > 0)
-            items.Add(new RepoBarContextMenu.Item(
-                s.ReviewContextStage(toStage.Count), () => _marks.SetViewed(toStage, true)));
-        if (toUnstage.Count > 0)
-            items.Add(new RepoBarContextMenu.Item(
-                s.ReviewContextUnstage(toUnstage.Count), () => _marks.SetViewed(toUnstage, false)));
+        var items = new List<RepoBarContextMenu.Item>();
+        _fileOps.AppendFileOps(items, targets);
+        if (targets.Count > 0) _fileOps.AppendUtilities(items, targets, representative);
         return items;
     }
 

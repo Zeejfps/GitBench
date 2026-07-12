@@ -324,7 +324,8 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     // A folder row's right-click menu (the tree sidebar): the same Viewed actions over every file
     // beneath the folder. Folders are never part of the selection, so they only ever act on
     // themselves — collapsed subfolders included, since the row carries all its descendant leaves.
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(IReadOnlyList<string> paths)
+    // The folder path only matters to the working-tree review's file operations, not here.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
         => BuildViewedContextMenuItems(paths);
 
     private IReadOnlyList<RepoBarContextMenu.Item> BuildViewedContextMenuItems(IReadOnlyList<string> targets)

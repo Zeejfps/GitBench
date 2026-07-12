@@ -424,8 +424,6 @@
   "review.files_staged": "{total} 個中 {staged} 個をステージ済み",
   "review.working_tree_title": "ワーキングツリー",
   "review.no_local_changes": "レビューするローカル変更はありません。",
-  "review.context_stage": { "one": "ファイルをステージ", "other": "{count}個のファイルをステージ" },
-  "review.context_unstage": { "one": "ファイルのステージを解除", "other": "{count}個のファイルのステージを解除" },
   "review.context_mark_viewed": { "one": "表示済みにする", "other": "{count}個のファイルを表示済みにする" },
   "review.context_mark_not_viewed": { "one": "未表示にする", "other": "{count}個のファイルを未表示にする" },
   "review.shortcuts_title": "キーボードショートカット",

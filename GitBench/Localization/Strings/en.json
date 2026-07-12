@@ -424,8 +424,6 @@
   "review.files_staged": "{staged} / {total} files staged",
   "review.working_tree_title": "Working tree",
   "review.no_local_changes": "No local changes to review.",
-  "review.context_stage": { "one": "Stage file", "other": "Stage {count} files" },
-  "review.context_unstage": { "one": "Unstage file", "other": "Unstage {count} files" },
   "review.context_mark_viewed": { "one": "Mark as viewed", "other": "Mark {count} files as viewed" },
   "review.context_mark_not_viewed": { "one": "Mark as not viewed", "other": "Mark {count} files as not viewed" },
   "review.shortcuts_title": "Keyboard shortcuts",
