@@ -100,6 +100,12 @@ internal sealed record WorkingTreeReviewView : Widget
                         [
                             new LocalChangesHeaderActionButton
                             {
+                                Icon = LucideIcons.Trash,
+                                Command = model.DiscardSelected,
+                                Tooltip = L.T(s => s.LocalchangesDiscardSelectedTooltip),
+                            },
+                            new LocalChangesHeaderActionButton
+                            {
                                 Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft),
                                 Command = model.StageSelected,
                                 Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),

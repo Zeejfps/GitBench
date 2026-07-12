@@ -33,6 +33,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     private readonly Derived<bool> _hasFiles;
     private readonly Derived<bool> _canStageSelected;
     private readonly Derived<bool> _canUnstageSelected;
+    private readonly Derived<bool> _canDiscardSelected;
     private readonly List<IDisposable> _subscriptions = new();
 
     public WorkingTreeReviewViewModel(
@@ -54,8 +55,10 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _hasFiles = new Derived<bool>(() => Files().Count > 0);
         _canStageSelected = new Derived<bool>(() => AnySelected(p => !_marks.IsViewed(p)));
         _canUnstageSelected = new Derived<bool>(() => AnySelected(_marks.HasStagedContent));
+        _canDiscardSelected = new Derived<bool>(() => AnySelected(p => !_marks.IsViewed(p)));
         StageSelected = new Command(() => SetSelectedStaged(true), _canStageSelected);
         UnstageSelected = new Command(() => SetSelectedStaged(false), _canUnstageSelected);
+        DiscardSelected = new Command(DoDiscardSelected, _canDiscardSelected);
 
         // The working tree changes on every editor save and every index op. Re-push the merged file
         // list each time; the details surface keeps its open diffs and the stacked list reconciles in
@@ -81,6 +84,9 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
 
     /// <summary>Unstages every selected file carrying any staged content, partial ones included.</summary>
     public Command UnstageSelected { get; }
+
+    /// <summary>Opens the discard confirmation for every selected file with unstaged edits.</summary>
+    public Command DiscardSelected { get; }
 
     // The review surface's file list is the whole working tree, so the list layout's all-files commands
     // already cover exactly the right paths — gate and action both.
@@ -189,6 +195,14 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     private void SetSelectedStaged(bool staged)
         => _marks.SetViewed([.. _cursor.SelectedPaths.Value], staged);
 
+    private void DoDiscardSelected()
+    {
+        var paths = new List<string>();
+        foreach (var p in _cursor.SelectedPaths.Value)
+            if (!_marks.IsViewed(p)) paths.Add(p);
+        _local.RequestDiscard(paths);
+    }
+
     private ReviewHud BuildHud()
     {
         var files = Files();
@@ -216,6 +230,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     {
         foreach (var s in _subscriptions) s.Dispose();
         _subscriptions.Clear();
+        _canDiscardSelected.Dispose();
         _canUnstageSelected.Dispose();
         _canStageSelected.Dispose();
         _hasFiles.Dispose();
