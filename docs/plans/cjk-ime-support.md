@@ -203,6 +203,29 @@ insertion but none for navigating or deleting. Added to `TextInputUnicodeTests` 
 astral char, arrow keys stepping over one without landing between the surrogate halves, and a CJK
 word-jump.
 
+## Known gap — CJK in popup-hosted fields (searchable context menus)
+
+**Not fixed. Needs a real IME to confirm before acting on it.**
+
+A popup gets its own window and its own `DesktopInputSystem` (`PopupWindowFactory`), so a text field
+inside one — `RepoBarContextMenu.SearchMenuInputController` is the live example — enables the IME on
+the *popup's* window. But a borderless popup never takes OS keyboard focus on Windows
+(`WS_EX_NOACTIVATE`), which is exactly why `DesktopInputSystem` already forwards keys and characters
+from the host window to the focused menu. The IME composes against the **host** window, whose input
+mode is off — so no preedit callback ever fires, and the forwarding branch in `HandlePreeditEvent` is
+unreachable. Expect a menu's search box to take Latin but not CJK.
+
+The tempting fix — enable the IME on every app window — is **wrong and would regress the commit box**:
+the menu's field disabling on close would turn the IME off under a main-window field that is still
+editing, and that field would never turn it back on (it takes neither branch of the press handler
+while `IsEditing` is already true).
+
+The right shape is to stop treating the IME mode as a one-shot toggle owned by the field, and instead
+assert it each frame from focus state — "the window that holds OS keyboard focus has the IME on iff
+some field somewhere is editing" — which is idempotent and self-healing across windows. The caret
+rect would need translating into the focused window's coordinates too, or the candidate window lands
+in the wrong place.
+
 ## Phase 6 — atlas capacity
 
 `framework/ZGF.Fonts/GlyphAtlas.cs` is a single 2048×2048 skyline-packed atlas with **no eviction**:
