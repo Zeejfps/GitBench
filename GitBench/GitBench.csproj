@@ -28,8 +28,9 @@
 
     <ItemGroup>
         <!-- The diff syntax-highlighting logic modules are internal; the test project drives
-             them directly. -->
+             them directly. The automation runner builds the app through GitBenchHost. -->
         <InternalsVisibleTo Include="GitBench.Tests" />
+        <InternalsVisibleTo Include="GitBench.Automation" />
     </ItemGroup>
 
     <ItemGroup>

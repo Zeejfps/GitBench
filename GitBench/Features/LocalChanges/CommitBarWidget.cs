@@ -48,8 +48,10 @@ internal sealed record CommitBarWidget : Widget
         var loc = ctx.Localization();
         var operation = ctx.Require<OperationViewModel>();
 
+        // Ids so automation (GuiDriver, the MCP server) can address the fields by name.
         var titleInput = new TextInputView(ctx.Canvas)
         {
+            Id = ShowOperationChrome ? "merge-commit-title" : "commit-title",
             TextWrap = TextWrap.NoWrap,
         };
         titleInput.Bind(loc.Strings, s => titleInput.PlaceholderText = s.LocalchangesCommitTitlePlaceholder);
@@ -65,7 +67,10 @@ internal sealed record CommitBarWidget : Widget
         titleInput.UseController(input, titleController);
         titleInput.BindTwoWay(vm.Title, vm.SetTitle);
 
-        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight);
+        var descriptionField = new GrowingDescriptionField(ctx, DescriptionMinHeight, DescriptionMaxHeight)
+        {
+            Id = ShowOperationChrome ? "merge-commit-description" : "commit-description",
+        };
         descriptionField.Bind(loc.Strings, s => descriptionField.PlaceholderText = s.LocalchangesCommitDescriptionPlaceholder);
         descriptionField.BindTwoWay(vm.Description, vm.SetDescription);
 

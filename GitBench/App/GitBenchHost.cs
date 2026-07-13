@@ -1,0 +1,101 @@
+using GitBench.Features.Identity;
+using GitBench.Platform;
+using Velopack;
+using ZGF.Desktop;
+using ZGF.Gui;
+using ZGF.Gui.Desktop;
+using ZGF.Observable;
+using static GitBench.App.AppPaths;
+
+namespace GitBench.App;
+
+/// <summary>
+/// GitBench's composition root — preferences, services, the GUI host, fonts, menus, updates — kept
+/// separate from the entry point so something other than <c>Program</c> can stand the real app up
+/// in-process. That's what the automation runner does: it builds the same app the user gets and
+/// scripts it, which keeps every trace of the automation out of the shipped binary.
+/// </summary>
+internal sealed class GitBenchHost : IDisposable
+{
+    private readonly PreferencesService _preferences;
+    private readonly IdentityProfileService _identityProfiles;
+
+    public GuiApp App { get; }
+    public Context Services { get; }
+
+    private GitBenchHost(
+        PreferencesService preferences,
+        IdentityProfileService identityProfiles,
+        Context services,
+        GuiApp app)
+    {
+        _preferences = preferences;
+        _identityProfiles = identityProfiles;
+        Services = services;
+        App = app;
+    }
+
+    /// <param name="startUnfocused">Show the window without taking OS focus. For scripted runs: the
+    /// driver injects input and needs no focus, and taking it would drop the user's own keystrokes
+    /// into whatever field the script had just focused.</param>
+    public static GitBenchHost Create(bool startUnfocused = false)
+    {
+        // Must be the very first thing that runs: Velopack's install/update hooks are driven by
+        // special CLI args the installer/updater passes, and any file I/O or GUI work before this
+        // can leave an update half-applied. No callbacks here — the DI container doesn't exist yet.
+        VelopackApp.Build().Run();
+
+        CrashLog.Install(AppDataPath("crash.log"));
+
+        var prefsPath = AppDataPath("preferences.json");
+        var preferences = new PreferencesService(PreferencesStore.Load(prefsPath), prefsPath);
+
+        var profilesPath = AppDataPath("identity-profiles.json");
+        var identityProfiles = new IdentityProfileService(IdentityProfileStore.Load(profilesPath), profilesPath);
+
+        var builder = GuiApp.CreateBuilder(new StartupConfig
+        {
+            WindowTitle = "GitBench",
+            WindowWidth = preferences.Current.WindowWidth,
+            WindowHeight = preferences.Current.WindowHeight,
+            WindowX = preferences.Current.WindowX,
+            WindowY = preferences.Current.WindowY,
+            IsUndecorated = false,
+            StartUnfocused = startUnfocused,
+        });
+
+        var services = builder.Services;
+        services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
+
+        var app = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
+        app.OnWindowResized += preferences.SetWindowSize;
+        app.OnWindowMoved += preferences.SetWindowPosition;
+
+        // The dispatcher is registered during Build, so background services (watchers, sync, stores)
+        // can only spin up now.
+        services.CreateEagerSingletons();
+
+        app.BindTitleBarToTheme(services);
+        app.BindTextDirectionToLocale(services);
+        app.RegisterAppFonts();
+        app.LoadPlatformIcons();
+        services.InstallNativeAppMenu();
+
+        var updateService = services.Require<UpdateService>();
+        var updateDispatcher = services.Require<IUiDispatcher>();
+        _ = updateService.CheckForUpdatesAsync(updateDispatcher, userInitiated: false);
+        updateService.StartAutoChecks(updateDispatcher);
+
+        return new GitBenchHost(preferences, identityProfiles, services, app);
+    }
+
+    public void Run() => App.Run();
+
+    public void Dispose()
+    {
+        App.Dispose();
+        Services.Dispose();
+        _identityProfiles.Dispose();
+        _preferences.Dispose();
+    }
+}

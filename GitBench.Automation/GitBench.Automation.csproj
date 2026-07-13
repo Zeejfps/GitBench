@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Scripted runs of the real GitBench: stands the app up in-process via GitBenchHost and drives
+         it through GuiDriver. A separate executable on purpose — none of this ships with the app. -->
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <!-- Console, not WinExe: the script narrates what it's doing as it types. -->
+        <InvariantGlobalization>false</InvariantGlobalization>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\GitBench\GitBench.csproj" />
+    </ItemGroup>
+
+</Project>
