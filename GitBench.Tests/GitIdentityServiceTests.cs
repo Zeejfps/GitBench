@@ -41,6 +41,10 @@ public class GitIdentityServiceTests
 
     private static string TempPath() => Path.Combine(Path.GetTempPath(), $"gb-{Guid.NewGuid():N}.json");
 
+    // The resolver keys everything by PathKey.Normalize (Path.GetFullPath), so the fake reader has to
+    // be seeded with the already-canonical path: a rooted posix path picks up a drive on Windows.
+    private static string Repo(string name) => Path.GetFullPath($"/repos/{name}");
+
     private static (GitIdentityService svc, FakeReader reader, IdentityProfileService profiles) Build(
         params IdentityProfile[] seed)
     {
@@ -62,7 +66,7 @@ public class GitIdentityServiceTests
     public void MatchesProfileByHostAndOwner()
     {
         var (svc, reader, _) = Build(Work);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -80,7 +84,7 @@ public class GitIdentityServiceTests
         // Personal is host-only catch-all; Work is owner-specific. A series-ai repo must pick Work.
         var work = Work;
         var (svc, reader, _) = Build(Personal, work);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "https://github.com/series-ai/app.git";
 
@@ -93,7 +97,7 @@ public class GitIdentityServiceTests
     public void HostOnlyRuleMatchesOtherOwners()
     {
         var (svc, reader, _) = Build(Personal);
-        var path = "/repos/side";
+        var path = Repo("side");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:someoneelse/toy.git";
 
@@ -106,7 +110,7 @@ public class GitIdentityServiceTests
     public void ExplicitLocalEmailIsHonoredAndNotInjected()
     {
         var (svc, reader, _) = Build(Work);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
         reader.Local[path] = ("Pinned", "pinned@x.com");
@@ -128,7 +132,7 @@ public class GitIdentityServiceTests
         var overrides = new FakeOverrides();
         var profiles = new IdentityProfileService(new[] { work }, TempPath());
         var svc = new GitIdentityService(reader, profiles, new FakeBus(), overrides);
-        var path = "/repos/venus";
+        var path = Repo("venus");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
         reader.Local[path] = ("Zee", "zvasilyev@series.ai");
@@ -149,7 +153,7 @@ public class GitIdentityServiceTests
     public void NoRemotesReportsNoRemotes()
     {
         var (svc, _, _) = Build(Work);
-        var r = svc.Resolve("/repos/empty");
+        var r = svc.Resolve(Repo("empty"));
         Assert.IsType<Identity.NoRemote>(r);
         Assert.Empty(r.PrefixArgs);
     }
@@ -158,7 +162,7 @@ public class GitIdentityServiceTests
     public void UnmatchedRemoteReportsNoMatch()
     {
         var (svc, reader, _) = Build(Work);
-        var path = "/repos/gitlab";
+        var path = Repo("gitlab");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@gitlab.com:foo/bar.git";
 
@@ -176,7 +180,7 @@ public class GitIdentityServiceTests
             SshKeyPath: "~/.ssh/id_work",
             Match: new List<IdentityMatchRule> { new("github.com", "series-ai") });
         var (svc, reader, _) = Build(p);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -191,7 +195,7 @@ public class GitIdentityServiceTests
     public void SigningOnlyInjectedWhenKeySet()
     {
         var (svc, reader, _) = Build(Work); // Work has no signing key
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -205,7 +209,7 @@ public class GitIdentityServiceTests
     {
         var work = Work;
         var (svc, reader, _) = Build(work, Personal);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "upstream", "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
         reader.Urls[$"{path}|upstream"] = "git@github.com:someoneelse/app.git";
@@ -219,7 +223,7 @@ public class GitIdentityServiceTests
     public void MemoFlushesWhenProfilesChange()
     {
         var (svc, reader, profiles) = Build();
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -236,7 +240,7 @@ public class GitIdentityServiceTests
         // A repo with a deliberate local user.name but no local user.email must not have its name
         // overridden by an auto-matched profile.
         var (svc, reader, _) = Build(Work);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
         reader.Local[path] = ("Bot Name", null);
@@ -252,7 +256,7 @@ public class GitIdentityServiceTests
     public void UnavailableRepoIsTransientAndNotMemoized()
     {
         var (svc, reader, _) = Build(Work);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -272,7 +276,7 @@ public class GitIdentityServiceTests
         var profiles = new IdentityProfileService(new[] { Work }, TempPath());
         var svc = new GitIdentityService(reader, profiles, new FakeBus());
 
-        Assert.IsType<Identity.Pending>(svc.Resolve("/repos/locked"));
+        Assert.IsType<Identity.Pending>(svc.Resolve(Repo("locked")));
     }
 
     [Fact]
@@ -284,7 +288,7 @@ public class GitIdentityServiceTests
             SigningKey: "id_work.pub", SigningKeyFormat: "ssh",
             Match: new List<IdentityMatchRule> { new("github.com", "series-ai") });
         var (svc, reader, _) = Build(p);
-        var path = "/repos/work";
+        var path = Repo("work");
         reader.Remotes[path] = new() { "origin" };
         reader.Urls[$"{path}|origin"] = "git@github.com:series-ai/app.git";
 
@@ -333,8 +337,8 @@ public class GitIdentityServiceTests
         var profiles = new IdentityProfileService(new[] { Work }, TempPath());
         var bus = new MessageBus();
         var repoA = Guid.NewGuid();
-        var pathA = "/repos/a";
-        var pathB = "/repos/b";
+        var pathA = Repo("a");
+        var pathB = Repo("b");
         var overrides = new FakeOverrides { PathById = id => id == repoA ? pathA : null };
         var svc = new GitIdentityService(reader, profiles, bus, overrides);
 

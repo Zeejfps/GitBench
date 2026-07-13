@@ -307,16 +307,15 @@ public class DiffSelectionViewTests
             h.PressKey(KeyboardKey.C, InputModifiers.Control);
 
             Assert.Equal(
-                """
-                var alpha = 1;
-                var beta = 2;
-                var gamma = 3;
-                return alpha;
-                int x = 0;
-                old();
-                fresh();
-                return x;
-                """,
+                string.Join('\n',
+                    "var alpha = 1;",
+                    "var beta = 2;",
+                    "var gamma = 3;",
+                    "return alpha;",
+                    "int x = 0;",
+                    "old();",
+                    "fresh();",
+                    "return x;"),
                 clipboard.Text);
         }
     }
