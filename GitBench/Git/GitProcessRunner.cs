@@ -274,6 +274,52 @@ internal sealed class GitProcessRunner
         return "git";
     }
 
+    // `--pathspec-from-file` landed in 2.25 for add/checkout/reset/restore and 2.26 for
+    // stash push and rm; gating everything on 2.26 keeps bulk path ops on a single branch.
+    private static bool? _supportsPathspecFromFile;
+    private static readonly object _pathspecSupportLock = new();
+
+    public static bool SupportsPathspecFromFile
+    {
+        get
+        {
+            if (_supportsPathspecFromFile is { } cached) return cached;
+            lock (_pathspecSupportLock)
+            {
+                return _supportsPathspecFromFile ??= DetectPathspecFromFileSupport();
+            }
+        }
+    }
+
+    private static bool DetectPathspecFromFileSupport()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = GitExecutable(),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add("--version");
+            using var proc = Process.Start(psi);
+            if (proc == null) return false;
+            var output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit();
+            var match = System.Text.RegularExpressions.Regex.Match(output, @"(\d+)\.(\d+)");
+            if (!match.Success) return false;
+            var major = int.Parse(match.Groups[1].Value);
+            var minor = int.Parse(match.Groups[2].Value);
+            return major > 2 || (major == 2 && minor >= 26);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static string? _loginShellPath;
     private static readonly object _loginShellPathLock = new();
 

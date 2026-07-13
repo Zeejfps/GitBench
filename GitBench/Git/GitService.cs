@@ -1142,17 +1142,15 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths)
         => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            var args = new List<string>(paths.Count + 2) { "add", "--" };
-            args.AddRange(paths);
-            return Mutate(repo.Path, args.ToArray());
+            var result = RunPathspecOp(repo.Path, new[] { "add" }, paths);
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git add"));
         });
 
     public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths)
         => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            var args = new List<string>(paths.Count + 3) { "restore", "--staged", "--" };
-            args.AddRange(paths);
-            return Mutate(repo.Path, args.ToArray());
+            var result = RunPathspecOp(repo.Path, new[] { "restore", "--staged" }, paths);
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git restore --staged"));
         });
 
     public GitOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
@@ -1499,11 +1497,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD") == null)
                 return GitOutcome.Ok;
             var hasParent = RunGit(repo.Path, out _, "rev-parse", "--verify", "-q", "HEAD^") != null;
-            var args = hasParent
-                ? new List<string>(paths.Count + 3) { "reset", "HEAD^", "--" }
-                : new List<string>(paths.Count + 4) { "rm", "--cached", "--force", "--" };
-            args.AddRange(paths);
-            return Mutate(repo.Path, args.ToArray());
+            var preArgs = hasParent
+                ? new[] { "reset", "HEAD^" }
+                : new[] { "rm", "--cached", "--force" };
+            var result = RunPathspecOp(repo.Path, preArgs, paths);
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError($"git {string.Join(' ', preArgs)}"));
         });
 
     // Throws away unstaged workdir changes for the given paths. Tracked files are restored
@@ -1515,16 +1513,18 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // `git ls-files -z -- <paths>` prints only the tracked subset, NUL-separated.
             // Anything not in that subset exists only on disk and gets deleted directly;
             // tracked entries fall through to the `git checkout --` restore below.
-            var lsArgs = new string[paths.Count + 3];
-            lsArgs[0] = "ls-files";
-            lsArgs[1] = "-z";
-            lsArgs[2] = "--";
-            for (var i = 0; i < paths.Count; i++) lsArgs[i + 3] = paths[i];
-            var lsOutput = RunGit(repo.Path, out var lsErr, lsArgs);
-            if (lsOutput == null) return new GitOutcome.Failed(lsErr ?? "git ls-files failed.");
-            var tracked = new HashSet<string>(
-                lsOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries),
-                StringComparer.Ordinal);
+            // ls-files has no --pathspec-from-file, so the selection is always chunked to
+            // stay under the Windows command-line cap.
+            var tracked = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var batch in ChunkPathsForCommandLine(paths))
+            {
+                var lsArgs = new List<string>(batch.Count + 3) { "ls-files", "-z", "--" };
+                lsArgs.AddRange(batch);
+                var lsOutput = RunGit(repo.Path, out var lsErr, lsArgs.ToArray());
+                if (lsOutput == null) return new GitOutcome.Failed(lsErr ?? "git ls-files failed.");
+                foreach (var t in lsOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                    tracked.Add(t);
+            }
 
             var trackedPaths = new List<string>();
             foreach (var p in paths)
@@ -1548,9 +1548,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
             if (trackedPaths.Count > 0)
             {
-                var args = new List<string> { "checkout", "--" };
-                args.AddRange(trackedPaths);
-                var result = _runner.Run(repo.Path, args);
+                var result = RunPathspecOp(repo.Path, new[] { "checkout" }, trackedPaths);
                 if (!result.Ok) return new GitOutcome.Failed(result.FirstLineError("git checkout"));
             }
             return GitOutcome.Ok;
@@ -2479,12 +2477,17 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 args.Add("-m");
                 args.Add(message);
             }
-            if (paths.Count > 0)
-            {
-                args.Add("--");
-                foreach (var p in paths) args.Add(p);
-            }
-            return ToOutcome(_runner.Run(repo.Path, args), "git stash push");
+            if (paths.Count == 0)
+                return ToOutcome(_runner.Run(repo.Path, args), "git stash push");
+
+            // Chunking is not an option here: each `git stash push -- <batch>` would create
+            // its own stash entry. Without --pathspec-from-file support, refuse a selection
+            // that doesn't fit one command line instead of silently splitting the stash.
+            if (!GitProcessRunner.SupportsPathspecFromFile
+                && ChunkPathsForCommandLine(paths).Skip(1).Any())
+                return new GitOutcome.Failed("Stashing this many files at once requires Git 2.26 or newer.");
+
+            return ToOutcome(RunPathspecOp(repo.Path, args, paths), "git stash push");
         });
 
     public MergeLikeOutcome ApplyStash(Repo repo, int index)
@@ -3049,6 +3052,57 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     {
         var (ok, err) = RunMutation(repoPath, args);
         return ok ? GitOutcome.Ok : new GitOutcome.Failed(err!);
+    }
+
+    // Bulk file operations must never put an unbounded path list on the command line:
+    // Windows CreateProcess caps the whole line at 32,767 chars, so "Stage All" in a repo
+    // with a few hundred changed files fails to even spawn git ("The filename or extension
+    // is too long"). Git >= 2.26 takes the list NUL-separated on stdin; older gits get it
+    // chunked into command lines that stay under the cap.
+    private GitProcessRunner.GitResult RunPathspecOp(string repoPath, IReadOnlyList<string> preArgs, IReadOnlyList<string> paths)
+    {
+        if (GitProcessRunner.SupportsPathspecFromFile)
+        {
+            var args = new List<string>(preArgs.Count + 2);
+            args.AddRange(preArgs);
+            args.Add("--pathspec-from-file=-");
+            args.Add("--pathspec-file-nul");
+            return _runner.Run(repoPath, args, GitProcessRunner.GitLaunch.Direct, string.Join('\0', paths));
+        }
+
+        var last = new GitProcessRunner.GitResult(0, string.Empty, string.Empty);
+        foreach (var batch in ChunkPathsForCommandLine(paths))
+        {
+            var args = new List<string>(preArgs.Count + 1 + batch.Count);
+            args.AddRange(preArgs);
+            args.Add("--");
+            args.AddRange(batch);
+            last = _runner.Run(repoPath, args, GitProcessRunner.GitLaunch.Direct);
+            if (!last.Ok) return last;
+        }
+        return last;
+    }
+
+    // Budget leaves headroom under the 32,767-char cap for the git path, subcommand args,
+    // identity `-c` prefix, and per-arg quoting.
+    internal const int PathspecCommandLineBudget = 28_000;
+
+    internal static IEnumerable<IReadOnlyList<string>> ChunkPathsForCommandLine(IReadOnlyList<string> paths)
+    {
+        var batch = new List<string>();
+        var length = 0;
+        foreach (var p in paths)
+        {
+            if (batch.Count > 0 && length + p.Length + 3 > PathspecCommandLineBudget)
+            {
+                yield return batch;
+                batch = new List<string>();
+                length = 0;
+            }
+            batch.Add(p);
+            length += p.Length + 3;
+        }
+        if (batch.Count > 0) yield return batch;
     }
 
     private static string NormalizeRelPath(string p) => p.Replace('\\', '/').TrimEnd('/');

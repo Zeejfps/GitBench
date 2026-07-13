@@ -652,6 +652,30 @@ gen_long_paths() {                              # 60-long-paths
           "packages/frontend/src/components/dashboard/widgets/analytics"
 }
 
+gen_huge_changeset() {                          # 61-huge-changeset
+  new_repo 61-huge-changeset
+  # Enough changed paths that the combined pathspec (~1.4 MB) blows past every
+  # process-spawn limit: Windows caps the whole CreateProcess command line at
+  # 32,767 chars ("The filename or extension is too long") and POSIX exec caps
+  # argv+env at ARG_MAX (~1 MB on macOS, E2BIG "Argument list too long").
+  # Stage All / Unstage All / Discard All must route the path list around the
+  # command line (stdin pathspec or chunking) to survive this repo.
+  local n=6000 pad="abcdefghijklmnopqrstuvwxyz-0123456789-abcdefghijklmnopqrstuvwxyz"
+  local i d
+  printf '    generating %s tracked + %s untracked files (slow)...\n' "$n" "$n"
+  for ((i = 0; i < n; i++)); do
+    d="src/area-$((i % 40))/module-$((i % 400))"
+    mkdir -p "$d"
+    printf 'original %d\n' "$i" > "$d/tracked-$(printf '%05d' "$i")-$pad.ts"
+  done
+  ci "Seed $n tracked files"
+  for ((i = 0; i < n; i++)); do
+    d="src/area-$((i % 40))/module-$((i % 400))"
+    printf 'modified %d\n' "$i" >> "$d/tracked-$(printf '%05d' "$i")-$pad.ts"
+    printf 'untracked %d\n' "$i" > "$d/untracked-$(printf '%05d' "$i")-$pad.ts"
+  done
+}
+
 # Three sibling repos wired the way the cross-repo change-set feature
 # (docs/plans/cross-repo-change-sets.md) expects to find them, in one folder
 # meant to be added to GitBench as a single group:
@@ -774,6 +798,7 @@ REGISTRY=(
   "52-submodule-detached|gen_submodule_detached|Submodules parked in each detached-HEAD banner state"
   "53-submodule-reattach|gen_submodule_reattach|Behind superproject; pulling auto-reattaches a submodule"
   "60-long-paths|gen_long_paths|Many long deeply-nested paths (M/A/D/R), mostly unstaged"
+  "61-huge-changeset|gen_huge_changeset|6000 modified + 6000 untracked; pathspec > CreateProcess/ARG_MAX caps"
   "70-change-set|gen_change_set|Three repos linked by same-named branches (change set + decoys)"
   "90-big-history|gen_big_history|Large history for perf (COUNT_BIG, default 800)"
   "91-wide-graph|gen_wide_graph|Many concurrent lanes with periodic merges"
