@@ -390,6 +390,8 @@
   "localchanges.conflict_merge": "Слить",
   "localchanges.conflict_title": "Конфликт слияния",
   "localchanges.conflict_subtitle": "Выберите изменения или слейте их вручную",
+  "localchanges.conflict_side_theirs": "их",
+  "localchanges.conflict_side_mine": "моё",
   "localchanges.conflict_badge_added": "добавлен",
   "localchanges.conflict_badge_deleted": "удалён",
   "localchanges.conflict_badge_modified": "изменён",

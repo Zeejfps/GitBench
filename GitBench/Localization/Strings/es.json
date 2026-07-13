@@ -345,6 +345,8 @@
   "localchanges.conflict_merge": "Fusionar",
   "localchanges.conflict_title": "Conflicto de fusión",
   "localchanges.conflict_subtitle": "Selecciona los cambios o fusiónalos manualmente",
+  "localchanges.conflict_side_theirs": "de ellos",
+  "localchanges.conflict_side_mine": "mío",
   "localchanges.conflict_badge_added": "añadido",
   "localchanges.conflict_badge_deleted": "eliminado",
   "localchanges.conflict_badge_modified": "modificado",

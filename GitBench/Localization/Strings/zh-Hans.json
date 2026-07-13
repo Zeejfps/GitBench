@@ -345,6 +345,8 @@
   "localchanges.conflict_merge": "合并",
   "localchanges.conflict_title": "合并冲突",
   "localchanges.conflict_subtitle": "选择更改或手动合并它们",
+  "localchanges.conflict_side_theirs": "对方的",
+  "localchanges.conflict_side_mine": "我的",
   "localchanges.conflict_badge_added": "已添加",
   "localchanges.conflict_badge_deleted": "已删除",
   "localchanges.conflict_badge_modified": "已修改",

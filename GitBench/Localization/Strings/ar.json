@@ -399,6 +399,8 @@
   "localchanges.conflict_merge": "دمج",
   "localchanges.conflict_title": "تعارض دمج",
   "localchanges.conflict_subtitle": "اختر التغييرات أو ادمجها يدويًا",
+  "localchanges.conflict_side_theirs": "تغييراتهم",
+  "localchanges.conflict_side_mine": "تغييراتي",
   "localchanges.conflict_badge_added": "مضاف",
   "localchanges.conflict_badge_deleted": "محذوف",
   "localchanges.conflict_badge_modified": "معدّل",

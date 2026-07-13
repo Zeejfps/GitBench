@@ -345,6 +345,8 @@
   "localchanges.conflict_merge": "マージ",
   "localchanges.conflict_title": "マージコンフリクト",
   "localchanges.conflict_subtitle": "変更を選択するか、手動でマージしてください",
+  "localchanges.conflict_side_theirs": "相手側",
+  "localchanges.conflict_side_mine": "自分側",
   "localchanges.conflict_badge_added": "追加",
   "localchanges.conflict_badge_deleted": "削除",
   "localchanges.conflict_badge_modified": "変更",

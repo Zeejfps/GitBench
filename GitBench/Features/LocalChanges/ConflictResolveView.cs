@@ -28,6 +28,7 @@ namespace GitBench.Features.LocalChanges;
 internal sealed record ConflictResolveView : Widget
 {
     private const float CardWidth = 300f;
+    private const float JunctionWidth = 80f;
     private const float ButtonHeight = 34f;
     private const float ButtonStackWidth = 220f;
 
@@ -81,20 +82,39 @@ internal sealed record ConflictResolveView : Widget
             [
                 BuildTitleRow(),
                 BuildFileNameRow(path),
-                new Row
+                new Column
                 {
-                    // Cards sit flush against the inner junction edges; the junction supplies its
-                    // own inset, so no inter-item gap here.
-                    Gap = Spacing.None,
-                    MainAxis = MainAxisAlignment.Center,
+                    Gap = Spacing.Xs,
                     CrossAxis = CrossAxisAlignment.Stretch,
                     Children =
                     [
-                        new ConflictCard { Side = conflict.Theirs, Checked = theirsChecked }
-                            .WithController<KbmController>(),
-                        new Raw { View = new MergeJunctionView(ctx.Theme(), theirsChecked, oursChecked) },
-                        new ConflictCard { Side = conflict.Ours, Checked = oursChecked }
-                            .WithController<KbmController>(),
+                        new Row
+                        {
+                            Gap = Spacing.None,
+                            MainAxis = MainAxisAlignment.Center,
+                            Children =
+                            [
+                                SideCaption(L.T(s => s.LocalchangesConflictSideTheirs)),
+                                new Box { Width = JunctionWidth },
+                                SideCaption(L.T(s => s.LocalchangesConflictSideMine)),
+                            ],
+                        },
+                        new Row
+                        {
+                            // Cards sit flush against the inner junction edges; the junction supplies its
+                            // own inset, so no inter-item gap here.
+                            Gap = Spacing.None,
+                            MainAxis = MainAxisAlignment.Center,
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children =
+                            [
+                                new ConflictCard { Side = conflict.Theirs, Checked = theirsChecked }
+                                    .WithController<KbmController>(),
+                                new Raw { View = new MergeJunctionView(ctx.Theme(), theirsChecked, oursChecked) },
+                                new ConflictCard { Side = conflict.Ours, Checked = oursChecked }
+                                    .WithController<KbmController>(),
+                            ],
+                        },
                     ],
                 },
                 new Row
@@ -193,6 +213,23 @@ internal sealed record ConflictResolveView : Widget
             new Text
             {
                 Value = L.T(s => s.LocalchangesConflictSubtitle),
+                HAlign = TextAlignment.Center,
+                Color = Theme.Color(s => s.Palette.TextMuted),
+            },
+        ],
+    };
+
+    // Fork-style side caption sitting above each card, centered on the card's width so the
+    // pair stays aligned with the cards row below regardless of label length.
+    private static IWidget SideCaption(Prop<string?> label) => new Box
+    {
+        Width = CardWidth,
+        Children =
+        [
+            new Text
+            {
+                Value = label,
+                FontSize = FontSize.Caption,
                 HAlign = TextAlignment.Center,
                 Color = Theme.Color(s => s.Palette.TextMuted),
             },
@@ -398,7 +435,6 @@ internal sealed record ConflictResolveView : Widget
     // live in the card corners.
     private sealed class MergeJunctionView : ContainerView
     {
-        private const float Width_ = 80f;
         private const float LineThickness = 1.5f;
 
         private readonly State<bool> _theirs;
@@ -407,7 +443,7 @@ internal sealed record ConflictResolveView : Widget
 
         public MergeJunctionView(IThemeService<ThemeStyles> theme, State<bool> theirsChecked, State<bool> oursChecked)
         {
-            Width = Width_;
+            Width = JunctionWidth;
             _theirs = theirsChecked;
             _ours = oursChecked;
             // Repaint when either side's selection flips so segments appear/disappear.

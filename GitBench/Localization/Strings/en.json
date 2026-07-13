@@ -345,6 +345,8 @@
   "localchanges.conflict_merge": "Merge",
   "localchanges.conflict_title": "Merge conflict",
   "localchanges.conflict_subtitle": "Select the changes or merge them manually",
+  "localchanges.conflict_side_theirs": "theirs",
+  "localchanges.conflict_side_mine": "mine",
   "localchanges.conflict_badge_added": "added",
   "localchanges.conflict_badge_deleted": "deleted",
   "localchanges.conflict_badge_modified": "modified",
