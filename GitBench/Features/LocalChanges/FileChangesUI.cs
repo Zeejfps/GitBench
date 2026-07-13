@@ -194,7 +194,7 @@ internal static class FileChangesUI
 
         var renderStyle = isSelected ? pathActiveStyle : pathStyle;
         var pathText = displayText ?? FileChangeFormatting.FormatPath(file);
-        var rendered = TextMeasure.TruncateToFit(pathText, renderStyle, textWidth, canvas);
+        var rendered = TextEllipsis.Truncate(canvas, pathText, renderStyle, textWidth);
         // A viewed file is "done" — dim its label (half alpha) so the eye skips to what's left.
         var baseColor = renderStyle.TextColor;
         if (isViewed) renderStyle.TextColor = Dim(baseColor);
@@ -292,7 +292,7 @@ internal static class FileChangesUI
         if (textWidth <= 0f) return;
 
         var style = isSelected ? textActiveStyle : textStyle;
-        var rendered = TextMeasure.TruncateToFit(displayName, style, textWidth, canvas);
+        var rendered = TextEllipsis.Truncate(canvas, displayName, style, textWidth);
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, left, textWidth, isRtl),

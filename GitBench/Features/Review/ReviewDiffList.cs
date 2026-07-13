@@ -944,7 +944,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             // A viewed file is "done" — dim its path (half alpha) so the eye skips to what's left.
             var color = _theme.Palette.TextPrimary;
             HeaderPathStyle.TextColor = viewed ? Dim(color) : color;
-            var text = TextMeasure.TruncateToFit(FileChangeFormatting.FormatPath(s.File), HeaderPathStyle, textWidth, c);
+            var text = TextEllipsis.Truncate(c, FileChangeFormatting.FormatPath(s.File), HeaderPathStyle, textWidth);
             c.DrawText(new DrawTextInputs
             {
                 Position = Place(band, x, textWidth),
