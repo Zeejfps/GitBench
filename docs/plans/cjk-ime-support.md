@@ -6,13 +6,12 @@
 > and a candidate list, and only on commit does real text exist. There is no IME layer anywhere in
 > the codebase. This plan adds one. Phases are ordered outside-in — each lands something runnable.
 
-> **Status: phases 1–5 implemented.** The composition path is built and covered headlessly
-> (`TextInputImeTests`, `TextInputUnicodeTests`); the full suite is green. Still open, in order:
-> **manual verification on a real IME** (nothing here has been typed into by a human yet — the tests
-> are synthetic), **phase 6** (a menu's search box takes Latin but not CJK — broken, not merely
-> missing), the **3.3.7 → 3.5.0 GLFW regression pass** per platform, building the natives ourselves
-> in CI instead of vendoring LWJGL's, and phases 7–8. Phase 8 is Windows-only and opens with a spike
-> that may end it.
+> **Status: phases 1–6 implemented.** The composition path is built and covered headlessly
+> (`TextInputImeTests`, `TextInputUnicodeTests`, `ImeCoordinatorTests`); the full suite is green.
+> Still open, in order: **manual verification on a real IME** (nothing here has been typed into by a
+> human yet — the tests are synthetic), the **3.3.7 → 3.5.0 GLFW regression pass** per platform,
+> building the natives ourselves in CI instead of vendoring LWJGL's, and phases 7–8. Phase 8 is
+> Windows-only and opens with a spike that may end it.
 
 ## What already works (do not rebuild)
 
@@ -205,7 +204,7 @@ insertion but none for navigating or deleting. Added to `TextInputUnicodeTests` 
 astral char, arrow keys stepping over one without landing between the surrogate halves, and a CJK
 word-jump.
 
-## Phase 6 — CJK in popup-hosted fields (searchable context menus)
+## Phase 6 — CJK in popup-hosted fields (searchable context menus) (DONE)
 
 Two live search boxes are affected: the repo picker (`RepoBarContextMenu.ShowSearchable`) and the
 Review window's base-branch picker (`ReviewHeaderBar.cs:85`, which calls the same helper). Both take
@@ -274,17 +273,69 @@ self-healing, which is the whole point.
 macOS needs no special case. A borderless popup there *does* take key status, so the focused window
 *is* the popup; the same derivation enables the IME on it and dispatches locally.
 
-### Landing it
+### What landed
 
-- Delete the "Known gap / this branch is currently unreachable" comment in
-  `DesktopInputSystem.HandlePreeditEvent` — the branch becomes live on Windows.
-- Tests: `GuiTestHarness` is single-window and injects composition straight into one `InputSystem`,
-  so it cannot cover the routing. Unit-test `ImeCoordinator` against fake windows for the four
-  states that matter: popup field editing while the host window is focused (IME on the **host**, not
-  the popup); popup closing while a main-window field still edits (IME **stays** on, caret reverts to
-  that field — the predicted regression, as a test); nothing editing (IME off everywhere); the app
-  losing focus (IME off).
-- Then the only check that counts: type pinyin into the Review window's base-branch picker.
+Built as designed above. `ImeCoordinator` (`ZGF.Gui.Desktop/Input/`) holds the registered windows
+and the editing-caret dictionary, and `GuiApp.HandleTick` calls `Update()` **last** — after
+`_contextMenuManager.Update()`, not just after `_secondaryWindows.Update()`, so a menu the tick's own
+input closed is already gone when the IME state is re-derived. `BaseTextInputKbmController` is
+unchanged, as predicted.
+
+Two things the design note did not anticipate, both found while building:
+
+- **`IImeHost` and the native switches had to be split into two interfaces.** `DesktopInputSystem`
+  now implements both: `IImeHost` is what a *field* asks for ("I am editing, here is my caret") and
+  forwards to the coordinator; the new `IImeWindow` is what the coordinator *does* to a window
+  (`SetImeMode` / `SetImeCursorRect` / `ResetImeComposition` / `CanvasToScreen`). Collapsing them
+  into one interface collides on `SetImeEnabled` — the field's request and the native switch are the
+  same signature and no longer the same thing, which is the entire point of the phase.
+- **`InputSystem.Reset()` drops the focused component without raising `OnFocusLost`.** A popup's
+  search field therefore never ends its own edit session when the menu closes, so it would sit in the
+  editing set forever and a pooled, hidden popup would keep asserting the IME. `DesktopInputSystem.Reset()`
+  now clears its own entry. Nothing about this is visible from the field's side.
+
+The bespoke Y-flip in `SetImeCaretRect` is gone: the caret goes through `WindowCoordinates.ToScreenPoints`
+and the composing window rebases it by subtracting its own position. The "this branch is currently
+unreachable" comment in `HandlePreeditEvent` is gone too — it is live on Windows now. The three
+forwarding branches (`HandleKeyEvent` / `HandleTextEvent` / `HandlePreeditEvent`) now share one
+`TypingMenu()` helper reading `ImeCoordinator.FocusedModal()`, so key, character and composition
+routing cannot drift apart from each other or from the IME mode.
+
+`ImeCoordinatorTests` (10 tests, fake windows — `GuiTestHarness` is single-window and cannot reach
+the routing) covers the four states that matter plus the macOS shape (a popup that *does* hold OS
+focus composes against itself, no platform branch) and reset routing. **The tests were mutation-checked:**
+reverting the rule to "compose on the window the field lives in" fails 7 of the 10, including the
+central one. The three survivors are exactly the cases where the target *is* the focused window, so
+they cannot distinguish the two rules — that is correct, not a gap.
+
+### Verified on a real IME — and what it overturned
+
+Typed with Microsoft Pinyin on Windows 11: the commit box, the Review window's base-branch picker,
+and the repo picker all compose 你好, with the preedit rendered inline and the OS candidate window on
+the caret. The routing works exactly as designed — the log shows `composing=w1 target=w2` with the
+preedit forwarded `→ menu`: the *host* window composes for a field living in the popup.
+
+Getting there overturned two things this document asserted as fact:
+
+1. **A borderless popup DOES take OS keyboard focus on Windows.** The premise above — "`WS_EX_NOACTIVATE`,
+   so keys land on the host and must be forwarded" — is false. Clicking a menu's search box makes the
+   popup the focused window (`glfwGetWindowAttrib(FOCUSED)` is true and `WM_CHAR` arrives on the
+   popup's own callback, unforwarded). The coordinator handles this without a special case, because
+   it derives the composing window from focus rather than assuming; but the *reason* Phase 6 was
+   needed is not the reason stated here.
+2. **Turning the IME off is destructive, and that — not the routing — was the real bug.**
+   `glfwSetInputMode(GLFW_IME, 0)` detaches the window's IME context, and re-enabling never restores
+   a working composition: Pinyin degrades to alphanumeric passthrough **for the whole process**. A
+   commit box that composed a moment earlier starts typing a literal `nihao`. This is a Phase 2 bug,
+   latent because the disable used to fire rarely; Phase 6's coordinator toggles the IME on every
+   window-focus change, which made it fire every time — which is why it read as a Phase 6 regression.
+   `GlfwImeBridge.SetEnabled` therefore only ever switches the IME **on**.
+
+**The cost, accepted knowingly:** the IME now stays on outside a text field, so in Chinese mode a bare
+letter can be swallowed into a composition rather than reaching a keybinding — exactly what Phase 2's
+disable existed to prevent. The alternative is CJK input that dies process-wide the first time a field
+is blurred, so this is the lesser evil. **Open:** find a non-destructive way to suppress the IME
+outside a field (whether the patched GLFW's IMM path is simply wrong here is worth checking upstream).
 
 ## Phase 7 — atlas capacity
 
