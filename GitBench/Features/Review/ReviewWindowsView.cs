@@ -105,12 +105,16 @@ internal sealed record ReviewWindowsView : Widget
                 Title = windowVm.Title,
                 Width = _preferences.Current.ReviewWindowWidth,
                 Height = _preferences.Current.ReviewWindowHeight,
+                X = _preferences.Current.ReviewWindowX,
+                Y = _preferences.Current.ReviewWindowY,
             });
             // Native close → drive removal through the view model so its list stays authoritative;
             // that removal calls CloseOsWindow below (idempotent if the window is already gone).
             win.Closed += () => _vm.Close(windowVm);
-            // Persist size like the main window; all review windows share one remembered size.
+            // Persist geometry like the main window; all review windows share one remembered
+            // size/position (last resized/moved wins).
             win.Window.OnResize += _preferences.SetReviewWindowSize;
+            win.Window.OnMove += _preferences.SetReviewWindowPosition;
             _windows[windowVm] = win;
             ApplyTitleBarTheme(win);
         }

@@ -29,6 +29,8 @@ public static class PreferencesStore
         public int? WindowY { get; set; }
         public int? ReviewWindowWidth { get; set; } = 1100;
         public int? ReviewWindowHeight { get; set; } = 800;
+        public int? ReviewWindowX { get; set; }
+        public int? ReviewWindowY { get; set; }
         public float? RepoBarWidth { get; set; } = 220f;
         public bool? RepoBarCollapsed { get; set; } = false;
         public float? BranchesWidth { get; set; } = 220f;
@@ -62,6 +64,8 @@ public static class PreferencesStore
                 WindowY = file.WindowY,
                 ReviewWindowWidth = file.ReviewWindowWidth is > 0 ? file.ReviewWindowWidth.Value : defaults.ReviewWindowWidth,
                 ReviewWindowHeight = file.ReviewWindowHeight is > 0 ? file.ReviewWindowHeight.Value : defaults.ReviewWindowHeight,
+                ReviewWindowX = file.ReviewWindowX,
+                ReviewWindowY = file.ReviewWindowY,
                 RepoBarWidth = file.RepoBarWidth is > 0 ? file.RepoBarWidth.Value : defaults.RepoBarWidth,
                 RepoBarCollapsed = file.RepoBarCollapsed ?? defaults.RepoBarCollapsed,
                 BranchesWidth = file.BranchesWidth is > 0 ? file.BranchesWidth.Value : defaults.BranchesWidth,
@@ -92,6 +96,8 @@ public static class PreferencesStore
             WindowY = preferences.WindowY,
             ReviewWindowWidth = preferences.ReviewWindowWidth,
             ReviewWindowHeight = preferences.ReviewWindowHeight,
+            ReviewWindowX = preferences.ReviewWindowX,
+            ReviewWindowY = preferences.ReviewWindowY,
             RepoBarWidth = preferences.RepoBarWidth,
             RepoBarCollapsed = preferences.RepoBarCollapsed,
             BranchesWidth = preferences.BranchesWidth,

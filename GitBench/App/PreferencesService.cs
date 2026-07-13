@@ -49,6 +49,8 @@ public sealed class PreferencesService : IDisposable
         Mutate(p => p with { ReviewWindowWidth = width, ReviewWindowHeight = height });
     }
 
+    public void SetReviewWindowPosition(int x, int y) => Mutate(p => p with { ReviewWindowX = x, ReviewWindowY = y });
+
     public void SetRepoBarWidth(float width) => Mutate(p => p with { RepoBarWidth = width });
 
     public void SetRepoBarCollapsed(bool collapsed) => Mutate(p => p with { RepoBarCollapsed = collapsed });
