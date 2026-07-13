@@ -8,5 +8,6 @@ public enum Locale
     ZhHans,
     Ko,
     Ar,
+    Ru,
     Pseudo,
 }

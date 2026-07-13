@@ -218,6 +218,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         (Locale.ZhHans, "简体中文"),
         (Locale.Ko, "한국어"),
         (Locale.Ar, "العربية"),
+        (Locale.Ru, "Русский"),
         (Locale.Pseudo, "Pseudo"),
     };
 
@@ -230,6 +231,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         Locale.ZhHans => "ZH",
         Locale.Ko => "KO",
         Locale.Ar => "AR",
+        Locale.Ru => "RU",
         Locale.Pseudo => "PS",
         _ => "EN",
     };

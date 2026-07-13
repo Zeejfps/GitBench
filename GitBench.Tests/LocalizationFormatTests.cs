@@ -86,6 +86,7 @@ public class LocalizationFormatTests
         Assert.Equal("zh", Strings.ZhHans.Culture.TwoLetterISOLanguageName);
         Assert.Equal("ko", Strings.Ko.Culture.TwoLetterISOLanguageName);
         Assert.Equal("ar", Strings.Ar.Culture.TwoLetterISOLanguageName);
+        Assert.Equal("ru", Strings.Ru.Culture.TwoLetterISOLanguageName);
     }
 
     [Fact]
@@ -105,6 +106,40 @@ public class LocalizationFormatTests
     }
 
     [Fact]
+    public void RussianPluralRuleCoversOneFewMany()
+    {
+        Assert.Equal(PluralCategory.One, PluralRules.Category("ru", 1));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ru", 2));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ru", 4));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 5));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 0));
+
+        // The teens are "many" even though their last digit says otherwise.
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 11));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 12));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 14));
+        Assert.Equal(PluralCategory.Many, PluralRules.Category("ru", 111));
+
+        // "one" is every number ending in 1 except the teens — 21, not just 1.
+        Assert.Equal(PluralCategory.One, PluralRules.Category("ru", 21));
+        Assert.Equal(PluralCategory.One, PluralRules.Category("ru", 101));
+        Assert.Equal(PluralCategory.Few, PluralRules.Category("ru", 22));
+    }
+
+    [Fact]
+    public void RussianCatalogSelectsTheFormForEachCategory()
+    {
+        Assert.Equal("Индексировать 1 файл", Strings.Ru.FilesStage(1));
+        Assert.Equal("Индексировать 3 файла", Strings.Ru.FilesStage(3));
+        Assert.Equal("Индексировать 5 файлов", Strings.Ru.FilesStage(5));
+        Assert.Equal("Индексировать 12 файлов", Strings.Ru.FilesStage(12));
+
+        // Russian "one" covers 21, so the form has to carry the count rather than read as a
+        // bare singular the way English's "Stage" does.
+        Assert.Equal("Индексировать 21 файл", Strings.Ru.FilesStage(21));
+    }
+
+    [Fact]
     public void ArabicCatalogSelectsTheFormForEachCategory()
     {
         // one/two are countless bare forms (digit-shape-independent); few/many carry distinct
@@ -113,5 +148,19 @@ public class LocalizationFormatTests
         Assert.Equal("تجهيز ملفين", Strings.Ar.FilesStage(2));      // two (dual)
         Assert.Contains("ملفات", Strings.Ar.FilesStage(3));         // few
         Assert.Contains("ملفًا", Strings.Ar.FilesStage(11));        // many
+    }
+
+    [Fact]
+    public void ArabicCountedKeysInflectBeyondTheOtherForm()
+    {
+        // These keys carried only one/other, so every count from 2 up fell through to "other"
+        // and read in the wrong case. LOC008 now requires the full set.
+        Assert.Equal("حذف فرعين", Strings.Ar.BranchesCleanAction(2));
+        Assert.Contains("فروع", Strings.Ar.BranchesCleanAction(3));
+        Assert.Contains("فرعًا", Strings.Ar.BranchesCleanAction(11));
+
+        Assert.Contains("تغييران", Strings.Ar.CommitsResetDirtyStaged(2));
+        Assert.Contains("تغييرات", Strings.Ar.CommitsResetDirtyStaged(3));
+        Assert.Contains("تغييرًا", Strings.Ar.CommitsResetDirtyStaged(11));
     }
 }

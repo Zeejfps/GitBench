@@ -193,9 +193,21 @@
   "branches.clean_never_pushed_label": "لم يُدفع مطلقًا — بلا upstream ({count})",
   "branches.clean_force_label": "احذف حتى إن لم يكن مدمجًا بالكامل",
   "branches.clean_force_hint": "عند إيقافه، تُتخطى الفروع غير المدمجة بالكامل بدلاً من حذفها.",
-  "branches.clean_selected_header": { "one": "سيتم حذف فرع واحد", "other": "سيتم حذف {count} فرع" },
+  "branches.clean_selected_header": {
+    "one": "سيتم حذف فرع واحد",
+    "two": "سيتم حذف فرعين",
+    "few": "سيتم حذف {count} فروع",
+    "many": "سيتم حذف {count} فرعًا",
+    "other": "سيتم حذف {count} فرع"
+  },
   "branches.clean_none_selected": "لم يتم تحديد أي فرع.",
-  "branches.clean_action": { "one": "حذف فرع", "other": "حذف {count} فرع" },
+  "branches.clean_action": {
+    "one": "حذف فرع",
+    "two": "حذف فرعين",
+    "few": "حذف {count} فروع",
+    "many": "حذف {count} فرعًا",
+    "other": "حذف {count} فرع"
+  },
   "branches.clean_error_title": "فشل التنظيف",
   "branches.context_switch_worktree": "التبديل إلى شجرة العمل",
   "branches.context_review_changes": "مراجعة التغييرات…",
@@ -542,7 +554,13 @@
   "operations.title_bisect": "التنصيف قيد التقدم",
   "operations.title_unmerged": "تعارضات لم تُحَل",
   "operations.detail_resolved": "تم حل جميع التعارضات",
-  "operations.detail_conflicts": { "one": "يحتوي دليل العمل على تعارض دمج واحد", "other": "يحتوي دليل العمل على {count} تعارضات دمج" },
+  "operations.detail_conflicts": {
+    "one": "يحتوي دليل العمل على تعارض دمج واحد",
+    "two": "يحتوي دليل العمل على تعارضي دمج",
+    "few": "يحتوي دليل العمل على {count} تعارضات دمج",
+    "many": "يحتوي دليل العمل على {count} تعارضًا في الدمج",
+    "other": "يحتوي دليل العمل على {count} تعارض دمج"
+  },
   "operations.step_progress": "الخطوة {step} من {total}",
   "operations.stopped_commit": "الإيداع: “{name}”",
   "operations.error_copy_tooltip": "نسخ الخطأ إلى الحافظة",
@@ -572,7 +590,10 @@
   "submodules.banner_action_tooltip": "تبديل الوحدات الفرعية إلى الإيداع الذي يسجّله المستودع الرئيسي",
   "submodules.banner_outdated": {
     "one": "هناك {count} وحدة فرعية قديمة — شجرة عملها تختلف عن الإيداع الذي يسجّله المستودع الرئيسي.",
-    "other": "هناك {count} وحدات فرعية قديمة — أشجار عملها تختلف عن الإيداعات التي يسجّلها المستودع الرئيسي."
+    "two": "هناك وحدتان فرعيتان قديمتان — أشجار عملهما تختلف عن الإيداعات التي يسجّلها المستودع الرئيسي.",
+    "few": "هناك {count} وحدات فرعية قديمة — أشجار عملها تختلف عن الإيداعات التي يسجّلها المستودع الرئيسي.",
+    "many": "هناك {count} وحدةً فرعيةً قديمةً — أشجار عملها تختلف عن الإيداعات التي يسجّلها المستودع الرئيسي.",
+    "other": "هناك {count} وحدة فرعية قديمة — أشجار عملها تختلف عن الإيداعات التي يسجّلها المستودع الرئيسي."
   },
   "submodules.update_title_all": "تحديث جميع الوحدات الفرعية",
   "submodules.update_title_single": "تحديث الوحدة الفرعية",
@@ -653,11 +674,17 @@
   "refname.no_trailing_slash": "لا يمكن أن تنتهي أسماء {noun} بـ ”/“.",
   "commits.reset_dirty_staged": {
     "one": "لديك {count} تغيير محلي مجهّز.",
-    "other": "لديك {count} تغييرات محلية مجهّزة."
+    "two": "لديك تغييران محليان مجهّزان.",
+    "few": "لديك {count} تغييرات محلية مجهّزة.",
+    "many": "لديك {count} تغييرًا محليًا مجهّزًا.",
+    "other": "لديك {count} تغيير محلي مجهّز."
   },
   "commits.reset_dirty_unstaged": {
     "one": "لديك {count} تغيير محلي غير مجهّز.",
-    "other": "لديك {count} تغييرات محلية غير مجهّزة."
+    "two": "لديك تغييران محليان غير مجهّزين.",
+    "few": "لديك {count} تغييرات محلية غير مجهّزة.",
+    "many": "لديك {count} تغييرًا محليًا غير مجهّز.",
+    "other": "لديك {count} تغيير محلي غير مجهّز."
   },
   "commits.reset_dirty_both": "لديك {staged} تغييرات مجهّزة و{unstaged} تغييرات غير مجهّزة.",
   "localchanges.files_header_empty": "الملفات"
