@@ -16,8 +16,9 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
         _input = input;
         _groupId = groupId;
         _registry = registry;
-        _input.StartEditing();
-        inputSystem.StealFocus(this);
+        // Not StartEditing + StealFocus by hand: BeginEditing also turns the IME on, without which
+        // the rename field cannot type CJK.
+        BeginEditing();
     }
 
     protected override void OnKeyboardKeyPressed(ref KeyboardKeyEvent e)
@@ -55,7 +56,7 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
         base.OnMouseButtonStateChanged(ref e);
     }
 
-    public override void OnFocusLost()
+    protected override void OnFocusLostCore()
     {
         if (_finished) return;
         Commit();
@@ -65,8 +66,10 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
     {
         if (_finished) return;
         _finished = true;
+        // Read before EndEditing: the name is the committed text, never an in-flight composition,
+        // which EndEditing discards.
         var newName = new string(_input.Text);
-        _input.StopEditing();
+        EndEditing();
         _registry.RenameGroup(_groupId, newName);
         _registry.EndRenameGroup();
     }
@@ -75,7 +78,7 @@ internal sealed class GroupRenameKbmController : BaseTextInputKbmController
     {
         if (_finished) return;
         _finished = true;
-        _input.StopEditing();
+        EndEditing();
         _registry.EndRenameGroup();
     }
 }

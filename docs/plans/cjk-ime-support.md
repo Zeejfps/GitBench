@@ -6,6 +6,12 @@
 > and a candidate list, and only on commit does real text exist. There is no IME layer anywhere in
 > the codebase. This plan adds one. Phases are ordered outside-in — each lands something runnable.
 
+> **Status: phases 1–5 implemented.** The composition path is built and covered headlessly
+> (`TextInputImeTests`, `TextInputUnicodeTests`); the full suite is green. Still open, in order:
+> **manual verification on a real IME** (nothing here has been typed into by a human yet — the tests
+> are synthetic), the **3.3.7 → 3.5.0 GLFW regression pass** per platform, building the natives
+> ourselves in CI instead of vendoring LWJGL's, and phases 6–7.
+
 ## What already works (do not rebuild)
 
 The rendering half of CJK is done and is not the problem:
@@ -98,87 +104,104 @@ resize).
    cannot distinguish them. On commit the text arrives separately on the char callback; on cancel
    nothing does. So composition-end handling must be driven by the char path (see Phase 2).
 
-## Phase 1 — native supply
+## Phase 1 — native supply (DONE)
 
-> **Current working-tree state (from the spike, not yet production-ready):**
-> `framework/Glfw.NET/Native/win-x64/glfw3.dll` is **LWJGL's build, borrowed** — fine for the spike,
-> not something to ship. The `osx-*` and `linux-x64` natives are **still stock**, so `IsSupported()`
-> returns false there and the IME is inert (degrades gracefully — it does not crash). The spike's
-> `ImeSpikeLog` and the `OpenGlWindow` preedit hook are temporary and must be replaced by Phase 2's
-> event stream.
+> The spike's artifacts did **not** survive: by the time this was implemented, `GlfwIme.cs` and the
+> `OpenGlWindow` hook were gone from the tree and `win-x64/glfw3.dll` was back to stock GLFW 3.3.7
+> (no `glfwSetPreedit*` exports). Phase 0/1 was re-landed from scratch rather than resumed.
 
-Own the patched native properly instead of borrowing LWJGL's build.
+All four natives now carry the IM-support patch, taken from **LWJGL 3.3.4** (which builds from a GLFW
+fork carrying it) rather than compiled here — see `framework/Glfw.NET/Native/README.md` for
+provenance and how to reproduce. GLFW is zlib-licensed, so shipping the binaries is fine with the
+notice retained (`Native/LICENSE.glfw`).
 
-- Build `clear-code/glfw@im-support` (pinned commit) for `win-x64` (MSVC), `osx` universal
-  (`-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"`), `linux-x64` (oldest supported Ubuntu, for glibc).
-  GLFW is CMake with zero dependencies; the builds are ~2 minutes each. This is new CI surface —
-  today the natives are *downloaded*, not compiled.
-- Unifies the Windows/macOS version skew (3.3.7 vs 3.4.0) as a side effect.
-- **Linux caveat:** `NativeLibraryResolver` prefers the distro's `libglfw.so.3`, which is unpatched.
-  The vendored `.so` must win, or Linux silently keeps no IME (`IsSupported()` returns false).
-- Regression pass on the version bump — see spike exit criteria.
+- Upstream GLFW commit `b35641f4a3c62aa86a0b3c983d163bc0fe36026d`, reporting version **3.5.0**.
+- Verified every RID exports the full preedit API before vendoring. On macOS a string search finds
+  nothing — Mach-O compresses export names into a prefix trie, so the trie has to be parsed.
+- **The `osx-x64` slot must stay universal.** LWJGL ships *thin* dylibs, but the csproj's RID-less
+  macOS fallback (plain `dotnet run`) bundles the `osx-x64` file, so a thin x86_64 dylib would fail
+  to load under an arm64 runtime on Apple Silicon. The two thin slices are `lipo`'d into one fat
+  binary.
+- Unifies the version skew as a side effect (was win 3.3.7 / linux 3.3.6 / macOS 3.4.0).
+- **Linux:** `NativeLibraryResolver` already prefers the app-local `libglfw.so.3` over the distro's
+  unpatched one, and that ordering is now load-bearing — if the distro copy won, Linux would silently
+  lose the IME.
+- **Not done:** building the natives ourselves in CI. Vendoring LWJGL's build is the shortcut taken
+  here; owning the build (pinned `clear-code/glfw@im-support`, CMake, ~2 min per RID) remains open.
+- **Not done:** the regression pass on the 3.3.7 → 3.5.0 bump (title bar, popups, resize) on each
+  platform.
 
-## Phase 2 — composition event stream (framework)
+## Phase 2 — composition event stream (framework) (DONE)
 
-Mirror the existing `TextInputEvent` path, which is the template:
+Mirrors the existing `TextInputEvent` path:
 `GLFW callback → IWindow.OnPreedit → DesktopInputSystem → InputSystem → controller`.
 
-- `IWindow`: add `event Action<PreeditText>? OnPreedit`, implemented in **both** `OpenGlWindow`
-  (Windows/Linux) and `MetalWindow` (macOS).
-- `PreeditText`: the composition string (GLFW hands over **UTF-32 code points**), the caret offset,
-  and the attributed blocks (`blockSizes` + `focusedBlock`) that carry the clause underlines.
-- New `CompositionEvent` alongside `TextInputEvent`, routed through `InputSystem` to the focused
-  component. **Committed text keeps arriving on the existing char path** — preedit is purely
-  additive, so Latin typing is untouched (confirmed in Phase 0).
-- **Commit vs. cancel is not distinguishable from the end event** (Phase 0 finding #2). Treat an
-  empty preedit as "composition over, drop the preedit", and let the char callback deliver the
-  committed text as it already does. Do **not** try to insert preedit text on end — that would
-  double-insert on commit and wrongly insert on cancel.
-- Enable the IME **only while a text field is focused** (`SetInputMode(Ime, 1)` on `StartEditing`,
-  `0` on `StopEditing`). Otherwise a Japanese IME would start composing when `j`/`k` is pressed to
-  navigate the commit list.
+- `IWindow` gains `OnPreedit` plus `SetImeEnabled` / `SetPreeditCursorRect` / `ResetPreedit`. Both
+  backends compose one `GlfwImeBridge` (`ZGF.Desktop/Input/`) rather than duplicating the wiring —
+  `MetalWindow` drives windowing through GLFW too, so one native serves both.
+- `PreeditText` restates GLFW's **UTF-32 code points** and code-point-indexed block sizes as a UTF-16
+  string with UTF-16 offsets, so the rest of the text stack indexes it like any other string. Astral
+  characters are where the two indexings diverge, and the conversion is what keeps them aligned.
+- `CompositionEvent` routes through `InputSystem.SendCompositionEvent` to the focused controller,
+  including the same searchable-context-menu hand-off the char path has.
+- Committed text still arrives on the char path, so Latin typing is untouched.
+- An empty preedit means only "drop the preedit" — it cannot distinguish commit from cancel.
+- The IME is enabled only while a field is being edited (`BeginEditing`/`EndEditing`). Two GitBench
+  rename controllers were hand-rolling `StartEditing` + `StealFocus` and so would never have turned
+  it on; they now go through `BeginEditing`.
 
-## Phase 3 — preedit in `TextInputView`
+## Phase 3 — preedit in `TextInputView` (DONE)
 
-`framework/ZGF.Gui.Desktop/Components/TextInput/TextInputView.cs`.
+- The composition lives in `_preedit`, apart from `_buffer`, and never notifies `TextValue`. Drawing
+  and measuring read `_composed` — the buffer with the preedit spliced in at the caret — which equals
+  the buffer when nothing is composing, so every draw path can read it unconditionally.
+- One exception notifies: a composition started over a **selection** deletes it, and that deletion is
+  a real edit. Without the notification, cancelling would leave the field rendering empty while the
+  bound value still held the replaced text.
+- Clause underlines come from the blocks (focused clause heavier), drawn through the same
+  line-clipping the selection highlight uses, since either can straddle a soft wrap.
+- The caret rect feeds `glfwSetPreeditCursorRectangle` so the OS candidate window follows the caret.
+  `DesktopInputSystem` owns the conversion — GUI coordinates are Y-up from a bottom-left origin, the
+  IME wants Y-down from a top-left one.
+- The composition is reset on blur, click-away and focus loss. `BaseTextInputKbmController.OnFocusLost`
+  is **sealed** and delegates to a new `OnFocusLostCore`, because four subclasses already overrode it
+  without calling base and would each have silently dropped the IME teardown.
 
-- Hold the composition string **separately from `_buffer`**, displayed at the caret, and **do not
-  fire `TextValue` change notifications** for it — otherwise the commit VM sees half-typed pinyin.
-- Render clause underlines from the attributed blocks; highlight `focusedBlock`.
-- Feed the caret rect back so the candidate window follows it: `GetCaretRect()` (already exists) →
-  window coordinates → `glfwSetPreeditCursorRectangle`.
-- `glfwResetPreeditText` on blur / Escape / focus loss, so a composition never survives its field.
+## Phase 4 — key gating while composing (DONE)
 
-## Phase 4 — key gating while composing
+- The `IsComposing` gate lives in `BaseTextInputKbmController.OnKeyboardKeyStateChanged`, which
+  consumes the key outright. **No separate gate in `AppKeybindController` is needed**, and adding one
+  would be redundant: `SendKeyboardKeyEvent` dispatches to the focused component *first* and returns
+  on consume, so the field structurally blocks the app's keybindings. That is asserted rather than
+  assumed — see `EnterWhileComposing_DoesNotReachTheApp`.
+- `TextInputImeTests` (15 tests) is the real deliverable: preedit/commit/cancel, keys not leaking,
+  keys not editing the buffer, the gate not latching after the composition ends, composition at a
+  mid-string caret, selection replacement, blur, interleaved Korean commits, astral-safe block
+  offsets, and a Latin no-regression control.
+- The leak tests were **initially vacuous** and had to be fixed: `InputSystem` builds its dispatch
+  path from the *hover* chain, so with the pointer parked nowhere no ancestor controller is in it and
+  "the key did not reach the app" passed no matter what. The tests now hover the field first, and
+  `KeysAfterComposing_ReachTheAppAgain` is the control that keeps them honest. Deleting the gate
+  fails exactly the three protection tests — verified.
 
-**Revised after Phase 0.** The destructive bug I predicted — Space/Enter selecting a candidate *and*
-leaking through to the app (typing a space, submitting the commit) — **did not reproduce**. The
-patched GLFW appears to already suppress keys the IME consumed, which stock GLFW does not do. That is
-an unadvertised bonus of the patch.
+## Phase 5 — editing-model correctness (DONE — was already fixed)
 
-Keep the work anyway, downgraded from "build the gate" to "verify and guard":
+**Every code fix listed here had already landed** (the "fixed a bunch of text input bugs" commit),
+which this plan predates. Confirmed against the current source:
 
-- An `IsComposing` gate in `BaseTextInputKbmController` and `GitBench/App/AppKeybindController.cs`,
-  as defence in depth: while a composition is live, Enter/Escape/arrows/Space belong to the IME.
-- **Regression tests are the real deliverable here** — the failure mode (a commit submitted
-  mid-composition) is destructive and silent, and we are relying on an unmerged upstream patch to
-  prevent it. Cover it in `GuiTestHarness` so a future GLFW bump can't quietly regress it.
-- Ordering works in our favour if a gate is needed: composition begins on an *earlier* keystroke, so
-  `IsComposing` is already true by the time the Enter key event arrives.
+- `MoveCaretLeft`/`MoveCaretRight` step through `TextBoundaries.Prev`/`Next`, and `Delete()` removes a
+  whole cluster — not a raw `_caretIndex--` over UTF-16 code units.
+- `TextInputView.GetLines` *does* call `TextWrapper.WrapRanges`, so kinsoku applies to the multi-line
+  field.
+- `TextBoundaries` has an `Ideographic` character class, so Ctrl+Arrow steps through a CJK run
+  instead of treating it as one word.
+- `GitBench/Controls/TextMeasure.cs` no longer exists; truncation is `ZGF.Gui/TextEllipsis.cs`, which
+  has its own tests.
 
-## Phase 5 — editing-model correctness (independent of IME; do it regardless)
-
-Real bugs found while reading, all in `TextInputView` unless noted:
-
-- `MoveCaretLeft`/`MoveCaretRight` do a raw `_caretIndex--`/`++` on a UTF-16 `char[]`, and `Delete()`
-  removes exactly one code unit. **Arrow keys land between surrogate halves and backspace over an
-  astral character (emoji, CJK Ext-B) orphans a surrogate.** There is a `TypesAstralPlaneChars` test
-  for insertion but none for navigating or deleting.
-- `TextInputView` **does not use `TextWrapper`** — it wraps per-`char` with no CJK rules, so all the
-  kinsoku work does not apply to the multi-line commit description field.
-- `GitBench/Controls/TextMeasure.cs TruncateToFit` slices without the surrogate guard that
-  `TextView.Ellipsize` correctly has.
-- `IsWordChar` is `char.IsLetterOrDigit`, so a whole CJK run is one "word" for Ctrl+Arrow.
+What was genuinely missing was the **coverage** the plan flagged: a `TypesAstralPlaneChars` test for
+insertion but none for navigating or deleting. Added to `TextInputUnicodeTests` — backspace over an
+astral char, arrow keys stepping over one without landing between the surrogate halves, and a CJK
+word-jump.
 
 ## Phase 6 — atlas capacity
 
@@ -196,14 +219,25 @@ not part of the first cut.
 
 ## Testing
 
-Because the composition stream is a framework-level event, `GuiTestHarness` can inject synthetic
-composition events and cover preedit/commit/cancel and the key-gating headlessly. This is the only
-way to test it: the existing `Typist` uses `SendInput` with `KEYEVENTF_UNICODE`, which posts
-`WM_CHAR` directly and **bypasses the IME entirely**.
+`GuiTestHarness.SendComposition` / `EndComposition` / `Compose` inject synthetic composition events,
+which is the only way to test this: the existing `Typist` uses `SendInput` with `KEYEVENTF_UNICODE`,
+posting `WM_CHAR` directly and **bypassing the IME entirely**.
 
-Manual matrix: Japanese (romaji→kana→kanji, the most demanding), Simplified Chinese (pinyin),
-Korean (jamo, composes in-place). Per platform. Plus Latin/Cyrillic regression — preedit must not
-disturb the existing char path.
+`GlfwImeNativeTests` asserts `GlfwIme.IsSupported` against the actually-bundled native, which is the
+one thing the synthetic tests cannot cover: that the binary on disk is the patched build and that the
+runtime probe resolves against it. It is not ceremony — it caught the vendored Windows DLL being
+silently reverted to stock mid-implementation, which would have left the whole feature inert with
+every other test still green.
+
+**Still outstanding — nobody has typed CJK into this yet.** The tests are synthetic, and they pin the
+contract the framework implements, not what a real IME does. The manual matrix is unrun: Japanese
+(romaji→kana→kanji, the most demanding), Simplified Chinese (pinyin), Korean (jamo, composes
+in-place), per platform, plus a Latin/Cyrillic regression check.
+
+Worth watching for on first real use, since the synthetic tests cannot reach them: whether the OS
+candidate window actually lands on the caret (the coordinate conversion has never been checked
+against a real IME), and the true ordering of commit-chars versus the end-of-composition event — the
+implementation deliberately tolerates either order rather than assuming one.
 
 ## Out of scope
 

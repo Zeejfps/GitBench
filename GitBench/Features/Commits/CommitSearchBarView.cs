@@ -210,7 +210,7 @@ internal sealed class SearchInputKbmController : BaseTextInputKbmController
         base.OnKeyboardKeyPressed(ref e);
     }
 
-    public override void OnFocusLost()
+    protected override void OnFocusLostCore()
     {
         _input.StopEditing();
     }
