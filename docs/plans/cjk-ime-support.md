@@ -9,8 +9,10 @@
 > **Status: phases 1–5 implemented.** The composition path is built and covered headlessly
 > (`TextInputImeTests`, `TextInputUnicodeTests`); the full suite is green. Still open, in order:
 > **manual verification on a real IME** (nothing here has been typed into by a human yet — the tests
-> are synthetic), the **3.3.7 → 3.5.0 GLFW regression pass** per platform, building the natives
-> ourselves in CI instead of vendoring LWJGL's, and phases 6–7.
+> are synthetic), **phase 6** (a menu's search box takes Latin but not CJK — broken, not merely
+> missing), the **3.3.7 → 3.5.0 GLFW regression pass** per platform, building the natives ourselves
+> in CI instead of vendoring LWJGL's, and phases 7–8. Phase 8 is Windows-only and opens with a spike
+> that may end it.
 
 ## What already works (do not rebuild)
 
@@ -203,42 +205,166 @@ insertion but none for navigating or deleting. Added to `TextInputUnicodeTests` 
 astral char, arrow keys stepping over one without landing between the surrogate halves, and a CJK
 word-jump.
 
-## Known gap — CJK in popup-hosted fields (searchable context menus)
+## Phase 6 — CJK in popup-hosted fields (searchable context menus)
 
-**Not fixed. Needs a real IME to confirm before acting on it.**
+Two live search boxes are affected: the repo picker (`RepoBarContextMenu.ShowSearchable`) and the
+Review window's base-branch picker (`ReviewHeaderBar.cs:85`, which calls the same helper). Both take
+Latin and neither takes CJK. This is a feature that is broken, not one that is missing, so it comes
+before the atlas and the candidate window.
 
-A popup gets its own window and its own `DesktopInputSystem` (`PopupWindowFactory`), so a text field
-inside one — `RepoBarContextMenu.SearchMenuInputController` is the live example — enables the IME on
-the *popup's* window. But a borderless popup never takes OS keyboard focus on Windows
-(`WS_EX_NOACTIVATE`), which is exactly why `DesktopInputSystem` already forwards keys and characters
-from the host window to the focused menu. The IME composes against the **host** window, whose input
-mode is off — so no preedit callback ever fires, and the forwarding branch in `HandlePreeditEvent` is
-unreachable. Expect a menu's search box to take Latin but not CJK.
+### Why it fails
+
+A popup gets its own window and its own `DesktopInputSystem` (`PopupWindowFactory`), so its text
+field resolves `InputSystem.ImeHost` to the *popup's* input system and enables the IME on the
+*popup's* window. But a borderless popup never takes OS keyboard focus on Windows
+(`WS_EX_NOACTIVATE`) — which is exactly why `DesktopInputSystem` already forwards keys and characters
+from the host window to the focused menu. So the IME composes against the **host** window, whose
+`GLFW_IME` mode is off: nothing composes, the keystrokes arrive as plain characters, and the box
+takes `nihao` literally. The forwarding branch in `HandlePreeditEvent` is unreachable for want of a
+preedit to forward.
+
+**The Review window is the case that constrains the fix.** The host window is not always the main
+window — a menu opened from a secondary window composes against *that* window. Nothing here may
+reach for `MainWindow`.
 
 The tempting fix — enable the IME on every app window — is **wrong and would regress the commit box**:
 the menu's field disabling on close would turn the IME off under a main-window field that is still
 editing, and that field would never turn it back on (it takes neither branch of the press handler
 while `IsEditing` is already true).
 
-The right shape is to stop treating the IME mode as a one-shot toggle owned by the field, and instead
-assert it each frame from focus state — "the window that holds OS keyboard focus has the IME on iff
-some field somewhere is editing" — which is idempotent and self-healing across windows. The caret
-rect would need translating into the focused window's coordinates too, or the candidate window lands
-in the wrong place.
+### The fix — assert the IME from focus, don't toggle it from the field
 
-## Phase 6 — atlas capacity
+Stop treating the IME mode as a one-shot toggle owned by the field. The three questions — which
+window composes, which component receives the preedit, where the caret is — all have the same answer
+today (whichever window has focus, unless a focused modal is up), but that rule currently lives
+duplicated across `HandleKeyEvent` / `HandleTextEvent` / `HandlePreeditEvent` and the IME mode
+doesn't consult it at all. Name it once and drive all four from it.
+
+A new `ImeCoordinator` (`ZGF.Gui.Desktop`), one per app, holds:
+
+- the registered per-window input systems (main, secondary, popup — the three `new
+  DesktopInputSystem` sites);
+- `Dictionary<DesktopInputSystem, RectF> _editingCarets` — every field currently editing, keyed by
+  the window it lives in, with its caret rect in *that window's* canvas coordinates.
+
+`DesktopInputSystem`'s `IImeHost` implementation stops talking to its own window and forwards to the
+coordinator instead: `SetImeEnabled(true/false)` adds/removes this window's entry, `SetImeCaretRect`
+updates it, `ResetComposition` resets the *focused* window's composition (that is where it lives).
+**`BaseTextInputKbmController` does not change** — its four existing call sites are already right;
+they were just being answered by the wrong window.
+
+Then `ImeCoordinator.Update()`, called each tick from `GuiApp.HandleTick` after
+`_secondaryWindows.Update()`, asserts the invariant:
+
+- **typing target** = `arbiter.TopmostModal()` when it holds focus, else the OS-focused window's own
+  input system — the same rule `HandleKeyEvent` already applies, lifted out of it and reused;
+- **enabled** = the OS-focused window gets `SetImeEnabled(_editingCarets.ContainsKey(target))`; every
+  other window gets it off. Push only on change — it's a native call;
+- **caret** = the target's rect, put through the *owning* window's `IWindowCoordinates.ToScreenPoints`
+  and then rebased into the focused window's client rect by subtracting its position. Going via
+  screen points reuses `WindowCoordinates` and deletes the bespoke Y-flip currently in
+  `DesktopInputSystem.SetImeCaretRect`.
+
+The dictionary, rather than a single slot, is what kills the regression the old note feared: with a
+commit-box field editing *and* a menu search field editing, both are in the map. The menu's field
+removes only its own entry on close, the next tick re-derives the truth — IME still on, caret rect
+back on the commit box — and nothing has to remember to turn anything back on. Idempotent and
+self-healing, which is the whole point.
+
+macOS needs no special case. A borderless popup there *does* take key status, so the focused window
+*is* the popup; the same derivation enables the IME on it and dispatches locally.
+
+### Landing it
+
+- Delete the "Known gap / this branch is currently unreachable" comment in
+  `DesktopInputSystem.HandlePreeditEvent` — the branch becomes live on Windows.
+- Tests: `GuiTestHarness` is single-window and injects composition straight into one `InputSystem`,
+  so it cannot cover the routing. Unit-test `ImeCoordinator` against fake windows for the four
+  states that matter: popup field editing while the host window is focused (IME on the **host**, not
+  the popup); popup closing while a main-window field still edits (IME **stays** on, caret reverts to
+  that field — the predicted regression, as a test); nothing editing (IME off everywhere); the app
+  losing focus (IME off).
+- Then the only check that counts: type pinyin into the Review window's base-branch picker.
+
+## Phase 7 — atlas capacity
 
 `framework/ZGF.Fonts/GlyphAtlas.cs` is a single 2048×2048 skyline-packed atlas with **no eviction**:
 `TryReserve` simply fails when full and the glyph is silently dropped. Thousands of ideographs across
 several sizes and weights can plausibly exhaust it. Needs growth or eviction, plus a visible signal
 rather than silent tofu.
 
-## Phase 7 — in-app candidate window (optional)
+## Phase 8 — in-app candidate window (Windows-only; spike first, and it may not survive it)
 
-The patch exposes `GLFW_MANAGE_PREEDIT_CANDIDATE` + `glfwSetPreeditCandidateCallback`, which lets us
-render candidates ourselves instead of accepting the OS panel. We already have keyboard-capable
-popups from the searchable-context-menu work. Consistent cross-platform look, but a nice-to-have —
-not part of the first cut.
+The patch exposes `GLFW_MANAGE_PREEDIT_CANDIDATE` + `glfwSetPreeditCandidateCallback`, which let us
+render the candidate list ourselves instead of accepting the OS panel. Four facts, read off the
+header and the Win32 backend at the commit our natives are actually built from (`744c3de`, upstream
+`b35641f`), change what this phase is:
+
+1. **It is Windows-only.** `glfw3.h` on both `glfwSetPreeditCandidateCallback` and
+   `glfwGetPreeditCandidate`: *"@macos @x11 @wayland Don't support this function. The callback is not
+   called."* And on the hint, in `intro.md`: *"@win32 Only the OS currently supports this hint."* All
+   four vendored natives *export* the symbols — the macOS export trie has them — but only the Win32
+   backend implements them. **So the stated motivation for this phase, a consistent cross-platform
+   look, is backwards**: it would give Windows our list and leave macOS and Linux on the OS panel.
+   The remaining honest motivations are a themed candidate list on Windows and control over its
+   placement. Decide whether that's worth it before writing any code.
+2. **It is an init hint, not an input mode.** `GLFW_MANAGE_PREEDIT_CANDIDATE` is `0x00050004`, in the
+   init-hint range: `glfwInitHint` before `glfwInit`, process-wide, for the app's lifetime. There is
+   no per-window or per-field toggle. `Glfw.NET` already binds `glfwInitHint`; the call site would be
+   `OpenGlApp.cs:20` / `MetalApp.cs:31`.
+3. **Turning it on hides the OS candidate window.** In `win32_window.c`'s `WM_IME_SETCONTEXT` the
+   hint is precisely what strips `ISC_SHOWUICANDIDATEWINDOW`. We do not render *alongside* the OS
+   panel, we *replace* it — so a popup that is wrong, empty or mispositioned leaves the user with a
+   preedit and no candidates, i.e. unable to type CJK at all. Same class of destructive, silent
+   failure as the leaked Enter key in Phase 4.
+4. **The list comes from IMM32, and the modern Windows IMEs may not feed it.** `getImmCandidates`
+   calls `ImmGetCandidateListW` off `IMN_OPENCANDIDATE` / `IMN_CHANGECANDIDATE`. Microsoft Pinyin and
+   MS-IME Japanese on Windows 11 are TSF text services that draw candidates from their own UI
+   process; the IMM32 compatibility layer reliably delivers *composition* (which is why the Phase 0
+   spike saw preedit) but is well known to be unreliable for *candidates*.
+
+### Phase 8.0 — the spike that can kill the phase (do this first)
+
+Everything below is conditional on it, and it is half a day. Add `Hint.ManagePreeditCandidate =
+0x00050004`, call `Glfw.InitHint` before `Glfw.Init()`, P/Invoke `glfwSetPreeditCandidateCallback` +
+`glfwGetPreeditCandidate` in `GlfwIme.cs`, log every callback to a file — the shape of the Phase 0
+spike. Then type with **Microsoft Pinyin** and **MS-IME Japanese** on Windows 11 and answer:
+
+1. Does the callback fire with a non-zero `candidates_count`?
+2. Does `glfwGetPreeditCandidate` return real text for each index in the page?
+3. Did the OS candidate panel actually disappear?
+
+If 1 or 2 fails, stop and record the negative result here — that *is* the deliverable. If 3 fails we
+would be drawing a second list under the OS's, which is worse than doing nothing. Try one third-party
+IME (Google Japanese Input) too, so a failure can be attributed to MS rather than to the patch.
+
+### Phase 8.1+ — only if the spike passes
+
+- **Binding.** `GlfwIme.cs` gains the two P/Invokes and a `CandidatesSupported` probe that checks the
+  export **and** the OS — the symbol exists on macOS but never calls back, so an export probe alone
+  would lie. `PreeditCandidates` joins `PreeditText` in `ZGF.Desktop/Input/`: the visible page as
+  UTF-16 strings, selected index, page start/size, total count. Reuse `PreeditText`'s UTF-32→UTF-16
+  conversion — candidates arrive as code points and carry the same astral-plane hazard.
+- **Event.** `IWindow.OnPreeditCandidates`; `GlfwImeBridge` registers the callback and marshals it,
+  holding the delegate alive as it already does for preedit.
+- **Popup.** A `CandidatePopupService` shaped like `PopupTooltipService`: `MousePassThrough = true`,
+  never modal, never takes capture, never dismisses the field. That is forced, not stylistic — the
+  API is read-only. There is no `glfwSelectPreeditCandidate`, so **the user cannot click a
+  candidate**; every selection still goes through the IME's keys. Microsoft Pinyin users click
+  candidates today, so this phase *takes a capability away* on the one platform it ships to. Anchor
+  it on the caret rect the `ImeCoordinator` from Phase 6 already computes, with `PopupRequest.Place`'s
+  flip fallback for a caret near the bottom of the screen. Hide on empty candidates, on empty
+  preedit, and on the `ResetComposition` path — the popup must not outlive the field, the same
+  invariant Phase 3 set for `_preedit`.
+- **Widget.** A `CandidateListView`: one row per candidate in the visible page, numbered 1–9
+  positionally, selected row on the existing `RowSelectionStyles` token rather than a new colour.
+- **Kill switch.** The hint stays **opt-in and defaulted off** (setting or env var) until real users
+  have typed against it. The failure mode — no candidates at all — is invisible to every test we can
+  write and total for the user who hits it.
+- **Tests.** `GuiTestHarness.SendCandidates` mirroring `SendComposition`, driving a fake popup factory
+  to assert show/update/hide and selection tracking; plus a `GlfwImeNativeTests`-style export
+  assertion. Be honest that these pin *our* contract, not IMM32's: the thing that can actually break
+  is unreachable from a headless test, which is why the kill switch exists.
 
 ## Testing
 
