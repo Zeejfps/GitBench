@@ -72,7 +72,6 @@ internal sealed record WorkingTreeReviewView : Widget
 
     private static IWidget Split(Context ctx, WorkingTreeReviewViewModel model) => new Box
     {
-        Background = Theme.Color(s => s.CommitDetailsView.Background),
         Children =
         [
             new BorderLayout
