@@ -29,12 +29,7 @@ internal sealed record WorkingTreeReviewView : Widget
         var model = ctx.Require<WorkingTreeReviewViewModel>();
         var input = ctx.Require<InputSystem>();
 
-        var body = new Show
-        {
-            When = model.HasFiles,
-            Then = () => Split(ctx, model),
-            Else = () => TopRuled(Centered(L.T(s => s.ReviewNoLocalChanges))),
-        };
+        var body = Split(ctx, model);
 
         // The review loop's keys (j/k, Space, v, ?) live on the surface, not the window: the History
         // tab and the list layout must keep their own keys. It never steals focus, so the file tree
@@ -137,7 +132,19 @@ internal sealed record WorkingTreeReviewView : Widget
                 // The sidebar's file-list header carries its own top border, but the stacked diff
                 // surface has no header — without this the rule under the toolbar would die at the
                 // sidebar's edge. In the review *window* the header bar spans both columns instead.
-                Center = TopRuled(new ReviewDiffPanel()),
+                Center = TopRuled(new Stack
+                {
+                    Children =
+                    [
+                        new ReviewDiffPanel(),
+                        new Show
+                        {
+                            When = model.HasFiles,
+                            Then = () => Empty.Widget,
+                            Else = () => Centered(L.T(s => s.ReviewNoLocalChanges)),
+                        },
+                    ],
+                }),
             },
         ],
     };
