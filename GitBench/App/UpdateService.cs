@@ -1,7 +1,5 @@
-using System.Runtime.InteropServices;
 using GitBench.Localization;
 using Velopack;
-using Velopack.Sources;
 using ZGF.Observable;
 
 namespace GitBench.App;
@@ -73,8 +71,7 @@ public sealed class UpdateService : IDisposable
         CheckFeedback.Value = null;
         try
         {
-            var source = new GithubSource("https://github.com/Zeejfps/GitBench", null, false);
-            var manager = new UpdateManager(source, new UpdateOptions { ExplicitChannel = RuntimeChannel() });
+            var manager = UpdateFeed.CreateManager();
             var update = await manager.CheckForUpdatesAsync();
             if (update is null)
             {
@@ -166,12 +163,4 @@ public sealed class UpdateService : IDisposable
         IsChecking.Dispose();
         CheckFeedback.Dispose();
     }
-
-    // The per-OS/arch channel must match the --channel vpk packs with in CI (see
-    // .github/workflows/release.yml), or CheckForUpdatesAsync finds no matching release.
-    private static string RuntimeChannel() =>
-        RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "win-x64"
-        : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-            ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "osx-arm64" : "osx-x64")
-            : "linux-x64";
 }

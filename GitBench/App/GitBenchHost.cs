@@ -1,6 +1,5 @@
 using GitBench.Features.Identity;
 using GitBench.Platform;
-using Velopack;
 using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
@@ -40,11 +39,6 @@ internal sealed class GitBenchHost : IDisposable
     /// into whatever field the script had just focused.</param>
     public static GitBenchHost Create(bool startUnfocused = false)
     {
-        // Must be the very first thing that runs: Velopack's install/update hooks are driven by
-        // special CLI args the installer/updater passes, and any file I/O or GUI work before this
-        // can leave an update half-applied. No callbacks here — the DI container doesn't exist yet.
-        VelopackApp.Build().Run();
-
         CrashLog.Install(AppDataPath("crash.log"));
 
         var prefsPath = AppDataPath("preferences.json");
