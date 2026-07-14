@@ -10,4 +10,4 @@ namespace GitBench.Messages;
 // (DiffSide.WorkingTree) is invariant under those, so the working-tree review's
 // stacked diffs skip a refetch that would return the same bytes; the staged and
 // unstaged sides still reload, since their content is exactly what moved.
-public readonly record struct WorkingTreeChangedMessage(Guid RepoId, bool IndexOnly = false);
+public readonly record struct WorkingTreeChangedMessage(Guid RepoId, bool IndexOnly = false, string? Path = null);

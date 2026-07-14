@@ -79,6 +79,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private const float ActiveBarWidth = 3f;
     // The clickable Viewed zone at the header's trailing edge (checkbox glyph + label).
     private const float ViewedZoneWidth = 96f;
+    // The full-file toggle beside it (a lone glyph), shown once the card's diff is loaded.
+    private const float FullFileZoneWidth = 24f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
 
@@ -113,12 +115,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         public required FileChange File { get; set; }
         public CommitFileTab? Diff;
         public IDisposable? Subscription;
+        public IDisposable? MarksSubscription;
         public DiffRenderState? Render;
         public DiffRowSet RowSet = DiffRowSet.Empty;
         public bool Folded;
         public int StartRow;
         public int BodyRows;
         public float GutterWidth;
+
+        public void DisposeDiff()
+        {
+            Subscription?.Dispose();
+            MarksSubscription?.Dispose();
+            Diff?.Dispose();
+        }
     }
 
     private readonly Context _ctx;
@@ -135,6 +145,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private readonly List<Section> _sections = new();
     private readonly Dictionary<string, Section> _byPath = new(StringComparer.Ordinal);
     private HashSet<string> _viewedSnapshot = new(StringComparer.Ordinal);
+    private readonly HunkButtonBar _buttonBar;
+    private Section? _hoveredHunkSection;
+    private int _hoveredHunkIndex = -1;
+    private HunkAction _hoveredHunkButton = HunkAction.None;
     private int _heightCursor;
     // Identity of the file list on screen (the details surface's Sha: a commit, a base..head key, or
     // the working-tree sentinel). A new identity is new content — rebuild and reset the scroll; the
@@ -171,6 +185,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         _vm = ctx.Require<IReviewSurfaceModel>();
         _details = ctx.Require<CommitDetailsViewModel>();
         _painter = new DiffRowPainter(_loc);
+        _buttonBar = new HunkButtonBar(_loc);
 
         _list = new VirtualRowListView
         {
@@ -191,6 +206,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // and floats the sticky header over the rows.
         AddChildToSelf(new PanelOverlay(this));
         _list.UseController(input, () => new VirtualRowListController(_list));
+        // Hover only — clicks flow through the list's RowClicked like the gap expanders. Attached
+        // before the selection controller to mirror DiffContentView's ordering.
+        this.UseController(input, () => new HunkHoverController(this), EventPhaseFilter.Capture);
         _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
@@ -220,9 +238,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // whether the toggle came from a header checkbox, the 'v' key, or the primary action.
         this.Bind(_vm.ReviewedFiles.Revision, _ => SyncViewedFolds());
 
-        // Repaint on active-file moves (the header accent) and language switches (message rows).
+        // Repaint on active-file moves (the header accent) and language switches (message rows,
+        // re-measured hunk-button labels).
         this.Bind(_vm.ActiveFile, _ => SetDirty());
-        this.Bind(_loc.Strings, _ => SetDirty());
+        this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
 
         // Navigation (tree click, j/k, mark-viewed advance) scrolls the file's section here.
         this.Use(() =>
@@ -304,8 +323,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         foreach (var s in _sections)
         {
             if (kept.Contains(s.File.Path)) continue;
-            s.Subscription?.Dispose();
-            s.Diff?.Dispose();
+            s.DisposeDiff();
         }
 
         _sections.Clear();
@@ -326,13 +344,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private void ClearSections()
     {
         foreach (var s in _sections)
-        {
-            s.Subscription?.Dispose();
-            s.Diff?.Dispose();
-        }
+            s.DisposeDiff();
         _sections.Clear();
         _byPath.Clear();
         _selection.Clear();
+        SetHunkHover(null, -1, HunkAction.None);
         _naturalWidth = 0f;
         _heightCursor = 0;
     }
@@ -437,6 +453,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         s.Diff = diff;
         // Fires immediately with the current state, then on load / highlight / expansion updates.
         s.Subscription = diff.Diff.RenderState.Subscribe(state => OnSectionRender(s, state));
+        // The per-hunk index states repaint the action pills; nothing else re-renders on them.
+        s.MarksSubscription = diff.Diff.WorkingTreeHunkStates.Subscribe(_ => SetDirty());
     }
 
     private void OnSectionRender(Section s, DiffRenderState state)
@@ -581,11 +599,14 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     }
 
     // A click on the pinned band acts like one on the real header: the trailing zone toggles the
-    // file's mark, anywhere else folds the file — which also snaps the viewport back to its header.
+    // file's mark, the full-file zone flips the body mode, anywhere else folds the file — which
+    // also snaps the viewport back to its header.
     private void OnStickyHeaderClicked(Section s, PointF point)
     {
         if (IsInViewedZone(point))
             _vm.ToggleFileViewed(s.File.Path);
+        else if (IsInFullFileZone(point) && HasFullFileToggle(s))
+            ToggleFullFile(s);
         else
             SetFolded(s, true);
         _vm.ReportActiveFile(s.File.Path);
@@ -595,6 +616,92 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private bool IsInViewedZone(PointF point) => IsRtl
         ? point.X <= CardLeft() + ViewedZoneWidth
         : point.X >= CardRight() - ViewedZoneWidth;
+
+    // The full-file toggle rides just inside the Viewed zone, mirrored the same way.
+    private bool IsInFullFileZone(PointF point) => IsRtl
+        ? point.X > CardLeft() + ViewedZoneWidth
+            && point.X <= CardLeft() + ViewedZoneWidth + FullFileZoneWidth
+        : point.X < CardRight() - ViewedZoneWidth
+            && point.X >= CardRight() - ViewedZoneWidth - FullFileZoneWidth;
+
+    // The header toggle needs a loaded, unfolded card: an unloaded section has no DiffViewModel to
+    // flip, and a folded one has no visible body for the mode to mean anything.
+    private static bool HasFullFileToggle(Section s) => s.Diff != null && !s.Folded;
+
+    private static void ToggleFullFile(Section s) => s.Diff?.Diff.ToggleFullFile();
+
+    // ---- hunk actions ----
+
+    // Per-hunk actions exist only on the working-tree surface (where the mark is the staged
+    // state) over a loaded, patchable HEAD→disk diff; the branch-review window (Viewed marks,
+    // Commit/Range sides) never qualifies.
+    private bool HasHunkButtons(Section s)
+        => _vm.MarkKind == ReviewMarkKind.Staged
+            && s.Render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree } loaded
+            && HunkPatchBuilder.CanPatchHunk(loaded.Result);
+
+    // Each hunk's pills come from its real index state (Stage flips to Unstage once its region is
+    // captured); until that async pass lands, the full set with toast fallbacks.
+    private static HunkAction[] HunkActionsFor(Section s, int hunkIndex)
+        => HunkButtonBar.ActionsFor(s.Diff?.Diff.WorkingTreeHunkStates.Value, hunkIndex, DiffSide.WorkingTree);
+
+    // The hunk under a point, in a section qualified for hunk actions. Null under the padding
+    // strip and the pinned band — both own their own input.
+    private (Section Section, int HunkIndex)? HunkAt(PointF point)
+    {
+        if (point.Y > _list.Position.Top - PanelPaddingY) return null;
+        if (FindStickyHeader() is { } sticky && sticky.Band.ContainsPoint(point)) return null;
+        var index = _list.RowIndexAt(point);
+        if (index < 0) return null;
+        var s = Locate(index, out var local);
+        return s == null ? null : HunkAtRow(s, local);
+    }
+
+    private (Section Section, int HunkIndex)? HunkAtRow(Section s, int local)
+    {
+        if (local == 0 || s.RowSet.Rows.Count == 0) return null;
+        if (!HasHunkButtons(s)) return null;
+        var hunkIndex = s.RowSet.HunkIndexOf(local - 1);
+        return hunkIndex < 0 ? null : (s, hunkIndex);
+    }
+
+    // The buttons ride the hunk's second row (clamped for single-row hunks), same as the
+    // single-file pane.
+    private static int ButtonRowFor(Section s, int hunkIndex)
+        => HunkButtonBar.ButtonRowFor(s.RowSet.HunkRanges[hunkIndex]);
+
+    // Screen Y of a body row's top edge (bottom-up coordinates).
+    private float BodyRowTopY(Section s, int bodyRow)
+        => _list.Position.Top + _list.ScrollY
+            - (SectionTopOffset(s) + HeaderRowHeight + bodyRow * LineHeight());
+
+    private HunkAction HitTestHunkButton(Section s, int hunkIndex, PointF point)
+        => _buttonBar.HitTest(
+            point,
+            CardRight(),
+            BodyRowTopY(s, ButtonRowFor(s, hunkIndex)),
+            HunkActionsFor(s, hunkIndex));
+
+    private void OnHunkPointerMove(PointF point)
+    {
+        if (HunkAt(point) is not { } hit)
+        {
+            SetHunkHover(null, -1, HunkAction.None);
+            return;
+        }
+        SetHunkHover(hit.Section, hit.HunkIndex, HitTestHunkButton(hit.Section, hit.HunkIndex, point));
+    }
+
+    private void SetHunkHover(Section? s, int hunkIndex, HunkAction button)
+    {
+        if (ReferenceEquals(_hoveredHunkSection, s)
+            && _hoveredHunkIndex == hunkIndex
+            && _hoveredHunkButton == button) return;
+        _hoveredHunkSection = s;
+        _hoveredHunkIndex = hunkIndex;
+        _hoveredHunkButton = button;
+        SetDirty();
+    }
 
     // ---- input ----
 
@@ -634,9 +741,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             // The row's top slice is the gap between cards — a click there targets nothing.
             if (!_list.TryGetRowRect(index, out var rowRect)) return;
             if (point.Y > rowRect.Top - SectionGap) return;
-            // The trailing zone is the mark checkbox; anywhere else on the band toggles the fold.
+            // The trailing zone is the mark checkbox, then the full-file toggle; anywhere else on
+            // the band toggles the fold.
             if (IsInViewedZone(point))
                 _vm.ToggleFileViewed(s.File.Path);
+            else if (IsInFullFileZone(point) && HasFullFileToggle(s))
+                ToggleFullFile(s);
             else
                 SetFolded(s, !s.Folded);
             _vm.ReportActiveFile(s.File.Path);
@@ -644,6 +754,18 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         }
 
         if (s.RowSet.Rows.Count == 0) return;
+
+        if (HasHunkButtons(s) && s.Diff != null
+            && s.RowSet.HunkIndexOf(local - 1) is var hunkIndex and >= 0)
+        {
+            switch (HitTestHunkButton(s, hunkIndex, point))
+            {
+                case HunkAction.Stage: s.Diff.Diff.StageHunk(hunkIndex); return;
+                case HunkAction.Unstage: s.Diff.Diff.UnstageHunk(hunkIndex); return;
+                case HunkAction.Discard: s.Diff.Diff.RequestDiscardHunk(hunkIndex); return;
+            }
+        }
+
         var row = s.RowSet.Rows[local - 1];
         if (DiffRowPainter.GapBarOf(row) is not { } gap) return;
         var contentLeft = CardLeft() - _scrollX;
@@ -690,6 +812,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             return point.Y > rowRect.Top - SectionGap ? MouseCursor.Default : MouseCursor.Hand;
         }
         if (s.RowSet.Rows.Count == 0) return MouseCursor.Default;
+        if (HunkAtRow(s, local) is { } hit && HitTestHunkButton(hit.Section, hit.HunkIndex, point) != HunkAction.None)
+            return MouseCursor.Hand;
         var row = s.RowSet.Rows[local - 1];
         if (DiffRowPainter.GapBarOf(row) != null) return MouseCursor.Hand;
         return row is DiffRow.Line ? MouseCursor.Text : MouseCursor.Default;
@@ -707,8 +831,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             ? s.RowSet.Rows
             : null;
 
-    // Everything that isn't a code line: the padding strips, the pinned band, a card header, and
-    // the gap-expander bars, each of which already owns its click.
+    // Everything that isn't a code line: the padding strips, the pinned band, a card header, the
+    // gap-expander bars, and the hunk-action buttons, each of which already owns its click.
     bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
     {
         if (point.Y > _list.Position.Top - PanelPaddingY) return true;
@@ -719,7 +843,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var s = Locate(index, out var local);
         if (s == null) return false;
         if (local == 0) return true;
-        return s.RowSet.Rows.Count > 0 && DiffRowPainter.GapBarOf(s.RowSet.Rows[local - 1]) != null;
+        if (s.RowSet.Rows.Count > 0 && DiffRowPainter.GapBarOf(s.RowSet.Rows[local - 1]) != null) return true;
+        return HunkAtRow(s, local) is { } hit && HitTestHunkButton(hit.Section, hit.HunkIndex, point) != HunkAction.None;
     }
 
     DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point)
@@ -784,6 +909,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         });
 
         EnsureMetrics(c);
+        _buttonBar.EnsureMetrics(c);
         ClampHorizontalScroll();
         ReassertPendingScroll();
         EnsureVisibleLoaded();
@@ -847,6 +973,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 Viewport: _list.Position,
                 Z: z,
                 Selection: selection));
+
+            var hunkIndex = s.RowSet.HunkIndexOf(local - 1);
+            if (hunkIndex >= 0 && hunkIndex == _hoveredHunkIndex
+                && ReferenceEquals(s, _hoveredHunkSection) && HasHunkButtons(s))
+            {
+                DrawHunkOutlineForRow(c, s, cardLeft, cardWidth, rowRect, local - 1, hunkIndex, z + 5);
+                if (local - 1 == ButtonRowFor(s, hunkIndex))
+                    _buttonBar.Draw(
+                        c, CardRight(), rowRect.Top,
+                        HunkActionsFor(s, hunkIndex),
+                        _hoveredHunkButton,
+                        _theme.DiffHunkButton,
+                        z + 7);
+            }
         }
 
         // Card outline: 1px sides on every body row, closed by a bottom edge on the last one.
@@ -860,6 +1000,48 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 Position = new RectF(cardLeft, rowRect.Bottom, cardWidth, 1f),
                 Style = new RectStyle { BackgroundColor = _theme.Palette.Border },
                 ZIndex = z + 6,
+            });
+        }
+    }
+
+    // The hovered hunk's outline, drawn per row against the card edges: 1px sides every row,
+    // closed by a top edge on the hunk's first row and a bottom edge on its last.
+    private void DrawHunkOutlineForRow(
+        ICanvas c, Section s, float cardLeft, float cardWidth, RectF rowRect, int bodyRow, int hunkIndex, int z)
+    {
+        var range = s.RowSet.HunkRanges[hunkIndex];
+        var style = new RectStyle { BackgroundColor = _theme.DiffContent.HunkOutline };
+        var right = cardLeft + cardWidth - 1f;
+
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(cardLeft, rowRect.Bottom, 1f, rowRect.Height),
+            Style = style,
+            ZIndex = z,
+        });
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(right, rowRect.Bottom, 1f, rowRect.Height),
+            Style = style,
+            ZIndex = z,
+        });
+
+        if (bodyRow == range.FirstRow)
+        {
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(cardLeft, rowRect.Top - 1f, cardWidth, 1f),
+                Style = style,
+                ZIndex = z,
+            });
+        }
+        if (bodyRow == range.LastRow)
+        {
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(cardLeft, rowRect.Bottom, cardWidth, 1f),
+                Style = style,
+                ZIndex = z,
             });
         }
     }
@@ -938,7 +1120,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         x += StatusIconWidth + 8f;
 
         var zoneLeft = cardLeft + cardWidth - ViewedZoneWidth;
-        var textWidth = Math.Max(0f, zoneLeft - x - HeaderPaddingX);
+        var showFullFileToggle = HasFullFileToggle(s);
+        var pathRight = showFullFileToggle ? zoneLeft - FullFileZoneWidth : zoneLeft;
+        var textWidth = Math.Max(0f, pathRight - x - HeaderPaddingX);
         if (textWidth > 0)
         {
             // A viewed file is "done" — dim its path (half alpha) so the eye skips to what's left.
@@ -950,6 +1134,21 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 Position = Place(band, x, textWidth),
                 Text = text,
                 Style = HeaderPathStyle,
+                ZIndex = z + 2,
+            });
+        }
+
+        if (showFullFileToggle)
+        {
+            // Same glyph and engaged tint as the diff pane header's full-file toggle.
+            HeaderGlyphStyle.TextColor = s.Diff!.Diff.Mode.Value == DiffViewMode.FullFile
+                ? _theme.DiffView.HeaderToggleActive
+                : _theme.Palette.TextSecondary;
+            c.DrawText(new DrawTextInputs
+            {
+                Position = Place(band, zoneLeft - FullFileZoneWidth, FullFileZoneWidth),
+                Text = LucideIcons.FileText,
+                Style = HeaderGlyphStyle,
                 ZIndex = z + 2,
             });
         }
@@ -1085,6 +1284,19 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
     private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
+
+    // Forwards pointer motion into the hunk hover state (outline + action pills). Clicks stay on
+    // the list's RowClicked path, like the gap expanders.
+    private sealed class HunkHoverController : KeyboardMouseController
+    {
+        private readonly ReviewDiffListView _owner;
+
+        public HunkHoverController(ReviewDiffListView owner) => _owner = owner;
+
+        public override void OnMouseMoved(ref MouseMoveEvent e) => _owner.OnHunkPointerMove(e.Mouse.Point);
+
+        public override void OnMouseExit(ref MouseExitEvent e) => _owner.SetHunkHover(null, -1, HunkAction.None);
+    }
 
     // Logic-free sibling of the row list: its raised ZIndex lets the margin strips and the sticky
     // header paint over row content, which the list itself (rows draw above their own view)

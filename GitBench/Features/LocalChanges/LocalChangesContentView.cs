@@ -1,5 +1,4 @@
 using GitBench.Controls;
-using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
@@ -16,13 +15,12 @@ using ZGF.Observable;
 namespace GitBench.Features.LocalChanges;
 
 /// <summary>
-/// The body of the Local Changes view: two file-list panels (unstaged / staged) above a
-/// diff pane, with a draggable splitter between them. The panels are wired to a
-/// <see cref="LocalChangesViewModel"/>'s observable state and forward stage
-/// / unstage clicks and row selection back to the VM. Selection is owned by the VM
+/// The body of the Local Changes view: two file-list panels (unstaged / staged) side by side.
+/// The panels are wired to a <see cref="LocalChangesViewModel"/>'s observable state and forward
+/// stage / unstage clicks and row selection back to the VM. Selection is owned by the VM
 /// (one <see cref="Selection"/> for both sides), so the panels are stateless
-/// w.r.t. selection — rows highlight reactively against the shared selection, and the
-/// diff view's target tracks <c>SelectedTarget</c> directly.
+/// w.r.t. selection — rows highlight reactively against the shared selection. Reading a diff
+/// happens in the Review layout; a row's "View in Review" (context menu or Space) jumps there.
 /// </summary>
 internal sealed class LocalChangesContentView : ContainerView
 {
@@ -32,16 +30,16 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly FlexRowView _errorActions;
     private readonly FlexColumnView _placeholderHost;
     private readonly RectView _centerContainer;
-    private readonly View _diffView;
-    private readonly VerticalSplitContainer _snapshotContainer;
     private readonly LocalChangesSubmoduleSection _submoduleSection;
-    private readonly BorderLayoutView _topHalf;
+    private readonly BorderLayoutView _contentRoot;
 
     private readonly State<Selection> _selection = new(Selection.Empty);
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
     private readonly ILocalizationService _loc;
     private readonly FileOpsContextMenu _fileOps;
+    private readonly State<WorkingChangesLayout> _layout;
+    private readonly WorkingTreeReviewViewModel _review;
     private string? _rawPlaceholder;
 
     // The snapshot panels fade up as a repo's working tree arrives from a placeholder; the
@@ -54,6 +52,8 @@ internal sealed class LocalChangesContentView : ContainerView
         _vm = vm;
         _loc = ctx.Localization();
         _fileOps = new FileOpsContextMenu(vm, _loc);
+        _layout = ctx.Require<State<WorkingChangesLayout>>();
+        _review = ctx.Require<WorkingTreeReviewViewModel>();
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
         var ticker = ctx.Require<IFrameTicker>();
@@ -184,46 +184,14 @@ internal sealed class LocalChangesContentView : ContainerView
             onInit: path => _vm.InitializeSubmodule(path),
             onReset: path => _vm.ResetSubmoduleToRecorded(path));
 
-        _diffView = new Provide<DiffViewModel>
-        {
-            Value = vm.DiffVm,
-            Child = new DiffView(),
-        }.BuildView(ctx);
-
-        // The diff pane = collapse header on top, diff body below. Collapsing nulls the body so
-        // only the header strip remains (the split container pins the pane to header height).
-        var diffHeader = new Provide<DiffViewModel>
-        {
-            Value = vm.DiffVm,
-            Child = new DiffPaneHeaderWidget().WithController<KbmController>(),
-        }.BuildView(ctx);
-        var diffPane = new BorderLayoutView
-        {
-            North = diffHeader,
-            Center = _diffView,
-        };
-        this.Bind(vm.DiffVm.IsCollapsed, c => diffPane.Center = c ? null : _diffView);
-
-        var splitterHovered = new State<bool>(false);
-        var splitter = new RectView();
-        splitter.BindThemedBackgroundColor(theme, s =>
-            splitterHovered.Value ? s.LocalChangesContent.SplitterHover : s.LocalChangesContent.SplitterIdle);
-
-        _topHalf = new BorderLayoutView
+        _contentRoot = new BorderLayoutView
         {
             Center = BuildContentRow(theme),
         };
-        _snapshotContainer = new VerticalSplitContainer(_topHalf, diffPane, splitter, bottomFraction: 2f / 3f);
-
-        splitter.UseController(input, () => new SplitterController(
-            ctx,
-            DragAxis.Y,
-            _snapshotContainer.AdjustBottomFractionByPixels,
-            h => splitterHovered.Value = h));
 
         _centerContainer = new RectView
         {
-            Children = { _snapshotContainer },
+            Children = { _contentRoot },
         };
         _centerContainer.BindThemedBackgroundColor(theme, s => s.LocalChangesContent.ContentBackground);
 
@@ -236,10 +204,10 @@ internal sealed class LocalChangesContentView : ContainerView
             expand => _vm.SetCursorFolderExpanded(expand),
             OnActivateSelection,
             OnDeleteSelection);
-        _arrowController.OnToggleFullFile = () => _vm.DiffVm.ToggleFullFile();
+        _arrowController.OnViewInReview = ViewCursorRowInReview;
         this.UseController(input, _arrowController);
 
-        this.Bind(_enterTween.LinearProgress, p => _snapshotContainer.Opacity = p);
+        this.Bind(_enterTween.LinearProgress, p => _contentRoot.Opacity = p);
         this.Bind(_placeholderTween.Progress, p => _placeholderHost.Opacity = p);
         this.Use(() => _enterTween);
         this.Use(() => _placeholderTween);
@@ -274,13 +242,10 @@ internal sealed class LocalChangesContentView : ContainerView
             _unstagedPanel.EnsureRowVisible(cursor);
             _stagedPanel.EnsureRowVisible(cursor);
         });
-        _snapshotContainer.BindBottomVisible(() => vm.SelectedTarget.Value != null);
-        _snapshotContainer.BindBottomCollapsed(vm.DiffVm.IsCollapsed, DiffPaneHeaderWidget.HeaderHeight);
-
         this.Bind(vm.DriftedSubmodules, drift =>
         {
             _submoduleSection.SetDrift(drift);
-            _topHalf.North = drift.Count > 0 ? _submoduleSection : null;
+            _contentRoot.North = drift.Count > 0 ? _submoduleSection : null;
         });
     }
 
@@ -328,7 +293,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private void AttachSnapshot()
     {
         _centerContainer.Children.Clear();
-        _centerContainer.Children.Add(_snapshotContainer);
+        _centerContainer.Children.Add(_contentRoot);
     }
 
     private View BuildContentRow(IThemeService<Theming.ThemeStyles> theme)
@@ -348,6 +313,22 @@ internal sealed class LocalChangesContentView : ContainerView
     }
 
     private void OnFolderToggle(FileRow row) => _vm.ToggleFolder(row.Side, row.FullPath);
+
+    // Jumps to the Review layout scrolled to the file. Layout first: the review view is built
+    // lazily on the first switch (KeepAlive Switch), and only once alive does it subscribe to the
+    // scroll request ActivateFile fires.
+    private void ViewInReview(string path)
+    {
+        _arrowController.ReleaseFocus();
+        _layout.Value = WorkingChangesLayout.Review;
+        _review.ActivateFile(path);
+    }
+
+    private void ViewCursorRowInReview()
+    {
+        if (_vm.Selection.Value.Cursor is { IsFolder: false } cursor)
+            ViewInReview(cursor.FullPath);
+    }
 
     // Enter stages the selection from the unstaged side and unstages it from the staged
     // side — mirroring the double-click activation. The commands are side-gated, so an
@@ -389,6 +370,7 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             var paths = ResolveTargetPaths(target);
             _fileOps.AppendFileOps(items, paths, stageShortcut: "Enter", discardShortcut: "Delete");
+            AppendViewInReview(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
@@ -426,6 +408,7 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             var paths = ResolveTargetPaths(target);
             _fileOps.AppendFileOps(items, paths, unstageShortcut: "Enter");
+            AppendViewInReview(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
@@ -436,6 +419,18 @@ internal sealed class LocalChangesContentView : ContainerView
             Enabled: _vm.UnstageAll.CanExecute.Value));
         AppendExpandCollapseItems(items, DiffSide.Staged);
         return items;
+    }
+
+    // The jump is single-file by nature, so it targets the clicked row regardless of selection.
+    private void AppendViewInReview(List<RepoBarContextMenu.Item> items, FileRow target)
+    {
+        if (target.Kind != FileRowKind.File) return;
+        var path = target.File!.Path;
+        items.Add(new RepoBarContextMenu.Item(
+            _loc.Strings.Value.LocalchangesViewInReview,
+            () => ViewInReview(path),
+            LucideIcons.ScrollText,
+            Shortcut: "Space"));
     }
 
     // Open-folder / terminal target the clicked row: the folder itself for a folder row,

@@ -147,6 +147,36 @@ gen_mixed_changes() {                           # 10-mixed-changes
   append tracked-c.txt "then unstaged part"
 }
 
+gen_partial_hunks() {                           # 1b-partial-hunks
+  new_repo 1b-partial-hunks
+  # Three well-separated regions in one committed file. Region A is edited with a changed line
+  # count and staged; regions B and C are edited afterwards. Result: the HEAD→disk diff shows
+  # three hunks while the index→worktree diff has two, at shifted line numbers — the case the
+  # review surface's hunk-staging mapping must get right.
+  {
+    printf 'region A line %d\n' 1 2 3
+    for i in $(seq 1 12); do printf 'filler one %02d\n' "$i"; done
+    printf 'region B line %d\n' 1 2 3
+    for i in $(seq 1 12); do printf 'filler two %02d\n' "$i"; done
+    printf 'region C line %d\n' 1 2 3
+  } > regions.txt
+  # A second file with a single unstaged hunk, for the simple stage/discard path.
+  write single.txt "alpha" "beta" "gamma"
+  ci "three regions + single"
+  # Region A: replace one line with three (shifts everything below by two lines), then stage.
+  awk '{
+    if ($0 == "region A line 2") {
+      print "region A line 2 edited"; print "region A extra i"; print "region A extra ii"
+    } else print
+  }' regions.txt > regions.tmp && mv regions.tmp regions.txt
+  git add regions.txt
+  # Regions B and C: unstaged edits on top.
+  sed -e 's/^region B line 2$/region B line 2 edited/' \
+      -e 's/^region C line 2$/region C line 2 edited/' \
+    regions.txt > regions.tmp && mv regions.tmp regions.txt
+  sed -e 's/^beta$/beta edited/' single.txt > single.tmp && mv single.tmp single.txt
+}
+
 gen_staged_only() {                             # 11-staged-only
   new_repo 11-staged-only
   write base.txt "base"; ci "base"
@@ -777,6 +807,7 @@ REGISTRY=(
   "18-line-endings|gen_line_endings|CRLF->LF and whitespace-only changes"
   "19-gitignored|gen_gitignore|Ignored files, untracked, and a tracked-but-ignored file"
   "1a-intra-line|gen_intra_line|Intra-line emphasis: replace blocks, gate, tab/ws, unbalanced (commit+staged+unstaged)"
+  "1b-partial-hunks|gen_partial_hunks|Partially-staged file: 3 WT hunks vs 2 shifted unstaged hunks"
   "20-merge-conflict|gen_merge_conflict|MERGE in progress: content + add/add + modify/delete"
   "21-rebase-conflict|gen_rebase_conflict|REBASE stopped mid-conflict"
   "22-cherry-pick-conflict|gen_cherry_pick_conflict|CHERRY-PICK stopped mid-conflict"
