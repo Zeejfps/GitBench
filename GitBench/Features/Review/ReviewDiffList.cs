@@ -118,6 +118,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         public IDisposable? MarksSubscription;
         public DiffRenderState? Render;
         public DiffRowSet RowSet = DiffRowSet.Empty;
+        public View? ConflictView;
         public bool Folded;
         public int StartRow;
         public int BodyRows;
@@ -209,6 +210,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // Hover only — clicks flow through the list's RowClicked like the gap expanders. Attached
         // before the selection controller to mirror DiffContentView's ordering.
         this.UseController(input, () => new HunkHoverController(this), EventPhaseFilter.Capture);
+        this.UseController(input, () => new PanelWheelController(this));
         _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
@@ -323,6 +325,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         foreach (var s in _sections)
         {
             if (kept.Contains(s.File.Path)) continue;
+            RemoveConflictView(s);
             s.DisposeDiff();
         }
 
@@ -344,7 +347,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private void ClearSections()
     {
         foreach (var s in _sections)
+        {
+            RemoveConflictView(s);
             s.DisposeDiff();
+        }
         _sections.Clear();
         _byPath.Clear();
         _selection.Clear();
@@ -402,6 +408,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var s = _sections[_heightCursor];
         var local = i - s.StartRow;
         if (local == 0) return HeaderRowHeight;
+        if (s.ConflictView != null) return ConflictBodyHeight(s);
         return s.RowSet.Rows.Count == 0 ? MessageRowHeight : LineHeight();
     }
 
@@ -410,8 +417,15 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private float BodyHeight(Section s)
     {
         if (s.Folded) return 0f;
+        if (s.ConflictView != null) return ConflictBodyHeight(s);
         return s.RowSet.Rows.Count == 0 ? MessageRowHeight : s.RowSet.Rows.Count * LineHeight();
     }
+
+    private float ConflictBodyHeight(Section s)
+        => s.ConflictView!.MeasureHeight(ConflictPanelWidth(s.ConflictView));
+
+    private float ConflictPanelWidth(View view)
+        => Math.Max(CardViewportWidth(), view.MeasureWidth());
 
     private float SectionTopOffset(Section target)
     {
@@ -463,6 +477,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var oldRowCount = s.RowSet.Rows.Count;
         s.Render = state;
         s.RowSet = DiffRowSet.Build(state, _loc);
+        SyncConflictView(s);
         // Row indices moved under a selection in this file (a gap expanded, the diff arrived). A
         // same-shape re-emit — the syntax highlight attaching — leaves them valid.
         if (s.RowSet.Rows.Count != oldRowCount) ClearSelectionIn(s.File.Path);
@@ -506,6 +521,68 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var width = gutters + DiffRowPainter.GlyphColumnWidth
             + s.RowSet.MaxRowCells * advance + DiffRowPainter.BannerPaddingX;
         if (width > _naturalWidth) _naturalWidth = width;
+    }
+
+    private void SyncConflictView(Section s)
+    {
+        if (s.Render is not DiffRenderState.Conflict)
+        {
+            RemoveConflictView(s);
+            return;
+        }
+        if (s.ConflictView != null || s.Diff == null) return;
+        var scope = new Context(_ctx);
+        scope.AddService(s.Diff.Diff);
+        var view = new ConflictResolveView().BuildView(scope);
+        view.ZIndex = 50;
+        s.ConflictView = view;
+        AddChildToSelf(view);
+        SetDirty();
+    }
+
+    private void RemoveConflictView(Section s)
+    {
+        if (s.ConflictView == null) return;
+        RemoveChildFromSelf(s.ConflictView);
+        s.ConflictView = null;
+        SetDirty();
+    }
+
+    private Section? ConflictSectionOf(View child)
+    {
+        foreach (var s in _sections)
+            if (ReferenceEquals(s.ConflictView, child))
+                return s;
+        return null;
+    }
+
+    protected override void OnLayoutChild(in RectF position, View child)
+    {
+        if (ConflictSectionOf(child) is { } s)
+        {
+            child.IsVisible = !s.Folded;
+            if (s.Folded) return;
+            var viewport = CardViewportWidth();
+            var width = ConflictPanelWidth(child);
+            var height = child.MeasureHeight(width);
+            if (width > _naturalWidth) _naturalWidth = width;
+            child.LeftConstraint = CardLeft() - (width > viewport ? _scrollX : 0f);
+            child.WidthConstraint = width;
+            child.HeightConstraint = height;
+            child.BottomConstraint = BodyRowTopY(s, 0) - height;
+            child.LayoutSelf();
+            return;
+        }
+        base.OnLayoutChild(position, child);
+    }
+
+    public override bool ClipsContent => true;
+
+    protected override void OnDrawChildren(ICanvas c)
+    {
+        c.PushClip(Position);
+        base.OnDrawChildren(c);
+        c.PopClip();
     }
 
     // ---- folding / viewed / navigation ----
@@ -1215,11 +1292,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         {
             null => (str.CommonLoading, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Placeholder p => (p.Text, _theme.DiffContent.PlaceholderText),
+            DiffRenderState.Conflict => (string.Empty, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded l when l.Result.ErrorMessage != null => (l.Result.ErrorMessage, _theme.DiffContent.ErrorText),
             DiffRenderState.Loaded l when l.Result.IsBinary => (str.DiffBinaryNotShown, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded => (str.DiffNoChanges, _theme.DiffContent.PlaceholderText),
             _ => (str.CommonLoading, _theme.DiffContent.PlaceholderText),
         };
+        if (text.Length == 0) return;
         MessageStyle.TextColor = color;
         c.DrawText(new DrawTextInputs
         {
@@ -1284,6 +1363,23 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
     private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
+
+    private sealed class PanelWheelController : KeyboardMouseController
+    {
+        private readonly ReviewDiffListView _owner;
+
+        public PanelWheelController(ReviewDiffListView owner) => _owner = owner;
+
+        public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
+        {
+            var list = _owner._list;
+            if (e.DeltaY != 0f)
+                list.SetScrollY(list.ScrollY - e.DeltaY * list.ScrollWheelStep);
+            if (e.DeltaX != 0f)
+                _owner.OnHorizontalWheel(e.DeltaX);
+            e.Consume();
+        }
+    }
 
     // Forwards pointer motion into the hunk hover state (outline + action pills). Clicks stay on
     // the list's RowClicked path, like the gap expanders.
