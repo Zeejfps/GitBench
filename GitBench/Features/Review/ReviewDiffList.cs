@@ -337,6 +337,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             _selection.Clear();
 
         _viewedSnapshot = CurrentViewedSet();
+        RecomputeNaturalWidth();
         var scroll = _list.ScrollY;
         RebuildIndex();
         if (anchor != null && _byPath.ContainsKey(anchor.File.Path))
@@ -482,7 +483,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // same-shape re-emit — the syntax highlight attaching — leaves them valid.
         if (s.RowSet.Rows.Count != oldRowCount) ClearSelectionIn(s.File.Path);
         s.GutterWidth = ComputeGutterWidth(s);
-        GrowNaturalWidth(s);
+        RecomputeNaturalWidth();
         var newHeight = BodyHeight(s);
         if (Math.Abs(newHeight - oldHeight) > 0.0001f)
             ReindexWithAnchor(s, oldHeight, newHeight);
@@ -512,8 +513,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         return s.RowSet.GutterDigits * advance + 8f;
     }
 
-    // Content width only ever grows (the widest loaded file wins), so a cheap running max is
-    // enough — no rescan when sections unload or fold.
+    private void RecomputeNaturalWidth()
+    {
+        _naturalWidth = 0f;
+        foreach (var s in _sections)
+        {
+            GrowNaturalWidth(s);
+            if (s.ConflictView is { } conflict)
+            {
+                var w = conflict.MeasureWidth();
+                if (w > _naturalWidth) _naturalWidth = w;
+            }
+        }
+    }
+
     private void GrowNaturalWidth(Section s)
     {
         var advance = _metricsResolved ? _monoAdvance : AssumedFontSize * FallbackMonoAdvanceRatio;
@@ -1005,12 +1018,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         _metricsResolved = true;
 
         // Re-derive everything the fallback advance seeded, then re-measure the offset table.
-        _naturalWidth = 0f;
         foreach (var s in _sections)
-        {
             s.GutterWidth = ComputeGutterWidth(s);
-            GrowNaturalWidth(s);
-        }
+        RecomputeNaturalWidth();
         _list.InvalidateRowHeights();
     }
 

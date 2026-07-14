@@ -81,6 +81,12 @@ internal sealed record WorkingTreeReviewView : Widget
                 {
                     Content = new CommitChangesPanel
                     {
+                        EmptyState = c => FileChangesUI.CreateEmptyState(
+                            c,
+                            LucideIcons.CircleCheck,
+                            c.Localization().Strings,
+                            s => s.LocalchangesUnstagedEmptyTitle,
+                            s => s.LocalchangesUnstagedEmptyHint),
                         SelectedPath = model.ActiveFile,
                         SelectedPaths = model.SelectedPaths,
                         CursorPath = model.SelectionCursor,

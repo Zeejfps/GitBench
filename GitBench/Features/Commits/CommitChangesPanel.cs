@@ -61,6 +61,9 @@ internal sealed record CommitChangesPanel : IWidget
     /// </summary>
     public Action<string, IReadOnlyList<string>, PointF>? OnFolderContextMenu { get; init; }
 
+    /// <summary>Overrides the view shown when the list is empty; null keeps the section's default text.</summary>
+    public Func<Context, View>? EmptyState { get; init; }
+
     public View BuildView(Context ctx) => new CommitChangesPanelView(this, ctx, ctx.Require<CommitDetailsViewModel>());
 }
 
@@ -104,7 +107,8 @@ internal sealed class CommitChangesPanelView : ContainerView
             headerActions: headerActions,
             onFileContextMenu: props.OnFileContextMenu,
             selectedPaths: props.SelectedPaths,
-            onFolderContextMenu: props.OnFolderContextMenu);
+            onFolderContextMenu: props.OnFolderContextMenu,
+            emptyView: props.EmptyState?.Invoke(ctx));
         AddChildToSelf(_changesSection);
 
         // Up/Down arrow navigation over the file rows, mirroring the local-changes panels. Arrows
