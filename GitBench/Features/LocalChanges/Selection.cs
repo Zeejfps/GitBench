@@ -41,12 +41,6 @@ internal sealed class Selection
     /// <summary>The side the selection lives on, or null when empty.</summary>
     public DiffSide? Side => Rows.Count > 0 ? Rows[0].Side : null;
 
-    /// <summary>
-    /// The single selected file target, or null when the selection is empty, multi, or a
-    /// folder (a folder selection has no single diff target).
-    /// </summary>
-    public DiffTarget? Single => Rows.Count == 1 && !Rows[0].IsFolder && Items.Count == 1 ? Items[0] : null;
-
     private Selection(
         IReadOnlyList<FileRowRef> rows,
         IReadOnlyList<DiffTarget> items,

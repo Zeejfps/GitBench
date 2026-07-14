@@ -56,7 +56,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public IReadable<IReadOnlyList<SubmoduleInfo>> DriftedSubmodules { get; }
     public IReadable<bool> IsMerging { get; }
     public IReadable<Selection> Selection { get; }
-    public IReadable<DiffTarget?> SelectedTarget { get; }
     public IReadable<FileViewMode> ViewMode { get; }
     public IReadable<IReadOnlySet<string>> UnstagedCollapsed { get; }
     public IReadable<IReadOnlySet<string>> StagedCollapsed { get; }
@@ -71,7 +70,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     public IReadable<bool> CommitEnabled { get; }
     public IReadable<bool> CommitBusy { get; }
     public IReadable<float> CommitRotation => _commitSpinner.Rotation;
-    public DiffViewModel DiffVm { get; }
 
     private readonly SpinnerAnimation _commitSpinner;
 
@@ -135,7 +133,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
         IsMerging = Slice(s => s.IsMerging);
         Selection = Slice(s => s.Selection);
-        SelectedTarget = Slice(s => s.Selection.Single);
         ViewMode = Slice(s => s.ViewMode);
         UnstagedCollapsed = Slice(s => s.UnstagedCollapsed);
         StagedCollapsed = Slice(s => s.StagedCollapsed);
@@ -155,7 +152,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         CommitBusy = Slice(s => s.CommitBusy);
 
         _commitSpinner = new SpinnerAnimation(ticker);
-        DiffVm = new DiffViewModel(SelectedTarget, registry, gitService, dispatcher, bus, shell, loc: loc);
 
         Update(s => s with { ViewMode = preferences.Current.FileViewMode });
 
@@ -250,7 +246,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     public override void Dispose()
     {
-        DiffVm.Dispose();
         _commitSpinner.Dispose();
         base.Dispose();
     }
@@ -1065,10 +1060,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         RunIndexMutation(repo, () => isStage
             ? _gitService.Stage(repo, paths)
-            : _gitService.Unstage(repo, paths));
+            : _gitService.Unstage(repo, paths),
+            paths.Count == 1 ? paths[0] : null);
     }
 
-    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate)
+    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate, string? path = null)
     {
         RunOutcome(
             work: mutate,
@@ -1076,7 +1072,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             {
                 // Nothing on disk moved — only the index. Lets the working-tree review's stacked
                 // diffs (HEAD→disk, invariant here) skip a refetch per loaded file per click.
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id, IndexOnly: true));
+                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id, IndexOnly: true, Path: path));
                 Update(s => s with { OpError = (outcome as GitOutcome.Failed)?.Message });
             },
             lane: _opGen);
@@ -1084,7 +1080,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
     private void ApplyOptimisticMove(IReadOnlyList<string> paths, DiffSide fromSide)
     {
-        DiffVm.DeferReloadToWorkingTreeChange();
         _deferStoreReloadUntilWorkingTreeChange = true;
         var toSide = fromSide == DiffSide.Unstaged ? DiffSide.Staged : DiffSide.Unstaged;
         Update(s =>
@@ -1137,7 +1132,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             return toResetToParent.Count > 0
                 ? _gitService.ResetToParent(repo, toResetToParent)
                 : GitOutcome.Ok;
-        });
+        }, movedToUnstaged.Count == 1 ? movedToUnstaged[0] : null);
     }
 
     private IReadOnlyList<FileChange> ComputeDisplayedStaged(EditorMode editor)

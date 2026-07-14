@@ -46,6 +46,7 @@ internal sealed record DiffView : Widget
             if (state is not DiffRenderState.Conflict)
                 content.SetRenderState(state);
         });
+        content.Bind(vm.WorkingTreeHunkStates, content.SetWorkingTreeHunkStates);
 
         var diffBody = new BorderLayout
         {

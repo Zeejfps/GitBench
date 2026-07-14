@@ -30,22 +30,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // Fallback mono advance ratio if the canvas isn't available yet to measure a glyph.
     private const float FallbackMonoAdvanceRatio = 0.6f;
 
-    private const float HunkButtonHeight = 18f;
-    private const float HunkButtonPaddingX = 10f;
-    private const float HunkButtonGap = 6f;
-    private const float HunkButtonsMarginRight = 8f;
-    private const float HunkButtonsTopInset = 4f;
-    private const float HunkButtonFontSize = FontSize.Caption;
     private const float HunkOutlineThickness = 1f;
 
     private static readonly TextStyle PlaceholderStyle = new()
     {
-        HorizontalAlignment = TextAlignment.Center,
-        VerticalAlignment = TextAlignment.Center,
-    };
-    private static readonly TextStyle HunkButtonTextStyle = new()
-    {
-        FontSize = HunkButtonFontSize,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,
     };
@@ -72,10 +60,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private int _hoveredHunkIndex = -1;
     private HunkAction _hoveredButton = HunkAction.None;
     private int _hoveredExpanderRow = -1;
-    private float _stageBtnTextWidth;
-    private float _unstageBtnTextWidth;
-    private float _discardBtnTextWidth;
-    private bool _buttonMetricsResolved;
+    private readonly HunkButtonBar _buttonBar;
+    private IReadOnlyList<WorkingTreeHunkState>? _hunkStates;
 
     public Action<int>? OnStageHunk { get; set; }
     public Action<int>? OnUnstageHunk { get; set; }
@@ -111,6 +97,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var theme = ctx.Theme();
         _loc = ctx.Localization();
         _painter = new DiffRowPainter(_loc);
+        _buttonBar = new HunkButtonBar(_loc);
 
         _list = new VirtualRowListView
         {
@@ -141,7 +128,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // Placeholder/conflict text is custom-painted, so repaint on a live language switch.
         // Hunk-button labels are measured and cached; drop the cache so they re-measure in the
         // new language on the next draw.
-        this.Bind(_loc.Strings, _ => { _buttonMetricsResolved = false; SetDirty(); });
+        this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
     }
 
     private void OnHorizontalWheel(float deltaX)
@@ -154,6 +141,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             SetDirty();
             NotifyScrollChanged(viewportFits: false);
         }
+    }
+
+    // The VM's per-hunk index states for the WorkingTree view (see
+    // DiffViewModel.WorkingTreeHunkStates); aligned with the current render's hunk list.
+    public void SetWorkingTreeHunkStates(IReadOnlyList<WorkingTreeHunkState>? states)
+    {
+        _hunkStates = states;
+        SetDirty();
     }
 
     public void SetRenderState(DiffRenderState state)
@@ -344,14 +339,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private void EnsureMetrics(ICanvas c)
     {
-        if (!_buttonMetricsResolved)
-        {
-            var s = _loc.Strings.Value;
-            _stageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkStage, HunkButtonTextStyle);
-            _unstageBtnTextWidth = c.MeasureTextWidth(s.DiffHunkUnstage, HunkButtonTextStyle);
-            _discardBtnTextWidth = c.MeasureTextWidth(s.DiffHunkDiscard, HunkButtonTextStyle);
-            _buttonMetricsResolved = _stageBtnTextWidth > 0;
-        }
+        _buttonBar.EnsureMetrics(c);
 
         if (_metricsResolved) return;
         _lineHeight = c.MeasureTextLineHeight(DiffRowPainter.MonoMetricsStyle);
@@ -372,14 +360,6 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             _list.NotifyItemsChanged();
         }
     }
-
-    private float GetButtonTextWidth(HunkAction action) => action switch
-    {
-        HunkAction.Stage => _stageBtnTextWidth,
-        HunkAction.Unstage => _unstageBtnTextWidth,
-        HunkAction.Discard => _discardBtnTextWidth,
-        _ => 0f,
-    };
 
     protected override void OnDrawSelf(ICanvas c)
     {
@@ -484,96 +464,26 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
         if (showButtons)
-            DrawHunkButtons(c, rowRect, hunkIndex, z + 6);
+            _buttonBar.Draw(
+                c, rowRect.Right, rowRect.Top,
+                ActionsForHunk(hunkIndex),
+                hunkIndex == _hoveredHunkIndex ? _hoveredButton : HunkAction.None,
+                _buttonStyles,
+                z + 6);
     }
 
     private int ButtonRowFor(int hunkIndex)
     {
         if (hunkIndex < 0 || hunkIndex >= _rowSet.HunkRanges.Count) return -1;
-        var range = _rowSet.HunkRanges[hunkIndex];
-        return Math.Min(range.FirstRow + 1, range.LastRow);
+        return HunkButtonBar.ButtonRowFor(_rowSet.HunkRanges[hunkIndex]);
     }
 
     private bool HasHunkButtons()
-    {
-        if (!_hunksPatchable) return false;
-        return _diffSide is DiffSide.Unstaged or DiffSide.Staged;
-    }
+        => _hunksPatchable && HunkButtonBar.ActionsFor(_diffSide).Length > 0;
 
-    private float GetButtonsTotalWidth()
-    {
-        var actions = GetButtonActions();
-        if (actions.Length == 0) return 0f;
-        var total = 0f;
-        for (var i = 0; i < actions.Length; i++)
-        {
-            total += GetButtonTextWidth(actions[i]) + HunkButtonPaddingX * 2;
-            if (i > 0) total += HunkButtonGap;
-        }
-        return total;
-    }
-
-    private HunkAction[] GetButtonActions() => _diffSide switch
-    {
-        DiffSide.Unstaged => new[] { HunkAction.Stage, HunkAction.Discard },
-        DiffSide.Staged => new[] { HunkAction.Unstage },
-        _ => Array.Empty<HunkAction>(),
-    };
-
-    private string ButtonLabel(HunkAction action)
-    {
-        var s = _loc.Strings.Value;
-        return action switch
-        {
-            HunkAction.Stage => s.DiffHunkStage,
-            HunkAction.Unstage => s.DiffHunkUnstage,
-            HunkAction.Discard => s.DiffHunkDiscard,
-            _ => string.Empty,
-        };
-    }
-
-    private void DrawHunkButtons(ICanvas c, RectF rowRect, int hunkIndex, int z)
-    {
-        var actions = GetButtonActions();
-        if (actions.Length == 0) return;
-
-        var totalWidth = GetButtonsTotalWidth();
-        var x = rowRect.Right - HunkButtonsMarginRight - totalWidth;
-        var btnBottom = rowRect.Top - HunkButtonsTopInset - HunkButtonHeight;
-
-        for (var i = 0; i < actions.Length; i++)
-        {
-            var label = ButtonLabel(actions[i]);
-            var width = GetButtonTextWidth(actions[i]) + HunkButtonPaddingX * 2;
-            var rect = new RectF(x, btnBottom, width, HunkButtonHeight);
-            var hovered = hunkIndex == _hoveredHunkIndex && actions[i] == _hoveredButton;
-            var bg = hovered ? _buttonStyles.BackgroundHover : _buttonStyles.BackgroundIdle;
-
-            c.DrawRect(new DrawRectInputs
-            {
-                Position = rect,
-                Style = new RectStyle
-                {
-                    BackgroundColor = bg,
-                    BorderColor = BorderColorStyle.All(_buttonStyles.Border),
-                    BorderSize = BorderSizeStyle.All(1),
-                    BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-                },
-                ZIndex = z,
-            });
-
-            HunkButtonTextStyle.TextColor = _buttonStyles.Text;
-            c.DrawText(new DrawTextInputs
-            {
-                Position = rect,
-                Text = label,
-                Style = HunkButtonTextStyle,
-                ZIndex = z + 1,
-            });
-
-            x += width + HunkButtonGap;
-        }
-    }
+    // WorkingTree pills follow each hunk's real index state once the VM's async pass lands.
+    private HunkAction[] ActionsForHunk(int hunkIndex)
+        => HunkButtonBar.ActionsFor(_hunkStates, hunkIndex, _diffSide);
 
     private void DrawHunkOutlineForRow(ICanvas c, RectF rowRect, int rowIndex, int hunkIndex, int z)
     {
@@ -643,7 +553,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var hunkIndex = _rowSet.HunkIndexOf(rowIndex);
         var button = HunkAction.None;
         if (hunkIndex >= 0)
-            button = HitTestButton(point, ButtonRowFor(hunkIndex));
+            button = HitTestButton(point, hunkIndex);
         SetHunkHover(hunkIndex, button);
     }
 
@@ -690,7 +600,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var hunkIndex = _rowSet.HunkIndexOf(rowIndex);
         if (hunkIndex < 0) return false;
 
-        var button = HitTestButton(point, ButtonRowFor(hunkIndex));
+        var button = HitTestButton(point, hunkIndex);
         if (button == HunkAction.None) return false;
 
         switch (button)
@@ -740,7 +650,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (HitTestExpander(point) != null) return true;
         if (!HasHunkButtons()) return false;
         var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
-        return hunkIndex >= 0 && HitTestButton(point, ButtonRowFor(hunkIndex)) != HunkAction.None;
+        return hunkIndex >= 0 && HitTestButton(point, hunkIndex) != HunkAction.None;
     }
 
     DiffTextHit? IDiffSelectionSurface.HitTestText(PointF point)
@@ -777,26 +687,13 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             : MouseCursor.Default;
     }
 
-    private HunkAction HitTestButton(PointF point, int buttonRowIndex)
+    private HunkAction HitTestButton(PointF point, int hunkIndex)
     {
-        var actions = GetButtonActions();
-        if (actions.Length == 0 || buttonRowIndex < 0) return HunkAction.None;
-
+        var buttonRowIndex = ButtonRowFor(hunkIndex);
+        if (buttonRowIndex < 0) return HunkAction.None;
         var listPos = _list.Position;
         var rowTop = listPos.Top + _list.ScrollY - buttonRowIndex * _lineHeight;
-        var btnTop = rowTop - HunkButtonsTopInset;
-        var btnBottom = btnTop - HunkButtonHeight;
-        if (point.Y < btnBottom || point.Y > btnTop) return HunkAction.None;
-
-        var totalWidth = GetButtonsTotalWidth();
-        var x = listPos.Right - HunkButtonsMarginRight - totalWidth;
-        for (var i = 0; i < actions.Length; i++)
-        {
-            var width = GetButtonTextWidth(actions[i]) + HunkButtonPaddingX * 2;
-            if (point.X >= x && point.X <= x + width) return actions[i];
-            x += width + HunkButtonGap;
-        }
-        return HunkAction.None;
+        return _buttonBar.HitTest(point, listPos.Right, rowTop, ActionsForHunk(hunkIndex));
     }
 
     private void NotifyScrollChanged(bool viewportFits)

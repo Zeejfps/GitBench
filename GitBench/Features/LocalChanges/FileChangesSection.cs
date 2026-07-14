@@ -44,7 +44,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly IRepoRegistry? _registry;
     private readonly IMessageBus? _bus;
     private readonly TextView _headerText;
-    private readonly TextView _emptyPlaceholder;
+    private readonly View _emptyPlaceholder;
     private readonly PaddingView _bodyContainer;
     private readonly VirtualRowListView _list;
     private readonly VerticalScrollBarView _scrollBar;
@@ -141,7 +141,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         IReadOnlyList<View>? headerActions = null,
         Action<FileChange, PointF>? onFileContextMenu = null,
         IReadable<IReadOnlySet<string>>? selectedPaths = null,
-        Action<string, IReadOnlyList<string>, PointF>? onFolderContextMenu = null)
+        Action<string, IReadOnlyList<string>, PointF>? onFolderContextMenu = null,
+        View? emptyView = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -155,7 +156,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _onFolderContextMenu = onFolderContextMenu;
         var input = ctx.Require<InputSystem>();
         _headerText = FileChangesUI.CreateHeaderText(ctx, title);
-        _emptyPlaceholder = FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
+        _emptyPlaceholder = emptyView ?? FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
 
         // Only selectable sections animate; parks itself when settled so it adds no idle repaints.
         if (_selectedPath != null)

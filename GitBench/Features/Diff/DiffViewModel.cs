@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -69,7 +70,16 @@ internal abstract record DiffRenderState
 // stored inline. Text diffs and placeholders produce None, which hides the badge.
 internal enum LfsBadge { None, Tracked, NotTracked }
 
-internal sealed record DiffState(DiffRenderState Render, string? OpError, DiffViewMode Mode);
+// One shown WorkingTree hunk's real index state: whether any of its region is in the index
+// (HasStaged → Unstage applies) and whether any is still only on disk (HasUnstaged → Stage and
+// Discard apply). Computed against the fresh per-side diffs, so the pills flip as regions move.
+internal readonly record struct WorkingTreeHunkState(bool HasStaged, bool HasUnstaged);
+
+internal sealed record DiffState(
+    DiffRenderState Render,
+    string? OpError,
+    DiffViewMode Mode,
+    IReadOnlyList<WorkingTreeHunkState>? HunkStates = null);
 
 internal sealed class DiffViewModel : ViewModelBase<DiffState>
 {
@@ -93,7 +103,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // Used only for "Open in editor" on a conflict. Null in panes that never show conflicts
     // (commit details, and pop-out windows pinned to a commit diff).
     private readonly IPlatformShell? _shell;
-    private bool _deferReloadToWorkingTreeChange;
+    private int _hunkStateGen;
 
     // Syntax highlighting runs on its own lane so an in-flight highlight for a file we've
     // navigated away from is dropped, and so it never invalidates the diff-load lane (Gen).
@@ -110,6 +120,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<string?> OpError { get; }
     public IReadable<LfsBadge> LfsStatus { get; }
+
+    // Per-hunk index state for the current WorkingTree render (aligned with its hunk list; null
+    // until the async pass lands or on other sides). The combined HEAD→disk view doesn't change
+    // bytes on index ops, so this is what flips a hunk's Stage pill to Unstage. Recomputed on
+    // every working-tree change — index-only ones included — and cleared on reload.
+    public IReadable<IReadOnlyList<WorkingTreeHunkState>?> WorkingTreeHunkStates { get; }
 
     // Sticky body mode for this pane. Drives the toggle button's active state and is read by
     // StartLoad to decide whether to assemble a diff or a full-file render.
@@ -160,12 +176,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             _ => (DiffSide?)null,
         });
         Mode = Slice(s => s.Mode);
+        WorkingTreeHunkStates = Slice(s => s.HunkStates);
 
-        Subscriptions.Add(_target.Subscribe(_ =>
-        {
-            if (_deferReloadToWorkingTreeChange) return;
-            StartLoad();
-        }));
+        Subscriptions.Add(_target.Subscribe(_ => StartLoad()));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
 
         // A loaded diff draws its localized chrome at paint time (DiffContentView re-resolves the
@@ -184,8 +197,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
     }
 
-    public void DeferReloadToWorkingTreeChange() => _deferReloadToWorkingTreeChange = true;
-
     // The repo this pane operates on: the pinned repo (resolved by id) when set, else the active repo.
     private Repo? ResolveRepo()
     {
@@ -201,7 +212,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         var active = ResolveRepo();
         if (active == null || active.Id != msg.RepoId) return;
-        _deferReloadToWorkingTreeChange = false;
         if (_target.Value is not { } target) return;
         // Commit/range targets are pinned to shas — their content is immutable, so a working-tree
         // change has nothing to refresh. Matters in the review window, where many per-file diff
@@ -209,14 +219,32 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target.Side is DiffSide.Commit or DiffSide.Range) return;
         // A stage / unstage moves content between HEAD and the index; a HEAD→disk diff is the same
         // bytes afterwards. Matters in the working-tree review, where every loaded file's pane would
-        // otherwise refetch on every checkbox click.
-        if (msg.IndexOnly && target.Side is DiffSide.WorkingTree) return;
+        // otherwise refetch on every checkbox click. The per-hunk pills DO depend on the index,
+        // so they refresh from the cheap per-side diffs instead of a full reload.
+        if (msg.IndexOnly && target.Side is DiffSide.WorkingTree)
+        {
+            if (msg.Path == null || msg.Path == target.Path)
+                RefreshWorkingTreeHunkStates();
+            return;
+        }
         StartLoad();
     }
 
-    public void StageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: false);
+    public void StageHunk(int hunkIndex)
+    {
+        if (State.Value.Render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
+            StageWorkingTreeHunk(hunkIndex);
+        else
+            ApplyHunk(hunkIndex, cached: true, reverse: false);
+    }
 
-    public void UnstageHunk(int hunkIndex) => ApplyHunk(hunkIndex, cached: true, reverse: true);
+    public void UnstageHunk(int hunkIndex)
+    {
+        if (State.Value.Render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
+            UnstageWorkingTreeHunk(hunkIndex);
+        else
+            ApplyHunk(hunkIndex, cached: true, reverse: true);
+    }
 
     // A gap-expander click on a hunk separator bar. The first click fetches the after-side file
     // text in the background and seeds the expansion; every later click re-emits synchronously.
@@ -400,10 +428,170 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public void RequestDiscardHunk(int hunkIndex)
     {
+        if (State.Value.Render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
+        {
+            DiscardWorkingTreeHunk(hunkIndex);
+            return;
+        }
         if (!TryGetPatchContext(hunkIndex, out var repo, out var diff)) return;
         var patch = HunkPatchBuilder.Build(diff, hunkIndex);
         _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardHunkDialog { Repo = repo, Path = diff.Path, Patch = patch, OnClose = onClose }));
     }
+
+    // The WorkingTree render is HEAD→disk, but hunk ops must patch against a diff whose base
+    // matches the apply target — a combined hunk's lines come from HEAD/disk and would mismatch a
+    // partially-staged index. The flows below therefore resolve the shown hunk to the hunks of the
+    // right per-side diff (fetched fresh at click time) via the side the two diffs share: stage and
+    // discard map through the index→worktree diff by disk lines (shared new side); unstage maps
+    // through the HEAD→index diff by HEAD lines (shared old side). Stage applies --cached, unstage
+    // --cached --reverse; discard confirms, then reverse-applies to the worktree, reverting the
+    // region to the index and leaving staged content alone. Outcomes surface as toasts: unlike the
+    // embedded pane, the review surface renders no OpError strip.
+    private void StageWorkingTreeHunk(int hunkIndex)
+        => RunWorkingTreeHunkOp(hunkIndex, reverse: false, DiffSide.Unstaged,
+            HunkOverlap.NewSideChangeSpan, NothingToStageText);
+
+    private void UnstageWorkingTreeHunk(int hunkIndex)
+        => RunWorkingTreeHunkOp(hunkIndex, reverse: true, DiffSide.Staged,
+            HunkOverlap.OldSideChangeSpan, NothingToUnstageText);
+
+    private void DiscardWorkingTreeHunk(int hunkIndex)
+        => RunWorkingTreeHunkOp(hunkIndex, reverse: null, DiffSide.Unstaged,
+            HunkOverlap.NewSideChangeSpan, NothingToDiscardText);
+
+    private void RunWorkingTreeHunkOp(
+        int hunkIndex,
+        bool? reverse,
+        DiffSide mapSide,
+        Func<DiffHunk, (int Start, int End)> spanOf,
+        string nothingText)
+    {
+        if (!TryGetPatchContext(hunkIndex, out var repo, out var shown)) return;
+        var span = spanOf(shown.Hunks[hunkIndex]);
+        var service = _gitService;
+        var bus = _bus;
+        var dispatcher = Dispatcher;
+        var repoId = repo.Id;
+        var path = shown.Path;
+        var unavailableText = PatchUnavailableText;
+        Task.Run(() =>
+        {
+            var (patch, nothing, error) = MapWorkingTreeHunk(service, repo, path, mapSide, span, spanOf, unavailableText);
+            if (error == null && patch != null && reverse is { } r)
+            {
+                try
+                {
+                    var outcome = service.ApplyPatch(repo, patch, cached: true, reverse: r);
+                    error = outcome.FailureMessage;
+                }
+                catch (Exception ex) { error = ex.Message; }
+            }
+
+            dispatcher.Post(() =>
+            {
+                if (error != null)
+                {
+                    bus.Broadcast(new ShowToastMessage(ToastIntent.Error(error)));
+                    if (reverse != null) bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+                }
+                else if (nothing)
+                {
+                    bus.Broadcast(new ShowToastMessage(ToastIntent.Info(nothingText)));
+                }
+                else if (reverse != null)
+                {
+                    // IndexOnly: the HEAD→disk render is byte-identical after an index op, so this
+                    // pane keeps its content; the broadcast loops back into OnWorkingTreeChanged,
+                    // which refreshes the per-hunk pills against the new index.
+                    bus.Broadcast(new WorkingTreeChangedMessage(repoId, IndexOnly: true, Path: path));
+                }
+                else
+                {
+                    bus.Broadcast(new ShowDialogMessage(onClose =>
+                        new DiscardHunkDialog { Repo = repo, Path = path, Patch = patch!, OnClose = onClose }));
+                }
+            });
+        });
+    }
+
+    // Worker-side: the file's per-side diff, filtered to the hunks whose shared-side lines
+    // intersect the span. Nothing = that side has no content left in the region (or at all).
+    private static (string? Patch, bool Nothing, string? Error) MapWorkingTreeHunk(
+        IGitService service,
+        Repo repo,
+        string path,
+        DiffSide mapSide,
+        (int Start, int End) span,
+        Func<DiffHunk, (int Start, int End)> spanOf,
+        string unavailableText)
+    {
+        try
+        {
+            var diff = service.GetDiff(repo, path, mapSide);
+            if (diff.Hunks.Count == 0) return (null, true, null);
+            if (!HunkPatchBuilder.CanPatchHunk(diff))
+                return (null, false, diff.ErrorMessage ?? unavailableText);
+            var indices = HunkOverlap.OverlappingHunks(diff, span, spanOf);
+            if (indices.Count == 0) return (null, true, null);
+            return (HunkPatchBuilder.Build(diff, indices), false, null);
+        }
+        catch (Exception ex) { return (null, false, ex.Message); }
+    }
+
+    // Recomputes each shown WorkingTree hunk's index state from fresh per-side diffs: overlap with
+    // the index→worktree diff (shared new side) means unstaged content, overlap with the HEAD→index
+    // diff (shared old side) means staged content. Guarded against the render having moved on while
+    // the diffs were fetched — the states would be aligned to some other hunk list.
+    private void RefreshWorkingTreeHunkStates()
+    {
+        if (State.Value.Render is not DiffRenderState.Loaded { Result: { Side: DiffSide.WorkingTree } shown }) return;
+        if (!HunkPatchBuilder.CanPatchHunk(shown)) return;
+        var repo = ResolveRepo();
+        if (repo == null) return;
+        var service = _gitService;
+        var dispatcher = Dispatcher;
+        var gen = ++_hunkStateGen;
+        Task.Run(() =>
+        {
+            WorkingTreeHunkState[] states;
+            try
+            {
+                var unstagedTask = Task.Run(() => service.GetDiff(repo, shown.Path, DiffSide.Unstaged));
+                var staged = service.GetDiff(repo, shown.Path, DiffSide.Staged);
+                var unstaged = unstagedTask.GetAwaiter().GetResult();
+                states = new WorkingTreeHunkState[shown.Hunks.Count];
+                for (var i = 0; i < shown.Hunks.Count; i++)
+                {
+                    var hunk = shown.Hunks[i];
+                    var hasUnstaged = HunkOverlap.Overlaps(
+                        unstaged, HunkOverlap.NewSideChangeSpan(hunk), HunkOverlap.NewSideChangeSpan);
+                    var hasStaged = HunkOverlap.Overlaps(
+                        staged, HunkOverlap.OldSideChangeSpan(hunk), HunkOverlap.OldSideChangeSpan);
+                    states[i] = new WorkingTreeHunkState(hasStaged, hasUnstaged);
+                }
+            }
+            catch { return; }
+
+            dispatcher.Post(() =>
+            {
+                if (gen != _hunkStateGen) return;
+                if (State.Value.Render is not DiffRenderState.Loaded cur || !ReferenceEquals(cur.Result, shown)) return;
+                Update(s => s with { HunkStates = states });
+            });
+        });
+    }
+
+    private string NothingToStageText
+        => _loc?.Strings.Value.DiffHunkNothingToStage ?? "This change is already staged.";
+
+    private string NothingToDiscardText
+        => _loc?.Strings.Value.DiffHunkNothingToDiscard ?? "No unstaged changes to discard here.";
+
+    private string NothingToUnstageText
+        => _loc?.Strings.Value.DiffHunkNothingToUnstage ?? "Nothing staged in this hunk.";
+
+    private string PatchUnavailableText
+        => _loc?.Strings.Value.DiffHunkPatchUnavailable ?? "This file can't be staged by hunk.";
 
     private void ApplyHunk(int hunkIndex, bool cached, bool reverse)
     {
@@ -524,6 +712,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // result can't land on the diff we're about to load.
         _highlightLane.Bump();
 
+        if (State.Value.HunkStates != null)
+            Update(s => s with { HunkStates = null });
+
         var target = _target.Value;
         if (target == null)
         {
@@ -594,6 +785,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // full-file placeholders (binary/deleted), which need no highlighting.
         if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
             StartHighlight(repo, diff, commitSha, baseSha);
+        if (render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
+            RefreshWorkingTreeHunkStates();
     }
 
     // Result of a load: the render to show plus the source diff (when one should drive a highlight

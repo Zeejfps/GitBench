@@ -17,9 +17,15 @@ internal static class HunkPatchBuilder
         return true;
     }
 
-    public static string Build(DiffResult diff, int hunkIndex)
+    public static string Build(DiffResult diff, int hunkIndex) => Build(diff, [hunkIndex]);
+
+    public static string Build(DiffResult diff, IReadOnlyList<int> hunkIndices)
     {
-        var hunk = diff.Hunks[hunkIndex];
+        if (hunkIndices.Count == 0)
+            throw new ArgumentException("At least one hunk index is required.", nameof(hunkIndices));
+        var ordered = hunkIndices.ToArray();
+        Array.Sort(ordered);
+        var firstHunk = diff.Hunks[ordered[0]];
         var path = diff.Path;
         var sb = new StringBuilder();
 
@@ -32,8 +38,8 @@ internal static class HunkPatchBuilder
         // exactly one hunk, so require that too: it stops a coincidental -0,0 / +0,0 range on
         // one hunk of a multi-hunk diff from injecting a spurious new/deleted-file header.
         var singleHunk = diff.Hunks.Count == 1;
-        var isNewFile = singleHunk && hunk.OldLines == 0 && hunk.OldStart == 0;
-        var isDeletedFile = singleHunk && hunk.NewLines == 0 && hunk.NewStart == 0;
+        var isNewFile = singleHunk && firstHunk.OldLines == 0 && firstHunk.OldStart == 0;
+        var isDeletedFile = singleHunk && firstHunk.NewLines == 0 && firstHunk.NewStart == 0;
         const int DefaultFileMode = 33188; // 0o100644
 
         if (isNewFile)
@@ -51,23 +57,27 @@ internal static class HunkPatchBuilder
         sb.Append("--- ").Append(oldFile).Append('\n');
         sb.Append("+++ ").Append(newFile).Append('\n');
 
-        sb.Append("@@ -").Append(hunk.OldStart).Append(',').Append(hunk.OldLines)
-            .Append(" +").Append(hunk.NewStart).Append(',').Append(hunk.NewLines).Append(" @@");
-        if (!string.IsNullOrEmpty(hunk.Header))
-            sb.Append(' ').Append(hunk.Header);
-        sb.Append('\n');
-
-        foreach (var line in hunk.Lines)
+        foreach (var index in ordered)
         {
-            var prefix = line.Kind switch
+            var hunk = diff.Hunks[index];
+            sb.Append("@@ -").Append(hunk.OldStart).Append(',').Append(hunk.OldLines)
+                .Append(" +").Append(hunk.NewStart).Append(',').Append(hunk.NewLines).Append(" @@");
+            if (!string.IsNullOrEmpty(hunk.Header))
+                sb.Append(' ').Append(hunk.Header);
+            sb.Append('\n');
+
+            foreach (var line in hunk.Lines)
             {
-                DiffLineKind.Added => '+',
-                DiffLineKind.Removed => '-',
-                _ => ' ',
-            };
-            sb.Append(prefix).Append(line.Text).Append('\n');
-            if (line.NoNewlineAtEof)
-                sb.Append("\\ No newline at end of file\n");
+                var prefix = line.Kind switch
+                {
+                    DiffLineKind.Added => '+',
+                    DiffLineKind.Removed => '-',
+                    _ => ' ',
+                };
+                sb.Append(prefix).Append(line.Text).Append('\n');
+                if (line.NoNewlineAtEof)
+                    sb.Append("\\ No newline at end of file\n");
+            }
         }
 
         return sb.ToString();

@@ -153,6 +153,41 @@ public class HunkPatchBuilderTests
         Assert.Contains("--- /dev/null\n", patch);
     }
 
+    // The working-tree review stages a mapped set of hunks as one patch: one file header, every
+    // requested @@ body, in file order regardless of the order the indices arrive in.
+    [Fact]
+    public void MultiHunkBuildEmitsHeaderOnceAndHunksInFileOrder()
+    {
+        var first = new DiffHunk(1, 1, 1, 1, null, new[] { Rem(1, "a"), Add(1, "A") });
+        var second = new DiffHunk(10, 1, 10, 1, null, new[] { Rem(10, "b"), Add(10, "B") });
+        var third = new DiffHunk(20, 1, 20, 1, null, new[] { Rem(20, "c"), Add(20, "C") });
+        var diff = Result("file.txt", truncated: false, first, second, third);
+
+        var patch = HunkPatchBuilder.Build(diff, new[] { 2, 0 });
+
+        Assert.Equal(
+            "diff --git a/file.txt b/file.txt\n" +
+            "--- a/file.txt\n" +
+            "+++ b/file.txt\n" +
+            "@@ -1,1 +1,1 @@\n" +
+            "-a\n" +
+            "+A\n" +
+            "@@ -20,1 +20,1 @@\n" +
+            "-c\n" +
+            "+C\n",
+            patch);
+    }
+
+    [Fact]
+    public void SingleIndexBuildMatchesMultiHunkBuildOfOne()
+    {
+        var first = new DiffHunk(1, 1, 1, 1, null, new[] { Rem(1, "a"), Add(1, "A") });
+        var second = new DiffHunk(10, 1, 10, 1, null, new[] { Rem(10, "b"), Add(10, "B") });
+        var diff = Result("file.txt", truncated: false, first, second);
+
+        Assert.Equal(HunkPatchBuilder.Build(diff, 1), HunkPatchBuilder.Build(diff, new[] { 1 }));
+    }
+
     // Intra-line emphasis is view-local (lives on DiffRow.Line, never on DiffLine), so a replace
     // block — the kind that gets emphasized at render time — produces a patch built solely from
     // Kind/Text. Byte-for-byte unchanged regardless of any emphasis the renderer computes.
