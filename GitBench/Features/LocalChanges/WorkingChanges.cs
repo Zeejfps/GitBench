@@ -42,8 +42,8 @@ internal sealed class LocalChangesView : ContainerView
         var focusRing = new FocusRing();
         content.RegisterFocusStops(focusRing);
 
-        // Keep-alive: the list layout's view owns the focus ring and its panels' scroll state, and the
-        // review layout's stacked diffs are expensive to re-mint. Switching layouts only toggles which
+        // Keep-alive: the Files layout's view owns the focus ring and its panels' scroll state, and the
+        // Diff layout's stacked diffs are expensive to re-mint. Switching layouts only toggles which
         // is shown.
         var body = new Switch<WorkingChangesLayout>
         {
@@ -51,7 +51,7 @@ internal sealed class LocalChangesView : ContainerView
             KeepAlive = true,
             Case = l => l switch
             {
-                WorkingChangesLayout.Review => new WorkingTreeReviewView(),
+                WorkingChangesLayout.Diff => new WorkingTreeReviewView(),
                 _ => new Raw { View = content },
             },
         }.BuildView(ctx);

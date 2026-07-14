@@ -37,9 +37,9 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     // diff pane (e.g. the commit history list), where F should do nothing.
     public Action? OnToggleFullFile { get; set; }
 
-    // Optional Space "view the selected file in the Review layout". Left null on lists with no
-    // review surface to jump to, where Space passes through.
-    public Action? OnViewInReview { get; set; }
+    // Optional Space "view the selected file in the Diff layout". Left null on lists with no
+    // diff surface to jump to, where Space passes through.
+    public Action? OnViewInDiff { get; set; }
 
     // Optional Ctrl/Cmd+A "select all rows". Left null on single-select lists, where the key
     // passes through.
@@ -138,9 +138,9 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
             OnToggleFullFile();
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.Space && OnViewInReview != null)
+        else if (e.Key == KeyboardKey.Space && OnViewInDiff != null)
         {
-            OnViewInReview();
+            OnViewInDiff();
             e.Consume();
         }
     }

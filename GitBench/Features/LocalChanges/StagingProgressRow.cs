@@ -12,7 +12,7 @@ namespace GitBench.Features.LocalChanges;
 /// <summary>
 /// "N / M files staged" with a meter, or a success badge once everything is staged. Rides the trailing
 /// edge of the <see cref="WorkingChangesTabStrip"/>, directly above the commit bar the reviewer is
-/// walking toward. Hidden in the List layout, whose panel headers already carry per-side counts, and
+/// walking toward. Hidden in the Files layout, whose panel headers already carry per-side counts, and
 /// while the working tree is clean.
 /// </summary>
 internal sealed record StagingProgressRow : Widget
@@ -23,7 +23,7 @@ internal sealed record StagingProgressRow : Widget
         var review = ctx.Require<WorkingTreeReviewViewModel>();
 
         var visible = Prop.Bind(() =>
-            layout.Value == WorkingChangesLayout.Review && review.Hud.Value.HasFiles);
+            layout.Value == WorkingChangesLayout.Diff && review.Hud.Value.HasFiles);
 
         return new Row
         {

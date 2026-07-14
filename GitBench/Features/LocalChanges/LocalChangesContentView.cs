@@ -204,7 +204,7 @@ internal sealed class LocalChangesContentView : ContainerView
             expand => _vm.SetCursorFolderExpanded(expand),
             OnActivateSelection,
             OnDeleteSelection);
-        _arrowController.OnViewInReview = ViewCursorRowInReview;
+        _arrowController.OnViewInDiff = ViewCursorRowInDiff;
         this.UseController(input, _arrowController);
 
         this.Bind(_enterTween.LinearProgress, p => _contentRoot.Opacity = p);
@@ -314,20 +314,20 @@ internal sealed class LocalChangesContentView : ContainerView
 
     private void OnFolderToggle(FileRow row) => _vm.ToggleFolder(row.Side, row.FullPath);
 
-    // Jumps to the Review layout scrolled to the file. Layout first: the review view is built
+    // Jumps to the Diff layout scrolled to the file. Layout first: the diff view is built
     // lazily on the first switch (KeepAlive Switch), and only once alive does it subscribe to the
     // scroll request ActivateFile fires.
-    private void ViewInReview(string path)
+    private void ViewInDiff(string path)
     {
         _arrowController.ReleaseFocus();
-        _layout.Value = WorkingChangesLayout.Review;
+        _layout.Value = WorkingChangesLayout.Diff;
         _review.ActivateFile(path);
     }
 
-    private void ViewCursorRowInReview()
+    private void ViewCursorRowInDiff()
     {
         if (_vm.Selection.Value.Cursor is { IsFolder: false } cursor)
-            ViewInReview(cursor.FullPath);
+            ViewInDiff(cursor.FullPath);
     }
 
     // Enter stages the selection from the unstaged side and unstages it from the staged
@@ -370,7 +370,7 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             var paths = ResolveTargetPaths(target);
             _fileOps.AppendFileOps(items, paths, stageShortcut: "Enter", discardShortcut: "Delete");
-            AppendViewInReview(items, target);
+            AppendViewInDiff(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
@@ -408,7 +408,7 @@ internal sealed class LocalChangesContentView : ContainerView
         {
             var paths = ResolveTargetPaths(target);
             _fileOps.AppendFileOps(items, paths, unstageShortcut: "Enter");
-            AppendViewInReview(items, target);
+            AppendViewInDiff(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
         }
@@ -422,13 +422,13 @@ internal sealed class LocalChangesContentView : ContainerView
     }
 
     // The jump is single-file by nature, so it targets the clicked row regardless of selection.
-    private void AppendViewInReview(List<RepoBarContextMenu.Item> items, FileRow target)
+    private void AppendViewInDiff(List<RepoBarContextMenu.Item> items, FileRow target)
     {
         if (target.Kind != FileRowKind.File) return;
         var path = target.File!.Path;
         items.Add(new RepoBarContextMenu.Item(
-            _loc.Strings.Value.LocalchangesViewInReview,
-            () => ViewInReview(path),
+            _loc.Strings.Value.LocalchangesViewInDiff,
+            () => ViewInDiff(path),
             LucideIcons.ScrollText,
             Shortcut: "Space"));
     }

@@ -11,7 +11,7 @@ namespace GitBench.Features.LocalChanges;
 
 /// <summary>
 /// The strip between the working-tree pane and the commit bar: underline tabs choosing how the pane
-/// presents the working tree, and — in the Review layout — the staging progress on the trailing edge.
+/// presents the working tree, and — in the Diff layout — the staging progress on the trailing edge.
 ///
 /// It sits here, not in the toolbar, because the choice only means anything for the Changes pane: the
 /// toolbar is chrome shared with History, where the control has nothing to say. Underline tabs rather
@@ -45,12 +45,12 @@ internal sealed record WorkingChangesTabStrip : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                Tab(layout, WorkingChangesLayout.List, LucideIcons.LayoutList,
-                                    L.T(s => s.LocalchangesLayoutList),
-                                    L.T(s => s.LocalchangesLayoutListTooltip)),
-                                Tab(layout, WorkingChangesLayout.Review, LucideIcons.ScrollText,
-                                    L.T(s => s.LocalchangesLayoutReview),
-                                    L.T(s => s.LocalchangesLayoutReviewTooltip)),
+                                Tab(layout, WorkingChangesLayout.Diff, LucideIcons.ScrollText,
+                                    L.T(s => s.LocalchangesLayoutDiff),
+                                    L.T(s => s.LocalchangesLayoutDiffTooltip)),
+                                Tab(layout, WorkingChangesLayout.Files, LucideIcons.LayoutList,
+                                    L.T(s => s.LocalchangesLayoutFiles),
+                                    L.T(s => s.LocalchangesLayoutFilesTooltip)),
                                 new Grow { Child = new Box() },
                                 new StagingProgressRow(),
                             ],

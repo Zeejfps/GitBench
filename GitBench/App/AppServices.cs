@@ -34,7 +34,7 @@ internal static class AppServices
         context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
 
         // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
-        // switches on it, and the commit bar shows staging progress only in the Review layout.
+        // switches on it, and the commit bar shows staging progress only in the Diff layout.
         var workingChangesLayout = new State<WorkingChangesLayout>(preferences.Current.WorkingChangesLayout);
         workingChangesLayout.Changed += preferences.SetWorkingChangesLayout;
         context.AddService(workingChangesLayout);

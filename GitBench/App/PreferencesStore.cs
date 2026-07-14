@@ -37,7 +37,7 @@ public static class PreferencesStore
         public float? CommitDetailsWidth { get; set; } = 380f;
         public float? CommitDetailsSplitFraction { get; set; } = 2f / 3f;
         public FileViewMode? FileViewMode { get; set; } = Features.LocalChanges.FileViewMode.Flat;
-        public WorkingChangesLayout? WorkingChangesLayout { get; set; } = Features.LocalChanges.WorkingChangesLayout.List;
+        public WorkingChangesLayout? WorkingChangesLayout { get; set; } = Features.LocalChanges.WorkingChangesLayout.Diff;
         public bool? HideRemoteOnlyBranches { get; set; } = false;
     }
 
