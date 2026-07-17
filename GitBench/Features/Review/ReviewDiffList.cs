@@ -67,7 +67,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     // Breathing room above the first card and below the last, as phantom padding rows in the
     // flattened surface. The top pad rides on the first header's own gap band, so both edges
     // read as the same visible padding. The sticky header pins this far below the viewport top
-    // and the strip above it stays panel surface, so the padding survives stickiness.
+    // and the strip above it stays panel surface, so the padding survives stickiness. The bottom
+    // pad is only this tall until the viewport is known — see BottomPadHeight.
     private const float PanelPaddingY = 24f;
     private const float TopPadRowHeight = PanelPaddingY - SectionGap;
     private const float HeaderBandHeight = 38f;
@@ -161,6 +162,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private float _monoAdvance;
     private bool _metricsResolved;
     private float _naturalWidth;
+    private float _lastViewportHeight;
 
     private float _scrollX;
     // A programmatic vertical scroll target re-asserted for a few frames — same guard as
@@ -399,11 +401,17 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     // Row height for the virtual list. The list's offset table rebuild queries indices in
     // ascending order, so a riding cursor answers amortized O(1) instead of a binary search per
     // row; random probes (draw, hit-test) stay near the cursor.
+    // Editor-style overscroll tail: the last phantom row grows with the viewport so any file's
+    // header — the last one's included — can always scroll onto the pin line, and folding a file
+    // near the end keeps enough scroll headroom that the clamp never yanks the viewport.
+    private float BottomPadHeight()
+        => Math.Max(PanelPaddingY, _list.Position.Height - HeaderRowHeight - TopPadRowHeight);
+
     private float RowHeightAt(int i)
     {
         if (_sections.Count == 0) return LineHeight();
         if (i == 0) return TopPadRowHeight;
-        if (i == _list.ItemCount - 1) return PanelPaddingY;
+        if (i == _list.ItemCount - 1) return BottomPadHeight();
         if (_heightCursor >= _sections.Count || i < _sections[_heightCursor].StartRow) _heightCursor = 0;
         while (_heightCursor + 1 < _sections.Count && _sections[_heightCursor + 1].StartRow <= i) _heightCursor++;
         var s = _sections[_heightCursor];
@@ -1000,6 +1008,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
         EnsureMetrics(c);
         _buttonBar.EnsureMetrics(c);
+        // The overscroll tail is viewport-sized, so a resize re-measures the offset table.
+        if (Math.Abs(_list.Position.Height - _lastViewportHeight) > 0.5f)
+        {
+            _lastViewportHeight = _list.Position.Height;
+            _list.InvalidateRowHeights();
+        }
         ClampHorizontalScroll();
         ReassertPendingScroll();
         EnsureVisibleLoaded();
