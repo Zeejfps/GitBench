@@ -1087,7 +1087,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             c.DrawRect(new DrawRectInputs
             {
                 Position = Place(band, cardLeft, ActiveBarWidth),
-                Style = new RectStyle { BackgroundColor = _theme.RowSelection.AccentBar },
+                Style = new RectStyle { BackgroundColor = Dim(_theme.RowSelection.AccentBar) },
                 ZIndex = z + 7,
             });
         }
@@ -1192,7 +1192,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             c.DrawRect(new DrawRectInputs
             {
                 Position = Place(band, cardLeft, ActiveBarWidth),
-                Style = new RectStyle { BackgroundColor = _theme.RowSelection.AccentBar },
+                Style = new RectStyle { BackgroundColor = Dim(_theme.RowSelection.AccentBar) },
                 ZIndex = z + 1,
             });
         }
