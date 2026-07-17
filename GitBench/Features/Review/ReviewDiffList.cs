@@ -1078,8 +1078,19 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
         // Card outline: 1px sides on every body row, closed by a bottom edge on the last one.
         // Drawn above the row content (long scrolled lines pass beneath; the margin overlay masks
-        // whatever escapes the card).
+        // whatever escapes the card). The active file's accent bar continues from its header down
+        // the leading edge of every body row, so the selection stays visible mid-file.
         DrawCardSides(c, cardLeft, cardWidth, rowRect.Bottom, rowRect.Height, z + 6);
+        if (_vm.ActiveFile.Value == s.File.Path)
+        {
+            var band = new RectF(cardLeft, rowRect.Bottom, cardWidth, rowRect.Height);
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = Place(band, cardLeft, ActiveBarWidth),
+                Style = new RectStyle { BackgroundColor = _theme.RowSelection.AccentBar },
+                ZIndex = z + 7,
+            });
+        }
         if (local == s.BodyRows)
         {
             c.DrawRect(new DrawRectInputs
@@ -1151,12 +1162,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // A file's header: the gap band above (panel surface, untouched) and the card's header band —
     // fold chevron, status icon, path (dimmed once viewed), and the Viewed checkbox on the
-    // trailing edge. The active file carries a leading accent bar so the tree's highlight has a
-    // visible counterpart while scrolling. A folded card is just this band, closed by its own
-    // bottom edge.
+    // trailing edge. The active file takes the shared selection fill and a leading accent bar
+    // (continued down its body rows) so the tree's highlight has a visible counterpart while
+    // scrolling. A folded card is just this band, closed by its own bottom edge.
     private void DrawHeader(ICanvas c, Section s, RectF rowRect, bool hovered, int z)
     {
         var viewed = _vm.IsFileViewed(s.File.Path);
+        var active = _vm.ActiveFile.Value == s.File.Path;
         var cardLeft = rowRect.Left + PanelPaddingX;
         var cardWidth = Math.Max(0f, rowRect.Width - PanelPaddingX * 2);
         var band = new RectF(cardLeft, rowRect.Bottom, cardWidth, HeaderBandHeight);
@@ -1166,14 +1178,16 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             Position = band,
             Style = new RectStyle
             {
-                BackgroundColor = hovered ? _theme.RowSelection.FillHover : _theme.FileChangesSection.HeaderBackground,
+                BackgroundColor = active ? _theme.RowSelection.Fill
+                    : hovered ? _theme.RowSelection.FillHover
+                    : _theme.FileChangesSection.HeaderBackground,
                 BorderColor = BorderColorStyle.All(_theme.Palette.Border),
                 BorderSize = BorderSizeStyle.All(1),
             },
             ZIndex = z,
         });
 
-        if (_vm.ActiveFile.Value == s.File.Path)
+        if (active)
         {
             c.DrawRect(new DrawRectInputs
             {
