@@ -120,7 +120,7 @@ internal sealed record RepoBar : Widget
                                 [
                                     new IconButtonWidget
                                     {
-                                        Icon = LucideIcons.PanelLeftClose,
+                                        Icon = Direction.Glyph(ctx, LucideIcons.PanelLeftClose, LucideIcons.PanelLeftOpen),
                                         IconSize = 15f,
                                         Width = 24,
                                         Height = 24,

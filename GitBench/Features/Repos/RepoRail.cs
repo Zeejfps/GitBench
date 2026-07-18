@@ -63,7 +63,7 @@ internal sealed record RepoRail : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                BuildHeader(collapse),
+                                BuildHeader(ctx, collapse),
                                 new Grow
                                 {
                                     Child = new KbmInput
@@ -139,7 +139,7 @@ internal sealed record RepoRail : Widget
     }
 
     // Mirrors the expanded bar's header strip so the chrome lines up across the swap.
-    private static IWidget BuildHeader(RepoBarCollapseState collapse) => new Box
+    private static IWidget BuildHeader(Context ctx, RepoBarCollapseState collapse) => new Box
     {
         Height = 44,
         BorderSize = new BorderSizeStyle { Bottom = 1 },
@@ -154,7 +154,7 @@ internal sealed record RepoRail : Widget
                 [
                     new IconButtonWidget
                     {
-                        Icon = LucideIcons.PanelLeftOpen,
+                        Icon = Direction.Glyph(ctx, LucideIcons.PanelLeftOpen, LucideIcons.PanelLeftClose),
                         IconSize = 15f,
                         Width = 24,
                         Height = 24,
