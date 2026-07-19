@@ -481,6 +481,8 @@
   "operations.step_progress": "단계 {step}/{total}",
   "operations.stopped_commit": "커밋: “{name}”",
   "operations.error_copy_tooltip": "오류를 클립보드에 복사",
+  "operations.lock_remove": "잠금 파일 제거",
+  "operations.lock_removed": "잠금 파일을 제거했습니다. 작업을 다시 시도하세요.",
   "operations.reconcile_title": "갈라진 브랜치 조정",
   "operations.reconcile_desc": "'{name}'과(와) 그 업스트림이 모두 진행되었습니다. 조정 방법을 선택한 다음 풀하세요.",
   "operations.reconcile_strategy_merge": "병합 (--no-rebase)",

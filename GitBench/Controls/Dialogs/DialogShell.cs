@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
+using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -65,6 +66,7 @@ internal sealed class DialogShell
     private readonly State<bool> _actionBusy = new(false);
     private readonly State<bool> _actionEnabled = new(true);
     private readonly State<bool> _cancelEnabled = new(true);
+    private readonly State<string?> _lockPath = new(null);
     private Action? _action;
     private SpinnerAnimation? _spinner;
 
@@ -127,6 +129,12 @@ internal sealed class DialogShell
         _spinner = _ctx.Get<SpinnerAnimation>();
 
         _errorView = DialogFrame.ErrorView(_ctx);
+        // Git's errors carry absolute paths, and a path is one unbreakable word — the wrapper
+        // keeps a too-wide word whole, so the error's intrinsic width is the whole line. The
+        // stretch column sizes its cross axis from that, which would drag every sibling (and the
+        // frame) out to the path's width. Cap it at the content box so the row wraps within the
+        // dialog instead of defining it.
+        _errorView.MaxWidthConstraint = Width - (DialogFrame.DefaultPadding * 2);
 
         var cancelView = new SecondaryDialogButton
         {
@@ -156,8 +164,43 @@ internal sealed class DialogShell
         };
         foreach (var child in Body) content.Children.Add(child);
         content.Children.Add(_errorView);
+        content.Children.Add(BuildLockRecoveryRow());
 
         _view = DialogFrame.Build(_ctx, _title, _onClose, content, footer, Width);
+    }
+
+    /// <summary>
+    /// The one-click recovery for a stale <c>*.lock</c> left by a crashed git: the button sits under
+    /// the error row and only materializes when the failure text names a lock file, so a discard (or
+    /// any other dialog action) that dies on "Unable to create '…index.lock'" can be unblocked without
+    /// leaving the app for a terminal.
+    /// </summary>
+    private View BuildLockRecoveryRow()
+    {
+        var button = new SecondaryDialogButton
+        {
+            Label = _ctx.Localization().Strings.Value.OperationsLockRemove,
+            Command = new Command(RemoveLockFile),
+            Height = DialogFrame.DefaultButtonHeight,
+            MinWidth = DialogFrame.DefaultButtonMinWidth,
+            Visible = Prop.Bind(() => _lockPath.Value != null),
+        }.WithController<KbmController>().BuildView(_ctx);
+
+        var row = new FlexRowView
+        {
+            Children = { button, new FlexItem { Grow = 1, Child = new ContainerView() } },
+        };
+        row.Bind(new Derived<bool>(() => _lockPath.Value != null), visible => row.IsVisible = visible);
+        return row;
+    }
+
+    private void RemoveLockFile()
+    {
+        if (_lockPath.Value is not { } path) return;
+
+        var failure = GitLockFile.Remove(path);
+        _errorView!.Text = failure ?? _ctx.Localization().Strings.Value.OperationsLockRemoved;
+        if (failure is null) _lockPath.Value = null;
     }
 
     /// <summary>
@@ -184,6 +227,7 @@ internal sealed class DialogShell
             else _spinner?.Stop();
         });
         Error.BindText(error, s => s ?? string.Empty);
+        _errorView!.Bind(error, s => _lockPath.Value = GitLockFile.Detect(s));
     }
 
     /// <summary>

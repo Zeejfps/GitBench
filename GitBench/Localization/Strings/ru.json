@@ -541,6 +541,8 @@
   "operations.step_progress": "Шаг {step} из {total}",
   "operations.stopped_commit": "Коммит: «{name}»",
   "operations.error_copy_tooltip": "Копировать ошибку в буфер обмена",
+  "operations.lock_remove": "Удалить файл блокировки",
+  "operations.lock_removed": "Файл блокировки удалён. Повторите операцию.",
   "operations.reconcile_title": "Согласование разошедшихся веток",
   "operations.reconcile_desc": "«{name}» и её вышестоящая ветка обе сдвинулись. Выберите способ согласования и получите изменения.",
   "operations.reconcile_strategy_merge": "Слияние (--no-rebase)",

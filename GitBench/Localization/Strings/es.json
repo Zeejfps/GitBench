@@ -481,6 +481,8 @@
   "operations.step_progress": "Paso {step} de {total}",
   "operations.stopped_commit": "Commit: “{name}”",
   "operations.error_copy_tooltip": "Copiar el error al portapapeles",
+  "operations.lock_remove": "Eliminar archivo de bloqueo",
+  "operations.lock_removed": "Archivo de bloqueo eliminado. Vuelve a intentar la operación.",
   "operations.reconcile_title": "Reconciliar ramas divergentes",
   "operations.reconcile_desc": "'{name}' y su upstream han avanzado por separado. Elige cómo reconciliarlas y luego haz pull.",
   "operations.reconcile_strategy_merge": "Fusionar (--no-rebase)",

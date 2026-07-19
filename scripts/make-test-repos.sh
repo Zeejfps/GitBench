@@ -147,6 +147,21 @@ gen_mixed_changes() {                           # 10-mixed-changes
   append tracked-c.txt "then unstaged part"
 }
 
+gen_stale_lock() {                              # 1c-stale-lock
+  new_repo 1c-stale-lock
+  write tracked-a.txt "original a"
+  write tracked-b.txt "original b"; ci "Initial files"
+  append tracked-a.txt "unstaged change"
+  append tracked-b.txt "another unstaged change"
+  write untracked.txt "brand new"
+  # A git that crashed (or was SIGKILLed) mid-write leaves these behind, and every later
+  # operation dies on "Unable to create '…lock': File exists" until they're removed. Planted
+  # last so the generator's own git calls aren't the ones that trip over them. Read-only
+  # commands (status, diff) still work — the failure only shows up once you try to mutate.
+  : > .git/index.lock                 # blocks stage / unstage / discard / commit
+  : > .git/refs/heads/main.lock       # blocks anything that moves the branch tip
+}
+
 gen_partial_hunks() {                           # 1b-partial-hunks
   new_repo 1b-partial-hunks
   # Three well-separated regions in one committed file. Region A is edited with a changed line
@@ -808,6 +823,7 @@ REGISTRY=(
   "19-gitignored|gen_gitignore|Ignored files, untracked, and a tracked-but-ignored file"
   "1a-intra-line|gen_intra_line|Intra-line emphasis: replace blocks, gate, tab/ws, unbalanced (commit+staged+unstaged)"
   "1b-partial-hunks|gen_partial_hunks|Partially-staged file: 3 WT hunks vs 2 shifted unstaged hunks"
+  "1c-stale-lock|gen_stale_lock|Stale index.lock + ref lock: every mutation fails until removed"
   "20-merge-conflict|gen_merge_conflict|MERGE in progress: content + add/add + modify/delete"
   "21-rebase-conflict|gen_rebase_conflict|REBASE stopped mid-conflict"
   "22-cherry-pick-conflict|gen_cherry_pick_conflict|CHERRY-PICK stopped mid-conflict"

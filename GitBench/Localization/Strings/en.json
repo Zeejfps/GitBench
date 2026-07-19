@@ -481,6 +481,8 @@
   "operations.step_progress": "Step {step} of {total}",
   "operations.stopped_commit": "Commit: “{name}”",
   "operations.error_copy_tooltip": "Copy error to clipboard",
+  "operations.lock_remove": "Remove lock file",
+  "operations.lock_removed": "Lock file removed. Try the operation again.",
   "operations.reconcile_title": "Reconcile divergent branches",
   "operations.reconcile_desc": "'{name}' and its upstream have both moved on. Choose how to reconcile them, then pull.",
   "operations.reconcile_strategy_merge": "Merge (--no-rebase)",

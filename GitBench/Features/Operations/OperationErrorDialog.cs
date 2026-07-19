@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
+using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -35,9 +36,17 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
 
     protected override DialogState CreateState(Context ctx) => new(OnClose);
 
+    // Null unless git's output names a stale *.lock; drives the recovery button and clears once
+    // the file is gone, so the dialog can't offer to delete the same path twice.
+    private readonly State<string?> _lockPath = new(null);
+    private readonly State<string?> _lockStatus = new(null);
+    private string _lockRemovedText = string.Empty;
+
     protected override IWidget Build(Context ctx, DialogState state)
     {
         var s = ctx.Localization().Strings.Value;
+        _lockPath.Value = GitLockFile.Detect(Message);
+        _lockRemovedText = s.OperationsLockRemoved;
         return new Box
         {
             Width = DialogFrame.WidthWide,
@@ -65,8 +74,24 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                                 new Row
                                 {
                                     CrossAxis = CrossAxisAlignment.Center,
+                                    Gap = Spacing.Sm,
                                     Children =
                                     [
+                                        new SecondaryDialogButton
+                                        {
+                                            Label = s.OperationsLockRemove,
+                                            Command = new Command(RemoveLockFile),
+                                            Height = DialogFrame.DefaultButtonHeight,
+                                            MinWidth = DialogFrame.DefaultButtonMinWidth,
+                                            Visible = Prop.Bind(() => _lockPath.Value != null),
+                                        }.WithController<KbmController>(),
+                                        new Text
+                                        {
+                                            Value = Prop.Bind(() => _lockStatus.Value ?? string.Empty),
+                                            VAlign = TextAlignment.Center,
+                                            Color = Theme.Color(t => t.DialogBody.RowTextMissing),
+                                            Visible = Prop.Bind(() => _lockStatus.Value != null),
+                                        },
                                         new Spacer(),
                                         new ActionDialogButton
                                         {
@@ -84,6 +109,15 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                 },
             ],
         };
+    }
+
+    private void RemoveLockFile()
+    {
+        if (_lockPath.Value is not { } path) return;
+
+        var failure = GitLockFile.Remove(path);
+        _lockStatus.Value = failure ?? _lockRemovedText;
+        if (failure is null) _lockPath.Value = null;
     }
 
     // Symmetric left spacer keeps the title centered: it matches the combined width of the two

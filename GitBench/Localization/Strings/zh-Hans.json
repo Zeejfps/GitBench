@@ -481,6 +481,8 @@
   "operations.step_progress": "第 {step}/{total} 步",
   "operations.stopped_commit": "提交：“{name}”",
   "operations.error_copy_tooltip": "将错误复制到剪贴板",
+  "operations.lock_remove": "删除锁文件",
+  "operations.lock_removed": "锁文件已删除。请重试该操作。",
   "operations.reconcile_title": "调和分叉的分支",
   "operations.reconcile_desc": "'{name}' 及其上游都已向前推进。选择如何调和它们，然后拉取。",
   "operations.reconcile_strategy_merge": "合并 (--no-rebase)",

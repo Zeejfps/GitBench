@@ -567,6 +567,8 @@
   "operations.step_progress": "الخطوة {step} من {total}",
   "operations.stopped_commit": "الإيداع: “{name}”",
   "operations.error_copy_tooltip": "نسخ الخطأ إلى الحافظة",
+  "operations.lock_remove": "إزالة ملف القفل",
+  "operations.lock_removed": "تمت إزالة ملف القفل. أعد المحاولة.",
   "operations.reconcile_title": "التوفيق بين الفروع المتباعدة",
   "operations.reconcile_desc": "'{name}' وفرعه الأساسي تحرّكا كلاهما. اختر كيفية التوفيق بينهما، ثم اسحب.",
   "operations.reconcile_strategy_merge": "دمج (--no-rebase)",

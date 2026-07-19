@@ -481,6 +481,8 @@
   "operations.step_progress": "ステップ {step}/{total}",
   "operations.stopped_commit": "コミット: 「{name}」",
   "operations.error_copy_tooltip": "エラーをクリップボードにコピー",
+  "operations.lock_remove": "ロックファイルを削除",
+  "operations.lock_removed": "ロックファイルを削除しました。操作をやり直してください。",
   "operations.reconcile_title": "分岐したブランチを調整",
   "operations.reconcile_desc": "'{name}' とそのアップストリームの両方が進んでいます。調整方法を選んでからプルしてください。",
   "operations.reconcile_strategy_merge": "マージ (--no-rebase)",
