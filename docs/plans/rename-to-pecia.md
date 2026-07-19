@@ -30,12 +30,12 @@ Velopack keys an installation on `--packId`. Shipping a new packId means existin
 `GitBench` packages, find none, and silently stop updating — no error, no prompt.
 
 The userbase is small and an interruption is acceptable, so **take the clean identity**: new
-`packId`, new `bundleId`, new install directory, and one bridge release to tell existing users where
-to go. The alternative — freezing `--packId GitBench` forever inside a product called Pecia — was
-considered and rejected as a permanent wart for a one-time cost.
+`packId`, new `bundleId`, new install directory, and a bridge release that hands existing installs
+over to Pecia. The alternative — freezing `--packId GitBench` forever inside a product called
+Pecia — was considered and rejected as a permanent wart for a one-time cost.
 
-This means **existing installs will not auto-update to Pecia.** That is the accepted trade, and
-Phase 1 exists to soften it.
+Existing installs will not *auto-update* to Pecia in the Velopack sense; the bridge in Phase 1
+installs it for them instead.
 
 ## Phase 0 — reserve the namespace
 
@@ -47,17 +47,47 @@ Nothing else starts until this is done; a rename to a name someone else buys fir
 - [ ] Create the GitHub org/handle (`peciaapp` — `pecia` is squatted).
 - [ ] Trademark sanity check before promoting.
 
-## Phase 1 — bridge release (before any renaming)
+## Phase 1 — bridge release (installer handoff)
 
-Ship one final GitBench-branded release, on the **existing** packId, whose only new content is an
-in-app notice: the project is now Pecia, here is the download link, your data will carry over.
+Velopack cannot chain one packId to another. `UpdateOptions` exposes only `ExplicitChannel`,
+`AllowVersionDowngrade` and `MaximumDeltasBeforeFallback` — no appId override — and
+`UpdateManager.AppId` is read-only ("the currently installed application Id"). A custom
+`IUpdateSource` *could* lie about appId, since `GetReleaseFeed` receives it as a parameter, but the
+apply step unpacks into a directory keyed to the installed AppId against package metadata naming a
+different app. That is undocumented behaviour and the failure mode is an install that cannot
+self-repair. Do not do it.
 
-This is the last thing existing users receive automatically. It must go out before the identity
-changes, or there is no channel left to reach them.
+Instead the bridge performs a **handoff**: it is an ordinary GitBench-packId release that installs
+Pecia alongside itself, then steps aside. Every step is a supported operation.
 
-- [ ] In-app banner or dialog pointing at the new site.
+1. Existing installs auto-update to the bridge normally — same packId, ordinary release.
+2. On launch the bridge downloads the Pecia installer for its platform.
+3. It runs that installer, which lays down Pecia as a proper Velopack install under the new identity.
+4. Pecia starts, runs the Phase 4 data migration, reads the copied settings.
+5. The bridge reports that Pecia is installed and GitBench can be removed.
+
+**Fetch from a stable URL, not a GitHub one.** At the time the bridge is built and shipped, the
+Pecia releases may not exist yet, and the bridge cannot be re-released afterwards to fix a URL.
+Point it at `pecia.dev/download/{channel}` — a redirect that is controlled independently of release
+ordering and survives any future repo move.
+
+Per-platform, matching the asset names `vpk` produces:
+
+| Platform | Asset | Action |
+|---|---|---|
+| Windows | `Pecia-win-x64-Setup.exe` | Execute; confirm the silent-install flag against the vpk version in use |
+| macOS | `Pecia-osx-arm64-Setup.pkg` / `Pecia-osx-x64-Setup.pkg` | `open` the pkg — cannot be silent without signing/notarisation and an admin prompt |
+| Linux | `Pecia-linux-x64.AppImage` | Not an installer. Download beside the existing app, `chmod +x`, launch, exit |
+
+- [ ] Reuse the existing channel detection in `GitBench/App/UpdateFeed.cs:19` (`RuntimeChannel()`)
+      to pick the asset — it already resolves win-x64 / osx-arm64 / osx-x64 / linux-x64.
+- [ ] Download to temp, verify the file is non-empty and executable before running it.
+- [ ] Handle the user declining the macOS prompt — the bridge must stay usable, not wedge.
+- [ ] Fall back to opening the download page if the handoff fails for any reason.
 - [ ] Tag and publish on the current `GitBench` packId.
-- [ ] Update the GitHub release notes for the final tag to say the same thing.
+- [ ] Release notes for the final tag say the same thing, for anyone who reads them instead.
+
+A user who never launches the bridge never migrates. That is acceptable — they install manually.
 
 ## Phase 2 — code rename
 
@@ -67,9 +97,10 @@ changes, or there is no channel left to reach them.
       `GitBench.Automation` → `Pecia.Automation`, `GitBench.Localization.Generator`,
       `GitBench.sln` → `Pecia.sln`, `GitBenchHost` → `PeciaHost`.
 - [ ] `GitBench/GitBench.csproj`: `ApplicationIcon`, both `InternalsVisibleTo` entries.
-- [ ] `GitBench/App/UpdateFeed.cs:13` — `GithubSource` URL to the renamed repo. GitHub preserves
-      redirects after a repo rename, but new builds should point at the real URL rather than depend
-      on a redirect indefinitely.
+- [ ] `GitBench/App/UpdateFeed.cs:13` — `GithubSource` URL to the renamed repo. Verified: the
+      GitHub API 301s a renamed repo to its stable `/repositories/{id}/` form and `HttpClient`
+      follows redirects by default, so pre-rename installs keep updating. New builds should still
+      point at the real URL rather than depend on a redirect indefinitely.
 - [ ] `.mcp.json`, README, `docs/`, LICENSE header.
 
 ## Phase 3 — release pipeline
@@ -104,7 +135,11 @@ as a fresh install, which reads as data loss.
 
 ## Phase 6 — outward-facing
 
-- [ ] Rename the GitHub repo (redirects are preserved automatically).
+- [ ] Rename the GitHub repo (redirects are preserved automatically). **Never create a new repo at
+      `Zeejfps/GitBench`** — GitHub drops the rename redirect the moment the old name is reoccupied,
+      which would strand any install still resolving through it.
+- [ ] Set up `pecia.dev/download/{channel}` before shipping the Phase 1 bridge — the bridge depends
+      on it and cannot be re-released to fix a bad URL.
 - [ ] About field → `pecia.dev`; refresh topics.
 - [ ] New site at `pecia.dev`; **301** from `gitbench.builtbyzee.com`. The old subdomain was never
       indexed, so the redirect is courtesy for humans holding old links, not equity preservation.
