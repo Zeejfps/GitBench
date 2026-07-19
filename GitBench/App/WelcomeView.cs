@@ -39,7 +39,7 @@ internal sealed record WelcomeView : Widget
                             [
                                 new Text
                                 {
-                                    Value = "GitBench",
+                                    Value = "Pecia",
                                     FontSize = FontSize.Title,
                                     Weight = FontWeight.Bold,
                                     HAlign = TextAlignment.Center,

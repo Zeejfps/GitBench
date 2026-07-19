@@ -82,7 +82,7 @@ internal static class PlatformServices
                     {
                         new AppMenu
                         {
-                            Title = "GitBench",
+                            Title = "Pecia",
                             Role = AppMenuRole.Application,
                             Items =
                             {

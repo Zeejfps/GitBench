@@ -49,7 +49,7 @@ internal sealed class GitBenchHost : IDisposable
 
         var builder = GuiApp.CreateBuilder(new StartupConfig
         {
-            WindowTitle = "GitBench",
+            WindowTitle = "Pecia",
             WindowWidth = preferences.Current.WindowWidth,
             WindowHeight = preferences.Current.WindowHeight,
             WindowX = preferences.Current.WindowX,

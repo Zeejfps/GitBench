@@ -12,7 +12,7 @@ using ZGF.Observable;
 namespace GitBench.App;
 
 /// <summary>
-/// "About GitBench" modal: app icon, name, version, a link to the repo, and copyright.
+/// "About Pecia" modal: app icon, name, version, a link to the repo, and copyright.
 /// Opened from the macOS app menu (and reusable from a Help menu on other platforms).
 /// </summary>
 internal sealed record AboutDialog : Widget<DialogState>
@@ -61,7 +61,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         new AppLogo(),
                                         new Text
                                         {
-                                            Value = "GitBench",
+                                            Value = "Pecia",
                                             FontSize = FontSize.Title,
                                             HAlign = TextAlignment.Center,
                                             VAlign = TextAlignment.Center,
