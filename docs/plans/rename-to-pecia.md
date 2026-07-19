@@ -1,12 +1,5 @@
 # Rename: GitBench → Pecia
 
-> GitBench is being renamed because the name is unrankable. Google reports the site as
-> "Crawled — currently not indexed", and the cause is not technical: robots.txt, sitemap,
-> SSR markup and headings all check out. The name competes with GitKraken's gitbench, a Go
-> benchmarking tool, JetBrains' GitGoodBench, a fork of git, and gitbenchltd.com. Every link
-> pointing at the site today is either `rel="nofollow"` (GitHub's About field and README) or
-> from a zero-authority domain. A project that cannot be found cannot be adopted.
-
 > **Pecia** (PEH-cha) is the medieval university system, first attested in the Vercelli contract
 > of 1228, where a stationer held an authorized master copy — the *exemplar* — split into numbered
 > pieces. Each piece was rented in parallel to different scribes who copied simultaneously; if a
@@ -15,31 +8,21 @@
 
 > **Status: not started.** Phase 0 gates everything else.
 
-## Why this name survived
+## Verified
 
-Roughly 300 candidates were verified across five naming families. Nearly every recognizable English
-word in this semantic space is taken, and mostly taken recently — Cairn, Weft, Grove, Orrery,
-Fascicle, Pandect and Cartulary were all claimed by AI coding tools within the last two years, and
-Stemma turned out to be Palantir's distributed Git server.
-
-Names that died in verification, so they are not reconsidered:
-
-| Name | Cause of death |
+| Check | Result |
 |---|---|
-| Muster | NuGet ID taken; two live dev CLIs (`muster.tools`, `giantswarm/muster`); German for "pattern" |
-| Rookery | Registered USPTO mark (serial 98209308) covering downloadable software |
-| Colophon | Already the dev convention for a personal-site credits page; Monotype owns the foundry mark |
-| Forge / Sourcecraft | "Forge" is the category term for a git host; SourceCraft is Yandex's GitHub competitor |
-| Porcelain | `git status --porcelain` is a heavily documented flag |
-| Spinney | Verified healthy, but org handle squatted and everyone writes "Spinny" |
+| `pecia.dev` / `.sh` / `.app` / `.io` | No nameservers — likely free |
+| `peciaapp.com`, `getpecia.com` | Likely free |
+| `pecia.com` | Registered to a drop-catch broker (DOMAINRECOVER nameservers) |
+| npm `pecia` | Free |
+| NuGet `Pecia` | Free |
+| `github.com/pecia` | **Taken** — squatted zero-repo account; use `peciaapp` |
+| SEO | Page one is Wikipedia, OED, Encyclopedia.com, Oxford Academic. Zero software |
 
-Pecia's verified position: `pecia.dev`, `.sh`, `.app`, `.io` all show no nameservers; npm and NuGet
-free; page one is Wikipedia, OED, Encyclopedia.com and Oxford Academic — academic reference only,
-zero software.
-
-**Two known gaps.** `github.com/pecia` is a squatted zero-repo account, so the org handle must be
-`peciaapp` or similar. `pecia.com` is registered to a drop-catch broker (DOMAINRECOVER
-nameservers). Neither blocks the rename.
+**All domain checks were DNS-inferred — whois port 43 was blocked during verification.** A
+registered domain with no delegation is indistinguishable from an unregistered one. Confirm at a
+registrar before trusting.
 
 ## Identity decision: clean break
 
@@ -58,14 +41,11 @@ Phase 1 exists to soften it.
 
 Nothing else starts until this is done; a rename to a name someone else buys first is wasted work.
 
-- [ ] Confirm `pecia.dev` at a registrar and buy it. **Every availability check in this
-      investigation was DNS-inferred — whois port 43 was blocked throughout.** A registered domain
-      with no delegation is indistinguishable from an unregistered one. Verify before trusting.
+- [ ] Confirm `pecia.dev` at a registrar and buy it (see the DNS caveat above).
 - [ ] Buy `peciaapp.com` (or `getpecia.com`) as the `.com` presence.
 - [ ] Reserve NuGet ID `Pecia` and npm name `pecia` even if unused.
 - [ ] Create the GitHub org/handle (`peciaapp` — `pecia` is squatted).
-- [ ] Trademark sanity check before promoting. Rookery died on a registered mark that no amount
-      of domain checking surfaced.
+- [ ] Trademark sanity check before promoting.
 
 ## Phase 1 — bridge release (before any renaming)
 
@@ -126,17 +106,10 @@ as a fresh install, which reads as data loss.
 
 - [ ] Rename the GitHub repo (redirects are preserved automatically).
 - [ ] About field → `pecia.dev`; refresh topics.
-- [ ] New site at `pecia.dev`; **301** from `gitbench.builtbyzee.com`.
+- [ ] New site at `pecia.dev`; **301** from `gitbench.builtbyzee.com`. The old subdomain was never
+      indexed, so the redirect is courtesy for humans holding old links, not equity preservation.
 - [ ] Update the GitBench project entry on `evasilyev.com`.
 - [ ] Add the meta description the old site was missing.
-
-**On SEO expectations:** the old subdomain was never indexed, so there is no ranking or link equity
-to migrate. The 301 is courtesy for humans holding old links, not preservation. Ranking starts from
-zero either way — which is precisely why the rename is cheap now and expensive later.
-
-The actual unlock is off-page, and no amount of on-page work substitutes for it: a Show HN, r/git,
-alternativeto.net, and PRs to `awesome-dotnet` / `awesome-git`. GitHub's About and README links are
-`nofollow` and pass no authority, which is why the current setup has produced nothing.
 
 ## Verification
 
