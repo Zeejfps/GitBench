@@ -1,6 +1,6 @@
 # Rename: name candidates
 
-Renaming because "GitBench" isn't indexed and GitKraken owns the name. ~430 candidates probed, verified 2026-07-19; re-verify before you buy. `✅` = NuGet free. Bare `.com` is taken for nearly every real word — listed domains are what's buyable.
+Renaming because "GitBench" isn't indexed and GitKraken owns the name. ~430 candidates probed, verified 2026-07-19; re-verify before you buy. `✅` = NuGet free. **Domains that matter: `.com`, `.dev`, maybe `.app`. `.sh`/`.tools` are noise — ignore them.** Bare `.com`/`.dev`/`.app` are taken for nearly every real word — listed domains are the buyable modifier forms.
 
 ## Ranked list
 
@@ -15,7 +15,7 @@ Renaming because "GitBench" isn't indexed and GitKraken owns the name. ~430 cand
 | 7 | Shallop | A light open boat, past Skiff | `shallop.dev` `.sh` `.tools` `get/use/git/app`-`.com` | ✅ | Deepest namespace; spell risk (SHAL-up→scallop) |
 | 8 | Swoop | Dive in, take it, gone | `.sh` | ✅ | Motion + pitch |
 | 9 | Pennant | Signal flag streaming at speed | `.dev` `.sh` | ✅ | Free `.dev`; 3 syllables |
-| 10 | Glint | Flash of light off a moving edge | `glinttools.com` | ✅ | — |
+| 10 | ~~Glint~~ | Flash of light off a moving edge | `glinttools.com` | ✅ | ❌ **glint.info is a live Git GUI — same category, drop** |
 | 11 | Dotterel | Small fast plover; "dot" logo + .NET | `.sh` `.dev` `.tools` + all `.com` modifiers | ✅ | Fullest domains; niche steno namesake |
 | 12 | Sundog | The bright spot beside the sun | `sundog.sh` `usesundog.com` | ✅ | Distinctive; Sundog Software adjacent |
 | 13 | Swivel | Turn to face another repo | `.sh` `.tools` `swivelgit.com` | ✅ | Verb; feature-toggle adjacency |
@@ -35,12 +35,26 @@ Renaming because "GitBench" isn't indexed and GitKraken owns the name. ~430 cand
 | 27 | Scamper / Skate / Scoot / Skitter | small/quick verbs | various `.sh`/`.tools` | ✅ | Juvenile / EA Skate / erratic |
 | 28 | Sanderling / Bilby | bird / marsupial mascots | `.sh` / `bilbygit.com` | ✅ | .NET namesake / bare `.com` gone |
 
-Ship **Martlet** or **Glisk**. **Gleg** if SEO is everything. **Whippet** is the safe fallback.
+Ship **Martlet**, **Glisk**, or **Stoop** (2026-07-19 batch, below). **Gleg** or **Pennant** if bare `.dev` matters most. **Whippet** is the safe fallback. ~~Glint~~ is out — glint.info is a live Git GUI with the same name.
 Before committing: check USPTO class 9/42, and say it to 3 strangers (≥2 must spell it).
+
+## New candidates — 2026-07-19 batch
+
+Speed-of-flight and diff-review angles, plus a polyrepo "many" angle. Verified against `.com`/`.dev`/`.app`/NuGet/GitHub (`.sh`/`.tools` ignored). **None have a clean bare `.com`, `.dev`, or `.app`** — bare forms are all taken, so only modifier-`.com` is buyable for the whole batch.
+
+| Name | Says | Buyable `.com` | NuGet | GitHub noise | Verdict |
+|---|---|---|---|---|---|
+| **Stoop** | A peregrine's high-speed dive *is* a stoop | `stoopgit` `stoophq` `stooptools` | ✅ | Bayer/stoop 44★ — nothing marquee | **Keep — best of batch.** Cleanest namespace, spells itself, verb. Slots ~#3–5. No bare `.dev`; "porch" second meaning |
+| **Skein** | A skein is a flock of geese *in flight* → many repos | `skeingit` `skeinhq` `skeintools` | ✅ | jcrist/skein 145★ (YARN tool) | Keep. Polyrepo story; mild dev-tool namesake; spell risk (skein/skane) |
+| **Murmuration** | Thousands of starlings moving as one | `get`/`use`/`git`/`app`/`hq`/`tools`-`murmuration` (deepest of batch) | ✅ | 17★ | Namespace-rich but 4 syllables — fails say-it/spell-it |
+| **Pinion** | A flight feather *and* a gear | `piniongit` `piniontools` | ✅ | yaqwsx/Pinion 493★ (KiCad) | Marginal — thin domains |
+| **Cairn** | Stacked stones marking a trail = commit history | `cairngit` | ✅ | Cairn TTRPG 2036★ | Marginal — indie-game brand noise, thin domains |
+
+Killed this batch: **Peregrine** (NuGet taken, 880 repos, only `peregrinegit`), **Winnow** (NuGet taken by winnow-rs, a well-known Rust parser lib), **Merlin** (NuGet taken; top repo is Merlin, a C2 post-exploitation framework, 5576★ — toxic association).
 
 ## Names we did NOT use
 
-**Dev / .NET / git collision:** GitBench *(GitKraken)* · Kestrel · Fleet · Quilt · Stet · Gutter · Pact · Orchard · Splice · Register · Prow · Braid · Vilka · Etch · Sprig · Clasp · Trunk · Score · Keel · Stride · Nimble · Grit · Flit · Hurl · Truss · Crux · Weld · Astral · Rush · Posit · Arborist · Sidestep · Bounce · Quiver · Roundhouse · Octopus · Switchboard · Juggler · Juggle · Meta · Repo · Polyrepo · Monorepo · Poly · Polyglot · Polybase · Multipass · Multiplex · Manifold · Myriad · Omnia · Plural · Multiplicity · Manyfold · Hopscotch · Flip · Ferry · Dovecote · Flock · Hydra · Shuffle · Shimmy · Skim · Swerve · Pluck · Glide · Riffle · Veer · Darter · Borzoi · Harrier · Saluki · Jerboa · Turnstone · Nest · Bevy · Swarm · Bundle · Harbor · Depot · Rack · Caddy · Loom · Warp · Harness · Relay · Shuttle · Conductor · Turnstile · Snap · Yank · Trice · Whoosh · Brisk · Briskly · Nimbly · Glance · Grain · Gossamer · Shearwater · Avocet · Curlew · Shrike · Fleck · Wisp · Glisten · Snell · Alacrity · Solano · Ostro · Chinook · Zonda · Levanter · Felucca · Vaka · Proa · Sloop · Foil · Caravel · Terral · Oroshi · Gusto · Subito · Presto · Allegro · Stretto · Kedge · Wimble · Levin · Dapple · Airglow · Foxfire · GitLeap · GitFlick · GitGlide · GitDart · Gleam · Lumen · Glow · Spark · Ember · Beam · Ray · Photon · Prism · Halo · Aurora · Nimbus · Sparkle · Scintilla · Lustre · Chroma · Iris · Candle · Torch · Glimpse · Glimmer · Moonbeam · Corona · Flare · Flash · Zephyr · Mistral · Vim · Tailwind · Helm · Updraft · Kata · Vertex · Lattice · Spine · all `Omni-` · all `Git‹word›`.
+**Dev / .NET / git collision:** GitBench *(GitKraken)* · Kestrel · Fleet · Quilt · Stet · Gutter · Pact · Orchard · Splice · Register · Prow · Braid · Vilka · Etch · Sprig · Clasp · Trunk · Score · Keel · Stride · Nimble · Grit · Flit · Hurl · Truss · Crux · Weld · Astral · Rush · Posit · Arborist · Sidestep · Bounce · Quiver · Roundhouse · Octopus · Switchboard · Juggler · Juggle · Meta · Repo · Polyrepo · Monorepo · Poly · Polyglot · Polybase · Multipass · Multiplex · Manifold · Myriad · Omnia · Plural · Multiplicity · Manyfold · Hopscotch · Flip · Ferry · Dovecote · Flock · Hydra *(THC-Hydra cracker + FB config framework; also kills GitHydra)* · Shuffle · Shimmy · Skim · Swerve · Pluck · Glide · Riffle · Veer · Darter · Borzoi · Harrier · Saluki · Jerboa · Turnstone · Nest · Bevy · Swarm · Bundle · Harbor · Depot · Rack · Caddy · Loom · Warp · Harness · Relay · Shuttle · Conductor · Turnstile · Snap · Yank · Trice · Whoosh · Brisk · Briskly · Nimbly · Glance · Grain · Gossamer · Shearwater · Avocet · Curlew · Shrike · Fleck · Wisp · Glisten · Snell · Alacrity · Solano · Ostro · Chinook · Zonda · Levanter · Felucca · Vaka · Proa · Sloop · Foil · Caravel · Terral · Oroshi · Gusto · Subito · Presto · Allegro · Stretto · Kedge · Wimble · Levin · Dapple · Airglow · Foxfire · GitLeap · GitFlick · GitGlide · GitDart · Gleam · Lumen · Glow · Spark · Ember · Beam · Ray · Photon · Prism · Halo · Aurora · Nimbus · Sparkle · Scintilla · Lustre · Chroma · Iris · Candle · Torch · Glimpse · Glimmer · Moonbeam · Corona · Flare · Flash · Zephyr · Mistral · Vim · Tailwind · Helm · Updraft · Kata · Vertex · Lattice · Spine · Peregrine *(NuGet taken, 880 repos)* · Winnow *(winnow-rs Rust parser lib)* · Merlin *(Merlin C2 framework, 5576★)* · all `Omni-` · all `Git‹word›`.
 
 **Can't spell from hearing:** Pecia · Pliego · Poset · Pfad · Falz · Plooi · Kvisl · Merkle · Hasse · Trie · Treap · Keccak · Clique · Klados · Punto · Punkt · Ponte · Piega · Quoin · Forme · Quire · Caret · Obelus · Pilcrow · Preorder · Luge · Whir · Yare · Ketch · Wherry · Wight · Foehn · Vivace · Veloce · Tiercel · Vireo · Rathe · Swith · Mettle · Sleight · Prest · Birr · Croose · Skua · Petrel · Dhow · Currach · Umiak · Bateau · Pirogue · Coble · Faering · Yole · Birlinn · Eurus · Williwaw · Panoply.
 
@@ -58,9 +72,6 @@ Before committing: check USPTO class 9/42, and say it to 3 strangers (≥2 must 
 |---|---|
 | `.com` | `rdap.verisign.com/com/v1/domain/<n>.com` — no rate limit |
 | `.dev` `.app` | `pubapi.registry.google/rdap/domain/<n>.dev` — 404 = free |
-| `.tools` | `rdap.identitydigital.services/rdap/domain/<n>.tools` — 404 = free; DPML string = locked |
-| `.sh` | `whois -h whois.nic.sh <n>.sh` — "Domain not found." = free |
-| NuGet | `api.nuget.org/v3-flatcontainer/<lowername>/index.json` |
 | GitHub | `gh api search/repositories?q=<n>+in:name` |
 | Trademarks | `POST tmdn.org/tmview/api/search/results` — was down 2026-07-19, retry |
 
