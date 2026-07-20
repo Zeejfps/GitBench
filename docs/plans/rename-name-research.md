@@ -52,6 +52,66 @@ Speed-of-flight and diff-review angles, plus a polyrepo "many" angle. Verified a
 
 Killed this batch: **Peregrine** (NuGet taken, 880 repos, only `peregrinegit`), **Winnow** (NuGet taken by winnow-rs, a well-known Rust parser lib), **Merlin** (NuGet taken; top repo is Merlin, a C2 post-exploitation framework, 5576★ — toxic association).
 
+## Wordplay — recursive acronyms & the fork pun (2026-07-19)
+
+GNU-style: the name is a recursive acronym whose first word *is* the name — `X Is Not Git`. Structurally self-defeating for domains, because every clean word that expands to "… Not Git" is a common word with a crowded namespace. Bare `.com`/`.dev`/`.app` are taken for all of these; only modifier-`.com` is buyable. Concept is the value, not availability.
+
+| Name | Expansion / pun | Buyable `.com` | NuGet | Collision | Verdict |
+|---|---|---|---|---|---|
+| **WING** | "**W**ing **I**s **N**ot **G**it" | `winggit` | ❌ | winglang/wing 5392★ + Wing IDE | Concept winner (recursive **and** on the flight theme), availability loser |
+| **GNAT** | "**G**nat's **N**ot **A** **T**ool" | `getgnat` `usegnat` `gnatgit` `gnathq` | ✅ | AdaCore GNAT (Ada compiler) | **Best *ownable* recursive** — mascot = tiny fast flyer |
+| **NAG** | "**N**ag **A**in't **G**it" | `usenag` `naggit` `naghq` | ✅ | noisy token, no marquee | Recursive-clean but "nag" is negative |
+| **FANG** | "**F**ang's **A** **N**ew **G**it" | `usefang` `fanggit` | ✅ | charmbracelet/fang 1927★ | Aggressive register |
+| **Tine** | a *tine* is a fork's prong → "just part of a fork" | `usetine` `tinegit` `tinehq` | ✅ | 248★ + Tine dairy brand | **Cleanest fork-pun** (not recursive); spells clean |
+| **Spork** | the not-quite-a-fork | `usespork` `sporkgit` `sporkhq` | ✅ | sporkrb/spork 1385★ | Playful; Ruby testing-tool namesake |
+
+Killed: **Wren** (wren-lang 8077★), **Finch** (AWS Finch container tool + finagle/finch 1593★), **Snag** ("a problem" + no `.com` modifiers free).
+
+### Coined recursive acronyms (attempted 2026-07-19)
+
+Coining a *short* word does **not** rescue the bare `.com` — every 3–4 letter `.com` is registered regardless of meaning (that space is fully squatted), and `.dev`/`.app` for short coinages are taken too. NuGet is free across the board. Domains only open up when you coin *longer* or go *literal*. And a purely coined recursive acronym ("Ving Is Not Git") is **circular** — nobody remembers why it's called Ving. The winners are the ones that read as themselves.
+
+GUI-recursive family (payload spells `ORG` = "Only a Repo GUI"):
+
+| Name | Expansion | Buyable `.com` | NuGet | Collision | Verdict |
+|---|---|---|---|---|---|
+| **Vorg** | "**V**org's **O**nly a **R**epo **G**UI" | `getvorg` `usevorg` `vorggit` `vorghq` `vorgapp` `vorggui` | ✅ | vorg/timeline.js 551★ (low) | **Cleanest** — GUI angle + no dev-space namesake |
+| **Norg** | "**N**org's **O**nly a **R**epo **G**UI" | `getnorg` `usenorg` `norggit` `norghq` `norggui` | ✅ | **neorg `.norg` format** (Neovim plugin) | Great fit, but adjacent-space clash bites |
+| **Zang** | "**Z**ang's **A** **N**ew **G**it" | `usezang` `zanghq` `myzang` | ✅ | zangodb 1069★ + Twilio Zang residue | Punchiest sound; weaker acronym, thin domains |
+
+Literal "not fork / not git" coinages (read instantly, no circularity):
+
+| Name | Reads as | Domains | NuGet | Collision |
+|---|---|---|---|---|
+| **Unfork** | the anti-fork | **`.dev` + `.app` free**; `getunfork` `useunfork` `unforkapp` `.com` | ✅ | whitequark/unfork 1490★ (real tool) |
+| **Notafork** | "not a fork" | **`.dev` + `.app` free**; `usenotafork.com` | ✅ | clean, clunky spoken |
+| **Notagit** | "not a git" | **bare `notagit.com` FREE** | ✅ | clean (16 repos); reads as two words |
+| **Ungitten** | "un-gitten" | **bare `ungitten.com` FREE** | ✅ | clean; cute-weird |
+| **Gliskit** | Glisk + kit | **bare `.com` + `.dev` both FREE** | ✅ | clean; ties to #2 Glisk |
+
+### GUI-explicit recursive / descriptive (2026-07-19)
+
+Payload spells the GUI part, or the word visibly contains "git". These coinages aren't squatted — empty namespaces.
+
+| Name | Reads as | `.com` | `.dev` | NuGet | GitHub | Verdict |
+|---|---|---|---|---|---|---|
+| **Vorgui** | Vorg **+ GUI** (ends in GUI) | ✅ | ✅ | ✅ | ~0 | **Best** — extends Vorg, says "GUI", fully empty; say-it risk (vor-GWEE?) |
+| **Vigit** | "**Vi**git Is (a) **Git** Interface Tool" | taken | ✅ | ✅ | 0★ | Best coined single word — git visible, brandable |
+| **GuiGit** | **GUI + Git**, literal | ✅ | ✅ | ✅ | 0★ | Maximally clear but descriptive = weak mark, awkward to say |
+| **RepoGui** | "Repo GUI" | ✅ | taken | ✅ | 9★ | Same descriptive tradeoff |
+| **Frigit** | contains GIT + *frigate* (fast ship) pun | taken | ✅ | ✅ | 0★ | Boat-theme wink; "frigid" drags |
+
+The `-org` = "…Repo GUI" family is otherwise squatted out at 4 letters (`sorg` `lorg` `dorg` `gorg` `torg` all taken) — **Vorg** remains the clean one.
+
+**Mark-strength note:** literal names (GuiGit, RepoGui) self-explain but are **weak, near-unprotectable marks** — you can't stop others using descriptive terms, and they read generic. Coined/suggestive (Vorgui, Vigit) are more memorable **and** more defensible. Spectrum: generic < descriptive < suggestive < fanciful — live on the right half.
+
+### Legal note: "X, Not Fork"
+
+- **"…Not Git" is safe.** Exact GNU precedent — "GNU's Not Unix" referenced Unix, a real AT&T trademark, with no issue. "Git" is generic and open-source; a recursive acronym truthfully saying "not git" is defensible nominative use. "Zang's Not Git" / "Vorg's Not Git" ≈ zero risk.
+- **"…Not Fork" is riskier.** There's a live commercial git GUI named **Fork** (git-fork.com). Naming your brand in reference to a specific competitor's mark invites a fight (you'd likely win — "fork" is a weak/descriptive mark — but why start it?). Fine as an offhand tagline, bad as identity.
+- **Keep the fork joke safely** by punning on the *generic* fork (operation/utensil), not the product: **Unfork**, **Tine**, **Spork**.
+- Not legal advice — run a USPTO class 9/42 search before committing.
+
 ## Names we did NOT use
 
 **Dev / .NET / git collision:** GitBench *(GitKraken)* · Kestrel · Fleet · Quilt · Stet · Gutter · Pact · Orchard · Splice · Register · Prow · Braid · Vilka · Etch · Sprig · Clasp · Trunk · Score · Keel · Stride · Nimble · Grit · Flit · Hurl · Truss · Crux · Weld · Astral · Rush · Posit · Arborist · Sidestep · Bounce · Quiver · Roundhouse · Octopus · Switchboard · Juggler · Juggle · Meta · Repo · Polyrepo · Monorepo · Poly · Polyglot · Polybase · Multipass · Multiplex · Manifold · Myriad · Omnia · Plural · Multiplicity · Manyfold · Hopscotch · Flip · Ferry · Dovecote · Flock · Hydra *(THC-Hydra cracker + FB config framework; also kills GitHydra)* · Shuffle · Shimmy · Skim · Swerve · Pluck · Glide · Riffle · Veer · Darter · Borzoi · Harrier · Saluki · Jerboa · Turnstone · Nest · Bevy · Swarm · Bundle · Harbor · Depot · Rack · Caddy · Loom · Warp · Harness · Relay · Shuttle · Conductor · Turnstile · Snap · Yank · Trice · Whoosh · Brisk · Briskly · Nimbly · Glance · Grain · Gossamer · Shearwater · Avocet · Curlew · Shrike · Fleck · Wisp · Glisten · Snell · Alacrity · Solano · Ostro · Chinook · Zonda · Levanter · Felucca · Vaka · Proa · Sloop · Foil · Caravel · Terral · Oroshi · Gusto · Subito · Presto · Allegro · Stretto · Kedge · Wimble · Levin · Dapple · Airglow · Foxfire · GitLeap · GitFlick · GitGlide · GitDart · Gleam · Lumen · Glow · Spark · Ember · Beam · Ray · Photon · Prism · Halo · Aurora · Nimbus · Sparkle · Scintilla · Lustre · Chroma · Iris · Candle · Torch · Glimpse · Glimmer · Moonbeam · Corona · Flare · Flash · Zephyr · Mistral · Vim · Tailwind · Helm · Updraft · Kata · Vertex · Lattice · Spine · Peregrine *(NuGet taken, 880 repos)* · Winnow *(winnow-rs Rust parser lib)* · Merlin *(Merlin C2 framework, 5576★)* · all `Omni-` · all `Git‹word›`.
@@ -74,5 +134,3 @@ Killed this batch: **Peregrine** (NuGet taken, 880 repos, only `peregrinegit`), 
 | `.dev` `.app` | `pubapi.registry.google/rdap/domain/<n>.dev` — 404 = free |
 | GitHub | `gh api search/repositories?q=<n>+in:name` |
 | Trademarks | `POST tmdn.org/tmview/api/search/results` — was down 2026-07-19, retry |
-
-Traps: sequential 9–13s (429 ≠ taken) · macOS has no `timeout` (empties whois) · zsh doesn't word-split `$vars` · WebSearch with pitch words (`"<n>" git OR desktop OR fast`) — collisions hide in taglines · a free `.sh` apex can still be a marquee repo · check embedded substrings (curl, tail, dart, `pro*`).
