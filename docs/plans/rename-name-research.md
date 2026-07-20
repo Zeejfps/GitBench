@@ -1,12 +1,5 @@
 # Rename: name research
 
-> Companion to [rename-to-pecia.md](rename-to-pecia.md). That plan's *mechanics* are name-agnostic and
-> still hold verbatim — only the name token changes.
->
-> 20 research agents, ~400 candidates probed. Verified 2026-07-19.
-> **Update 2026-07-19:** 4 more agents ran the *multi-repo* angle — see
-> [The multi-repo angle](#the-multi-repo-angle). Verdict: the angle is dead, two of its by-products are not.
-
 ## Why this is actually happening — the SEO driver (2026-07-19)
 
 This whole exercise started from a concrete failure, not a wordmark preference: **`gitbench.builtbyzee.com` is
@@ -164,6 +157,33 @@ shortlist, it did not dethrone Tier 1.
 > The speed lane confirmed its own warning: **Trice, Whoosh, Brisk(ly), Grain, Glance, Jiffy, Gossamer** all
 > looked free on the registries and were each already a shipping tool *marketing on being fast* — you have to
 > search the name **with the pitch words**, because the collision hides in the tagline, not the wordmark.
+
+### Third sweep (2026-07-19) — run against the SEO driver
+
+Five more lanes (fast-flyer birds, small watercraft, optics, archaic quick-words, winds), scored with **own-your-
+search-term as the #1 gate** and a new **no-lewd/juvenile-sound-alike gate** (the one that just killed Jink). This
+sweep produced the first candidates to genuinely challenge Whippet — because "distinctive enough to own the term"
+is exactly what a rare-but-real word does best.
+
+| Name | Lane | Says | Domains free | NuGet | Owns its term? | Cost / risk |
+|---|---|---|---|---|---|---|
+| **Martlet** | bird | The heraldic swift, drawn **with no feet because it never lands** — "always in flight, never idle" *is* the native-vs-Electron pitch, and it's already a stylized geometric bird | `martlet.sh` `.tools` + `get`/`use`/`git`/`app`/`hq`-`.com` | ✅ | **Yes — empty software namespace** (top hits are generic "best git client" listicles) | **Best mascot/logo + story in the whole project.** Spells clean (MAR-tlet; rhymes harlot/scarlet, no lewd read). Non-software noise only: McGill Martlets, a student paper. `.dev` taken (ship on `.sh`) |
+| **Glisk** | optics | Scots: *a gleam of sunshine; a fleeting glimpse* — a flash of light **and** an instant in one word. The purest Glint sibling found | `glisk.sh` `.tools` `getglisk.com` `glisktools.com` `gliskgit.com` | ✅ | **Yes — zero products named Glisk**; GitHub shelf empty (max ★3) | **Spell-clean AND ownable** — the rare name that wins both. Reads as a modern coined wordmark (Zed/Vite/Bun register). Cost: obscure meaning, needs the footnote. No bare `.dev` |
+| **Gleg** | archaic | Dictionary word (M-W/Collins), Old Norse root: *quick in movement; nimble; keen, alert*. "Gleg at the uptake" = quick-witted | **`gleg.dev`** (bare) `.sh` `.tools` + `getgleg`/`usegleg`/`glegtools`/`glegapp`-`.com` | ✅ | **Best in the project — essentially zero commercial/software use anywhere** | The strongest *pure* SEO play, out-owns even Whippet (a dog breed with endless noise). Cost: so obscure it reads as a typo/fragment without its footnote; single-vs-double-g wobble; **no mascot** |
+| **Shallop** | boat | A light open boat for shallow fast water — "the smallest boat that still carries you," continues the Skiff pitch past Skiff | **`shallop.dev`** (bare) `.sh` `.tools` + `get`/`use`/`git`/`app`-`.com` | ✅ | **Yes — term wide open**, GitHub `in:name` = dead test repos | Deepest namespace in the sweep (bare `.dev`!). Cost: spell-from-hearing (SHAL-up → some write "scallop/shallup") — its one real risk, exactly what the 3-stranger gate settles |
+| **Dotterel** | bird | Small fast plover — and "**dot**" is a ready-made logo *and* on-brand for a .NET app | `dotterel.sh` `.dev` `.tools` + all six `.com` modifiers | ✅ | Mostly — one niche Android steno app | Fullest domain sweep of the birds. Archaic "gullible fool" sense is obsolete → cleared. Round-plover mascot, weaker than Martlet |
+| **Sundog** | optics | The bright spot beside the sun (parhelion) — instant, bright, catches the eye | `sundog.sh` `usesundog.com` `sundoggit.com` | ✅ | Mostly — but **Sundog Software** (3D-graphics SDKs) is adjacent dev tooling | Distinctive, mascot-able, clean spell. `.tools` taken; thinner namespace |
+| **Ponente** / **Meltemi** | wind | West wind / the Aegean wind sailors ride for days — light, steady, carries you | both **bare `.dev`** + `.sh` `.tools` + `.com` modifiers | ✅ | Yes on the English term | Both carry a free bare `.dev`. Cost: foreign register (Ponente = "presenter" in Romance langs); 3 syllables |
+
+**How this sweep changes the picture.** Two names now rival Whippet on the axis that started this whole rename:
+- **Martlet** is the one that beats it *on Whippet's own terms* — a better mascot, a sharper story (the footless bird that never lands vs. a fast dog), and a genuinely empty in-category namespace, while spelling just as cleanly.
+- **Glisk** is the one that beats it *on the SEO gate specifically* — spell-clean, carries the pitch (light + instant), and returns **zero** competing products, where "whippet" fights dog-breed noise forever.
+- **Gleg** wins ownership outright but loses sayability — it reads as a fragment without its gloss, edging toward the Tier-4 "wrong register" trap. Keep it as the high-risk/high-SEO option, not the front-runner.
+
+> The three lanes that produced **nothing** worth carrying — deeper winds, most raptors, most watercraft — failed
+> the same way: the clean-spelling words were namespace-taken and the free words were spell-risky or foreign. That
+> tension (obscure enough to own ⇄ clear enough to say) is now the central trade-off. Martlet and Glisk are the two
+> names that resolve it.
 
 ### Tier 4 — strong namespaces, wrong register
 
@@ -390,6 +410,22 @@ registered 2025-12-02. Do not enter this prefix under any construction.
 **Fatal — DPML-locked (unregisterable, not free):** `nab.sh`, `glide.sh` and other short dictionary words return
 Identity Digital's *DPML Brand Protection* string rather than a record — operationally locked.
 
+**Fatal — third-sweep collisions (verified this pass):**
+- **Shearwater** — Shearwater Research ships "Shearwater Desktop/Cloud" (real desktop apps); owns the SERP ·
+  **Avocet** — `avocet-shores/laravel-rewind` is literally "version control for Eloquent models, diff/restore" ·
+  **Curlew** — embeds `curl`, plus a shipping Linux desktop GUI · **Shrike** — NuGet + `.sh` taken · **Fleck** —
+  a popular **C# WebSocket library** (your ecosystem) · **Wisp** / **Glisten** — both **Gleam-language** packages
+  (Gleam is a fatal collision) · **Snell** — Surge's proxy protocol, `snell.sh` is a 1.4k★ repo · **Alacrity** —
+  homophone of **Alacritty**, the GPU terminal · **Solano** — one letter from **Solana**; also a git-CI tool ·
+  **Ostro** — sound-alike to **OSTree** ("git for OS binaries") · **Chinook** — the canonical .NET sample DB ·
+  **Zonda** — Pagani + zondacrypto own the term · **Levanter** — a 706★ Stanford ML framework · **Felucca** — a
+  live Cairo package manager + Ultima Online lore
+- **Lewd/juvenile gate (the Jink gate), could not clear:** **Pinnace** (reads "penis") · **Cutter** (self-harm
+  slang) · **Smack** (heroin) · **Shamal** (unclearable sound-alike) · **Glister** (archaic = enema) · **Noddy**
+  (juvenile) · **Dory** (the *forgetful* fish — self-defeating for version control)
+- **Spell-from-hearing, confirmed dead:** Yare (yair/yar) · Ketch (=catch) · Wherry (=ferry) · Wight (=white) ·
+  Foehn (=fern) · Vivace/Veloce (English cold-reads them wrong) · Tiercel · Vireo
+
 ### Fatal — pronunciation or spelling (the Pecia failure, repeated)
 
 **Pliego** — the most painful cut: Spanish for a folded printing sheet, essentially *pecia*. But Spanish says
@@ -516,32 +552,20 @@ Reusable. Several agents independently burned a full pass on the traps below.
     `osprey.tools` (200) instead.
 17. **Watch for silent partial batches.** The `.tools` RDAP endpoint and un-`--max-time`'d `.dev` loops both
     returned fewer rows than names, exit 0, no error. Assert expected-line-count vs actual before trusting.
+18. **zsh does not word-split unquoted variables.** `for n in $names` iterates *once* over the whole string
+    under this repo's default zsh (unlike bash) — curl gets embedded spaces and returns `000` for every name,
+    falsely condemning a whole lane. Use an array `names=(...)` or `${=names}`. Hit independently by 3 agents.
+19. **Embedded-tool substrings generalize past languages.** The Swift/Dart trap extends to Unix commands and
+    prefixes: Curlew ⊃ `curl`, Needletail ⊃ `tail`, Proa ⊂ `pro*` (10k GitHub hits), Imbat ⊂ `im`+`bat`.
+20. **Own-your-term ≠ no-product-collision, in both directions.** A name with zero *product* rivals can still be
+    unownable from dictionary/celebrity/surname frequency (Sheen, Wherry); and a "free" `<name>.sh` apex can
+    still be a marquee repo name (`snell.sh`). Weight GitHub `total_count` magnitude *and* read the top repos.
+21. **Whole naming veins are pre-claimed by big non-software brands.** Maserati names Mediterranean winds
+    (Levante, Ghibli, Shamal, Khamsin); Pagani took Zonda. The Gleam language claims light-words as package
+    names (wisp, glisten) — each of which is then itself your fatal collision. WebSearch the bare word.
+22. **A hardware vendor's companion desktop app owns the SERP the registries can't see.** Shearwater cleared
+    every registry and had near-zero GitHub stars, yet "Shearwater Desktop" fails the own-your-term gate. Always
+    WebSearch `"<name>" desktop` even when GitHub looks empty.
 
 **Control-test every probe** against a known-free nonsense string *and* a known-taken name before trusting a
 single result.
-
----
-
-## Open items
-
-Nothing here can be closed by more agent work.
-
-1. **Run the spelling gate** on the finalists — ≥2 of 3 strangers must spell it correctly from hearing.
-2. **USPTO classes 9 and 42** — **every Tier 1 and Tier 2 name is unchecked**, now including Swivel, Shunt,
-   Covey and Flotilla. For Whippet, check the Guile/Scheme GC library; for Skiff, the defunct Notion-acquired
-   mark; for Glint, both the Ember/Glimmer typechecker and LinkedIn's HR product; for Swivel, Swivel Secure.
-   (Trademark-*clear* so far: Pometka, Pravka, Prival, Pleat.) **TMview was down on 2026-07-19** — retry
-   before concluding anything.
-3. **Re-run web search** on the finalists — every collision note in Tier 1–3 is INFERRED from registry data,
-   not searched. **Now unblocked**: the WebSearch tool works, only direct engine fetches are blocked. Highest
-   value per minute of anything left on this list. Run it on Whippet, Swoop, Pennant, Skiff, Glint, Swivel, Shunt.
-4. **Availability is a live number.** Re-verify immediately before committing.
-5. **Execute Phase 0 the moment a name is picked** — the only irreversible step.
-
----
-
-## Adopt regardless of the name
-
-- **`stet`** as the in-app label for the revert / discard action — the proofreader's mark for "let it stand."
-  The best single piece of vocabulary this exercise surfaced. Unavailable as a product name, free as a UI touch.
-- **The pecia story** as the About page and docs voice.
