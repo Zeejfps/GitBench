@@ -6,9 +6,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -53,37 +51,37 @@ internal sealed record RemoveWorktreeDialog : Widget
                         - 2; // account for the 1px border on each side of the code-block
         var wrappedPath = PathWrap.Wrap(Worktree.Path, pathTextStyle, available, ctx.Canvas);
 
-        var theme = ctx.Theme();
-        var pathTextView = new Text
+        var pathBox = new Box
         {
-            Value = wrappedPath,
-            FontFamily = DiffOptions.MonoFontFamily,
-            FontSize = FontSize.Body,
-            Wrap = TextWrap.Wrap,
-            Color = Theme.Color(t => t.DialogBody.BodyText),
-        }.BuildView(ctx);
-
-        var pathBox = new RectView
-        {
+            Background = Theme.Color(t => t.DialogFrame.InsetBackground),
             BorderSize = BorderSizeStyle.All(1),
             BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            BorderColor = Theme.BorderColor(t => BorderColorStyle.All(t.DialogFrame.Border)),
             Children =
-            {
-                new PaddingView
+            [
+                new Padding
                 {
-                    Padding = new PaddingStyle
+                    Amount = new PaddingStyle
                     {
                         Left = (int)CodeBlockInnerPadding,
                         Right = (int)CodeBlockInnerPadding,
                         Top = Spacing.Sm,
                         Bottom = Spacing.Sm,
                     },
-                    Children = { pathTextView },
+                    Children =
+                    [
+                        new Text
+                        {
+                            Value = wrappedPath,
+                            FontFamily = DiffOptions.MonoFontFamily,
+                            FontSize = FontSize.Body,
+                            Wrap = TextWrap.Wrap,
+                            Color = Theme.Color(t => t.DialogBody.BodyText),
+                        },
+                    ],
                 },
-            },
+            ],
         };
-        pathBox.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        pathBox.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
 
         return new Dialog
         {
@@ -101,7 +99,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
-                new Raw { View = pathBox },
+                pathBox,
                 new CheckboxWidget
                 {
                     Label = s.WorktreesRemoveForceLabel,
