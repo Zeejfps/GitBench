@@ -1,3 +1,4 @@
+using GitBench.Messages;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -14,14 +15,14 @@ internal sealed class RepoBarViewModel : IDisposable
 
     public bool HasMultipleGroups => _registry.Groups.Count > 1;
 
-    public RepoBarViewModel(IRepoRegistry registry, RepoNodeFactory nodes)
+    public RepoBarViewModel(IRepoRegistry registry, IMessageBus bus, RepoNodeFactory nodes)
     {
         _registry = registry;
         NewGroup = new Command(DoNewGroup);
         ExpandAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(false));
         CollapseAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(true));
         GroupSections = _registry.Groups.Map(
-            g => new GroupSectionViewModel(g, registry, NewGroup, nodes),
+            g => new GroupSectionViewModel(g, registry, bus, NewGroup, nodes),
             out _groupSectionsSubscription,
             vm => vm.Dispose());
     }

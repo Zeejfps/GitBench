@@ -1,5 +1,6 @@
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -20,11 +21,11 @@ internal sealed class GroupSectionViewModel : IDisposable
     // they are" when the rest of the group is hidden.
     public ObservableList<RepoNodeViewModel> VisiblePrimaries => _primaries.Items;
 
-    public GroupSectionViewModel(Group group, IRepoRegistry registry, Command newGroup, RepoNodeFactory nodes)
+    public GroupSectionViewModel(Group group, IRepoRegistry registry, IMessageBus bus, Command newGroup, RepoNodeFactory nodes)
     {
         _group = group;
         _registry = registry;
-        HeaderVm = new GroupHeaderRowViewModel(group, registry, newGroup);
+        HeaderVm = new GroupHeaderRowViewModel(group, registry, bus, newGroup);
         _primaryRepos = new Derived<IReadOnlyList<Repo>>(ComputeVisiblePrimaries);
         _primaries = new KeyedViewModelList<Repo, Guid, RepoNodeViewModel>(
             _primaryRepos, r => r.Id, r => nodes.Create(r, 0));

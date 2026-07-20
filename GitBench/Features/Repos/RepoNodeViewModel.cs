@@ -233,7 +233,9 @@ internal sealed class RepoNodeViewModel : IDisposable
     private void AddPrimaryRepoActions(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
     {
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoRename, () => _registry.BeginRenameRepo(repo.Id), LucideIcons.PencilLine));
-        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove, () => _registry.RemoveRepo(repo.Id), LucideIcons.Trash));
+        items.Add(new RepoBarContextMenu.Item(s.ReposRepoRemove,
+            () => _bus.Broadcast(new ShowDialogMessage(onClose => new RemoveRepoDialog { Repo = repo, OnClose = onClose })),
+            LucideIcons.Trash));
         if (_clipboard is not null)
             items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(repo.Path), LucideIcons.Copy));
         if (_shell is not null)
