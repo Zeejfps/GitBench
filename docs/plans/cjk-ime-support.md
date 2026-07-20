@@ -9,9 +9,12 @@
 > **Status: phases 1–6 implemented.** The composition path is built and covered headlessly
 > (`TextInputImeTests`, `TextInputUnicodeTests`, `ImeCoordinatorTests`); the full suite is green.
 > Still open, in order: **manual verification on a real IME** (nothing here has been typed into by a
-> human yet — the tests are synthetic), the **3.3.7 → 3.5.0 GLFW regression pass** per platform,
-> building the natives ourselves in CI instead of vendoring LWJGL's, and phases 7–8. Phase 8 is
-> Windows-only and opens with a spike that may end it.
+> human yet — the tests are synthetic), the **GLFW regression pass** per platform, and phases 7–8.
+> Phase 8 is Windows-only and opens with a spike that may end it.
+>
+> Two items from this list have since closed in `ime-text-input-focus.md`: the natives are now built
+> in CI from a pinned commit, and the "IME stays on outside a text field" compromise in Phase 6 is
+> gone — see that document rather than trusting Phase 6's closing notes on their own.
 
 ## What already works (do not rebuild)
 
@@ -127,8 +130,11 @@ notice retained (`Native/LICENSE.glfw`).
 - **Linux:** `NativeLibraryResolver` already prefers the app-local `libglfw.so.3` over the distro's
   unpatched one, and that ordering is now load-bearing — if the distro copy won, Linux would silently
   lose the IME.
-- **Not done:** building the natives ourselves in CI. Vendoring LWJGL's build is the shortcut taken
-  here; owning the build (pinned `clear-code/glfw@im-support`, CMake, ~2 min per RID) remains open.
+- **Done, since:** building the natives ourselves in CI. Vendoring LWJGL's build was the shortcut
+  taken here, and it came due in `ime-text-input-focus.md` — no LWJGL release exports
+  `glfwSetTextInputFocus`, so the shortcut could not reach the fix at any version. The natives now
+  build from a pinned `clear-code/glfw@im-support` commit via the framework repo's `glfw-natives`
+  workflow, with provenance and checksums in `Glfw.NET/Native/README.md`.
 - **Not done:** the regression pass on the 3.3.7 → 3.5.0 bump (title bar, popups, resize) on each
   platform.
 
@@ -323,19 +329,30 @@ Getting there overturned two things this document asserted as fact:
    popup's own callback, unforwarded). The coordinator handles this without a special case, because
    it derives the composing window from focus rather than assuming; but the *reason* Phase 6 was
    needed is not the reason stated here.
-2. **Turning the IME off is destructive, and that — not the routing — was the real bug.**
-   `glfwSetInputMode(GLFW_IME, 0)` detaches the window's IME context, and re-enabling never restores
-   a working composition: Pinyin degrades to alphanumeric passthrough **for the whole process**. A
-   commit box that composed a moment earlier starts typing a literal `nihao`. This is a Phase 2 bug,
-   latent because the disable used to fire rarely; Phase 6's coordinator toggles the IME on every
-   window-focus change, which made it fire every time — which is why it read as a Phase 6 regression.
-   `GlfwImeBridge.SetEnabled` therefore only ever switches the IME **on**.
+2. **Turning `GLFW_IME` off is destructive — but the diagnosis attached to that was wrong.**
+   The observation held: `glfwSetInputMode(GLFW_IME, 0)` degraded Pinyin to alphanumeric passthrough
+   **for the whole process**, so a commit box that composed a moment earlier started typing a literal
+   `nihao`. Latent because the disable used to fire rarely; Phase 6's coordinator toggles on every
+   window-focus change, which made it fire every time and read as a Phase 6 regression.
 
-**The cost, accepted knowingly:** the IME now stays on outside a text field, so in Chinese mode a bare
-letter can be swallowed into a composition rather than reaching a keybinding — exactly what Phase 2's
-disable existed to prevent. The alternative is CJK input that dies process-wide the first time a field
-is blurred, so this is the lesser evil. **Open:** find a non-destructive way to suppress the IME
-outside a field (whether the patched GLFW's IMM path is simply wrong here is worth checking upstream).
+   What was wrong was the conclusion that the call "detaches the window's IME context". `GLFW_IME` is
+   the IME's **conversion mode** — the user's own Chinese-vs-alphanumeric toggle — so a process-wide,
+   user-visible change is what that call *does*, not a bug in it. We were reaching for the wrong API
+   and reading its correct behaviour as breakage.
+
+**Superseded — this compromise is no longer in effect.** It was resolved by
+`docs/plans/ime-text-input-focus.md`, which switched to `glfwSetTextInputFocus`, the separate API the
+same IM-support patch provides for exactly this: it gates whether the IME may consume the window's
+keystrokes, and touches the conversion mode not at all. It works on all four platforms via each
+platform's own mechanism (`ImmAssociateContext` on Win32, `XSetICFocus`/`XUnsetICFocus` on X11,
+`zwp_text_input_v3` on Wayland, skipping `interpretKeyEvents:` on Cocoa).
+
+Both directions are now forwarded, so **the IME is off outside a text field** and bare-letter
+shortcuts survive a CJK input method. The cost recorded here — letters swallowed into a composition
+instead of reaching a keybinding — is paid off, and the open item is closed. Reaching it required
+building the GLFW natives ourselves, since no LWJGL release exports the function; that is the "not
+done: building the natives ourselves in CI" debt from this document's own shortcut list, and it is
+now done.
 
 ## Phase 7 — atlas capacity
 

@@ -334,7 +334,22 @@ public static bool IsTextInputFocusSupported => _tif ??= ProbeExport("glfwSetTex
 
 Extend `GlfwImeNativeTests` to assert it against the on-disk binary, matching the existing guard.
 
-### Phase 3 — wire it through the seam
+### Phase 3 — wire it through the seam ✅ done
+
+`GlfwImeBridge.SetTextInputFocus` forwards both directions, guarded by the capability probe; the
+rename landed through `IWindow`, both backends, `IImeWindow`, `DesktopInputSystem`, `ImeCoordinator`
+and the test fake. Full suite green (374).
+
+**Steps 2 and 3 collapsed into one line.** Arming lives in `GlfwImeBridge`'s constructor, not at the
+window-creation sites. There are exactly two `new GlfwImeBridge(window)` calls — one per backend, one
+per GLFW window — so every top-level window, secondary and pooled popup alike, is armed by
+construction, and `DesktopInputSystem.Reset()` cannot un-arm it because the bridge belongs to the
+window rather than the input system. `PopupWindowFactory` and `SecondaryWindowFactory` needed no
+changes at all.
+
+The doc-comment rewrite listed under Phase 4 was pulled forward: leaving "turning it off is
+deliberately not forwarded to GLFW" attached to a method that now forwards it would have been false,
+not merely stale.
 
 The abstraction already models this. `ImeCoordinator` tracks which window holds an editing field
 (`_editingCarets`, `_composing`) and calls `IImeWindow.SetImeMode(bool)` only on change. That is
@@ -356,7 +371,13 @@ exactly the signal `glfwSetTextInputFocus` wants; it has simply been landing on 
 
 No change to `IImeHost` or to `BaseTextInputKbmController`: fields already report editing start/stop.
 
-### Phase 4 — remove the workaround
+### Phase 4 — remove the workaround ✅ done
+
+`GlfwIme.Ime` is deleted and nothing calls `Glfw.SetInputMode` for the IME any more (the remaining
+`SetInputMode` uses are cursor/sticky-key modes, untouched). `cjk-ime-support.md` has its Phase 6
+finding corrected and its open item closed, and its "not done: build the natives in CI" shortcut is
+marked done. The csproj's macOS comment is rewritten. The `GlfwImeBridge` doc comment was already
+rewritten in Phase 3.
 
 Delete the `Glfw.SetInputMode(_window, GlfwIme.Ime, 1)` call and the `GlfwIme.Ime` constant. Nothing
 should touch IME *conversion mode* — it is the user's setting, not ours.
@@ -410,10 +431,19 @@ Pitfalls the upstream implementations handle and that our call sites must not de
 The existing harness dispatches through `InputSystem` and never reaches GLFW, so it can cover the
 routing but not the native gate.
 
-- `ImeCoordinatorTests` — `FakeWindow` asserts `SetTextInputFocus(true)` on field focus,
-  `false` on blur, exactly once per transition, and `false` at window creation (the arming call).
+- `ImeCoordinatorTests` — `FakeWindow` asserts `SetTextInputFocus(true)` on field focus, `false` on
+  blur, and exactly once per transition. ✅ The last of these landed with Phase 3 as
+  `SteadyState_DoesNotRepeatTheNativeFocusCall`; it matters more than it looks, because on Windows
+  the call associates and disassociates the window's IME context, so re-asserting it every tick
+  would churn that under a live composition.
+- ~~`false` at window creation (the arming call).~~ **Not testable here, by design.** Phase 3 put
+  arming in `GlfwImeBridge`'s constructor — one layer below the coordinator — so no fake window can
+  observe it. That is the right trade: arming in the bridge covers pooled popups and secondary
+  windows structurally, where a coordinator-level call site would have to be repeated per factory
+  and could be missed. The cost is that the arming call is only verifiable at runtime, in Phase 7
+  step 6.
 - Coverage for the popup/secondary-window case, which is where this is most likely to be missed.
-- `GlfwImeNativeTests` — assert the new export, per Phase 2.
+- `GlfwImeNativeTests` — assert the new export, per Phase 2. ✅ Done.
 - The native gate itself is not unit-testable from C#; it belongs to Phase 7.
 
 ### Phase 7 — verification
