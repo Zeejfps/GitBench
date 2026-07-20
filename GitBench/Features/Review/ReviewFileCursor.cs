@@ -23,6 +23,11 @@ internal sealed class ReviewFileCursor : IDisposable
     private readonly Derived<IReadOnlySet<string>> _selectedPaths;
     private readonly Derived<string?> _selectionCursor;
 
+    // Set while the selection was deliberately emptied (the tree's cursor moved onto a folder row).
+    // The working tree re-pushes its file list on every index op and editor save, so without this the
+    // reload below would seed the first file straight back in and steal the folder's highlight.
+    private bool _selectionCleared;
+
     /// <summary>Raised when a navigation (tree click, j/k, mark-and-advance) wants the stacked diff
     /// list to scroll a file's section into view. Scrollspy updates never raise it.</summary>
     public event Action<string>? ScrollToFileRequested;
@@ -43,6 +48,13 @@ internal sealed class ReviewFileCursor : IDisposable
     /// the active file and the selection of paths the list no longer carries.</summary>
     public void OnFilesLoaded(IReadOnlyList<FileChange> files)
     {
+        if (_selectionCleared)
+        {
+            var held = _selection.Value;
+            _selection.Value = ReviewSelection.Create(held.Paths, held.Anchor, held.Cursor, files);
+            return;
+        }
+
         var active = _activeFile.Value;
         if (active == null || IndexOfFile(files, active) < 0)
             active = files.Count > 0 ? files[0].Path : null;
@@ -58,6 +70,10 @@ internal sealed class ReviewFileCursor : IDisposable
     /// <summary>Navigates to a file: selects it alone, makes it active, and asks the stacked diff list
     /// to scroll its section into view.</summary>
     public void ActivateFile(string path) => ApplySelection(ReviewSelection.Single(path, _files()), scroll: true);
+
+    /// <summary>Drops the selection and the active file, for the tree's cursor moving onto a folder
+    /// row — a folder is not a diff target, so nothing is being read.</summary>
+    public void ClearSelection() => ApplySelection(ReviewSelection.Empty, scroll: false);
 
     /// <summary>
     /// Updates the selection for a tree row gesture. A plain gesture selects just that row; Ctrl/Cmd
@@ -110,6 +126,7 @@ internal sealed class ReviewFileCursor : IDisposable
     /// collapses it onto that file. Scrolling never calls this — reading is not selecting.</summary>
     public void ReportActiveFile(string path)
     {
+        _selectionCleared = false;
         _activeFile.Value = path;
         if (!_selection.Value.Contains(path))
             _selection.Value = ReviewSelection.Single(path, _files());
@@ -168,6 +185,7 @@ internal sealed class ReviewFileCursor : IDisposable
     {
         _selection.Value = next;
         var lead = next.Lead;
+        _selectionCleared = lead == null;
         if (lead == null)
         {
             _activeFile.Value = null;

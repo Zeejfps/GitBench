@@ -49,6 +49,12 @@ internal sealed record CommitChangesPanel : IWidget
     /// <summary>Ctrl/Cmd+A over the visible file rows; null leaves the key unhandled.</summary>
     public Action<IReadOnlyList<string>>? OnSelectAll { get; init; }
 
+    /// <summary>
+    /// Enter on the current row, folder or file alike — the host resolves what "the current row" means.
+    /// Null makes Enter a no-op (the tree still swallows it).
+    /// </summary>
+    public Action? OnActivateSelection { get; init; }
+
     /// <summary>Buttons appended to the header toolbar, after the view-mode toggle.</summary>
     public IReadOnlyList<IWidget>? HeaderActions { get; init; }
 
@@ -147,7 +153,7 @@ internal sealed class CommitChangesPanelView : ContainerView
                 _changesSection.EnsureRowVisible(next.File!.Path);
             },
             vm.SetCursorFolderExpanded,
-            () => { },
+            () => props.OnActivateSelection?.Invoke(),
             () => { });
         _arrowController.OnToggleFullFile = () => vm.ActiveDiff?.ToggleFullFile();
         if (props.OnSelectAll is { } selectAll)

@@ -92,6 +92,7 @@ internal sealed record WorkingTreeReviewView : Widget
                         OnActivate = model.ActivateFile,
                         OnSelect = model.SelectFile,
                         OnSelectAll = model.SelectAllFiles,
+                        OnActivateSelection = model.ToggleActiveFileViewed,
                         OnFileContextMenu = (file, point) =>
                             RepoBarContextMenu.Show(ctx, point, model.BuildFileContextMenuItems(file.Path)),
                         OnFolderContextMenu = (folderPath, paths, point) =>

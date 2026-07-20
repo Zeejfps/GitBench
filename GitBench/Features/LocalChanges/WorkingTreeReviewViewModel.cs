@@ -69,6 +69,13 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         // reading the two side slices from a handler of either can catch the other mid-update, and the
         // resulting file-less transient knocks the cursor off the active file.
         _subscriptions.Add(_local.WorkingTreeLists.Subscribe(PushFiles));
+
+        // A folder and a file are peers in the tree's cursor, so landing on a folder drops the file
+        // selection — one row is current at a time, as in the list layout.
+        _subscriptions.Add(_details.CursorFolder.Subscribe(folder =>
+        {
+            if (folder != null) _cursor.ClearSelection();
+        }));
     }
 
     public ReviewMarkKind MarkKind => ReviewMarkKind.Staged;
@@ -114,7 +121,28 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public bool IsFileViewed(string path) => _marks.IsViewed(path);
     public bool IsFilePartiallyMarked(string path) => _marks.IsPartiallyStaged(path);
     public void ToggleFileViewed(string path) => _marks.ToggleViewed(path);
-    public void ToggleActiveFileViewed() => _cursor.ToggleActiveFileMarked();
+
+    /// <summary>
+    /// Enter / Space / v on the tree: stages the target, or unstages it when it is already fully
+    /// staged. With a folder under the cursor the target is its whole subtree, so one keypress stages
+    /// a folder the way it stages a file.
+    /// </summary>
+    public void ToggleActiveFileViewed()
+    {
+        if (_details.CursorFolder.Value == null)
+        {
+            _cursor.ToggleActiveFileMarked();
+            return;
+        }
+
+        var targets = TargetPaths();
+        if (targets.Count == 0) return;
+
+        var allStaged = true;
+        foreach (var p in targets)
+            if (!_marks.IsViewed(p)) { allStaged = false; break; }
+        _marks.SetViewed(targets, !allStaged);
+    }
 
     public void ReportActiveFile(string path) => _cursor.ReportActiveFile(path);
     public void ActivateFile(string path) => _cursor.ActivateFile(path);
