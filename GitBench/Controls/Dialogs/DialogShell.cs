@@ -129,12 +129,6 @@ internal sealed class DialogShell
         _spinner = _ctx.Get<SpinnerAnimation>();
 
         _errorView = DialogFrame.ErrorView(_ctx);
-        // Git's errors carry absolute paths, and a path is one unbreakable word — the wrapper
-        // keeps a too-wide word whole, so the error's intrinsic width is the whole line. The
-        // stretch column sizes its cross axis from that, which would drag every sibling (and the
-        // frame) out to the path's width. Cap it at the content box so the row wraps within the
-        // dialog instead of defining it.
-        _errorView.MaxWidthConstraint = Width - (DialogFrame.DefaultPadding * 2);
 
         var cancelView = new SecondaryDialogButton
         {
