@@ -191,7 +191,13 @@ everywhere. Two incidental confirmations — `osx-x64` is a genuine `x86_64 + ar
 `glfwGetX11Display` and `glfwGetWaylandDisplay`, confirming the dual-backend build that Phase 1 must
 reproduce. Items 2 and 3 still need real hardware.
 
-### Phase 1 — build the natives
+### Phase 1 — build the natives ✅ done
+
+Landed in the framework repo as `0cec9819`. All four natives are built from
+`clear-code/glfw@9af719e6` by `.github/workflows/glfw-natives.yml` and export `glfwSetTextInputFocus`;
+both macOS slots now hold the same universal binary; `Native/README.md` carries the checksum manifest
+and pinned provenance. The staged per-RID rollout below was **not** needed — one dispatch built all
+four green, so they landed together rather than Windows-first.
 
 Build GLFW from `clear-code/glfw@im-support` for `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`.
 
