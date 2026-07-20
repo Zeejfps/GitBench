@@ -309,7 +309,13 @@ change this phase — it changes the release job.
 **Exit:** four natives, reproducible from a pinned SHA by a CI job, each exporting
 `glfwSetTextInputFocus`, with checksums recorded and asserted by a test.
 
-### Phase 2 — bind it
+### Phase 2 — bind it ✅ done
+
+`GlfwIme.SetTextInputFocus` and a separately-cached `IsTextInputFocusSupported` are in place, and
+`GlfwImeNativeTests` asserts the export against the on-disk native (both tests green — the probe
+resolves `true`, confirming the Phase 1 binaries end-to-end). The signature takes `bool` rather than
+the `int` sketched below: default P/Invoke bool marshalling is a 4-byte `BOOL` matching GLFW's `int`,
+and it matches `Glfw.SetWindowAttribute`/`Glfw.InitHint` in the same assembly.
 
 In `framework/Glfw.NET/GlfwIme.cs`:
 
