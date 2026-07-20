@@ -33,20 +33,27 @@ and it stays unindexed too.
 own name against zero competition** the moment it's crawled. That is the real search case for renaming.
 
 **Indexing fixes to do regardless of the name — the rename does not replace these:**
-1. **Google Search Console — already set up (sitemap submitted).** So submission is *not* the blocker. The
-   page still returns zero in `site:` search, which means GSC is almost certainly reporting it as
-   **"Crawled – currently not indexed"** or **"Discovered – currently not indexed"** — Google judging a
-   zero-authority subdomain not worth indexing. *Action: read the exact URL-Inspection status; if it's either
-   "currently not indexed" string, submission won't move it — go to #2.* (If instead it says noindex, canonical,
-   or redirect, that's a technical block to fix directly.)
-2. **Authority backlinks — the actual lever now.** Get listed on **`git-scm.com/tools/guis`** (the official Git
-   GUI list — authority *and* topical relevance from the canonical source; likely enough on its own to flip the
-   "currently not indexed" status), then AlternativeTo, a Show HN, Product Hunt, r/git, dev.to, and the repo
-   README link.
-3. **An apex domain, not a subdomain** — the rename plan already assumes buying `whippet.sh` / `godwit.sh`;
+1. **Google Search Console — already set up; status is confirmed "Crawled – currently not indexed."** This is
+   the important finding: it means the technical side is **perfect** — Google fetched the page, found no
+   noindex, no robots block, no canonical/redirect issue — and then made a *value* judgment that it isn't worth
+   an index slot. Not a bug to fix, a verdict to overturn. Submission and *Request Indexing* do not move this
+   status; only authority and substance do (#2, #3).
+2. **Authority backlinks — the primary lever.** The standout is a **`git-scm.com/tools/guis` listing**: that
+   page is a GitHub-hosted data file, you submit a PR, and it's the canonical source for exactly this category —
+   authority *and* topical relevance in one link. It flips "crawled – not indexed" more reliably than anything
+   else. Then AlternativeTo, a Show HN, Product Hunt, r/git, dev.to, and the repo README link.
+3. **Substance — the second lever.** A single thin landing page is the textbook "crawled not indexed" victim.
+   Add real interlinked surface: docs, a changelog, a features page. Three or four substantive pages read as "a
+   real project," not "a splash page."
+4. **An apex domain, not a subdomain** — the rename plan already assumes buying `whippet.sh` / `godwit.sh`;
    that alone helps more than the wordmark change.
-4. **Verify the raw `<head>` has a strong unique `<title>` + `<meta name="description">`** — a fetch couldn't
+5. **Verify the raw `<head>` has a strong unique `<title>` + `<meta name="description">`** — a fetch couldn't
    confirm them, and a thin page with weak metadata is a "currently not indexed" magnet.
+
+**Sequencing — do the rename before building any links.** Every backlink earned to `gitbench.builtbyzee.com`
+is authority poured into a URL you're about to abandon; it does not transfer cleanly to `whippet.sh`. Order:
+pick the name → buy the apex domain → ship the site (with #3's extra pages) there → *then* submit the git-scm
+PR and do the Show HN. Otherwise the hard part (link-building) gets done twice.
 
 > **Bottom line:** rename **and** fix indexing. The rename wins the "search my name → find me, not GitKraken"
 > battle; Search Console + a git-scm.com listing win the "get indexed at all" battle. Neither substitutes for
