@@ -33,10 +33,16 @@ and it stays unindexed too.
 own name against zero competition** the moment it's crawled. That is the real search case for renaming.
 
 **Indexing fixes to do regardless of the name — the rename does not replace these:**
-1. **Google Search Console** — verify the property, submit the sitemap, URL Inspection → *Request Indexing*.
-   Biggest single lever for a new site; appears not to have been done.
-2. **Authority backlinks** — get listed on **`git-scm.com/tools/guis`** (the official Git GUI list), then
-   AlternativeTo, a Show HN, Product Hunt, r/git, dev.to, and the repo README link.
+1. **Google Search Console — already set up (sitemap submitted).** So submission is *not* the blocker. The
+   page still returns zero in `site:` search, which means GSC is almost certainly reporting it as
+   **"Crawled – currently not indexed"** or **"Discovered – currently not indexed"** — Google judging a
+   zero-authority subdomain not worth indexing. *Action: read the exact URL-Inspection status; if it's either
+   "currently not indexed" string, submission won't move it — go to #2.* (If instead it says noindex, canonical,
+   or redirect, that's a technical block to fix directly.)
+2. **Authority backlinks — the actual lever now.** Get listed on **`git-scm.com/tools/guis`** (the official Git
+   GUI list — authority *and* topical relevance from the canonical source; likely enough on its own to flip the
+   "currently not indexed" status), then AlternativeTo, a Show HN, Product Hunt, r/git, dev.to, and the repo
+   README link.
 3. **An apex domain, not a subdomain** — the rename plan already assumes buying `whippet.sh` / `godwit.sh`;
    that alone helps more than the wordmark change.
 4. **Verify the raw `<head>` has a strong unique `<title>` + `<meta name="description">`** — a fetch couldn't
