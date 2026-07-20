@@ -341,7 +341,7 @@ Getting there overturned two things this document asserted as fact:
    and reading its correct behaviour as breakage.
 
 **Superseded — this compromise is no longer in effect.** It was resolved by
-`docs/plans/ime-text-input-focus.md`, which switched to `glfwSetTextInputFocus`, the separate API the
+`docs/plans/done/ime-text-input-focus.md`, which switched to `glfwSetTextInputFocus`, the separate API the
 same IM-support patch provides for exactly this: it gates whether the IME may consume the window's
 keystrokes, and touches the conversion mode not at all. It works on all four platforms via each
 platform's own mechanism (`ImmAssociateContext` on Win32, `XSetICFocus`/`XUnsetICFocus` on X11,

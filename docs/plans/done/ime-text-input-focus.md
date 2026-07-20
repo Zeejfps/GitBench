@@ -1,7 +1,8 @@
 # IME text-input focus — scope the IME to text fields on all three platforms
 
-**Status:** proposed. Supersedes the "IME stays on outside a text field" compromise recorded in
-`cjk-ime-support.md` (Phase 6) and in `GlfwImeBridge.SetEnabled`'s doc comment.
+**Status:** implemented and verified on Windows. Phases 0–6 are done; Phase 7 is done for Windows and
+open for macOS and Linux, which have no verification at all. Supersedes the "IME stays on outside a
+text field" compromise recorded in `cjk-ime-support.md` (Phase 6), which is now corrected there.
 
 ## The bug
 
@@ -406,10 +407,13 @@ pass, or they will read as live constraints:
 
 Pitfalls the upstream implementations handle and that our call sites must not defeat:
 
-- **Windows.** Reset the preedit *before* disassociating, or a half-composed string is orphaned in the
-  UI. The saved-`HIMC` field doubles as the disabled flag, so both directions are idempotent — do not
-  add our own duplicate call that could overwrite it with `NULL`. The association must be restored
-  before `DestroyWindow`; verify pooled popup teardown does not leak it.
+- **Windows.** ✅ **Resolved — upstream handles all three, nothing needed from us.**
+  `_glfwSetTextInputFocusWin32` (`win32_window.c:2913`) calls `_glfwResetPreeditTextWin32` before
+  disassociating, so no half-composed string is orphaned. Both directions are guarded on the
+  saved-`HIMC` field (`if (window->win32.textInputContext)` / `if (!...)`), so they are idempotent and
+  our constructor arming plus the coordinator's transitions cannot overwrite it with `NULL`. And
+  `_glfwDestroyWindowWin32` (`win32_window.c:1974`) re-associates the saved context before destroying
+  the window — so pooled popup teardown cannot leak it, and `PopupWindowFactory` needs no change.
 - **X11.** `XUnsetICFocus` does not change the IC's focus window, and IM events can still arrive —
   keep the preedit callbacks defensive rather than assuming silence. Over-the-spot style bails out of
   IME management entirely upstream, so verify which style we get.
@@ -446,7 +450,18 @@ routing but not the native gate.
 - `GlfwImeNativeTests` — assert the new export, per Phase 2. ✅ Done.
 - The native gate itself is not unit-testable from C#; it belongs to Phase 7.
 
-### Phase 7 — verification
+### Phase 7 — verification — Windows ✅, macOS/Linux outstanding
+
+**Windows, with Microsoft Pinyin: verified by hand.** Bare-letter shortcuts work with the IME active
+and no field focused; composition still works in the commit box and search fields; popup and
+secondary windows behave like the main window; and the focus → blur → re-focus cycle — the specific
+regression that produced the original always-on workaround — holds. That was the load-bearing one:
+the compromise this plan removes existed because that cycle was believed unrecoverable.
+
+**macOS and Linux are entirely unverified.** Phase 0 items 2 and 3 were never done, so the symptom
+has not even been *reproduced* there, and Phase 1 replaced those natives too — a 108-commit GLFW jump
+carrying the preedit path we already shipped. Item 8 below applies to them in full. Do not cut a
+release on the assumption that Windows passing generalises.
 
 Per platform, with a real IME (Microsoft Pinyin / macOS Pinyin / ibus or fcitx):
 
