@@ -105,9 +105,35 @@ The `-org` = "…Repo GUI" family is otherwise squatted out at 4 letters (`sorg`
 
 **Mark-strength note:** literal names (GuiGit, RepoGui) self-explain but are **weak, near-unprotectable marks** — you can't stop others using descriptive terms, and they read generic. Coined/suggestive (Vorgui, Vigit) are more memorable **and** more defensible. Spectrum: generic < descriptive < suggestive < fanciful — live on the right half.
 
+#### Vorgui — pre-commit cleared (2026-07-19)
+
+`vorgui.com` ✅ · `vorgui.dev` ✅ · `vorgui.app` ✅ — all three, plus every modifier (`getvorgui` `usevorgui` `myvorgui` `vorguiapp` `tryvorgui` `vorguihq`). NuGet free. No GitHub repo. No existing "Vorgui" software/company/mark — a truly fanciful (strongest) mark. **Only gate: say-it/spell-it** — `-gui` reads "GOO-ee" to devs but "GWEE" to others; a listener may spell it `vorgooey`. Test on 3 strangers before buying.
+
+The `-gui` suffix family is an **entirely empty namespace** (all NuGet-free, 0★ GitHub), but most members are meaningless soundalikes. Ranked by whether the prefix carries meaning:
+
+| Name | Prefix | `.com`/`.dev` | Verdict |
+|---|---|---|---|
+| **Vergui** | **ver**sion → "Version GUI" | both ✅ | **Best runner-up** — real version-control hook |
+| **Nimgui** | **nim**ble → "Nimble GUI" | `.com` only | On-theme (speed); `.dev` taken |
+| Virgui / Vargui / Vurgui / Dorgui / Sorgui / Lorgui | — | both ✅ | Available but pure filler — no meaning |
+| Zorgui / Morgui | — | `.dev` only | Avoid — villainous (Zorg / Morgoth) |
+
+Past Vorgui / Vergui the family adds nothing. For a *true* recursive acronym that says GUI, use **Vorg** / **Norg** ("…Only a Repo GUI"); Vorgui just *ends* in GUI.
+
+### NGF / "New Git Frontend" — killed (2026-07-19)
+
+Three-letter initialism, unownable and collision-heavy: **NGF = Nerve Growth Factor** (dominant meaning) + National Golf Foundation, Naval gunfire support, etc.; `ngf.com`/`.dev` taken; 3-letter `.com` is fully squatted and initialisms are weak/forgettable, unpronounceable marks. **Salvage the concept as a tagline** — "*a new git frontend*" under a real name (Vorgui, Martlet…) — not as the name itself.
+
+"New Git" word-coinages mostly fail too:
+- **Neogit** — `NeogitOrg/neogit` 5546★, popular Neovim git plugin. Same-space collision. Dead.
+- **Nugit** — homophone of **NuGet**, the .NET package manager. Fatal for a C#/.NET app. Dead.
+- **Newgit** — generic, embeds "git", and "New" ages badly ("New X" isn't new forever). Weak.
+- **Novagit** — only survivor: `.dev` free, GitHub clean; nova (new/star) + git. Embeds "git" (git-mark policy) and leans on the aging "new" frame. Viable, not recommended over Vorgui.
+
 ### Legal note: "X, Not Fork"
 
-- **"…Not Git" is safe.** Exact GNU precedent — "GNU's Not Unix" referenced Unix, a real AT&T trademark, with no issue. "Git" is generic and open-source; a recursive acronym truthfully saying "not git" is defensible nominative use. "Zang's Not Git" / "Vorg's Not Git" ≈ zero risk.
+- **"…Not Git" is safe.** Exact GNU precedent — "GNU's Not Unix" referenced Unix, a real AT&T trademark, with no issue. A recursive acronym truthfully saying "not git" is defensible nominative use. "Zang's Not Git" / "Vorg's Not Git" ≈ zero risk.
+- **But note "GIT" *is* a registered mark** (Reg. 4680534, Software Freedom Conservancy; policy at git-scm.com/about/trademark). Nominative "…Not Git" is fine and `Git‹X›` is tolerated in practice (GitHub/GitLab/GitKraken), but any name that *embeds* "git" (GuiGit, Vigit, Notagit) must comply with that policy. A coined word with no "git" in it (**Vorgui, Vorg, Zang**) avoids the mark entirely — cleanest position.
 - **"…Not Fork" is riskier.** There's a live commercial git GUI named **Fork** (git-fork.com). Naming your brand in reference to a specific competitor's mark invites a fight (you'd likely win — "fork" is a weak/descriptive mark — but why start it?). Fine as an offhand tagline, bad as identity.
 - **Keep the fork joke safely** by punning on the *generic* fork (operation/utensil), not the product: **Unfork**, **Tine**, **Spork**.
 - Not legal advice — run a USPTO class 9/42 search before committing.
