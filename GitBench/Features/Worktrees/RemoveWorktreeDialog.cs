@@ -19,9 +19,7 @@ namespace GitBench.Features.Worktrees;
 /// </summary>
 internal sealed record RemoveWorktreeDialog : Widget
 {
-    // Mirrors the frame width Build() applies, so the path pre-wrap math below stays in sync.
-    private const float DialogWidth = DialogFrame.WidthStandard;
-    private const float CodeBlockInnerPadding = 8f;
+    private const int CodeBlockInnerPadding = 8;
 
     public required Repo Primary { get; init; }
     public required Repo Worktree { get; init; }
@@ -37,22 +35,6 @@ internal sealed record RemoveWorktreeDialog : Widget
 
         var s = ctx.Localization().Strings.Value;
 
-        // Path strings have no whitespace, so the framework's word-wrap engine can't break
-        // them. Pre-wrap by inserting newlines at path-separator boundaries so the displayed
-        // block stays inside the dialog's content width.
-        var pathTextStyle = new TextStyle
-        {
-            FontFamily = DiffOptions.MonoFontFamily,
-            FontSize = FontSize.Body,
-            TextWrap = TextWrap.Wrap,
-        };
-        var available = DialogWidth
-                        - 2 * DialogFrame.DefaultPadding
-                        - 2 * CodeBlockInnerPadding
-                        - 2 // account for the 1px border on each side of the code-block
-                        - DialogFrame.CloseButtonSize - Spacing.Sm; // the copy button's column
-        var wrappedPath = PathWrap.Wrap(Worktree.Path, pathTextStyle, available, ctx.Canvas);
-
         var pathBox = new DialogInsetCard
         {
             Children =
@@ -61,8 +43,8 @@ internal sealed record RemoveWorktreeDialog : Widget
                 {
                     Amount = new PaddingStyle
                     {
-                        Left = (int)CodeBlockInnerPadding,
-                        Right = (int)CodeBlockInnerPadding,
+                        Left = CodeBlockInnerPadding,
+                        Right = CodeBlockInnerPadding,
                         Top = Spacing.Sm,
                         Bottom = Spacing.Sm,
                     },
@@ -78,7 +60,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                                 {
                                     Child = new Text
                                     {
-                                        Value = wrappedPath,
+                                        Value = Worktree.Path,
                                         FontFamily = DiffOptions.MonoFontFamily,
                                         FontSize = FontSize.Body,
                                         Wrap = TextWrap.Wrap,
