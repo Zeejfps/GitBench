@@ -43,7 +43,12 @@ internal sealed record DialogScrollRegion : Widget
             CrossAxisAlignment = CrossAxisAlignment.Stretch,
             Children =
             {
-                new FlexItem { Grow = 1, Child = pane },
+                // Shrink as well as Grow: a flex child that can't shrink lays out at its intrinsic
+                // width even when that overruns the row, and the pane's intrinsic width is the
+                // widest body child's unwrapped width — a wrapping paragraph measures as one long
+                // line. Without this the pane sizes past the frame and forces its content to that
+                // width, so nothing wraps and the body draws under the dialog's clip.
+                new FlexItem { Grow = 1, Shrink = 1, Child = pane },
                 bar,
             },
         });
