@@ -151,8 +151,6 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
     // rides in as a raw view.
     private View BuildScrollHost(Context ctx)
     {
-        var theme = ctx.Theme();
-
         var messageView = new Text
         {
             Value = Message,
@@ -172,21 +170,20 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
 
         var vScrollBar = ScrollBars.CreateVertical(ctx);
 
-        var scrollHost = new RectView
+        var scrollHost = new DialogInsetCard
         {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(DialogFrame.ControlBorderRadius),
             Children =
-            {
-                new BorderLayoutView
+            [
+                new Raw
                 {
-                    Center = scrollPane,
-                    East = vScrollBar,
+                    View = new BorderLayoutView
+                    {
+                        Center = scrollPane,
+                        East = vScrollBar,
+                    },
                 },
-            },
-        };
-        scrollHost.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        scrollHost.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
+            ],
+        }.BuildView(ctx);
         scrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
 
         return scrollHost;

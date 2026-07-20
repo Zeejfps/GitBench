@@ -7,6 +7,7 @@ using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -48,15 +49,12 @@ internal sealed record RemoveWorktreeDialog : Widget
         var available = DialogWidth
                         - 2 * DialogFrame.DefaultPadding
                         - 2 * CodeBlockInnerPadding
-                        - 2; // account for the 1px border on each side of the code-block
+                        - 2 // account for the 1px border on each side of the code-block
+                        - DialogFrame.CloseButtonSize - Spacing.Sm; // the copy button's column
         var wrappedPath = PathWrap.Wrap(Worktree.Path, pathTextStyle, available, ctx.Canvas);
 
-        var pathBox = new Box
+        var pathBox = new DialogInsetCard
         {
-            Background = Theme.Color(t => t.DialogFrame.InsetBackground),
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            BorderColor = Theme.BorderColor(t => BorderColorStyle.All(t.DialogFrame.Border)),
             Children =
             [
                 new Padding
@@ -70,13 +68,25 @@ internal sealed record RemoveWorktreeDialog : Widget
                     },
                     Children =
                     [
-                        new Text
+                        new Row
                         {
-                            Value = wrappedPath,
-                            FontFamily = DiffOptions.MonoFontFamily,
-                            FontSize = FontSize.Body,
-                            Wrap = TextWrap.Wrap,
-                            Color = Theme.Color(t => t.DialogBody.BodyText),
+                            Gap = Spacing.Sm,
+                            CrossAxis = CrossAxisAlignment.Start,
+                            Children =
+                            [
+                                new Grow
+                                {
+                                    Child = new Text
+                                    {
+                                        Value = wrappedPath,
+                                        FontFamily = DiffOptions.MonoFontFamily,
+                                        FontSize = FontSize.Body,
+                                        Wrap = TextWrap.Wrap,
+                                        Color = Theme.Color(t => t.DialogBody.BodyText),
+                                    },
+                                },
+                                new DialogCopyButton { GetText = () => Worktree.Path },
+                            ],
                         },
                     ],
                 },

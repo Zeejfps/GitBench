@@ -1,6 +1,5 @@
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -28,7 +27,6 @@ internal sealed record DialogScrollList : Widget
 
     protected override View CreateView(Context ctx)
     {
-        var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
 
         // The padding rides inside the scroll viewport (wrapping the content), not around it, so the
@@ -45,23 +43,22 @@ internal sealed record DialogScrollList : Widget
         var vBar = ScrollBars.CreateVertical(ctx);
         var hBar = ScrollBars.CreateHorizontal(ctx);
 
-        var card = new RectView
+        var card = new DialogInsetCard
         {
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            MinHeight = DefaultMinHeight,
             Children =
-            {
-                new BorderLayoutView
+            [
+                new Raw
                 {
-                    Center = pane,
-                    East = vBar,
-                    South = hBar,
+                    View = new BorderLayoutView
+                    {
+                        Center = pane,
+                        East = vBar,
+                        South = hBar,
+                    },
                 },
-            },
-        };
-        card.MinHeightConstraint = DefaultMinHeight;
-        card.BindBackgroundColor(() => theme.Styles.Value.DialogFrame.InsetBackground);
-        card.BindBorderColor(() => BorderColorStyle.All(theme.Styles.Value.DialogFrame.Border));
+            ],
+        }.BuildView(ctx);
         card.Use(() => new ScrollSyncController(pane, vBar, hBar));
 
         return card;

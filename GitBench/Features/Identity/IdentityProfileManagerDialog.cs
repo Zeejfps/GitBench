@@ -127,13 +127,9 @@ internal sealed record IdentityProfileManagerDialog : Widget
             ],
         };
 
-        var listCard = new Box
+        var listCard = new DialogInsetCard
         {
             Width = ListWidth,
-            BorderSize = BorderSizeStyle.All(1),
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Background = Theme.Color(t => t.DialogFrame.InsetBackground),
-            BorderColor = Theme.BorderColor(t => BorderColorStyle.All(t.DialogFrame.Border)),
             Children =
             [
                 new Column
