@@ -218,6 +218,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
             _cursor.OnFilesLoaded(loaded.Details.Files);
         }));
 
+        // A folder and a file are peers in the tree's cursor, so landing on a folder drops the file
+        // selection — one row is current at a time, and a folder is not a diff target.
+        Subscriptions.Add(_details.CursorFolder.Subscribe(folder =>
+        {
+            if (folder != null) _cursor.ClearSelection();
+        }));
+
         // A ref change in the reviewed repo (amend, rebase, push, branch move) reshapes the range;
         // reload it without dropping the current view. Working-tree edits never touch committed
         // history, so they're deliberately ignored here.
@@ -377,7 +384,16 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     /// <summary>Flips a file's Viewed mark (a section header checkbox click).</summary>
     public void ToggleFileViewed(string path) => _reviewedFiles.ToggleViewed(path);
 
-    public void ToggleActiveFileViewed() => _cursor.ToggleActiveFileMarked();
+    /// <summary>
+    /// Enter / Space / v on the tree: flips the active file's Viewed mark, or — with a folder under
+    /// the cursor — marks its whole subtree, clearing it again when every file beneath is already
+    /// viewed.
+    /// </summary>
+    public void ToggleActiveFileViewed()
+    {
+        if (_details.CursorFolder.Value is { } folder) _cursor.ToggleMarked(_cursor.PathsUnder(folder));
+        else _cursor.ToggleActiveFileMarked();
+    }
 
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
@@ -389,7 +405,13 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
 
     public void SelectAllFiles(IReadOnlyList<string> visiblePaths) => _cursor.SelectAllFiles(visiblePaths);
 
-    public void ReportActiveFile(string path) => _cursor.ReportActiveFile(path);
+    public void ReportActiveFile(string path)
+    {
+        // A click into the diff picks a file, so the tree's folder cursor yields — the panel does this
+        // for its own row clicks, but a diff-card click reaches the model without passing through it.
+        _details.SetCursorFolder(null);
+        _cursor.ReportActiveFile(path);
+    }
 
     public void NextFile() => _cursor.NextFile();
     public void PrevFile() => _cursor.PrevFile();

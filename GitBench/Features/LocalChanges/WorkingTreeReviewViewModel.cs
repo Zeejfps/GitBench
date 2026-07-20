@@ -129,22 +129,17 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     /// </summary>
     public void ToggleActiveFileViewed()
     {
-        if (_details.CursorFolder.Value == null)
-        {
-            _cursor.ToggleActiveFileMarked();
-            return;
-        }
-
-        var targets = TargetPaths();
-        if (targets.Count == 0) return;
-
-        var allStaged = true;
-        foreach (var p in targets)
-            if (!_marks.IsViewed(p)) { allStaged = false; break; }
-        _marks.SetViewed(targets, !allStaged);
+        if (_details.CursorFolder.Value == null) _cursor.ToggleActiveFileMarked();
+        else _cursor.ToggleMarked(TargetPaths());
     }
 
-    public void ReportActiveFile(string path) => _cursor.ReportActiveFile(path);
+    public void ReportActiveFile(string path)
+    {
+        // A click into the diff picks a file, so the tree's folder cursor yields — the panel does this
+        // for its own row clicks, but a diff-card click reaches the model without passing through it.
+        _details.SetCursorFolder(null);
+        _cursor.ReportActiveFile(path);
+    }
     public void ActivateFile(string path) => _cursor.ActivateFile(path);
 
     public void SelectFile(string path, InputModifiers modifiers, IReadOnlyList<string> visiblePaths)
@@ -224,16 +219,9 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     /// with one selected stages the subtree.
     /// </summary>
     private IReadOnlyList<string> TargetPaths()
-    {
-        if (_details.CursorFolder.Value is not { } folder)
-            return [.. _cursor.SelectedPaths.Value];
-
-        var prefix = folder + "/";
-        var paths = new List<string>();
-        foreach (var f in Files())
-            if (f.Path.StartsWith(prefix, StringComparison.Ordinal)) paths.Add(f.Path);
-        return paths;
-    }
+        => _details.CursorFolder.Value is { } folder
+            ? _cursor.PathsUnder(folder)
+            : [.. _cursor.SelectedPaths.Value];
 
     // Reads the tracker's revision as well as the targets so the gate re-evaluates after an index op.
     private bool AnySelected(Func<string, bool> predicate)

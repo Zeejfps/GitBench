@@ -141,6 +141,28 @@ internal sealed class ReviewFileCursor : IDisposable
         if (_activeFile.Value is { } active) _marks.ToggleViewed(active);
     }
 
+    /// <summary>Every file nested under a folder row, in list order. A folder stands in for its
+    /// contents whenever an action targets it.</summary>
+    public IReadOnlyList<string> PathsUnder(string folderPath)
+    {
+        var prefix = folderPath + "/";
+        var paths = new List<string>();
+        foreach (var f in _files())
+            if (f.Path.StartsWith(prefix, StringComparison.Ordinal)) paths.Add(f.Path);
+        return paths;
+    }
+
+    /// <summary>Marks every path, or clears them all when they already carry the mark — the
+    /// many-files counterpart of <see cref="ToggleActiveFileMarked"/>.</summary>
+    public void ToggleMarked(IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return;
+        var allMarked = true;
+        foreach (var p in paths)
+            if (!_marks.IsViewed(p)) { allMarked = false; break; }
+        _marks.SetViewed(paths, !allMarked);
+    }
+
     /// <summary>The files a row action applies to: the whole selection when the row is part of it, else
     /// just that row (right-clicking elsewhere never silently retargets the selection).</summary>
     public IReadOnlyList<string> ResolveTargetPaths(string path)

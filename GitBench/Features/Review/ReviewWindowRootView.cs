@@ -119,6 +119,7 @@ internal sealed record ReviewWindowRootView : Widget
                                     OnActivate = Model.ActivateFile,
                                     OnSelect = Model.SelectFile,
                                     OnSelectAll = Model.SelectAllFiles,
+                                    OnActivateSelection = Model.ToggleActiveFileViewed,
                                     OnFileContextMenu = (file, point) =>
                                         RepoBarContextMenu.Show(ctx, point, Model.BuildFileContextMenuItems(file.Path)),
                                     OnFolderContextMenu = (folderPath, paths, point) =>

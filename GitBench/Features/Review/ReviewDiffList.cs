@@ -851,6 +851,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             return;
         }
 
+        // A click anywhere on the card's body — the diff text included — picks that file, so the tree
+        // highlight follows a click into the diff, not just one on the header. A drag becomes a text
+        // selection and never reaches here, so selecting text leaves the pick alone.
+        _vm.ReportActiveFile(s.File.Path);
+
         if (s.RowSet.Rows.Count == 0) return;
 
         if (HasHunkButtons(s) && s.Diff != null
