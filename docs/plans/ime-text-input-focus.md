@@ -162,9 +162,11 @@ single-key shortcuts anywhere in the app. Worth stating plainly so the choice is
 
 ### Phase 0 — verify the ground truth
 
-1. Parse the Mach-O export trie of both macOS dylibs and the PE/ELF tables of the other two; record
-   for each RID whether `glfwSetTextInputFocus` is present. Expected: absent everywhere. This is the
-   premise of Phase 1 and must not rest on a string search.
+1. Dump the export table of each of the four natives and record for each RID whether
+   `glfwSetTextInputFocus` is present. Expected: absent everywhere. This must not rest on a string
+   search — but it needs no bespoke tooling either: `dumpbin /exports` (PE), `nm -D --defined-only`
+   (ELF) and `nm -gU` (Mach-O) all read the real table, and `nm` walks the export trie itself, so the
+   macOS case is a one-liner rather than an investigation.
 2. Reproduce the symptom on macOS and on Linux/X11, not just Windows. The Cocoa and X11 paths differ
    enough that "shortcuts are dead in CJK mode" should be confirmed, not assumed.
 3. Record the current behaviour of `GLFW_IME` on each platform so Phase 4's removal can be judged
@@ -176,24 +178,96 @@ single-key shortcuts anywhere in the app. Worth stating plainly so the choice is
 
 Build GLFW from `clear-code/glfw@im-support` for `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`.
 
-- **Pin the commit.** Record the exact SHA in `Native/README.md` alongside the existing LWJGL
-  provenance. The branch is a moving PR head; an unpinned build is unreproducible.
-- **CI, not a workstation.** Three GitHub Actions runners (windows/ubuntu/macos). A hand-built binary
-  nobody can reproduce is how the current situation arose.
-- **Keep the `osx-x64` slot universal.** `lipo` the two macOS slices into one fat binary — the csproj's
-  RID-less macOS fallback bundles the `osx-x64` file, and a thin x86_64 dylib fails to load under an
-  arm64 runtime. This constraint is already documented and is easy to regress.
-- **Match the current build's surface.** The existing natives dynamically link `imm32` on Windows.
-  Diff the exported symbol set old-vs-new and review anything that disappears.
-- **Checksums.** Record SHA-256 per file so a silent revert is detectable — the existing
-  `GlfwImeNativeTests` was written because the Windows DLL was once reverted to stock mid-implementation.
+GLFW is a small CMake project with no dependencies beyond system libs, so the compilation itself is a
+handful of lines per platform. The work is in where the job lives, the flags that decide what the
+binary depends on, and the verification that stops a bad native from landing.
 
-**Risks:** X11/Wayland build dependencies on the Linux runner; macOS codesigning/notarization for the
-dylibs; the PR head may have drifted from `b35641f` in ways that affect the preedit path we already
-depend on — hence the regression pass in Phase 7.
+#### Where the job lives
+
+**The framework repo, not this one.** `framework/` is a submodule of
+`Zeejfps/ENV-Game-Framework`, which is where `Glfw.NET/Native/` lives — and which currently has **no
+`.github/workflows` at all**. This is the first workflow that repo will have. GitBench's
+`release.yml` consumes the natives; it does not produce them.
+
+**`workflow_dispatch`, emitting artifacts a human then commits.** Not push-triggered — a native bump
+is a deliberate act, not a side effect of a commit.
+
+**Keep vendoring the binaries in git.** The alternative considered was publishing a
+`ZGF.Glfw.Natives` NuGet runtime pack with a `runtimes/<rid>/native/` layout — no binaries in git,
+proper versioning. Rejected: the framework is consumed as a submodule and is not distributed as a
+package anywhere, so a feed buys nothing but auth setup and a second version axis to keep in sync
+with the submodule pointer. The thing that actually failed last time was provenance, not delivery.
+Fix provenance.
+
+#### Per-platform builds
+
+Common to all: `-DBUILD_SHARED_LIBS=ON -DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF
+-DGLFW_BUILD_DOCS=OFF`.
+
+- **Windows** (`windows-latest`, MSVC, `-A x64`). Add
+  **`-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded`** — static CRT. LWJGL builds this way; a stock MSVC
+  build takes a `vcruntime140.dll` dependency the current native does not have, and that failure is
+  invisible until someone runs the app on a clean machine. `imm32` linkage comes from GLFW's own
+  CMake and needs nothing from us.
+- **Linux** — build inside a **`ubuntu:22.04` container step**, not on the bare runner.
+  `ubuntu-latest` is 24.04 (glibc 2.39) and its output will not load on anything older. Enable
+  **both X11 and Wayland**, matching the current binary's surface: `Native/README.md` documents
+  Wayland being present and `Glfw`'s static ctor pinning to X11 via `GLFW_PLATFORM`, so building
+  Wayland out would silently change what that pin means. Needs the X11 dev headers plus
+  `libwayland-dev` / `wayland-protocols` / `extra-cmake-modules`.
+- **macOS** — **no `lipo`.** One `macos-latest` job with
+  `-DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"` and a pinned `-DCMAKE_OSX_DEPLOYMENT_TARGET` produces
+  the universal dylib directly. Then put **the same universal file in both RID slots**, rather than
+  keeping `osx-x64` universal and `osx-arm64` thin. That deletes the entire "thin slice under the
+  wrong runtime" failure class instead of documenting it a second time; at that point the csproj's
+  two macOS RID conditions are cosmetic and the folders could collapse to a single `osx/`.
+  Note that `release.yml` already builds macOS on real Intel (`macos-15-intel`) and ARM
+  (`macos-latest`) runners — so the universal requirement is driven only by RID-less local dev
+  builds, not by shipping.
+
+#### Verification, in the same workflow
+
+Building is the easy half. These gates are what earn the CI job:
+
+- **Pin the SHA as a workflow input** with a default constant, recorded in `Native/README.md`
+  alongside the existing LWJGL provenance. The branch is a moving PR head; an unpinned build is
+  unreproducible.
+- **Print `git log --oneline b35641f..HEAD` into the job summary.** This answers open question 2 as a
+  build artifact rather than as a separate investigation.
+- **Assert exports and fail the job otherwise** — `glfwSetTextInputFocus` plus the three preedit
+  entry points, via the same `dumpbin` / `nm -D` / `nm -gU` calls as Phase 0.
+- **Diff the exported symbol set old-vs-new, failing on anything that disappeared.** This is the
+  automated form of "review anything that disappears"; a human eyeballing two symbol dumps is the
+  step that gets skipped.
+- **Emit SHA-256 per file** into a manifest written to `Native/README.md`.
+
+Then extend `GlfwImeNativeTests` to assert the recorded checksum against the on-disk binary. That is
+the real anti-silent-revert guard: the existing `IsSupported` probe catches a *stock* native, but
+would not catch a patched-but-different one — and a native bump becoming a deliberate two-file change
+is the point, not a cost.
+
+#### Sequencing — this is not a blocking gate
+
+Phase 1 reads as though nothing can proceed until all four natives exist. It is not, because Phase 2's
+`IsTextInputFocusSupported` probe degrades **per RID** by design. So:
+
+1. Land the workflow producing artifacts, committing no natives. Verify exports on all four.
+2. Bump **`win-x64` alone** and ship Phases 2–4 against it. Linux and macOS keep today's behaviour
+   until their natives land.
+3. Bump the remaining RIDs.
+
+This turns one large risky step into three small ones, and fixes the bug first on the platform where
+it has actually been reproduced.
+
+**Risks:** X11/Wayland build dependencies on the Linux runner; the PR head may have drifted from
+`b35641f` in ways that affect the preedit path we already depend on — hence the regression pass in
+Phase 7. **Notarization** is the one to record now rather than discover later: ad-hoc signing is fine
+while GitBench ships unsigned, but the moment the app is notarized, a bundled dylib needs the same
+Developer ID and hardened runtime. That is a `vpk pack` concern, not a build-time one, so it does not
+change this phase — it changes the release job.
 
 **Exit:** four natives, reproducible from a pinned SHA by a CI job, each exporting
-`glfwSetTextInputFocus`, with checksums recorded.
+`glfwSetTextInputFocus`, with checksums recorded and asserted by a test.
 
 ### Phase 2 — bind it
 
@@ -245,6 +319,22 @@ Rewrite the `GlfwImeBridge` doc comment. As written it records a diagnosis we ha
 it is the reason the compromise reads as permanent. Correct `cjk-ime-support.md` Phase 6 the same way
 and close its open item.
 
+Two documents go stale the moment Phase 1's macOS decision lands and should be corrected in the same
+pass, or they will read as live constraints:
+
+- **`Glfw.NET.csproj`.** Its macOS comment explains selecting by target RID "because building osx-x64
+  on an Intel runner still has `IsOSPlatform(OSX)==true`", and that `osx-x64` carries the universal
+  dylib. Once *both* slots are universal the two RID conditions select identical bytes and the
+  hazard they guard against cannot occur. Either collapse to a single `osx/` folder with one
+  condition, or keep the RID layout and rewrite the comment to say the slots are universal by policy
+  — but do not leave a comment describing a trap that no longer exists.
+- **`Native/README.md`.** The provenance section describes extracting binaries from LWJGL jars, and
+  the verification advice says a macOS string search cannot find the export so "just run the app and
+  check `GlfwIme.IsSupported()`". Both are superseded: provenance becomes the pinned SHA plus the
+  checksum manifest, and verification becomes `nm -gU` (Phase 0) plus the checksum test (Phase 1).
+  The warning not to substitute a distro package or upstream release archive stays — it is still
+  true, and still the failure mode this file exists to prevent.
+
 ### Phase 5 — per-platform hardening
 
 Pitfalls the upstream implementations handle and that our call sites must not defeat:
@@ -262,7 +352,12 @@ Pitfalls the upstream implementations handle and that our call sites must not de
   discovered later.
 - **macOS.** If the candidate window or input-source indicator still appears with focus off, the
   follow-up is overriding `-inputContext` to return `nil` (what Chromium does). That needs a patch to
-  `cocoa_window.m`, so treat it as contingent on observation, not as planned work.
+  `cocoa_window.m` — which Phase 1 makes cheap rather than prohibitive: the natives build from source
+  in CI, so this is a patch file applied to the pinned checkout before `cmake`, carried the same way
+  the pinned SHA is. Still contingent on observation, not planned work — but if it is needed, the
+  cost is a patch file and a symbol-diff re-run, not a change of strategy. Note that a local patch is
+  the one thing that makes the build no longer reproducible from a SHA alone, so it must be committed
+  next to the workflow and named in `Native/README.md`.
 
 ### Phase 6 — tests
 
