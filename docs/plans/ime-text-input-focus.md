@@ -261,15 +261,24 @@ Building is the easy half. These gates are what earn the CI job:
   architecture.
 - **Emit SHA-256 per file** into a manifest written to `Native/README.md`.
 
-**Deliberately not done: a symbol-verification step.** An earlier draft of this phase specified
-asserting each P/Invoked export and diffing the old-vs-new symbol set. Both were dropped after
-reading GLFW's build: the IME entry points are `GLFWAPI` functions in the pinned source, so there is
-no path where cmake succeeds and they are absent — checking for them checks that the compiler works.
-The failure it appeared to guard against, silently losing a backend, is already a hard configure
-error upstream. And the case that *did* happen historically — a stock binary landing in `Native/` —
-is caught by `GlfwImeNativeTests` in the consuming repo, which is where that mistake occurs, not in
-the job that produced the file correctly. Verification belongs where the pinned SHA stops being
-authoritative, which is exactly two places: `lipo`, and the C# test.
+**Not done in CI: a symbol-verification step — but do it by hand at every bump.** An earlier draft
+specified asserting each P/Invoked export and diffing old-vs-new on every run. The *assert* half is
+genuinely redundant: the IME entry points are `GLFWAPI` functions in the pinned source, so there is
+no path where cmake succeeds and they are absent, and losing a backend is already a hard configure
+error upstream.
+
+The *diff* half is not redundant, and the first real bump proved it. Moving from the LWJGL natives
+to this build removed six exports — `_glfw_{egl,mesa,opengl,opengles,vulkan}_library` and
+`glfwAttachWin32Window` — all LWJGL fork additions absent from upstream. Nothing references them, so
+the bump was safe, but that conclusion required a human looking at a list. Nothing else in the
+pipeline could have produced it: the SHA guarantees what is *present*, not what is *gone*, and a
+removed symbol we happened to P/Invoke would surface as a runtime `EntryPointNotFoundException` that
+no test covers.
+
+It stays out of CI because a native bump is rare and human-driven, so the check belongs at that
+moment rather than on every run — a throwaway export dump, reviewed once, then discarded. What CI
+keeps is only what the pinned SHA cannot give: the `lipo` assert. And `GlfwImeNativeTests` remains
+the guard for the case that actually happened historically, a stock binary landing in `Native/`.
 
 #### Sequencing — this is not a blocking gate
 
