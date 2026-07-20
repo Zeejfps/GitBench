@@ -70,6 +70,15 @@ internal interface IReviewSurfaceModel
     void ToggleCheatsheet();
     void CloseCheatsheet();
 
+    /// <summary>A file's right-click menu, on a stacked diff card or a tree row alike — a file is a
+    /// file, and folding is not one of its actions.</summary>
     IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path);
-    IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths);
+
+    /// <summary>A tree folder row's menu: the per-file actions over everything beneath it, plus
+    /// Expand/Collapse All scoped to that folder's subtree.</summary>
+    IReadOnlyList<RepoBarContextMenu.Item> BuildTreeFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths);
+
+    /// <summary>The menu for a right-click below the last row: no file to act on, so the commands that
+    /// take the tree as a whole — including Expand/Collapse All over everything.</summary>
+    IReadOnlyList<RepoBarContextMenu.Item> BuildTreeEmptyContextMenuItems();
 }

@@ -61,6 +61,12 @@ internal sealed record CommitChangesPanel : IWidget
     /// </summary>
     public Action<string, IReadOnlyList<string>, PointF>? OnFolderContextMenu { get; init; }
 
+    /// <summary>
+    /// Optional right-click handler for the space below the last row, where there is no file to act
+    /// on; null means no context menu there.
+    /// </summary>
+    public Action<PointF>? OnEmptyContextMenu { get; init; }
+
     /// <summary>Overrides the view shown when the list is empty; null keeps the section's default text.</summary>
     public Func<Context, View>? EmptyState { get; init; }
 
@@ -101,6 +107,7 @@ internal sealed class CommitChangesPanelView : ContainerView
             selectedPath: _selectedPath,
             onRowClicked: (f, modifiers) =>
             {
+                vm.SetCursorFolder(null);
                 Gesture(f.Path, modifiers);
                 _arrowController.TakeFocus();
             },
@@ -108,23 +115,38 @@ internal sealed class CommitChangesPanelView : ContainerView
             onFileContextMenu: props.OnFileContextMenu,
             selectedPaths: props.SelectedPaths,
             onFolderContextMenu: props.OnFolderContextMenu,
-            emptyView: props.EmptyState?.Invoke(ctx));
+            onEmptyContextMenu: props.OnEmptyContextMenu,
+            emptyView: props.EmptyState?.Invoke(ctx),
+            onToggleFolder: vm.ToggleFolder,
+            onFolderClicked: folderPath =>
+            {
+                vm.SetCursorFolder(folderPath);
+                _arrowController.TakeFocus();
+            });
         AddChildToSelf(_changesSection);
 
-        // Up/Down arrow navigation over the file rows, mirroring the local-changes panels. Arrows
-        // step through the visible file rows only (folder rows are toggled by mouse, skipped by the
-        // keyboard), starting from the cursor so a Shift-extend continues where the last one landed.
+        // Up/Down arrow navigation over the rows, mirroring the local-changes panels: folder rows are
+        // cursor stops too, so the keyboard can fold them with Left/Right. Stepping onto a file
+        // resumes the normal selection gesture (Shift-extend continues from the cursor) and hands the
+        // folder cursor back; stepping onto a folder leaves the file selection where it was.
         _arrowController = new ListArrowKbmController(
             this,
             input,
             (delta, shift) =>
             {
-                var next = _changesSection.NextFilePath(cursor.Value, delta);
+                var next = _changesSection.NextRow(vm.CursorFolder.Value, cursor.Value, delta);
                 if (next == null) return;
-                Gesture(next, shift ? InputModifiers.Shift : InputModifiers.None);
-                _changesSection.EnsureRowVisible(next);
+                if (next.Kind == FileRowKind.Folder)
+                {
+                    vm.SetCursorFolder(next.FullPath);
+                    _changesSection.EnsureFolderVisible(next.FullPath);
+                    return;
+                }
+                vm.SetCursorFolder(null);
+                Gesture(next.File!.Path, shift ? InputModifiers.Shift : InputModifiers.None);
+                _changesSection.EnsureRowVisible(next.File!.Path);
             },
-            _ => { },
+            vm.SetCursorFolderExpanded,
             () => { },
             () => { });
         _arrowController.OnToggleFullFile = () => vm.ActiveDiff?.ToggleFullFile();
@@ -140,6 +162,8 @@ internal sealed class CommitChangesPanelView : ContainerView
         }
 
         this.Bind(vm.ViewMode, _changesSection.SetViewMode);
+        this.Bind(vm.CollapsedFolders, _changesSection.SetCollapsedFolders);
+        this.Bind(vm.CursorFolder, _changesSection.SetCursorFolder);
         this.Bind(selection, path =>
         {
             _selectedPath.Value = path;

@@ -28,7 +28,8 @@ namespace GitBench.Features.LocalChanges;
 ///
 /// Renders either a flat list or a collapsible folder tree (see <see cref="SetViewMode"/>);
 /// the row sequence is produced by the shared <see cref="FileTreeBuilder"/> so both flavors
-/// match the local-changes panels. Collapse state is kept locally on the view.
+/// match the local-changes panels. Collapse state is owned by the host, pushed in through
+/// <see cref="SetCollapsedFolders"/>; a folder click reports back through <c>onToggleFolder</c>.
 ///
 /// Optionally selectable: pass <paramref name="selectedPath"/> + <paramref name="onRowClicked"/>
 /// to make rows highlight against an external selection and dispatch clicks (with their modifiers)
@@ -54,6 +55,9 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly Action<FileChange, InputModifiers>? _onRowClicked;
     private readonly Action<FileChange, PointF>? _onFileContextMenu;
     private readonly Action<string, IReadOnlyList<string>, PointF>? _onFolderContextMenu;
+    private readonly Action<PointF>? _onEmptyContextMenu;
+    private readonly Action<string>? _onToggleFolder;
+    private readonly Action<string>? _onFolderClicked;
 
     // The per-file Viewed tracker, present only in a review window's context (null elsewhere ⇒ no marks,
     // so the History pane and Local Changes stay clean). When present, rows whose (sha, path) is viewed
@@ -72,7 +76,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
     private IReadOnlyList<string> _visibleFilePaths = Array.Empty<string>();
     private FileViewMode _viewMode = FileViewMode.Flat;
-    private readonly HashSet<string> _collapsed = new();
+    private IReadOnlySet<string> _collapsed = new HashSet<string>();
+    private string? _cursorFolder;
 
     // Selection is painted once as a floating bar that slides between rows (selectable sections
     // only). _selectedIndex is the resolved target row (-1 = none); the bar draws at
@@ -142,7 +147,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         Action<FileChange, PointF>? onFileContextMenu = null,
         IReadable<IReadOnlySet<string>>? selectedPaths = null,
         Action<string, IReadOnlyList<string>, PointF>? onFolderContextMenu = null,
-        View? emptyView = null)
+        Action<PointF>? onEmptyContextMenu = null,
+        View? emptyView = null,
+        Action<string>? onToggleFolder = null,
+        Action<string>? onFolderClicked = null)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -154,6 +162,9 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _onRowClicked = onRowClicked;
         _onFileContextMenu = onFileContextMenu;
         _onFolderContextMenu = onFolderContextMenu;
+        _onEmptyContextMenu = onEmptyContextMenu;
+        _onToggleFolder = onToggleFolder;
+        _onFolderClicked = onFolderClicked;
         var input = ctx.Require<InputSystem>();
         _headerText = FileChangesUI.CreateHeaderText(ctx, title);
         _emptyPlaceholder = emptyView ?? FileChangesUI.CreateEmptyPlaceholder(ctx, emptyText);
@@ -170,7 +181,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             ScrollWheelStep = Scrolling.WheelStep,
         };
         _list.RowClicked += OnRowClicked;
-        if (_onFileContextMenu != null || _onFolderContextMenu != null)
+        if (_onFileContextMenu != null || _onFolderContextMenu != null || _onEmptyContextMenu != null)
             _list.RowContextRequested += OnRowContextRequested;
         _list.ScrollChanged += NotifyScrollChanged;
 
@@ -224,7 +235,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         {
             // Retarget the floating bar on selection change; repaint each tick while it slides
             // (the tween goes quiet once it lands).
-            this.Bind(_selectedPath!, path => { MoveSelectionTo(IndexOfPath(path)); SetDirty(); });
+            this.Bind(_selectedPath!, _ => { RetargetSelection(); SetDirty(); });
             this.Bind(tween.Progress, _ => SetDirty());
             this.Use(() => tween);
         }
@@ -269,6 +280,23 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _viewMode = mode;
         RebuildRows();
         NotifyScrollChanged();
+    }
+
+    public void SetCollapsedFolders(IReadOnlySet<string> collapsed)
+    {
+        _collapsed = collapsed;
+        RebuildRows();
+        NotifyScrollChanged();
+    }
+
+    /// <summary>Parks the keyboard cursor on a folder row (null = the cursor is on the selected file).
+    /// The floating selection bar follows it, so folders highlight like any other row.</summary>
+    public void SetCursorFolder(string? folderPath)
+    {
+        if (_cursorFolder == folderPath) return;
+        _cursorFolder = folderPath;
+        RetargetSelection();
+        SetDirty();
     }
 
     // The commit whose files are listed, so the review tracker's per-(sha, path) Viewed marks key
@@ -327,22 +355,22 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     /// collapsed one excluded) — the universe an arrow key or a Shift-range gesture moves over.</summary>
     public IReadOnlyList<string> VisibleFilePaths => _visibleFilePaths;
 
-    // Next file path for an Up/Down press, over the visible file rows only (so a file hidden
-    // under a collapsed folder is skipped). Null when there are no file rows.
-    public string? NextFilePath(string? current, int delta)
+    // The row an Up/Down press lands on, stepping over folder rows as well as files — a folder is a
+    // cursor stop so the keyboard can fold it. Rows under a collapsed folder aren't in _rows at all,
+    // so they're skipped for free. Null when the list is empty.
+    internal FileRow? NextRow(string? cursorFolder, string? currentFilePath, int delta)
     {
-        var paths = _visibleFilePaths;
-        if (paths.Count == 0) return null;
-
-        var index = current == null ? -1 : IndexOfVisible(current);
-        return paths[ListNavigation.NextIndex(paths.Count, index, delta)];
+        if (_rows.Count == 0) return null;
+        var index = cursorFolder != null ? IndexOfFolder(cursorFolder) : IndexOfPath(currentFilePath);
+        return _rows[ListNavigation.NextIndex(_rows.Count, index, delta)];
     }
 
-    private int IndexOfVisible(string path)
+    /// <summary>Scrolls the folder's row into view, the folder-cursor counterpart of
+    /// <see cref="EnsureRowVisible"/>.</summary>
+    public void EnsureFolderVisible(string folderPath)
     {
-        for (var i = 0; i < _visibleFilePaths.Count; i++)
-            if (_visibleFilePaths[i] == path) return i;
-        return -1;
+        var index = IndexOfFolder(folderPath);
+        if (index >= 0) _list.EnsureRowVisible(index);
     }
 
     protected override void OnDrawSelf(ICanvas c)
@@ -357,6 +385,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
 
         var row = _rows[rowIndex];
+        // The floating bar owns its row's fill; every other row paints its own, so the selected file
+        // keeps its highlight while the bar sits on a folder.
+        var floatsBar = _selectionTween != null && rowIndex == _selectedIndex;
+
         if (row.Kind == FileRowKind.Folder)
         {
             FileChangesUI.DrawFolderRow(
@@ -365,7 +397,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
                 row.DisplayName,
                 row.Indent,
                 row.IsOpen,
-                isSelected: false,
+                row.FullPath == _cursorFolder,
                 state.IsHovered,
                 _rowSelection,
                 _chevronStyle,
@@ -374,6 +406,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
                 _pathTextActiveStyle,
                 z,
                 isRtl: IsRtl,
+                drawSelectionBackground: !floatsBar,
                 guides: row.Guides);
             return;
         }
@@ -401,7 +434,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             row.Indent,
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl,
-            drawSelectionBackground: _selectionTween == null || !isLead,
+            drawSelectionBackground: !floatsBar,
             reserveViewedColumn: reviewMode,
             isViewed: isViewed,
             viewedIconStyle: _viewedIconStyle,
@@ -429,13 +462,19 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         }
     }
 
-    // Re-resolves the selected row from the current path and parks the bar on it without animating.
+    // Re-resolves the cursor row and parks the bar on it without animating.
     private void SnapSelectionToPath()
     {
-        _selectedIndex = IndexOfPath(_selectedPath?.Value);
+        _selectedIndex = ResolveCursorIndex();
         _animFromIndex = _selectedIndex < 0 ? 0f : _selectedIndex;
         _animToIndex = _animFromIndex;
     }
+
+    private void RetargetSelection() => MoveSelectionTo(ResolveCursorIndex());
+
+    // The bar sits on the cursor folder when there is one, else on the selected file.
+    private int ResolveCursorIndex()
+        => _cursorFolder != null ? IndexOfFolder(_cursorFolder) : IndexOfPath(_selectedPath?.Value);
 
     private int IndexOfPath(string? path)
     {
@@ -444,6 +483,16 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         {
             var row = _rows[i];
             if (row.Kind == FileRowKind.File && row.File!.Path == path) return i;
+        }
+        return -1;
+    }
+
+    private int IndexOfFolder(string folderPath)
+    {
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            var row = _rows[i];
+            if (row.Kind == FileRowKind.Folder && row.FullPath == folderPath) return i;
         }
         return -1;
     }
@@ -472,23 +521,26 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
         if (row.Kind == FileRowKind.Folder)
         {
-            // A chevron hit and a click anywhere else on the folder row both toggle it — folders
-            // aren't a diff target, so there's nothing else a folder click could mean here.
-            if (IsChevronHit(row, point))
+            // The chevron folds the row without disturbing the cursor; a click anywhere else parks
+            // the cursor on the folder and leaves it folded as it was.
+            if (!IsChevronHit(row, point))
             {
-                // RowClicked fires on every physical click, so a double-click would toggle twice
-                // (a net no-op). Swallow the second click of a double on the same chevron.
-                var now = Environment.TickCount;
-                if (_lastChevronTogglePath == row.FullPath
-                    && unchecked(now - _lastChevronToggleTick) <= _list.DoubleClickThresholdMs)
-                {
-                    _lastChevronTogglePath = null;
-                    return;
-                }
-                _lastChevronTogglePath = row.FullPath;
-                _lastChevronToggleTick = now;
+                _onFolderClicked?.Invoke(row.FullPath);
+                return;
             }
-            ToggleFolder(row);
+
+            // RowClicked fires on every physical click, so a double-click would toggle twice
+            // (a net no-op). Swallow the second click of a double on the same chevron.
+            var now = Environment.TickCount;
+            if (_lastChevronTogglePath == row.FullPath
+                && unchecked(now - _lastChevronToggleTick) <= _list.DoubleClickThresholdMs)
+            {
+                _lastChevronTogglePath = null;
+                return;
+            }
+            _lastChevronTogglePath = row.FullPath;
+            _lastChevronToggleTick = now;
+            _onToggleFolder?.Invoke(row.FullPath);
             return;
         }
 
@@ -503,7 +555,12 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     private void OnRowContextRequested(int rowIndex, PointF point)
     {
-        if (rowIndex < 0 || rowIndex >= _rows.Count) return;
+        // Below the last row there is nothing to act on, so the host gets the whole-list menu.
+        if (rowIndex < 0 || rowIndex >= _rows.Count)
+        {
+            _onEmptyContextMenu?.Invoke(point);
+            return;
+        }
         var row = _rows[rowIndex];
         // A folder row acts on every file beneath it, so it hands over its descendant leaves.
         if (row.Kind == FileRowKind.Folder)
@@ -512,13 +569,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             return;
         }
         _onFileContextMenu?.Invoke(row.File!, point);
-    }
-
-    private void ToggleFolder(FileRow row)
-    {
-        if (!_collapsed.Remove(row.FullPath)) _collapsed.Add(row.FullPath);
-        RebuildRows();
-        NotifyScrollChanged();
     }
 
     // The chevron occupies the indent + chevron column at the left of a folder row; a hit

@@ -314,21 +314,32 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
         return items;
     }
 
-    // A file row's right-click menu (the tree sidebar and the stacked diff cards). Right-clicking
-    // inside the selection acts on the whole of it, so a mixed group offers both directions; a single
-    // file (or a right-click outside the selection) offers only the one its state allows. Folders go
-    // through BuildFolderContextMenuItems.
+    // A file's right-click menu, on a diff card or a tree row alike. Right-clicking inside the
+    // selection acts on the whole of it, so a mixed group offers both directions; a single file (or a
+    // right-click outside the selection) offers only the one its state allows.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
         => BuildViewedContextMenuItems(ResolveTargetPaths(path));
 
     // A folder row's right-click menu (the tree sidebar): the same Viewed actions over every file
-    // beneath the folder. Folders are never part of the selection, so they only ever act on
-    // themselves — collapsed subfolders included, since the row carries all its descendant leaves.
-    // The folder path only matters to the working-tree review's file operations, not here.
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
-        => BuildViewedContextMenuItems(paths);
+    // beneath the folder, plus folding of its own subtree. Folders are never part of the selection, so
+    // they only ever act on themselves — collapsed subfolders included, since the row carries all its
+    // descendant leaves.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildTreeFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
+    {
+        var items = BuildViewedContextMenuItems(paths);
+        FileTreeFoldingMenu.AppendForFolder(items, _details, _loc, folderPath);
+        return items;
+    }
 
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildViewedContextMenuItems(IReadOnlyList<string> targets)
+    // Right-clicking below the last row: no file to act on, so whole-tree folding is all there is.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildTreeEmptyContextMenuItems()
+    {
+        var items = new List<RepoBarContextMenu.Item>();
+        FileTreeFoldingMenu.AppendForTree(items, _details, _loc);
+        return items;
+    }
+
+    private List<RepoBarContextMenu.Item> BuildViewedContextMenuItems(IReadOnlyList<string> targets)
     {
         var s = _loc.Strings.Value;
 

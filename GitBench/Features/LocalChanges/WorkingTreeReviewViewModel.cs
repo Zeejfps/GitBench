@@ -2,6 +2,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Controls;
 using GitBench.Localization;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
@@ -129,17 +130,37 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
-    /// <summary>A file row's right-click menu: the same file operations the list layout offers, over
-    /// the whole selection when the row is part of it.</summary>
+    /// <summary>A file's right-click menu: the same file operations the list layout offers, over the
+    /// whole selection when the file is part of it.</summary>
     public IReadOnlyList<RepoBarContextMenu.Item> BuildFileContextMenuItems(string path)
         => BuildFileOpsMenuItems(_cursor.ResolveTargetPaths(path), path);
 
     /// <summary>A folder row's right-click menu: the same operations over every file beneath it, with
-    /// the folder itself as the open-folder / terminal target.</summary>
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
-        => BuildFileOpsMenuItems(paths, folderPath);
+    /// the folder itself as the open-folder / terminal target, plus folding of its own subtree.</summary>
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildTreeFolderContextMenuItems(string folderPath, IReadOnlyList<string> paths)
+    {
+        var items = BuildFileOpsMenuItems(paths, folderPath);
+        FileTreeFoldingMenu.AppendForFolder(items, _details, _loc, folderPath);
+        return items;
+    }
 
-    private IReadOnlyList<RepoBarContextMenu.Item> BuildFileOpsMenuItems(IReadOnlyList<string> targets, string representative)
+    /// <summary>Right-clicking below the last row: the whole-tree commands only — stage/unstage
+    /// everything, and folding across the entire tree.</summary>
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildTreeEmptyContextMenuItems()
+    {
+        var s = _loc.Strings.Value;
+        var items = new List<RepoBarContextMenu.Item>
+        {
+            new(s.LocalchangesStageAllMenu, StageAll.Execute, LucideIcons.ChevronsRight,
+                Enabled: StageAll.CanExecute.Value),
+            new(s.LocalchangesUnstageAllMenu, UnstageAll.Execute, LucideIcons.ChevronsLeft,
+                Enabled: UnstageAll.CanExecute.Value),
+        };
+        FileTreeFoldingMenu.AppendForTree(items, _details, _loc);
+        return items;
+    }
+
+    private List<RepoBarContextMenu.Item> BuildFileOpsMenuItems(IReadOnlyList<string> targets, string representative)
     {
         var items = new List<RepoBarContextMenu.Item>();
         _fileOps.AppendFileOps(items, targets);
@@ -169,22 +190,38 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _cursor.OnFilesLoaded(files);
     }
 
-    // Reads the tracker's revision as well as the selection so the gate re-evaluates after an index op.
+    /// <summary>
+    /// What Stage / Unstage / Discard act on: every file under the folder when the tree's cursor sits
+    /// on a folder row, else the selected files. A folder is a stand-in for its contents, so staging
+    /// with one selected stages the subtree.
+    /// </summary>
+    private IReadOnlyList<string> TargetPaths()
+    {
+        if (_details.CursorFolder.Value is not { } folder)
+            return [.. _cursor.SelectedPaths.Value];
+
+        var prefix = folder + "/";
+        var paths = new List<string>();
+        foreach (var f in Files())
+            if (f.Path.StartsWith(prefix, StringComparison.Ordinal)) paths.Add(f.Path);
+        return paths;
+    }
+
+    // Reads the tracker's revision as well as the targets so the gate re-evaluates after an index op.
     private bool AnySelected(Func<string, bool> predicate)
     {
         _ = _marks.Revision.Value;
-        foreach (var p in _cursor.SelectedPaths.Value)
+        foreach (var p in TargetPaths())
             if (predicate(p)) return true;
         return false;
     }
 
-    private void SetSelectedStaged(bool staged)
-        => _marks.SetViewed([.. _cursor.SelectedPaths.Value], staged);
+    private void SetSelectedStaged(bool staged) => _marks.SetViewed(TargetPaths(), staged);
 
     private void DoDiscardSelected()
     {
         var paths = new List<string>();
-        foreach (var p in _cursor.SelectedPaths.Value)
+        foreach (var p in TargetPaths())
             if (!_marks.IsViewed(p)) paths.Add(p);
         _local.RequestDiscard(paths);
     }

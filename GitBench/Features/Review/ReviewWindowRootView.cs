@@ -122,7 +122,9 @@ internal sealed record ReviewWindowRootView : Widget
                                     OnFileContextMenu = (file, point) =>
                                         RepoBarContextMenu.Show(ctx, point, Model.BuildFileContextMenuItems(file.Path)),
                                     OnFolderContextMenu = (folderPath, paths, point) =>
-                                        RepoBarContextMenu.Show(ctx, point, Model.BuildFolderContextMenuItems(folderPath, paths)),
+                                        RepoBarContextMenu.Show(ctx, point, Model.BuildTreeFolderContextMenuItems(folderPath, paths)),
+                                    OnEmptyContextMenu = point =>
+                                        RepoBarContextMenu.Show(ctx, point, Model.BuildTreeEmptyContextMenuItems()),
                                 },
                         },
                         InitialWidth = 340f,

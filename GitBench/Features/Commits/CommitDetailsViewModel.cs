@@ -23,7 +23,9 @@ public abstract record CommitDetailsRenderState
 internal sealed record CommitDetailsState(
     CommitDetailsRenderState Render,
     string? SelectedPath,
-    FileViewMode ViewMode);
+    FileViewMode ViewMode,
+    IReadOnlySet<string> Collapsed,
+    string? CursorFolder);
 
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 {
@@ -46,6 +48,11 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public IReadable<CommitDetailsRenderState> RenderState { get; }
     public IReadable<string?> SelectedPath { get; }
     public IReadable<FileViewMode> ViewMode { get; }
+    public IReadable<IReadOnlySet<string>> CollapsedFolders { get; }
+
+    /// <summary>The folder row the keyboard cursor sits on, or null when it is on a file. Only one of
+    /// the two is ever the cursor, so the file tree highlights exactly one row.</summary>
+    public IReadable<string?> CursorFolder { get; }
     public Command ToggleViewMode { get; }
 
     // Open file tabs, in tab order. The "Details" tab (commit metadata + file list) is implicit and
@@ -63,7 +70,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         bool subscribeToSelection = true)
         : base(dispatcher, new CommitDetailsState(
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
-            null, preferences.Current.FileViewMode))
+            null, preferences.Current.FileViewMode, EmptyCollapsed, null))
     {
         _gitService = gitService;
         _registry = registry;
@@ -74,6 +81,8 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
         ViewMode = Slice(s => s.ViewMode);
+        CollapsedFolders = Slice(s => s.Collapsed);
+        CursorFolder = Slice(s => s.CursorFolder);
         ToggleViewMode = new Command(DoToggleViewMode);
 
         // The History pane follows commit selection over the bus; the Review window drives its own
@@ -93,6 +102,99 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _preferences.SetFileViewMode(next);
         Update(s => s with { ViewMode = next });
     }
+
+    /// <summary>Flips a folder's collapsed state (tree mode only).</summary>
+    public void ToggleFolder(string folderPath)
+    {
+        Update(s =>
+        {
+            var next = new HashSet<string>(s.Collapsed);
+            if (!next.Remove(folderPath)) next.Add(folderPath);
+            return s with { Collapsed = next };
+        });
+    }
+
+    /// <summary>Expands every folder by clearing the collapsed set (tree mode only).</summary>
+    public void ExpandAllFolders()
+    {
+        Update(s => s.Collapsed.Count == 0 ? s : s with { Collapsed = EmptyCollapsed });
+    }
+
+    /// <summary>
+    /// Collapses every folder (tree mode only). The full folder set is derived from the file list
+    /// with an empty collapsed set so nested folders aren't hidden from the walk.
+    /// </summary>
+    public void CollapseAllFolders()
+    {
+        Update(s =>
+        {
+            if (s.Render is not CommitDetailsRenderState.Loaded loaded) return s;
+            var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
+            var folders = new HashSet<string>();
+            foreach (var row in allRows)
+                if (row.Kind == FileRowKind.Folder) folders.Add(row.FullPath);
+            return folders.Count == 0 ? s : s with { Collapsed = folders };
+        });
+    }
+
+    /// <summary>
+    /// Expands or collapses one folder and everything nested under it, leaving the rest of the tree
+    /// alone — the folder row's own Expand All / Collapse All, matching the branches tree. Collapsing
+    /// walks the file list with an empty collapsed set so subfolders already hidden are still caught.
+    /// </summary>
+    public void SetFolderSubtreeCollapsed(string folderPath, bool collapsed)
+    {
+        Update(s =>
+        {
+            var prefix = folderPath + "/";
+            var next = new HashSet<string>(s.Collapsed);
+            var changed = false;
+
+            if (collapsed)
+            {
+                if (s.Render is not CommitDetailsRenderState.Loaded loaded) return s;
+                var allRows = FileTreeBuilder.BuildRows(loaded.Details.Files, DiffSide.Commit, FileViewMode.Tree, EmptyCollapsed);
+                foreach (var row in allRows)
+                {
+                    if (row.Kind != FileRowKind.Folder) continue;
+                    if (row.FullPath != folderPath && !row.FullPath.StartsWith(prefix, StringComparison.Ordinal)) continue;
+                    changed |= next.Add(row.FullPath);
+                }
+            }
+            else
+            {
+                changed = next.Remove(folderPath);
+                foreach (var path in s.Collapsed)
+                    if (path.StartsWith(prefix, StringComparison.Ordinal)) changed |= next.Remove(path);
+            }
+
+            return changed ? s with { Collapsed = next } : s;
+        });
+    }
+
+    /// <summary>Parks the keyboard cursor on a folder row, or hands it back to the selected file
+    /// (null). Set by an arrow key stepping onto a folder and by a folder click.</summary>
+    public void SetCursorFolder(string? folderPath)
+        => Update(s => s.CursorFolder == folderPath ? s : s with { CursorFolder = folderPath });
+
+    /// <summary>
+    /// Expands (<paramref name="expand"/> true) or collapses the folder the cursor sits on. No-op
+    /// when the cursor is on a file or the folder is already in that state. Wired to Right / Left.
+    /// </summary>
+    public void SetCursorFolderExpanded(bool expand)
+    {
+        Update(s =>
+        {
+            if (s.CursorFolder is not { } folder) return s;
+            var isCollapsed = s.Collapsed.Contains(folder);
+            if (expand != isCollapsed) return s;
+            var next = new HashSet<string>(s.Collapsed);
+            if (expand) next.Remove(folder); else next.Add(folder);
+            return s with { Collapsed = next };
+        });
+    }
+
+    private static readonly IReadOnlySet<string> EmptyCollapsed = new HashSet<string>();
 
     public override void Dispose()
     {
@@ -197,6 +299,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Update(s => s with
         {
             SelectedPath = null,
+            CursorFolder = null,
             Render = new CommitDetailsRenderState.Placeholder(DefaultPlaceholder),
         });
     }
@@ -219,6 +322,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Update(s => s with
         {
             SelectedPath = null,
+            CursorFolder = null,
             Render = new CommitDetailsRenderState.Loading(),
         });
 
@@ -260,6 +364,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         Update(s => s with
         {
             SelectedPath = null,
+            CursorFolder = null,
             Render = new CommitDetailsRenderState.Loading(),
         });
 
