@@ -174,6 +174,23 @@ single-key shortcuts anywhere in the app. Worth stating plainly so the choice is
 
 **Exit:** a written per-RID symbol table and a reproduction on all three platforms.
 
+**Item 1 is done.** A throwaway PE/ELF/Mach-O export dumper (including the trie walk) was run against
+all four vendored natives. It was not kept — the question it answers does not recur, and Phase 1
+explains why CI does not need it:
+
+| RID | exports | `glfwSetTextInputFocus` | `glfwSetPreeditCallback` |
+| --- | --- | --- | --- |
+| win-x64 | 148 | absent | present |
+| linux-x64 | 157 | absent | present |
+| osx-x64 | 146 | absent | present |
+| osx-arm64 | 146 | absent | present |
+
+The premise of Phase 1 holds: the function is absent everywhere, and the IM patch is present
+everywhere. Two incidental confirmations — `osx-x64` is a genuine `x86_64 + arm64` fat binary while
+`osx-arm64` is thin (exactly the asymmetry Phase 1 removes), and the Linux native exports both
+`glfwGetX11Display` and `glfwGetWaylandDisplay`, confirming the dual-backend build that Phase 1 must
+reproduce. Items 2 and 3 still need real hardware.
+
 ### Phase 1 — build the natives
 
 Build GLFW from `clear-code/glfw@im-support` for `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`.
@@ -234,17 +251,25 @@ Building is the easy half. These gates are what earn the CI job:
   unreproducible.
 - **Print `git log --oneline b35641f..HEAD` into the job summary.** This answers open question 2 as a
   build artifact rather than as a separate investigation.
-- **Assert exports and fail the job otherwise** — `glfwSetTextInputFocus` plus the three preedit
-  entry points, via the same `dumpbin` / `nm -D` / `nm -gU` calls as Phase 0.
-- **Diff the exported symbol set old-vs-new, failing on anything that disappeared.** This is the
-  automated form of "review anything that disappears"; a human eyeballing two symbol dumps is the
-  step that gets skipped.
+- **Pass the backend flags explicitly** (`-DGLFW_BUILD_X11=ON -DGLFW_BUILD_WAYLAND=ON`). This is the
+  backend guard, not boilerplate: GLFW's `src/CMakeLists.txt` uses `pkg_check_modules(... REQUIRED)`,
+  `find_package(X11 REQUIRED)` and explicit `FATAL_ERROR`s, so a half-installed runner fails at
+  configure time rather than quietly producing an X11-only native. Omitting the flags lets cmake
+  auto-detect and silently change the surface.
+- **Assert `lipo -archs`** on the macOS output. This is the one property the pinned SHA cannot give
+  us — a thin dylib compiles, links and packages cleanly, and only fails at `dlopen` on the other
+  architecture.
 - **Emit SHA-256 per file** into a manifest written to `Native/README.md`.
 
-Then extend `GlfwImeNativeTests` to assert the recorded checksum against the on-disk binary. That is
-the real anti-silent-revert guard: the existing `IsSupported` probe catches a *stock* native, but
-would not catch a patched-but-different one — and a native bump becoming a deliberate two-file change
-is the point, not a cost.
+**Deliberately not done: a symbol-verification step.** An earlier draft of this phase specified
+asserting each P/Invoked export and diffing the old-vs-new symbol set. Both were dropped after
+reading GLFW's build: the IME entry points are `GLFWAPI` functions in the pinned source, so there is
+no path where cmake succeeds and they are absent — checking for them checks that the compiler works.
+The failure it appeared to guard against, silently losing a backend, is already a hard configure
+error upstream. And the case that *did* happen historically — a stock binary landing in `Native/` —
+is caught by `GlfwImeNativeTests` in the consuming repo, which is where that mistake occurs, not in
+the job that produced the file correctly. Verification belongs where the pinned SHA stops being
+authoritative, which is exactly two places: `lipo`, and the C# test.
 
 #### Sequencing — this is not a blocking gate
 
@@ -355,7 +380,7 @@ Pitfalls the upstream implementations handle and that our call sites must not de
   `cocoa_window.m` — which Phase 1 makes cheap rather than prohibitive: the natives build from source
   in CI, so this is a patch file applied to the pinned checkout before `cmake`, carried the same way
   the pinned SHA is. Still contingent on observation, not planned work — but if it is needed, the
-  cost is a patch file and a symbol-diff re-run, not a change of strategy. Note that a local patch is
+  cost is a patch file and a rebuild, not a change of strategy. Note that a local patch is
   the one thing that makes the build no longer reproducible from a SHA alone, so it must be committed
   next to the workflow and named in `Native/README.md`.
 
@@ -397,8 +422,14 @@ can recover a keystroke the IME consumed before the app saw it.
 
 1. Does the symptom actually reproduce on macOS and Linux? Phase 0. If it does not, the priority of
    those platforms drops sharply, though the fix stays the same shape.
-2. How far has `im-support` drifted from `b35641f`? A large drift raises the regression risk in the
-   preedit path we already ship and depend on.
+2. ~~How far has `im-support` drifted from `b35641f`?~~ **Answered.** At
+   `9af719e6073a317f2dfa17f6cf0c373619b1ec8c` (2026-07-14) the branch is **108 commits ahead and 0
+   behind** — our vendored commit is a strict ancestor, so the new build is a superset rather than a
+   divergence. That is the reassuring shape: no preedit work has been reverted or rebased away, and
+   the drift is additive. It does not remove the need for Phase 7's regression pass — 108 commits
+   still touch the preedit path — but it downgrades the risk from "may have diverged" to "has moved
+   forward". The workflow prints the full log each run so this stays current rather than becoming a
+   stale note.
 3. Is there appetite for upstreaming? The gap is that LWJGL's fork predates the function; a nudge on
    [LWJGL#946](https://github.com/LWJGL/lwjgl3/issues/946) may be cheaper long-term than owning a
    native build — but it cannot be scheduled, so this plan does not depend on it.
