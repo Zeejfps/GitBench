@@ -60,9 +60,12 @@ internal static class AppHostSetup
 
             // Glyph fallbacks come from system fonts so we don't bundle any. CJK registers one font
             // per script family (JP/SC/KR); the shape layer picks per glyph by cmap coverage. Arabic
-            // (RTL) is reordered to visual order by the BiDi shape layer.
-            RegisterFallbacks(appHost, "CJK", SystemFonts.CjkFallbacks());
-            RegisterFallbacks(appHost, "Arabic", SystemFonts.ArabicFallbacks());
+            // (RTL) is reordered to visual order by the BiDi shape layer. Deferred off the startup
+            // path: these are large system TTCs (100+ MB combined), none needed until non-Latin text
+            // appears, so reading them must not block first paint. Text drawn before its fallback
+            // lands shows tofu for a frame, then re-shapes when RegisterFallbackFont drops the cache.
+            DeferFallbacks(appHost, "CJK", SystemFonts.CjkFallbacks());
+            DeferFallbacks(appHost, "Arabic", SystemFonts.ArabicFallbacks());
         }
 
         public void UsePlatformIcons()
@@ -86,12 +89,31 @@ internal static class AppHostSetup
         }
     }
 
-    private static void RegisterFallbacks(GuiApp appHost, string script, IReadOnlyList<SystemFontSpec> fonts)
+    // Reads each fallback font off the UI thread, then posts its registration back onto the UI
+    // dispatcher (the font backend isn't thread-safe). Registration order is preserved per script.
+    private static void DeferFallbacks(GuiApp appHost, string script, IReadOnlyList<SystemFontSpec> fonts)
     {
-        foreach (var font in fonts)
+        if (fonts.Count == 0) return;
+        var dispatcher = appHost.Context.Require<IUiDispatcher>();
+        Task.Run(() =>
         {
-            try { appHost.RegisterFallbackFont(font.Path, 16, font.FaceIndex); }
-            catch (Exception ex) { Console.WriteLine($"[Fonts] {script} fallback load failed ({font.Path}): {ex.Message}"); }
-        }
+            foreach (var font in fonts)
+            {
+                byte[] bytes;
+                try { bytes = File.ReadAllBytes(font.Path); }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[Fonts] {script} fallback read failed ({font.Path}): {ex.Message}");
+                    continue;
+                }
+                var faceIndex = font.FaceIndex;
+                var path = font.Path;
+                dispatcher.Post(() =>
+                {
+                    try { appHost.RegisterFallbackFontFromMemory(bytes, 16, faceIndex); }
+                    catch (Exception ex) { Console.WriteLine($"[Fonts] {script} fallback load failed ({path}): {ex.Message}"); }
+                });
+            }
+        });
     }
 }
