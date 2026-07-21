@@ -114,31 +114,13 @@ internal static class AppServices
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
 
-        context.AddSingleton<IRepoSnapshotStore>(ctx =>
-        {
-            var store = ctx.Require<RepoSnapshotStore>();
-            store.Start(ctx.Require<IUiDispatcher>());
-            return store;
-        }, eager: true);
-        context.AddSingleton<IRepoOperationsStore>(ctx =>
-        {
-            var store = ctx.Require<RepoOperationsStore>();
-            store.Start(ctx.Require<IUiDispatcher>());
-            return store;
-        }, eager: true);
-        context.AddSingleton<IRepoStatusStore>(ctx =>
-        {
-            var store = ctx.Require<RepoStatusStore>();
-            store.Start(ctx.Require<IUiDispatcher>());
-            return store;
-        }, eager: true);
+        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>();
+        context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
+        context.AddHostedService<IRepoStatusStore, RepoStatusStore>();
 
-        context.AddSingleton<IToastService>(ctx =>
-        {
-            var toasts = ctx.Require<ToastService>();
-            toasts.Start(ctx.Require<IUiDispatcher>());
-            return toasts;
-        }, eager: true);
+        // No post-construction lifecycle — it subscribes to the bus in its constructor — so it's just
+        // an eager singleton: the host constructs it at startup, no Start() to run.
+        context.AddSingleton<IToastService, ToastService>(eager: true);
 
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
             ctx.Require<IPopupWindowFactory>(),

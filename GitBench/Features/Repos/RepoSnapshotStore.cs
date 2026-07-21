@@ -6,6 +6,7 @@ using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -42,7 +43,7 @@ internal interface IRepoSnapshotStore
 /// Late loads warm the cache keyed by repo id but only touch the exposed active state when their
 /// repo is still active, guarded per slice by a <see cref="GenerationGuard"/>.
 /// </summary>
-internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
+internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, IDisposable
 {
     private const int MaxCommits = 3000;
 
@@ -57,8 +58,8 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
     // The active repo's first load kicks three slice loads; once all three have landed the active
     // repo is "ready" and the deferred all-repos sweeps may run. UI-thread only.
     private int _firstLoadRemaining = 3;
-    // Set in Start once the UI dispatcher exists (it's created inside GuiApp). Null until then.
-    private IUiDispatcher? _dispatcher;
+    private readonly IUiDispatcher _dispatcher;
+    private bool _started;
 
     private readonly State<Fetched<CommitSnapshot>?> _commits = new(null);
     private readonly State<Fetched<BranchListing>?> _branches = new(null);
@@ -94,24 +95,25 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         IRepoRegistry registry,
         IGitService git,
         IMessageBus bus,
-        IStartupSweepCoordinator sweep)
+        IStartupSweepCoordinator sweep,
+        IUiDispatcher dispatcher)
     {
         _registry = registry;
         _git = git;
         _bus = bus;
         _sweep = sweep;
+        _dispatcher = dispatcher;
     }
 
     /// <summary>
-    /// Wires up loading once the UI dispatcher is available (it's created inside GuiApp, after
-    /// this store is constructed so that view models can resolve it during startup). Until this
-    /// runs the store is inert and its slices read null — view models simply show "Loading…".
-    /// Subscribing to <see cref="IRepoRegistry.Active"/> fires immediately, seeding the first load.
+    /// Wires up loading once the host starts hosted services (after Build). Until this runs the
+    /// store is inert and its slices read null — view models simply show "Loading…". Subscribing to
+    /// <see cref="IRepoRegistry.Active"/> fires immediately, seeding the first load.
     /// </summary>
-    public void Start(IUiDispatcher dispatcher)
+    public void Start()
     {
-        if (_dispatcher != null) return; // idempotent
-        _dispatcher = dispatcher;
+        if (_started) return; // idempotent
+        _started = true;
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
         _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged);
@@ -125,7 +127,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         Task.Run(async () =>
         {
             await Task.Delay(ActiveReadyFallbackMs).ConfigureAwait(false);
-            dispatcher.Post(_sweep.MarkActiveReady);
+            _dispatcher.Post(_sweep.MarkActiveReady);
         });
     }
 
@@ -387,7 +389,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         where T : class
     {
         var dispatcher = _dispatcher;
-        if (dispatcher == null) return;
         Task.Run(() =>
         {
             T? result = null;
@@ -413,7 +414,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IDisposable
         where T : class
     {
         var dispatcher = _dispatcher;
-        if (dispatcher == null) return; // not started yet
         var gen = lane.Bump();
         Task.Run(() =>
         {

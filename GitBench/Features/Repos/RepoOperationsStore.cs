@@ -2,6 +2,7 @@ using GitBench.Features.Notifications;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -55,14 +56,14 @@ public interface IRepoOperationsStore
 /// Like <see cref="RepoSnapshotStore"/> it exposes the *active* repo's slice as one observable and
 /// is wired in <see cref="Start"/> once the UI dispatcher exists.
 /// </summary>
-internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
+internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
-    // Set in Start once the UI dispatcher exists. Null until then — ops are inert before startup.
-    private IUiDispatcher? _dispatcher;
+    private readonly IUiDispatcher _dispatcher;
+    private bool _started;
     private bool _disposed;
 
     // Per-repo source of truth, created lazily on first touch and kept for the app's lifetime (one
@@ -76,18 +77,19 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
 
     public IReadable<RepoOperations> Active => _active;
 
-    public RepoOperationsStore(IRepoRegistry registry, IGitService git, IMessageBus bus, ILocalizationService loc)
+    public RepoOperationsStore(IRepoRegistry registry, IGitService git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
     {
         _registry = registry;
         _git = git;
         _bus = bus;
         _loc = loc;
+        _dispatcher = dispatcher;
     }
 
-    public void Start(IUiDispatcher dispatcher)
+    public void Start()
     {
-        if (_dispatcher != null) return; // idempotent
-        _dispatcher = dispatcher;
+        if (_started) return; // idempotent
+        _started = true;
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
     }
 
@@ -183,7 +185,6 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IDisposable
         RemoteSyncOptimisticMessage? optimisticSync = null)
     {
         var dispatcher = _dispatcher;
-        if (dispatcher == null) return;
         Task.Run(() =>
         {
             bool success = false;

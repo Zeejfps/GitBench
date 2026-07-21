@@ -56,7 +56,7 @@ internal static class PlatformServices
 
     extension(GuiApp app)
     {
-        public void InstallNativeAppMenu()
+        public void UseNativeAppMenu()
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 

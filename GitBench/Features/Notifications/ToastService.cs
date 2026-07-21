@@ -31,21 +31,19 @@ internal sealed class ToastService : IToastService, IDisposable
     private readonly Dictionary<ToastId, State<bool>> _exiting = new();
     private readonly Action<ShowToastMessage> _onShow;
 
-    private IUiDispatcher? _dispatcher;
+    private readonly IUiDispatcher _dispatcher;
     private long _nextId;
     private bool _disposed;
 
     public IReadable<IReadOnlyList<Toast>> Active => _active;
 
-    public ToastService(IMessageBus bus)
+    public ToastService(IMessageBus bus, IUiDispatcher dispatcher)
     {
         _bus = bus;
+        _dispatcher = dispatcher;
         _onShow = m => { if (m.Intent != null) Show(m.Intent); };
         _bus.Subscribe(_onShow);
     }
-
-    /// <summary>Idempotent; wires the dispatcher used to post timed dismissals back to the UI thread.</summary>
-    public void Start(IUiDispatcher dispatcher) => _dispatcher ??= dispatcher;
 
     public IReadable<bool> Exiting(ToastId id) => _exiting.TryGetValue(id, out var st) ? st : NotExiting;
 
@@ -111,8 +109,6 @@ internal sealed class ToastService : IToastService, IDisposable
     private void Schedule(ToastId id, TimeSpan delay, Action onElapsed)
     {
         var dispatcher = _dispatcher;
-        if (dispatcher == null) { onElapsed(); return; } // pre-Start: act immediately
-
         CancelTimer(id);
         var cts = new CancellationTokenSource();
         _timers[id] = cts;

@@ -57,19 +57,18 @@ internal sealed class GitBenchApp : IDisposable
             StartUnfocused = startUnfocused,
         });
 
-        var context = builder.Services;
+        var context = builder.Context;
         context.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
         var app = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
 
-        app.PersistWindowGeometry(preferences);
-        app.StartBackgroundServices();
-        app.BindTitleBarToTheme();
-        app.BindTextDirectionToLocale();
-        app.RegisterAppFonts();
-        app.LoadPlatformIcons();
-        app.InstallNativeAppMenu();
-        app.StartUpdateChecks();
+        app.UseWindowGeometry(preferences);
+        app.UseThemedTitleBar();
+        app.UseLocaleTextDirection();
+        app.UseAppFonts();
+        app.UsePlatformIcons();
+        app.UseNativeAppMenu();
+        app.UseUpdateChecks();
 
         return new GitBenchApp(preferences, identityProfiles, context, app);
     }

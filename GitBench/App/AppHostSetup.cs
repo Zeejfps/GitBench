@@ -17,30 +17,22 @@ internal static class AppHostSetup
 {
     extension(GuiApp appHost)
     {
-        public void PersistWindowGeometry(PreferencesService preferences)
+        public void UseWindowGeometry(PreferencesService preferences)
         {
             appHost.OnWindowResized += preferences.SetWindowSize;
             appHost.OnWindowMoved += preferences.SetWindowPosition;
         }
 
-        // The dispatcher is registered during Build, so background services (watchers, sync, stores)
-        // can only spin up now.
-        public void StartBackgroundServices()
-        {
-            appHost.Context.CreateEagerSingletons();
-        }
-
-        public void StartUpdateChecks()
+        public void UseUpdateChecks()
         {
             var services = appHost.Context;
-            services.CreateEagerSingletons();
             var updateService = services.Require<UpdateService>();
             var dispatcher = services.Require<IUiDispatcher>();
             _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
             updateService.StartAutoChecks(dispatcher);
         }
 
-        public void BindTitleBarToTheme()
+        public void UseThemedTitleBar()
         {
             var services = appHost.Context;
             var themeMode = services.Require<State<ThemeMode>>();
@@ -50,7 +42,7 @@ internal static class AppHostSetup
 
         // Drives the UI's base writing direction from the active locale's culture: an RTL locale
         // (Arabic) flips text alignment and the bidi base for direction-neutral lines.
-        public void BindTextDirectionToLocale()
+        public void UseLocaleTextDirection()
         {
             var services = appHost.Context;
             var locale = services.Require<State<Locale>>();
@@ -60,7 +52,7 @@ internal static class AppHostSetup
             locale.Changed += Apply;
         }
 
-        public void RegisterAppFonts()
+        public void UseAppFonts()
         {
             var fontAssembly = typeof(LucideIcons).Assembly;
             appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
@@ -73,7 +65,7 @@ internal static class AppHostSetup
             RegisterFallbacks(appHost, "Arabic", SystemFonts.ArabicFallbacks());
         }
 
-        public void LoadPlatformIcons()
+        public void UsePlatformIcons()
         {
             // macOS is excluded: GLFW can't set the Dock icon there; it comes from the .app bundle.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))

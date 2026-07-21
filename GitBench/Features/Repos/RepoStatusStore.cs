@@ -1,5 +1,6 @@
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -48,7 +49,7 @@ public interface IRepoStatusStore
 /// Each refresh is generation-guarded so a slow result can't clobber a newer one, and a small
 /// semaphore caps how many git processes run at once so a big repo tree doesn't burst at startup.
 /// </summary>
-internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
+internal sealed class RepoStatusStore : IRepoStatusStore, IHostedService, IDisposable
 {
     private const int MaxConcurrentProbes = 6;
 
@@ -57,7 +58,8 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
-    private IUiDispatcher? _dispatcher;
+    private readonly IUiDispatcher _dispatcher;
+    private bool _started;
     private bool _disposed;
 
     // Per-repo probe result + a per-repo generation counter for ordered refreshes. UI-thread only.
@@ -76,13 +78,14 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep, IUiDispatcher dispatcher)
     {
         _ops = ops;
         _registry = registry;
         _git = git;
         _bus = bus;
         _sweep = sweep;
+        _dispatcher = dispatcher;
         // Recomputes whenever the active repo, its probe, or its op state changes — all tracked.
         _active = new Derived<RepoStatus>(() =>
         {
@@ -91,10 +94,10 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
         });
     }
 
-    public void Start(IUiDispatcher dispatcher)
+    public void Start()
     {
-        if (_dispatcher != null) return; // idempotent
-        _dispatcher = dispatcher;
+        if (_started) return; // idempotent
+        _started = true;
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(m => Refresh(m.RepoId));
         _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(m => Refresh(m.RepoId));
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => Refresh(m.RepoId));
@@ -164,7 +167,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IDisposable
     private void Refresh(Guid repoId)
     {
         var dispatcher = _dispatcher;
-        if (dispatcher == null) return;
         var repo = FindRepo(repoId);
         if (repo == null) return;
         var state = Probe(repoId);
