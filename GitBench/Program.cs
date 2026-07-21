@@ -18,12 +18,12 @@ if (health.IsCrashLooping)
     RecoveryUpdater.TryApplyLatest();
 }
 
-using var host = GitBenchHost.Create();
+using var app = GitBenchApp.Create();
 
 // Drained on the first tick, by which point the window has been created, given its icon, positioned
 // and shown, and the run loop is pumping — every startup crash this guards against has already had
 // its chance to happen.
-host.Context.Require<IUiDispatcher>().Post(health.MarkHealthy);
+app.Context.Require<IUiDispatcher>().Post(health.MarkHealthy);
 
-host.Run();
+app.Run();
 return 0;

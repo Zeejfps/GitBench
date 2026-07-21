@@ -14,7 +14,7 @@ namespace GitBench.App;
 /// in-process. That's what the automation runner does: it builds the same app the user gets and
 /// scripts it, which keeps every trace of the automation out of the shipped binary.
 /// </summary>
-internal sealed class GitBenchHost : IDisposable
+internal sealed class GitBenchApp : IDisposable
 {
     private readonly PreferencesService _preferences;
     private readonly IdentityProfileService _identityProfiles;
@@ -22,7 +22,7 @@ internal sealed class GitBenchHost : IDisposable
     public GuiApp App { get; }
     public Context Context { get; }
 
-    private GitBenchHost(
+    private GitBenchApp(
         PreferencesService preferences,
         IdentityProfileService identityProfiles,
         Context context,
@@ -37,7 +37,7 @@ internal sealed class GitBenchHost : IDisposable
     /// <param name="startUnfocused">Show the window without taking OS focus. For scripted runs: the
     /// driver injects input and needs no focus, and taking it would drop the user's own keystrokes
     /// into whatever field the script had just focused.</param>
-    public static GitBenchHost Create(bool startUnfocused = false)
+    public static GitBenchApp Create(bool startUnfocused = false)
     {
         CrashLog.Install(AppDataPath("crash.log"));
 
@@ -80,7 +80,7 @@ internal sealed class GitBenchHost : IDisposable
         _ = updateService.CheckForUpdatesAsync(updateDispatcher, userInitiated: false);
         updateService.StartAutoChecks(updateDispatcher);
 
-        return new GitBenchHost(preferences, identityProfiles, services, app);
+        return new GitBenchApp(preferences, identityProfiles, services, app);
     }
 
     public void Run() => App.Run();
