@@ -22,7 +22,10 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
     public State<bool> SetUpstream { get; } = new(true);
 
     public AsyncCommand Publish { get; }
-    public IReadable<string?> ErrorMessage { get; }
+
+    /// <summary>Load-time inline message (no remotes configured). The publish failure itself
+    /// surfaces in the operation-error dialog, not here.</summary>
+    public IReadable<string?> LoadError => _loadError;
 
     public event Action? CloseRequested;
 
@@ -59,8 +62,6 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
                 CloseRequested?.Invoke();
             },
             gate: gate);
-
-        ErrorMessage = new Derived<string?>(() => _loadError.Value ?? Publish.Error.Value);
 
         LoadRemotes();
     }

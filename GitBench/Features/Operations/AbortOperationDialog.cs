@@ -43,7 +43,6 @@ internal sealed record AbortOperationDialog : Widget
             OnClose = OnClose,
             Action = (AbortOperationDialogViewModel.DefaultConfirmLabel(s, State), DialogButtonRole.Destructive),
             Command = vm.Abort,
-            Error = vm.Error,
             BindActionLabel = vm.ConfirmButtonLabel,
             ConfirmKeys = true,
             ViewModel = vm,

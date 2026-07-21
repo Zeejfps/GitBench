@@ -44,12 +44,18 @@ public sealed class DialogPresenter : IViewBehavior
         // git CLI almost always writes *something* on failure); this guard is a backstop
         // for the few paths where we couldn't extract any meaningful text.
         if (string.IsNullOrWhiteSpace(m.Message)) return;
-        ShowDialog(new OperationErrorDialog
+        var dialog = new OperationErrorDialog
         {
             Title = m.Title,
             Message = m.Message,
             OnClose = OnDialogClosed,
-        }.WithController<DialogKbmController>().BuildView(_windowContext));
+        }.WithController<DialogKbmController>().BuildView(_windowContext);
+
+        // A failure raised from inside an open dialog stacks the error on top so the user can read
+        // it, act on it (copy, remove a stale lock), then return to the dialog to retry; a failure
+        // with nothing on screen (e.g. a background push) just shows.
+        if (_dialogSurfaceView.IsShowing) _dialogSurfaceView.PushDialog(dialog);
+        else _dialogSurfaceView.ShowDialog(dialog);
     }
 
     private void ShowDialog(View dialog)

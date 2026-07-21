@@ -31,8 +31,12 @@ internal sealed record Dialog : Widget
     /// <summary>Busy spinner + disable + error row follow this command while it runs.</summary>
     public AsyncCommand? Command { get; init; }
 
-    /// <summary>Error source when the VM surfaces it separately from the command's own.</summary>
-    public IReadable<string?>? Error { get; init; }
+    /// <summary>
+    /// Inline load- or validation-time message shown in the error row (e.g. "no remotes
+    /// configured"). Action failures are not routed here — they surface in the operation-error
+    /// dialog — so this is only for messages a dialog wants visible before/independent of its action.
+    /// </summary>
+    public IReadable<string?>? InlineError { get; init; }
 
     /// <summary>Rooted for the view's mounted lifetime; CloseRequested routes to OnClose.</summary>
     public IDialogViewModel? ViewModel { get; init; }
@@ -81,7 +85,7 @@ internal sealed record Dialog : Widget
 
         if (Command != null)
         {
-            if (Error != null) shell.BindCommand(Command, Error);
+            if (InlineError != null) shell.BindCommand(Command, InlineError);
             else shell.BindCommand(Command);
         }
 

@@ -1,8 +1,8 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
-using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -66,9 +66,9 @@ internal sealed class DialogShell
     private readonly State<bool> _actionBusy = new(false);
     private readonly State<bool> _actionEnabled = new(true);
     private readonly State<bool> _cancelEnabled = new(true);
-    private readonly State<string?> _lockPath = new(null);
     private Action? _action;
     private SpinnerAnimation? _spinner;
+    private IMessageBus? _bus;
 
     /// <summary>Dialog width; one of the <see cref="DialogFrame"/> width tokens.</summary>
     public float Width { get; init; } = DialogFrame.WidthStandard;
@@ -127,6 +127,7 @@ internal sealed class DialogShell
         _actionLabel.Value = Action.Label;
         _action = Action.OnClick;
         _spinner = _ctx.Get<SpinnerAnimation>();
+        _bus = _ctx.Get<IMessageBus>();
 
         _errorView = DialogFrame.ErrorView(_ctx);
 
@@ -158,57 +159,24 @@ internal sealed class DialogShell
         };
         foreach (var child in Body) content.Children.Add(child);
         content.Children.Add(_errorView);
-        content.Children.Add(BuildLockRecoveryRow());
 
         _view = DialogFrame.Build(_ctx, _title, _onClose, content, footer, Width);
     }
 
     /// <summary>
-    /// The one-click recovery for a stale <c>*.lock</c> left by a crashed git: the button sits under
-    /// the error row and only materializes when the failure text names a lock file, so a discard (or
-    /// any other dialog action) that dies on "Unable to create '…index.lock'" can be unblocked without
-    /// leaving the app for a terminal.
-    /// </summary>
-    private View BuildLockRecoveryRow()
-    {
-        var button = new SecondaryDialogButton
-        {
-            Label = _ctx.Localization().Strings.Value.OperationsLockRemove,
-            Command = new Command(RemoveLockFile),
-            Height = DialogFrame.DefaultButtonHeight,
-            MinWidth = DialogFrame.DefaultButtonMinWidth,
-            Visible = Prop.Bind(() => _lockPath.Value != null),
-        }.WithController<KbmController>().BuildView(_ctx);
-
-        var row = new FlexRowView
-        {
-            Children = { button, new FlexItem { Grow = 1, Child = new ContainerView() } },
-        };
-        row.Bind(new Derived<bool>(() => _lockPath.Value != null), visible => row.IsVisible = visible);
-        return row;
-    }
-
-    private void RemoveLockFile()
-    {
-        if (_lockPath.Value is not { } path) return;
-
-        var failure = GitLockFile.Remove(path);
-        _errorView!.Text = failure ?? _ctx.Localization().Strings.Value.OperationsLockRemoved;
-        if (failure is null) _lockPath.Value = null;
-    }
-
-    /// <summary>
     /// Wires the standard async-command trio in one call: the action button shows a busy spinner
-    /// and disables via the command's CanExecute, Cancel locks out while it runs, and the error
-    /// row mirrors the command's error.
+    /// and disables via the command's CanExecute, and Cancel locks out while it runs. A failure
+    /// is routed to the dedicated operation-error dialog (see <see cref="RouteFailuresToErrorDialog"/>),
+    /// not the inline row.
     /// </summary>
-    public void BindCommand(AsyncCommand command) => BindCommand(command, command.Error);
+    public void BindCommand(AsyncCommand command) => BindCommand(command, null);
 
     /// <summary>
-    /// Variant for view models that surface their error on a property separate from the
-    /// command's own <see cref="AsyncCommand.Error"/> (the busy/disable wiring is identical).
+    /// Variant for the few dialogs that surface a load- or validation-time message inline (e.g.
+    /// "no remotes configured") — that message rides <paramref name="inlineError"/> in the error
+    /// row, while the command's own action failures still go to the operation-error dialog.
     /// </summary>
-    public void BindCommand(AsyncCommand command, IReadable<string?> error)
+    public void BindCommand(AsyncCommand command, IReadable<string?>? inlineError)
     {
         EnsureBuilt();
         _action = command.Execute;
@@ -220,8 +188,25 @@ internal sealed class DialogShell
             if (running) _spinner?.Start();
             else _spinner?.Stop();
         });
-        Error.BindText(error, s => s ?? string.Empty);
-        _errorView!.Bind(error, s => _lockPath.Value = GitLockFile.Detect(s));
+
+        if (inlineError != null)
+            Error.BindText(inlineError, s => s ?? string.Empty);
+
+        RouteFailuresToErrorDialog(command);
+    }
+
+    /// <summary>
+    /// When the action fails, hand the failure to the dedicated operation-error dialog — the full
+    /// scrollable error, a copy button, and stale-lock recovery — stacked over this dialog so the
+    /// user can read it and return to retry, instead of a truncated line squeezed into the frame.
+    /// </summary>
+    private void RouteFailuresToErrorDialog(AsyncCommand command)
+    {
+        command.Error.Subscribe(error =>
+        {
+            if (!string.IsNullOrEmpty(error))
+                _bus?.Broadcast(new ShowOperationErrorMessage(_title, error));
+        });
     }
 
     /// <summary>

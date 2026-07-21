@@ -41,7 +41,6 @@ internal sealed record ReconcilePullDialog : Widget
             BodyGap = 10,
             Action = (s.CommonPull, DialogButtonRole.Primary),
             Command = vm.Pull,
-            Error = vm.Error,
             ConfirmKeys = true,
             Body =
             [

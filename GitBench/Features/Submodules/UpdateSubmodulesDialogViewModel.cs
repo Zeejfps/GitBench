@@ -12,7 +12,6 @@ internal sealed class UpdateSubmodulesDialogViewModel : IDialogViewModel
     public State<SubmoduleUpdateMode> Mode { get; } = new(SubmoduleUpdateMode.Checkout);
 
     public AsyncCommand Update { get; }
-    public IReadable<string?> Error => Update.Error;
 
     public event Action? CloseRequested;
 

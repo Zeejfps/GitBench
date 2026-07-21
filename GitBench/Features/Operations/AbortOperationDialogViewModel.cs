@@ -16,7 +16,6 @@ internal sealed class AbortOperationDialogViewModel : IDialogViewModel
     private bool _forceQuitAvailable;
 
     public IReadable<string> ConfirmButtonLabel { get; }
-    public IReadable<string?> Error => Abort.Error;
 
     public AsyncCommand Abort { get; }
 

@@ -37,7 +37,7 @@ internal sealed record PublishBranchDialog : Widget
             Width = DialogFrame.WidthWide,
             Action = (s.BranchesPublishAction, DialogButtonRole.Primary),
             Command = vm.Publish,
-            Error = vm.ErrorMessage,
+            InlineError = vm.LoadError,
             ConfirmKeys = true,
             ViewModel = vm,
             Body =

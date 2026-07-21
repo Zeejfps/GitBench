@@ -10,7 +10,6 @@ internal sealed class ReconcilePullDialogViewModel : IDialogViewModel
     public State<PullStrategy> Strategy { get; } = new(PullStrategy.Merge);
 
     public AsyncCommand Pull { get; }
-    public IReadable<string?> Error => Pull.Error;
 
     public event Action? CloseRequested;
 

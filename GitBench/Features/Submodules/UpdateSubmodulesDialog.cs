@@ -40,7 +40,6 @@ internal sealed record UpdateSubmodulesDialog : Widget
             BodyGap = 10,
             Action = (s.SubmodulesUpdateAction, DialogButtonRole.Primary),
             Command = vm.Update,
-            Error = vm.Error,
             ConfirmKeys = true,
             Body =
             [

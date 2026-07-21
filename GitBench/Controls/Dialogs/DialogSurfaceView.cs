@@ -1,4 +1,5 @@
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
@@ -14,108 +15,156 @@ public sealed class DialogSurfaceView : ContainerView
     private const float EnterDuration = 0.20f;
     private const float ExitDuration = 0.13f;
 
-    private readonly ContainerView _overlay;
     private readonly InputSystem _input;
     private readonly IFrameTicker _ticker;
 
-    private Tween? _transition;
-    private IDisposable? _fadeSub;
-    private IDisposable? _scaleSub;
-    private bool _closing;
+    // Bottom-to-top stack of live dialogs. A single open dialog is one layer; an operation error
+    // stacked over it (so the user can read the failure and return to retry) is a second layer.
+    private readonly List<Layer> _layers = new();
 
     public DialogSurfaceView(InputSystem input, IFrameTicker ticker)
     {
         _input = input;
         _ticker = ticker;
-        _overlay = new ContainerView
-        {
-            ZIndex = 1000,
-        };
     }
 
+    /// <summary>True while any dialog is on screen — the cue for whether a new one replaces or stacks.</summary>
+    public bool IsShowing => _layers.Count > 0;
+
+    /// <summary>Replaces the whole stack with a single dialog: the standard "open a dialog" path.</summary>
     public void ShowDialog(View dialog)
     {
-        // Replace anything still on screen (including a previous dialog mid-close) instantly.
-        ClearTransition();
-        _overlay.Children.Clear();
-        Children.Remove(_overlay);
+        while (_layers.Count > 0) RemoveLayerInstant(_layers[^1]);
+        AddLayer(dialog, suspendBelow: false);
+    }
+
+    /// <summary>
+    /// Stacks a dialog on top of the current one, leaving it mounted underneath. The layer beneath
+    /// is suspended — its keyboard focus is blurred so typing can't leak into a now-hidden field —
+    /// and restored when this layer pops.
+    /// </summary>
+    public void PushDialog(View dialog)
+    {
+        AddLayer(dialog, suspendBelow: _layers.Count > 0);
+    }
+
+    /// <summary>Pops the topmost dialog, revealing (and re-focusing) the one beneath.</summary>
+    public void HideDialog()
+    {
+        if (_layers.Count == 0) return;
+        var top = _layers[^1];
+        if (top.Transition is null)
+        {
+            RemoveLayerInstant(top);
+            return;
+        }
+        top.Closing = true;
+        top.Transition.Reverse();
+    }
+
+    private void AddLayer(View dialog, bool suspendBelow)
+    {
+        // Owning the keyboard is what actually blocks the layer beneath: the backdrop stops the mouse
+        // but keyboard input routes to the single global focused component regardless of z-order, so a
+        // still-focused field underneath would keep swallowing keystrokes. Blur it now; restore on pop.
+        IKeyboardMouseController? savedFocus = null;
+        if (suspendBelow)
+        {
+            savedFocus = _input.FocusedComponent;
+            if (savedFocus != null) _input.Blur(savedFocus);
+        }
+
+        var overlay = new ContainerView
+        {
+            ZIndex = 1000 + _layers.Count,
+        };
 
         var backdrop = new RectView
         {
             BackgroundColor = 0xB0000000,
         };
         backdrop.UseController(_input, new DialogInputBlockingController());
-        _overlay.Children.Add(backdrop);
+        overlay.Children.Add(backdrop);
+        overlay.Children.Add(new CenterView { Children = { dialog } });
 
-        _overlay.Children.Add(new CenterView
+        Children.Add(overlay);
+
+        var layer = new Layer
         {
-            Children =
-            {
-                dialog,
-            }
-        });
+            Overlay = overlay,
+            SavedFocus = savedFocus,
+        };
+        _layers.Add(layer);
 
-        Children.Add(_overlay);
-
-        _closing = false;
         var transition = new Tween(_ticker, EnterDuration, Easings.EaseOutCubic, reverseDurationSeconds: ExitDuration);
-        _transition = transition;
+        layer.Transition = transition;
 
         // Subscribe fires immediately with 0 — the opening frame is painted scaled-down and
         // transparent before Play advances it, so the dialog grows in rather than flashing.
-        _fadeSub = transition.LinearProgress.Subscribe(p =>
+        layer.FadeSub = transition.LinearProgress.Subscribe(p =>
         {
             backdrop.Opacity = p;
             dialog.Opacity = p;
         });
-        _scaleSub = transition.Progress.Subscribe(p =>
+        layer.ScaleSub = transition.Progress.Subscribe(p =>
         {
             var scale = EnterScale + (1f - EnterScale) * p;
             dialog.ScaleX = scale;
             dialog.ScaleY = scale;
         });
 
-        transition.Completed += OnTransitionCompleted;
+        layer.CompletedHandler = () => OnTransitionCompleted(layer);
+        transition.Completed += layer.CompletedHandler;
         transition.Play();
     }
 
-    public void HideDialog()
+    private void OnTransitionCompleted(Layer layer)
     {
-        if (_transition is null)
-        {
-            _overlay.Children.Clear();
-            Children.Remove(_overlay);
-            return;
-        }
-
-        _closing = true;
-        _transition.Reverse();
+        if (!layer.Closing) return; // the open animation finished — leave the dialog up
+        RemoveLayerInstant(layer);
     }
 
-    private void OnTransitionCompleted()
+    private void RemoveLayerInstant(Layer layer)
     {
-        if (!_closing) return; // the open animation finished — leave the dialog up
+        layer.Dispose();
+        Children.Remove(layer.Overlay);
+        _layers.Remove(layer);
 
-        ClearTransition();
-        _overlay.Children.Clear();
-        Children.Remove(_overlay);
+        // Hand the keyboard back to the field this layer suspended, so the user lands back in the
+        // dialog beneath ready to type. A bare StealFocus would re-focus a text input without
+        // restarting its edit session, so route text inputs through BeginEditing.
+        if (layer.SavedFocus is { } saved)
+        {
+            if (saved is BaseTextInputKbmController textInput) textInput.BeginEditing();
+            else _input.StealFocus(saved);
+        }
     }
 
-    private void ClearTransition()
+    private sealed class Layer
     {
-        _fadeSub?.Dispose();
-        _scaleSub?.Dispose();
-        _fadeSub = null;
-        _scaleSub = null;
+        public ContainerView Overlay = null!;
+        public Tween? Transition;
+        public IDisposable? FadeSub;
+        public IDisposable? ScaleSub;
+        public Action? CompletedHandler;
+        public IKeyboardMouseController? SavedFocus;
+        public bool Closing;
 
-        if (_transition != null)
+        public void Dispose()
         {
-            _transition.Completed -= OnTransitionCompleted;
-            _transition.Dispose();
-            _transition = null;
-        }
+            FadeSub?.Dispose();
+            ScaleSub?.Dispose();
+            FadeSub = null;
+            ScaleSub = null;
 
-        _closing = false;
+            if (Transition != null)
+            {
+                if (CompletedHandler != null) Transition.Completed -= CompletedHandler;
+                Transition.Dispose();
+                Transition = null;
+            }
+            CompletedHandler = null;
+        }
     }
 }
 
