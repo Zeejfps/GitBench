@@ -60,7 +60,7 @@ internal sealed class GitBenchApp : IDisposable
         var context = builder.Context;
         context.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
-        var app = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
+        var app = builder.Build(new AppView());
 
         app.UseWindowGeometry(preferences);
         app.UseThemedTitleBar();
