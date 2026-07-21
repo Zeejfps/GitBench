@@ -3,6 +3,7 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -34,19 +35,21 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
     public required string Message { get; init; }
     public required Action OnClose { get; init; }
 
+    /// <summary>Caller-supplied in-place fix (e.g. unlock worktree). Falls back to stale-lock removal.</summary>
+    public OperationErrorRecovery? Recovery { get; init; }
+
     protected override DialogState CreateState(Context ctx) => new(OnClose);
 
-    // Null unless git's output names a stale *.lock; drives the recovery button and clears once
-    // the file is gone, so the dialog can't offer to delete the same path twice.
-    private readonly State<string?> _lockPath = new(null);
-    private readonly State<string?> _lockStatus = new(null);
-    private string _lockRemovedText = string.Empty;
+    // The one recovery this dialog offers, if any; null once it has run successfully so the same
+    // fix can't be applied twice. _recoveryStatus carries the outcome line shown beside the button.
+    private OperationErrorRecovery? _recovery;
+    private readonly State<bool> _recoveryDone = new(false);
+    private readonly State<string?> _recoveryStatus = new(null);
 
     protected override IWidget Build(Context ctx, DialogState state)
     {
         var s = ctx.Localization().Strings.Value;
-        _lockPath.Value = GitLockFile.Detect(Message);
-        _lockRemovedText = s.OperationsLockRemoved;
+        _recovery = Recovery ?? DetectLockRecovery(s);
         return new Box
         {
             Width = DialogFrame.WidthWide,
@@ -79,18 +82,18 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                                     [
                                         new SecondaryDialogButton
                                         {
-                                            Label = s.OperationsLockRemove,
-                                            Command = new Command(RemoveLockFile),
+                                            Label = _recovery?.ButtonLabel ?? string.Empty,
+                                            Command = new Command(RunRecovery),
                                             Height = DialogFrame.DefaultButtonHeight,
                                             MinWidth = DialogFrame.DefaultButtonMinWidth,
-                                            Visible = Prop.Bind(() => _lockPath.Value != null),
+                                            Visible = Prop.Bind(() => _recovery != null && !_recoveryDone.Value),
                                         }.WithController<KbmController>(),
                                         new Text
                                         {
-                                            Value = Prop.Bind(() => _lockStatus.Value ?? string.Empty),
+                                            Value = Prop.Bind(() => _recoveryStatus.Value ?? string.Empty),
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(t => t.DialogBody.RowTextMissing),
-                                            Visible = Prop.Bind(() => _lockStatus.Value != null),
+                                            Visible = Prop.Bind(() => _recoveryStatus.Value != null),
                                         },
                                         new Spacer(),
                                         new ActionDialogButton
@@ -111,13 +114,21 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
         };
     }
 
-    private void RemoveLockFile()
+    private void RunRecovery()
     {
-        if (_lockPath.Value is not { } path) return;
+        if (_recovery is not { } recovery) return;
 
-        var failure = GitLockFile.Remove(path);
-        _lockStatus.Value = failure ?? _lockRemovedText;
-        if (failure is null) _lockPath.Value = null;
+        var failure = recovery.Fix();
+        _recoveryStatus.Value = failure ?? recovery.SuccessText;
+        if (failure is null) _recoveryDone.Value = true;
+    }
+
+    // The always-available fix: git leaves an absolute *.lock path in its failure text when a crashed
+    // process left one behind, so this recovery is a pure function of the message — no repo needed.
+    private OperationErrorRecovery? DetectLockRecovery(Strings s)
+    {
+        if (GitLockFile.Detect(Message) is not { } lockPath) return null;
+        return new OperationErrorRecovery(s.OperationsLockRemove, s.OperationsLockRemoved, () => GitLockFile.Remove(lockPath));
     }
 
     // Symmetric left spacer keeps the title centered: it matches the combined width of the two

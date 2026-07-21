@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Infrastructure;
+using GitBench.Messages;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
@@ -27,6 +28,12 @@ internal sealed record Dialog : Widget
     public float BodyGap { get; init; } = 12f;
     public string? CancelLabel { get; init; }
     public IWidget? FooterLead { get; init; }
+
+    /// <summary>
+    /// Optional in-place fix offered in the operation-error dialog when <see cref="Command"/> fails
+    /// (e.g. unlock a locked worktree). Given the failure text, returns a recovery or null.
+    /// </summary>
+    public Func<string, OperationErrorRecovery?>? ErrorRecovery { get; init; }
 
     /// <summary>Busy spinner + disable + error row follow this command while it runs.</summary>
     public AsyncCommand? Command { get; init; }
@@ -56,6 +63,7 @@ internal sealed record Dialog : Widget
             CancelLabel = CancelLabel,
             Width = Width.IsSet ? Width.Value : DialogFrame.WidthStandard,
             FooterLead = FooterLead?.BuildView(ctx),
+            ErrorRecovery = ErrorRecovery,
         };
 
         // Body widgets build against a child scope carrying the input registry, so input

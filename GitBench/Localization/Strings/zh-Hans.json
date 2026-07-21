@@ -539,6 +539,8 @@
   "worktrees.remove_force_label": "即使有更改也移除",
   "worktrees.remove_note": "如果工作树有未提交的更改，git 会拒绝。勾选此框以强行移除。",
   "worktrees.remove_action": "移除",
+  "worktrees.unlock_action": "解锁工作树",
+  "worktrees.unlocked_status": "工作树已解锁",
 
   "common.clone": "克隆",
   "common.pull": "拉取",

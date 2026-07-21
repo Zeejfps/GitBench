@@ -31,7 +31,8 @@ internal sealed record RemoveWorktreeDialog : Widget
             new RemoveWorktreeRequest(Primary, Worktree),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;
 
@@ -82,6 +83,7 @@ internal sealed record RemoveWorktreeDialog : Widget
             ViewModel = vm,
             Action = (s.WorktreesRemoveAction, DialogButtonRole.Destructive),
             Command = vm.Remove,
+            ErrorRecovery = vm.UnlockRecoveryFor,
             ConfirmKeys = true,
             Body =
             [

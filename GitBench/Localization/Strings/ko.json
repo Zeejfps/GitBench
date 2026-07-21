@@ -539,6 +539,8 @@
   "worktrees.remove_force_label": "변경 사항이 있어도 제거",
   "worktrees.remove_note": "작업 트리에 커밋되지 않은 변경 사항이 있으면 git이 거부합니다. 그래도 제거하려면 확인란을 선택하세요.",
   "worktrees.remove_action": "제거",
+  "worktrees.unlock_action": "작업 트리 잠금 해제",
+  "worktrees.unlocked_status": "작업 트리 잠금이 해제됨",
 
   "common.clone": "복제",
   "common.pull": "풀",

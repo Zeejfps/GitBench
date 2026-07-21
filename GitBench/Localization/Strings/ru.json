@@ -601,6 +601,8 @@
   "worktrees.remove_force_label": "Удалить, даже если есть изменения",
   "worktrees.remove_note": "git откажется удалять рабочее дерево с незакоммиченными изменениями. Установите флажок, чтобы удалить всё равно.",
   "worktrees.remove_action": "Удалить",
+  "worktrees.unlock_action": "Разблокировать рабочее дерево",
+  "worktrees.unlocked_status": "Рабочее дерево разблокировано",
 
   "common.clone": "Клонировать",
   "common.pull": "Получить",

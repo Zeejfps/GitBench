@@ -2651,6 +2651,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return ToOutcome(_runner.Run(primary.Path, args), "git worktree remove");
         });
 
+    public GitOutcome UnlockWorktree(Repo primary, string worktreePath)
+        => RunOperation(primary, () =>
+        {
+            if (string.IsNullOrWhiteSpace(worktreePath))
+                return new GitOutcome.Failed("Worktree path is required.");
+            return ToOutcome(_runner.Run(primary.Path, new[] { "worktree", "unlock", worktreePath }), "git worktree unlock");
+        });
+
     public GitOutcome PruneWorktrees(Repo primary)
         => RunSimple(primary, "git worktree prune", "worktree", "prune");
 

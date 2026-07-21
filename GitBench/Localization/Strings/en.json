@@ -539,6 +539,8 @@
   "worktrees.remove_force_label": "Remove even if dirty",
   "worktrees.remove_note": "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
   "worktrees.remove_action": "Remove",
+  "worktrees.unlock_action": "Unlock worktree",
+  "worktrees.unlocked_status": "Worktree unlocked",
 
   "common.clone": "Clone",
   "common.pull": "Pull",

@@ -48,6 +48,7 @@ public sealed class DialogPresenter : IViewBehavior
         {
             Title = m.Title,
             Message = m.Message,
+            Recovery = m.Recovery,
             OnClose = OnDialogClosed,
         }.WithController<DialogKbmController>().BuildView(_windowContext);
 

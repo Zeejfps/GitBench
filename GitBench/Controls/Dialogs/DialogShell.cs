@@ -88,6 +88,12 @@ internal sealed class DialogShell
     /// </summary>
     public View? FooterLead { get; init; }
 
+    /// <summary>
+    /// Optional per-dialog fix offered in the operation-error dialog when the action fails. Given the
+    /// failure text, returns a recovery (e.g. unlock a locked worktree) or null when it doesn't apply.
+    /// </summary>
+    public Func<string, OperationErrorRecovery?>? ErrorRecovery { get; init; }
+
     /// <summary>Body rows, top to bottom. Populated via a collection initializer.</summary>
     public List<View> Body { get; } = new();
 
@@ -205,7 +211,7 @@ internal sealed class DialogShell
         command.Error.Subscribe(error =>
         {
             if (!string.IsNullOrEmpty(error))
-                _bus?.Broadcast(new ShowOperationErrorMessage(_title, error));
+                _bus?.Broadcast(new ShowOperationErrorMessage(_title, error, ErrorRecovery?.Invoke(error)));
         });
     }
 

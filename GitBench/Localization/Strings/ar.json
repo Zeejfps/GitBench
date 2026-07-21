@@ -628,6 +628,8 @@
   "worktrees.remove_force_label": "أزل حتى لو كانت متسخة",
   "worktrees.remove_note": "يرفض git إذا كانت شجرة العمل تحتوي على تغييرات غير مُودَعة. حدد المربع للإزالة على أي حال.",
   "worktrees.remove_action": "إزالة",
+  "worktrees.unlock_action": "إلغاء قفل شجرة العمل",
+  "worktrees.unlocked_status": "تم إلغاء قفل شجرة العمل",
 
   "common.clone": "استنساخ",
   "common.pull": "سحب",
