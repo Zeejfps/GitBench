@@ -58,29 +58,21 @@ internal sealed class GitBenchApp : IDisposable
             StartUnfocused = startUnfocused,
         });
 
-        var services = builder.Services;
-        services.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
+        var context = builder.Services;
+        context.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
 
         var app = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
-        app.OnWindowResized += preferences.SetWindowSize;
-        app.OnWindowMoved += preferences.SetWindowPosition;
 
-        // The dispatcher is registered during Build, so background services (watchers, sync, stores)
-        // can only spin up now.
-        services.CreateEagerSingletons();
-
-        app.BindTitleBarToTheme(services);
-        app.BindTextDirectionToLocale(services);
+        app.PersistWindowGeometry(preferences);
+        app.StartBackgroundServices(context);
+        app.BindTitleBarToTheme(context);
+        app.BindTextDirectionToLocale(context);
         app.RegisterAppFonts();
         app.LoadPlatformIcons();
-        services.InstallNativeAppMenu();
+        app.InstallNativeAppMenu(context);
+        app.StartUpdateChecks(context);
 
-        var updateService = services.Require<UpdateService>();
-        var updateDispatcher = services.Require<IUiDispatcher>();
-        _ = updateService.CheckForUpdatesAsync(updateDispatcher, userInitiated: false);
-        updateService.StartAutoChecks(updateDispatcher);
-
-        return new GitBenchApp(preferences, identityProfiles, services, app);
+        return new GitBenchApp(preferences, identityProfiles, context, app);
     }
 
     public void Run() => App.Run();

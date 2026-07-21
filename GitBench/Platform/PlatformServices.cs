@@ -52,8 +52,11 @@ internal static class PlatformServices
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
         }
+    }
 
-        public void InstallNativeAppMenu()
+    extension(GuiApp app)
+    {
+        public void InstallNativeAppMenu(Context context)
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 

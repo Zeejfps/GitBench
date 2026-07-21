@@ -17,6 +17,24 @@ internal static class AppHostSetup
 {
     extension(GuiApp appHost)
     {
+        public void PersistWindowGeometry(PreferencesService preferences)
+        {
+            appHost.OnWindowResized += preferences.SetWindowSize;
+            appHost.OnWindowMoved += preferences.SetWindowPosition;
+        }
+
+        // The dispatcher is registered during Build, so background services (watchers, sync, stores)
+        // can only spin up now.
+        public void StartBackgroundServices(Context services) => services.CreateEagerSingletons();
+
+        public void StartUpdateChecks(Context services)
+        {
+            var updateService = services.Require<UpdateService>();
+            var dispatcher = services.Require<IUiDispatcher>();
+            _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
+            updateService.StartAutoChecks(dispatcher);
+        }
+
         public void BindTitleBarToTheme(Context services)
         {
             var themeMode = services.Require<State<ThemeMode>>();
