@@ -55,6 +55,7 @@ internal static class AppServices
             new RepoRegistry(RepoStateStore.Load(statePath), statePath));
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
+        context.AddSingleton<AppViewModel>();
         context.AddSingleton<IStartupSweepCoordinator, StartupSweepCoordinator>();
         context.AddSingleton<IRepoActivityTracker, RepoActivityTracker>();
         context.AddSingleton<IGitService>(ctx =>
