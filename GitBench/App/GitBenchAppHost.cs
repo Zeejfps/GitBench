@@ -1,4 +1,3 @@
-using GitBench.Features.Identity;
 using GitBench.Platform;
 using ZGF.Desktop;
 using ZGF.Gui;
@@ -16,17 +15,14 @@ namespace GitBench.App;
 internal sealed class GitBenchAppHost : IDisposable
 {
     private readonly PreferencesService _preferences;
-    private readonly IdentityProfileService _identityProfiles;
 
     public GuiApp App { get; }
 
     private GitBenchAppHost(
         PreferencesService preferences,
-        IdentityProfileService identityProfiles,
         GuiApp app)
     {
         _preferences = preferences;
-        _identityProfiles = identityProfiles;
         App = app;
     }
 
@@ -40,9 +36,6 @@ internal sealed class GitBenchAppHost : IDisposable
         var prefsPath = AppDataPath("preferences.json");
         var preferences = new PreferencesService(PreferencesStore.Load(prefsPath), prefsPath);
 
-        var profilesPath = AppDataPath("identity-profiles.json");
-        var identityProfiles = new IdentityProfileService(IdentityProfileStore.Load(profilesPath), profilesPath);
-
         var builder = GuiApp.CreateBuilder(new StartupConfig
         {
             WindowTitle = "GitBench",
@@ -54,8 +47,7 @@ internal sealed class GitBenchAppHost : IDisposable
             StartUnfocused = startUnfocused,
         });
 
-        var context = builder.Context;
-        context.AddAppServices(preferences, identityProfiles, AppDataPath("state.json"));
+        builder.Context.AddAppServices(preferences);
 
         var app = builder.Build(new AppView());
 
@@ -67,7 +59,7 @@ internal sealed class GitBenchAppHost : IDisposable
         app.UseNativeAppMenu();
         app.UseUpdateChecks();
 
-        return new GitBenchAppHost(preferences, identityProfiles, app);
+        return new GitBenchAppHost(preferences, app);
     }
 
     public void Run() => App.Run();
@@ -75,7 +67,6 @@ internal sealed class GitBenchAppHost : IDisposable
     public void Dispose()
     {
         App.Dispose();
-        _identityProfiles.Dispose();
         _preferences.Dispose();
     }
 }

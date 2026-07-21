@@ -9,7 +9,7 @@ public sealed class PreferencesService : IDisposable
     private const int SaveDebounceMs = 500;
 
     private readonly string _path;
-    private readonly System.Threading.Timer _saveTimer;
+    private readonly Timer _saveTimer;
     private readonly object _gate = new();
     // Serializes the actual file write. A timer-fired Flush can overlap the synchronous Flush in
     // Dispose (Timer.Dispose doesn't wait for an in-flight callback), and both would otherwise
@@ -23,7 +23,7 @@ public sealed class PreferencesService : IDisposable
     {
         _current = initial;
         _path = path;
-        _saveTimer = new System.Threading.Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
+        _saveTimer = new Timer(_ => Flush(), null, Timeout.Infinite, Timeout.Infinite);
     }
 
     public Preferences Current

@@ -21,14 +21,13 @@ namespace GitBench.App;
 
 internal static class AppServices
 {
-    public static void AddAppServices(
-        this Context context,
-        PreferencesService preferences,
-        IdentityProfileService identityProfiles,
-        string statePath)
+    public static void AddAppServices(this Context context, PreferencesService preferences)
     {
         context.AddService(preferences);
-        context.AddService(identityProfiles);
+
+        var profilesPath = AppPaths.AppDataPath("identity-profiles.json");
+        context.AddSingleton(_ => new IdentityProfileService(
+            IdentityProfileStore.Load(profilesPath), profilesPath));
 
         context.AddSingleton<IMessageBus, MessageBus>();
         context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
@@ -51,6 +50,7 @@ internal static class AppServices
 
         context.AddPlatformServices();
 
+        var statePath = AppPaths.AppDataPath("state.json");
         context.AddSingleton<IRepoRegistry>(_ =>
             new RepoRegistry(RepoStateStore.Load(statePath), statePath));
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
@@ -63,8 +63,8 @@ internal static class AppServices
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo
         // config. Hosted via a factory because its deps need an interface cast the container can't do.
         context.AddHostedService(ctx => new GitIdentityService(
-            (IGitRawConfigReader)ctx.Require<IGitService>(), identityProfiles, ctx.Require<IMessageBus>(),
-            (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
+            (IGitRawConfigReader)ctx.Require<IGitService>(), ctx.Require<IdentityProfileService>(),
+            ctx.Require<IMessageBus>(), (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
         context.AddSingleton<IDragController, DragController>();
         context.AddSingleton<RepoHoverState>();
         context.AddSingleton<RepoBarCollapseState>();
