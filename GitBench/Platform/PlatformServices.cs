@@ -56,10 +56,11 @@ internal static class PlatformServices
 
     extension(GuiApp app)
     {
-        public void InstallNativeAppMenu(Context context)
+        public void InstallNativeAppMenu()
         {
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) return;
 
+            var context = app.Context;
             var themeMode = context.Require<State<ThemeMode>>();
             var updateService = context.Require<UpdateService>();
             var dispatcher = context.Require<IUiDispatcher>();

@@ -25,18 +25,24 @@ internal static class AppHostSetup
 
         // The dispatcher is registered during Build, so background services (watchers, sync, stores)
         // can only spin up now.
-        public void StartBackgroundServices(Context services) => services.CreateEagerSingletons();
-
-        public void StartUpdateChecks(Context services)
+        public void StartBackgroundServices()
         {
+            appHost.Context.CreateEagerSingletons();
+        }
+
+        public void StartUpdateChecks()
+        {
+            var services = appHost.Context;
+            services.CreateEagerSingletons();
             var updateService = services.Require<UpdateService>();
             var dispatcher = services.Require<IUiDispatcher>();
             _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
             updateService.StartAutoChecks(dispatcher);
         }
 
-        public void BindTitleBarToTheme(Context services)
+        public void BindTitleBarToTheme()
         {
+            var services = appHost.Context;
             var themeMode = services.Require<State<ThemeMode>>();
             appHost.SetTitleBarDark(themeMode.Value == ThemeMode.Dark);
             themeMode.Changed += mode => appHost.SetTitleBarDark(mode == ThemeMode.Dark);
@@ -44,8 +50,9 @@ internal static class AppHostSetup
 
         // Drives the UI's base writing direction from the active locale's culture: an RTL locale
         // (Arabic) flips text alignment and the bidi base for direction-neutral lines.
-        public void BindTextDirectionToLocale(Context services)
+        public void BindTextDirectionToLocale()
         {
+            var services = appHost.Context;
             var locale = services.Require<State<Locale>>();
             void Apply(Locale l) => appHost.SetBaseDirection(
                 Strings.For(l).Culture.TextInfo.IsRightToLeft ? BidiDirection.Rtl : BidiDirection.Auto);

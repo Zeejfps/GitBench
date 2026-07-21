@@ -3,7 +3,6 @@ using GitBench.Platform;
 using ZGF.Desktop;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
-using ZGF.Observable;
 using static GitBench.App.AppPaths;
 
 namespace GitBench.App;
@@ -64,13 +63,13 @@ internal sealed class GitBenchApp : IDisposable
         var app = builder.UseContent(ctx => new AppView().BuildView(ctx)).Build();
 
         app.PersistWindowGeometry(preferences);
-        app.StartBackgroundServices(context);
-        app.BindTitleBarToTheme(context);
-        app.BindTextDirectionToLocale(context);
+        app.StartBackgroundServices();
+        app.BindTitleBarToTheme();
+        app.BindTextDirectionToLocale();
         app.RegisterAppFonts();
         app.LoadPlatformIcons();
-        app.InstallNativeAppMenu(context);
-        app.StartUpdateChecks(context);
+        app.InstallNativeAppMenu();
+        app.StartUpdateChecks();
 
         return new GitBenchApp(preferences, identityProfiles, context, app);
     }
