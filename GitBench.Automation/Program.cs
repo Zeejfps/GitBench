@@ -19,6 +19,6 @@ Console.OutputEncoding = Encoding.UTF8;
 
 var useOsInput = args.Contains("--os-input");
 
-using var host = GitBenchApp.Create(startUnfocused: !useOsInput);
-CommitCyrillicScript.Start(host.App, host.Context, useOsInput);
+using var host = GitBenchAppHost.Create(startUnfocused: !useOsInput);
+CommitCyrillicScript.Start(host.App, useOsInput);
 host.Run();

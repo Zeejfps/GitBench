@@ -24,13 +24,14 @@ internal static class CommitCyrillicScript
 
     /// <summary>Starts the script in the background. Call before <c>Run()</c>: the driver needs the UI
     /// thread pumping, which only happens once the app is running.</summary>
-    public static void Start(GuiApp app, Context services, bool useOsKeyboard)
+    public static void Start(GuiApp app, bool useOsKeyboard)
     {
         var driver = app.CreateDriver();
         driver.UseOsKeyboard = useOsKeyboard;
 
-        var registry = services.Require<IRepoRegistry>();
-        var dispatcher = services.Require<IUiDispatcher>();
+        var context = app.Context;
+        var registry = context.Require<IRepoRegistry>();
+        var dispatcher = context.Require<IUiDispatcher>();
 
         new Thread(() => Run(driver, registry, dispatcher, useOsKeyboard))
         {
