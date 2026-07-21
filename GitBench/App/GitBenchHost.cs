@@ -20,17 +20,17 @@ internal sealed class GitBenchHost : IDisposable
     private readonly IdentityProfileService _identityProfiles;
 
     public GuiApp App { get; }
-    public Context Services { get; }
+    public Context Context { get; }
 
     private GitBenchHost(
         PreferencesService preferences,
         IdentityProfileService identityProfiles,
-        Context services,
+        Context context,
         GuiApp app)
     {
         _preferences = preferences;
         _identityProfiles = identityProfiles;
-        Services = services;
+        Context = context;
         App = app;
     }
 
@@ -88,7 +88,7 @@ internal sealed class GitBenchHost : IDisposable
     public void Dispose()
     {
         App.Dispose();
-        Services.Dispose();
+        Context.Dispose();
         _identityProfiles.Dispose();
         _preferences.Dispose();
     }
