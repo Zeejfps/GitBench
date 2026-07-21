@@ -3,50 +3,22 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Diff;
 using GitBench.Features.Notifications;
 using GitBench.Features.Review;
-using GitBench.Features.StatusBar;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.App;
 
-internal sealed record AppWidget : Widget<AppViewModel>
+internal sealed record AppWidget : Widget
 {
-    protected override IWidget Build(Context ctx, AppViewModel vm)
+    protected override IWidget Build(Context ctx)
     {
-        var frame = new Column
-        {
-            CrossAxis = CrossAxisAlignment.Stretch,
-            Children =
-            [
-                new UpdateBannerView(),
-                new Grow
-                {
-                    // The whole workspace swaps for the full-window welcome screen while no
-                    // repositories are open, so first-run isn't a maze of empty panels.
-                    Child = new Switch<bool>
-                    {
-                        Value = vm.HasRepos,
-                        Case = has => has
-                            ? new BorderLayout
-                            {
-                                West = new RepoBarSidebar(),
-                                Center = new RepoView(),
-                                South = new StatusBarView(),
-                            }
-                            : new WelcomeView(),
-                    },
-                },
-            ],
-        };
-
         var content = new Stack
         {
             Children =
             [
-                frame,
+                new AppContentWidget(),
                 new ToastHostView(),
                 new DragOverlay(),
                 new DialogSurface(),

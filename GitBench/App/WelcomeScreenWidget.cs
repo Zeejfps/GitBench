@@ -15,7 +15,7 @@ namespace GitBench.App;
 /// Full-window first-run screen shown while no repositories are open: the app logo and name,
 /// a short greeting, and the two ways in — open a local repository or clone one.
 /// </summary>
-internal sealed record WelcomeView : Widget
+internal sealed record WelcomeScreenWidget : Widget
 {
     protected override IWidget Build(Context ctx) => new Box
     {
