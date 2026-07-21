@@ -26,6 +26,11 @@ public interface IGitRawConfigReader
     IReadOnlyList<string> GetRemoteNamesRaw(string repoPath);
     string? GetRemoteUrlRaw(string repoPath, string remoteName);
     (string? Name, string? Email) GetLocalIdentityRaw(string repoPath);
+
+    // Wires the resolver that injects per-repo identity into every git invocation. Called once at
+    // startup by GitIdentityService itself (its hosted Start), which needs this reader for its raw
+    // config reads — hence the post-construction back-wire rather than a constructor arg either way.
+    void AttachIdentityResolver(GitIdentityService identity);
 }
 
 public sealed class GitService : IGitService, IGitRawConfigReader
@@ -3316,10 +3321,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
     }
 
-    // Sets the resolver that injects per-repo identity into every git invocation. Called once at
-    // startup after GitIdentityService is built (which itself needs this GitService for raw reads,
-    // hence the post-construction wiring rather than a constructor arg).
-    public void AttachIdentityResolver(GitIdentityService identity)
+    void IGitRawConfigReader.AttachIdentityResolver(GitIdentityService identity)
         => _runner.IdentityPrefixResolver = identity.ResolvePrefixArgs;
 
     private bool IsTracked(string workingDir, string path)

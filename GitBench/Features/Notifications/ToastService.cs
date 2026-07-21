@@ -12,7 +12,7 @@ namespace GitBench.Features.Notifications;
 /// real after <see cref="ExitDuration"/>. Toasts are added/removed on the UI thread (bus broadcasts
 /// and direct callers both run there), so the lists and tables need no locking.
 /// </summary>
-internal sealed class ToastService : IToastService, IDisposable
+internal sealed class ToastService : IToastService, IHostedService, IDisposable
 {
     // The stack is capped so a burst (e.g. fetch-all across many repos) can't bury the screen;
     // the oldest toast drops when a new one would exceed the cap.
@@ -42,8 +42,9 @@ internal sealed class ToastService : IToastService, IDisposable
         _bus = bus;
         _dispatcher = dispatcher;
         _onShow = m => { if (m.Intent != null) Show(m.Intent); };
-        _bus.Subscribe(_onShow);
     }
+
+    public void Start() => _bus.Subscribe(_onShow);
 
     public IReadable<bool> Exiting(ToastId id) => _exiting.TryGetValue(id, out var st) ? st : NotExiting;
 

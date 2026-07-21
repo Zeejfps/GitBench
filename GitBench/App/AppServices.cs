@@ -59,18 +59,12 @@ internal static class AppServices
         context.AddSingleton<IRepoActivityTracker, RepoActivityTracker>();
         context.AddSingleton<IGitService>(ctx =>
             new GitService(ctx.Require<IRepoActivityTracker>()));
-        // Built lazily but eagerly instantiated: it reads config through gitService and must be
-        // attached back so every git invocation gets the right per-repo name/email/SSH key
-        // injected without touching repo config.
-        context.AddSingleton(ctx =>
-        {
-            var gitService = (GitService)ctx.Require<IGitService>();
-            var identityService = new GitIdentityService(
-                gitService, identityProfiles, ctx.Require<IMessageBus>(),
-                (IIdentityOverrides)ctx.Require<IRepoRegistry>());
-            gitService.AttachIdentityResolver(identityService);
-            return identityService;
-        }, eager: true);
+        // Reads config through gitService and back-wires itself into it (its hosted Start) so every
+        // git invocation gets the right per-repo name/email/SSH key injected without touching repo
+        // config. Hosted via a factory because its deps need an interface cast the container can't do.
+        context.AddHostedService(ctx => new GitIdentityService(
+            (IGitRawConfigReader)ctx.Require<IGitService>(), identityProfiles, ctx.Require<IMessageBus>(),
+            (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
         context.AddSingleton<IDragController, DragController>();
         context.AddSingleton<RepoHoverState>();
         context.AddSingleton<RepoBarCollapseState>();
@@ -118,17 +112,15 @@ internal static class AppServices
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
         context.AddHostedService<IRepoStatusStore, RepoStatusStore>();
 
-        // No post-construction lifecycle — it subscribes to the bus in its constructor — so it's just
-        // an eager singleton: the host constructs it at startup, no Start() to run.
-        context.AddSingleton<IToastService, ToastService>(eager: true);
+        context.AddHostedService<IToastService, ToastService>();
 
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
             ctx.Require<IPopupWindowFactory>(),
             ctx.Require<IWindowCoordinates>()));
 
-        context.AddSingleton<RepoWatcherService>(eager: true);
-        context.AddSingleton<WorktreeSyncService>(eager: true);
-        context.AddSingleton<SubmoduleSyncService>(eager: true);
-        context.AddSingleton<SubmodulePointerSyncService>(eager: true);
+        context.AddHostedService<RepoWatcherService>();
+        context.AddHostedService<WorktreeSyncService>();
+        context.AddHostedService<SubmoduleSyncService>();
+        context.AddHostedService<SubmodulePointerSyncService>();
     }
 }

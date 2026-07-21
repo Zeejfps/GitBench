@@ -1,6 +1,7 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
@@ -15,13 +16,13 @@ namespace GitBench.Features.Submodules;
 // its own RepoWatcher, so this fires for both in-app operations and external HEAD moves. The
 // staging `git add` runs through the git runner, whose writes the parent's RepoWatcher ignores,
 // so there's no watcher feedback loop; and since `add` doesn't move refs it can't re-trigger us.
-internal sealed class SubmodulePointerSyncService : IDisposable
+internal sealed class SubmodulePointerSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
-    private readonly IDisposable _refsChangedSub;
+    private IDisposable? _refsChangedSub;
 
     public SubmodulePointerSyncService(
         IRepoRegistry registry,
@@ -33,7 +34,11 @@ internal sealed class SubmodulePointerSyncService : IDisposable
         _git = git;
         _dispatcher = dispatcher;
         _bus = bus;
-        _refsChangedSub = _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
+    }
+
+    public void Start()
+    {
+        _refsChangedSub ??= _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
     }
 
     private void OnRefsChanged(RefsChangedMessage msg)
@@ -65,5 +70,5 @@ internal sealed class SubmodulePointerSyncService : IDisposable
         });
     }
 
-    public void Dispose() => _refsChangedSub.Dispose();
+    public void Dispose() => _refsChangedSub?.Dispose();
 }

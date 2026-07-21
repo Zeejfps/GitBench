@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
+using ZGF.Gui;
 
 namespace GitBench.Features.Identity;
 
@@ -20,7 +21,7 @@ public interface IIdentityOverrides
 //
 // Compute() reads config through IGitRawConfigReader with inject:false, so the runner never calls
 // back into this resolver while resolving.
-public sealed class GitIdentityService
+public sealed class GitIdentityService : IHostedService
 {
     private readonly IGitRawConfigReader _git;
     private readonly IdentityProfileService _profiles;
@@ -42,6 +43,11 @@ public sealed class GitIdentityService
         _profiles.Changed += FlushAll;
         bus.Subscribe<RefsChangedMessage>(OnRefsChanged);
     }
+
+    // Back-wires this resolver into the git reader so every git invocation injects the right
+    // per-repo identity. Deferred to startup because the reader (GitService) and this resolver
+    // depend on each other; see IGitRawConfigReader.AttachIdentityResolver.
+    public void Start() => _git.AttachIdentityResolver(this);
 
     public Identity Resolve(string workingDir)
     {

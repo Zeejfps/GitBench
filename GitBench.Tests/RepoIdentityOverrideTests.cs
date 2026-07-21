@@ -46,6 +46,7 @@ public class RepoIdentityOverrideTests
         public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => new[] { "origin" };
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => Url;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
+        public void AttachIdentityResolver(GitIdentityService identity) { }
     }
 
     private sealed class FakeBus : IMessageBus

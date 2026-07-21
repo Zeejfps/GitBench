@@ -1,5 +1,6 @@
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -7,14 +8,14 @@ namespace GitBench.Features.Repos;
 // Owns one RepoWatcher per known repo. Subscribes to the repo registry's list and
 // creates/disposes watchers as repos are added or removed. Registered as a service
 // at startup; lifetime is the lifetime of the app.
-internal sealed class RepoWatcherService : IDisposable
+internal sealed class RepoWatcherService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IRepoActivityTracker _activity;
     private readonly Dictionary<Guid, RepoWatcher> _watchers = new();
-    private readonly IDisposable _reposSub;
+    private IDisposable? _reposSub;
 
     public RepoWatcherService(
         IRepoRegistry registry,
@@ -26,10 +27,13 @@ internal sealed class RepoWatcherService : IDisposable
         _dispatcher = dispatcher;
         _bus = bus;
         _activity = activity;
+    }
 
+    public void Start()
+    {
         // Subscribe fires Reset immediately with the current list contents, so we don't
         // need a separate initial-seed loop.
-        _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
+        _reposSub ??= _registry.Repos.Subscribe(OnRepoListChange);
     }
 
     private void OnRepoListChange(ListChange<Repo> change)
@@ -39,17 +43,17 @@ internal sealed class RepoWatcherService : IDisposable
             case ListChangeKind.Reset:
                 DisposeAll();
                 foreach (var repo in _registry.Repos)
-                    Start(repo);
+                    StartWatching(repo);
                 break;
             case ListChangeKind.Added:
-                if (change.Item is { } added) Start(added);
+                if (change.Item is { } added) StartWatching(added);
                 break;
             case ListChangeKind.Removed:
                 if (change.OldItem is { } removed) Stop(removed.Id);
                 break;
             case ListChangeKind.Replaced:
                 if (change.OldItem is { } oldRepo) Stop(oldRepo.Id);
-                if (change.Item is { } newRepo) Start(newRepo);
+                if (change.Item is { } newRepo) StartWatching(newRepo);
                 break;
             case ListChangeKind.Moved:
                 // No-op: reordering doesn't change which repos exist.
@@ -60,7 +64,7 @@ internal sealed class RepoWatcherService : IDisposable
         }
     }
 
-    private void Start(Repo repo)
+    private void StartWatching(Repo repo)
     {
         if (_watchers.ContainsKey(repo.Id)) return;
         try
@@ -89,7 +93,7 @@ internal sealed class RepoWatcherService : IDisposable
 
     public void Dispose()
     {
-        _reposSub.Dispose();
+        _reposSub?.Dispose();
         DisposeAll();
     }
 }

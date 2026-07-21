@@ -1,6 +1,7 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Submodules;
@@ -20,16 +21,16 @@ namespace GitBench.Features.Submodules;
 //     update / deinit.
 //   * RefsChangedMessage(hostId) — HEAD moves can swap in a different .gitmodules,
 //     which changes the submodule set even though the working tree didn't change.
-internal sealed class SubmoduleSyncService : IDisposable
+internal sealed class SubmoduleSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
-    private readonly IDisposable _reposSub;
-    private readonly IDisposable _submodulesChangedSub;
-    private readonly IDisposable _refsChangedSub;
+    private IDisposable? _reposSub;
+    private IDisposable? _submodulesChangedSub;
+    private IDisposable? _refsChangedSub;
 
     public SubmoduleSyncService(
         IRepoRegistry registry,
@@ -43,10 +44,13 @@ internal sealed class SubmoduleSyncService : IDisposable
         _dispatcher = dispatcher;
         _bus = bus;
         _sweep = sweep;
+    }
 
-        _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
-        _submodulesChangedSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
-        _refsChangedSub = _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
+    public void Start()
+    {
+        _reposSub ??= _registry.Repos.Subscribe(OnRepoListChange);
+        _submodulesChangedSub ??= _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
+        _refsChangedSub ??= _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
     }
 
     private void OnRepoListChange(ListChange<Repo> change)
@@ -148,8 +152,8 @@ internal sealed class SubmoduleSyncService : IDisposable
 
     public void Dispose()
     {
-        _reposSub.Dispose();
-        _submodulesChangedSub.Dispose();
-        _refsChangedSub.Dispose();
+        _reposSub?.Dispose();
+        _submodulesChangedSub?.Dispose();
+        _refsChangedSub?.Dispose();
     }
 }

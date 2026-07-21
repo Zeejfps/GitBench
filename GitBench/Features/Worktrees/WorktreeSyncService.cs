@@ -1,6 +1,7 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Worktrees;
@@ -16,16 +17,16 @@ namespace GitBench.Features.Worktrees;
 //   * RefsChangedMessage(primaryId) — re-broadcast as RefsChangedMessage(worktreeId)
 //     for each child, because the worktrees share refs/heads with the primary and
 //     their BranchesView needs the same refresh.
-internal sealed class WorktreeSyncService : IDisposable
+internal sealed class WorktreeSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
-    private readonly IDisposable _reposSub;
-    private readonly IDisposable _worktreesChangedSub;
-    private readonly IDisposable _refsChangedSub;
+    private IDisposable? _reposSub;
+    private IDisposable? _worktreesChangedSub;
+    private IDisposable? _refsChangedSub;
 
     public WorktreeSyncService(
         IRepoRegistry registry,
@@ -39,10 +40,13 @@ internal sealed class WorktreeSyncService : IDisposable
         _dispatcher = dispatcher;
         _bus = bus;
         _sweep = sweep;
+    }
 
-        _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
-        _worktreesChangedSub = _bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged);
-        _refsChangedSub = _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
+    public void Start()
+    {
+        _reposSub ??= _registry.Repos.Subscribe(OnRepoListChange);
+        _worktreesChangedSub ??= _bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged);
+        _refsChangedSub ??= _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
     }
 
     private void OnRepoListChange(ListChange<Repo> change)
@@ -148,8 +152,8 @@ internal sealed class WorktreeSyncService : IDisposable
 
     public void Dispose()
     {
-        _reposSub.Dispose();
-        _worktreesChangedSub.Dispose();
-        _refsChangedSub.Dispose();
+        _reposSub?.Dispose();
+        _worktreesChangedSub?.Dispose();
+        _refsChangedSub?.Dispose();
     }
 }
