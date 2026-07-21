@@ -1,8 +1,8 @@
 using GitBench.Controls;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 
 namespace GitBench.Features.Repos;
 
@@ -21,7 +21,7 @@ internal static class AddRepoMenu
     public static void OpenFromFolder(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
-        ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerOpenRepository, path =>
+        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerOpenRepository, path =>
         {
             if (ctx.Get<IRepoRegistry>()?.Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
             {

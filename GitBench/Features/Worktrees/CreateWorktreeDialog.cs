@@ -2,9 +2,9 @@ using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -78,8 +78,8 @@ internal sealed record CreateWorktreeDialog : Widget
 
     private static void PickPath(Context ctx, CreateWorktreeDialogViewModel vm)
     {
-        var shell = ctx.Get<IPlatformShell>();
-        shell?.PickFolder(ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
+        var picker = ctx.Get<IFilePicker>();
+        picker?.PickFolder(ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
             picked => vm.Path.Value = picked);
     }
 }

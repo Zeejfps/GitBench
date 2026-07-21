@@ -22,6 +22,10 @@ internal static class PlatformServices
     {
         public void AddPlatformServices()
         {
+            // The OS-native file/folder picker lives in the framework (ZGF.Gui.Desktop); this
+            // registers the right one for the current platform under IFilePicker.
+            context.AddNativeFilePicker();
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());
@@ -32,7 +36,7 @@ internal static class PlatformServices
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                context.AddService<IPlatformShell>(new MacOSPlatformShell(context));
+                context.AddService<IPlatformShell>(new MacOSPlatformShell());
                 context.AddService<IClipboard>(new OsxClipboard());
                 context.AddService<IPopupNativeDecorator>(new MacOsPopupDecorator());
                 context.AddService<IWindowChrome>(new MacOsWindowChrome());
@@ -40,7 +44,7 @@ internal static class PlatformServices
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                context.AddService<IPlatformShell>(new LinuxPlatformShell(context));
+                context.AddService<IPlatformShell>(new LinuxPlatformShell());
                 context.AddService<IPopupNativeDecorator>(new NoopPopupDecorator());
                 context.AddService<IWindowChrome>(new LinuxWindowChrome());
                 context.AddService<IAppMenu>(new NoopAppMenu());

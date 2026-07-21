@@ -2,9 +2,9 @@ using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -40,7 +40,7 @@ internal sealed record CloneRepoDialog : Widget
         {
             Label = s.CommonBrowse,
             Command = new Command(() =>
-                ctx.Get<IPlatformShell>()?.PickFolder(s.ReposPickerChooseClone, picked =>
+                ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerChooseClone, picked =>
                     vm.ParentDir.Value = picked)),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();

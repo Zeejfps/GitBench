@@ -1,8 +1,8 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Localization;
-using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -33,7 +33,7 @@ internal sealed record IdentityProfileFields : Widget
         {
             Label = s.CommonBrowse,
             Command = new Command(() =>
-                ctx.Get<IPlatformShell>()?.PickFile(
+                ctx.Get<IFilePicker>()?.PickFile(
                     s.IdentityPickerChooseSshKey,
                     IdentityProfileEditing.InitialSshKeyDirectory(SshKeyPath.Value),
                     picked => SshKeyPath.Value = picked)),
