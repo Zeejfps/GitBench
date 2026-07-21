@@ -156,6 +156,8 @@ internal sealed record RepoBar : Widget
         var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>
         {
+            new(s.ReposAddButton, () => { }, LucideIcons.Plus, Submenu: AddRepoMenu.Items(ctx)),
+            RepoBarContextMenu.Separator,
             new(s.ReposMenuNewGroup, () => vm.NewGroup.Execute(), LucideIcons.FolderPlus),
         };
         if (vm.HasMultipleGroups)
