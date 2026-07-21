@@ -49,7 +49,7 @@ internal sealed class GitBenchAppHost : IDisposable
 
         builder.Context.AddAppServices(preferences);
 
-        var app = builder.Build(new AppView());
+        var app = builder.Build(new AppWidget());
 
         app.UseWindowGeometry(preferences);
         app.UseThemedTitleBar();

@@ -5,7 +5,6 @@ using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.StatusBar;
-using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -15,7 +14,7 @@ using ZGF.Observable;
 
 namespace GitBench.App;
 
-internal sealed record AppView : Widget
+internal sealed record AppWidget : Widget
 {
     protected override IWidget Build(Context ctx)
     {
