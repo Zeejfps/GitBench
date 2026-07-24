@@ -36,6 +36,7 @@ internal sealed record IdentityProfileFields : Widget
                 ctx.Get<IFilePicker>()?.PickFile(
                     s.IdentityPickerChooseSshKey,
                     IdentityProfileEditing.InitialSshKeyDirectory(SshKeyPath.Value),
+                    filters: null,
                     picked => SshKeyPath.Value = picked)),
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();
