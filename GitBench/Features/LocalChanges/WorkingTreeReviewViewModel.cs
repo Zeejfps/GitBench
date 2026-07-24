@@ -33,6 +33,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
     private readonly Derived<float> _filesFraction;
     private readonly Derived<string> _filesStagedLabel;
     private readonly Derived<bool> _hasFiles;
+    private readonly Derived<bool> _showsEmptyState;
     private readonly Derived<bool> _canStageSelected;
     private readonly Derived<bool> _canUnstageSelected;
     private readonly Derived<bool> _canDiscardSelected;
@@ -56,6 +57,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _filesFraction = new Derived<float>(() => _hud.Value.FilesFraction);
         _filesStagedLabel = new Derived<string>(BuildFilesStagedLabel);
         _hasFiles = new Derived<bool>(() => Files().Count > 0);
+        _showsEmptyState = new Derived<bool>(() => !IsLoading.Value && !_hasFiles.Value);
         _canStageSelected = new Derived<bool>(() => AnySelected(p => !_marks.IsViewed(p)));
         _canUnstageSelected = new Derived<bool>(() => AnySelected(_marks.HasStagedContent));
         _canDiscardSelected = new Derived<bool>(() => AnySelected(p => !_marks.IsViewed(p)));
@@ -111,6 +113,14 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
 
     /// <summary>False when the working tree is clean — the surface shows its empty state instead.</summary>
     public IReadable<bool> HasFiles => _hasFiles;
+
+    /// <summary>True while the working tree loads with nothing to keep on screen (a repo switch, or
+    /// the first load) — both columns stand in a skeleton until the files land.</summary>
+    public IReadable<bool> IsLoading => _local.IsColdLoad;
+
+    /// <summary>The "no local changes" message: a clean working tree that is done loading. A load
+    /// with no files yet is not empty, it is pending.</summary>
+    public IReadable<bool> ShowsEmptyState => _showsEmptyState;
 
     public event Action<string>? ScrollToFileRequested
     {
@@ -272,6 +282,7 @@ internal sealed class WorkingTreeReviewViewModel : IReviewSurfaceModel, IDisposa
         _canDiscardSelected.Dispose();
         _canUnstageSelected.Dispose();
         _canStageSelected.Dispose();
+        _showsEmptyState.Dispose();
         _hasFiles.Dispose();
         _filesStagedLabel.Dispose();
         _filesFraction.Dispose();

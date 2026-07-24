@@ -65,8 +65,14 @@ internal readonly record struct LocalChangesState(
     public string? Placeholder =>
         !HasRepo ? OpenRepoPlaceholder :
         LoadError != null ? LoadError :
-        (Staged.Count == 0 && Unstaged.Count == 0 && IsLoading) ? LoadingPlaceholder :
+        IsColdLoad ? LoadingPlaceholder :
         null;
+
+    // A load with nothing on screen to keep — a repo switch, or a first load. The surfaces stand in
+    // a placeholder / skeleton for it; a refresh that still has lists up revalidates in place
+    // instead, so the user never watches content they are reading get torn down.
+    public bool IsColdLoad =>
+        HasRepo && LoadError == null && IsLoading && Staged.Count == 0 && Unstaged.Count == 0;
 
     // Unmerged paths surface as conflicted entries in the unstaged list; committing while any
     // remain would be rejected by git, so the button stays disabled until they're resolved.

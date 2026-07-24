@@ -58,6 +58,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // — during a stage, that transient shows the file on neither side. Consumers that merge the two
     // (the working-tree review surface) subscribe here instead.
     public IReadable<(IReadOnlyList<FileChange> Unstaged, IReadOnlyList<FileChange> Staged)> WorkingTreeLists { get; }
+    /// <summary>True while a repo's working tree loads with nothing to keep on screen — the surfaces
+    /// show their loading placeholder / skeleton for it.</summary>
+    public IReadable<bool> IsColdLoad { get; }
     public IReadable<IReadOnlyList<SubmoduleInfo>> DriftedSubmodules { get; }
     public IReadable<bool> IsMerging { get; }
     public IReadable<Selection> Selection { get; }
@@ -127,6 +130,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Unstaged = Slice(s => s.Unstaged);
         Staged = Slice(s => s.Staged);
         WorkingTreeLists = Slice(s => (s.Unstaged, s.Staged));
+        // Declared after WorkingTreeLists: slices notify in declaration order, so the review
+        // surface has taken the fresh file list before this drops to false and its skeleton gives
+        // way — otherwise the tree would appear empty for the swap.
+        IsColdLoad = Slice(s => s.IsColdLoad);
         DriftedSubmodules = Slice(s => s.DriftedSubmodules);
         IsMerging = Slice(s => s.IsMerging);
         Selection = Slice(s => s.Selection);

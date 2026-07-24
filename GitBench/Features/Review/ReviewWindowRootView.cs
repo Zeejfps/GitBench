@@ -132,12 +132,12 @@ internal sealed record ReviewWindowRootView : Widget
                         MinResizeWidth = 240f,
                         MaxResizeWidth = 600f,
                     },
-                    // The stacked diff surface, or a loading indicator while a base switch resolves.
+                    // The stacked diff surface, standing in skeleton cards while a base switch resolves.
                     Center = new Switch<bool>
                     {
                         Value = Model.IsSwitchingBase,
                         Case = switching => switching
-                            ? new FadeIn { Bloom = true, Child = Centered(L.T(s => s.CommonLoading)) }
+                            ? new FadeIn { Bloom = true, Child = new ReviewDiffSkeleton() }
                             : new ReviewDiffPanel(),
                     },
                 },

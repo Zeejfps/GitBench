@@ -78,60 +78,69 @@ internal sealed record WorkingTreeReviewView : Widget
             {
                 West = new ResizableSidebar
                 {
-                    Content = new CommitChangesPanel
+                    // A cold load (a repo switch, or the first one) stands the tree up as a skeleton
+                    // until the working tree lands, so the files resolve into shape rather than
+                    // popping in over the clean-tree empty state.
+                    Content = new Switch<bool>
                     {
-                        EmptyState = c => FileChangesUI.CreateEmptyState(
-                            c,
-                            LucideIcons.CircleCheck,
-                            c.Localization().Strings,
-                            s => s.LocalchangesUnstagedEmptyTitle,
-                            s => s.LocalchangesUnstagedEmptyHint),
-                        SelectedPath = model.ActiveFile,
-                        SelectedPaths = model.SelectedPaths,
-                        CursorPath = model.SelectionCursor,
-                        OnActivate = model.ActivateFile,
-                        OnSelect = model.SelectFile,
-                        OnSelectAll = model.SelectAllFiles,
-                        OnActivateSelection = model.ToggleActiveFileViewed,
-                        OnFileContextMenu = (file, point) =>
-                            RepoBarContextMenu.Show(ctx, point, model.BuildFileContextMenuItems(file.Path)),
-                        OnFolderContextMenu = (folderPath, paths, point) =>
-                            RepoBarContextMenu.Show(ctx, point, model.BuildTreeFolderContextMenuItems(folderPath, paths)),
-                        OnEmptyContextMenu = point =>
-                            RepoBarContextMenu.Show(ctx, point, model.BuildTreeEmptyContextMenuItems()),
-                        HeaderActions =
-                        [
-                            new LocalChangesHeaderActionButton
+                        Value = model.IsLoading,
+                        Case = loading => loading
+                            ? new FadeIn { Bloom = true, Child = new ReviewTreeSkeleton() }
+                            : new CommitChangesPanel
                             {
-                                Icon = LucideIcons.Trash,
-                                Command = model.DiscardSelected,
-                                Tooltip = L.T(s => s.LocalchangesDiscardSelectedTooltip),
+                                EmptyState = c => FileChangesUI.CreateEmptyState(
+                                    c,
+                                    LucideIcons.CircleCheck,
+                                    c.Localization().Strings,
+                                    s => s.LocalchangesUnstagedEmptyTitle,
+                                    s => s.LocalchangesUnstagedEmptyHint),
+                                SelectedPath = model.ActiveFile,
+                                SelectedPaths = model.SelectedPaths,
+                                CursorPath = model.SelectionCursor,
+                                OnActivate = model.ActivateFile,
+                                OnSelect = model.SelectFile,
+                                OnSelectAll = model.SelectAllFiles,
+                                OnActivateSelection = model.ToggleActiveFileViewed,
+                                OnFileContextMenu = (file, point) =>
+                                    RepoBarContextMenu.Show(ctx, point, model.BuildFileContextMenuItems(file.Path)),
+                                OnFolderContextMenu = (folderPath, paths, point) =>
+                                    RepoBarContextMenu.Show(ctx, point, model.BuildTreeFolderContextMenuItems(folderPath, paths)),
+                                OnEmptyContextMenu = point =>
+                                    RepoBarContextMenu.Show(ctx, point, model.BuildTreeEmptyContextMenuItems()),
+                                HeaderActions =
+                                [
+                                    new LocalChangesHeaderActionButton
+                                    {
+                                        Icon = LucideIcons.Trash,
+                                        Command = model.DiscardSelected,
+                                        Tooltip = L.T(s => s.LocalchangesDiscardSelectedTooltip),
+                                    },
+                                    new LocalChangesHeaderActionButton
+                                    {
+                                        Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft),
+                                        Command = model.StageSelected,
+                                        Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
+                                    },
+                                    new LocalChangesHeaderActionButton
+                                    {
+                                        Icon = Direction.Glyph(ctx, LucideIcons.ChevronsRight, LucideIcons.ChevronsLeft),
+                                        Command = model.StageAll,
+                                        Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
+                                    },
+                                    new LocalChangesHeaderActionButton
+                                    {
+                                        Icon = Direction.Glyph(ctx, LucideIcons.ChevronsLeft, LucideIcons.ChevronsRight),
+                                        Command = model.UnstageAll,
+                                        Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
+                                    },
+                                    new LocalChangesHeaderActionButton
+                                    {
+                                        Icon = Direction.Glyph(ctx, LucideIcons.ChevronLeft, LucideIcons.ChevronRight),
+                                        Command = model.UnstageSelected,
+                                        Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
+                                    },
+                                ],
                             },
-                            new LocalChangesHeaderActionButton
-                            {
-                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronRight, LucideIcons.ChevronLeft),
-                                Command = model.StageSelected,
-                                Tooltip = L.T(s => s.LocalchangesStageSelectedTooltip),
-                            },
-                            new LocalChangesHeaderActionButton
-                            {
-                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronsRight, LucideIcons.ChevronsLeft),
-                                Command = model.StageAll,
-                                Tooltip = L.T(s => s.LocalchangesStageAllTooltip),
-                            },
-                            new LocalChangesHeaderActionButton
-                            {
-                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronsLeft, LucideIcons.ChevronsRight),
-                                Command = model.UnstageAll,
-                                Tooltip = L.T(s => s.LocalchangesUnstageAllTooltip),
-                            },
-                            new LocalChangesHeaderActionButton
-                            {
-                                Icon = Direction.Glyph(ctx, LucideIcons.ChevronLeft, LucideIcons.ChevronRight),
-                                Command = model.UnstageSelected,
-                                Tooltip = L.T(s => s.LocalchangesUnstageSelectedTooltip),
-                            },
-                        ],
                     },
                     InitialWidth = 300f,
                     MinResizeWidth = 220f,
@@ -147,9 +156,13 @@ internal sealed record WorkingTreeReviewView : Widget
                         new ReviewDiffPanel(),
                         new Show
                         {
-                            When = model.HasFiles,
-                            Then = () => Empty.Widget,
-                            Else = () => Centered(L.T(s => s.ReviewNoLocalChanges)),
+                            When = model.IsLoading,
+                            Then = () => new FadeIn { Bloom = true, Child = new ReviewDiffSkeleton() },
+                        },
+                        new Show
+                        {
+                            When = model.ShowsEmptyState,
+                            Then = () => Centered(L.T(s => s.ReviewNoLocalChanges)),
                         },
                     ],
                 }),
