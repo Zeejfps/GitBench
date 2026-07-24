@@ -121,16 +121,15 @@ Delete the second copy rather than reconcile it. `IRepoStatusStore` becomes the 
 HEAD's ahead/behind; the branch listing stops being *able* to answer for the checked-out branch.
 Non-HEAD branches keep using `for-each-ref` — `git status` cannot report them.
 
-The enforcement is type-level, not conventional: **HEAD is lifted out of the local-branch list**,
-so there is no `AheadBy` field on it to fill in wrongly.
+The enforcement is type-level, not conventional: **the local-branch entry becomes a two-case
+union**, and the HEAD case has no count field to fill in wrongly.
 
 ```csharp
 // Branches.cs
 public sealed record BranchSync(int Ahead, int Behind);
 
-// A local branch that is not checked out. for-each-ref counted its divergence.
-public sealed record LocalBranchEntry(string Name, string TipSha, LocalUpstream Upstream);
-
+// Upstream link for a local branch that is not checked out. Tracked always carries both names and
+// a count pair, so there are no nullable-field combinations to get wrong.
 public abstract record LocalUpstream
 {
     public sealed record None : LocalUpstream;                   // no upstream configured
@@ -138,71 +137,105 @@ public abstract record LocalUpstream
     public sealed record Tracked(string Remote, string Branch, BranchSync Sync) : LocalUpstream;
 }
 
-// The checked-out local branch. Deliberately count-free: ahead/behind for HEAD is owned by
-// IRepoStatusStore, which observes it in the same git read that drives the toolbar.
-public sealed record HeadBranch(string Name, string TipSha, HeadUpstreamState Upstream);
+// Whether HEAD has an upstream ref at all. Deliberately not a count: how far apart they are is
+// owned by IRepoStatusStore, which observes it in the same git read that drives the toolbar.
 public enum HeadUpstreamState { None, Gone, Tracked }
 
-public sealed record RemoteBranchEntry(string Name, string TipSha);   // no upstream concept
+public abstract record LocalBranchEntry(string Name, string TipSha)
+{
+    public sealed record Head(string Name, string TipSha, HeadUpstreamState Upstream)
+        : LocalBranchEntry(Name, TipSha);
+    public sealed record Other(string Name, string TipSha, LocalUpstream Upstream)
+        : LocalBranchEntry(Name, TipSha);
+}
 
-public sealed record BranchListing(
-    Guid RepoId,
-    HeadBranch? Head,                                  // null when detached
-    IReadOnlyList<LocalBranchEntry> LocalBranches,     // never contains Head
-    IReadOnlyList<RemoteGroup> Remotes,
-    IReadOnlyList<StashEntry> Stashes);
+public sealed record RemoteBranchEntry(string Name, string TipSha);   // no upstream concept
 ```
+
+`BranchListing.LocalBranches` becomes `IReadOnlyList<LocalBranchEntry>` and still contains **every**
+local branch, HEAD included. `Fetched<T>.Ok` / `.Failed` already establishes the nested-case-record
+idiom, so this reads as house style. Derived records compare by `EqualityContract`, so
+`Head("main", …)` and `Other("main", …)` are never equal and the `KeyedViewModelList` row
+reconciliation stays sound.
 
 What each shape rules out:
 
 | Was representable | Now |
 | --- | --- |
-| HEAD carrying its own ahead/behind | `HeadBranch` has no count field |
+| HEAD carrying its own ahead/behind | `LocalBranchEntry.Head` has no count field |
 | `AheadBy` known, `BehindBy` unknown | one `BranchSync`, both or neither |
 | `Tracked` with a null remote or branch name | `Tracked` requires both |
 | A remote branch claiming `UpstreamState.Tracked` | `RemoteBranchEntry` has no upstream field |
-| Cleanup offering to delete the checked-out branch | HEAD is not in `LocalBranches` |
+| Cleanup computing a cleanup kind for the checked-out branch | `LocalUpstream` is only reachable on `Other` |
 
-`BranchTreeBuilder.BuildRows` gains a required `RepoStatus headStatus` parameter and becomes the
-single site where the two halves join: it prepends `listing.Head` into the local leaf set with
-`Sync` filled from `headStatus` (`HasUpstream && !IsDetached ? new BranchSync(Ahead, Behind) : null`)
-and maps `LocalBranches` through unchanged. Rows cannot be built without the status in hand.
-`LocalBranchRow` carries `BranchSync? Sync` plus a rendering-level `BranchUpstreamKind`
-(None/Gone/Tracked, used by the glyph at `BranchListRow.cs:125` and the name color at
-`BranchListRow.cs:58-61`); a null `Sync` renders **no** badge, so a consumer that somehow bypassed
-the join would be silent rather than confidently wrong.
+The split is principled rather than incidental. *Does an upstream ref exist* (None / Gone /
+Tracked) is a ref-listing fact `git status` genuinely cannot report — the same reason non-HEAD
+branches keep `for-each-ref`. *How far apart they are* is the number that must have one owner. So
+HEAD's glyph (`BranchListRow.cs:125`) and name colour (`BranchListRow.cs:58-61`) read
+`HeadUpstreamState`; only the badge reads `RepoStatus`.
+
+`BranchTreeBuilder.BuildRows` gains a required `RepoStatus headStatus` parameter and is the single
+site where the two halves join:
+
+```csharp
+entry switch
+{
+    LocalBranchEntry.Head     => SyncFrom(headStatus),                        // status store
+    LocalBranchEntry.Other o  => (o.Upstream as LocalUpstream.Tracked)?.Sync, // for-each-ref
+}
+```
+
+where `SyncFrom` is `HasUpstream && !IsDetached ? new BranchSync(Ahead, Behind) : null`. Rows
+cannot be built without the status in hand. `LocalBranchRow` carries `BranchSync? Sync` plus a
+rendering-level `BranchUpstreamKind` (None/Gone/Tracked); a null `Sync` renders **no** badge, so a
+consumer that somehow bypassed the join is silent rather than confidently wrong.
 
 `BranchesViewModel._rowModels` (`BranchesViewModel.cs:102`) reads `IRepoStatusStore.Active.Value`.
 Verified this propagates in-frame: `Derived.Value` calls `DependencyTracker.Register`, `Derived`
 is itself `IInvalidatable`, and `Recompute` fires synchronously on dependency invalidation — so
 the badge and the button move in the same tick.
 
-- **Files:** `Branches.cs` (the types above), `GitService.cs`
-  (`ParseLocalBranch:781`, `ParseUpstream:882`, `SplitUpstreamRef:798`, `AddRemoteBranch:808`,
-  `GetBranches:722` splits HEAD out), `BranchRow.cs` (`LocalBranchRow`, `RemoteBranchRow`),
-  `BranchTreeBuilder.cs:24,92`, `BranchListRow.cs:58,125,147`, `BranchesViewModel.cs`
-  (inject `IRepoStatusStore`; `_rowModels:102`, `FindLocalBranchEntry:1062`,
-  `AddFastForwardMenuItem:804`, `AddRenameDeleteMenuItems:879`, `RefStillExists:260`),
+- **Files:** `Branches.cs` (the types above), `GitService.cs` (`ParseLocalBranch:781`,
+  `ParseUpstream:882`, `SplitUpstreamRef:798`, `AddRemoteBranch:808`), `BranchRow.cs`
+  (`LocalBranchRow`, `RemoteBranchRow`), `BranchTreeBuilder.cs:24,92`,
+  `BranchListRow.cs:58,125,147`, `BranchesViewModel.cs` (inject `IRepoStatusStore`;
+  `_rowModels:102`, plus the `IsHead` → pattern-match rename at `:285,681,1055,1064`),
   `RepoSnapshotStore.cs` (delete `_remoteSyncSub:122`, `OnRemoteSyncOptimistic:211`,
   `PatchHeadSync:240-259`), `IGitService.cs` / `GitService.cs` (delete `GetPushStatus` +
   `PushStatus`).
 - **Deletions this earns:** sources 3 and 4 disappear entirely — the snapshot store's optimistic
   patch has nothing left to patch, and the optimistic path survives only in
   `RepoStatusStore.ApplyOptimisticSync`, which already exists.
-- **Simplifications that fall out:** `ListingHeadIs:283` and `GetHeadBranchName:1052` become
-  `listing.Head?.Name`; `IsCleanCandidate:681` drops its `!b.IsHead` guard as structurally
-  impossible; `AddFastForwardMenuItem:809-810` drops its `IsNullOrEmpty(UpstreamRemote/Branch)`
-  guards; `AddRenameDeleteMenuItems:879-880` drops the `UpstreamState == Tracked ? … : null`
-  dance.
-- **No visual change from lifting HEAD out:** `PathTree.Build` re-sorts children itself
-  (`PathTree.cs:62,69-77` — folders first, then alphabetical), so `SortLocalBranches`' head-first
-  pass is already discarded for the sidebar today. That pass reduces to a plain alphabetical sort.
-- **Watch:** `RefStillExists:260` scans `LocalBranches` for the selection and must now also
-  consider `listing.Head`, or selecting the checked-out branch drops the selection on every
-  reload.
+- **Simplifications that fall out:** `IsCleanCandidate:681` collapses a bool guard plus two enum
+  comparisons into `b is LocalBranchEntry.Other { Upstream: LocalUpstream.Gone or
+  LocalUpstream.None }`, and its `!b.IsHead` check becomes structural rather than filtered;
+  `AddFastForwardMenuItem:809-810` drops its `IsNullOrEmpty(UpstreamRemote/Branch)` guards;
+  `AddRenameDeleteMenuItems:879-880` drops the `UpstreamState == Tracked ? … : null` dance.
+- **Residual invariant:** "at most one `Head` in the list" is not type-enforced. The sole producer
+  is `GetBranches:722`, deriving head-ness from `%(HEAD) == "*"`, which git guarantees is unique —
+  a one-site invariant at the parse.
 - **Acceptance:** the Branches view HEAD badge and the toolbar push/pull enablement cannot
   disagree by more than a frame, and no type in the tree can hold a second copy of HEAD's
   ahead/behind. Closes root cause A.
+
+**Rejected alternative — lifting HEAD out of `LocalBranches` entirely** (a `HeadBranch? Head` field
+on `BranchListing`, with the list holding only non-HEAD branches). It buys the same guarantee, but
+relocates an invariant rather than removing one: "HEAD carries no counts" becomes compiler-enforced
+while "every local-branch scan must union HEAD back in" becomes a new unenforced obligation across
+ten sites, five of which break immediately:
+
+| Site | Effect of omitting HEAD from the list |
+| --- | --- |
+| `RefStillExists:278` | HEAD selection dropped on every `ApplyListing`, and the `CommitSelectedMessage(null)` at `:257` wipes the commits panel's tip highlight. Fires on every `RefsChangedMessage` / `CommitCreatedMessage` / refresh. |
+| `ListingHeadIs:285` | Scans for the head entry to clear `PendingHead`; finds nothing, so `PendingHead` never clears and `BranchListRow.cs:38` pins the current-branch highlight to the pending name until a repo switch (`:189`). |
+| `LocalBranchExists:543` | Guards `ActivateRemoteBranch:484`. Double-clicking `origin/main` while `main` is checked out opens the create-tracking-branch dialog instead of checking out the existing local. |
+| `BranchNamesIn:364` | Expand/Collapse-All misses a folder whose only local branch is HEAD. |
+| `ReviewWindowViewModel.cs:299` | Base-ref picker filters by `Session.HeadRef` — the branch *under review*, not the repo's HEAD — so the checked-out branch vanishes from the list. |
+
+`FolderHasCleanCandidates:658` and `BuildCleanCandidates:669` would be correct either way (both
+already filter `!b.IsHead`), and `FindLocalBranchEntry:1064` would return null for HEAD — safe
+today only because all three of its consumers early-return on `IsHead`, and silently wrong for any
+menu item added later. The two-case union keeps every one of these sites working unchanged.
 
 ### 2. One observation, one timestamp
 
