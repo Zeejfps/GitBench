@@ -3,7 +3,7 @@ using GitBench.Infrastructure;
 namespace GitBench.Features.Repos;
 
 // Per-repo "git is currently running" gate consulted by RepoWatcher before it
-// schedules any debounce.
+// broadcasts a debounced change.
 //
 // Why this exists: every git read — `status`, `submodule status`, `ls-tree`,
 // libgit2 Repository operations — mutates files inside `.git/` (the index
@@ -17,13 +17,13 @@ namespace GitBench.Features.Repos;
 // disk, so the watcher can't treat its own write echoes as user-driven change.
 // We mark a repo "active" for the duration of every git invocation plus a
 // short tail (FSW delivers events asynchronously after the process exits, so
-// the gate must stay closed briefly past End). The watcher consults this and
-// drops events that arrive during the window.
+// the gate must stay closed briefly past End).
 //
-// Trade-off: a genuinely external change made by the user during the window
-// is dropped at FSW level too. That's acceptable — the in-flight reload's
-// `git status` will see the user's change in its output (filesystem is
-// authoritative for the snapshot), and any future change reopens the gate.
+// Suppression here means *postpone*, not *discard*: the watcher records every
+// arriving event and consults this gate only when it is about to broadcast,
+// re-arming its debounce while the gate is closed. So a genuinely external
+// change made during the window is delayed until git goes quiet rather than
+// lost — the echo stops looping and the user's edit still lands.
 public interface IRepoActivityTracker
 {
     IDisposable Begin(string repoPath);

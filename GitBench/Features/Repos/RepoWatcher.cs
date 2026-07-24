@@ -44,10 +44,11 @@ internal sealed class RepoWatcher : IDisposable
 
     private readonly FileSystemWatcher? _treeWatcher;
     private readonly FileSystemWatcher? _gitWatcher;
-    private readonly Timer _workingTreeDebounce;
-    private readonly Timer _refsDebounce;
-    private readonly Timer _worktreesDebounce;
-    private readonly Timer _submodulesDebounce;
+    private readonly Channel _workingTree;
+    private readonly Channel _refs;
+    private readonly Channel _worktrees;
+    private readonly Channel _submodules;
+    private readonly Channel[] _channels;
 
     private readonly string _gitDirPrefix;
     private readonly string _gitmodulesPath;
@@ -67,10 +68,11 @@ internal sealed class RepoWatcher : IDisposable
         _gitDirPrefix = Path.Combine(repo.Path, ".git") + Path.DirectorySeparatorChar;
         _gitmodulesPath = Path.Combine(repo.Path, ".gitmodules");
 
-        _workingTreeDebounce = new Timer(_ => OnWorkingTreeDebounce(), null, Timeout.Infinite, Timeout.Infinite);
-        _refsDebounce = new Timer(_ => OnRefsDebounce(), null, Timeout.Infinite, Timeout.Infinite);
-        _worktreesDebounce = new Timer(_ => OnWorktreesDebounce(), null, Timeout.Infinite, Timeout.Infinite);
-        _submodulesDebounce = new Timer(_ => OnSubmodulesDebounce(), null, Timeout.Infinite, Timeout.Infinite);
+        _workingTree = NewChannel(id => _bus.Broadcast(new WorkingTreeChangedMessage(id)));
+        _refs = NewChannel(id => _bus.Broadcast(new RefsChangedMessage(id)));
+        _worktrees = NewChannel(id => _bus.Broadcast(new WorktreesChangedMessage(id)));
+        _submodules = NewChannel(id => _bus.Broadcast(new SubmodulesChangedMessage(id)));
+        _channels = [_workingTree, _refs, _worktrees, _submodules];
 
         _treeWatcher = TryCreateWatcher(repo.Path);
         if (_treeWatcher != null)
@@ -129,16 +131,16 @@ internal sealed class RepoWatcher : IDisposable
         // re-run submodule discovery rather than just bumping the WorkingTree channel
         // (which would only re-read GetLocalChanges, not the submodule list).
         if (IsGitmodules(e.FullPath))
-            ScheduleSubmodules();
-        ScheduleWorkingTree();
+            Schedule(_submodules);
+        Schedule(_workingTree);
     }
 
     private void OnTreeRenamed(object sender, RenamedEventArgs e)
     {
         if (IsGitmodules(e.FullPath) || IsGitmodules(e.OldFullPath))
-            ScheduleSubmodules();
+            Schedule(_submodules);
         if (IsUnderGit(e.FullPath) && IsUnderGit(e.OldFullPath)) return;
-        ScheduleWorkingTree();
+        Schedule(_workingTree);
     }
 
     private void OnGitEvent(object sender, FileSystemEventArgs e)
@@ -150,7 +152,7 @@ internal sealed class RepoWatcher : IDisposable
         ClassifyGitChange(ToGitRelativePath(e.OldFullPath));
     }
 
-    private void ClassifyGitChange(string? gitRelativePath)
+    internal void ClassifyGitChange(string? gitRelativePath)
     {
         if (gitRelativePath == null) return;
 
@@ -168,18 +170,45 @@ internal sealed class RepoWatcher : IDisposable
             || string.Equals(gitRelativePath, "MERGE_HEAD", StringComparison.Ordinal)
             || gitRelativePath.StartsWith("refs/", StringComparison.Ordinal))
         {
-            ScheduleRefs();
+            Schedule(_refs);
             return;
         }
 
-        // .git/worktrees/<name>/ holds per-worktree HEAD/ORIG_HEAD/REBASE_HEAD plus the
-        // directory itself is created/deleted on `git worktree add`/`remove`. Any change
-        // here invalidates the worktree set or a worktree's HEAD; the sync service will
-        // re-run discovery and fan refs out to children.
-        if (gitRelativePath.StartsWith("worktrees/", StringComparison.Ordinal)
-            || gitRelativePath.Equals("worktrees", StringComparison.Ordinal))
+        // .git/worktrees/<name>/ carries two unrelated facts, and they go to two channels.
+        // The directory itself appearing or vanishing means the SET changed (`git worktree
+        // add`/`remove`). Everything *inside* one worktree's gitdir belongs to that worktree,
+        // and needs the same per-file whitelist as modules/ below — a `git status` run in a
+        // worktree rewrites its own `.git/worktrees/<name>/index` stat cache, which lands in
+        // the primary's tree, so treating any change here as a set change drags a full
+        // `git worktree list` rediscovery behind every tick in a worktree.
+        if (gitRelativePath.Equals("worktrees", StringComparison.Ordinal))
         {
-            ScheduleWorktrees();
+            Schedule(_worktrees);
+            return;
+        }
+        if (gitRelativePath.StartsWith("worktrees/", StringComparison.Ordinal))
+        {
+            var afterWorktrees = gitRelativePath.Substring("worktrees/".Length);
+            var nextSlash = afterWorktrees.IndexOf('/');
+            if (nextSlash < 0)
+            {
+                Schedule(_worktrees);
+                return;
+            }
+            // Worktrees share refs/heads with the primary, so the primary's Refs channel is the
+            // correct carrier: WorktreeSyncService already fans RefsChangedMessage(primary) out
+            // to every worktree child. The watcher has no registry and can't name the worktree.
+            var perWorktree = afterWorktrees.Substring(nextSlash + 1);
+            if (perWorktree.Equals("HEAD", StringComparison.Ordinal)
+                || perWorktree.Equals("ORIG_HEAD", StringComparison.Ordinal)
+                || perWorktree.Equals("MERGE_HEAD", StringComparison.Ordinal)
+                || perWorktree.Equals("REBASE_HEAD", StringComparison.Ordinal)
+                || perWorktree.StartsWith("refs/", StringComparison.Ordinal))
+            {
+                Schedule(_refs);
+            }
+            // index / index.lock / logs / gitdir / commondir / locked — ignored, exactly as
+            // modules/<name>/index is.
             return;
         }
 
@@ -192,7 +221,7 @@ internal sealed class RepoWatcher : IDisposable
         if (gitRelativePath.Equals("modules", StringComparison.Ordinal))
         {
             // modules/ directory itself created / deleted — submodule added or all removed.
-            ScheduleSubmodules();
+            Schedule(_submodules);
             return;
         }
         if (gitRelativePath.StartsWith("modules/", StringComparison.Ordinal))
@@ -203,7 +232,7 @@ internal sealed class RepoWatcher : IDisposable
             {
                 // modules/<name> directory itself created / deleted — a specific submodule
                 // was added or deinit'd.
-                ScheduleSubmodules();
+                Schedule(_submodules);
                 return;
             }
             var perSubmodule = afterModules.Substring(nextSlash + 1);
@@ -211,7 +240,7 @@ internal sealed class RepoWatcher : IDisposable
                 || perSubmodule.Equals("packed-refs", StringComparison.Ordinal)
                 || perSubmodule.StartsWith("refs/", StringComparison.Ordinal))
             {
-                ScheduleSubmodules();
+                Schedule(_submodules);
             }
             return;
         }
@@ -256,105 +285,74 @@ internal sealed class RepoWatcher : IDisposable
     // "external change" and broadcasting them retriggers the same git read,
     // which writes again, looping forever. The tracker stays "active" for the
     // git invocation plus a short tail — long enough to absorb the post-syscall
-    // delivery lag. Real external edits during the window are dropped at this
-    // gate, but their effect is already captured in the in-flight reload's
-    // git-status snapshot, so the resulting UI state stays correct.
+    // delivery lag. Consulted by the drain only: a real external edit arriving
+    // in the window is postponed until git goes quiet, never discarded.
     private bool IsOurOwnWrite() => _activity.IsActive(_repo.Path);
 
-    private void ScheduleWorkingTree()
+    // One debounce channel. Arrival always sets Pending; the activity gate can only postpone the
+    // drain, never cancel it, so there is no path from "event arrived" to "nothing ever happens".
+    private sealed class Channel
     {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        if (IsOurOwnWrite()) return;
-        ArmDebounce(_workingTreeDebounce);
+        public Timer Debounce = null!;
+        public Action<Guid> Broadcast = null!;
+        public bool Pending;                    // guarded by _timerLock, like every Timer.Change here
     }
 
-    private void ScheduleRefs()
+    private Channel NewChannel(Action<Guid> broadcast)
     {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        if (IsOurOwnWrite()) return;
-        ArmDebounce(_refsDebounce);
+        var channel = new Channel { Broadcast = broadcast };
+        channel.Debounce = new Timer(_ => Drain(channel), null, Timeout.Infinite, Timeout.Infinite);
+        return channel;
     }
 
-    private void ScheduleWorktrees()
+    // The _timerLock re-check of _disposed is the authoritative one, so the Change() can't race
+    // Dispose()'s timer teardown. The Volatile.Read pre-check is just a cheap fast-path.
+    private void Schedule(Channel channel)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        if (IsOurOwnWrite()) return;
-        ArmDebounce(_worktreesDebounce);
-    }
-
-    private void ScheduleSubmodules()
-    {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        if (IsOurOwnWrite()) return;
-        ArmDebounce(_submodulesDebounce);
-    }
-
-    // Arms a debounce timer under _timerLock with an authoritative _disposed re-check, so the
-    // Change() can't race Dispose()'s timer teardown. The Volatile.Read pre-checks above are
-    // just a cheap fast-path; this is the one that actually closes the window.
-    private void ArmDebounce(Timer debounce)
-    {
         lock (_timerLock)
         {
             if (_disposed != 0) return;
-            debounce.Change(DebounceMs, Timeout.Infinite);
+            channel.Pending = true;
+            channel.Debounce.Change(DebounceMs, Timeout.Infinite);
         }
     }
 
-    private void OnWorkingTreeDebounce()
+    private void Drain(Channel channel)
     {
         if (Volatile.Read(ref _disposed) != 0) return;
+        lock (_timerLock)
+        {
+            if (_disposed != 0 || !channel.Pending) return;
+            // Git is still writing: postpone, don't discard. Re-arming polls at debounce
+            // granularity, bounded by the tracker's own quiet tail.
+            if (IsOurOwnWrite())
+            {
+                channel.Debounce.Change(DebounceMs, Timeout.Infinite);
+                return;
+            }
+            channel.Pending = false;
+        }
+        // Outside _timerLock: FSW threadpool callbacks contend for it, and taking the UI
+        // dispatcher's queue underneath it is a deadlock shape.
         var repoId = _repo.Id;
         _dispatcher.Post(() =>
         {
             if (Volatile.Read(ref _disposed) != 0) return;
-            _bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+            channel.Broadcast(repoId);
         });
     }
 
-    private void OnRefsDebounce()
+    // FSW's internal buffer overflowed and events were dropped (huge churn — typically a build or
+    // a checkout touching thousands of files), so nothing is known about any channel: arm all four
+    // and let the UI reconcile via a full reload.
+    internal void ScheduleAllChannels()
     {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        var repoId = _repo.Id;
-        _dispatcher.Post(() =>
-        {
-            if (Volatile.Read(ref _disposed) != 0) return;
-            _bus.Broadcast(new RefsChangedMessage(repoId));
-        });
+        foreach (var channel in _channels)
+            Schedule(channel);
     }
 
-    private void OnWorktreesDebounce()
-    {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        var repoId = _repo.Id;
-        _dispatcher.Post(() =>
-        {
-            if (Volatile.Read(ref _disposed) != 0) return;
-            _bus.Broadcast(new WorktreesChangedMessage(repoId));
-        });
-    }
-
-    private void OnSubmodulesDebounce()
-    {
-        if (Volatile.Read(ref _disposed) != 0) return;
-        var repoId = _repo.Id;
-        _dispatcher.Post(() =>
-        {
-            if (Volatile.Read(ref _disposed) != 0) return;
-            _bus.Broadcast(new SubmodulesChangedMessage(repoId));
-        });
-    }
-
-    private void OnError(object sender, ErrorEventArgs e)
-    {
-        // Internal buffer overflowed and events were dropped (huge churn — typically a
-        // build or a checkout touching thousands of files). Schedule every channel so
-        // the UI reconciles via a full reload rather than staying stale.
-        ScheduleWorkingTree();
-        ScheduleRefs();
-        ScheduleWorktrees();
-        ScheduleSubmodules();
-    }
+    private void OnError(object sender, ErrorEventArgs e) => ScheduleAllChannels();
 
     public void Dispose()
     {
@@ -380,15 +378,13 @@ internal sealed class RepoWatcher : IDisposable
             _gitWatcher.Error -= OnError;
             _gitWatcher.Dispose();
         }
-        // Dispose the timers under the lock the schedulers use. _disposed is already set above,
-        // so any Schedule* that takes the lock after this skips its Change(); any that's holding
-        // the lock mid-Change() finishes first, blocking this teardown until it's safe.
+        // Dispose the timers under the lock Schedule/Drain use. _disposed is already set above,
+        // so anything that takes the lock after this skips its Change(); anything holding the
+        // lock mid-Change() finishes first, blocking this teardown until it's safe.
         lock (_timerLock)
         {
-            _workingTreeDebounce.Dispose();
-            _refsDebounce.Dispose();
-            _worktreesDebounce.Dispose();
-            _submodulesDebounce.Dispose();
+            foreach (var channel in _channels)
+                channel.Debounce.Dispose();
         }
     }
 }

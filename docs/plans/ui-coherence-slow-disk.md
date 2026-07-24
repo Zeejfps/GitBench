@@ -8,10 +8,14 @@
 > triggers, and it does not self-correct at any disk speed. This document records the root causes
 > found by reading the sync path end to end, and the work items that close them.
 >
-> **Status: §1 is implemented (2026-07-24). §3, §4 and §9 are grounded against the code and ready
-> to build; everything else is analysis only.** Items are ordered by what fixes the reported
-> symptoms first; §1+§2 are one seam and should land together, as should §3+§4+§9. §9 is appended
-> rather than inserted in priority order to avoid renumbering — it belongs with §3.
+> **Status: §1, §3, §4 and §9 are implemented (2026-07-24). §2, §5, §6, §7 and §8 are analysis
+> only.** Items are ordered by what fixes the reported symptoms first; §1+§2 are one seam and
+> should land together, as should §3+§4+§9. §9 is appended rather than inserted in priority order
+> to avoid renumbering — it belongs with §3.
+>
+> **Next up: §2** (the other half of §1's seam — one status read feeding both the file lists and
+> the ahead/behind/dirty summary), then §5 (index-mutation serialization, independent of
+> everything) or §6 (the shared read gate, which §4 now has a second consumer waiting on).
 
 ## Root causes
 
@@ -57,7 +61,7 @@ Two representation defects in the same types feed this:
   `GitService.AddRemoteBranch:823` claims to be tracking an upstream it has no concept of. Nothing
   reads it today; nothing stops it.
 
-### B. The watcher silently drops real filesystem events, permanently
+### B. The watcher silently drops real filesystem events, permanently — *closed by §3, netted by §4*
 
 All four `Schedule*` methods (`RepoWatcher.cs:264-290`) return early when
 `IRepoActivityTracker.IsActive` — i.e. whenever any git process is running on that repo, plus a
@@ -150,7 +154,7 @@ There is also no global disk gate. Three independent caps exist and none knows a
 On a single spindle, 6+ concurrent `git status` processes are *slower* than 2 sequential ones —
 the cost is seek thrash, not throughput.
 
-### F. A watcher can only name itself, but its `.git` holds other repos' refs
+### F. A watcher can only name itself, but its `.git` holds other repos' refs — *closed by §9*
 
 `RepoWatcher` is constructed with one `Repo` and every broadcast carries `_repo.Id`
 (`RepoWatcher.cs:307,318,329,340`). It has no way to address a sibling. But a primary's `.git`
@@ -438,7 +442,10 @@ under the existing `_epoch` guard. One slot, ordered — not a second slot.
 - **Note:** land with §1 — same seam. §1 is independently shippable and closes the reported
   symptom on its own; §2 depends on nothing in §1 but is much less useful without it.
 
-### 3. Never drop a watcher signal; defer it
+### 3. Never drop a watcher signal; defer it — **DONE (2026-07-24)**
+
+> Landed as designed below. The *Implemented* subsection at the end of this item records the
+> as-built shape and the one deviation.
 
 Move the gate from the **arrival** path to the **drain** path. Arrival becomes unconditional — it
 sets a per-channel `Pending` bit and arms the debounce. The drain consults the gate and, if git is
@@ -534,7 +541,37 @@ What each shape rules out:
   way and does not depend on this answer, so land the deferral first and treat gate removal as a
   separate, optional follow-up.
 
-### 4. Reconcile safety net
+#### Implemented
+
+The `Channel` sketch landed verbatim. Notes on the as-built shape:
+
+- **Twelve members became five.** `Channel` + `NewChannel` + `Schedule` + `Drain` +
+  `ScheduleAllChannels` replace the four `Schedule*`, `ArmDebounce`, the four `On*Debounce` bodies,
+  and `OnError`'s body. The four channels are named fields *and* a `Channel[] _channels`; the array
+  is what `ScheduleAllChannels` and `Dispose` iterate, the fields are what the classifier names.
+- **`IsOurOwnWrite()` now runs inside `_timerLock`** (it used to run outside, on the arrival path).
+  Lock order is `_timerLock` → the tracker's own lock, and the tracker never calls back into the
+  watcher, so there is no inversion. `_dispatcher.Post` stayed outside the lock as required.
+- **Deviation — two internal members for the tests.** `ClassifyGitChange` widened from `private` to
+  `internal`, and `OnError`'s body was lifted into `internal void ScheduleAllChannels()`. Both are
+  driven directly by `RepoWatcherDeferralTests` / `RepoWatcherClassifierTests`: FSW buffer overflow
+  cannot be provoked deterministically, and driving §9's classification through real file writes
+  would test the OS's event coalescing rather than the classifier.
+- **`RepoActivityTracker` is behaviourally untouched**, but its class comment was rewritten — it
+  claimed dropped events were "acceptable because the in-flight reload's `git status` will see the
+  user's change", which is exactly the reasoning this item disproves. It now says suppression means
+  postpone, not discard.
+- **Tests:** `GitBench.Tests/RepoWatcherDeferralTests.cs` — 8 methods pinning that an event arriving
+  mid-read is deferred not dropped, survives ~6 debounce cycles, coalesces a burst into exactly one
+  broadcast, defers each channel independently, does not re-fire after delivery, recovers from
+  buffer overflow through the closed gate, and cancels cleanly on disposal. The last drives a real
+  `FileSystemWatcher` over a temp dir so the arrival path itself is covered, not just the classifier.
+  Shared fakes live in `GitBench.Tests/WatcherTestSupport.cs`.
+
+### 4. Reconcile safety net — **DONE (2026-07-24)**
+
+> Landed as designed below, restricted to the active repo per the *Scope per tick* bullet. The
+> *Implemented* subsection at the end records the as-built shape.
 
 Add a low-frequency revalidate: on window focus-gain, and every ~30s while the window is focused.
 Any missed signal self-heals within one interval instead of persisting until the user switches
@@ -569,11 +606,10 @@ consumes them (`GuiApp.cs:131,147`) — but the window is not registered in the 
 The signal must be **app** focus, not main-window focus. GitBench has secondary windows (review,
 diff) and popup windows; on macOS the menu popup is the key window, so main-window blur fires
 whenever a context menu opens. A naive `MainWindow.OnFocusChanged` would reconcile on every menu
-open and stop reconciling while the review window is in front. `PointerOwnershipArbiter` already
-computes exactly the right predicate — "no arbitrated window holds focus"
-(`PointerOwnershipArbiter.cs:137-143`) — so the framework addition is a small
-`IAppActivation { IReadable<bool> IsActive { get; } }` fed from the same place, registered
-alongside the services above.
+open and stop reconciling while the review window is in front. The right owner is the app object:
+`IWindowedApp.Windows` (`framework/ZGF.Desktop/IWindowedApp.cs:6`) already holds every window —
+main, popups, secondaries — and drops them as they close, so "is any of them focused" is the app's
+own state to keep, not something the GUI layer should reassemble.
 
 **Do not drive the 30s tick from `IFrameTicker`.** It is constructed as
 `new FrameTicker(onActivated: app.MainWindow.RequestRedraw)` (`GuiApp.cs:70`), and `Add` invokes
@@ -583,7 +619,8 @@ rate forever. Use a `PeriodicTimer` in a hosted service, marshalling back throug
 re-reading the enable condition on the UI thread each tick rather than tearing the loop down.
 
 - **Files:** new hosted service alongside `RepoWatcherService` (registered in `AppServices.cs`);
-  new `IAppActivation` in `ZGF.Gui.Desktop`, registered in `GuiApp`.
+  `IsForeground` on `IWindowedApp` in `ZGF.Desktop`, surfaced as `IAppForeground` and registered
+  in `GuiApp`.
 - **Scope per tick:** the active repo unconditionally; the warm set is free (the channel messages
   already fan out to it) but N repos × 2 messages × a slow spindle is real cost — gate it behind
   §6's shared read gate, or reconcile only the active repo until §6 lands.
@@ -594,6 +631,43 @@ re-reading the enable condition on the UI thread each tick rather than tearing t
   redraws between ticks. This is what structurally removes the "other weird de-sync issues I can't
   remember" category.
 - **Note:** land with §3.
+
+#### Implemented
+
+- **`RepoReconcileService`** (`Features/Repos/`, hosted, registered next to `RepoWatcherService`).
+  Takes its `TimeSpan interval` as a constructor parameter with `DefaultInterval = 30s` passed at
+  the `AppServices` wiring site, so the app's cadence is visible where it is chosen and the tests
+  can run the same loop at 120ms.
+- **Scope is the active repo only**, as the *Scope per tick* bullet permits. Broadcasts
+  `WorkingTreeChangedMessage` + `RefsChangedMessage` for it. Adding the warm set is §6's call.
+- **`Reconcile` re-reads every condition on the UI thread** — activation, active repo, activity gate
+  — rather than capturing them, so losing focus or switching repos changes the next tick without
+  tearing the loop down. The no-stacking rule is `IRepoActivityTracker.IsActive(repo.Path)`: if the
+  previous reconcile's reads have not landed, the tick is skipped rather than queued.
+- **The initial `Subscribe` delivery is swallowed.** `State<T>.Subscribe` fires immediately with the
+  current value; startup is the one moment every store has just loaded, so counting it as a focus
+  gain would reconcile a repo read milliseconds ago.
+- **Framework: the app owns the state.** `IWindowedApp` (`ZGF.Desktop`) gains
+  `bool IsForeground` + `event Action<bool> OnForegroundChanged`, the same `IsFocused`/
+  `OnFocusChanged` shape `IWindow` already uses. `OpenGlApp` / `MetalApp` maintain it with a shared
+  internal `AppForegroundTracker` over the window list they already keep, watching each window's
+  focus event as they create it. That covers popups and secondary windows for free, so a context
+  menu (key window on macOS) or a review window taking focus does not read as backgrounding.
+  - `ZGF.Gui.Desktop` adds `IAppForeground : IReadable<bool>` and an internal `AppForeground`
+    projection over the app's property + event, registered by `GuiApp` beside `IUiDispatcher` /
+    `IFrameTicker`. It holds no state of its own — it exists because the `Context` resolves by type
+    and `IReadable<bool>` is not a usable key.
+  - **`PointerOwnershipArbiter`, `GuiApp.HandleMainFocusChanged` and `SecondaryWindowFactory` are
+    untouched.** An earlier cut fed activation from a new `AppFocusChanged` event on the arbiter,
+    which meant teaching a class documented as "single source of truth for which window owns the
+    pointer" a second, unrelated job, and threading a handle through both window factories. The
+    app already knows its own windows; the arbiter's participant list was an accidental proxy for
+    them.
+- **Tests:** `GitBench.Tests/RepoReconcileServiceTests.cs` — 8 methods over a real `RepoRegistry`
+  and real throwaway repos: focus-gain reconciles the active repo (asserting the repo id on both
+  channels), the initial activation value does not, a focused window ticks repeatedly, an unfocused
+  one never does, a tick is skipped while git is still reading and resumes once it goes idle, no
+  active repo is silent, and both losing focus and disposal stop the loop.
 
 ### 5. Serialize index mutations per repo
 
@@ -639,7 +713,10 @@ explicit per-repo or global setting, never silent.
 - **Files:** `PreferencesStore.cs` / settings UI, `GitService.cs`.
 - **Acceptance:** off by default; enabling it is a visible user choice.
 
-### 9. `worktrees/` gets the whitelist `modules/` already has
+### 9. `worktrees/` gets the whitelist `modules/` already has — **DONE (2026-07-24)**
+
+> Landed as designed below, with the layout assumption in *Verify first* confirmed empirically.
+> See the *Implemented* subsection at the end of this item.
 
 Give the `worktrees/` branch of `ClassifyGitChange` the same per-file discrimination the `modules/`
 branch below it already has, and route the two meanings to two channels:
@@ -705,6 +782,27 @@ does it).
   `Schedule*` methods this item calls — doing them in either order is fine, but doing them apart
   means touching `ClassifyGitChange` twice.
 
+#### Implemented
+
+- **Verified, not assumed.** On a real throwaway repo (`git init` → commit → `git worktree add`),
+  `.git/worktrees/<name>/` contains exactly `HEAD`, `ORIG_HEAD`, `commondir`, `gitdir`, `index`,
+  `logs/` (with `logs/HEAD`), and `refs/`. Running `git status` **inside the worktree** moved that
+  `index`'s mtime while the primary's own `.git/index` was untouched. F1's mechanism is real: every
+  working-tree tick in a worktree writes into the *primary's* `.git` tree, and the old
+  `StartsWith("worktrees/")` branch turned each one into a full `git worktree list` rediscovery.
+- **`WorktreeSyncService.OnRefsChanged` confirmed as the carrier** — it fans
+  `RefsChangedMessage(primary)` out to every child via `GetWorktrees`, so routing a worktree HEAD
+  move to the primary's Refs channel reaches that worktree's branch list and commit graph.
+- **One extra branch beyond the sketch.** The sketch only covers `worktrees/`; the bare `worktrees`
+  directory event needed its own branch above it (it was an `||` on the old `if`), mirroring how
+  `modules` sits above `modules/`.
+- **Tests:** `GitBench.Tests/RepoWatcherClassifierTests.cs` — 30 cases driving `ClassifyGitChange`
+  directly. Per-worktree `HEAD` / `ORIG_HEAD` / `MERGE_HEAD` / `REBASE_HEAD` / `refs/…` route to the
+  refs channel and *not* the worktrees channel; `index`, `index.lock`, `logs/HEAD`, `gitdir`,
+  `commondir`, `locked` produce nothing at all; only `worktrees` and `worktrees/<name>` reach the
+  set channel. The neighbouring branches (primary refs, `.git/index`, `modules/…`) are pinned too,
+  so a future edit to this method cannot quietly move them.
+
 **Rejected alternative — widen the activity gate to the repo family.** The obvious reading of the
 mismatch is that `Begin(W.Path)` should also close the gate for W's primary and siblings, since
 their watchers see W's writes. That is backwards. The gate's only correct job is suppressing our own
@@ -725,29 +823,41 @@ if a repo with many worktrees shows measurable cost.
 
 ## Dependency notes for task breakout
 
-- §1 → §2: same seam, land together. §1 goes first — it closes the reported symptom and is
-  self-contained.
-- §3 → §4: same seam, land together. §4 is the insurance policy that makes the whole class of
-  symptom non-persistent, so do not defer it far behind §3. §3 is self-contained in one file and
-  touches no framework code; §4 needs a small `ZGF.Gui.Desktop` addition (`IAppActivation`), so §3
-  is the one to start with if they are split across sessions.
-- §4 → §6/§7: §4 introduces the app's first periodic git read. Landing it before the shared read
-  gate means a many-repo tree gets a new 30s burst with nothing coordinating it — so either
-  restrict §4's first cut to the active repo, or pull §6 forward.
+- ~~§1 → §2: same seam, land together. §1 goes first.~~ §1 done; **§2 is the open half of that
+  seam and the natural next item.**
+- ~~§3 → §4, §3 → §9: same seam / same file.~~ All three done, landed together as planned.
+- §4 → §6/§7: §4 introduces the app's first periodic git read. **It shipped restricted to the
+  active repo** for exactly this reason, so §6 inherits a second consumer to route through the
+  shared read gate before the warm set can be added to a reconcile tick.
+- §3 → §7: the adaptive debounce now has a re-arm loop to interact with. `Drain` re-arms at
+  `DebounceMs` while the activity gate is closed, so lengthening a slow repo's debounce also
+  lengthens its deferral poll interval — the desired direction, but note that the two are now the
+  same knob.
 - §2 unblocks the measurement half of §6 and §7 (once there is one read per tick, per-repo read
   timing is meaningful).
-- §3 → §9: same file, same method. §9 is a self-contained classifier fix that stands alone, but
-  §3's `Channel` refactor renames the methods §9 calls, so splitting them means editing
-  `ClassifyGitChange` twice. §9 only matters for repos that have linked worktrees.
 - §5 is independent of everything else and can go in any order.
 - §8 is independent and lowest priority.
 
+**Still open from §3:** the gate-removal question. §3 established that the read-side gate is
+redundant for every branch of `ClassifyGitChange` *except* a possible `git gc --auto` rewriting
+`packed-refs`, and that was never verified empirically. Deferring rather than dropping is safe
+either way, so this stays an optional follow-up — but §9 strengthened the case: the classifier, not
+the gate, is now what suppresses read echoes on the `worktrees/` branch too.
+
 **Symptom → item mapping**, for prioritising:
 
-| Reported symptom | Closed by |
-| --- | --- |
-| Branches shows a pull, pull button greyed out | §1 + §2 |
-| Files in Unstaged that are not there | §3 (+ §5 for the mutation-failure variant) |
-| Unremembered / intermittent de-sync | §4 |
-| General slowness on HDD | §1, §6, §7 (§9 if worktrees are in use; §8 optional) |
-| A worktree's branch list / graph stale after an external checkout | §9 |
+| Reported symptom | Closed by | State |
+| --- | --- | --- |
+| Branches shows a pull, pull button greyed out | §1 + §2 | §1 done, §2 open |
+| Files in Unstaged that are not there | §3 (+ §5 for the mutation-failure variant) | §3 done, §5 open |
+| Unremembered / intermittent de-sync | §4 | done |
+| General slowness on HDD | §1, §6, §7 (§9 if worktrees are in use; §8 optional) | §1, §9 done |
+| A worktree's branch list / graph stale after an external checkout | §9 | done |
+
+**For whoever picks up §2.** §3/§4/§9 touched none of §2's files — `GitService.cs`,
+`LocalChanges.cs`, `RepoSnapshotStore.cs`, `RepoStatusStore.cs` are all as §1 left them, and §1's
+*What §2 inherits* note still stands unchanged. One new interaction to be aware of: §4's reconcile
+tick broadcasts `WorkingTreeChangedMessage` + `RefsChangedMessage` for the active repo every 30s,
+so §2's "skip the now-redundant probe for the active repo on `WorkingTreeChangedMessage`" applies to
+reconcile ticks as well — which is correct, since the tick's working-tree reload will carry the
+summary once §2 lands. §4 already skips its own tick while a git read is in flight on that repo.

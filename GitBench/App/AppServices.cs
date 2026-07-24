@@ -120,6 +120,15 @@ internal static class AppServices
             ctx.Require<IWindowCoordinates>()));
 
         context.AddHostedService<RepoWatcherService>();
+        // The watcher's safety net: the interval is passed here rather than defaulted in the
+        // service so the app's reconcile cadence is visible at the wiring site.
+        context.AddHostedService(ctx => new RepoReconcileService(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IRepoActivityTracker>(),
+            ctx.Require<IAppForeground>(),
+            RepoReconcileService.DefaultInterval));
         context.AddHostedService<WorktreeSyncService>();
         context.AddHostedService<SubmoduleSyncService>();
         context.AddHostedService<SubmodulePointerSyncService>();
