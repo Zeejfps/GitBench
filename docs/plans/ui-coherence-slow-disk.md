@@ -8,7 +8,7 @@
 > triggers, and it does not self-correct at any disk speed. This document records the root causes
 > found by reading the sync path end to end, and the work items that close them.
 >
-> **Status: §1, §3, §4 and §9 are implemented (2026-07-24). §2, §5, §6, §7, §8, §10 and §11 are
+> **Status: §1, §3, §4, §5, §9 and §11 are implemented (2026-07-24). §2, §6, §7, §8 and §10 are
 > analysis only.** Items are ordered by what fixes the reported symptoms first; §1+§2 are one seam
 > and should land together, as should §3+§4+§9. §9, §10 and §11 are appended rather than inserted
 > in priority order to avoid renumbering.
@@ -17,11 +17,12 @@
 > Index mutations *are* serialized per repo — `GitService` has held a per-repo mutation semaphore
 > all along (`GitService.cs:38-81`), and every mutating method goes through it. C has been rewritten
 > around what is actually broken at that seam, §5 rewritten to match, and §10 / §11 added for the
-> two defects the re-grounding surfaced.
+> two defects the re-grounding surfaced. **C is now closed: §5 covers C1 + C2, §11 covers C3 and the
+> keying half of C4.**
 >
 > **Next up: §2** (the other half of §1's seam — one status read feeding both the file lists and
-> the ahead/behind/dirty summary), then §5 (mutation results being discarded, independent of
-> everything) or §6 (the shared read gate, which §4 now has a second consumer waiting on).
+> the ahead/behind/dirty summary), then §6 (the shared read gate, which §4 now has a second consumer
+> waiting on) or §10 (git on the UI thread, independent of everything).
 
 ## Root causes
 
@@ -121,7 +122,7 @@ On an SSD a status read is ~50ms, so the gate is closed rarely; on a slow HDD it
 reads fire on every tick, so the gate is closed a large fraction of the time. **The drop rate scales
 directly with disk latency. This is the phantom-unstaged-files report.**
 
-### C. Mutations *are* serialized per repo — the lane above them throws their results away
+### C. Mutations *are* serialized per repo — the lane above them throws their results away — *closed by §5 (C1, C2) and §11 (C3, C4's keying)*
 
 > **This section replaced an earlier one whose premise was wrong.** It claimed index mutations run
 > unserialized and collide on `index.lock`. They do not: `GitService` holds a per-repo mutation
@@ -774,11 +775,13 @@ re-reading the enable condition on the UI thread each tick rather than tearing t
   one never does, a tick is skipped while git is still reading and resumes once it goes idle, no
   active repo is silent, and both losing focus and disposal stop the loop.
 
-### 5. A mutation's result can never be dropped
+### 5. A mutation's result can never be dropped — **DONE (2026-07-24)**
 
 > Rewritten 2026-07-24. The original item ("put a per-repo queue in front of stage / unstage /
 > discard / commit") is already done — at the service layer, since before this document existed.
-> See root cause C.
+> See root cause C. Landed as designed below plus one strengthening the design text did not have —
+> the revalidation moved *into* the runner. The *Implemented* subsection at the end records the
+> as-built shape.
 
 Mutations and loads have opposite staleness semantics, and `ViewModelBase` offers only the load one.
 A newer load *should* supersede an older one: both compute the same fact, and the fresher answer
@@ -791,21 +794,37 @@ runner that says so:
 /// mutation is meaningless (the git process already ran and the index already moved), and dropping
 /// its continuation drops both its error and the broadcast that reconciles the optimistic list.
 /// Guarded only by disposal.
-protected void RunMutation<T>(Func<T> work, Action<T> onResult) where T : IOutcome<T>
+protected void RunMutation<T>(MutationEffects effects, Func<T> work, Action<T> onResult)
+    where T : IOutcome<T>
 ```
 
 Disposal is currently expressed *as* a lane bump (`ViewModelBase.Dispose:170-173`), so this needs a
 real `_disposed` flag checked in the posted continuation — a small honesty fix in its own right: the
 lanes are then only about staleness, not about lifetime.
 
+**"The continuation always runs" is not enough on its own.** It closes the *dropped* broadcast, but
+not the *omitted* one — and the omitted one is what C2 actually documents: `StashSelected` and
+`RunSubmoduleUpdate` chose not to broadcast on failure, and the whole reason the two files disagreed
+is that broadcasting was a convention held in seven separate callbacks. So the obligation moves out
+of the callback and into the runner's signature: `MutationEffects` is a required parameter naming the
+channels the op may have moved, and `RunMutation` broadcasts it in a `finally` around `onResult`.
+There is no factory that produces an empty one, so "mutate and tell nobody" stops being expressible.
+
+Broadcasting on failure is not a concession, it is the correct reading: a batch that failed partway
+still moved the index, a pre-commit hook can reformat the working tree and *then* reject the commit,
+and the panel that fired the op is painting the optimistic result either way.
+
 What each shape rules out:
 
 | Was representable | Now |
 | --- | --- |
 | A `git add` that failed and reported nothing | the continuation always runs, so `OpError` is always set |
-| A mutation that moved the index and broadcast nothing | the broadcast is in the continuation, which always runs |
+| A mutation that moved the index and broadcast nothing | the broadcast is the runner's, in a `finally`, from a value with no empty case |
+| A mutation that broadcast on success only | same — `MutationEffects` is not outcome-aware |
 | `_deferStoreReloadUntilWorkingTreeChange` outliving the mutation that set it | the setting op's own continuation always broadcasts, which clears it |
 | A stage and a submodule update invalidating each other | no shared lane — there is nothing left to invalidate |
+| A disposed panel taking the app's view of the repo down with it | `onResult` is skipped on disposal; the broadcast is not |
+| A lane bump standing in for "the VM is gone" | disposal is a `_disposed` flag; lanes mean staleness only |
 
 - **Files:** `ViewModelBase.cs` (the runner + `_disposed`); `LocalChangesViewModel.cs`
   (`RunIndexMutation:1067`, `MarkResolved:614`, `StashSelected:712`, `RunSubmoduleUpdate:654`);
@@ -827,11 +846,73 @@ What each shape rules out:
   Closes root causes C1 and C2.
 - **Note:** independent of every other item.
 
+#### Implemented
+
+- **`MutationEffects`** (`Infrastructure/MutationEffects.cs`) — a bus plus the channels one op may
+  have moved. Three named constructors, one per thing an op can do (`Index(bus, repoId, path)`,
+  `WorkingTree(bus, repoId)`, `Commit(bus, repoId)`), and two additive modifiers (`AndRefs()`,
+  `AndSubmodulesOf(primaryId)`). Exactly one primary channel always fires; the extras go first, so
+  the working-tree broadcast — the one that releases `_deferStoreReloadUntilWorkingTreeChange` —
+  lands last, after every other store has been told to reload.
+- **`ViewModelBase.RunMutation<T>(effects, work, onResult)`** — no lane, `_disposed` only, and
+  `try { onResult } finally { effects.Broadcast() }`. The broadcast fires **even when the VM is
+  disposed**: the revalidation is owed to the stores, not to the panel that happened to start the op.
+  A deviation from the plan text, which said "guarded only by disposal" for the whole continuation.
+- **`_disposed` replaced the dispose-time lane bumps**, and `_lanes` went with them — `CreateLane` is
+  now `new GenerationGuard()`. Every posted continuation (`RunBackground`, `TryRunBackground`,
+  `RunMutation`) checks it. Nothing outside `ViewModelBase` relied on disposal bumping a lane.
+- **Eight call sites moved.** `LocalChangesViewModel`: `RunIndexMutation`, `MarkResolved`,
+  `StashSelected`, `RunSubmoduleUpdate`, **and `Commit`** — the plan listed four; `Commit` came along
+  because deleting `_commitGen` left it with nothing to run on. `DiffViewModel`: `RunFileIndexOp`,
+  `RunResolve`, `RunApplyPatch`. Every `onResult` collapsed to `Update(s => s with { OpError =
+  outcome.FailureMessage })` (plus `RunApplyPatch`'s render rollback and `Commit`'s editor clear),
+  because `IOutcome<T>.FailureMessage` already existed and the success/failure fork was only there to
+  decide whether to broadcast.
+- **Deleted:** `_opGen`, `_commitGen`, `ViewModelBase._lanes`, `DiffViewModel`'s three hand-rolled
+  `Task.Run` blocks with their `service` / `bus` / `dispatcher` / `repoId` capture preambles, and the
+  comment at `DiffViewModel:637-639` explaining why one of them hand-rolled.
+- **Behaviour deltas, all deliberate:**
+  - A failed stash, a failed submodule update and a failed commit now revalidate. Previously silent.
+  - `RunSubmoduleUpdate` now broadcasts `WorkingTreeChangedMessage` as well as
+    `SubmodulesChangedMessage` — a submodule checkout changes the parent's `git status`, and it is
+    what clears the optimistic hold.
+  - A rejected commit broadcasts `CommitCreatedMessage`. Every subscriber treats it as
+    "revalidate" (`RepoSnapshotStore`, `RepoStatusStore`, `DetachedHeadBannerViewModel`,
+    `OperationViewModel` all just reload), and a hook that rewrote files before failing needs exactly
+    that. The alternative was an outcome-aware `MutationEffects`, which reintroduces the empty case.
+  - `DiffViewModel.RunFileIndexOp` now broadcasts with `IndexOnly: true`. It stages/unstages a whole
+    file, which is precisely what the flag documents; it disagreed with `LocalChangesViewModel`'s own
+    `RunIndexMutation` before. Net effect: the working-tree review stops refetching every loaded
+    file's HEAD→disk diff on a file-level stage from the diff header.
+- **`MarkResolved` keeps attempting every path after one fails** (the resolutions are independent) and
+  reports the first failure — preserved from the `RunBackground<bool>` version it replaced.
+- **Not moved, and why:** `BranchesViewModel`'s `_branchOpGen` / `_stashGen` and `CommitsViewModel`'s
+  `_resetGen` / `_moveGen` / `_applyGen` are mutation lanes too, but each is gated to one in-flight op
+  by state (`IsBranchOpInFlight`, `TryRunOutcome`), so no op can supersede another and none of them
+  paints an optimistic list. With disposal no longer expressed as a bump they deliver unconditionally
+  already. Worth revisiting only if one of them grows a second concurrent op.
+- **Tests:** `GitBench.Tests/MutationRunnerTests.cs` — 11 methods over the real `ViewModelBase`, a
+  real `MessageBus` and a drain-on-demand dispatcher. The headline one starts a slow mutation, lets a
+  newer one land, then releases the first and asserts it still delivers (the C1 defect, inverted into
+  an assertion). The rest pin: a failure delivers its error *and* broadcasts, a thrown exception folds
+  into the outcome and still broadcasts, a *throwing continuation* cannot swallow the broadcast,
+  disposal drops the continuation but not the broadcast, the index/working-tree/commit channels carry
+  what they claim, extras broadcast before the working tree, a rejected commit still broadcasts — and,
+  guarding the other side of the split, that a newer *load* still supersedes an older one.
+
 **Rejected alternative — a per-repo mutation queue in the view model** (the original §5). It would
 re-implement, one layer up, a lock that already exists one layer down: the same waits in the same
 order, plus a second place for the "is this repo busy" question to be answered differently. Worse,
 it addresses the symptom the re-grounding disproved (`index.lock`) and leaves the one that is real
 (dropped results) untouched. The seam is right where it is; the defect is the lane above it.
+
+**Rejected alternative — an outcome-aware `MutationEffects`** (`Broadcast(bool succeeded)`, with a
+success-only channel set). It would let a commit broadcast `CommitCreatedMessage` only when a commit
+was really created. But it puts the empty channel set back in reach — a mutation whose always-set is
+empty is exactly the silent-on-failure shape this item removes — and it buys a naming nicety at the
+price of the one guarantee the type exists for. `CommitCreatedMessage` is a reload trigger to all four
+of its subscribers; a rare redundant reload after a rejected commit is cheaper than a representable
+hole.
 
 **Rejected alternative — make the hold a pending-mutation counter** instead of a bool, incremented
 on the optimistic move and decremented in each continuation. Equivalent once §5 lands, and worse
@@ -1008,7 +1089,10 @@ load, so this is a matter of not blocking on it once at entry.
   are frame-time operations on a cold 5400 RPM repo. Closes root cause G.
 - **Note:** independent of everything else.
 
-### 11. The mutation lock stops covering the network
+### 11. The mutation lock stops covering the network — **DONE (2026-07-24)**
+
+> Landed as designed below. The *Implemented* subsection at the end records the as-built shape and
+> the one deviation (the lock policy became its own type rather than more statics in `GitService`).
 
 `Push` and `Fetch` do not touch the index, and they hold the per-repo mutation semaphore for a
 network round-trip (root cause C3). Give network-only ops their own per-repo-family lock:
@@ -1043,6 +1127,42 @@ committing to a full ref/index split.
 - **Acceptance:** staging during a fetch runs immediately; staging during a pull still queues.
 - **Note:** `GitService.cs` only. Independent of §5, though both are about the same seam.
 
+#### Implemented
+
+- **Deviation — the lock policy became a type.** `GitBench/Git/GitRepoLocks.cs` holds
+  `GitResource { LocalState, Remote }`, the two semaphore maps, the common-git-dir memo, `KeyFor`
+  and `Acquire`. The plan said "a second semaphore map + the common-git-dir key" in `GitService.cs`;
+  that would have been five more statics and a three-branch key helper inside a 3,800-line file, with
+  the whole rationale for the split living in a comment nobody reads at the call sites. As its own
+  type the policy has one place to be documented and — the actual reason — one place to be *tested*:
+  `KeyFor` is the observable form of "which paths contend", so the keying is assertable without
+  timing a real fetch.
+- **The maps stopped being `static`.** `GitService` is a DI singleton, so instance-scoped is
+  equivalent, and it retires the "static and never trimmed" footnote under C4.
+- **Moved to the remote lock:** `Push:1877`, `Fetch:2021`, `DeleteRemoteBranch:2466`, via two new
+  entry points (`RunRemoteOperation`, `RunRemoteSimple`) that sit beside `RunOperation` / `RunSimple`.
+  `RunLocked` gained a required `GitResource` parameter; the ~36 existing mutating call sites pass
+  through `RunOperation` / `RunMergeLike` / `RunSimple` and did not change, and the four direct
+  `RunLocked` callers name `GitResource.LocalState` explicitly.
+- **`Pull` takes both, LocalState first** (`RunLocked(..., LocalState, …)` with an inner
+  `_locks.Acquire(Remote, …)`). It is the only two-lock op, which is what makes the order unable to
+  invert; the pre-existing parent→submodule nesting through `ReattachSubmodulesOnBranchTip` sits
+  inside it and is now written down next to the enum.
+- **`PublishBranch` deliberately stayed on the local-state lock.** It is a network push, so it has the
+  same defect in miniature — but it also writes `branch.<x>.merge` into local config, and the doc
+  scoped this item to the three ops whose queueing was the reported symptom. Worth a follow-up.
+- **C4's ref-store gap is still open**, as designed: `DeleteBranch` in a primary and
+  `CheckoutLocalBranch` in a linked worktree still take different `LocalState` locks and can still
+  collide on git's own `packed-refs.lock`. The common-git-dir key is now available if that is ever
+  observed; git degrades it to a failed op with a clear message, not corruption.
+- **Tests:** `GitBench.Tests/GitRepoLocksTests.cs` — 11 methods, 12 cases. The two resources do not contend
+  (the acceptance criterion, expressed directly); the same resource on the same repo does; different
+  repos never do; a shared common git dir shares the remote lock while keeping distinct local ones; a
+  relative `--git-common-dir` resolves against the working tree; null / empty / throwing resolvers all
+  fall back to today's per-working-tree behaviour; the resolver runs once per working tree; trailing
+  separators normalize. The last drives real git — `git worktree add`, then assert the primary and the
+  worktree land on one remote key and two local ones.
+
 **Rejected alternative — a full ref-lock / index-lock split**, with every op declaring which
 resources it touches. Most mutating ops move refs *and* the index (commit, checkout, merge, rebase,
 reset, cherry-pick, revert, stash), so nearly everything would take both, the ordering invariant
@@ -1066,13 +1186,12 @@ thirty.
   same knob.
 - §2 unblocks the measurement half of §6 and §7 (once there is one read per tick, per-repo read
   timing is meaningful).
-- §5, §10 and §11 are independent of everything else and of each other, and can go in any order.
-  §5 and §11 sit on the same seam (the mutation path) but touch disjoint files — §5 is view models,
-  §11 is `GitService.cs` alone.
-- §4 partially nets §5: a focused window's 30s reconcile tick broadcasts `WorkingTreeChangedMessage`
-  for the active repo, which clears the hold C2 wedges. That bounds the frozen-panel window rather
-  than closing it — the silent mutation errors are untouched, and an unfocused window still waits
-  for a real filesystem event.
+- ~~§5, §10 and §11 are independent of everything else and of each other, and can go in any order.~~
+  §5 and §11 done, landed together as the two halves of root cause C. **§10 remains independent** and
+  is the only item that touches no file any other open item does.
+- ~~§4 partially nets §5~~ — moot now that nothing can drop a mutation's broadcast. The reconcile
+  tick is still the safety net for missed *watcher* events; it is no longer covering for the mutation
+  path.
 - §8 is independent and lowest priority.
 
 **Still open from §3:** the gate-removal question. §3 established that the read-side gate is
@@ -1086,19 +1205,26 @@ the gate, is now what suppresses read echoes on the `worktrees/` branch too.
 | Reported symptom | Closed by | State |
 | --- | --- | --- |
 | Branches shows a pull, pull button greyed out | §1 + §2 | §1 done, §2 open |
-| Files in Unstaged that are not there | §3 (+ §5 for the mutation-failure variant) | §3 done, §5 open |
-| File panel frozen after a stage + another op, until something else touches the tree | §5 (§4 bounds it to 30s while focused) | §4 done, §5 open |
-| A stage/unstage that silently did nothing | §5 | open |
+| Files in Unstaged that are not there | §3 (+ §5 for the mutation-failure variant) | done |
+| File panel frozen after a stage + another op, until something else touches the tree | §5 | done |
+| A stage/unstage that silently did nothing | §5 | done |
 | Whole UI freezes opening Discard / Stash, or ticking Amend | §10 | open |
-| A click during a fetch does nothing until the fetch ends | §11 | open |
+| A click during a fetch does nothing until the fetch ends | §11 | done |
 | Unremembered / intermittent de-sync | §4 | done |
-| General slowness on HDD | §1, §6, §7, §10, §11 (§9 if worktrees are in use; §8 optional) | §1, §9 done |
+| General slowness on HDD | §1, §6, §7, §10, §11 (§9 if worktrees are in use; §8 optional) | §1, §9, §11 done |
 | A worktree's branch list / graph stale after an external checkout | §9 | done |
 
-**For whoever picks up §2.** §3/§4/§9 touched none of §2's files — `GitService.cs`,
-`LocalChanges.cs`, `RepoSnapshotStore.cs`, `RepoStatusStore.cs` are all as §1 left them, and §1's
-*What §2 inherits* note still stands unchanged. One new interaction to be aware of: §4's reconcile
-tick broadcasts `WorkingTreeChangedMessage` + `RefsChangedMessage` for the active repo every 30s,
-so §2's "skip the now-redundant probe for the active repo on `WorkingTreeChangedMessage`" applies to
-reconcile ticks as well — which is correct, since the tick's working-tree reload will carry the
-summary once §2 lands. §4 already skips its own tick while a git read is in flight on that repo.
+**For whoever picks up §2.** `LocalChanges.cs`, `RepoSnapshotStore.cs` and `RepoStatusStore.cs` are
+all as §1 left them, and §1's *What §2 inherits* note still stands unchanged. Two interactions to be
+aware of:
+
+- §4's reconcile tick broadcasts `WorkingTreeChangedMessage` + `RefsChangedMessage` for the active
+  repo every 30s, so §2's "skip the now-redundant probe for the active repo on
+  `WorkingTreeChangedMessage`" applies to reconcile ticks as well — which is correct, since the tick's
+  working-tree reload will carry the summary once §2 lands. §4 already skips its own tick while a git
+  read is in flight on that repo.
+- §11 edited `GitService.cs`, but only its locking preamble and four op signatures. §2's targets
+  (`RunGitStatusPorcelain`, `ParseStatusRecord`, `ParseStatusSummary`) are untouched. §5 changed
+  *which messages* the mutation path broadcasts — a submodule update and a failed stash / commit now
+  revalidate where they used to be silent — so a reader tracing "what triggers a status read" should
+  read `MutationEffects` alongside the store subscriptions.

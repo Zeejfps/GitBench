@@ -21,11 +21,15 @@ namespace GitBench.Infrastructure;
 /// never invalidates an in-flight continuation in another, so a mutation can't silently drop
 /// a concurrent reload (or vice versa). The default <see cref="Gen"/> lane covers VMs with a
 /// single stream.
+///
+/// Lanes are about staleness only, never about lifetime: disposal is a flag every posted
+/// continuation checks. Git mutations have the opposite staleness semantics from loads and go
+/// through <see cref="RunMutation"/>, which has no lane at all.
 /// </summary>
 internal abstract class ViewModelBase<TState> : IDisposable
 {
     private readonly List<IDisposable> _slices = new();
-    private readonly List<GenerationGuard> _lanes = new();
+    private bool _disposed;
 
     protected IUiDispatcher Dispatcher { get; }
     protected SubscriptionGroup Subscriptions { get; } = new();
@@ -40,17 +44,11 @@ internal abstract class ViewModelBase<TState> : IDisposable
     }
 
     /// <summary>
-    /// Creates an independent generation lane registered for disposal-invalidation. Use a
-    /// dedicated lane per concern (loads, index mutations, commit) and pass it to
-    /// <see cref="RunBackground"/> so an op in one lane never drops an in-flight continuation
-    /// in another. Must be called from the ctor body (after the base ctor has run).
+    /// Creates an independent generation lane. Use a dedicated lane per concern (a load, a
+    /// highlight pass, a lazy fetch) and pass it to <see cref="RunBackground"/> so an op in one
+    /// lane never drops an in-flight continuation in another.
     /// </summary>
-    protected GenerationGuard CreateLane()
-    {
-        var lane = new GenerationGuard();
-        _lanes.Add(lane);
-        return lane;
-    }
+    protected GenerationGuard CreateLane() => new();
 
     /// <summary>
     /// Declares a per-field projection over <see cref="State"/>. Tracked for disposal in
@@ -76,6 +74,9 @@ internal abstract class ViewModelBase<TState> : IDisposable
     /// <see cref="CreateLane"/>) to isolate a stream of work from unrelated ops. The work
     /// tuple lets callers report in-band errors without throwing; a thrown exception is
     /// captured as its <c>Message</c>.
+    ///
+    /// This is load semantics: a newer answer to the same question supersedes an older one. A git
+    /// mutation is not a load and must not run here — see <see cref="RunMutation"/>.
     /// </summary>
     protected void RunBackground<T>(
         Func<(T? Result, string? Error)> work,
@@ -100,8 +101,54 @@ internal abstract class ViewModelBase<TState> : IDisposable
 
             dispatcher.Post(() =>
             {
-                if (lane.IsStale(gen)) return;
+                if (_disposed || lane.IsStale(gen)) return;
                 onResult(result, errorMsg);
+            });
+        });
+    }
+
+    /// <summary>
+    /// Runs a git mutation: work whose result must always be delivered. Two things differ from
+    /// <see cref="RunBackground"/>, both because a mutation is not a load.
+    ///
+    /// There is no generation lane. Superseding a mutation is meaningless — the git process already
+    /// ran and the index already moved — and dropping its continuation drops the only carrier of its
+    /// error message and of the broadcast that reconciles the optimistically-updated lists. Only
+    /// disposal stops delivery.
+    ///
+    /// The revalidation is the runner's job, not the callback's. <paramref name="effects"/> names the
+    /// channels the op may have moved; it is broadcast once <paramref name="onResult"/> has settled
+    /// this VM's own state, in a <c>finally</c>, so neither an early return nor a throwing
+    /// continuation can leave the rest of the app unaware that the repo moved. It is broadcast even
+    /// when this VM has been disposed — the revalidation is owed to the stores, not to the panel that
+    /// happened to start the op.
+    /// </summary>
+    protected void RunMutation<T>(MutationEffects effects, Func<T> work, Action<T> onResult)
+        where T : IOutcome<T>
+    {
+        var dispatcher = Dispatcher;
+        Task.Run(() =>
+        {
+            T outcome;
+            try
+            {
+                outcome = work();
+            }
+            catch (Exception ex)
+            {
+                outcome = T.Fail(ex.Message);
+            }
+
+            dispatcher.Post(() =>
+            {
+                try
+                {
+                    if (!_disposed) onResult(outcome);
+                }
+                finally
+                {
+                    effects.Broadcast();
+                }
             });
         });
     }
@@ -150,7 +197,7 @@ internal abstract class ViewModelBase<TState> : IDisposable
             dispatcher.Post(() =>
             {
                 lane.InFlight = false;
-                if (lane.IsStale(gen)) return;
+                if (_disposed || lane.IsStale(gen)) return;
                 onResult(result, errorMsg);
             });
         });
@@ -167,11 +214,8 @@ internal abstract class ViewModelBase<TState> : IDisposable
 
     public virtual void Dispose()
     {
-        foreach (var lane in _lanes)
-        {
-            lane.Bump();
-        }
-        
+        _disposed = true;
+
         Subscriptions.Dispose();
         
         for (var i = _slices.Count - 1; i >= 0; i--)

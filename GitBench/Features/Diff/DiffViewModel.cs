@@ -333,8 +333,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public void UnstageFile() => RunFileIndexOp(stage: false);
 
     // Stages/unstages the whole current file. Mirrors ApplyHunk's pattern: run the git op
-    // off the UI thread, then broadcast a working-tree change so every list (and this diff)
-    // re-syncs against the truth — LocalChangesViewModel owns the optimistic list updates.
+    // off the UI thread; RunMutation broadcasts the working-tree change so every list (and this
+    // diff) re-syncs against the truth — LocalChangesViewModel owns the optimistic list updates.
     private void RunFileIndexOp(bool stage)
     {
         var repo = ResolveRepo();
@@ -343,32 +343,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (target == null) return;
 
         var path = target.Path;
-        var service = _gitService;
-        var bus = _bus;
-        var dispatcher = Dispatcher;
-        var repoId = repo.Id;
-        Task.Run(() =>
-        {
-            GitOutcome outcome;
-            try
-            {
-                outcome = stage
-                    ? service.Stage(repo, new[] { path })
-                    : service.Unstage(repo, new[] { path });
-            }
-            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
-
-            dispatcher.Post(() =>
-            {
-                if (outcome is GitOutcome.Failed failed)
-                {
-                    Update(s => s with { OpError = failed.Message });
-                    return;
-                }
-                Update(s => s with { OpError = null });
-                bus.Broadcast(new WorkingTreeChangedMessage(repoId));
-            });
-        });
+        RunMutation(
+            MutationEffects.Index(_bus, repo.Id, path),
+            work: () => stage
+                ? _gitService.Stage(repo, new[] { path })
+                : _gitService.Unstage(repo, new[] { path }),
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
     // Conflict resolution from the resolution header. Each writes the chosen content + stages
@@ -393,27 +373,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
 
         var path = conflict.Path;
-        var service = _gitService;
-        var bus = _bus;
-        var dispatcher = Dispatcher;
-        var repoId = repo.Id;
-        Task.Run(() =>
-        {
-            GitOutcome outcome;
-            try { outcome = op(service, repo, path); }
-            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
-
-            dispatcher.Post(() =>
-            {
-                if (outcome is GitOutcome.Failed failed)
-                {
-                    Update(s => s with { OpError = failed.Message });
-                    return;
-                }
-                Update(s => s with { OpError = null });
-                bus.Broadcast(new WorkingTreeChangedMessage(repoId));
-            });
-        });
+        RunMutation(
+            MutationEffects.WorkingTree(_bus, repo.Id),
+            work: () => op(_gitService, repo, path),
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
     // Opens the conflicted file in the OS default editor so the user can resolve markers by
@@ -634,39 +597,20 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
     }
 
-    // Intentionally unguarded: every apply must broadcast a working-tree change so the optimistic
-    // move (here and in LocalChangesViewModel) reconciles against the truth, so this op does not
-    // run through RunBackground's staleness drop.
+    // The broadcast belongs to RunMutation, which fires it whichever way the apply went: both the
+    // diff here and LocalChangesViewModel's lists have already painted the optimistic move, so a
+    // failure needs the reconcile just as much as a success does.
     private void RunApplyPatch(Repo repo, string patch, bool cached, bool reverse, DiffResult original)
-    {
-        var service = _gitService;
-        var bus = _bus;
-        var dispatcher = Dispatcher;
-        var repoId = repo.Id;
-        Task.Run(() =>
-        {
-            GitOutcome outcome;
-            try { outcome = service.ApplyPatch(repo, patch, cached, reverse); }
-            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
-
-            dispatcher.Post(() =>
+        => RunMutation(
+            MutationEffects.WorkingTree(_bus, repo.Id),
+            work: () => _gitService.ApplyPatch(repo, patch, cached, reverse),
+            onResult: outcome =>
             {
-                if (outcome is GitOutcome.Failed failed)
-                {
-                    Update(s => s with { OpError = failed.Message });
-                    // Roll back the optimistic diff state, and broadcast a working-tree change so
-                    // LocalChangesViewModel re-syncs its lists against the truth (we may have
-                    // optimistically moved the file in OnHunkAppliedOptimistic).
-                    if (State.Value.Render is DiffRenderState.Loaded)
-                        Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
-                    bus.Broadcast(new WorkingTreeChangedMessage(repoId));
-                    return;
-                }
-                Update(s => s with { OpError = null });
-                bus.Broadcast(new WorkingTreeChangedMessage(repoId));
+                Update(s => s with { OpError = outcome.FailureMessage });
+                // Roll the optimistic diff state back to what the file actually still contains.
+                if (outcome is GitOutcome.Failed && State.Value.Render is DiffRenderState.Loaded)
+                    Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
             });
-        });
-    }
 
     private DiffHighlight? CurrentHighlight()
         => State.Value.Render is DiffRenderState.Loaded l ? l.Highlight : null;

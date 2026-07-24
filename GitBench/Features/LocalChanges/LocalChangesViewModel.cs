@@ -27,6 +27,11 @@ namespace GitBench.Features.LocalChanges;
 /// invalid combinations (a selected path no longer in any list, the diff view targeting
 /// a path that just moved sides) unrepresentable, and removes the cross-panel
 /// coordination that used to be needed to keep the two sides mutually exclusive.
+///
+/// Every git op here goes through <see cref="ViewModelBase{TState}.RunMutation{T}"/>, which has no
+/// generation lane, so no op can drop another's result — the continuation is the only carrier of the
+/// error and of the revalidation that reconciles the optimistic move. The base <c>Gen</c> lane is
+/// left to the amend head-files refresh, which is a load and should supersede.
 /// </summary>
 internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 {
@@ -87,12 +92,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     // post-mutation snapshot can land afterwards). Mirrors DiffViewModel's defer for the file lists.
     private bool _deferStoreReloadUntilWorkingTreeChange;
 
-    // Mutations and commit get their own lanes so staging a file never drops an in-flight reload,
-    // and a reload never drops the commit continuation. The base Gen lane is used for the amend
-    // head-files refresh. The working-tree snapshot itself is loaded by the snapshot store.
-    private readonly GenerationGuard _opGen;
-    private readonly GenerationGuard _commitGen;
-
     public LocalChangesViewModel(
         IRepoRegistry registry,
         IGitService gitService,
@@ -115,8 +114,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         _clipboard = clipboard;
         _preferences = preferences;
         _loc = loc;
-        _opGen = CreateLane();
-        _commitGen = CreateLane();
 
         Title = Slice(s => s.Title);
         Description = Slice(s => s.Description);
@@ -611,23 +608,21 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
 
         ApplyOptimisticMove(paths, DiffSide.Unstaged);
 
-        RunBackground<bool>(
+        RunMutation(
+            MutationEffects.WorkingTree(_bus, repo.Id),
             work: () =>
             {
-                string? firstError = null;
+                // Every path is attempted even after one fails — the rest are independent
+                // resolutions — and the first failure is what the banner reports.
+                GitOutcome.Failed? firstFailure = null;
                 foreach (var path in paths)
                 {
                     if (_gitService.MarkResolved(repo, path) is GitOutcome.Failed failed)
-                        firstError ??= failed.Message;
+                        firstFailure ??= failed;
                 }
-                return (true, firstError);
+                return firstFailure ?? GitOutcome.Ok;
             },
-            onResult: (_, errorMsg) =>
-            {
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                Update(s => s with { OpError = errorMsg });
-            },
-            lane: _opGen);
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
     // Resets a submodule's working tree back to the SHA the parent has recorded. Runs
@@ -651,18 +646,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             Recursive: false,
             Mode: SubmoduleUpdateMode.Checkout);
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
-        RunOutcome(
+        RunMutation(
+            MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(primaryId),
             work: () => _gitService.UpdateSubmodules(repo, req),
-            onResult: outcome =>
-            {
-                if (outcome is MergeLikeOutcome.Failed failed)
-                {
-                    Update(s => s with { OpError = failed.Message });
-                    return;
-                }
-                _bus.Broadcast(new SubmodulesChangedMessage(primaryId));
-            },
-            lane: _opGen);
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
     public void Unstage(IReadOnlyList<string> paths)
@@ -709,19 +696,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
             if (f.Status == FileChangeStatus.Added) untracked.Add(f.Path);
         var includeUntracked = paths.Any(untracked.Contains);
 
-        RunOutcome(
+        RunMutation(
+            MutationEffects.WorkingTree(_bus, repo.Id).AndRefs(),
             work: () => _gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths),
-            onResult: outcome =>
-            {
-                if (outcome is GitOutcome.Failed failed)
-                {
-                    Update(s => s with { OpError = failed.Message });
-                    return;
-                }
-                _bus.Broadcast(new RefsChangedMessage(repo.Id));
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-            },
-            lane: _opGen);
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
     public void CopyPaths(IReadOnlyList<string> paths)
@@ -782,11 +760,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         Update(s => s with { CommitBusy = true, OpError = null });
         _commitSpinner.Start();
 
-        // Commit runs on its own lane so the continuation always runs (resetting CommitBusy)
-        // even if a store reload lands mid-commit. The editor is cleared immediately; the
-        // post-commit file lists arrive via CommitCreatedMessage → the store reloads and pushes
-        // the fresh snapshot through OnStoreLocalChanges.
-        RunOutcome(
+        // The continuation always runs (resetting CommitBusy) because a mutation's result is never
+        // dropped. The editor is cleared immediately; the post-commit file lists arrive via the
+        // CommitCreatedMessage RunMutation broadcasts → the store reloads and pushes the fresh
+        // snapshot through OnStoreLocalChanges.
+        RunMutation(
+            MutationEffects.Commit(_bus, repo.Id),
             work: () => _gitService.Commit(repo, message, amend),
             onResult: outcome =>
             {
@@ -818,10 +797,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                     Selection = LocalChanges.Selection.Create(
                         s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, Empty),
                 });
-                _bus.Broadcast(new CommitCreatedMessage(repo.Id));
                 _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(_loc.Strings.Value.ToastCommitCreated)));
-            },
-            lane: _commitGen);
+            });
     }
 
     // Projection of the store's local-changes slice (file lists + submodule drift). data == null
@@ -1065,18 +1042,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     }
 
     private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate, string? path = null)
-    {
-        RunOutcome(
+        => RunMutation(
+            MutationEffects.Index(_bus, repo.Id, path),
             work: mutate,
-            onResult: outcome =>
-            {
-                // Nothing on disk moved — only the index. Lets the working-tree review's stacked
-                // diffs (HEAD→disk, invariant here) skip a refetch per loaded file per click.
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id, IndexOnly: true, Path: path));
-                Update(s => s with { OpError = (outcome as GitOutcome.Failed)?.Message });
-            },
-            lane: _opGen);
-    }
+            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
 
     private void ApplyOptimisticMove(IReadOnlyList<string> paths, DiffSide fromSide)
     {

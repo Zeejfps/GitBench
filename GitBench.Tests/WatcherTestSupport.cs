@@ -14,6 +14,10 @@ internal sealed class QueuedDispatcher : IUiDispatcher
 
     public void Post(Action action) => _queue.Enqueue(action);
 
+    // Lets a test wait for a continuation to be posted without running it — needed when draining is
+    // itself the thing under test (a continuation that throws).
+    public int Queued => _queue.Count;
+
     public void Drain()
     {
         while (_queue.TryDequeue(out var action)) action();

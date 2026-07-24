@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
@@ -35,49 +34,30 @@ public interface IGitRawConfigReader
 
 public sealed class GitService : IGitService, IGitRawConfigReader
 {
-    // Every git write touches .git/index.lock; two writes against the same repo at the same
-    // time (e.g. a checkout from the sidebar racing a stage from the local-changes panel, or
-    // an impatient user double-clicking branches) collide with "Unable to create
-    // '.git/index.lock': File exists". Serialize all mutating ops per repo so the call sites
-    // can't race each other — their own UI-busy flags become cosmetic, not correctness guards.
-    // Reads stay unguarded; libgit2/git CLI tolerate concurrent reads, and the next
-    // RefsChangedMessage refresh corrects any brief inconsistency.
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _repoLocks =
-        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-
     // Every git invocation runs through the runner, which opens an activity scope so
     // RepoWatcher can drop the FSW events our own writes cause. Without this the auto-reload
     // loops on its own index/stat-cache mutations. See RepoActivityTracker for the full story.
     private readonly GitProcessRunner _runner;
 
+    // Which mutating op serializes against which is GitRepoLocks' story; read it there.
+    private readonly GitRepoLocks _locks;
+
     public GitService(IRepoActivityTracker activity)
     {
         _runner = new GitProcessRunner(activity);
+        _locks = new GitRepoLocks(ReadCommonGitDir);
     }
 
-    private static SemaphoreSlim GetRepoLock(string repoPath)
+    // `git rev-parse --git-common-dir` resolves a linked worktree's `.git` file down to the
+    // primary's `.git` directory. Plumbing, so it skips the identity prefix and the login shell.
+    private string? ReadCommonGitDir(string repoPath)
     {
-        string key;
-        try { key = Path.GetFullPath(repoPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { key = repoPath; }
-        return _repoLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-    }
-
-    // Acquires the per-repo mutation lock and releases it when the returned scope is disposed.
-    // Use with `using` so every mutation path serializes without hand-written try/finally:
-    //   using var _ = LockRepo(repo.Path);
-    private static RepoLock LockRepo(string repoPath)
-    {
-        var sem = GetRepoLock(repoPath);
-        sem.Wait();
-        return new RepoLock(sem);
-    }
-
-    private readonly struct RepoLock : IDisposable
-    {
-        private readonly SemaphoreSlim _sem;
-        public RepoLock(SemaphoreSlim sem) => _sem = sem;
-        public void Dispose() => _sem.Release();
+        var result = _runner.Run(
+            repoPath,
+            new[] { "rev-parse", "--git-common-dir" },
+            GitProcessRunner.GitLaunch.Direct,
+            inject: false);
+        return result.Ok ? FirstLine(result.Stdout) : null;
     }
 
     // `.git` is a directory in a normal repo and a file in worktrees/submodules. Deeper
@@ -1875,7 +1855,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // so a teammate's concurrent push isn't silently clobbered. Caller is expected to have
     // confirmed with the user before passing force=true.
     public GitOutcome Push(Repo repo, bool force = false)
-        => RunOperation(repo, () =>
+        => RunRemoteOperation(repo, () =>
         {
             // Pre-flight: refuse to push from detached HEAD or a branch with no upstream,
             // because the resulting `git push` error is less actionable than these messages.
@@ -1975,9 +1955,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     public GitOutcome AddRemote(Repo repo, string name, string url)
         => RunOperation(repo, () => Mutate(repo.Path, "remote", "add", name, url));
 
+    // The one op that holds both locks: it rewrites the working tree (so a stage click queueing
+    // behind it is correct, not a bug) and it talks to the remote. LocalState first — the order
+    // every future two-lock op must follow.
     public PullOutcome Pull(Repo repo, PullStrategy? strategy = null)
-        => RunLocked<PullOutcome>(repo, () =>
+        => RunLocked<PullOutcome>(repo, GitResource.LocalState, () =>
         {
+            using var _ = _locks.Acquire(GitResource.Remote, repo.Path);
             var info = GetHeadInfo(repo.Path);
             if (info.IsDetached)
                 return new PullOutcome.Failed("HEAD is detached. Check out a branch first.");
@@ -2019,7 +2003,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // --recurse-submodules downloads the commits each submodule is pinned to so they're
     // present locally; it does NOT touch submodule working trees (that's pull's job).
     public GitOutcome Fetch(Repo repo)
-        => RunSimple(repo, "git fetch", "fetch", "--all", "--prune", "--recurse-submodules");
+        => RunRemoteSimple(repo, "git fetch", "fetch", "--all", "--prune", "--recurse-submodules");
 
     // Clone has no existing Repo to lock or validate — it creates one. We run from the target's
     // parent dir (created if missing) with an absolute destination so git places the working tree
@@ -2464,7 +2448,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Shells out to `git push <remote> --delete <branch>`. The local copy is unaffected.
     // Server may refuse for protected refs — we surface whatever git reports.
     public GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName)
-        => RunSimple(repo, "git push", "push", remoteName, "--delete", branchName);
+        => RunRemoteSimple(repo, "git push", "push", remoteName, "--delete", branchName);
 
     public GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths)
         => RunOperation(repo, () =>
@@ -2893,7 +2877,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             var rel = NormalizeRelPath(relativePath);
             if (rel.Length == 0 || rel == ".") return false;
 
-            using var _ = LockRepo(parent.Path);
+            using var _ = _locks.Acquire(GitResource.LocalState, parent.Path);
 
             // --ignore-submodules=dirty so only a moved HEAD commit counts, not uncommitted
             // changes inside the submodule's working tree (which `git add` wouldn't record
@@ -3028,14 +3012,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return result.Ok ? (true, null) : (false, result.BlockError($"git {string.Join(' ', args)}"));
     }
 
-    // Owns the not-a-repo guard, the repo lock, and the exception fold shared by every
+    // Owns the not-a-repo guard, the resource lock, and the exception fold shared by every
     // mutating operation; `fail` builds the hierarchy-specific failure case.
-    private T RunLocked<T>(Repo repo, Func<T> body, Func<string, T> fail)
+    private T RunLocked<T>(Repo repo, GitResource resource, Func<T> body, Func<string, T> fail)
     {
         try
         {
             if (!IsGitRepo(repo.Path)) return fail("Not a git repository.");
-            using var _ = LockRepo(repo.Path);
+            using var _ = _locks.Acquire(resource, repo.Path);
             return body();
         }
         catch (Exception ex)
@@ -3045,13 +3029,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     }
 
     private GitOutcome RunOperation(Repo repo, Func<GitOutcome> body)
-        => RunLocked(repo, body, static m => new GitOutcome.Failed(m));
+        => RunLocked(repo, GitResource.LocalState, body, static m => new GitOutcome.Failed(m));
 
     private MergeLikeOutcome RunMergeLike(Repo repo, Func<MergeLikeOutcome> body)
-        => RunLocked(repo, body, static m => new MergeLikeOutcome.Failed(m));
+        => RunLocked(repo, GitResource.LocalState, body, static m => new MergeLikeOutcome.Failed(m));
 
     private GitOutcome RunSimple(Repo repo, string label, params string[] args)
         => RunOperation(repo, () => ToOutcome(_runner.Run(repo.Path, args), label));
+
+    // Network-only entry points: the op talks to a remote and updates refs/remotes, and never
+    // touches the index or the working tree, so it takes only the remote lock. Anything that could
+    // move the index must go through RunOperation / RunSimple instead.
+    private GitOutcome RunRemoteOperation(Repo repo, Func<GitOutcome> body)
+        => RunLocked(repo, GitResource.Remote, body, static m => new GitOutcome.Failed(m));
+
+    private GitOutcome RunRemoteSimple(Repo repo, string label, params string[] args)
+        => RunRemoteOperation(repo, () => ToOutcome(_runner.Run(repo.Path, args), label));
 
     private static GitOutcome ToOutcome(GitProcessRunner.GitResult result, string label)
         => result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError(label));
@@ -3598,7 +3591,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // but the operation banner reappear immediately. ForceQuitAvailable is set in that case
     // so the dialog can offer the escape-hatch second click.
     public AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false)
-        => RunLocked<AbortOutcome>(repo, () =>
+        => RunLocked<AbortOutcome>(repo, GitResource.LocalState, () =>
         {
             // Pick the verb. For force-quit we prefer git's own --quit (it removes the
             // sequencer/rebase state without touching the index/workdir) and fall back to
@@ -3755,7 +3748,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     };
 
     public ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state)
-        => RunLocked<ContinueOutcome>(repo, () =>
+        => RunLocked<ContinueOutcome>(repo, GitResource.LocalState, () =>
         {
             var args = state switch
             {
@@ -3773,7 +3766,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }, static m => new ContinueOutcome.Failed(m));
 
     public ContinueOutcome SkipOperation(Repo repo, RepoOperationState state)
-        => RunLocked<ContinueOutcome>(repo, () =>
+        => RunLocked<ContinueOutcome>(repo, GitResource.LocalState, () =>
         {
             var args = state switch
             {

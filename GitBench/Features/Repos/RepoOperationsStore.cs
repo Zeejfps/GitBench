@@ -50,8 +50,10 @@ public interface IRepoOperationsStore
 /// Owns the push/pull/fetch lifecycle per repo. The work already ran off-thread before; what this
 /// adds is keeping the *state* keyed by repo id instead of on the single toolbar view model, so a
 /// push on repo A keeps spinning (and its result/error lands correctly) after the user switches to
-/// repo B and commits there. Different repos run truly in parallel — only same-type ops on one repo
-/// are serialized (the in-flight flag), matching git's own per-repo index lock.
+/// repo B and commits there. Different repos run truly in parallel. The in-flight flag here only
+/// stops a second op of the *same* type on one repo; correctness comes from
+/// <see cref="GitService"/>'s per-resource locks, where push/fetch serialize against each other on
+/// the remote lock and pull additionally takes the local-state lock a stage click needs.
 ///
 /// Like <see cref="RepoSnapshotStore"/> it exposes the *active* repo's slice as one observable and
 /// is wired in <see cref="Start"/> once the UI dispatcher exists.
