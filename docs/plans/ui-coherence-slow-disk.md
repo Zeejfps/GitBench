@@ -8,13 +8,19 @@
 > triggers, and it does not self-correct at any disk speed. This document records the root causes
 > found by reading the sync path end to end, and the work items that close them.
 >
-> **Status: §1, §3, §4 and §9 are implemented (2026-07-24). §2, §5, §6, §7 and §8 are analysis
-> only.** Items are ordered by what fixes the reported symptoms first; §1+§2 are one seam and
-> should land together, as should §3+§4+§9. §9 is appended rather than inserted in priority order
-> to avoid renumbering — it belongs with §3.
+> **Status: §1, §3, §4 and §9 are implemented (2026-07-24). §2, §5, §6, §7, §8, §10 and §11 are
+> analysis only.** Items are ordered by what fixes the reported symptoms first; §1+§2 are one seam
+> and should land together, as should §3+§4+§9. §9, §10 and §11 are appended rather than inserted
+> in priority order to avoid renumbering.
+>
+> **Root cause C was re-grounded against the code on 2026-07-24 and its premise was wrong.**
+> Index mutations *are* serialized per repo — `GitService` has held a per-repo mutation semaphore
+> all along (`GitService.cs:38-81`), and every mutating method goes through it. C has been rewritten
+> around what is actually broken at that seam, §5 rewritten to match, and §10 / §11 added for the
+> two defects the re-grounding surfaced.
 >
 > **Next up: §2** (the other half of §1's seam — one status read feeding both the file lists and
-> the ahead/behind/dirty summary), then §5 (index-mutation serialization, independent of
+> the ahead/behind/dirty summary), then §5 (mutation results being discarded, independent of
 > everything) or §6 (the shared read gate, which §4 now has a second consumer waiting on).
 
 ## Root causes
@@ -115,19 +121,92 @@ On an SSD a status read is ~50ms, so the gate is closed rarely; on a slow HDD it
 reads fire on every tick, so the gate is closed a large fraction of the time. **The drop rate scales
 directly with disk latency. This is the phantom-unstaged-files report.**
 
-### C. Index mutations are not serialized per repo
+### C. Mutations *are* serialized per repo — the lane above them throws their results away
 
-`RunIndexMutation` (`LocalChangesViewModel.cs:1067`) calls `RunOutcome` → `RunBackground`, which
-fires `Task.Run` unconditionally with no exclusivity (`ViewModelBase.cs:80`). Two fast stage
-clicks — or a stage overlapping a discard, commit, or pull — run concurrent `git add` processes
-on one repo, producing `Unable to create '.git/index.lock'`. `ApplyOptimisticMove` has already
-moved the row by then, so a failure leaves the list wrong. The lock window is invisible on an SSD
-and routinely hit on a slow HDD.
+> **This section replaced an earlier one whose premise was wrong.** It claimed index mutations run
+> unserialized and collide on `index.lock`. They do not: `GitService` holds a per-repo mutation
+> semaphore and every mutating method takes it. What follows is what is actually broken at that
+> seam, read end to end.
 
-Related: `RunBackground` drops `onResult` when the lane is stale, so a superseded mutation never
-broadcasts its `WorkingTreeChangedMessage` — and that broadcast is the only thing that clears
-`_deferStoreReloadUntilWorkingTreeChange` (`LocalChangesViewModel.cs:88`), which gates whether
-store snapshots are allowed to land at all.
+**The serialization that exists.** `GitService._repoLocks` (`GitService.cs:45`) is a static
+`ConcurrentDictionary<string, SemaphoreSlim>` keyed by normalized full repo path, with the
+OS-appropriate comparer. `LockRepo` (`:69`) takes it; `RunLocked` (`:3033`) wraps *not-a-repo
+guard + lock + exception fold*; `RunOperation` / `RunMergeLike` / `RunSimple` (`:3047-3054`) are its
+three typed entry points. Sweeping every mutating member of `IGitService`, **all of them** route
+through one of those or take `LockRepo` explicitly (`StageSubmodulePointer:2896`). The class comment
+(`:38-44`) states the intent exactly — *"Serialize all mutating ops per repo so the call sites can't
+race each other — their own UI-busy flags become cosmetic, not correctness guards."* Reads are
+deliberately unguarded.
+
+So two fast stage clicks do **not** produce `index.lock`; the second `git add` waits. `index.lock`
+from GitBench's own concurrency is not a live defect, and the original §5 acceptance criterion
+("rapid stage clicks on a slow disk never produce `index.lock` errors") is already met. What remains
+is external git (a terminal, an IDE) — for which `OperationErrorDialog.cs:130` already offers the
+lock-removal recovery — and the granularity gap in **C4**.
+
+Four real defects sit on top of that lock:
+
+**C1 — the lane discards mutation results.** `RunIndexMutation` (`LocalChangesViewModel.cs:1067`)
+calls `RunOutcome` → `RunBackground`, which *bumps* `_opGen` (`ViewModelBase.cs:86`) and drops the
+continuation if the lane moved on (`:103`). That is the correct policy for a **load** — a newer load
+supersedes an older one — and the wrong policy for a **mutation**: the git process already ran, the
+index already moved, and the continuation is the only thing that carries the error and the change
+broadcast. Four ops share `_opGen`: `RunIndexMutation`, `MarkResolved:614`, `StashSelected:712`,
+`RunSubmoduleUpdate:654`. Any one supersedes any other.
+
+`DiffViewModel` reached the opposite conclusion for the same class of work and wrote it down
+(`DiffViewModel.cs:637-639`): *"Intentionally unguarded: every apply must broadcast a working-tree
+change so the optimistic move … reconciles against the truth, so this op does not run through
+RunBackground's staleness drop."* The two files disagree about mutation semantics, and the one that
+owns the file lists is the one that gets it wrong.
+
+**C2 — a dropped continuation wedges the panel shut.** `_deferStoreReloadUntilWorkingTreeChange`
+(`LocalChangesViewModel.cs:88`) gates whether store snapshots land at all (`:848-853`), and its only
+clear paths are a cross-repo switch (`:846`) and a `WorkingTreeChangedMessage` for the active repo
+(`:172-177`). `RunIndexMutation` and `MarkResolved` broadcast that message unconditionally — but
+only if their continuation runs. `StashSelected` and `RunSubmoduleUpdate` never broadcast it on
+failure, and `RunSubmoduleUpdate` broadcasts only `SubmodulesChangedMessage` on *success*:
+
+| t | Event |
+| --- | --- |
+| 0ms | stage `a.txt` → `ApplyOptimisticMove` sets the hold; `RunIndexMutation` bumps `_opGen` to N; `git add` queues on the repo lock |
+| 200ms | user hits "Reset submodule to recorded" → `RunSubmoduleUpdate` bumps `_opGen` to N+1 |
+| 3s | `git add` returns; continuation posts, `IsStale(N)` → **dropped**. No broadcast, no `OpError` |
+| 9s | `git submodule update` returns; broadcasts `SubmodulesChangedMessage` only |
+| after | the hold is still set. `OnStoreLocalChanges` early-returns for **every** subsequent snapshot |
+
+The file lists then sit frozen at the optimistic state until *some* `WorkingTreeChangedMessage`
+arrives for that repo. Since §4 a focused window self-heals within 30s (the reconcile tick
+broadcasts both channels); an unfocused window waits for a real filesystem event or a repo switch.
+
+The milder form needs no second op type at all: two stage clicks in a row means the first one's
+failure message is discarded in silence, with its row already moved.
+
+**C3 — the mutation lock spans the network.** `Push` (`:1877`, `RunOperation`), `Fetch` (`:2021`,
+`RunSimple`) and `Pull` (`:1978`, `RunLocked`) take the **same** per-repo semaphore as `git add`.
+`Fetch` is `fetch --all --prune --recurse-submodules`. So a stage click during a fetch is queued for
+the entire fetch — and nothing in the UI says so: the optimistic move paints instantly, and
+`RepoOperations.IsFetching` only disables the toolbar's own remote buttons.
+
+For `Pull` the queueing is *correct* — pull rewrites the working tree and takes git's own index lock
+anyway. For `Push` and `Fetch` it is not: neither touches the index. They serialize against staging
+for no reason, and they hold the lock for a network round-trip rather than a disk one. `LockRepo`
+uses a blocking `sem.Wait()` (`:72`), so each queued mutation also parks a thread-pool thread for
+the duration — the same pool every store load and status probe dispatches onto.
+
+**C4 — one key for two resources.** The lock key is the working-tree path (`:58-64`). That is right
+for the index, which is per worktree, and wrong for refs, which are not: a primary and its linked
+worktrees share one ref store (root cause F), so `DeleteBranch` in the primary and
+`CheckoutLocalBranch` in a worktree take *different* semaphores and can still collide on git's own
+`refs/heads/<name>.lock` / `packed-refs.lock`. Reasoned from the layout, not observed — and git's
+ref locking degrades to a failed op with a clear message, not corruption.
+
+There is also an unwritten lock-ordering invariant. `Pull` holds the primary's lock and calls
+`ReattachSubmodulesOnBranchTip` (`:1852`), which calls the public, locked `AttachDetachedHead` on a
+submodule (`:1862`) — parent lock, then child lock. Nothing nests the other way today
+(`StageSubmodulePointer` takes the *parent's* lock and no child lock), so there is no ABBA hazard;
+nothing records or enforces that either. `_repoLocks` is also static and never trimmed — one
+semaphore per repo path the process has ever touched, which is negligible but unbounded.
 
 ### D. A failed probe pins stale values
 
@@ -204,6 +283,32 @@ This is the granularity mismatch noted under root cause B, now located: it is no
 gate's key is too narrow. It is that `.git/worktrees/<name>/…` carries *two* meanings — "the
 worktree set changed" and "that worktree's refs moved" — and `WorktreesChangedMessage` can only
 express the first.
+
+### G. Three git reads run on the UI thread
+
+Found while sweeping C's call sites: every `IGitService` call in the app is dispatched through
+`Task.Run` / `AsyncCommand` / `RunBackground` — **except three**, which run synchronously on the UI
+thread.
+
+| Site | Call | Triggered by |
+| --- | --- | --- |
+| `AmendSession.Begin:56-57` | `GetHeadCommitMessage` + `GetAmendStagedFiles` | ticking the Amend checkbox (`LocalChangesViewModel.SetAmend:287`) |
+| `DiscardChangesViewModel:45` | `GetLocalChanges` — a full `git status` | `DiscardChangesDialog.Build:30` |
+| `StashDialogViewModel:53` | `GetLocalChanges` — a full `git status` | `StashDialog.Build:27` |
+
+The last two run **inside a widget `Build` pass**, i.e. inside layout. On a repo where `git status`
+costs seconds, opening Discard or Stash freezes every window for that long — and it cannot show a
+spinner or a skeleton, because the frame that would draw one is the frame that is blocked.
+
+Both dialogs are also re-reading data the app already holds: they are always constructed for the
+active repo (`RequestDiscard:690` reads `_registry.Active.Value`), whose `LocalChangesSnapshot` is
+already in `IRepoSnapshotStore`. This is not "move the read off-thread" so much as "stop doing the
+read". Amend's `GetAmendStagedFiles` is a diff against HEAD~1 that the store genuinely doesn't
+carry — but the VM already refreshes it asynchronously on every load
+(`ReloadAmendStagedThenApply:949`), so the machinery to populate it a beat later exists.
+
+These are reads, so they never touch C's mutation lock. They do contend for the same spindle as
+every background load, which is why they are worst exactly when they hurt most.
 
 ---
 
@@ -669,20 +774,71 @@ re-reading the enable condition on the UI thread each tick rather than tearing t
   one never does, a tick is skipped while git is still reading and resumes once it goes idle, no
   active repo is silent, and both losing focus and disposal stop the loop.
 
-### 5. Serialize index mutations per repo
+### 5. A mutation's result can never be dropped
 
-Put a per-repo queue in front of stage / unstage / discard / commit so only one index-mutating
-git process runs per repo at a time. Eliminates `index.lock` collisions and makes optimistic
-state reliably reconcilable.
+> Rewritten 2026-07-24. The original item ("put a per-repo queue in front of stage / unstage /
+> discard / commit") is already done — at the service layer, since before this document existed.
+> See root cause C.
 
-- **Files:** `LocalChangesViewModel.cs` (`RunIndexMutation`, `RunIndexOp`, `RunUnstageWithReset`),
-  possibly a new per-repo mutation queue service; interaction with `RepoOperationsStore` (push /
-  pull also touch the index).
-- **Acceptance:** rapid stage clicks on a slow disk never produce `index.lock` errors, and a
-  failed mutation always reconciles the optimistic list. Closes root cause C.
-- **Watch:** the `_deferStoreReloadUntilWorkingTreeChange` clearing path — a mutation whose
-  `onResult` is dropped as stale never broadcasts, so the flag must not depend solely on that
-  broadcast.
+Mutations and loads have opposite staleness semantics, and `ViewModelBase` offers only the load one.
+A newer load *should* supersede an older one: both compute the same fact, and the fresher answer
+wins. A newer mutation supersedes nothing — the older one's git process already ran, and its
+continuation is the sole carrier of its error message and its change broadcast. Give mutations a
+runner that says so:
+
+```csharp
+/// Runs a mutation — work whose result must always be delivered. No generation lane: superseding a
+/// mutation is meaningless (the git process already ran and the index already moved), and dropping
+/// its continuation drops both its error and the broadcast that reconciles the optimistic list.
+/// Guarded only by disposal.
+protected void RunMutation<T>(Func<T> work, Action<T> onResult) where T : IOutcome<T>
+```
+
+Disposal is currently expressed *as* a lane bump (`ViewModelBase.Dispose:170-173`), so this needs a
+real `_disposed` flag checked in the posted continuation — a small honesty fix in its own right: the
+lanes are then only about staleness, not about lifetime.
+
+What each shape rules out:
+
+| Was representable | Now |
+| --- | --- |
+| A `git add` that failed and reported nothing | the continuation always runs, so `OpError` is always set |
+| A mutation that moved the index and broadcast nothing | the broadcast is in the continuation, which always runs |
+| `_deferStoreReloadUntilWorkingTreeChange` outliving the mutation that set it | the setting op's own continuation always broadcasts, which clears it |
+| A stage and a submodule update invalidating each other | no shared lane — there is nothing left to invalidate |
+
+- **Files:** `ViewModelBase.cs` (the runner + `_disposed`); `LocalChangesViewModel.cs`
+  (`RunIndexMutation:1067`, `MarkResolved:614`, `StashSelected:712`, `RunSubmoduleUpdate:654`);
+  `DiffViewModel.cs` (`RunFileIndexOp:338`, `RunResolve:389`, `RunApplyPatch:640`).
+- **Deletions this earns:** `_opGen` disappears — those four ops are its only users. `_commitGen`
+  goes too: `Commit:770` already returns early on `CommitBusy`, so no second commit can start, and
+  its lane's only other bumper is `Dispose`. And `DiffViewModel`'s three hand-rolled `Task.Run`
+  blocks — each with the same `service` / `bus` / `dispatcher` / `repoId` capture preamble, and one
+  with a comment explaining why it hand-rolls (`:637-639`) — collapse onto the shared runner. Three
+  bespoke blocks and two lanes become one method.
+- **Watch:** the base `Gen` lane must stay exactly as it is. Loads *should* supersede;
+  `ReloadAmendStagedThenApply:949` depends on it. Only mutations move.
+- **Watch:** `StashSelected` and `RunSubmoduleUpdate` still skip `WorkingTreeChangedMessage` on
+  failure. That stops mattering for C2's wedge once nothing can drop the *setting* op's broadcast,
+  but a failed stash still leaves the lists un-revalidated — broadcast unconditionally, as
+  `RunIndexMutation` already does.
+- **Acceptance:** no index mutation can complete without delivering exactly one result; a failed
+  stage always surfaces its error; the optimistic hold cannot outlive the mutation that set it.
+  Closes root causes C1 and C2.
+- **Note:** independent of every other item.
+
+**Rejected alternative — a per-repo mutation queue in the view model** (the original §5). It would
+re-implement, one layer up, a lock that already exists one layer down: the same waits in the same
+order, plus a second place for the "is this repo busy" question to be answered differently. Worse,
+it addresses the symptom the re-grounding disproved (`index.lock`) and leaves the one that is real
+(dropped results) untouched. The seam is right where it is; the defect is the lane above it.
+
+**Rejected alternative — make the hold a pending-mutation counter** instead of a bool, incremented
+on the optimistic move and decremented in each continuation. Equivalent once §5 lands, and worse
+before it: the hunk path sets the hold from `HunkAppliedOptimisticMessage` (`:184`) but is completed
+by `DiffViewModel`'s continuation in a different view model, so the increment and decrement would
+straddle a message boundary. The bool is fine; what was broken is that its clearing path could be
+dropped.
 
 ### 6. One shared read gate
 
@@ -819,6 +975,81 @@ than a bool (fighting §3's flag model), and a name→repo-id resolution step. T
 few redundant refreshes among siblings that genuinely do share `refs/heads` — worth revisiting only
 if a repo with many worktrees shows measurable cost.
 
+### 10. No git on the UI thread
+
+Close the three sites in root cause G. Two of them are not "move the read off-thread" but "delete
+the read": `DiscardChangesViewModel` and `StashDialogViewModel` re-run a full `git status` for the
+active repo, whose `LocalChangesSnapshot` `IRepoSnapshotStore` is already holding. Project it — the
+dialogs then open in a frame, and they show exactly the same lists the panel behind them shows,
+which is the stronger property anyway (today they can disagree, because they are two reads).
+
+Amend is the one that genuinely needs a git call: `GetAmendStagedFiles` diffs the index against
+HEAD~1 and no store carries it. Enter amend mode synchronously with the current staged list and let
+the existing `ReloadAmendStagedThenApply:949` path replace it — that machinery already runs on every
+load, so this is a matter of not blocking on it once at entry.
+
+| Was representable | Now |
+| --- | --- |
+| A `git status` inside a widget `Build` pass | the dialogs read a snapshot they are handed |
+| The Discard dialog listing different files than the panel that opened it | one snapshot, one reader |
+| Blocking the frame that would have drawn the loading state | nothing on the UI thread blocks |
+
+- **Files:** `DiscardChangesViewModel.cs:45`, `StashDialogViewModel.cs:53` (take the snapshot
+  instead of the service — the dialog widgets already resolve from `Context`, so `DiscardChangesDialog.Build:30` /
+  `StashDialog.Build:27` pass it in), `AmendSession.cs:42-64` + `LocalChangesViewModel.SetAmend:280`.
+- **Watch:** the stash dialog needs untracked status to decide `--include-untracked`
+  (`StashDialogViewModel:131-133`); `FileChange.Status == Added` is in the store's snapshot, so this
+  survives the switch.
+- **Watch:** entering amend asynchronously must not clobber text the user typed in the gap. They
+  just enabled amend, so the editor is being replaced wholesale either way — but the apply should
+  still no-op if the editor left `Amending` in the meantime, the same guard
+  `ReloadAmendStagedThenApply` already carries.
+- **Acceptance:** no `IGitService` call on the UI thread; opening Discard / Stash and ticking Amend
+  are frame-time operations on a cold 5400 RPM repo. Closes root cause G.
+- **Note:** independent of everything else.
+
+### 11. The mutation lock stops covering the network
+
+`Push` and `Fetch` do not touch the index, and they hold the per-repo mutation semaphore for a
+network round-trip (root cause C3). Give network-only ops their own per-repo-family lock:
+`Push:1877`, `Fetch:2021` and `DeleteRemoteBranch:2466` move off the index lock; everything else
+stays exactly where it is.
+
+`Pull` keeps the index lock — it checks the working tree out and takes git's own index lock anyway,
+so queueing a stage behind it is correct, not a bug. Pull is then the only op holding two locks,
+which means there is no second two-lock op to invert against and no ABBA hazard to design around.
+
+Key each lock by the resource it protects rather than by the caller: the index lock by working-tree
+path (today's key, correct — the index is per worktree), the remote lock by the common git dir, so a
+primary and its linked worktrees share one. That is also the shape C4's ref-store gap wants, without
+committing to a full ref/index split.
+
+| Was representable | Now |
+| --- | --- |
+| A stage click waiting on a `fetch --all --recurse-submodules` | different locks; the stage runs at disk speed |
+| A pool thread parked for a network round-trip on a `sem.Wait()` | waits are bounded by disk work again |
+| A primary and its worktree pushing concurrently under two different locks | the remote lock is keyed by the shared git dir |
+
+- **Files:** `GitService.cs:45-81` (a second semaphore map + the common-git-dir key), `:3033-3054`
+  (`RunLocked` gains the lock choice), `Push:1877`, `Fetch:2021`, `DeleteRemoteBranch:2466`,
+  `Pull:1978`.
+- **Watch:** `RepoOperationsStore` already prevents same-type remote ops per repo id
+  (`:107,119,137`), but its comment claims *"only same-type ops on one repo are serialized … matching
+  git's own per-repo index lock"* (`:52-54`) — which has been false since the service lock landed and
+  becomes false differently after this. Fix the comment with the change.
+- **Watch:** resolving the common git dir costs a `git rev-parse --git-common-dir` per repo; memoize
+  it per path, and fall back to the working-tree path when it fails so an unreadable repo degrades to
+  today's behaviour.
+- **Acceptance:** staging during a fetch runs immediately; staging during a pull still queues.
+- **Note:** `GitService.cs` only. Independent of §5, though both are about the same seam.
+
+**Rejected alternative — a full ref-lock / index-lock split**, with every op declaring which
+resources it touches. Most mutating ops move refs *and* the index (commit, checkout, merge, rebase,
+reset, cherry-pick, revert, stash), so nearly everything would take both, the ordering invariant
+would become load-bearing across ~30 call sites, and the only ops that gain anything are the three
+above. The narrow version buys the whole symptom fix and introduces one two-lock op instead of
+thirty.
+
 ---
 
 ## Dependency notes for task breakout
@@ -835,7 +1066,13 @@ if a repo with many worktrees shows measurable cost.
   same knob.
 - §2 unblocks the measurement half of §6 and §7 (once there is one read per tick, per-repo read
   timing is meaningful).
-- §5 is independent of everything else and can go in any order.
+- §5, §10 and §11 are independent of everything else and of each other, and can go in any order.
+  §5 and §11 sit on the same seam (the mutation path) but touch disjoint files — §5 is view models,
+  §11 is `GitService.cs` alone.
+- §4 partially nets §5: a focused window's 30s reconcile tick broadcasts `WorkingTreeChangedMessage`
+  for the active repo, which clears the hold C2 wedges. That bounds the frozen-panel window rather
+  than closing it — the silent mutation errors are untouched, and an unfocused window still waits
+  for a real filesystem event.
 - §8 is independent and lowest priority.
 
 **Still open from §3:** the gate-removal question. §3 established that the read-side gate is
@@ -850,8 +1087,12 @@ the gate, is now what suppresses read echoes on the `worktrees/` branch too.
 | --- | --- | --- |
 | Branches shows a pull, pull button greyed out | §1 + §2 | §1 done, §2 open |
 | Files in Unstaged that are not there | §3 (+ §5 for the mutation-failure variant) | §3 done, §5 open |
+| File panel frozen after a stage + another op, until something else touches the tree | §5 (§4 bounds it to 30s while focused) | §4 done, §5 open |
+| A stage/unstage that silently did nothing | §5 | open |
+| Whole UI freezes opening Discard / Stash, or ticking Amend | §10 | open |
+| A click during a fetch does nothing until the fetch ends | §11 | open |
 | Unremembered / intermittent de-sync | §4 | done |
-| General slowness on HDD | §1, §6, §7 (§9 if worktrees are in use; §8 optional) | §1, §9 done |
+| General slowness on HDD | §1, §6, §7, §10, §11 (§9 if worktrees are in use; §8 optional) | §1, §9 done |
 | A worktree's branch list / graph stale after an external checkout | §9 | done |
 
 **For whoever picks up §2.** §3/§4/§9 touched none of §2's files — `GitService.cs`,
