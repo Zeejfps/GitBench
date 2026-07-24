@@ -2,32 +2,58 @@
 
 > On a 5400 RPM HDD the app visibly de-syncs: the Branches view shows a pending pull while the
 > pull button is greyed out, files linger in Unstaged after they are gone, and everything is
-> sluggish. None of these are HDD-specific bugs — they are latent races whose windows are
-> normally sub-100ms on an SSD and become seconds-wide when every `git status` costs seconds.
-> This document records the root causes found by reading the sync path end to end, and the work
-> items that close them.
+> sluggish. None of these are HDD-specific bugs — they are mostly latent races whose windows are
+> normally sub-100ms on an SSD and become seconds-wide when every `git status` costs seconds. One
+> (A) is not a race at all: it is the same number stored in four places on mismatched refresh
+> triggers, and it does not self-correct at any disk speed. This document records the root causes
+> found by reading the sync path end to end, and the work items that close them.
 >
 > **Status: analysis only. Nothing here is implemented.** Items are ordered by what fixes the
 > reported symptoms first; §1+§2 are one seam and should land together, as should §3+§4.
 
 ## Root causes
 
-### A. Ahead/behind has two independent sources of truth
+### A. Ahead/behind has four sources of truth
 
-The same fact is computed by two different git processes, launched at different times, refreshed
-on different triggers, and stored in different stores:
+The same fact is computed by different git processes, launched at different times, refreshed on
+different triggers, and stored in different places:
 
-| Consumer | Source | Path |
-| --- | --- | --- |
-| Branches view badges | `git for-each-ref --format=%(upstream:track)` | `GitService.cs:789` → `BranchListing` → `IRepoSnapshotStore` → `BranchListRow.cs:150` |
-| Push/pull button enablement | `git status --porcelain=v2 --branch` | `GitService.cs:1127` → `GitStatusSummary` → `IRepoStatusStore` → `ActionsToolbarViewModel.cs:150` |
+| # | Source | Path | Live |
+| --- | --- | --- | --- |
+| 1 | `git for-each-ref --format=%(upstream:track)` | `GitService.cs:720,789` → `BranchEntry.AheadBy/BehindBy` → `IRepoSnapshotStore` → `BranchTreeBuilder.cs:92` → `BranchListRow.cs:150` badge | yes |
+| 2 | `git status --porcelain=v2 --branch` (`# branch.ab`) | `GitService.cs:1088,1127` → `GitStatusSummary` → `IRepoStatusStore` → toolbar (`ActionsToolbarViewModel.cs:150`), status bar, repo bar, branches header | yes |
+| 3 | `RemoteSyncOptimisticMessage` | patched *independently* into both of the above: `RepoSnapshotStore.cs:211` (`OnRemoteSyncOptimistic` → `PatchHeadSync`) **and** `RepoStatusStore.cs:156` (`ApplyOptimisticSync`) | yes |
+| 4 | `GitService.GetPushStatus` → `PushStatus` | `GitService.cs:1716`, `IGitService.cs:41` | **dead — zero callers** |
 
-They are never guaranteed to agree. The disagreement window is however long it takes the slower
-of the two reloads to land — imperceptible on an SSD, seconds on a slow HDD. **This is the
-"branches says I have a pull, the pull button is grey" report.**
+**This is the "branches says I have a pull, the pull button is grey" report.**
 
-`RepoSnapshotStore.PatchHeadSync` (`RepoSnapshotStore.cs:240`) already exists specifically to
-paper over this, but only fires on the optimistic post-push/pull message, not on the general case.
+It is not only a latency race. The two live sources have *asymmetric trigger sets*, so they can
+disagree indefinitely rather than for the length of one reload:
+
+- `RepoStatusStore.Start` (`RepoStatusStore.cs:101-107`) probes on `WorkingTreeChangedMessage` /
+  `RefsChangedMessage` / `CommitCreatedMessage` / `RepoRefreshRequestedMessage` / repo-list change.
+  It does **not** subscribe to `IRepoRegistry.Active`.
+- `RepoSnapshotStore.OnActiveChanged` (`RepoSnapshotStore.cs:157`) serves the **cached**
+  `BranchListing` synchronously on a repo switch, then reloads.
+
+So switching to a warm repo paints the sidebar's ahead/behind from a listing loaded minutes ago,
+while the toolbar shows a probe that was never re-run for the switch. Both are stale, from
+different moments, and nothing is scheduled to reconcile them. The latency window on top of that
+is imperceptible on an SSD and seconds on a slow HDD.
+
+`RepoSnapshotStore.PatchHeadSync` (`RepoSnapshotStore.cs:240`) exists specifically to paper over
+this, but only fires on the optimistic post-push/pull message, not on the general case — and it
+papers by *writing the number twice*, which is the defect rather than the fix.
+
+Two representation defects in the same types feed this:
+
+- `BranchEntry.AheadBy` / `BehindBy` are independent `int?`, so `(null, 3)` is representable, and
+  `BranchListRow.cs:150` collapses "no upstream" and "in sync" into the same
+  `GetValueOrDefault()`.
+- `BranchEntry` serves both local and remote branches, and `UpstreamState` **defaults to
+  `Tracked`** (`Branches.cs:18`) — so every remote entry built by
+  `GitService.AddRemoteBranch:823` claims to be tracking an upstream it has no concept of. Nothing
+  reads it today; nothing stops it.
 
 ### B. The watcher silently drops real filesystem events, permanently
 
@@ -89,29 +115,141 @@ the cost is seek thrash, not throughput.
 
 ## Work items
 
-### 1. One observation, one timestamp
+### 1. HEAD's sync counts get exactly one owner
+
+Delete the second copy rather than reconcile it. `IRepoStatusStore` becomes the sole holder of
+HEAD's ahead/behind; the branch listing stops being *able* to answer for the checked-out branch.
+Non-HEAD branches keep using `for-each-ref` — `git status` cannot report them.
+
+The enforcement is type-level, not conventional: **HEAD is lifted out of the local-branch list**,
+so there is no `AheadBy` field on it to fill in wrongly.
+
+```csharp
+// Branches.cs
+public sealed record BranchSync(int Ahead, int Behind);
+
+// A local branch that is not checked out. for-each-ref counted its divergence.
+public sealed record LocalBranchEntry(string Name, string TipSha, LocalUpstream Upstream);
+
+public abstract record LocalUpstream
+{
+    public sealed record None : LocalUpstream;                   // no upstream configured
+    public sealed record Gone : LocalUpstream;                   // upstream ref deleted
+    public sealed record Tracked(string Remote, string Branch, BranchSync Sync) : LocalUpstream;
+}
+
+// The checked-out local branch. Deliberately count-free: ahead/behind for HEAD is owned by
+// IRepoStatusStore, which observes it in the same git read that drives the toolbar.
+public sealed record HeadBranch(string Name, string TipSha, HeadUpstreamState Upstream);
+public enum HeadUpstreamState { None, Gone, Tracked }
+
+public sealed record RemoteBranchEntry(string Name, string TipSha);   // no upstream concept
+
+public sealed record BranchListing(
+    Guid RepoId,
+    HeadBranch? Head,                                  // null when detached
+    IReadOnlyList<LocalBranchEntry> LocalBranches,     // never contains Head
+    IReadOnlyList<RemoteGroup> Remotes,
+    IReadOnlyList<StashEntry> Stashes);
+```
+
+What each shape rules out:
+
+| Was representable | Now |
+| --- | --- |
+| HEAD carrying its own ahead/behind | `HeadBranch` has no count field |
+| `AheadBy` known, `BehindBy` unknown | one `BranchSync`, both or neither |
+| `Tracked` with a null remote or branch name | `Tracked` requires both |
+| A remote branch claiming `UpstreamState.Tracked` | `RemoteBranchEntry` has no upstream field |
+| Cleanup offering to delete the checked-out branch | HEAD is not in `LocalBranches` |
+
+`BranchTreeBuilder.BuildRows` gains a required `RepoStatus headStatus` parameter and becomes the
+single site where the two halves join: it prepends `listing.Head` into the local leaf set with
+`Sync` filled from `headStatus` (`HasUpstream && !IsDetached ? new BranchSync(Ahead, Behind) : null`)
+and maps `LocalBranches` through unchanged. Rows cannot be built without the status in hand.
+`LocalBranchRow` carries `BranchSync? Sync` plus a rendering-level `BranchUpstreamKind`
+(None/Gone/Tracked, used by the glyph at `BranchListRow.cs:125` and the name color at
+`BranchListRow.cs:58-61`); a null `Sync` renders **no** badge, so a consumer that somehow bypassed
+the join would be silent rather than confidently wrong.
+
+`BranchesViewModel._rowModels` (`BranchesViewModel.cs:102`) reads `IRepoStatusStore.Active.Value`.
+Verified this propagates in-frame: `Derived.Value` calls `DependencyTracker.Register`, `Derived`
+is itself `IInvalidatable`, and `Recompute` fires synchronously on dependency invalidation — so
+the badge and the button move in the same tick.
+
+- **Files:** `Branches.cs` (the types above), `GitService.cs`
+  (`ParseLocalBranch:781`, `ParseUpstream:882`, `SplitUpstreamRef:798`, `AddRemoteBranch:808`,
+  `GetBranches:722` splits HEAD out), `BranchRow.cs` (`LocalBranchRow`, `RemoteBranchRow`),
+  `BranchTreeBuilder.cs:24,92`, `BranchListRow.cs:58,125,147`, `BranchesViewModel.cs`
+  (inject `IRepoStatusStore`; `_rowModels:102`, `FindLocalBranchEntry:1062`,
+  `AddFastForwardMenuItem:804`, `AddRenameDeleteMenuItems:879`, `RefStillExists:260`),
+  `RepoSnapshotStore.cs` (delete `_remoteSyncSub:122`, `OnRemoteSyncOptimistic:211`,
+  `PatchHeadSync:240-259`), `IGitService.cs` / `GitService.cs` (delete `GetPushStatus` +
+  `PushStatus`).
+- **Deletions this earns:** sources 3 and 4 disappear entirely — the snapshot store's optimistic
+  patch has nothing left to patch, and the optimistic path survives only in
+  `RepoStatusStore.ApplyOptimisticSync`, which already exists.
+- **Simplifications that fall out:** `ListingHeadIs:283` and `GetHeadBranchName:1052` become
+  `listing.Head?.Name`; `IsCleanCandidate:681` drops its `!b.IsHead` guard as structurally
+  impossible; `AddFastForwardMenuItem:809-810` drops its `IsNullOrEmpty(UpstreamRemote/Branch)`
+  guards; `AddRenameDeleteMenuItems:879-880` drops the `UpstreamState == Tracked ? … : null`
+  dance.
+- **No visual change from lifting HEAD out:** `PathTree.Build` re-sorts children itself
+  (`PathTree.cs:62,69-77` — folders first, then alphabetical), so `SortLocalBranches`' head-first
+  pass is already discarded for the sidebar today. That pass reduces to a plain alphabetical sort.
+- **Watch:** `RefStillExists:260` scans `LocalBranches` for the selection and must now also
+  consider `listing.Head`, or selecting the checked-out branch drops the selection on every
+  reload.
+- **Acceptance:** the Branches view HEAD badge and the toolbar push/pull enablement cannot
+  disagree by more than a frame, and no type in the tree can hold a second copy of HEAD's
+  ahead/behind. Closes root cause A.
+
+### 2. One observation, one timestamp
+
+§1 unifies the *consumers*; this unifies the *observation*, which is what stops the same disease
+recurring between `RepoStatus.IsDirty` (toolbar Stash, `ActionsToolbarViewModel.cs:78`; repo-bar
+dot, `RepoNodeViewModel.cs:123`) and the file lists those signals are supposed to summarise.
 
 Add `--branch` to the file-list status call and return branch / ahead / behind / dirty alongside
-the file lists from that single read. The active repo's `RepoStatus` becomes a projection of the
-same snapshot the file lists came from, rather than an independent probe. The cheap all-repos
-probe stays for *non-active* repos, where file lists are not loaded.
+the file lists from that single read, as **fields of one record** — `LocalChangesSnapshot` gains a
+`GitStatusSummary Summary`, so there is no constructor that would let the lists and the summary
+come from two invocations. The cheap all-repos probe stays for *non-active* repos, where file
+lists are not loaded.
 
-- **Files:** `GitService.cs` (`GetLocalChanges`, `RunGitStatusPorcelain`, `ParseStatusSummary`),
-  `IGitService.cs`, `RepoSnapshotStore.cs` (`LocalChangesData`), `RepoStatusStore.cs`.
-- **Also fixes:** halves per-tick disk work for the active repo (root cause E, first half).
+Verified `--branch` composes with `-z --untracked-files=all`, and the headers come back
+NUL-terminated like every other record:
+
+```
+# branch.oid c84118f…\0# branch.head main\0# branch.upstream origin/main\0# branch.ab +0 -0\01 .M … \0
+```
+
+So `ParseStatusPorcelainV2`'s existing NUL walk already yields the headers; only
+`ParseStatusRecord:949` needs a `'#'` case. Factor the per-header parsing out of
+`ParseStatusSummary:1100` so the `-z` and `\n` paths share it.
+
+`RepoStatusStore` keeps sole ownership of its per-repo slot and gains a second *input*: an ingest
+entry point that `RepoSnapshotStore.LoadSlice` calls when a local-changes load lands, writing
+under the existing `_epoch` guard. One slot, ordered — not a second slot.
+
+- **Files:** `GitService.cs` (`RunGitStatusPorcelain:1055`, `ParseStatusRecord:949`,
+  `ParseStatusSummary:1100`), `LocalChanges.cs` (`LocalChangesSnapshot`), `IGitService.cs`,
+  `RepoSnapshotStore.cs` (`LoadSlice`), `RepoStatusStore.cs`.
+- **Also fixes:** halves per-tick disk work for the active repo (root cause E, first half), once
+  the now-redundant probe is skipped for the active repo on `WorkingTreeChangedMessage` /
+  `CommitCreatedMessage` (both already reload local unconditionally). Keep the probe on
+  `RefsChangedMessage` — a fetch moves ahead/behind without touching the working tree.
+- **Also fixes:** the missing trigger from root cause A — probe on active-repo change, so a switch
+  never leaves the toolbar showing a probe from before the switch.
+- **Watch:** ingest on a *load* result only, never on the cached value `OnActiveChanged:158`
+  serves, or a switch-back writes a stale summary over a fresher slot.
+- **Watch:** the dirty bool is currently "any non-header record"; that stays correct only once
+  `'#'` is handled explicitly rather than falling through.
+- **Known gap:** warm repos still double up (both stores reload on `WorkingTreeChangedMessage`).
+  Fixing that needs warm-set knowledge in the status store; leave it to §6 rather than leak it.
 - **Acceptance:** the active repo's file lists and its ahead/behind/dirty signals can never
   originate from two different git invocations.
-
-### 2. Make `for-each-ref` non-authoritative for HEAD
-
-Generalize `PatchHeadSync` so the branch listing's HEAD row always renders the status summary's
-numbers rather than its own. Non-HEAD branches keep using `for-each-ref` — `git status` cannot
-report them.
-
-- **Files:** `RepoSnapshotStore.cs` (`PatchHeadSync` and its trigger set), `BranchesViewModel.cs`.
-- **Acceptance:** the Branches view HEAD badge and the toolbar push/pull enablement cannot
-  disagree by more than a frame. Closes root cause A.
-- **Note:** land with §1 — same seam.
+- **Note:** land with §1 — same seam. §1 is independently shippable and closes the reported
+  symptom on its own; §2 depends on nothing in §1 but is much less useful without it.
 
 ### 3. Never drop a watcher signal; defer it
 
@@ -191,10 +329,11 @@ explicit per-repo or global setting, never silent.
 
 ## Dependency notes for task breakout
 
-- §1 → §2: same seam, land together.
+- §1 → §2: same seam, land together. §1 goes first — it closes the reported symptom and is
+  self-contained.
 - §3 → §4: same seam, land together. §4 is the insurance policy that makes the whole class of
   symptom non-persistent, so do not defer it far behind §3.
-- §1 unblocks the measurement half of §6 and §7 (once there is one read per tick, per-repo read
+- §2 unblocks the measurement half of §6 and §7 (once there is one read per tick, per-repo read
   timing is meaningful).
 - §5 is independent of everything else and can go in any order.
 - §8 is independent and lowest priority.

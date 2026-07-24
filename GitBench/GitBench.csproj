@@ -75,6 +75,75 @@
         <AdditionalFiles Include="Localization\Strings\*.json" />
     </ItemGroup>
 
+    <ItemGroup>
+      <Content Include="..\docs\plans\cjk-ime-support.md">
+        <Link>docs\plans\cjk-ime-support.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\code-graph-view.md">
+        <Link>docs\plans\code-graph-view.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\cross-repo-change-sets.md">
+        <Link>docs\plans\cross-repo-change-sets.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\dependency-graph-delta.md">
+        <Link>docs\plans\dependency-graph-delta.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\diff-improvements.md">
+        <Link>docs\plans\diff-improvements.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\full-file-view-toggle.md">
+        <Link>docs\plans\done\full-file-view-toggle.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\gui-testing-harness.md">
+        <Link>docs\plans\done\gui-testing-harness.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\ime-text-input-focus.md">
+        <Link>docs\plans\done\ime-text-input-focus.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\intra-line-highlighting.md">
+        <Link>docs\plans\done\intra-line-highlighting.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\localization.md">
+        <Link>docs\plans\done\localization.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\multi-window-mcp-testability.md">
+        <Link>docs\plans\done\multi-window-mcp-testability.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\text-input-bugs.md">
+        <Link>docs\plans\done\text-input-bugs.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\hunk-context-expansion.md">
+        <Link>docs\plans\hunk-context-expansion.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\linked-repo-groups.md">
+        <Link>docs\plans\linked-repo-groups.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\moved-code-detection.md">
+        <Link>docs\plans\moved-code-detection.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\rename-name-research.md">
+        <Link>docs\plans\rename-name-research.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\rename-to-pecia.md">
+        <Link>docs\plans\rename-to-pecia.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\semantic-tree-diff.md">
+        <Link>docs\plans\semantic-tree-diff.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\stacked-diffs.md">
+        <Link>docs\plans\stacked-diffs.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\symbol-change-outline.md">
+        <Link>docs\plans\symbol-change-outline.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\ui-coherence-slow-disk.md">
+        <Link>docs\plans\ui-coherence-slow-disk.md</Link>
+      </Content>
+      <Content Include="..\docs\Screenshot.jpg">
+        <Link>docs\Screenshot.jpg</Link>
+      </Content>
+    </ItemGroup>
+
     <!-- macOS .app bundling is handled by `vpk pack` in the release workflow (it builds the
          bundle with the Velopack update structure embedded), so there's no MSBuild target here. -->
 
