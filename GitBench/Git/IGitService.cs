@@ -38,7 +38,6 @@ public interface IGitService
     GitOutcome Commit(Repo repo, string message, bool amend);
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
     IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo);
-    PushStatus GetPushStatus(Repo repo);
     DetachedHeadReport GetDetachedHeadReport(Repo repo);
     GitOutcome AttachDetachedHead(Repo repo, string branch);
     GitOutcome Push(Repo repo, bool force = false);
@@ -167,13 +166,6 @@ public enum RepoOperationState
 }
 
 public sealed record HeadCommitMessage(string Title, string Description);
-
-public sealed record PushStatus(
-    string? CurrentBranchName,
-    bool HasUpstream,
-    int Ahead,
-    int Behind,
-    bool IsDetached);
 
 // Cheap per-repo signals read from a single `git status --porcelain=v2 --branch`: the current
 // branch / detached / upstream + ahead/behind (the branch header) and whether the working tree has

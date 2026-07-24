@@ -55,10 +55,10 @@ internal sealed record BranchListRow : Widget<BranchRowState>
                     case StashRow: return Selected() ? RS().Text : bv.RowText;
                     case LocalBranchRow lb:
                         if (Busy() && !Head()) return bv.RowTextDim;
-                        return lb.UpstreamState switch
+                        return lb.Upstream switch
                         {
-                            BranchUpstreamState.Tracked => bv.AheadColor,
-                            BranchUpstreamState.Gone => bv.BehindColor,
+                            BranchUpstreamKind.Tracked => bv.AheadColor,
+                            BranchUpstreamKind.Gone => bv.BehindColor,
                             _ => bv.RowTextDim,
                         };
                     case RemoteBranchRow: return Selected() ? RS().Text : bv.RowText;
@@ -122,7 +122,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
     {
         FolderRow f => f.IsOpen ? LucideIcons.FolderOpen : LucideIcons.Folder,
         StashRow => LucideIcons.Stash,
-        LocalBranchRow lb => lb.UpstreamState == BranchUpstreamState.Gone ? LucideIcons.CloudOff : LucideIcons.Branch,
+        LocalBranchRow lb => lb.Upstream == BranchUpstreamKind.Gone ? LucideIcons.CloudOff : LucideIcons.Branch,
         RemoteBranchRow => LucideIcons.Branch,
         _ => null,
     };
@@ -146,14 +146,12 @@ internal sealed record BranchListRow : Widget<BranchRowState>
 
     private static IWidget? TrailingFor(BranchRow row)
     {
-        if (row is not LocalBranchRow lb) return null;
-        var ahead = lb.AheadBy.GetValueOrDefault();
-        var behind = lb.BehindBy.GetValueOrDefault();
-        if (ahead == 0 && behind == 0) return null;
+        if (row is not LocalBranchRow { Sync: { } sync }) return null;
+        if (sync is { Ahead: 0, Behind: 0 }) return null;
 
         var groups = new List<IWidget>(2);
-        if (ahead > 0) groups.Add(BadgeGroup(LucideIcons.Push, ahead, s => s.BranchesView.AheadColor));
-        if (behind > 0) groups.Add(BadgeGroup(LucideIcons.Pull, behind, s => s.BranchesView.BehindColor));
+        if (sync.Ahead > 0) groups.Add(BadgeGroup(LucideIcons.Push, sync.Ahead, s => s.BranchesView.AheadColor));
+        if (sync.Behind > 0) groups.Add(BadgeGroup(LucideIcons.Pull, sync.Behind, s => s.BranchesView.BehindColor));
         return new Row { Gap = 8f, CrossAxis = CrossAxisAlignment.Center, Children = groups.ToArray() };
     }
 

@@ -41,15 +41,19 @@ public sealed record RemoteHeaderRow(int Depth, string RemoteName, bool IsOpen)
 public sealed record FolderRow(int Depth, BranchFolder Folder, string DisplayName, bool IsOpen)
     : BranchRow(Depth), ICollapsibleRow;
 
+// What the row draws for its upstream link, flattened from whichever entry case produced it.
+public enum BranchUpstreamKind { None, Gone, Tracked }
+
+// Sync is null when there is nothing to say — no upstream, a detached HEAD, or a status the store
+// hasn't probed yet — and the row then draws no badge rather than a zero one.
 public sealed record LocalBranchRow(
     int Depth,
     string Name,
     string DisplayName,
     string TipSha,
     bool IsHead,
-    int? AheadBy,
-    int? BehindBy,
-    BranchUpstreamState UpstreamState) : BranchRow(Depth)
+    BranchUpstreamKind Upstream,
+    BranchSync? Sync) : BranchRow(Depth)
 {
     public override BranchRowKey? SelectionKey => new(IsRemote: false, IsStash: false, RemoteName: null, Name);
 }

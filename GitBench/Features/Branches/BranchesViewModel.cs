@@ -78,6 +78,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IMessageBus bus,
         State<MainViewMode> mode,
         IRepoSnapshotStore store,
+        IRepoStatusStore status,
         ILocalizationService loc)
         : base(dispatcher, BranchesState.Initial)
     {
@@ -99,7 +100,10 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
 
-        _rowModels = new Derived<IReadOnlyList<BranchRow>>(() => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value));
+        // Reading the status store here — rather than carrying HEAD's counts in the listing — is what
+        // keeps the badge and the toolbar's push/pull enablement moving in the same tick.
+        _rowModels = new Derived<IReadOnlyList<BranchRow>>(
+            () => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value, status.Active.Value));
         _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
         _placeholderText = new Derived<string?>(() =>
             LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err) : null);
@@ -283,7 +287,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private static bool ListingHeadIs(BranchListing listing, string branchName)
     {
         foreach (var b in listing.LocalBranches)
-            if (b.IsHead) return b.Name == branchName;
+            if (b is LocalBranchEntry.Head) return b.Name == branchName;
         return false;
     }
 
@@ -630,7 +634,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // ---- branch cleanup ----
     //
     // "Clean…" gathers the stale local branches under a folder — those whose upstream was
-    // deleted (Gone) or that never had one (NeverLinked) — and hands them to a dialog that
+    // deleted (Gone) or that never had one (None) — and hands them to a dialog that
     // confirms and deletes the chosen set. Scoped to the folder's path, so cleaning a sub-folder
     // only touches branches beneath it. The current HEAD and branches checked out in a sibling
     // worktree are excluded — git refuses to delete those.
@@ -669,7 +673,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         foreach (var b in listing.LocalBranches)
         {
             if (!IsCleanCandidate(b, folder, worktree)) continue;
-            var kind = b.UpstreamState == BranchUpstreamState.Gone
+            var kind = b is LocalBranchEntry.Other { Upstream: LocalUpstream.Gone }
                 ? BranchCleanupKind.Disconnected
                 : BranchCleanupKind.NeverPushed;
             result.Add(new CleanBranchCandidate(b.Name, kind));
@@ -677,11 +681,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return result;
     }
 
-    private static bool IsCleanCandidate(BranchEntry b, BranchFolder folder, IReadOnlySet<string> worktree)
-        => !b.IsHead
+    // The checked-out branch is excluded structurally: only Other carries a LocalUpstream at all.
+    private static bool IsCleanCandidate(LocalBranchEntry b, BranchFolder folder, IReadOnlySet<string> worktree)
+        => b is LocalBranchEntry.Other { Upstream: LocalUpstream.Gone or LocalUpstream.None }
            && !worktree.Contains(b.Name)
-           && BranchIsUnder(folder.Path, b.Name)
-           && b.UpstreamState is BranchUpstreamState.Gone or BranchUpstreamState.NeverLinked;
+           && BranchIsUnder(folder.Path, b.Name);
 
     // Appends a separator followed by Expand All / Collapse All, for menus that already carry
     // actions above the pair (e.g. "New branch", "Edit remote").
@@ -755,7 +759,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // Shared inputs for the local-branch context menu, resolved once from the active repo/state.
     private readonly record struct LocalBranchMenu(
         Repo Repo, string Name, bool IsHead, Strings S, BranchesState State,
-        bool ThisRowBusy, bool CheckedOutElsewhere, string? HeadBranch, BranchEntry? Entry);
+        bool ThisRowBusy, bool CheckedOutElsewhere, string? HeadBranch, LocalBranchEntry? Entry);
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalBranchMenuItems(string fullPath, bool isHead)
     {
@@ -803,21 +807,16 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     private void AddFastForwardMenuItem(List<RepoBarContextMenu.Item> items, LocalBranchMenu m)
     {
-        var entry = m.Entry;
-        if (m.IsHead
-            || entry?.UpstreamState != BranchUpstreamState.Tracked
-            || string.IsNullOrEmpty(entry.UpstreamRemote)
-            || string.IsNullOrEmpty(entry.UpstreamBranch))
-            return;
+        if (m.IsHead || m.Entry is not LocalBranchEntry.Other { Upstream: LocalUpstream.Tracked tracked }) return;
 
         var s = m.S;
         var name = m.Name;
-        var ffRemote = entry.UpstreamRemote;
-        var ffBranch = entry.UpstreamBranch;
+        var ffRemote = tracked.Remote;
+        var ffBranch = tracked.Branch;
         var ffDisabled = m.ThisRowBusy
             || m.CheckedOutElsewhere
             || m.State.IsBranchOpInFlight
-            || (entry.BehindBy ?? 0) == 0;
+            || tracked.Sync.Behind == 0;
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextFastForward(ffRemote, ffBranch),
             () => StartFastForwardLocal(name, ffRemote, ffBranch),
@@ -862,7 +861,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var s = m.S;
         var repo = m.Repo;
         var name = m.Name;
-        var entry = m.Entry;
         var renameDisabled = m.ThisRowBusy;
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextRename,
@@ -876,16 +874,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             Enabled: !renameDisabled));
 
         var deleteDisabled = m.IsHead || m.ThisRowBusy || m.CheckedOutElsewhere;
-        var upstreamRemote = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamRemote : null;
-        var upstreamBranch = entry?.UpstreamState == BranchUpstreamState.Tracked ? entry.UpstreamBranch : null;
+        var tracked = (m.Entry as LocalBranchEntry.Other)?.Upstream as LocalUpstream.Tracked;
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextDelete,
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new DeleteLocalBranchDialog
             {
                 Repo = repo,
                 BranchName = name,
-                UpstreamRemote = upstreamRemote,
-                UpstreamBranch = upstreamBranch,
+                UpstreamRemote = tracked?.Remote,
+                UpstreamBranch = tracked?.Branch,
                 OnClose = onClose,
             })),
             LucideIcons.Trash,
@@ -1053,11 +1050,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var listing = State.Value.Listing;
         if (listing == null) return null;
         foreach (var b in listing.LocalBranches)
-            if (b.IsHead) return b.Name;
+            if (b is LocalBranchEntry.Head) return b.Name;
         return null;
     }
 
-    private BranchEntry? FindLocalBranchEntry(string name)
+    private LocalBranchEntry? FindLocalBranchEntry(string name)
     {
         var listing = State.Value.Listing;
         if (listing == null) return null;

@@ -12,7 +12,7 @@ public enum RefKind
 // Sync of a local branch against its upstream, used to tint the branch glyph: green when
 // level with the remote, amber when ahead/behind, gray when there's no upstream at all.
 // None applies to non-local-branch refs (remotes, tags, stashes, detached HEAD).
-public enum BranchSync
+public enum RefSyncState
 {
     None,
     Untracked,
@@ -22,8 +22,8 @@ public enum BranchSync
 
 // IsCurrent marks the local branch that HEAD points at (the checked-out branch) so it can
 // absorb the standalone "HEAD" badge (rendered with a bold name). Sync drives the branch
-// glyph's color (see BranchSync).
-public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent = false, BranchSync Sync = BranchSync.None);
+// glyph's color (see RefSyncState).
+public readonly record struct RefBadge(string Name, RefKind Kind, bool IsCurrent = false, RefSyncState Sync = RefSyncState.None);
 
 public readonly record struct ParentLink(int ParentIndex, int Lane);
 

@@ -84,7 +84,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     private IDisposable? _workingTreeSub;
     private IDisposable? _commitCreatedSub;
     private IDisposable? _submodulesSub;
-    private IDisposable? _remoteSyncSub;
     private IDisposable? _refreshSub;
 
     public IReadable<Fetched<CommitSnapshot>?> Commits => _commits;
@@ -119,7 +118,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged);
         _commitCreatedSub = _bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated);
         _submodulesSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
-        _remoteSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(OnRemoteSyncOptimistic);
         _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(OnRefreshRequested);
 
         // Safety net for the active-ready signal below: if the first load never lands, release the
@@ -201,61 +199,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
             ReloadLocal(active);
         else if (WarmRepo(msg.RepoId) is { } warm)
             WarmLocal(warm);
-    }
-
-    // Snap the current branch's ahead/behind badge to the known post-sync outcome (push → ahead 0,
-    // pull → behind 0) so the Branches list matches the RepoBar/toolbar instantly instead of trailing
-    // until the heavier branch reload (kicked by the accompanying RefsChangedMessage) lands. Patches
-    // the cache too so a switch-away-and-back doesn't briefly show the pre-sync numbers. Best-effort:
-    // only the already-tracked HEAD branch is touched; everything else waits for the reload.
-    private void OnRemoteSyncOptimistic(RemoteSyncOptimisticMessage msg)
-    {
-        var active = _registry.Active.Value;
-        if (active != null && active.Id == msg.RepoId)
-        {
-            if (_branches.Value is { } current)
-            {
-                var patched = PatchHeadSync(current, msg.Ahead, msg.Behind);
-                if (!ReferenceEquals(patched, current))
-                {
-                    _branches.Value = patched;
-                    _branchesCache.Set(msg.RepoId, patched);
-                }
-            }
-            return;
-        }
-
-        if (_branchesCache.TryGet(msg.RepoId, out var cached) && cached != null)
-        {
-            var patched = PatchHeadSync(cached, msg.Ahead, msg.Behind);
-            if (!ReferenceEquals(patched, cached))
-                _branchesCache.Set(msg.RepoId, patched);
-        }
-    }
-
-    // Returns the listing with the HEAD branch's ahead/behind set to the given components (a null
-    // component is left as loaded). Returns the same instance when there's nothing to change — not
-    // Ok, no HEAD branch, an untracked/gone HEAD (no badge to snap), or already at the target — so
-    // callers can skip the write and the equality-deduped State stays quiet.
-    private static Fetched<BranchListing> PatchHeadSync(Fetched<BranchListing> fetched, int? ahead, int? behind)
-    {
-        if (fetched is not Fetched<BranchListing>.Ok ok) return fetched;
-        var locals = ok.Value.LocalBranches;
-        var headIdx = -1;
-        for (var i = 0; i < locals.Count; i++)
-            if (locals[i].IsHead) { headIdx = i; break; }
-        if (headIdx < 0) return fetched;
-
-        var head = locals[headIdx];
-        if (head.UpstreamState != BranchUpstreamState.Tracked) return fetched;
-
-        var newAhead = ahead ?? head.AheadBy;
-        var newBehind = behind ?? head.BehindBy;
-        if (newAhead == head.AheadBy && newBehind == head.BehindBy) return fetched;
-
-        var newLocals = new List<BranchEntry>(locals);
-        newLocals[headIdx] = head with { AheadBy = newAhead, BehindBy = newBehind };
-        return new Fetched<BranchListing>.Ok(ok.Value with { LocalBranches = newLocals });
     }
 
     // Explicit user retry after a failed load. The local slice is nulled before reloading so the
@@ -441,7 +384,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         _workingTreeSub?.Dispose();
         _commitCreatedSub?.Dispose();
         _submodulesSub?.Dispose();
-        _remoteSyncSub?.Dispose();
         _refreshSub?.Dispose();
         _commits.Dispose();
         _branches.Dispose();

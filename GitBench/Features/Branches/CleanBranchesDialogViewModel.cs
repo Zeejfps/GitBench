@@ -6,7 +6,7 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
-// Why a local branch is offered for cleanup, mirrored from BranchUpstreamState:
+// Why a local branch is offered for cleanup, mirrored from LocalUpstream:
 // Disconnected = upstream was set but the remote ref is gone; NeverPushed = no upstream.
 internal enum BranchCleanupKind { Disconnected, NeverPushed }
 

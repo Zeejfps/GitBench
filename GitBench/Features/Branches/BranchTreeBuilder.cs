@@ -1,14 +1,19 @@
 using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Infrastructure;
 
 namespace GitBench.Features.Branches;
 
 /// <summary>
-/// Pure flattening of a <see cref="BranchListing"/> plus collapse/expand state into the linear
-/// <see cref="BranchRow"/> sequence the branches sidebar renders. Branch names containing "/" become
-/// folder nodes (e.g. "feature/login" lives inside a "feature" folder). Each row carries a tree
-/// <c>Depth</c> rather than pixel indent — the row widget turns depth into spacing — so this stays a
-/// deterministic function of (listing, ui-state) with no layout knowledge.
+/// Pure flattening of a <see cref="BranchListing"/> plus collapse/expand state and the repo's
+/// <see cref="RepoStatus"/> into the linear <see cref="BranchRow"/> sequence the branches sidebar
+/// renders. Branch names containing "/" become folder nodes (e.g. "feature/login" lives inside a
+/// "feature" folder). Each row carries a tree <c>Depth</c> rather than pixel indent — the row widget
+/// turns depth into spacing — so this stays a deterministic function of its inputs with no layout
+/// knowledge.
+///
+/// This is also the one site where a branch row's ahead/behind is decided: HEAD's comes from the
+/// status store, every other local branch's from the listing.
 /// </summary>
 internal static class BranchTreeBuilder
 {
@@ -21,7 +26,7 @@ internal static class BranchTreeBuilder
     private const int RemoteTreeBaseDepth = 1;
     private const int StashDepth = 0;
 
-    public static IReadOnlyList<BranchRow> BuildRows(BranchListing? listing, BranchesUiState ui)
+    public static IReadOnlyList<BranchRow> BuildRows(BranchListing? listing, BranchesUiState ui, RepoStatus headStatus)
     {
         var rows = new List<BranchRow>();
         if (listing == null) return rows;
@@ -30,7 +35,12 @@ internal static class BranchTreeBuilder
         if (ui.LocalOpen)
         {
             var localTree = PathTree.Build(listing.LocalBranches, b => b.Name);
-            EmitTreeRows(rows, localTree, ui, isRemote: false, remoteName: null, LocalTreeBaseDepth, depth: 0, trunkMask: 0);
+            EmitTreeRows(rows, localTree, ui, BranchScope.Local, LocalTreeBaseDepth, depth: 0, trunkMask: 0,
+                leafRow: (entry, segment, rowDepth, mask) => new LocalBranchRow(
+                    rowDepth, entry.Name, segment, entry.TipSha,
+                    IsHead: entry is LocalBranchEntry.Head,
+                    Upstream: UpstreamKindOf(entry),
+                    Sync: SyncFor(entry, headStatus)) { GuideMask = mask });
         }
 
         rows.Add(new RemotesHeaderRow(Depth: 0, ui.RemotesOpen));
@@ -49,7 +59,9 @@ internal static class BranchTreeBuilder
                 if (!isOpen) continue;
                 var childTrunk = TreeGuides.SetKind(0, RemoteHeaderDepth, isLast ? TreeGuide.None : TreeGuide.Through);
                 var remoteTree = PathTree.Build(rg.Branches, b => b.Name);
-                EmitTreeRows(rows, remoteTree, ui, isRemote: true, rg.Name, RemoteTreeBaseDepth, depth: 0, childTrunk);
+                EmitTreeRows(rows, remoteTree, ui, BranchScope.Remote(rg.Name), RemoteTreeBaseDepth, depth: 0, childTrunk,
+                    leafRow: (entry, segment, rowDepth, mask) =>
+                        new RemoteBranchRow(rowDepth, rg.Name, entry.Name, segment, entry.TipSha) { GuideMask = mask });
             }
         }
 
@@ -71,13 +83,36 @@ internal static class BranchTreeBuilder
         return rows;
     }
 
+    // HEAD's counts come from the status store — the same git read that drives the toolbar — so the
+    // badge and the push/pull buttons can never disagree. Every other local branch keeps for-each-ref,
+    // which is the only thing that can report them.
+    private static BranchSync? SyncFor(LocalBranchEntry entry, RepoStatus headStatus) => entry switch
+    {
+        LocalBranchEntry.Head => headStatus is { HasUpstream: true, IsDetached: false }
+            ? new BranchSync(headStatus.Ahead, headStatus.Behind)
+            : null,
+        LocalBranchEntry.Other o => (o.Upstream as LocalUpstream.Tracked)?.Sync,
+        _ => null,
+    };
+
+    private static BranchUpstreamKind UpstreamKindOf(LocalBranchEntry entry) => entry switch
+    {
+        LocalBranchEntry.Head { Upstream: HeadUpstreamState.Tracked } => BranchUpstreamKind.Tracked,
+        LocalBranchEntry.Head { Upstream: HeadUpstreamState.Gone } => BranchUpstreamKind.Gone,
+        LocalBranchEntry.Other { Upstream: LocalUpstream.Tracked } => BranchUpstreamKind.Tracked,
+        LocalBranchEntry.Other { Upstream: LocalUpstream.Gone } => BranchUpstreamKind.Gone,
+        _ => BranchUpstreamKind.None,
+    };
+
     // trunkMask carries the ancestors' passthrough trunks for guide levels [0, rowDepth-1] — level 0 is
     // the section/remote header (the root), each deeper level a tree depth in. Each row sets its own
     // connector at level rowDepth (its parent's column) on top of those.
-    private static void EmitTreeRows(List<BranchRow> rows, IReadOnlyList<PathNode<BranchEntry>> nodes, BranchesUiState ui, bool isRemote, string? remoteName, int treeBaseDepth, int depth, long trunkMask)
+    private static void EmitTreeRows<TLeaf>(
+        List<BranchRow> rows, IReadOnlyList<PathNode<TLeaf>> nodes, BranchesUiState ui, BranchScope scope,
+        int treeBaseDepth, int depth, long trunkMask, Func<TLeaf, string, int, long, BranchRow> leafRow)
+        where TLeaf : class
     {
         var rowDepth = treeBaseDepth + depth;
-        var scope = isRemote ? BranchScope.Remote(remoteName!) : BranchScope.Local;
         var count = nodes.Count;
         for (var i = 0; i < count; i++)
         {
@@ -87,9 +122,7 @@ internal static class BranchTreeBuilder
 
             if (node.Leaf is { } entry)
             {
-                rows.Add(isRemote
-                    ? new RemoteBranchRow(rowDepth, remoteName!, entry.Name, node.Segment, entry.TipSha) { GuideMask = mask }
-                    : new LocalBranchRow(rowDepth, entry.Name, node.Segment, entry.TipSha, entry.IsHead, entry.AheadBy, entry.BehindBy, entry.UpstreamState) { GuideMask = mask });
+                rows.Add(leafRow(entry, node.Segment, rowDepth, mask));
             }
             else
             {
@@ -101,7 +134,7 @@ internal static class BranchTreeBuilder
                     // The folder's children inherit its trunk at its own column — a passthrough while the
                     // folder has a sibling below it, nothing once it is the last.
                     var childTrunk = TreeGuides.SetKind(trunkMask, rowDepth, isLast ? TreeGuide.None : TreeGuide.Through);
-                    EmitTreeRows(rows, node.Children, ui, isRemote, remoteName, treeBaseDepth, depth + 1, childTrunk);
+                    EmitTreeRows(rows, node.Children, ui, scope, treeBaseDepth, depth + 1, childTrunk, leafRow);
                 }
             }
         }

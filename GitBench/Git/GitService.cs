@@ -224,7 +224,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    private static BranchSync ResolveBranchSync(
+    private static RefSyncState ResolveBranchSync(
         Branch local, Commit tip, List<Branch> remoteBranches, HashSet<string> absorbedRemotes)
     {
         var tracked = local.TrackedBranch;
@@ -234,7 +234,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             // different commit (its own row), so only fold the remote badge in when the two are level.
             var inSync = tracked.Tip.Sha == tip.Sha;
             if (inSync) absorbedRemotes.Add(tracked.FriendlyName);
-            return inSync ? BranchSync.InSync : BranchSync.Diverged;
+            return inSync ? RefSyncState.InSync : RefSyncState.Diverged;
         }
 
         // No upstream configured (e.g. pushed without -u, or the upstream was later unset). Git
@@ -243,9 +243,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         // badge rather than showing a redundant local/remote pair on the same commit.
         var twin = remoteBranches.FirstOrDefault(r =>
             r.Tip!.Sha == tip.Sha && RemoteBranchShortName(r) == local.FriendlyName);
-        if (twin == null) return BranchSync.Untracked;
+        if (twin == null) return RefSyncState.Untracked;
         absorbedRemotes.Add(twin.FriendlyName);
-        return BranchSync.InSync;
+        return RefSyncState.InSync;
     }
 
     private static void AddRemoteBranchBadges(List<Branch> remoteBranches, RefScan scan)
@@ -735,7 +735,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (branchesOut == null)
                 return new Fetched<BranchListing>.Failed(brErr ?? "git for-each-ref failed.");
 
-            var locals = new List<BranchEntry>();
+            var locals = new List<LocalBranchEntry>();
             foreach (var line in branchesOut.Split('\n'))
                 ParseBranchRefLine(line, locals, remotesByName);
 
@@ -752,21 +752,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     // Seed with all configured remotes so groups still show even when a remote has no branches
     // yet (matches the prior LibGit2Sharp behavior). Returns null on a genuine git failure.
-    private Dictionary<string, List<BranchEntry>>? SeedRemoteGroups(string repoPath, out string? error)
+    private Dictionary<string, List<RemoteBranchEntry>>? SeedRemoteGroups(string repoPath, out string? error)
     {
         var remotesOut = RunGit(repoPath, out error, "remote");
         if (remotesOut == null) return null;
-        var remotesByName = new Dictionary<string, List<BranchEntry>>(StringComparer.Ordinal);
+        var remotesByName = new Dictionary<string, List<RemoteBranchEntry>>(StringComparer.Ordinal);
         foreach (var rawLine in remotesOut.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
             var name = rawLine.Trim();
-            if (name.Length > 0) remotesByName[name] = new List<BranchEntry>();
+            if (name.Length > 0) remotesByName[name] = new List<RemoteBranchEntry>();
         }
         return remotesByName;
     }
 
     private static void ParseBranchRefLine(
-        string line, List<BranchEntry> locals, Dictionary<string, List<BranchEntry>> remotesByName)
+        string line, List<LocalBranchEntry> locals, Dictionary<string, List<RemoteBranchEntry>> remotesByName)
     {
         if (line.Length == 0) return;
         var parts = line.Split(BranchFieldSep);
@@ -778,27 +778,30 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             AddRemoteBranch(refname, parts[1], remotesByName);
     }
 
-    private static BranchEntry ParseLocalBranch(string[] parts, string refname)
+    // parts[0] is %(HEAD): "*" for the checked-out branch, a space otherwise. git guarantees at most
+    // one ref carries it, which is what keeps "at most one Head in a listing" a one-site invariant.
+    private static LocalBranchEntry ParseLocalBranch(string[] parts, string refname)
     {
-        // parts[0] is %(HEAD): "*" for the checked-out branch, a space otherwise.
         var name = refname["refs/heads/".Length..];
-        var isHead = parts[0] == "*";
         var sha = parts[1];
         var track = parts.Length > 3 ? parts[3] : string.Empty;
         var upstream = parts.Length > 4 ? parts[4] : string.Empty;
-        var (ahead, behind, upstreamState) = ParseUpstream(track, upstream);
-        var (upstreamRemote, upstreamBranch) = SplitUpstreamRef(upstream, upstreamState);
-        return new BranchEntry(name, sha, isHead,
-            AheadBy: ahead, BehindBy: behind,
-            UpstreamState: upstreamState,
-            UpstreamRemote: upstreamRemote,
-            UpstreamBranch: upstreamBranch);
+        var link = ParseUpstream(track, upstream);
+        return parts[0] == "*"
+            ? new LocalBranchEntry.Head(name, sha, HeadStateOf(link))
+            : new LocalBranchEntry.Other(name, sha, link);
     }
 
-    private static (string? Remote, string? Branch) SplitUpstreamRef(string upstream, BranchUpstreamState state)
+    private static HeadUpstreamState HeadStateOf(LocalUpstream link) => link switch
     {
-        if (state != BranchUpstreamState.Tracked || !upstream.StartsWith("refs/remotes/", StringComparison.Ordinal))
-            return (null, null);
+        LocalUpstream.Tracked => HeadUpstreamState.Tracked,
+        LocalUpstream.Gone => HeadUpstreamState.Gone,
+        _ => HeadUpstreamState.None,
+    };
+
+    private static (string? Remote, string? Branch) SplitUpstreamRef(string upstream)
+    {
+        if (!upstream.StartsWith("refs/remotes/", StringComparison.Ordinal)) return (null, null);
         var rest = upstream["refs/remotes/".Length..];
         var slash = rest.IndexOf('/');
         if (slash <= 0) return (null, null);
@@ -806,7 +809,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     }
 
     private static void AddRemoteBranch(
-        string refname, string sha, Dictionary<string, List<BranchEntry>> remotesByName)
+        string refname, string sha, Dictionary<string, List<RemoteBranchEntry>> remotesByName)
     {
         var rest = refname["refs/remotes/".Length..];
         var slash = rest.IndexOf('/');
@@ -817,20 +820,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         if (display == "HEAD") return;
         if (!remotesByName.TryGetValue(remoteName, out var list))
         {
-            list = new List<BranchEntry>();
+            list = new List<RemoteBranchEntry>();
             remotesByName[remoteName] = list;
         }
-        list.Add(new BranchEntry(display, sha, IsHead: false));
+        list.Add(new RemoteBranchEntry(display, sha));
     }
 
-    private static void SortLocalBranches(List<BranchEntry> locals) =>
+    private static void SortLocalBranches(List<LocalBranchEntry> locals) =>
         locals.Sort((a, b) =>
         {
-            if (a.IsHead != b.IsHead) return a.IsHead ? -1 : 1;
+            var aHead = a is LocalBranchEntry.Head;
+            var bHead = b is LocalBranchEntry.Head;
+            if (aHead != bHead) return aHead ? -1 : 1;
             return string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
         });
 
-    private static List<RemoteGroup> BuildRemoteGroups(Dictionary<string, List<BranchEntry>> remotesByName)
+    private static List<RemoteGroup> BuildRemoteGroups(Dictionary<string, List<RemoteBranchEntry>> remotesByName)
     {
         var groups = new List<RemoteGroup>(remotesByName.Count);
         foreach (var kv in remotesByName.OrderBy(p => p.Key, StringComparer.OrdinalIgnoreCase))
@@ -879,18 +884,29 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // OR in sync with upstream — so we also key on %(upstream) (the upstream ref name,
     // empty when none is set) to disambiguate. "gone" = upstream was set but the remote
     // ref has since been deleted. The UI surfaces those as distinct states.
-    private static (int? ahead, int? behind, BranchUpstreamState state) ParseUpstream(string track, string upstream)
+    //
+    // An upstream that isn't a remote-tracking ref (a branch tracking another local branch, via
+    // remote ".") reads as None: Tracked promises a remote/branch pair the rest of the app can
+    // fetch and fast-forward from, and there is none here.
+    private static LocalUpstream ParseUpstream(string track, string upstream)
     {
-        if (string.IsNullOrEmpty(upstream)) return (null, null, BranchUpstreamState.NeverLinked);
-        if (track == "gone") return (null, null, BranchUpstreamState.Gone);
-        int? a = null, b = null;
+        if (string.IsNullOrEmpty(upstream)) return new LocalUpstream.None();
+        if (track == "gone") return new LocalUpstream.Gone();
+        var (remote, branch) = SplitUpstreamRef(upstream);
+        if (remote == null || branch == null) return new LocalUpstream.None();
+        return new LocalUpstream.Tracked(remote, branch, ParseSync(track));
+    }
+
+    private static BranchSync ParseSync(string track)
+    {
+        int ahead = 0, behind = 0;
         foreach (var part in track.Split(',', StringSplitOptions.RemoveEmptyEntries))
         {
             var p = part.Trim();
-            if (p.StartsWith("ahead ", StringComparison.Ordinal) && int.TryParse(p[6..], out var av)) a = av;
-            else if (p.StartsWith("behind ", StringComparison.Ordinal) && int.TryParse(p[7..], out var bv)) b = bv;
+            if (p.StartsWith("ahead ", StringComparison.Ordinal) && int.TryParse(p[6..], out var av)) ahead = av;
+            else if (p.StartsWith("behind ", StringComparison.Ordinal) && int.TryParse(p[7..], out var bv)) behind = bv;
         }
-        return (a, b, BranchUpstreamState.Tracked);
+        return new BranchSync(ahead, behind);
     }
 
     // Shells out to `git status --porcelain=v2 -z` instead of libgit2's RetrieveStatus.
@@ -1711,27 +1727,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return File.Exists(msgPath) ? File.ReadAllText(msgPath) : "Merge";
         }
         catch { return null; }
-    }
-
-    public PushStatus GetPushStatus(Repo repo)
-    {
-        try
-        {
-            if (!IsGitRepo(repo.Path))
-                return new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false);
-
-            var info = GetHeadInfo(repo.Path);
-            return new PushStatus(
-                CurrentBranchName: info.CurrentBranchName,
-                HasUpstream: info.HasUpstream,
-                Ahead: info.Ahead,
-                Behind: info.Behind,
-                IsDetached: info.IsDetached);
-        }
-        catch
-        {
-            return new PushStatus(null, HasUpstream: false, Ahead: 0, Behind: 0, IsDetached: false);
-        }
     }
 
     public DetachedHeadReport GetDetachedHeadReport(Repo repo)

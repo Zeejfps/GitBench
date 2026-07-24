@@ -22,9 +22,9 @@ public sealed record RepoStatus(
     public static readonly RepoStatus Unknown = new(null, false, false, 0, 0, false, false, false);
 }
 
-// Single source of truth for the cheap per-repo signals. Replaces the snapshot store's PushStatus
-// derivation (active-only) with one probe per repo so every RepoBar row — not just the active one —
-// can show its branch state and dirtiness.
+// Single source of truth for the cheap per-repo signals, including the checked-out branch's
+// ahead/behind — nothing else in the app may hold a second copy of those. One probe per repo, so
+// every RepoBar row (not just the active one) can show its branch state and dirtiness.
 public interface IRepoStatusStore
 {
     // The active repo's status. Swaps on repo switch; recomputes when its probe or op state changes.

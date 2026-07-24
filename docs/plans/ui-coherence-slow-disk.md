@@ -8,12 +8,13 @@
 > triggers, and it does not self-correct at any disk speed. This document records the root causes
 > found by reading the sync path end to end, and the work items that close them.
 >
-> **Status: analysis only. Nothing here is implemented.** Items are ordered by what fixes the
-> reported symptoms first; §1+§2 are one seam and should land together, as should §3+§4.
+> **Status: §1 is implemented (2026-07-24). Everything else is analysis only.** Items are ordered by
+> what fixes the reported symptoms first; §1+§2 are one seam and should land together, as should
+> §3+§4.
 
 ## Root causes
 
-### A. Ahead/behind has four sources of truth
+### A. Ahead/behind has four sources of truth — *closed by §1, except the missing trigger*
 
 The same fact is computed by different git processes, launched at different times, refreshed on
 different triggers, and stored in different places:
@@ -115,7 +116,12 @@ the cost is seek thrash, not throughput.
 
 ## Work items
 
-### 1. HEAD's sync counts get exactly one owner
+### 1. HEAD's sync counts get exactly one owner — **DONE (2026-07-24)**
+
+> Landed as designed below; the *Implemented* subsection at the end of this item records the
+> as-built shape, the two deviations, and what §2 inherits. Sources 3 and 4 are gone, and the two
+> live sources are now one.
+
 
 Delete the second copy rather than reconcile it. `IRepoStatusStore` becomes the sole holder of
 HEAD's ahead/behind; the branch listing stops being *able* to answer for the checked-out branch.
@@ -236,6 +242,54 @@ ten sites, five of which break immediately:
 already filter `!b.IsHead`), and `FindLocalBranchEntry:1064` would return null for HEAD — safe
 today only because all three of its consumers early-return on `IsHead`, and silently wrong for any
 menu item added later. The two-case union keeps every one of these sites working unchanged.
+
+#### Implemented
+
+The type shapes, the join, and the deletions all landed exactly as specified above. Notes on what
+differs from the plan text and what the next item inherits:
+
+- **`BranchTreeBuilder.BuildRows(listing, ui, RepoStatus headStatus)`** is the sole join site, with
+  `SyncFor` / `UpstreamKindOf` beside it. `EmitTreeRows` became generic over the leaf type with a
+  `leafRow` factory — local and remote leaves are no longer the same type — and its `isRemote` /
+  `remoteName` pair collapsed into the `BranchScope` it was already deriving.
+- **`LocalBranchRow`** carries `BranchUpstreamKind Upstream` + `BranchSync? Sync` (the enum lives in
+  `BranchRow.cs`, next to its only consumer). `TrailingFor` returns null on a null `Sync`.
+- **`BranchesViewModel`** takes `IRepoStatusStore` and its `_rowModels` `Derived` reads
+  `status.Active.Value`. No DI registration changed: the VM is unregistered and `Context.Get<T>`
+  constructs it reflectively from registered ctor params.
+- **Deleted:** `BranchEntry`, `BranchUpstreamState`, `RepoSnapshotStore.OnRemoteSyncOptimistic` +
+  `PatchHeadSync` + `_remoteSyncSub`, `IGitService.GetPushStatus`, `PushStatus`. `GetHeadInfo`
+  survives — three other callers.
+- **Naming collision, resolved by rename.** `GitBench.Features.Commits.BranchSync` (the commit-graph
+  ref-badge tint enum) is now **`RefSyncState`**, freeing the name for the new record. `GitService.cs`
+  uses both namespaces, so the alternative was a permanent `using BranchSync = …Commits.BranchSync;`
+  alias in the exact file §2 edits.
+- **Behaviour delta — upstreams that are not remote-tracking refs.** A branch tracking another
+  *local* branch (`branch.X.remote = .`, `%(upstream)` = `refs/heads/…`) now parses as
+  `LocalUpstream.None` rather than the old `Tracked`-with-null-names. `Tracked` promising a usable
+  remote/branch pair is precisely what lets the fast-forward guards go away, so the type forces this.
+  Consequences: such a branch loses its ahead/behind badge and its glyph dims, and it now appears in
+  the "Clean…" dialog as *never pushed* — which is arguably accurate (it has no remote), but it is a
+  change. Its context menu is unaffected (the old `IsNullOrEmpty` guards already suppressed
+  fast-forward for it).
+- **Tests:** `GitBench.Tests/BranchTreeBuilderTests.cs` pins the join (HEAD reads the status store;
+  siblings read the listing; detached / no-upstream / unprobed all render no badge; in-sync stays a
+  real `BranchSync(0,0)` distinct from null) and `GitBench.Tests/BranchListingParseTests.cs` drives
+  the real `GitService` against a throwaway repo + bare origin for every upstream case, the
+  one-`Head`-per-listing invariant, and the detached-HEAD-has-no-`Head`-entry case. 26 methods.
+
+**What §2 inherits.** `BuildRows` takes `RepoStatus` by value and `_rowModels` is a `Derived` over
+`IRepoStatusStore.Active`, which is itself a `Derived` over the per-repo probe `State` — so anything
+§2 writes into the status store (including its new ingest entry point) reaches the sidebar badge with
+no further plumbing. Two constraints to respect:
+
+- `RepoStatusStore` still does **not** subscribe to `IRepoRegistry.Active`. After §1 a repo switch
+  paints badge and toolbar from the *same* pre-switch probe — consistent but stale, strictly better
+  than the old disagreement. "Probe on active-repo change" (already listed under §2) is the last
+  piece needed for correctness on switch; do not defer it past §2.
+- The optimistic post-push/pull patch now exists **only** in `RepoStatusStore.ApplyOptimisticSync`,
+  and `RepoStatusStore` is the sole subscriber to `RemoteSyncOptimisticMessage`. Do not reintroduce a
+  second patch site in the snapshot store.
 
 ### 2. One observation, one timestamp
 

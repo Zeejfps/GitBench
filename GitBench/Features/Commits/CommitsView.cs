@@ -831,11 +831,11 @@ internal sealed record CommitsView : Widget
 
         // The branch glyph is tinted by upstream sync: green = level, amber = ahead/behind,
         // gray = no upstream. A level upstream is already folded into this badge.
-        private TextStyle BadgeIconStyle(BranchSync sync) => sync switch
+        private TextStyle BadgeIconStyle(RefSyncState sync) => sync switch
         {
-            BranchSync.InSync => _badgeIconInSyncStyle,
-            BranchSync.Diverged => _badgeIconDivergedStyle,
-            BranchSync.Untracked => _badgeIconUntrackedStyle,
+            RefSyncState.InSync => _badgeIconInSyncStyle,
+            RefSyncState.Diverged => _badgeIconDivergedStyle,
+            RefSyncState.Untracked => _badgeIconUntrackedStyle,
             _ => _badgeIconStyle,
         };
 
