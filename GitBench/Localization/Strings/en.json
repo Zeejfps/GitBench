@@ -104,6 +104,8 @@
 
   "statusbar.toggle_theme_tooltip": "Toggle theme",
   "statusbar.check_updates_tooltip": "Check for updates",
+  "statusbar.settings_tooltip": "Settings",
+  "statusbar.enable_untracked_cache": "Enable untracked cache",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "Not in LFS",
   "statusbar.identity_none": "No identity",

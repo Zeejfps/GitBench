@@ -146,6 +146,8 @@
 
   "statusbar.toggle_theme_tooltip": "تبديل السمة",
   "statusbar.check_updates_tooltip": "التحقق من التحديثات",
+  "statusbar.settings_tooltip": "الإعدادات",
+  "statusbar.enable_untracked_cache": "تفعيل ذاكرة التخزين المؤقت للملفات غير المتتبعة",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "ليس في LFS",
   "statusbar.identity_none": "بلا هوية",

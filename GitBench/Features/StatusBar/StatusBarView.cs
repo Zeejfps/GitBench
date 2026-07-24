@@ -85,6 +85,15 @@ internal sealed record StatusBarView : Widget
                                             Command = vm.ToggleTheme,
                                         }.WithTooltip(L.T(s => s.StatusbarToggleThemeTooltip))
                                             .WithController<KbmController>(),
+                                        new StatusBarIconButton
+                                        {
+                                            Icon = LucideIcons.Settings,
+                                            // The press is owned by the menu controller below; this
+                                            // just satisfies the button's required command.
+                                            Command = new Command(static () => { }),
+                                        }.WithTooltip(L.T(s => s.StatusbarSettingsTooltip))
+                                            .WithMenuController(rect =>
+                                                RepoBarContextMenu.Show(ctx, rect.TopLeft, vm.BuildSettingsMenu(), MenuPlacement.Above)),
                                         new LanguageChipButton
                                         {
                                             Label = vm.ActiveLocale.Bind(string? (l) => StatusBarViewModel.Code(l)),

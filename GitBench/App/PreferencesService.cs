@@ -68,6 +68,8 @@ public sealed class PreferencesService : IDisposable
 
     public void SetHideRemoteOnlyBranches(bool hide) => Mutate(p => p with { HideRemoteOnlyBranches = hide });
 
+    public void SetEnableUntrackedCache(bool on) => Mutate(p => p with { EnableUntrackedCache = on });
+
     private void Mutate(Func<Preferences, Preferences> mutator)
     {
         lock (_gate)

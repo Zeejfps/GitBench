@@ -8,10 +8,14 @@
 > triggers, and it does not self-correct at any disk speed. This document records the root causes
 > found by reading the sync path end to end, and the work items that close them.
 >
-> **Status: §1, §2, §3, §4, §5, §6, §7, §9, §10 and §11 are implemented (2026-07-24). Only §8 remains
-> — analysis only, independent, lowest priority.** Items are ordered by what fixes the reported
-> symptoms first; §1+§2 were one seam and landed together, as did §3+§4+§9. §9, §10 and §11 are
-> appended rather than inserted in priority order to avoid renumbering.
+> **Status: all eleven work items are implemented (2026-07-24).** §8 shipped `core.untrackedCache`
+> (its grounding **split the original pair** — fsmonitor is a documented deferred follow-up, since it
+> duplicates `RepoWatcher`'s tree watch and leaves an orphaned daemon — and it built the app's first
+> shared preference menu, there having been no settings UI). Three smaller follow-ups remain open by
+> design: §2's warm double-read and reconcile-refs residual (both throttled by §6, not closed) and the
+> §1/§2 local-upstream glyph mismatch. Items were ordered by what fixes the reported symptoms first;
+> §1+§2 were one seam and landed together, as did §3+§4+§9. §9, §10 and §11 are appended rather than
+> inserted in priority order to avoid renumbering.
 >
 > **Root cause C was re-grounded against the code on 2026-07-24 and its premise was wrong.**
 > Index mutations *are* serialized per repo — `GitService` has held a per-repo mutation semaphore
@@ -2011,13 +2015,373 @@ The split, the EWMA, and the timing-source seam landed as specified.
   each-read-folds-once invariant, so distinct values are the faithful way to demonstrate the gradual
   walk-down. No behavioural divergence from the design.
 
-### 8. Opt-in `core.untrackedCache` + `core.fsmonitor`
+### 8. Opt-in `core.untrackedCache` (fsmonitor deferred) — **DONE (2026-07-24)**
 
-Both are large wins on a slow spindle. Both write to the user's repo config, so this must be an
-explicit per-repo or global setting, never silent.
+> Landed as designed below, scoped to `core.untrackedCache`; fsmonitor remains a deferred follow-up.
+> The *Implemented* subsection at the end records the as-built shape and the deviations.
+>
+> **Grounded against the code on 2026-07-24 and re-scoped by what the grounding found.** The sketch
+> paired two settings — `core.untrackedCache` and `core.fsmonitor` — as "both large wins." Reading
+> the watcher seam disproved the pairing the way root cause C's re-grounding disproved its own
+> premise: `core.untrackedCache` is a pure cache that rides the exact `.git/index` write `RepoWatcher`
+> **already ignores by design** (`RepoWatcher.cs:19-31`), so it composes with everything the earlier
+> items built and adds no new interaction. `core.fsmonitor` starts a **long-lived daemon that watches
+> the whole working tree** — the tree `RepoWatcher` already watches (`RepoWatcher.cs:12,85`) — leaves
+> that daemon running after the app closes, and sprays new `.git/fsmonitor--daemon/` cookie churn that
+> the classifier would have to whitelist (a §9-shaped bug waiting to happen). The two settings have
+> different risk profiles, so they are no longer one item: **§8 ships `core.untrackedCache`; fsmonitor
+> is a deferred follow-up** (its analysis is written down under *fsmonitor: deferred, with evidence*).
+>
+> Two sketch citations were wrong. `PreferencesStore.cs` is real (`GitBench/App/PreferencesStore.cs`)
+> — but it is only the JSON shape; a preference is three files, not one (below). And "settings UI"
+> presumes one exists: **it does not.** There is no settings dialog, panel, or view anywhere. App-level
+> preferences are scattered onto whatever surface owns them — the theme toggle and language chip live
+> in the status bar (`StatusBarView.cs:82-92`), `HideRemoteOnlyBranches` on a commit-history toggle
+> (`CommitsViewModel.cs:456`), file-view / layout modes on their toolbars. So §8 is not "add a toggle";
+> it is "add a preference, its apply path, **and** the first shared home for an app-level toggle that
+> isn't already owned by a feature surface." That is the bulk of the work and the reason this item is
+> bigger than its one-line sketch implied — though still small, and still lowest priority.
 
-- **Files:** `PreferencesStore.cs` / settings UI, `GitService.cs`.
-- **Acceptance:** off by default; enabling it is a visible user choice.
+#### What the setting buys and costs
+
+`core.untrackedCache` (a repo-`--local` config bool) caches the untracked-file scan in the `index`'s
+`UNTR` extension: `git status` records each directory's mtime and, on the next run, re-reads only the
+directories whose mtime moved instead of `readdir`-ing the whole tree. On a cold 5400 RPM drive with a
+large working tree and many untracked paths, the untracked walk is a dominant share of the
+`--untracked-files=all` read root cause E is about — this is the one lever that shortens that walk
+without changing what it reports. It has existed as a config bool since git 2.8, so no version gate is
+needed (unlike fsmonitor's 2.37); its data lives in the index and travels with no daemon and no second
+watcher.
+
+Its one correctness caveat is mtime reliability: git will honour `core.untrackedCache=true` **even on
+filesystems where directory mtime is not trustworthy**, and there a created/deleted untracked file can
+be missed by `git status` until an unrelated invalidation. git ships the precondition probe for exactly
+this — `git update-index --test-untracked-cache` exits 0 only when the filesystem's mtime behaviour is
+sound. Mainstream local filesystems (NTFS, ext4, APFS, HFS+) pass; network and some virtualized mounts
+do not. `RepoWatcher` is only a partial net here — it fires on the real FS event and reloads, but that
+reload still consults the same cache — so the probe, not the watcher, is the guard. **§8 runs the probe
+as a precondition of writing** (below), so the cache is never enabled on a filesystem that can't support
+it.
+
+`core.fsmonitor` is analysed and deferred below; it is not enabled by this item.
+
+#### The granularity decision: one global GitBench preference, applied `--local`, never `--global`
+
+The sketch's "per-repo or global" hides a second ambiguity the doc must resolve: "global" could mean a
+GitBench *preference* (one toggle governing every repo GitBench opens) **or** writing git's own
+`--global` config. They are very different.
+
+- **Not `--global`.** Writing `~/.gitconfig` would silently change the user's *command-line* git — every
+  repo on the machine, GitBench-managed or not, would start using the untracked cache. That is exactly
+  the "surprising side effect" this item's "never silent" clause exists to forbid. §8 writes only each
+  repo's own `.git/config` (`--local`), so the blast radius is precisely the repos the user drives
+  through GitBench.
+- **Global GitBench preference, not per-repo.** A per-repo checkbox is richer but needs a per-repo
+  settings surface that does not exist (there is no per-repo settings view — the repo context menu is
+  actions, not config), and `core.untrackedCache` is *universally* safe-and-beneficial wherever the
+  probe passes, so per-repo control buys a bigger UI for a choice nobody needs to vary per repo. **One
+  global toggle**, default off, that applies `--local` to every primary repo GitBench opens, is the
+  honest MVP.
+
+| Was ambiguous in the sketch | Resolved |
+| --- | --- |
+| "global" = write `--global` gitconfig | never — only each repo's `--local` config |
+| "per-repo or global" granularity | one global GitBench preference; no per-repo knob |
+| the two settings are one toggle | split — untrackedCache ships, fsmonitor deferred |
+| "settings UI" already exists | it does not — §8 builds the first shared app-preference menu |
+
+#### The preference shape
+
+A GitBench preference is three coordinated edits plus a UI-facing observable, and `HideRemoteOnlyBranches`
+(`Preferences.cs:29`) is the exact bool exemplar to mirror:
+
+- `Preferences.cs` — `public bool EnableUntrackedCache { get; init; }` (defaults `false`, i.e. off).
+- `PreferencesStore.cs` — `bool? EnableUntrackedCache { get; set; } = false;` on `FileShape` (`:41` is
+  the sibling), plus the `Load` line (`EnableUntrackedCache = file.EnableUntrackedCache ?? defaults.…`,
+  next to `:76`) and the `Save` line (next to `:108`). The `bool?`-with-lenient-default idiom is the
+  file's house pattern, so an absent key reads as off.
+- `PreferencesService.cs` — `public void SetEnableUntrackedCache(bool on) => Mutate(p => p with {
+  EnableUntrackedCache = on });`, mirroring `SetHideRemoteOnlyBranches:69`. The debounced save is
+  inherited unchanged.
+- `AppServices.cs` — a `State<bool>` seeded from `preferences.Current.EnableUntrackedCache` with
+  `Changed += preferences.SetEnableUntrackedCache`, registered as a service, mirroring the `themeMode`
+  / `locale` / `workingChangesLayout` wiring exactly (`:37-48`). This single observable is what both the
+  toggle writes and the apply service reads, so the two can never disagree about the current value.
+
+#### The apply path in `GitService`
+
+Writing config is a `--local` mutation, and the codebase already has the precise analog:
+`PinLocalIdentity` (`GitService.cs:3008`) writes `config --local` keys through `RunMutation:3032` inside
+`RunOperation:3054` → `RunLocked:3040`, which takes `GitResource.LocalState` — the same lock §11 keeps
+for index/working-tree/refs writes. A config write is local state, so it belongs on that lock, and the
+lock is what lets the read-check-then-write below be atomic against a concurrent GitBench write to the
+same repo.
+
+Add one method to `IGitService` (near `PinLocalIdentity`, `IGitService.cs:47`):
+
+```csharp
+// Enables core.untrackedCache in the repo's --local config, once, if the filesystem supports it and
+// the user hasn't already set the key. Idempotent and respectful: an existing value (either way) is
+// left as the user left it. Never writes --global.
+GitOutcome ApplyUntrackedCache(Repo repo);
+```
+
+implemented beside `PinLocalIdentity`, the whole body inside one `RunOperation` (so the check and the
+write share the LocalState lock):
+
+1. **Respect an explicit value.** Read `git config --local --get core.untrackedCache` via the
+   `RunGitInternal(..., allowExitCode1: true, ...)` config-read shape already used by
+   `IGitRawConfigReader.GetLocalIdentityRaw` (`GitService.cs:3330-3339`); exit 1 = unset. **If the key
+   is present at all — `true` or `false` — return `GitOutcome.Ok` without writing.** This is the
+   "respect the user" guarantee: GitBench writes only into the vacuum, so it can never re-flip a value
+   the user set by hand, on this open or any future one.
+2. **Probe filesystem support.** `git update-index --test-untracked-cache` (exit 0 = supported). On a
+   non-zero exit, return `Ok` without writing — the cache would be unsafe here, and declining is not a
+   failure.
+3. **Write.** `RunMutation(repo.Path, ["config", "--local", "core.untrackedCache", "true"])`.
+
+Steps 1 and 2 make the method idempotent *and* safe *and* respectful in one locked body, with no state
+tracked outside git's own config.
+
+#### The apply-point: on registration and on toggle-on, off-thread, primaries only
+
+Repos enter through `RepoRegistry` (`Open:69` adds to the `Repos` `ObservableList`; worktrees and
+submodules arrive through `ReplaceWorktreesFor` / `ReplaceSubmoduleForest`). The clean trigger mirrors
+`GitIdentityService` — a hosted service that back-wires nothing but subscribes to the registry and the
+preference:
+
+**`GitUntrackedCacheService : IHostedService`** (new, `GitBench/Features/Repos/`), taking
+`IRepoRegistry`, `IGitService`, and the `State<bool>` preference:
+
+- In `Start`, subscribe to the preference `State<bool>` (fires immediately with the current value) and
+  to `IRepoRegistry.Repos.Changed`. `ObservableList.Subscribe` opens with a `Reset`
+  (`ObservableList.cs:117-119`), so the initial pass over already-open repos and the per-open `Added`
+  case share one handler.
+- **When the preference is on**, for each **primary** repo (`Repo.IsPrimary`, `Repo.cs:33`) apply
+  `ApplyUntrackedCache` on a background thread (`Task.Run`, the way every other `IGitService` call in the
+  app is dispatched). Skip worktrees and submodules: `core.untrackedCache` lives in the family's shared
+  config, so setting it once on the primary covers every linked worktree's status; the cache *data* is
+  per-index but the config bool that turns it on is shared.
+- **On the preference flipping on**, the same handler runs over all currently-registered primaries — so
+  turning it on retroactively tunes the repos already open, not just the next one.
+- The apply is fire-and-forget and **non-fatal**: a failed config write is logged (`Console.WriteLine`,
+  as the stores do) and never raised as a dialog. It is an optimization, not a user action, and must
+  not block or interrupt a repo open.
+
+Because step 1 of `ApplyUntrackedCache` is write-if-absent, re-registration and re-open are no-ops after
+the first write — the idempotence the sketch's "never silent" clause needs, enforced at the git layer
+rather than by remembering which repos were touched.
+
+#### The disable path: stop applying forward; do not rip config out
+
+Turning the preference **off** stops the service applying to newly-opened repos and does **not** unset
+`core.untrackedCache` in repos that already have it. Three reasons, and this is exactly where fsmonitor's
+deferral pays off:
+
+- **Nothing is left running.** The sketch's worry — "leaving a daemon behind is surprising" — is a
+  *fsmonitor* problem (a live `git fsmonitor--daemon` process). untrackedCache leaves only a benign,
+  fully visible line in `.git/config`; there is no process to orphan.
+- **A mass unset is itself the silent write this item forbids.** Ripping the key out of every registered
+  repo on a toggle flip is precisely the kind of unannounced multi-repo config mutation "never silent"
+  exists to prevent — the disable would be exactly as surprising as a silent enable.
+- **GitBench can't tell its `true` from the user's.** With no external bookkeeping (deliberately — see
+  step 1), the key is just present-or-absent; unsetting on disable could delete a `true` the user set
+  themselves.
+
+So "off" means "GitBench stops managing this," and the one git command to remove the residue is named in
+the toggle's help text. The symmetric-unset variant is a rejected alternative below.
+
+#### The UI: the first shared app-preference menu
+
+There is **no settings surface to add a checkbox to** — the critical finding above. §8 must build the
+minimum one. The established home for an app-level preference is the status bar (theme + language live
+there), and the language chip is the exact pattern: a status-bar control whose click opens a
+`RepoBarContextMenu` of checkable items (`StatusBarView.cs:88-92`, `BuildLanguageMenu:241`). §8 adds:
+
+- A status-bar **gear button** (`StatusBarIconButton` with a new `Settings`/`Sliders` glyph — none
+  exists in `LucideIcons.cs`, so add one via the documented post+cmap codepoint-extraction script),
+  placed beside the theme toggle, with `.WithMenuController(rect => RepoBarContextMenu.Show(ctx,
+  rect.TopLeft, vm.BuildSettingsMenu(), MenuPlacement.Above))`.
+- `StatusBarViewModel.BuildSettingsMenu()` returning a single `RepoBarContextMenu.Item` whose action
+  toggles the `State<bool>` and whose `Checked` reflects it — the exact `Item(label, action,
+  Checked: …)` idiom `BuildLanguageMenu` uses, and the `Checked`-marks-active-choice convention the
+  context-menu memory records. The VM gains the `State<bool>` as a ctor dependency.
+
+This reuses the toggle machinery wholesale and establishes a home future app toggles can join without a
+modal. A full `SettingsDialog` is a rejected alternative — worth building only once there are enough
+knobs to justify it, which one toggle is not.
+
+New user-facing strings (the menu label + its tooltip) must be added to **all six** `Strings/*.json` or
+the localization source generator fails the build (LOC004).
+
+#### fsmonitor: deferred, with evidence
+
+`core.fsmonitor=true` (git ≥ 2.37) starts the built-in `git fsmonitor--daemon`, a long-lived process
+that watches the working tree so `git status` can skip the tree walk. It is a real slow-disk win — and
+it is deferred, not because it is low-value, but because it collides with what this app already is:
+
+| Concern | Detail |
+| --- | --- |
+| **Duplicate tree watch** | GitBench already watches the entire working tree recursively via `RepoWatcher`'s `_treeWatcher` (`RepoWatcher.cs:12,85`). fsmonitor adds a *second* OS-level recursive watch of the same tree, in a separate process. They don't corrupt each other — different consumers (the daemon feeds git's status; `RepoWatcher` feeds the UI) — but it is duplicated cost on exactly the machines least able to afford it. |
+| **Orphaned daemon lifecycle** | git spawns the daemon lazily on first status and **owns its lifecycle** — it keeps running after GitBench exits. GitBench enabling a setting that leaves a background process alive after it closes is the surprising side effect the disable path had to reason about. |
+| **New `.git/` churn the classifier doesn't know** | The daemon writes cookie files under `.git/fsmonitor--daemon/` and an `fsmonitor` extension into `.git/index`. `ClassifyGitChange` has no branch for these; the `.git/index` write is already ignored (good), but the cookie directory is exactly the kind of unmodelled `.git/` traffic that produced root cause F's spurious cascade — enabling fsmonitor would need a §9-shaped whitelist to stay quiet. |
+| **Version + platform gate** | Needs git ≥ 2.37 (detectable via the `GitProcessRunner.SupportsPathspecFromFile:282` version-probe shape) and differs by platform (native on Windows/macOS; Linux needs a recent git with Unix-socket support). |
+
+The honest split is the same shape as root cause C's re-grounding: ship the half that is a pure cache
+and composes cleanly (`core.untrackedCache`), and hold the half that spawns a process, duplicates the
+app's own watcher, and needs a classifier change (`core.fsmonitor`) behind evidence that its win exceeds
+that cost on a real slow-disk profile. When it is picked up, it reuses §8's preference plumbing and apply
+service verbatim — it is a second `State<bool>`, a second `ApplyX`, and the classifier whitelist — so
+deferring it costs nothing in rework.
+
+#### Files
+
+- **`GitBench/App/Preferences.cs`** — add `bool EnableUntrackedCache { get; init; }` (default `false`).
+- **`GitBench/App/PreferencesStore.cs`** — `bool? EnableUntrackedCache` on `FileShape` (`:41` area);
+  `Load` mapping (`:76` area); `Save` mapping (`:108` area).
+- **`GitBench/App/PreferencesService.cs`** — `SetEnableUntrackedCache(bool)` mirroring
+  `SetHideRemoteOnlyBranches:69`.
+- **`GitBench/App/AppServices.cs`** — a `State<bool>` seeded from `preferences.Current`, `Changed`-wired
+  to `SetEnableUntrackedCache`, registered as a service (mirror `:37-48`); register
+  `AddHostedService<GitUntrackedCacheService>()` (plain reflective ctor injection resolves its three
+  registered deps — no factory needed, unlike the interface-cast services above it).
+- **`GitBench/Git/IGitService.cs:47`** — add `GitOutcome ApplyUntrackedCache(Repo repo);`.
+- **`GitBench/Git/GitService.cs`** — implement `ApplyUntrackedCache` beside `PinLocalIdentity:3008`
+  (`RunOperation` → `--local --get` check → `--test-untracked-cache` probe → `RunMutation` write), reusing
+  the `RunGitInternal(..., allowExitCode1: true, ...)` config-read shape from `:3330-3339`.
+- **`GitBench/Features/Repos/GitUntrackedCacheService.cs`** (new) — the `IHostedService` above.
+- **`GitBench/Features/StatusBar/StatusBarViewModel.cs`** — inject the `State<bool>`; add
+  `BuildSettingsMenu()` mirroring `BuildLanguageMenu:241`.
+- **`GitBench/Features/StatusBar/StatusBarView.cs`** — a gear `StatusBarIconButton` + `WithMenuController`
+  beside the theme toggle (`:82-92` is the sibling row).
+- **`GitBench/Widgets/LucideIcons.cs`** — add a `Settings`/`Sliders` glyph const (codepoint via the
+  documented post+cmap extraction script).
+- **`GitBench/Localization/Strings/*.json`** (all six) — the menu label + tooltip keys (LOC004).
+- **`GitBench.Tests/GitUntrackedCacheTests.cs`** (new) — see *Test plan*.
+
+#### Watch
+
+- **`--test-untracked-cache` is a stat probe, not free-but-cheap-enough**, and it runs once per primary
+  at apply-time, off-thread — acceptable, and it is what makes the write safe on network/virtualized
+  mounts. If it ever shows up as a startup cost on a many-repo tree, it is gate-able behind §6's read
+  gate like every other background read, but it is not on the hot path (one shot per repo, write-if-absent
+  after).
+- **No new `RepoWatcher` interaction — assert it, don't assume it.** The claim that untrackedCache adds
+  nothing for the watcher rests on the cache riding `.git/index`, which `RepoWatcher` deliberately does
+  not treat as a working-tree signal (`RepoWatcher.cs:19-31`). That is a read of the current classifier;
+  the test plan pins it by enabling the cache in a throwaway repo and confirming a `git status` produces
+  no extra watcher broadcast beyond today's.
+- **`Repos.Changed` fires for worktrees and submodules too** — the `IsPrimary` filter is load-bearing,
+  not cosmetic; without it a submodule's `--local` config gets a redundant write.
+- **Apply must not block repo open.** It is `Task.Run` + log-on-failure; a slow or failing config write
+  on a cold disk must never stall the open flow or surface a dialog.
+- **Off-by-default is a build-time invariant, not a runtime hope.** `Preferences.Default` and the
+  `FileShape` default must both be `false`; a test asserts a fresh prefs file writes no config.
+
+#### Acceptance
+
+- **Off by default.** With default preferences, opening a repo writes **no** `core.untrackedCache` to its
+  `.git/config` and the apply service issues zero `ApplyUntrackedCache` calls.
+- **Enabling is a visible user choice.** The status-bar gear menu carries the toggle; flipping it on
+  writes `core.untrackedCache=true` to the `--local` config of every registered primary (where the probe
+  passes) and to each subsequently-opened primary.
+- **Idempotent and respectful.** Re-opening an already-tuned repo rewrites nothing; a repo with
+  `core.untrackedCache` already set (`true` or `false`) by the user is left exactly as-is.
+- **Never `--global`.** No write ever targets `~/.gitconfig`.
+- **fsmonitor is not enabled** by this item.
+
+#### Test plan
+
+House style — real throwaway repos for the git-facing behaviour, a fake preferences source for the
+service, and no reliance on frame timing.
+
+- **`GitService.ApplyUntrackedCache` (real repo).** `git init` a throwaway repo; assert
+  `ApplyUntrackedCache` sets `core.untrackedCache=true` in `--local` config when absent and the probe
+  passes (read it back with `git config --local --get`); a second call rewrites nothing (idempotent); a
+  repo pre-set to `false` by hand is left `false` and one pre-set to `true` is left `true`
+  (respect-the-user); and the process's `--global` config is untouched (assert `git config --global --get
+  core.untrackedCache` is unaffected — read-only, never written).
+- **`GitUntrackedCacheService` off-by-default.** A real `RepoRegistry` over throwaway repos, a real
+  `State<bool>` seeded `false`, and a **counting/throwing `IGitService`**: register a repo and assert
+  `ApplyUntrackedCache` is never invoked (the throw never fires) and the repo's `.git/config` has no
+  `core.untrackedCache`.
+- **Toggle-on retroactive.** Two primaries already registered, `State<bool>` flips to `true`: assert both
+  receive exactly one `ApplyUntrackedCache`, and a worktree/submodule row in the registry receives none
+  (the `IsPrimary` filter).
+- **On-open apply.** Preference on, then `Open` a fresh throwaway repo: assert it receives the apply and
+  its `.git/config` gains the key.
+- **Watcher-quiet check (optional, fuller).** Enable the cache in a throwaway repo, run a `git status`,
+  and assert no watcher broadcast beyond today's baseline — pinning the "rides `.git/index`, which the
+  classifier ignores" claim rather than trusting it.
+
+The counting `IGitService` is the same fake shape §10 extended (`CountingGitService`), gaining an
+`ApplyUntrackedCache` counter; the `State<bool>` is the fake preferences source (no `PreferencesService`
+needed — the service reads the observable, not the store).
+
+#### Rejected alternatives
+
+- **Ship `core.fsmonitor` in this item (or at all, now).** Rejected with evidence in *fsmonitor:
+  deferred* above: it duplicates `RepoWatcher`'s tree watch, leaves an orphaned daemon after the app
+  closes, sprays `.git/fsmonitor--daemon/` cookie churn the classifier would need a §9-shaped whitelist
+  to ignore, and needs a version/platform gate. The pure-cache half ships; the process-spawning half
+  waits for a measured win that beats that cost.
+- **Write `--global` config.** Rejected: it changes the user's command-line git for every repo on the
+  machine — the surprising side effect "never silent" forbids. `--local` per opened repo is the contained
+  scope.
+- **Per-repo checkbox granularity.** Rejected: no per-repo settings surface exists, and the setting is
+  universally safe-and-beneficial wherever the probe passes, so per-repo control buys a larger UI for a
+  choice that never needs to vary per repo.
+- **Overwrite `core.untrackedCache` unconditionally on apply.** Rejected: it re-flips a value the user
+  explicitly set to `false`, on every open — the literal "fights the user" failure. Write-if-absent is
+  what makes the apply respectful *and* idempotent.
+- **Symmetric unset on disable** (rip the key out of every repo when the toggle goes off). Rejected: a
+  mass automatic multi-repo config mutation is itself the silent write this item forbids, and GitBench
+  can't distinguish its own `true` from the user's; with no daemon to tear down, forward-only-stop is the
+  honest disable.
+- **Build a full `SettingsDialog`.** Rejected for the MVP: the item needs one toggle, and a status-bar
+  gear menu matches the established app-preference surface (theme/language) at a fraction of the cost. A
+  modal settings surface is its own item once the knob count justifies it.
+- **Apply on a manual "tune this repo" button instead of on registration.** Rejected: it makes a
+  universally-safe optimization a per-repo chore and defeats the point (the reads it accelerates run from
+  the moment a repo opens). Registration is the moment the cache should already be on.
+
+- **Note:** independent of every implemented item. Closes no reported symptom on its own — it accelerates
+  the untracked walk root cause E describes, which the other items coordinate but do not shorten. Lowest
+  priority.
+
+#### Implemented
+
+The preference, apply path, hosted service, and status-bar menu landed as designed; fsmonitor was not
+touched.
+
+- **Preference (three files + observable):** `EnableUntrackedCache` on `Preferences` (default false),
+  `PreferencesStore.FileShape` (`bool?`, default false) with Load/Save mappings, `SetEnableUntrackedCache`
+  on `PreferencesService`, and a registered `State<bool>` in `AppServices` `Changed`-wired to the setter
+  — mirroring `HideRemoteOnlyBranches` exactly.
+- **`IGitService.ApplyUntrackedCache(Repo)`** implemented beside `PinLocalIdentity`, whole body in one
+  `RunOperation` (LocalState lock): `config --local --get` (via the `allowExitCode1` read shape) →
+  return `Ok` if any value present (respect the user); `update-index --test-untracked-cache` → return
+  `Ok` if unsupported; else `RunMutation` writes `core.untrackedCache true`. Never `--global`,
+  write-if-absent, idempotent.
+- **`GitUntrackedCacheService : IHostedService`** (`Features/Repos/`) — the preference observable owns
+  the bulk pass (initial-on + flip-on over all registered primaries); the repo list's `Added` event
+  drives the per-open case. `IsPrimary`-filtered, `Task.Run` fire-and-forget, log-on-failure, never
+  blocks a repo open. Registered via `AddHostedService<GitUntrackedCacheService>()`.
+- **UI — the first shared app-preference menu:** a gear `StatusBarIconButton` beside the theme toggle
+  opens `StatusBarViewModel.BuildSettingsMenu()`, one checkable `Item` toggling the `State<bool>` —
+  mirroring `BuildLanguageMenu`. A real `Settings` glyph (U+E154, verified in the Lucide subset font's
+  cmap) was extracted and added to `LucideIcons.cs`.
+- **Deviations:** (1) there are **seven** locale files, not six — both new keys
+  (`statusbar.settings_tooltip`, `statusbar.enable_untracked_cache`) were added to all seven, LOC004
+  passing. (2) `LucideIcons.cs` lives at `Controls/`, not the `Widgets/` the Files list guessed. (3) the
+  registry/preference triggers were split rather than sharing one handler, so a preference-already-on
+  startup does not double-apply (functionally equivalent under write-if-absent). (4) the gear button's
+  `required ICommand` is a no-op `Command` since the menu controller owns the press. All minor.
+- **Tests:** `GitUntrackedCacheTests` — 8 methods over real throwaway repos: sets `true` when absent +
+  probe passes, second apply rewrites nothing, preset `false`/`true` left as-is, `--global` never
+  written, service off-by-default (throwing `IGitService`, no apply, no config), toggle-on retroactive
+  (both primaries once, worktree row skipped), on-open apply. `CountingGitService` gained an
+  `ApplyUntrackedCache` counter + `ThrowOnApplyUntrackedCache`. Full suite: **473 passing.**
 
 ### 9. `worktrees/` gets the whitelist `modules/` already has — **DONE (2026-07-24)**
 
@@ -2517,12 +2881,11 @@ thirty.
   meaningful (one read per tick), §6 records it (`IGitReadGate.LastStatusReadDuration`), and §7 now
   consumes it. That timing seam has no remaining open consumers.
 - ~~§5, §10 and §11 are independent of everything else and of each other, and can go in any order.~~
-  All three done. §5 + §11 were the two halves of root cause C; §10 closed root cause G. §10 is the
-  last symptom-closing item, so **only §8 (opt-in git config, independent, lowest priority) remains.**
+  All three done. §5 + §11 were the two halves of root cause C; §10 closed root cause G.
 - ~~§4 partially nets §5~~ — moot now that nothing can drop a mutation's broadcast. The reconcile
   tick is still the safety net for missed *watcher* events; it is no longer covering for the mutation
   path.
-- §8 is independent and lowest priority.
+- ~~§8 is independent and lowest priority.~~ Done — `core.untrackedCache` shipped; fsmonitor deferred.
 
 **Still open from §3:** the gate-removal question. §3 established that the read-side gate is
 redundant for every branch of `ClassifyGitChange` *except* a possible `git gc --auto` rewriting
@@ -2541,37 +2904,38 @@ the gate, is now what suppresses read echoes on the `worktrees/` branch too.
 | Whole UI freezes opening Discard / Stash, or ticking Amend | §10 | done |
 | A click during a fetch does nothing until the fetch ends | §11 | done |
 | Unremembered / intermittent de-sync | §4 | done |
-| General slowness on HDD | §1, §2, §6, §7, §10, §11 (§9 if worktrees are in use; §8 optional) | all but §8 done |
+| General slowness on HDD | §1, §2, §6, §7, §10, §11 (§9 if worktrees are in use; §8 optional) | done |
 | A worktree's branch list / graph stale after an external checkout | §9 | done |
 
-**Only §8 remains.** Opt-in `core.untrackedCache` + `core.fsmonitor` — both large wins on a slow
-spindle, both writing to the user's repo config, so they must be an explicit, visible per-repo or
-global setting, never silent. It is independent of every implemented item, closes no reported symptom
-on its own (it accelerates the reads the other items coordinate), and is lowest priority. It is the
-only item still at sketch standard; grounding it means reading `PreferencesStore.cs` / the settings UI
-and `GitService.cs`'s config-write surface, and deciding the opt-in granularity (per-repo vs global)
-and where the toggle lives. See §8.
+**All eleven items are implemented.** Every reported symptom in the table above is closed. The test
+suite stands at 473 passing (`GitBench.Tests`), each item's behaviour pinned against real throwaway git
+repos in the house style. §8 shipped `core.untrackedCache` only; its `core.fsmonitor` half is a
+documented deferred follow-up (it spawns a long-lived daemon that duplicates `RepoWatcher`'s own tree
+watch, leaves a process running after the app closes, and its `.git/fsmonitor--daemon/` cookie churn
+would need a §9-shaped classifier whitelist — so the pure-cache half ships and the process-spawning half
+waits for a measured win; §8's plumbing is reused verbatim when it is picked up).
 
-**Three follow-ups deliberately left open, none blocking §8:**
+**Follow-ups deliberately left open, in priority order:**
 
-- §2's *Known gap* — the warm set still runs `WarmLocal` + the all-repos probe. §6's gate bounds it to
+- **§8's fsmonitor half** — the largest remaining win on a slow spindle, gated on the daemon/watcher
+  interaction analysis in §8's *fsmonitor: deferred, with evidence*.
+- **§2's *Known gap*** — a warm repo still runs `WarmLocal` + the all-repos probe. §6's gate bounds it to
   one queued read; closing it needs warm-set knowledge in `RepoStatusStore` and, once throttled, the
   payoff no longer justifies the coupling.
-- §2's *Residual* — a reconcile tick still probes refs after ingesting the working-tree half. Same
+- **§2's *Residual*** — a reconcile tick still probes refs after ingesting the working-tree half. Same
   gate-throttled, same closure requirement.
-- The §1/§2 upstream-glyph mismatch (below): a branch tracking another *local* branch reports
-  `HasUpstream: true` to the status store while `ParseUpstream` maps it to `None`, so its HEAD glyph
-  dims while its badge shows `0/0`.
+- **The §3 gate-removal question** — the read-side activity gate is redundant for every branch of
+  `ClassifyGitChange` except a possible `git gc --auto` rewriting `packed-refs`, never verified
+  empirically. Deferring rather than dropping is safe either way; §9 strengthened the case that the
+  classifier, not the gate, should suppress read echoes.
+- **The §1/§2 local-upstream glyph mismatch** — a branch tracking another *local* branch
+  (`branch.X.remote = .`) reports `HasUpstream: true` to the status store while §1's `ParseUpstream`
+  maps it to `None`, so its HEAD glyph dims while its badge shows `0/0`. Pre-existing since §1; §2
+  changed only which read fills the slot, not what the fields mean.
+- **§10's `GetHeadCommitMessage`** — the one git call left on the UI thread by design (a single-object
+  read seeding editor text). Move it off with an unchanged-since-seed guard only if a slow spindle shows
+  a measured amend-entry stall.
 
 Root cause E's `GitService.cs` and `RepoSnapshotStore.cs` line citations and root cause D's
 `RepoStatusStore.cs` citation were corrected during §2's re-grounding (drifted by four and two lines);
 no claim in either changed.
-
-Root cause E's `GitService.cs` and `RepoSnapshotStore.cs` line citations and root cause D's
-`RepoStatusStore.cs` citation were corrected during §2's re-grounding (drifted by four and two lines);
-no claim in either changed.
-
-One follow-up surfaced by §2's verification and deliberately not folded in: a branch whose upstream is
-another *local* branch (`branch.X.remote = .`) reports `HasUpstream: true` to the status store while
-§1's `ParseUpstream` maps it to `None`, so its HEAD glyph dims while its badge shows `0/0`. Pre-existing
-since §1; §2 changed only which read fills the slot, not what the fields mean.

@@ -48,6 +48,13 @@ internal static class AppServices
         context.AddService(locale);
         context.AddSingleton<ILocalizationService, LocalizationService>();
 
+        // The one source of truth for the opt-in core.untrackedCache setting: the status-bar
+        // settings toggle writes it and GitUntrackedCacheService reads it, so the two can't
+        // disagree about the current value.
+        var enableUntrackedCache = new State<bool>(preferences.Current.EnableUntrackedCache);
+        enableUntrackedCache.Changed += preferences.SetEnableUntrackedCache;
+        context.AddService(enableUntrackedCache);
+
         context.AddPlatformServices();
 
         var statePath = AppPaths.AppDataPath("state.json");
@@ -148,5 +155,9 @@ internal static class AppServices
         context.AddHostedService<WorktreeSyncService>();
         context.AddHostedService<SubmoduleSyncService>();
         context.AddHostedService<SubmodulePointerSyncService>();
+        // Applies the opt-in core.untrackedCache setting to managed primaries; its three deps
+        // (registry, git service, the enable-untracked-cache observable) are all registered above,
+        // so plain reflective ctor injection resolves it.
+        context.AddHostedService<GitUntrackedCacheService>();
     }
 }

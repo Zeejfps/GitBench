@@ -139,6 +139,8 @@
 
   "statusbar.toggle_theme_tooltip": "Переключить тему",
   "statusbar.check_updates_tooltip": "Проверить обновления",
+  "statusbar.settings_tooltip": "Настройки",
+  "statusbar.enable_untracked_cache": "Включить кэш неотслеживаемых файлов",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "Не в LFS",
   "statusbar.identity_none": "Без профиля",

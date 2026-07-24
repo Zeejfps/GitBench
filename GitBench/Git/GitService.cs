@@ -3018,6 +3018,31 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return GitOutcome.Ok;
         });
 
+    // Turns on core.untrackedCache in the repo's --local config so `git status` re-reads only the
+    // directories whose mtime moved instead of walking the whole tree. Write-if-absent inside one
+    // lock: an explicit value (true OR false) the user set is honored untouched, and the
+    // filesystem-support probe gates the write so the cache is never enabled where directory mtime
+    // can't be trusted. Never --global.
+    public GitOutcome ApplyUntrackedCache(Repo repo)
+        => RunOperation(repo, () =>
+        {
+            // An explicit value — either way — is the user's, so write only into the vacuum: this
+            // can never re-flip a hand-set false, on this open or any future one. --get exits 1
+            // (allowed) when the key is unset.
+            var existing = RunGitInternal(repo.Path, allowExitCode1: true, out var readErr,
+                new[] { "config", "--local", "--get", "core.untrackedCache" })?.Trim();
+            if (readErr != null) return new GitOutcome.Failed(readErr);
+            if (!string.IsNullOrEmpty(existing)) return GitOutcome.Ok;
+
+            // The cache is unsafe where directory mtime is unreliable (network / some virtualized
+            // mounts); this probe exits 0 only where it's sound. Declining there isn't a failure.
+            if (!_runner.Run(repo.Path, new[] { "update-index", "--test-untracked-cache" }).Ok)
+                return GitOutcome.Ok;
+
+            var (ok, err) = RunMutation(repo.Path, new[] { "config", "--local", "core.untrackedCache", "true" });
+            return ok ? GitOutcome.Ok : new GitOutcome.Failed(err!);
+        });
+
     // `git config --local --unset` exits 5 when the key was already absent — that's the desired
     // end state, not a failure, so it's treated as success.
     private (bool Ok, string? Error) UnsetLocalConfig(string repoPath, string key)

@@ -104,6 +104,8 @@
 
   "statusbar.toggle_theme_tooltip": "テーマを切り替え",
   "statusbar.check_updates_tooltip": "アップデートを確認",
+  "statusbar.settings_tooltip": "設定",
+  "statusbar.enable_untracked_cache": "追跡外ファイルのキャッシュを有効にする",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "LFS対象外",
   "statusbar.identity_none": "アイデンティティなし",

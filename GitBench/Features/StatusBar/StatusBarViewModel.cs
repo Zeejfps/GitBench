@@ -32,6 +32,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly UpdateService _updateService;
     private readonly ILocalizationService _loc;
     private readonly State<Locale> _locale;
+    private readonly State<bool> _enableUntrackedCache;
     private readonly SpinnerAnimation _updateSpinner;
     private readonly GenerationGuard _identityLane;
     private CancellationTokenSource? _feedbackCts;
@@ -69,7 +70,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         State<ThemeMode> themeMode,
         UpdateService updateService,
         ILocalizationService loc,
-        State<Locale> locale)
+        State<Locale> locale,
+        State<bool> enableUntrackedCache)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
@@ -81,6 +83,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _updateService = updateService;
         _loc = loc;
         _locale = locale;
+        _enableUntrackedCache = enableUntrackedCache;
         _updateSpinner = new SpinnerAnimation(ticker);
         _identityLane = CreateLane();
 
@@ -252,6 +255,20 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         }
 
         return items;
+    }
+
+    // The shared app-preferences menu (the first of its kind — theme and language have their own
+    // controls). One checkable toggle for the opt-in untracked cache; a check marks it on.
+    public IReadOnlyList<RepoBarContextMenu.Item> BuildSettingsMenu()
+    {
+        var s = _loc.Strings.Value;
+        return new[]
+        {
+            new RepoBarContextMenu.Item(
+                s.StatusbarEnableUntrackedCache,
+                () => _enableUntrackedCache.Value = !_enableUntrackedCache.Value,
+                Checked: _enableUntrackedCache.Value),
+        };
     }
 
     // Built fresh on each chip click so it reflects the current profiles + resolution.

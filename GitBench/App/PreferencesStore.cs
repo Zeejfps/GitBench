@@ -39,6 +39,7 @@ public static class PreferencesStore
         public FileViewMode? FileViewMode { get; set; } = Features.LocalChanges.FileViewMode.Flat;
         public WorkingChangesLayout? WorkingChangesLayout { get; set; } = Features.LocalChanges.WorkingChangesLayout.Diff;
         public bool? HideRemoteOnlyBranches { get; set; } = false;
+        public bool? EnableUntrackedCache { get; set; } = false;
     }
 
     public static Preferences Load(string path)
@@ -74,6 +75,7 @@ public static class PreferencesStore
                 FileViewMode = file.FileViewMode ?? defaults.FileViewMode,
                 WorkingChangesLayout = file.WorkingChangesLayout ?? defaults.WorkingChangesLayout,
                 HideRemoteOnlyBranches = file.HideRemoteOnlyBranches ?? defaults.HideRemoteOnlyBranches,
+                EnableUntrackedCache = file.EnableUntrackedCache ?? defaults.EnableUntrackedCache,
             };
         }
         catch (Exception ex)
@@ -106,6 +108,7 @@ public static class PreferencesStore
             FileViewMode = preferences.FileViewMode,
             WorkingChangesLayout = preferences.WorkingChangesLayout,
             HideRemoteOnlyBranches = preferences.HideRemoteOnlyBranches,
+            EnableUntrackedCache = preferences.EnableUntrackedCache,
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);

@@ -27,6 +27,7 @@ public sealed record Preferences
     public FileViewMode FileViewMode { get; init; } = FileViewMode.Flat;
     public WorkingChangesLayout WorkingChangesLayout { get; init; } = WorkingChangesLayout.Diff;
     public bool HideRemoteOnlyBranches { get; init; }
+    public bool EnableUntrackedCache { get; init; }
 
     public static Preferences Default { get; } = new();
 }

@@ -104,6 +104,8 @@
 
   "statusbar.toggle_theme_tooltip": "切换主题",
   "statusbar.check_updates_tooltip": "检查更新",
+  "statusbar.settings_tooltip": "设置",
+  "statusbar.enable_untracked_cache": "启用未跟踪文件缓存",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "不在 LFS 中",
   "statusbar.identity_none": "无身份",

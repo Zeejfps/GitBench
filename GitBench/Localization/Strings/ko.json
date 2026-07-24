@@ -104,6 +104,8 @@
 
   "statusbar.toggle_theme_tooltip": "테마 전환",
   "statusbar.check_updates_tooltip": "업데이트 확인",
+  "statusbar.settings_tooltip": "설정",
+  "statusbar.enable_untracked_cache": "추적되지 않는 파일 캐시 사용",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "LFS 대상 아님",
   "statusbar.identity_none": "ID 없음",

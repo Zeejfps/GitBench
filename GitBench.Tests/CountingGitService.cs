@@ -18,10 +18,25 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     private int _localChangesCalls;
     private int _headMessageCalls;
     private int _amendStagedCalls;
+    private int _applyUntrackedCacheCalls;
     public int StatusSummaryCalls => Volatile.Read(ref _statusSummaryCalls);
     public int GetLocalChangesCalls => Volatile.Read(ref _localChangesCalls);
     public int GetHeadCommitMessageCalls => Volatile.Read(ref _headMessageCalls);
     public int GetAmendStagedFilesCalls => Volatile.Read(ref _amendStagedCalls);
+    public int ApplyUntrackedCacheCalls => Volatile.Read(ref _applyUntrackedCacheCalls);
+
+    // The repos ApplyUntrackedCache was invoked on, in call order — lets a test assert which rows
+    // got tuned (primaries) and which were skipped (worktrees/submodules). Guarded because applies
+    // run off the UI thread (Task.Run).
+    private readonly List<Repo> _appliedUntrackedCache = new();
+    public IReadOnlyList<Repo> AppliedUntrackedCache
+    {
+        get { lock (_appliedUntrackedCache) return _appliedUntrackedCache.ToList(); }
+    }
+
+    // When set, ApplyUntrackedCache throws instead of delegating — lets a test prove the service
+    // never touches it while the preference is off.
+    public bool ThrowOnApplyUntrackedCache { get; set; }
 
     // When set, the three read paths throw instead of delegating — lets a test prove a code path
     // (e.g. a dialog constructor) never issues a status/head/amend read.
@@ -77,6 +92,16 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     public IReadOnlyList<string> GetRemoteNames(Repo repo) => inner.GetRemoteNames(repo);
     public string? GetRemoteUrl(Repo repo, string remoteName) => inner.GetRemoteUrl(repo, remoteName);
     public GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config) => inner.PinLocalIdentity(repo, config);
+    public GitOutcome ApplyUntrackedCache(Repo repo)
+    {
+        Interlocked.Increment(ref _applyUntrackedCacheCalls);
+        if (ThrowOnApplyUntrackedCache) throw new InvalidOperationException("ApplyUntrackedCache must not run here.");
+        var outcome = inner.ApplyUntrackedCache(repo);
+        // Recorded only after the real write completes, so a test that waits on this list sees a
+        // finished config write (the call counter above fires at entry, before the slow probe).
+        lock (_appliedUntrackedCache) _appliedUntrackedCache.Add(repo);
+        return outcome;
+    }
     public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url) => inner.EditRemote(repo, oldName, newName, url);
     public GitOutcome AddRemote(Repo repo, string name, string url) => inner.AddRemote(repo, name, url);
     public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => inner.Pull(repo, strategy);

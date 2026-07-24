@@ -104,6 +104,8 @@
 
   "statusbar.toggle_theme_tooltip": "Alternar tema",
   "statusbar.check_updates_tooltip": "Buscar actualizaciones",
+  "statusbar.settings_tooltip": "Configuración",
+  "statusbar.enable_untracked_cache": "Habilitar caché de archivos sin seguimiento",
   "statusbar.lfs_tracked": "Git LFS",
   "statusbar.lfs_not_tracked": "No está en LFS",
   "statusbar.identity_none": "Sin identidad",

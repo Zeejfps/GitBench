@@ -45,6 +45,7 @@ internal static class LucideIcons
     public const string Package = "";    // package (submodule rows)
     public const string Sun = "";          // sun
     public const string Moon = "";         // moon
+    public const string Settings = "";     // settings (status-bar app-preferences menu)
     public const string List = "";         // list (flat file view)
     public const string ListTree = "";     // list-tree (tree file view)
     public const string ListFilter = ""; // list-filter (hide remote-only branches)
