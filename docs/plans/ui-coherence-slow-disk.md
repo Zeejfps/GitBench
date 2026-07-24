@@ -14,7 +14,7 @@
 
 ## Root causes
 
-### A. Ahead/behind has four sources of truth — *closed by §1, except the missing trigger*
+### A. Ahead/behind has four sources of truth — *closed by §1*
 
 The same fact is computed by different git processes, launched at different times, refreshed on
 different triggers, and stored in different places:
@@ -278,18 +278,28 @@ differs from the plan text and what the next item inherits:
   the real `GitService` against a throwaway repo + bare origin for every upstream case, the
   one-`Head`-per-listing invariant, and the detached-HEAD-has-no-`Head`-entry case. 26 methods.
 
+**The missing trigger landed with §1**, lifted out of §2 (where it was a sub-bullet) because it is
+independent of that item's parsing work and is what makes the switch case actually *correct* rather
+than merely consistent. `RepoStatusStore.Start` now subscribes to `IRepoRegistry.Active` and refreshes
+the newly active repo. Two consequences worth knowing:
+
+- Subscribing fires immediately, so the active repo is probed at `Start` instead of waiting for
+  `MarkActiveReady` to release the deferred all-repos sweep — the toolbar and status bar populate for
+  the repo the user is looking at without riding the 5s fallback. The cost is that the active repo is
+  probed twice at startup (once here, once when the sweep releases); the second supersedes the first
+  under the existing `_epoch` guard, and §6's shared read gate absorbs the duplicate.
+- `RepoStatusStoreTriggerTests` covers it: switch, initial seed, and switch-back-after-the-repo-moved.
+  It drives the real store over real throwaway repos with a real `RepoRegistry`, and deliberately
+  never calls `MarkActiveReady` — so the active-repo trigger is the *only* thing that can produce a
+  probe, and the test fails outright if it regresses. Only `IUiDispatcher` (a drain-on-demand queue)
+  and `IRepoOperationsStore` are faked.
+
 **What §2 inherits.** `BuildRows` takes `RepoStatus` by value and `_rowModels` is a `Derived` over
 `IRepoStatusStore.Active`, which is itself a `Derived` over the per-repo probe `State` — so anything
 §2 writes into the status store (including its new ingest entry point) reaches the sidebar badge with
-no further plumbing. Two constraints to respect:
-
-- `RepoStatusStore` still does **not** subscribe to `IRepoRegistry.Active`. After §1 a repo switch
-  paints badge and toolbar from the *same* pre-switch probe — consistent but stale, strictly better
-  than the old disagreement. "Probe on active-repo change" (already listed under §2) is the last
-  piece needed for correctness on switch; do not defer it past §2.
-- The optimistic post-push/pull patch now exists **only** in `RepoStatusStore.ApplyOptimisticSync`,
-  and `RepoStatusStore` is the sole subscriber to `RemoteSyncOptimisticMessage`. Do not reintroduce a
-  second patch site in the snapshot store.
+no further plumbing. One constraint to respect: the optimistic post-push/pull patch now exists
+**only** in `RepoStatusStore.ApplyOptimisticSync`, and `RepoStatusStore` is the sole subscriber to
+`RemoteSyncOptimisticMessage`. Do not reintroduce a second patch site in the snapshot store.
 
 ### 2. One observation, one timestamp
 
@@ -325,8 +335,9 @@ under the existing `_epoch` guard. One slot, ordered — not a second slot.
   the now-redundant probe is skipped for the active repo on `WorkingTreeChangedMessage` /
   `CommitCreatedMessage` (both already reload local unconditionally). Keep the probe on
   `RefsChangedMessage` — a fetch moves ahead/behind without touching the working tree.
-- **Also fixes:** the missing trigger from root cause A — probe on active-repo change, so a switch
-  never leaves the toolbar showing a probe from before the switch.
+- ~~**Also fixes:** the missing trigger from root cause A — probe on active-repo change, so a switch
+  never leaves the toolbar showing a probe from before the switch.~~ **Done — landed with §1**
+  (`RepoStatusStore.Start` subscribes to `IRepoRegistry.Active`); see §1's *Implemented* notes.
 - **Watch:** ingest on a *load* result only, never on the cached value `OnActiveChanged:158`
   serves, or a switch-back writes a stale summary over a fresher slot.
 - **Watch:** the dirty bool is currently "any non-header record"; that stays correct only once

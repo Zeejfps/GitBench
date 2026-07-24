@@ -43,9 +43,9 @@ public interface IRepoStatusStore
 /// bounded to the active + warm set for the expensive slices (commit graph, full file lists,
 /// branch listing).
 ///
-/// Probes refresh proactively on <see cref="Start"/> and on repo add, and per-repo on
-/// <see cref="WorkingTreeChangedMessage"/> / <see cref="RefsChangedMessage"/> /
-/// <see cref="CommitCreatedMessage"/> (the watcher emits these for all repos, not just active).
+/// Probes refresh proactively on <see cref="Start"/>, on repo add, and whenever the active repo
+/// changes, and per-repo on <see cref="WorkingTreeChangedMessage"/> / <see cref="RefsChangedMessage"/>
+/// / <see cref="CommitCreatedMessage"/> (the watcher emits these for all repos, not just active).
 /// Each refresh is generation-guarded so a slow result can't clobber a newer one, and a small
 /// semaphore caps how many git processes run at once so a big repo tree doesn't burst at startup.
 /// </summary>
@@ -70,6 +70,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IHostedService, IDispo
     private readonly Derived<RepoStatus> _active;
 
     private IDisposable? _reposSub;
+    private IDisposable? _activeSub;
     private IDisposable? _workingTreeSub;
     private IDisposable? _refsSub;
     private IDisposable? _commitSub;
@@ -105,6 +106,14 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IHostedService, IDispo
         _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
         // Subscribe fires Reset immediately with the current list, seeding a probe for every repo.
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
+        // A switch has to re-probe: every consumer reads the *active* repo's slot, so without this
+        // the toolbar, the status bar and the branches badge all keep showing the previous repo's
+        // numbers until an unrelated message happens to fire. Subscribing fires immediately, which
+        // also seeds the active repo ahead of the startup sweep the Reset above defers.
+        _activeSub = _registry.Active.Subscribe(repo =>
+        {
+            if (repo != null) Refresh(repo.Id);
+        });
     }
 
     public RepoStatus For(Guid repoId)
@@ -203,6 +212,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IHostedService, IDispo
     {
         _disposed = true;
         _reposSub?.Dispose();
+        _activeSub?.Dispose();
         _workingTreeSub?.Dispose();
         _refsSub?.Dispose();
         _commitSub?.Dispose();
