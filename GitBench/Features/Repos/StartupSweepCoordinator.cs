@@ -1,3 +1,5 @@
+using GitBench.Git;
+
 namespace GitBench.Features.Repos;
 
 /// <summary>
@@ -5,8 +7,8 @@ namespace GitBench.Features.Repos;
 /// discovery) against the active repo's first load. Each of those services fans out a git
 /// process per repo the moment the registry first populates; run concurrently with the active
 /// repo's heavy first load they contend for the disk and slow the one thing the user is waiting
-/// for. This holds the initial sweeps until that first load has landed, then releases them under
-/// a shared concurrency cap so the deferred burst can't saturate the disk all at once.
+/// for. This holds the initial sweeps until that first load has landed, then releases them; the
+/// deferred burst is bounded by the shared <see cref="IGitReadGate"/> the discovery reads run under.
 /// </summary>
 internal interface IStartupSweepCoordinator
 {
@@ -14,24 +16,22 @@ internal interface IStartupSweepCoordinator
     // then it is queued; after, it runs synchronously on the caller. Call on the UI thread.
     void RunInitialSweep(Action sweep);
 
-    // Runs one unit of sweep git work off the UI thread under a shared concurrency cap.
-    void RunThrottled(Action work);
+    // Runs one unit of sweep git work off the UI thread under the shared read gate.
+    void RunThrottled(Guid repoId, Action work);
 
     // Releases the queued initial sweeps — called once the active repo's first load lands (or
     // when there is no active repo to wait on). Only the first call releases; the rest are no-ops.
     void MarkActiveReady();
 }
 
-internal sealed class StartupSweepCoordinator : IStartupSweepCoordinator, IDisposable
+internal sealed class StartupSweepCoordinator : IStartupSweepCoordinator
 {
-    // Small enough that a many-repo startup sweep can't burst one git process per repo at once,
-    // large enough to keep interactive (post-startup) syncs responsive.
-    private const int MaxConcurrentSweeps = 4;
-
+    private readonly IGitReadGate _gate;
     private readonly object _lock = new();
-    private readonly SemaphoreSlim _throttle = new(MaxConcurrentSweeps);
     private bool _ready;
     private List<Action>? _pending = new();
+
+    public StartupSweepCoordinator(IGitReadGate gate) => _gate = gate;
 
     public void RunInitialSweep(Action sweep)
     {
@@ -46,13 +46,12 @@ internal sealed class StartupSweepCoordinator : IStartupSweepCoordinator, IDispo
         sweep();
     }
 
-    public void RunThrottled(Action work)
+    public void RunThrottled(Guid repoId, Action work)
     {
         Task.Run(async () =>
         {
-            await _throttle.WaitAsync().ConfigureAwait(false);
-            try { work(); }
-            finally { _throttle.Release(); }
+            using (await _gate.Acquire(repoId, GitReadKind.Discovery))
+                work();
         });
     }
 
@@ -69,6 +68,4 @@ internal sealed class StartupSweepCoordinator : IStartupSweepCoordinator, IDispo
         if (toRun == null) return;
         foreach (var sweep in toRun) sweep();
     }
-
-    public void Dispose() => _throttle.Dispose();
 }

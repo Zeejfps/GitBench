@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -24,8 +25,10 @@ internal sealed record StashDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
+        var snapshot = LocalChangesProjection.ActiveSnapshot(ctx.Require<IRepoSnapshotStore>(), Repo);
         var vm = new StashDialogViewModel(
             new StashRequest(Repo),
+            snapshot,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),

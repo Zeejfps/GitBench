@@ -57,6 +57,10 @@ internal static class AppServices
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
         context.AddSingleton<AppViewModel>();
         context.AddSingleton<IStartupSweepCoordinator, StartupSweepCoordinator>();
+        // The one throttle every background git read shares, so a many-repo tree can't seek-thrash
+        // one disk. Injected into the two stores and the coordinator below; reads only — mutations
+        // serialize on GitRepoLocks and never touch it.
+        context.AddSingleton<IGitReadGate, GitReadGate>();
         context.AddSingleton<IRepoActivityTracker, RepoActivityTracker>();
         context.AddSingleton<IGitService>(ctx =>
             new GitService(ctx.Require<IRepoActivityTracker>()));
@@ -109,7 +113,19 @@ internal static class AppServices
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
 
-        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>();
+        // Factory because the snapshot store ingests the active repo's file-list summary into the
+        // status store, an interface cast (IRepoStatusIngest) the container can't do by plain
+        // injection — the same shape GitIdentityService uses above. IRepoStatusIngest is deliberately
+        // not its own registration: the container owns every factory result, so a second delegating
+        // registration would dispose RepoStatusStore twice.
+        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>(ctx => new RepoSnapshotStore(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IStartupSweepCoordinator>(),
+            (IRepoStatusIngest)ctx.Require<IRepoStatusStore>(),
+            ctx.Require<IGitReadGate>(),
+            ctx.Require<IUiDispatcher>()));
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
         context.AddHostedService<IRepoStatusStore, RepoStatusStore>();
 

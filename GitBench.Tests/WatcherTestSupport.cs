@@ -1,10 +1,26 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
+using GitBench.Git;
 using GitBench.Messages;
 using ZGF.Observable;
 
 namespace GitBench.Tests;
+
+// The timing source §7 injects. Default TimeSpan? is null, so every existing deferral/classifier
+// test keeps its fixed-250ms behaviour unchanged.
+internal sealed class FakeReadGate : IGitReadGate
+{
+    private readonly ConcurrentDictionary<Guid, TimeSpan> _durations = new();
+
+    public void SetStatusDuration(Guid repoId, TimeSpan d) => _durations[repoId] = d;
+
+    public TimeSpan? LastStatusReadDuration(Guid repoId)
+        => _durations.TryGetValue(repoId, out var d) ? d : null;
+
+    public Task<IGitReadGate.Permit> Acquire(Guid repoId, GitReadKind kind)
+        => Task.FromResult(new IGitReadGate.Permit(() => { }));
+}
 
 // Shared scaffolding for the filesystem-watcher and reconcile tests. Both drive real components
 // whose broadcasts arrive through IUiDispatcher, so the test thread decides when they land.

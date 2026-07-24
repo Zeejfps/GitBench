@@ -55,6 +55,8 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     private readonly IGitService _git;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
+    private readonly IRepoStatusIngest _statusIngest;
+    private readonly IGitReadGate _gate;
     // The active repo's first load kicks three slice loads; once all three have landed the active
     // repo is "ready" and the deferred all-repos sweeps may run. UI-thread only.
     private int _firstLoadRemaining = 3;
@@ -95,12 +97,16 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         IGitService git,
         IMessageBus bus,
         IStartupSweepCoordinator sweep,
+        IRepoStatusIngest statusIngest,
+        IGitReadGate gate,
         IUiDispatcher dispatcher)
     {
         _registry = registry;
         _git = git;
         _bus = bus;
         _sweep = sweep;
+        _statusIngest = statusIngest;
+        _gate = gate;
         _dispatcher = dispatcher;
     }
 
@@ -265,7 +271,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     // ---- loads ----
 
     private void ReloadCommits(Repo repo) =>
-        LoadSlice(repo, _commitsLane, _commitsCache, _commits, LoadCommits);
+        LoadSlice(repo, GitReadKind.Commits, _commitsLane, _commitsCache, _commits, LoadCommits);
 
     // Unlike GetBranches/GetLocalChanges, the commit Load can throw. Fold the throw into
     // Failed so the failure reaches the view model (which renders it) instead of being
@@ -280,10 +286,21 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     }
 
     private void ReloadBranches(Repo repo) =>
-        LoadSlice(repo, _branchesLane, _branchesCache, _branches, r => _git.GetBranches(r));
+        LoadSlice(repo, GitReadKind.Branches, _branchesLane, _branchesCache, _branches, r => _git.GetBranches(r));
 
-    private void ReloadLocal(Repo repo) =>
-        LoadSlice(repo, _localLane, _localCache, _local, LoadLocalChanges);
+    // The active/warm repo's file-list read carries the same `git status --branch` summary the status
+    // store would otherwise probe for separately. Reserve the status slot's next epoch before the read
+    // starts, so this observation orders against concurrent probes the same way two probes do, then
+    // publish the parsed summary when the read lands.
+    private void ReloadLocal(Repo repo)
+    {
+        var reservation = _statusIngest.Reserve(repo.Id);
+        LoadSlice(repo, GitReadKind.Status, _localLane, _localCache, _local, LoadLocalChanges,
+            onLanded: result => _statusIngest.Publish(repo.Id, reservation, SummaryOf(result)));
+    }
+
+    private static GitStatusSummary? SummaryOf(Fetched<LocalChangesData>? result)
+        => (result as Fetched<LocalChangesData>.Ok)?.Value.Snapshot.Summary;
 
     private Fetched<LocalChangesData> LoadLocalChanges(Repo repo)
         => _git.GetLocalChanges(repo).Map(snap => BuildLocalData(repo, snap));
@@ -316,27 +333,30 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     // ---- warm loads (non-active repos: refresh the cache only, never the exposed state) ----
 
     private void WarmCommits(Repo repo) =>
-        WarmSlice(repo, _commitsCache, LoadCommits, static s => s is Fetched<CommitSnapshot>.Failed);
+        WarmSlice(repo, GitReadKind.Commits, _commitsCache, LoadCommits, static s => s is Fetched<CommitSnapshot>.Failed);
 
     private void WarmBranches(Repo repo) =>
-        WarmSlice(repo, _branchesCache, r => _git.GetBranches(r), static b => b is Fetched<BranchListing>.Failed);
+        WarmSlice(repo, GitReadKind.Branches, _branchesCache, r => _git.GetBranches(r), static b => b is Fetched<BranchListing>.Failed);
 
     private void WarmLocal(Repo repo) =>
-        WarmSlice(repo, _localCache, LoadLocalChanges, static d => d is Fetched<LocalChangesData>.Failed);
+        WarmSlice(repo, GitReadKind.Status, _localCache, LoadLocalChanges, static d => d is Fetched<LocalChangesData>.Failed);
 
     // Background-refresh a warm (non-active) repo's cached slice so a later switch-back is instant
     // and current. Unlike LoadSlice it never touches the exposed active State — it only updates the
     // cache, and it skips error results so a transient failure can't poison the cache. Best-effort:
     // no generation guard (a switch-back always reloads anyway), so concurrent warms are last-write.
-    private void WarmSlice<T>(Repo repo, RepoSnapshotCache<T> cache, Func<Repo, T> work, Func<T, bool> hasError)
+    private void WarmSlice<T>(Repo repo, GitReadKind kind, RepoSnapshotCache<T> cache, Func<Repo, T> work, Func<T, bool> hasError)
         where T : class
     {
         var dispatcher = _dispatcher;
-        Task.Run(() =>
+        Task.Run(async () =>
         {
             T? result = null;
-            try { result = work(repo); }
-            catch { result = null; }
+            using (await _gate.Acquire(repo.Id, kind))
+            {
+                try { result = work(repo); }
+                catch { result = null; }
+            }
             if (result == null) return;
             dispatcher.Post(() =>
             {
@@ -350,19 +370,24 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     // active state when this load is the latest on its lane AND its repo is still active.
     private void LoadSlice<T>(
         Repo repo,
+        GitReadKind kind,
         GenerationGuard lane,
         RepoSnapshotCache<T> cache,
         State<T?> active,
-        Func<Repo, T> work)
+        Func<Repo, T> work,
+        Action<T?>? onLanded = null)
         where T : class
     {
         var dispatcher = _dispatcher;
         var gen = lane.Bump();
-        Task.Run(() =>
+        Task.Run(async () =>
         {
             T? result = null;
-            try { result = work(repo); }
-            catch { result = null; }
+            using (await _gate.Acquire(repo.Id, kind))
+            {
+                try { result = work(repo); }
+                catch { result = null; }
+            }
 
             dispatcher.Post(() =>
             {
@@ -370,6 +395,10 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
                 if (_firstLoadRemaining > 0 && --_firstLoadRemaining == 0)
                     _sweep.MarkActiveReady();
                 if (result != null) cache.Set(repo.Id, result);
+                // Before the lane-stale return: a lane-stale result is still a legitimate observation
+                // of *this* repo, which is what the ingest orders by (its own reservation), not by
+                // whether it is the active repo's newest load.
+                onLanded?.Invoke(result);
                 if (lane.IsStale(gen)) return;
                 if (result != null && _registry.Active.Value?.Id == repo.Id)
                     active.Value = result;

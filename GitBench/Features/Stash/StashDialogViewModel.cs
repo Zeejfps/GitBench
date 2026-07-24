@@ -37,6 +37,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
 
     public StashDialogViewModel(
         StashRequest request,
+        LocalChangesSnapshot snapshot,
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
@@ -50,9 +51,6 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
         var strings = loc.Strings.Value;
         _doneToast = strings.ToastChangesStashed;
 
-        var snapshot = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
-            ? ok.Value
-            : new LocalChangesSnapshot(_repo.Id, Array.Empty<FileChange>(), Array.Empty<FileChange>());
         var rows = BuildRows(snapshot, _untrackedPaths);
         var preChecked = ComputePreChecked(rows, selectionStore.UnstagedPaths.Value);
         Update(s => s with

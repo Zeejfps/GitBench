@@ -102,7 +102,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
         // The discovery shells out to git and parses output; run it off the UI thread (under the
         // shared sweep cap) and post the registry mutation back. The registry itself is not
         // thread-safe for writes from arbitrary threads.
-        _sweep.RunThrottled(() =>
+        _sweep.RunThrottled(primaryId, () =>
         {
             Repo? primary = null;
             foreach (var r in _registry.Repos)

@@ -34,34 +34,21 @@ internal sealed class AmendSession
     }
 
     /// <summary>
-    /// Builds a session by snapshotting HEAD's message and file list. <paramref name="repo"/>
-    /// may be null — the VM defensively allows entering amend mode with no active repo,
-    /// in which case the session carries empty HEAD data but still remembers the editor
-    /// backups so toggling amend off restores them.
+    /// Builds a session from the pre-amend editor backups, HEAD's message (may be null when there
+    /// is no commit to amend), and a seed staged list. Makes no git calls — the caller has already
+    /// read what it needs; the seed is a stand-in that the amend diff replaces once it lands.
     /// </summary>
     public static AmendSession Begin(
-        IGitService gitService,
-        Repo? repo,
         string preAmendTitle,
-        string preAmendDescription)
-    {
-        if (repo == null)
-        {
-            return new AmendSession(
-                preAmendTitle, preAmendDescription,
-                string.Empty, string.Empty,
-                Array.Empty<FileChange>());
-        }
-
-        var head = gitService.GetHeadCommitMessage(repo);
-        var stagedFiles = gitService.GetAmendStagedFiles(repo);
-        return new AmendSession(
+        string preAmendDescription,
+        HeadCommitMessage? head,
+        IReadOnlyList<FileChange> seedStagedFiles)
+        => new(
             preAmendTitle,
             preAmendDescription,
             head?.Title ?? string.Empty,
             head?.Description ?? string.Empty,
-            stagedFiles);
-    }
+            seedStagedFiles);
 
     /// <summary>Replaces the staged-vs-parent file list. Called from the VM's load path
     /// on every reload so the displayed staged panel tracks index mutations and external

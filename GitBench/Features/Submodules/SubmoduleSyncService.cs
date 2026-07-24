@@ -95,7 +95,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
 
     private void ScheduleSync(Guid hostId)
     {
-        _sweep.RunThrottled(() =>
+        _sweep.RunThrottled(hostId, () =>
         {
             Repo? host = null;
             foreach (var r in _registry.Repos)

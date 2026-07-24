@@ -278,17 +278,24 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
     {
         EditorMode mode;
         string title, description;
+        Repo? refreshRepo = null;
         if (on)
         {
             if (State.Value.Editor is not EditorMode.Normal) return;
+            // Only the cheap single-object head read runs on the UI thread — it seeds the editor text.
+            // The staged panel is seeded with the index-vs-HEAD list the panel already holds; the
+            // amend diff (index-vs-HEAD^) is deferred to the async refresh kicked below.
+            var repo = _registry.Active.Value;
+            var head = repo != null ? _gitService.GetHeadCommitMessage(repo) : null;
             var session = AmendSession.Begin(
-                _gitService,
-                _registry.Active.Value,
                 State.Value.Title,
-                State.Value.Description);
+                State.Value.Description,
+                head,
+                _stagedFromIndex);
             mode = new EditorMode.Amending(session);
             title = session.Title;
             description = session.Description;
+            refreshRepo = repo;
         }
         else
         {
@@ -310,6 +317,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 Selection = LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
             };
         });
+
+        if (refreshRepo != null)
+            RefreshAmendStaged(refreshRepo);
     }
 
     private void DropAmendSession()
@@ -919,20 +929,39 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
         ApplySnapshot(snap, data.Drift);
     }
 
-    // The amend staged panel diffs the index against HEAD's parent, which the status snapshot
-    // doesn't carry — recompute off-thread before applying so index mutations and external HEAD
-    // moves stay reflected. Uses the base Gen lane: a newer push supersedes an older in-flight
-    // refresh.
+    // Applies the fresh snapshot now (the staged panel keeps showing the session's current amend
+    // list until the diff below lands — stale-while-revalidate), then refreshes the amend staged
+    // list off-thread.
     private void ReloadAmendStagedThenApply(Repo repo, LocalChangesSnapshot snap, IReadOnlyList<SubmoduleInfo>? drift)
+    {
+        ApplySnapshot(snap, drift);
+        RefreshAmendStaged(repo);
+    }
+
+    // The amend staged panel diffs the index against HEAD's parent, which no status snapshot carries
+    // — recompute it off-thread and replace the session's list once it lands, so index mutations and
+    // external HEAD moves stay reflected. Shared by amend entry and every reload while amending. Uses
+    // the base Gen lane: a newer push supersedes an older in-flight refresh. Guarded by *still the
+    // active repo* and *still Amending* so a repo switch or toggling amend off mid-flight no-ops.
+    private void RefreshAmendStaged(Repo repo)
     {
         RunBackground<IReadOnlyList<FileChange>>(
             work: () => (_gitService.GetAmendStagedFiles(repo), null),
             onResult: (stagedFiles, _) =>
             {
                 if (_registry.Active.Value?.Id != repo.Id) return;
-                if (State.Value.Editor is EditorMode.Amending amending && stagedFiles != null)
-                    amending.Session.UpdateStagedFiles(stagedFiles);
-                ApplySnapshot(snap, drift);
+                if (State.Value.Editor is not EditorMode.Amending amending || stagedFiles == null) return;
+                amending.Session.UpdateStagedFiles(stagedFiles);
+                Update(s =>
+                {
+                    var staged = ComputeDisplayedStaged(s.Editor);
+                    return s with
+                    {
+                        Staged = staged,
+                        Selection = LocalChanges.Selection.Create(
+                            s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, s.Unstaged, staged),
+                    };
+                });
             });
     }
 

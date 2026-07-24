@@ -30,6 +30,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
 
     public DiscardChangesViewModel(
         DiscardChangesRequest request,
+        LocalChangesSnapshot snapshot,
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
@@ -42,9 +43,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
         var strings = loc.Strings.Value;
         _doneToast = strings.ToastChangesDiscarded;
 
-        var rows = _gitService.GetLocalChanges(_repo) is Fetched<LocalChangesSnapshot>.Ok ok
-            ? BuildRows(ok.Value)
-            : Array.Empty<DiscardFileRow>();
+        var rows = BuildRows(snapshot);
         var preChecked = ComputePreChecked(rows, request.Paths);
         Update(s => s with
         {

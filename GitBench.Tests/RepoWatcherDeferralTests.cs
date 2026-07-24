@@ -29,7 +29,7 @@ public sealed class RepoWatcherDeferralTests : IDisposable
 
         _seen = new ChannelRecorder(_bus);
         var repo = new Repo(Guid.NewGuid(), _dir.Path, "watched");
-        _watcher = new RepoWatcher(repo, _dispatcher, _bus, _gate);
+        _watcher = new RepoWatcher(repo, _dispatcher, _bus, _gate, new FakeReadGate());
     }
 
     [Fact]

@@ -26,7 +26,7 @@ public sealed class RepoWatcherClassifierTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_dir.Path, ".git"));
         _seen = new ChannelRecorder(_bus);
         var repo = new Repo(Guid.NewGuid(), _dir.Path, "primary");
-        _watcher = new RepoWatcher(repo, _dispatcher, _bus, new GateTracker());
+        _watcher = new RepoWatcher(repo, _dispatcher, _bus, new GateTracker(), new FakeReadGate());
     }
 
     // ---- worktrees: the set changed ----

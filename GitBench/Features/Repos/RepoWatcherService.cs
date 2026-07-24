@@ -14,6 +14,7 @@ internal sealed class RepoWatcherService : IHostedService, IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IRepoActivityTracker _activity;
+    private readonly IGitReadGate _readGate;
     private readonly Dictionary<Guid, RepoWatcher> _watchers = new();
     private IDisposable? _reposSub;
 
@@ -21,12 +22,14 @@ internal sealed class RepoWatcherService : IHostedService, IDisposable
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
-        IRepoActivityTracker activity)
+        IRepoActivityTracker activity,
+        IGitReadGate readGate)
     {
         _registry = registry;
         _dispatcher = dispatcher;
         _bus = bus;
         _activity = activity;
+        _readGate = readGate;
     }
 
     public void Start()
@@ -69,7 +72,7 @@ internal sealed class RepoWatcherService : IHostedService, IDisposable
         if (_watchers.ContainsKey(repo.Id)) return;
         try
         {
-            _watchers[repo.Id] = new RepoWatcher(repo, _dispatcher, _bus, _activity);
+            _watchers[repo.Id] = new RepoWatcher(repo, _dispatcher, _bus, _activity, _readGate);
         }
         catch
         {

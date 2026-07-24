@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -27,8 +28,10 @@ internal sealed record DiscardChangesDialog : Widget
 
     protected override IWidget Build(Context ctx)
     {
+        var snapshot = LocalChangesProjection.ActiveSnapshot(ctx.Require<IRepoSnapshotStore>(), Repo);
         var vm = new DiscardChangesViewModel(
             new DiscardChangesRequest(Repo, Paths),
+            snapshot,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),

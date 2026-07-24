@@ -167,10 +167,12 @@ public enum RepoOperationState
 
 public sealed record HeadCommitMessage(string Title, string Description);
 
-// Cheap per-repo signals read from a single `git status --porcelain=v2 --branch`: the current
+// Cheap per-repo signals composed from a `git status --porcelain=v2 --branch`: the current
 // branch / detached / upstream + ahead/behind (the branch header) and whether the working tree has
-// any changes (any non-header record). One probe powers the RepoBar dirty dot, the toolbar's
-// push/pull availability, and the status bar — for every repo, not just the active one.
+// any changes (any non-header record). Powers the RepoBar dirty dot, the toolbar's push/pull
+// availability, and the status bar. Two reads fill it: GetStatusSummary's all-repos probe, and the
+// active/warm repo's file-list read (GetLocalChanges), which parses the same headers in one pass so
+// the file lists and the summary always describe one observation.
 public sealed record GitStatusSummary(
     string? Branch,
     bool IsDetached,

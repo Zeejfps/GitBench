@@ -909,12 +909,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
             var staged = new List<FileChange>();
             var unstaged = new List<FileChange>();
-            ParseStatusPorcelainV2(output, staged, unstaged);
+            var headers = new StatusBranchHeaders();
+            var dirty = false;
+            ParseStatusPorcelainV2(output, staged, unstaged, ref headers, ref dirty);
 
             staged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
             unstaged.Sort(static (a, b) => string.Compare(a.Path, b.Path, StringComparison.OrdinalIgnoreCase));
 
-            return new LocalChangesSnapshot(repo.Id, staged, unstaged);
+            return new LocalChangesSnapshot(repo.Id, staged, unstaged, headers.ToSummary(dirty));
         }
         catch (Exception ex)
         {
@@ -924,8 +926,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     // Porcelain v2 with -z is NUL-terminated. Most records are a single NUL-terminated line;
     // type-2 (rename/copy) records carry an additional NUL-terminated origPath right after, so
-    // we walk byte-by-byte rather than splitting on NUL up front.
-    private static void ParseStatusPorcelainV2(string output, List<FileChange> staged, List<FileChange> unstaged)
+    // we walk byte-by-byte rather than splitting on NUL up front. The `--branch` headers arrive
+    // first as `# branch.*` records and fold into headers; dirty is any non-header record, which
+    // is exactly the summary probe's rule (ParseStatusSummary) so the two reads can't drift.
+    private static void ParseStatusPorcelainV2(
+        string output, List<FileChange> staged, List<FileChange> unstaged,
+        ref StatusBranchHeaders headers, ref bool dirty)
     {
         var idx = 0;
         while (idx < output.Length)
@@ -934,16 +940,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (end < 0) break;
             var record = output[idx..end];
             idx = end + 1;
-            if (record.Length > 0)
-                ParseStatusRecord(record, output, ref idx, staged, unstaged);
+            if (record.Length == 0) continue;
+            if (record[0] != '#') dirty = true;
+            ParseStatusRecord(record, output, ref idx, staged, unstaged, ref headers);
         }
     }
 
     private static void ParseStatusRecord(
-        string record, string output, ref int idx, List<FileChange> staged, List<FileChange> unstaged)
+        string record, string output, ref int idx, List<FileChange> staged, List<FileChange> unstaged,
+        ref StatusBranchHeaders headers)
     {
         switch (record[0])
         {
+            case '#': // "# branch.*" — status header (present with --branch).
+                ApplyStatusHeader(record, ref headers);
+                break;
             case '?': // "? path" — untracked.
                 var path = record.Length > 2 ? record[2..] : string.Empty;
                 if (path.Length > 0)
@@ -1054,7 +1065,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         detail = null;
         var result = _runner.Run(
             workingDir,
-            new[] { "status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
+            new[] { "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
             GitProcessRunner.GitLaunch.Direct);
         if (result.Ok) return result.Stdout;
         // One-line headline for the inline placeholder; full block for the on-demand dialog.
@@ -1091,40 +1102,52 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    // The `# branch.*` headers of a porcelain-v2 status, accumulated. Shared by the -z file-list read
+    // and the \n summary probe so the two cannot drift: same headers, same order, same meaning.
+    private struct StatusBranchHeaders
+    {
+        public string? Branch;
+        public bool IsDetached;
+        public bool HasUpstream;
+        public int Ahead;
+        public int Behind;
+
+        public readonly GitStatusSummary ToSummary(bool isDirty) =>
+            new(Branch, IsDetached, HasUpstream, Ahead, Behind, isDirty);
+    }
+
+    private static void ApplyStatusHeader(string line, ref StatusBranchHeaders h)
+    {
+        if (line.StartsWith("# branch.head ", StringComparison.Ordinal))
+        {
+            var v = line["# branch.head ".Length..];
+            if (v == "(detached)") h.IsDetached = true;
+            else h.Branch = v;
+        }
+        else if (line.StartsWith("# branch.upstream ", StringComparison.Ordinal))
+        {
+            h.HasUpstream = true;
+        }
+        else if (line.StartsWith("# branch.ab ", StringComparison.Ordinal))
+        {
+            ParseAheadBehind(line["# branch.ab ".Length..], out h.Ahead, out h.Behind);
+        }
+    }
+
     // Porcelain v2 emits all `# branch.*` headers first, then one record per changed/untracked path.
     // So the first non-header line means "dirty" and every header is already parsed by then.
     private static GitStatusSummary ParseStatusSummary(string stdout)
     {
-        string? branch = null;
-        var detached = false;
-        var hasUpstream = false;
-        var ahead = 0;
-        var behind = 0;
-
+        var headers = new StatusBranchHeaders();
         foreach (var raw in stdout.Split('\n'))
         {
             var line = raw.TrimEnd('\r');
             if (line.Length == 0) continue;
-            if (line[0] != '#')
-                return new GitStatusSummary(branch, detached, hasUpstream, ahead, behind, IsDirty: true);
-
-            if (line.StartsWith("# branch.head ", StringComparison.Ordinal))
-            {
-                var v = line["# branch.head ".Length..];
-                if (v == "(detached)") detached = true;
-                else branch = v;
-            }
-            else if (line.StartsWith("# branch.upstream ", StringComparison.Ordinal))
-            {
-                hasUpstream = true;
-            }
-            else if (line.StartsWith("# branch.ab ", StringComparison.Ordinal))
-            {
-                ParseAheadBehind(line["# branch.ab ".Length..], out ahead, out behind);
-            }
+            if (line[0] != '#') return headers.ToSummary(isDirty: true);
+            ApplyStatusHeader(line, ref headers);
         }
 
-        return new GitStatusSummary(branch, detached, hasUpstream, ahead, behind, IsDirty: false);
+        return headers.ToSummary(isDirty: false);
     }
 
     // "+<ahead> -<behind>", e.g. "+2 -3".

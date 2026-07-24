@@ -31,7 +31,9 @@ namespace GitBench.Features.Repos;
 //   row list re-bind.
 internal sealed class RepoWatcher : IDisposable
 {
-    private const int DebounceMs = 250;
+    private const int DebounceFloorMs = 250;      // today's value; the coalescing window never drops below it
+    private const int DebounceCeilingMs = 2000;   // a pathological read must not make the app feel dead
+    private const double DecayAlpha = 0.25;       // how fast the window relaxes when reads speed up
     private const int FswBufferBytes = 64 * 1024;
 
     private static readonly StringComparison PathCmp =
@@ -41,6 +43,7 @@ internal sealed class RepoWatcher : IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IRepoActivityTracker _activity;
+    private readonly IGitReadGate _readGate;
 
     private readonly FileSystemWatcher? _treeWatcher;
     private readonly FileSystemWatcher? _gitWatcher;
@@ -59,12 +62,17 @@ internal sealed class RepoWatcher : IDisposable
     private readonly object _timerLock = new();
     private int _disposed;
 
-    public RepoWatcher(Repo repo, IUiDispatcher dispatcher, IMessageBus bus, IRepoActivityTracker activity)
+    // Guarded by _timerLock, like every value the arm reads. One RepoWatcher per repo, so one EWMA.
+    private double _smoothedReadMs;
+    private TimeSpan? _lastSample;                 // last value seen from the gate, to fold each read once
+
+    public RepoWatcher(Repo repo, IUiDispatcher dispatcher, IMessageBus bus, IRepoActivityTracker activity, IGitReadGate readGate)
     {
         _repo = repo;
         _dispatcher = dispatcher;
         _bus = bus;
         _activity = activity;
+        _readGate = readGate;
         _gitDirPrefix = Path.Combine(repo.Path, ".git") + Path.DirectorySeparatorChar;
         _gitmodulesPath = Path.Combine(repo.Path, ".gitmodules");
 
@@ -289,6 +297,25 @@ internal sealed class RepoWatcher : IDisposable
     // in the window is postponed until git goes quiet, never discarded.
     private bool IsOurOwnWrite() => _activity.IsActive(_repo.Path);
 
+    // Called under _timerLock. The coalescing window for the *next* arrival arm, scaled toward this
+    // repo's own status-read cost so a burst on a slow disk coalesces into roughly one reload per
+    // service-time. Reacts to a slower read immediately, relaxes only gradually, so one warm-cache
+    // read doesn't collapse a genuinely slow repo's window back to the floor.
+    internal int CurrentDebounceMs()
+    {
+        if (_readGate.LastStatusReadDuration(_repo.Id) is not { } reading)
+            return DebounceFloorMs;                // cold repo: no read yet, fall back to today's default
+        if (reading != _lastSample)                // a genuinely new read has landed since we last sampled
+        {
+            _lastSample = reading;
+            var ms = reading.TotalMilliseconds;
+            _smoothedReadMs = ms >= _smoothedReadMs
+                ? ms                                             // attack: the disk got slower — react now
+                : DecayAlpha * ms + (1 - DecayAlpha) * _smoothedReadMs;   // decay: relax slowly
+        }
+        return (int)Math.Clamp(_smoothedReadMs, DebounceFloorMs, DebounceCeilingMs);
+    }
+
     // One debounce channel. Arrival always sets Pending; the activity gate can only postpone the
     // drain, never cancel it, so there is no path from "event arrived" to "nothing ever happens".
     private sealed class Channel
@@ -314,7 +341,7 @@ internal sealed class RepoWatcher : IDisposable
         {
             if (_disposed != 0) return;
             channel.Pending = true;
-            channel.Debounce.Change(DebounceMs, Timeout.Infinite);
+            channel.Debounce.Change(CurrentDebounceMs(), Timeout.Infinite);
         }
     }
 
@@ -326,9 +353,11 @@ internal sealed class RepoWatcher : IDisposable
             if (_disposed != 0 || !channel.Pending) return;
             // Git is still writing: postpone, don't discard. Re-arming polls at debounce
             // granularity, bounded by the tracker's own quiet tail.
+            // The re-arm polls at the fixed floor (not CurrentDebounceMs) so a parked deferral
+            // notices the reopened gate promptly; only the arrival window scales with read cost.
             if (IsOurOwnWrite())
             {
-                channel.Debounce.Change(DebounceMs, Timeout.Infinite);
+                channel.Debounce.Change(DebounceFloorMs, Timeout.Infinite);
                 return;
             }
             channel.Pending = false;
