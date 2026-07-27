@@ -207,6 +207,55 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         slot3.Dispose();
     }
 
+    // ---- §3 optimistic commit: the ahead count must not wait on the post-commit reload ----
+    //
+    // Nothing probes the active repo after a commit (§2) — the fresh count rides in on the file-list
+    // reload's `git status`, a whole working-tree walk later. The patch is what stops the push button
+    // sitting disabled, and the sidebar badge showing the old number, behind an already-emptied panel.
+
+    [Fact]
+    public void A_commit_bumps_the_tracked_ahead_count_without_probing()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+        Seed(h, id, Tracked(ahead: 0));
+        var before = h.Git.StatusSummaryCalls;
+
+        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+
+        // Synchronous, like every other write to the slot — no drain window can be needed.
+        Assert.Equal(1, h.Store.For(id).Ahead);
+        Assert.Equal(before, h.Git.StatusSummaryCalls);
+    }
+
+    [Fact]
+    public void A_commit_on_a_branch_with_no_upstream_leaves_the_ahead_count_alone()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+        Seed(h, id, Summary("active-branch"));
+
+        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+
+        // Ahead means nothing without an upstream, and the toolbar already enables push as a publish.
+        Assert.Equal(0, h.Store.For(id).Ahead);
+    }
+
+    [Fact]
+    public void The_reload_reconciles_an_optimistic_bump_rather_than_compounding_it()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+        Seed(h, id, Tracked(ahead: 0));
+        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        Assert.Equal(1, h.Store.For(id).Ahead);
+
+        // The bump stands in for the reload's answer; it never becomes part of it.
+        Seed(h, id, Tracked(ahead: 3));
+
+        Assert.Equal(3, h.Store.For(id).Ahead);
+    }
+
     // ---- helpers ----
 
     private void SetActive(string name) => _registry.SetActive(RepoId(name));
@@ -214,6 +263,15 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     private Guid RepoId(string name) => _registry.Repos.Single(r => r.DisplayName == name).Id;
 
     private static GitStatusSummary Summary(string branch) => new(branch, false, false, 0, 0, false);
+
+    private static GitStatusSummary Tracked(int ahead) => new("active-branch", false, true, ahead, 0, false);
+
+    // Writes a summary into the repo's slot the way RepoSnapshotStore's file-list read does.
+    private static void Seed(CountingHarness h, Guid id, GitStatusSummary summary)
+    {
+        var ingest = (IRepoStatusIngest)h.Store;
+        ingest.Publish(id, ingest.Reserve(id), summary);
+    }
 
     private RepoStatusStore NewStore(IGitService git, IUiDispatcher dispatcher)
     {
