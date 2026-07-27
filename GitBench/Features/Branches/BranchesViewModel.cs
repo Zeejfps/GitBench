@@ -42,18 +42,27 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     // One spinner for every row that spins, so they turn in phase off a single frame tick.
     private readonly SpinnerAnimation _syncSpinner;
 
+    // The in-sync mark's timeline. It lives here, not on the row widget, because the refresh that
+    // follows an operation remounts the row it is playing on — a per-widget tween would restart
+    // mid-fade and then be cut off. Reaching the end is also what clears the mark.
+    private readonly Tween _syncMark;
+
     public IReadable<BranchListing?> Listing { get; }
     public IReadable<BranchesUiState> Ui { get; }
     public IReadable<BranchSelection?> Selection { get; }
     public IReadable<string?> BusyBranch { get; }
     public IReadable<string?> SyncingBranch { get; }
-
-    /// <summary>Angle for the badge spinner; bind a row's spinner glyph to it.</summary>
-    public IReadable<float> SyncRotation => _syncSpinner.Rotation;
+    public IReadable<string?> SyncedBranch { get; }
     public IReadable<string?> PendingHead { get; }
     public IReadable<string?> LoadError { get; }
     public IReadable<bool> IsLoading { get; }
     public IReadable<IReadOnlySet<string>> WorktreeBranches { get; }
+
+    /// <summary>Angle for the badge spinner; bind a row's spinner glyph to it.</summary>
+    public IReadable<float> SyncRotation => _syncSpinner.Rotation;
+
+    /// <summary>0→1 over the in-sync mark's lifetime; bind the mark's opacity envelope to it.</summary>
+    public IReadable<float> SyncMarkProgress => _syncMark.Progress;
 
     // The flattened, collapse-aware row list the sidebar renders, projected with value-equality
     // reconciliation so a reload only remounts the rows whose data actually changed and a collapse
@@ -100,6 +109,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _loc = loc;
         _ops = ops;
         _syncSpinner = new SpinnerAnimation(ticker);
+        _syncMark = new Tween(ticker, Transitions.SyncMarkSeconds);
+        _syncMark.Completed += () => Update(s => s with { SyncedBranch = null });
 
         _branchOpGen = CreateLane();
         _stashGen = CreateLane();
@@ -109,6 +120,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Selection = Slice(s => s.Selection);
         BusyBranch = Slice(s => s.BusyBranch);
         SyncingBranch = Slice(s => s.SyncingBranch);
+        SyncedBranch = Slice(s => s.SyncedBranch);
         PendingHead = Slice(s => s.PendingHead);
         LoadError = Slice(s => s.LoadError);
         IsLoading = Slice(s => s.IsLoading);
@@ -141,19 +153,47 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // both sources feed one animation rather than each row driving its own tick.
         Subscriptions.Add(_ops.Active.Subscribe(_ => UpdateSyncSpinner()));
         Subscriptions.Add(SyncingBranch.Subscribe(_ => UpdateSyncSpinner()));
+
+        // The operations store broadcasts this only after a push or pull has actually succeeded, and
+        // both move HEAD — so it doubles as "HEAD just went in sync" without a second signal. Fetch
+        // sends none, and needs none: its counts grow rather than clear, so there is nothing to cover.
+        Subscriptions.Add(_bus.SubscribeScoped<RemoteSyncOptimisticMessage>(OnRemoteSynced));
+    }
+
+    private void OnRemoteSynced(RemoteSyncOptimisticMessage msg)
+    {
+        if (msg.RepoId != _activeRepoId) return;
+        MarkSynced(GetHeadBranchName());
     }
 
     /// <summary>
-    /// True while an in-flight operation is moving this branch's ahead/behind counts — a
-    /// fast-forward of the branch itself, a push or pull (which move HEAD), or a fetch (which
-    /// re-reads every upstream). Reads observable slices, so call it inside a reactive binding.
+    /// What this row's trailing slot should show. Reads observable slices, so call it inside a
+    /// reactive binding.
     /// </summary>
-    public bool IsSyncing(LocalBranchRow row)
+    public BranchBadgeKind BadgeKind(LocalBranchRow row)
     {
-        if (row.Upstream != BranchUpstreamKind.Tracked) return false;
+        if (row.Upstream != BranchUpstreamKind.Tracked) return BranchBadgeKind.Counts;
+        if (IsSyncing(row)) return BranchBadgeKind.Syncing;
+        return SyncedBranch.Value == row.Name ? BranchBadgeKind.Synced : BranchBadgeKind.Counts;
+    }
+
+    // In-flight ops that move this branch's ahead/behind counts: a fast-forward of the branch
+    // itself, a push or pull (which move HEAD), or a fetch (which re-reads every upstream).
+    private bool IsSyncing(LocalBranchRow row)
+    {
         if (SyncingBranch.Value == row.Name) return true;
         var ops = _ops.Active.Value;
         return ops.IsFetching || ((ops.IsPushing || ops.IsPulling) && row.IsHead);
+    }
+
+    // Stands the "in sync" mark in front of the branch's counts for a beat once an operation has
+    // brought them level. It outlives the op deliberately: the refresh that reconciles the counts
+    // lands a moment later, and without the mark the row would flash the number it just cleared.
+    // Restart, so a second op marking another branch gets a full pass rather than the tail of this one.
+    private void MarkSynced(string? branchName)
+    {
+        Update(s => s with { SyncedBranch = branchName });
+        if (branchName != null) _syncMark.Restart();
     }
 
     private void UpdateSyncSpinner()
@@ -231,7 +271,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // Listing/IsLoading/LoadError are driven by the store subscription (OnStoreBranches);
         // here we only refresh the per-repo UI fold state, drop the previous repo's selection,
         // and recompute the worktree-branch set. Listing is deliberately left untouched.
-        Update(s => s with { Ui = ui, Selection = null, PendingHead = null });
+        // SyncedBranch is dropped rather than carried: the mark belongs to the repo whose operation
+        // earned it, and a same-named branch here didn't.
+        Update(s => s with { Ui = ui, Selection = null, PendingHead = null, SyncedBranch = null });
         RefreshWorktreeBranches();
     }
 
@@ -632,9 +674,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             {
                 Update(s => s with { BusyBranch = null, SyncingBranch = null });
                 if (outcome is GitOutcome.Failed failed)
+                {
                     bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorFastForwardFailed, failed.Message));
-                else
-                    bus.Broadcast(new RefsChangedMessage(repo.Id));
+                    return;
+                }
+                MarkSynced(branchName);
+                bus.Broadcast(new RefsChangedMessage(repo.Id));
             },
             lane: _branchOpGen);
     }
@@ -1145,6 +1190,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public override void Dispose()
     {
         _syncSpinner.Dispose();
+        _syncMark.Dispose();
         _rows.Dispose();
         _rowModels.Dispose();
         _placeholderText.Dispose();
@@ -1167,8 +1213,10 @@ internal sealed record BranchesState(
     BranchSelection? Selection,
     string? BusyBranch,
     // The branch a fast-forward is moving. Narrower than BusyBranch, which also covers checkout:
-    // only ops that change ahead/behind counts belong here (see BranchesViewModel.IsSyncing).
+    // only ops that change ahead/behind counts belong here (see BranchesViewModel.BadgeKind).
     string? SyncingBranch,
+    // The branch that just went in sync, held for the mark's lifetime (Transitions.SyncMarkSeconds).
+    string? SyncedBranch,
     string? PendingHead,
     bool IsLoading,
     string? LoadError,
@@ -1184,6 +1232,7 @@ internal sealed record BranchesState(
         Selection: null,
         BusyBranch: null,
         SyncingBranch: null,
+        SyncedBranch: null,
         PendingHead: null,
         IsLoading: false,
         LoadError: null,

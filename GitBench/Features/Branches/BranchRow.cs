@@ -44,6 +44,10 @@ public sealed record FolderRow(int Depth, BranchFolder Folder, string DisplayNam
 // What the row draws for its upstream link, flattened from whichever entry case produced it.
 public enum BranchUpstreamKind { None, Gone, Tracked }
 
+// What a branch row's trailing slot shows: its ahead/behind counts, the spinner while an operation
+// moves them, or the mark that the branch just went in sync.
+public enum BranchBadgeKind { Counts, Syncing, Synced }
+
 // Sync is null when there is nothing to say — no upstream, a detached HEAD, or a status the store
 // hasn't probed yet — and the row then draws no badge rather than a zero one.
 public sealed record LocalBranchRow(

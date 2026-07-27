@@ -145,16 +145,21 @@ internal sealed record BranchListRow : Widget<BranchRowState>
     }
 
     // The ahead/behind badge, which gives way to a spinner while an op is moving this branch's
-    // counts — the badge's own numbers are the thing in flux, so they're what reports the wait.
+    // counts — the badge's own numbers are the thing in flux, so they're what reports the wait —
+    // and then to the in-sync mark, which covers the beat before the refreshed counts arrive.
     private static IWidget? TrailingFor(BranchRow row, BranchRowState state)
     {
         if (row is not LocalBranchRow lb) return null;
-        if (state.Syncing is not { } syncing) return SyncBadge(lb.Sync);
-        return new Show
+        if (state.Badge is not { } badge) return SyncBadge(lb.Sync);
+        return new Switch<BranchBadgeKind>
         {
-            When = syncing,
-            Then = () => new BranchSyncSpinner(),
-            Else = () => SyncBadge(lb.Sync) ?? Empty.Widget,
+            Value = badge,
+            Case = kind => kind switch
+            {
+                BranchBadgeKind.Syncing => new BranchSyncSpinner(),
+                BranchBadgeKind.Synced => new BranchSyncMark(),
+                _ => SyncBadge(lb.Sync) ?? Empty.Widget,
+            },
         };
     }
 
