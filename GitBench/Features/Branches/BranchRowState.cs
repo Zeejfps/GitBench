@@ -14,13 +14,20 @@ internal interface IBranchRowInteraction
     IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems();
 }
 
-// Per-row interaction state: owns the hover/context flags and routes the row's click (select or
-// toggle), double-click (checkout / apply), and context menu to the shared BranchesViewModel based
-// on the row's variant.
+// Per-row live state: owns the hover/context flags and the badge's syncing flag, and routes the
+// row's click (select or toggle), double-click (checkout / apply), and context menu to the shared
+// BranchesViewModel based on the row's variant.
 internal sealed class BranchRowState(BranchRow row, BranchesViewModel vm) : IBranchRowInteraction, IDisposable
 {
     public State<bool> Hovered { get; } = new(false);
     public State<bool> ContextHighlighted { get; } = new(false);
+
+    // Non-null only for the rows an op can ever spin — a local branch with a tracked upstream;
+    // every other kind carries no subscription at all.
+    public Derived<bool>? Syncing { get; } =
+        row is LocalBranchRow { Upstream: BranchUpstreamKind.Tracked } branch
+            ? new Derived<bool>(() => vm.IsSyncing(branch))
+            : null;
 
     public void Click()
     {
@@ -65,5 +72,6 @@ internal sealed class BranchRowState(BranchRow row, BranchesViewModel vm) : IBra
     {
         Hovered.Dispose();
         ContextHighlighted.Dispose();
+        Syncing?.Dispose();
     }
 }

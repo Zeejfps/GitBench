@@ -85,7 +85,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
             SpacingBefore = row is RemotesHeaderRow or StashesHeaderRow ? Spacing.Lg : 0,
             Background = Prop.Bind(() =>
                 !Selected() && (state.Hovered.Value || state.ContextHighlighted.Value) ? RS().FillHover : 0u),
-            Trailing = TrailingFor(row),
+            Trailing = TrailingFor(row, state),
         };
 
         return key is { } selKey
@@ -144,14 +144,27 @@ internal sealed record BranchListRow : Widget<BranchRowState>
         };
     }
 
-    private static IWidget? TrailingFor(BranchRow row)
+    // The ahead/behind badge, which gives way to a spinner while an op is moving this branch's
+    // counts — the badge's own numbers are the thing in flux, so they're what reports the wait.
+    private static IWidget? TrailingFor(BranchRow row, BranchRowState state)
     {
-        if (row is not LocalBranchRow { Sync: { } sync }) return null;
-        if (sync is { Ahead: 0, Behind: 0 }) return null;
+        if (row is not LocalBranchRow lb) return null;
+        if (state.Syncing is not { } syncing) return SyncBadge(lb.Sync);
+        return new Show
+        {
+            When = syncing,
+            Then = () => new BranchSyncSpinner(),
+            Else = () => SyncBadge(lb.Sync) ?? Empty.Widget,
+        };
+    }
+
+    private static IWidget? SyncBadge(BranchSync? sync)
+    {
+        if (sync is not { } s || s is { Ahead: 0, Behind: 0 }) return null;
 
         var groups = new List<IWidget>(2);
-        if (sync.Ahead > 0) groups.Add(BadgeGroup(LucideIcons.Push, sync.Ahead, s => s.BranchesView.AheadColor));
-        if (sync.Behind > 0) groups.Add(BadgeGroup(LucideIcons.Pull, sync.Behind, s => s.BranchesView.BehindColor));
+        if (s.Ahead > 0) groups.Add(BadgeGroup(LucideIcons.Push, s.Ahead, st => st.BranchesView.AheadColor));
+        if (s.Behind > 0) groups.Add(BadgeGroup(LucideIcons.Pull, s.Behind, st => st.BranchesView.BehindColor));
         return new Row { Gap = 8f, CrossAxis = CrossAxisAlignment.Center, Children = groups.ToArray() };
     }
 

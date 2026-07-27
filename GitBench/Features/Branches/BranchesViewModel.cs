@@ -7,6 +7,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
@@ -36,11 +37,19 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly IMessageBus _bus;
     private readonly State<MainViewMode> _mode;
     private readonly ILocalizationService _loc;
+    private readonly IRepoOperationsStore _ops;
+
+    // One spinner for every row that spins, so they turn in phase off a single frame tick.
+    private readonly SpinnerAnimation _syncSpinner;
 
     public IReadable<BranchListing?> Listing { get; }
     public IReadable<BranchesUiState> Ui { get; }
     public IReadable<BranchSelection?> Selection { get; }
     public IReadable<string?> BusyBranch { get; }
+    public IReadable<string?> SyncingBranch { get; }
+
+    /// <summary>Angle for the badge spinner; bind a row's spinner glyph to it.</summary>
+    public IReadable<float> SyncRotation => _syncSpinner.Rotation;
     public IReadable<string?> PendingHead { get; }
     public IReadable<string?> LoadError { get; }
     public IReadable<bool> IsLoading { get; }
@@ -79,6 +88,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         State<MainViewMode> mode,
         IRepoSnapshotStore store,
         IRepoStatusStore status,
+        IRepoOperationsStore ops,
+        IFrameTicker ticker,
         ILocalizationService loc)
         : base(dispatcher, BranchesState.Initial)
     {
@@ -87,6 +98,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _bus = bus;
         _mode = mode;
         _loc = loc;
+        _ops = ops;
+        _syncSpinner = new SpinnerAnimation(ticker);
 
         _branchOpGen = CreateLane();
         _stashGen = CreateLane();
@@ -95,6 +108,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Ui = Slice(s => s.Ui);
         Selection = Slice(s => s.Selection);
         BusyBranch = Slice(s => s.BusyBranch);
+        SyncingBranch = Slice(s => s.SyncingBranch);
         PendingHead = Slice(s => s.PendingHead);
         LoadError = Slice(s => s.LoadError);
         IsLoading = Slice(s => s.IsLoading);
@@ -122,6 +136,33 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         Subscriptions.Add(_bus.SubscribeScoped<CheckoutRequestedMessage>(OnCheckoutRequested));
         Subscriptions.Add(_bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged));
         Subscriptions.Add(_registry.WorktreesChanged.Subscribe(_ => RefreshWorktreeBranches()));
+
+        // Row badges spin off the operations store (push/pull/fetch) and our own fast-forward, so
+        // both sources feed one animation rather than each row driving its own tick.
+        Subscriptions.Add(_ops.Active.Subscribe(_ => UpdateSyncSpinner()));
+        Subscriptions.Add(SyncingBranch.Subscribe(_ => UpdateSyncSpinner()));
+    }
+
+    /// <summary>
+    /// True while an in-flight operation is moving this branch's ahead/behind counts — a
+    /// fast-forward of the branch itself, a push or pull (which move HEAD), or a fetch (which
+    /// re-reads every upstream). Reads observable slices, so call it inside a reactive binding.
+    /// </summary>
+    public bool IsSyncing(LocalBranchRow row)
+    {
+        if (row.Upstream != BranchUpstreamKind.Tracked) return false;
+        if (SyncingBranch.Value == row.Name) return true;
+        var ops = _ops.Active.Value;
+        return ops.IsFetching || ((ops.IsPushing || ops.IsPulling) && row.IsHead);
+    }
+
+    private void UpdateSyncSpinner()
+    {
+        var ops = _ops.Active.Value;
+        if (SyncingBranch.Value != null || ops.IsPushing || ops.IsPulling || ops.IsFetching)
+            _syncSpinner.Start();
+        else
+            _syncSpinner.Stop();
     }
 
     private void OnWorktreesChanged(WorktreesChangedMessage _) => RefreshWorktreeBranches();
@@ -581,7 +622,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         if (repo == null) return;
         if (State.Value.IsBranchOpInFlight) return;
 
-        Update(s => s with { BusyBranch = branchName });
+        Update(s => s with { BusyBranch = branchName, SyncingBranch = branchName });
 
         var bus = _bus;
 
@@ -589,7 +630,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             work: () => _gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch),
             onResult: outcome =>
             {
-                Update(s => s with { BusyBranch = null });
+                Update(s => s with { BusyBranch = null, SyncingBranch = null });
                 if (outcome is GitOutcome.Failed failed)
                     bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorFastForwardFailed, failed.Message));
                 else
@@ -1103,6 +1144,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     public override void Dispose()
     {
+        _syncSpinner.Dispose();
         _rows.Dispose();
         _rowModels.Dispose();
         _placeholderText.Dispose();
@@ -1124,6 +1166,9 @@ internal sealed record BranchesState(
     BranchesUiState Ui,
     BranchSelection? Selection,
     string? BusyBranch,
+    // The branch a fast-forward is moving. Narrower than BusyBranch, which also covers checkout:
+    // only ops that change ahead/behind counts belong here (see BranchesViewModel.IsSyncing).
+    string? SyncingBranch,
     string? PendingHead,
     bool IsLoading,
     string? LoadError,
@@ -1138,6 +1183,7 @@ internal sealed record BranchesState(
         Ui: new BranchesUiState(),
         Selection: null,
         BusyBranch: null,
+        SyncingBranch: null,
         PendingHead: null,
         IsLoading: false,
         LoadError: null,
