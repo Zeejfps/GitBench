@@ -800,6 +800,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
                 // staged list, so there's no flicker.
                 _stagedFromIndex = Empty;
 
+                // Same reasoning for the ahead count the push button reads: on the active repo it
+                // only refreshes when that reload's `git status` lands, so the button would sit
+                // disabled behind an emptied panel. Amend is left to the reload — see the message.
+                if (!amend) _bus.Broadcast(new LocalCommitOptimisticMessage(repo.Id));
+
                 // After a successful commit the editor is cleared regardless of mode.
                 // When amending we also drop the session — bypassing SetAmend(false)'s
                 // restore-from-backup, which would put the pre-amend text back.

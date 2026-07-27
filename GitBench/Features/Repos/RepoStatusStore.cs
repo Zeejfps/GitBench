@@ -84,6 +84,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     private IDisposable? _refsSub;
     private IDisposable? _commitSub;
     private IDisposable? _optimisticSyncSub;
+    private IDisposable? _optimisticCommitSub;
     private IDisposable? _refreshSub;
 
     public IReadable<RepoStatus> Active => _active;
@@ -118,6 +119,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => RefreshUnlessActive(m.RepoId));
         _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(m => Refresh(m.RepoId));
         _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
+        _optimisticCommitSub = _bus.SubscribeScoped<LocalCommitOptimisticMessage>(ApplyOptimisticCommit);
         // Subscribe fires Reset immediately with the current list, seeding a probe for every repo.
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
         // A switch has to re-probe: every consumer reads the *active* repo's slot, so without this
@@ -185,6 +187,18 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         if (msg.Ahead is { } ahead) next = next with { Ahead = ahead };
         if (msg.Behind is { } behind) next = next with { Behind = behind };
         if (next != cur) state.Value = next;
+    }
+
+    // Grows the repo's ahead count by the one commit that just landed, ahead of the post-commit
+    // reload that reconciles it. Skipped without a tracked upstream: Ahead means nothing then, and
+    // the toolbar already enables push as a publish. UI-thread only, like every other probe write.
+    private void ApplyOptimisticCommit(LocalCommitOptimisticMessage msg)
+    {
+        if (_disposed) return;
+        var state = Probe(msg.RepoId);
+        var cur = state.Value;
+        if (cur.IsDetached || !cur.HasUpstream) return;
+        state.Value = cur with { Ahead = cur.Ahead + 1 };
     }
 
     // The active repo's file-list reload already runs a `git status` that carries the summary, and
@@ -263,6 +277,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _refsSub?.Dispose();
         _commitSub?.Dispose();
         _optimisticSyncSub?.Dispose();
+        _optimisticCommitSub?.Dispose();
         _refreshSub?.Dispose();
         _active.Dispose();
         foreach (var s in _probe.Values) s.Dispose();
