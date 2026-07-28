@@ -78,6 +78,10 @@ public interface IGitService
     // context). Returns null when that side has no content (root commit's parent, pure add/
     // delete) or on any failure — the caller then renders that side plain.
     string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null);
+    // Same addressing as GetFileText, but the blob's raw bytes — nothing is decoded as text, so
+    // binary content survives. Backs the diff view's image preview. Returns null when that side
+    // has no content, on any failure, or when the blob exceeds maxBytes.
+    byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null);
     RepoOperationState GetOperationState(Repo repo);
     RepoOperation? GetOperation(Repo repo);
     bool HasUnmergedPaths(Repo repo);

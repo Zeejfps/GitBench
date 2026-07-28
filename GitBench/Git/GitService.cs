@@ -3257,35 +3257,59 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         try
         {
             if (!IsGitRepo(repo.Path)) return null;
-
-            switch (side)
-            {
-                case DiffSide.Commit:
-                    if (string.IsNullOrEmpty(commitSha)) return null;
-                    // old = the commit's first parent; new = the commit itself. A root commit has
-                    // no parent, so `<sha>~1:` fails and old comes back null (all-add diff anyway).
-                    return ShowBlob(repo.Path, oldSide ? $"{commitSha}~1:{path}" : $"{commitSha}:{path}");
-
-                case DiffSide.Range:
-                    // Combined range: old = the base blob, new = the head blob.
-                    if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha)) return null;
-                    return ShowBlob(repo.Path, oldSide ? $"{baseSha}:{path}" : $"{commitSha}:{path}");
-
-                case DiffSide.Staged:
-                    // Staged diff is index-vs-HEAD: old = HEAD blob, new = staged (index) blob.
-                    return ShowBlob(repo.Path, oldSide ? $"HEAD:{path}" : $":{path}");
-
-                case DiffSide.WorkingTree:
-                    // HEAD-vs-disk: old = HEAD blob, new = file on disk.
-                    return oldSide ? ShowBlob(repo.Path, $"HEAD:{path}") : ReadWorkingFile(repo.Path, path);
-
-                default: // Unstaged: working-tree-vs-index. old = index blob, new = file on disk.
-                    return oldSide ? ShowBlob(repo.Path, $":{path}") : ReadWorkingFile(repo.Path, path);
-            }
+            var (revPath, onDisk) = ResolveBlobSource(path, side, oldSide, commitSha, baseSha);
+            if (onDisk) return ReadWorkingFile(repo.Path, path);
+            return revPath == null ? null : ShowBlob(repo.Path, revPath);
         }
         catch
         {
             return null;
+        }
+    }
+
+    public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return null;
+            var (revPath, onDisk) = ResolveBlobSource(path, side, oldSide, commitSha, baseSha);
+            if (onDisk) return ReadWorkingFileBytes(repo.Path, path, maxBytes);
+            return revPath == null ? null : ShowBlobBytes(repo.Path, revPath, maxBytes);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Where one side of a diff's content lives: a `git show` rev spec, or the working-tree file
+    // on disk. RevPath is null when the side isn't addressable (a required sha is missing).
+    private static (string? RevPath, bool OnDisk) ResolveBlobSource(
+        string path, DiffSide side, bool oldSide, string? commitSha, string? baseSha)
+    {
+        switch (side)
+        {
+            case DiffSide.Commit:
+                if (string.IsNullOrEmpty(commitSha)) return (null, false);
+                // old = the commit's first parent; new = the commit itself. A root commit has
+                // no parent, so `<sha>~1:` fails and old comes back null (all-add diff anyway).
+                return (oldSide ? $"{commitSha}~1:{path}" : $"{commitSha}:{path}", false);
+
+            case DiffSide.Range:
+                // Combined range: old = the base blob, new = the head blob.
+                if (string.IsNullOrEmpty(commitSha) || string.IsNullOrEmpty(baseSha)) return (null, false);
+                return (oldSide ? $"{baseSha}:{path}" : $"{commitSha}:{path}", false);
+
+            case DiffSide.Staged:
+                // Staged diff is index-vs-HEAD: old = HEAD blob, new = staged (index) blob.
+                return (oldSide ? $"HEAD:{path}" : $":{path}", false);
+
+            case DiffSide.WorkingTree:
+                // HEAD-vs-disk: old = HEAD blob, new = file on disk.
+                return oldSide ? ($"HEAD:{path}", false) : (null, true);
+
+            default: // Unstaged: working-tree-vs-index. old = index blob, new = file on disk.
+                return oldSide ? ($":{path}", false) : (null, true);
         }
     }
 
@@ -3297,12 +3321,32 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return result.Ok ? result.Stdout : null;
     }
 
+    private byte[]? ShowBlobBytes(string workingDir, string revPath, int maxBytes)
+    {
+        var result = _runner.RunBytes(workingDir, new[] { "show", revPath }, maxBytes);
+        return result.Started && result.ExitCode == 0 && !result.Truncated ? result.Stdout : null;
+    }
+
     private static string? ReadWorkingFile(string workingDir, string path)
     {
         try
         {
             var full = Path.IsPathRooted(path) ? path : Path.Combine(workingDir, path);
             return File.Exists(full) ? File.ReadAllText(full) : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static byte[]? ReadWorkingFileBytes(string workingDir, string path, int maxBytes)
+    {
+        try
+        {
+            var full = Path.IsPathRooted(path) ? path : Path.Combine(workingDir, path);
+            if (!File.Exists(full)) return null;
+            return new FileInfo(full).Length > maxBytes ? null : File.ReadAllBytes(full);
         }
         catch
         {

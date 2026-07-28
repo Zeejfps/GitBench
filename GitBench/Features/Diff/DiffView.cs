@@ -9,6 +9,10 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Diff;
 
+// Which body the diff pane shows. Most render states draw as a patch; a conflicted file and an
+// image blob each take over the pane with their own view.
+internal enum DiffBodyKind { Diff, Conflict, Image }
+
 /// <summary>
 /// The diff body itself: a virtualized, scrollable view of a <see cref="DiffResult"/> with
 /// inline per-hunk Stage/Unstage/Discard. It is intentionally headerless — chrome lives in
@@ -16,7 +20,8 @@ namespace GitBench.Features.Diff;
 /// Changes, Commit Details) and <see cref="DiffWindowToolbar"/> for the pop-out window.
 ///
 /// When the selected file is a conflicted (unmerged) working-tree file, the body swaps from
-/// the diff to a <see cref="ConflictResolveView"/> resolution header.
+/// the diff to a <see cref="ConflictResolveView"/> resolution header; when it is an image
+/// blob, to an <see cref="ImagePreviewView"/>.
 /// </summary>
 internal sealed record DiffView : Widget
 {
@@ -38,12 +43,12 @@ internal sealed record DiffView : Widget
         hScrollBar.IsRtl = false;
         content.Use(() => new ScrollSyncController(content, vScrollBar, hScrollBar));
 
-        // Every non-conflict render is pushed into the persistent content view; a Conflict state
-        // swaps in the resolution header instead (see the Switch below), so it's skipped here.
-        // Anchored on the content view so the subscription releases on unmount.
+        // Every render that the diff body actually draws is pushed into the persistent content
+        // view; Conflict and Image swap in their own body instead (see the Switch below), so
+        // they're skipped here. Anchored on the content view so the subscription releases on unmount.
         content.Bind(vm.RenderState, state =>
         {
-            if (state is not DiffRenderState.Conflict)
+            if (state is not (DiffRenderState.Conflict or DiffRenderState.Image))
                 content.SetRenderState(state);
         });
         content.Bind(vm.WorkingTreeHunkStates, content.SetWorkingTreeHunkStates);
@@ -60,13 +65,23 @@ internal sealed record DiffView : Widget
             Background = Theme.Color(s => s.DiffView.PanelBackground),
             Children =
             [
-                new Switch<bool>
+                new Switch<DiffBodyKind>
                 {
-                    // Conflict is the only state that escapes the diff body. Keep both branches
-                    // alive so swapping back to the diff preserves its scroll position.
-                    Value = new Derived<bool>(() => vm.RenderState.Value is DiffRenderState.Conflict),
+                    // Conflict and Image are the states that escape the diff body. Keep every
+                    // branch alive so swapping back to the diff preserves its scroll position.
+                    Value = new Derived<DiffBodyKind>(() => vm.RenderState.Value switch
+                    {
+                        DiffRenderState.Conflict => DiffBodyKind.Conflict,
+                        DiffRenderState.Image => DiffBodyKind.Image,
+                        _ => DiffBodyKind.Diff,
+                    }),
                     KeepAlive = true,
-                    Case = conflict => conflict ? new ConflictResolveView() : diffBody,
+                    Case = kind => kind switch
+                    {
+                        DiffBodyKind.Conflict => new ConflictResolveView(),
+                        DiffBodyKind.Image => new ImagePreviewView(),
+                        _ => diffBody,
+                    },
                 },
             ],
         };

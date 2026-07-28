@@ -64,6 +64,16 @@ internal abstract record DiffRenderState
     // A conflicted (unmerged) working-tree file. Drives the Fork-style resolution header
     // (two side cards + take ours/theirs/both + open-in-editor) instead of a normal diff.
     public sealed record Conflict(string Path, ConflictContext Context) : DiffRenderState;
+    // A PNG/JPEG blob shown as a picture instead of a patch. There is no image diff: this is the
+    // after-side blob, or — when the file was deleted on this side, so there is no after — the
+    // before-side one, flagged by IsOldSide. IsLfs mirrors the diff's LFS status so the header
+    // badge survives the swap away from Loaded.
+    public sealed record Image(
+        string Path,
+        ImagePreview Preview,
+        DiffSide Side,
+        bool IsOldSide,
+        bool IsLfs) : DiffRenderState;
 }
 
 // Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is
@@ -166,13 +176,18 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
         RenderState = Slice(s => s.Render);
         OpError = Slice(s => s.OpError);
-        LfsStatus = Slice(s => s.Render is DiffRenderState.Loaded { Result.IsBinary: true } loaded
-            ? (loaded.Result.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked)
-            : LfsBadge.None);
+        LfsStatus = Slice(s => s.Render switch
+        {
+            DiffRenderState.Loaded { Result.IsBinary: true } l =>
+                l.Result.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked,
+            DiffRenderState.Image img => img.IsLfs ? LfsBadge.Tracked : LfsBadge.NotTracked,
+            _ => LfsBadge.None,
+        });
         CurrentSide = Slice(s => s.Render switch
         {
             DiffRenderState.Loaded l => l.Result.Side,
             DiffRenderState.FullFile ff => ff.Side,
+            DiffRenderState.Image img => img.Side,
             _ => (DiffSide?)null,
         });
         Mode = Slice(s => s.Mode);
@@ -709,10 +724,41 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
 
         var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
+        // An image blob has no readable patch on either mode's terms, so the picture replaces the
+        // body in both — the full-file toggle has nothing else to offer for it.
+        if (BuildImagePreview(git, repo, diff, path, side, commitSha, baseSha) is { } image)
+            return (new LoadResult(image, null), null);
         if (mode == DiffViewMode.Diff)
             return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
         var render = BuildFullFile(git, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText);
         return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
+    }
+
+    // Reads and decodes the blob behind a binary image file, or returns null to leave the diff
+    // rendering as it did before (non-image path, unreadable/oversized blob, LFS pointer standing
+    // in for the real bytes, a format neither codec handles).
+    private static DiffRenderState? BuildImagePreview(
+        IGitService git, Repo repo, DiffResult diff, string path, DiffSide side,
+        string? commitSha, string? baseSha)
+    {
+        if (!diff.IsBinary || diff.ErrorMessage != null) return null;
+        if (!ImagePreviewDecoder.IsPreviewablePath(path)) return null;
+
+        var max = ImagePreviewDecoder.MaxSourceBytes;
+        var isOldSide = false;
+        var bytes = git.GetFileBytes(repo, path, side, oldSide: false, max, commitSha, baseSha);
+        if (bytes == null)
+        {
+            // Deleted on this side: show what it looked like before rather than nothing.
+            bytes = git.GetFileBytes(repo, path, side, oldSide: true, max, commitSha, baseSha);
+            isOldSide = true;
+        }
+        if (bytes == null) return null;
+
+        var preview = ImagePreviewDecoder.TryDecode(bytes);
+        return preview == null
+            ? null
+            : new DiffRenderState.Image(path, preview, side, isOldSide, diff.IsLfs);
     }
 
     private void OnDiffLoaded(LoadResult? result, string? error, Repo repo, string? commitSha, string? baseSha)

@@ -65,6 +65,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
+        <!-- Image codecs behind the diff view's image preview. PngSharp also arrives
+             transitively through ZGF.Gui; referenced explicitly because the app decodes with it
+             directly. -->
+        <ProjectReference Include="..\framework\PngSharp\PngSharp\PngSharp.csproj" />
+        <ProjectReference Include="..\framework\JpegSharp\JpegSharp.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui\ZGF.Gui.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui.Desktop\ZGF.Gui.Desktop.csproj" />
         <ProjectReference Include="..\framework\ZGF.Gui.Generator\ZGF.Gui.Generator.csproj"

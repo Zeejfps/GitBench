@@ -98,6 +98,42 @@ internal sealed class GitProcessRunner
         return new GitResult(proc.ExitCode, stdout, stderr);
     }
 
+    // Raw-bytes variant for blob reads whose content isn't text. Run() decodes stdout as UTF-8,
+    // which replaces every invalid byte sequence with U+FFFD — fine for patches and file text,
+    // fatal for a PNG. This drains the raw pipe instead. Output past `maxBytes` is read and
+    // discarded (the pipe must keep draining or git blocks forever) and reported as truncated,
+    // so a huge blob can't be pulled into memory whole.
+    public (int ExitCode, byte[] Stdout, bool Started, bool Truncated) RunBytes(
+        string workingDir,
+        IReadOnlyList<string> args,
+        int maxBytes,
+        GitLaunch launch = GitLaunch.Direct,
+        bool inject = true)
+    {
+        var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
+        using var _ = _activity.Begin(workingDir);
+        var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args, prefix) : BuildShellPsi(args, workingDir, prefix);
+
+        using var proc = Process.Start(psi);
+        if (proc == null) return (-1, [], false, false);
+
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+        using var captured = new MemoryStream();
+        var buffer = new byte[64 * 1024];
+        var truncated = false;
+        var stdout = proc.StandardOutput.BaseStream;
+        int read;
+        while ((read = stdout.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            if (truncated) continue;
+            if (captured.Length + read > maxBytes) truncated = true;
+            else captured.Write(buffer, 0, read);
+        }
+        proc.WaitForExit();
+        stderrTask.GetAwaiter().GetResult();
+        return (proc.ExitCode, truncated ? [] : captured.ToArray(), true, truncated);
+    }
+
     // Streaming variant for long-running network ops (fetch) that surface progress line by
     // line. Captures everything for post-hoc error extraction and forwards each line live.
     public (int ExitCode, string Captured, bool Started) RunStreaming(
