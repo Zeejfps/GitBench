@@ -1,6 +1,7 @@
 # Rename-safe identity
 
-> **Status: R1 shipped (v0.205.0). R2 code done, blocked on the redirector DNS.** Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
+> **Status: R1–R4 shipped (v0.205.0, v0.206.0, v0.207.0, v0.208.0). R5 recommended against.**
+> Renaming is now a display-string change; the identity is settled. Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
 > `packId` change silently strands existing installs. It does not — see Verified below.
 
 The app now presents as **DiffDino** while its update identity, data folder and executable are still
@@ -198,8 +199,13 @@ it was the likeliest way to break users silently.
 
 - [ ] Re-run this whenever `Velopack`/`vpk` is bumped — it is the regression test for the one
       assumption everything else rests on. (vpk 1.2.0 is already available; 1.1.1 is what shipped.)
-- [ ] Still unproven off Windows: osx-arm64, osx-x64, linux-x64. macOS carries the extra risk that
-      the bundle path and `bundleId` are both involved.
+- [x] **macOS, proven in production.** A real osx install updated 0.199 → 0.208 in one jump —
+      created under `packId GitBench` / exe `GitBench` / `CFBundleExecutable GitBench` at
+      `/Applications/GitBench.app`, landing on a package with a different packId *and* a different
+      executable name inside the bundle — and it relaunched. It also skipped R1–R3 entirely, so an
+      install that missed every intermediate release still arrives intact.
+- [ ] linux-x64 remains unproven. The AppImage is the least like the other two and has the fewest
+      users; worth a check but not a gate.
 
 ## Release sequence
 
