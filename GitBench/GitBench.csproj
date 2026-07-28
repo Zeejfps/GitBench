@@ -12,6 +12,10 @@
         <IsAotCompatible>true</IsAotCompatible>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <ApplicationIcon>Assets\app_icon.ico</ApplicationIcon>
+        <!-- The shipped executable name, and so the mainExe vpk is given in release.yml. Set
+             explicitly because it no longer follows the project name; the namespace deliberately
+             does not follow it either. -->
+        <AssemblyName>DiffDino</AssemblyName>
         <!-- Default for local/dev builds. CI overrides with a -p:Version=<tag> publish arg
              (see release.yml) so the version shown in-app matches the release tag. -->
         <Version>0.0.0-dev</Version>

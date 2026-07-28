@@ -5,7 +5,7 @@
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleName</key><string>DiffDino</string>
 	<key>CFBundleDisplayName</key><string>DiffDino</string>
-	<key>CFBundleExecutable</key><string>GitBench</string>
+	<key>CFBundleExecutable</key><string>DiffDino</string>
 	<key>CFBundleIdentifier</key><string>com.builtbyzee.gitbench</string>
 	<key>CFBundleShortVersionString</key><string>__VERSION__</string>
 	<key>CFBundleVersion</key><string>__VERSION__</string>

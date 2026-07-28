@@ -47,25 +47,25 @@ jobs:
           - os: windows-latest
             rid: win-x64
             channel: win-x64
-            exe: GitBench.exe
+            exe: DiffDino.exe
             icon: GitBench/Assets/app_icon.ico
             extra: ""
           - os: macos-latest          # Apple Silicon runner
             rid: osx-arm64
             channel: osx-arm64
-            exe: GitBench
+            exe: DiffDino
             icon: macicon/AppIcon.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: macos-15-intel         # Intel runner (macos-13 was retired Dec 2025)
             rid: osx-x64
             channel: osx-x64
-            exe: GitBench
+            exe: DiffDino
             icon: macicon/AppIcon.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux-x64
-            exe: GitBench
+            exe: DiffDino
             icon: GitBench/Assets/app_icon.png
             extra: ""
     runs-on: ${{ matrix.os }}
@@ -124,7 +124,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          APP=bundle/GitBench.app
+          APP=bundle/DiffDino.app
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp -R publish/${{ matrix.rid }}/. "$APP/Contents/MacOS/"
           cp macicon/Assets.car macicon/AppIcon.icns "$APP/Contents/Resources/"
@@ -135,19 +135,21 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" = "macOS" ]; then
-            echo "dir=bundle/GitBench.app" >> "$GITHUB_OUTPUT"
+            echo "dir=bundle/DiffDino.app" >> "$GITHUB_OUTPUT"
           else
             echo "dir=publish/${{ matrix.rid }}" >> "$GITHUB_OUTPUT"
           fi
 
-      # --packTitle is display and retitles existing installs' shortcuts and uninstall entry on
-      # apply; --packId is the install identity and deliberately still reads GitBench. Changing it
-      # is safe but leaves existing installs at the old path — see docs/plans/rename-safe-identity.md.
+      # --channel is the only value that joins an install to this feed; it can never change.
+      # --packId, --packTitle and --mainExe all moved to DiffDino without breaking existing
+      # installs: they keep updating, retitle their shortcut and uninstall entry, relaunch into the
+      # renamed exe, and stay at %LocalAppData%\GitBench. Verified, not assumed — see the proof in
+      # docs/plans/rename-safe-identity.md before changing any of them again.
       - name: Pack
         shell: bash
         run: >
           vpk pack
-          --packId GitBench
+          --packId DiffDino
           --packVersion ${{ steps.ver.outputs.version }}
           --packDir ${{ steps.packdir.outputs.dir }}
           --mainExe ${{ matrix.exe }}

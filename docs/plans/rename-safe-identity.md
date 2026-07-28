@@ -124,10 +124,12 @@ parts — only reach for it if the `latest/download` form fails the Phase 4 proo
 Given Phase 1 and 2, this is no longer load-bearing: it buys a clean internal name, not correctness.
 It is safe to do because, per Verified, existing installs keep updating throughout.
 
-- [ ] `release.yml`: `--packId GitBench` → `DiffDino`, `--bundleId com.builtbyzee.gitbench` →
-      `com.builtbyzee.diffdino`, matrix `exe:` → `DiffDino` / `DiffDino.exe`, and the bundle
-      assembled at `bundle/DiffDino.app`. (`--packTitle` already shipped in R1.)
-- [ ] `Info.plist.in`: `CFBundleExecutable` and `CFBundleIdentifier` follow the above.
+- [x] `release.yml`: `--packId GitBench` → `DiffDino`, matrix `exe:` → `DiffDino` / `DiffDino.exe`,
+      bundle assembled at `bundle/DiffDino.app`. (`--packTitle` already shipped in R1.)
+- [x] `GitBench.csproj`: explicit `<AssemblyName>DiffDino</AssemblyName>`. `RootNamespace` is a
+      separate MSBuild default, so the namespace stays `GitBench` and no source changes.
+- [x] `Info.plist.in`: `CFBundleExecutable` → `DiffDino`.
+- [ ] `CFBundleIdentifier` is R5, and probably should not happen at all — see below.
 - [ ] Keep the version line **monotonic** across the change. A version that does not increase is the
       one way to genuinely strand installs here, and it is easy to trip by "restarting" versioning
       alongside a new identity.
@@ -137,6 +139,13 @@ It is safe to do because, per Verified, existing installs keep updating througho
 What existing users see afterwards: the shortcut and the Programs & Features entry retitle to
 DiffDino on the next update; the install stays at `%LocalAppData%\GitBench` and
 `/Applications/GitBench.app`.
+
+**R5 should probably not happen.** `com.builtbyzee.gitbench` is invisible — macOS never shows a
+bundle identifier to a user. Changing it costs existing Mac installs their `NSUserDefaults` domain,
+keychain items and TCC permission grants, and buys tidiness in a string nobody reads. That trade is
+backwards, and it contradicts the premise this plan established: identity values are allowed to
+disagree with the brand, because that is exactly what makes the brand free to move. Leave it, and
+let the next genuinely new app be the one that gets a matching identifier.
 
 **Do not chase the stale paths.** The maintainer's suggested Windows fix is a detached `move.bat`
 that renames the program directory out from under the running process, letting Velopack repair the
@@ -203,7 +212,7 @@ and changes one variable so a regression has one suspect.
 | **R2** | Phase 2 — `SimpleWebSource` at the redirector | None | — |
 | **R3** | Any ordinary release | None | **This is the proof of R2**: an R2 install must reach R3 through the redirector, not GitHub |
 | **R4** | Phase 3 — `--packId` and main exe name | Install path stays; relaunches into the renamed exe | Run the Phase 4 scratch-repo proof *first* — do not learn this on real users |
-| **R5** | `bundleId` (macOS, optional) | Resets `NSUserDefaults`, keychain and TCC grants for existing Mac installs | — |
+| **R5** | `bundleId` (macOS) — **recommend dropping** | Resets `NSUserDefaults`, keychain and TCC grants for existing Mac installs | — |
 
 Two properties make this safe to stretch out:
 
