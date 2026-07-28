@@ -3,7 +3,8 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleName</key><string>GitBench</string>
+	<key>CFBundleName</key><string>DiffDino</string>
+	<key>CFBundleDisplayName</key><string>DiffDino</string>
 	<key>CFBundleExecutable</key><string>GitBench</string>
 	<key>CFBundleIdentifier</key><string>com.builtbyzee.gitbench</string>
 	<key>CFBundleShortVersionString</key><string>__VERSION__</string>
