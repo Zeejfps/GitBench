@@ -118,6 +118,12 @@
       <Content Include="..\docs\plans\done\multi-window-mcp-testability.md">
         <Link>docs\plans\done\multi-window-mcp-testability.md</Link>
       </Content>
+      <Content Include="..\docs\plans\done\rename-safe-identity.md">
+        <Link>docs\plans\done\rename-safe-identity.md</Link>
+      </Content>
+      <Content Include="..\docs\plans\done\rename-to-pecia.md">
+        <Link>docs\plans\done\rename-to-pecia.md</Link>
+      </Content>
       <Content Include="..\docs\plans\done\text-input-bugs.md">
         <Link>docs\plans\done\text-input-bugs.md</Link>
       </Content>
@@ -132,12 +138,6 @@
       </Content>
       <Content Include="..\docs\plans\rename-name-research.md">
         <Link>docs\plans\rename-name-research.md</Link>
-      </Content>
-      <Content Include="..\docs\plans\rename-safe-identity.md">
-        <Link>docs\plans\rename-safe-identity.md</Link>
-      </Content>
-      <Content Include="..\docs\plans\rename-to-pecia.md">
-        <Link>docs\plans\rename-to-pecia.md</Link>
       </Content>
       <Content Include="..\docs\plans\semantic-tree-diff.md">
         <Link>docs\plans\semantic-tree-diff.md</Link>
