@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using JpegSharp.Api;
 using PngSharp.Api;
 using PngSharp.Spec.Chunks.IHDR;
@@ -27,6 +28,10 @@ internal static class ImagePreviewDecoder
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
+    private const int IcoDirectorySize = 6;
+    private const int IcoEntrySize = 16;
+    private const int BitmapInfoHeaderSize = 40;
+
     /// <summary>
     /// Whether a path is worth reading the blob for. Cheap extension test used to skip the git
     /// read entirely for the overwhelmingly common non-image binary; the real format check is
@@ -37,16 +42,18 @@ internal static class ImagePreviewDecoder
         var ext = Path.GetExtension(path);
         return ext.Equals(".png", StringComparison.OrdinalIgnoreCase)
             || ext.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
-            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase);
+            || ext.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+            || ext.Equals(".ico", StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>Decodes a PNG or JPEG blob, or returns null for anything else (or a decode failure).</summary>
+    /// <summary>Decodes a PNG, JPEG or ICO blob, or returns null for anything else (or a decode failure).</summary>
     public static ImagePreview? TryDecode(byte[] bytes)
     {
         try
         {
             if (IsPng(bytes)) return DecodePng(bytes);
             if (IsJpeg(bytes)) return DecodeJpeg(bytes);
+            if (IsIco(bytes)) return DecodeIco(bytes);
             return null;
         }
         catch
@@ -58,6 +65,12 @@ internal static class ImagePreviewDecoder
     private static bool IsPng(byte[] b) => b.AsSpan().StartsWith(PngSignature);
 
     private static bool IsJpeg(byte[] b) => b.Length >= 3 && b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF;
+
+    // An icon has no magic string, just a fixed directory header: reserved 0, then type 1.
+    // Type 2 is a cursor, which shares the container but carries a hotspot instead of a colour
+    // plane count and is not offered for preview.
+    private static bool IsIco(byte[] b) =>
+        b.Length >= IcoDirectorySize && b[0] == 0 && b[1] == 0 && b[2] == 1 && b[3] == 0;
 
     private static ImagePreview? DecodeJpeg(byte[] bytes)
     {
@@ -84,6 +97,167 @@ internal static class ImagePreviewDecoder
         }
         return new ImagePreview(width, height, rgba, bytes.Length, Fnv1A64(bytes));
     }
+
+    /// <summary>
+    /// Decodes the largest image in an icon container. An .ico is a ladder of separately drawn
+    /// artwork, and a single-image preview can only show one of them; the largest is the one that
+    /// carries the detail, so a change to it is what a reader is most likely looking for.
+    /// </summary>
+    private static ImagePreview? DecodeIco(byte[] bytes)
+    {
+        var count = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(4));
+        if (count == 0 || bytes.Length < IcoDirectorySize + count * IcoEntrySize) return null;
+
+        long bestPixels = -1;
+        var bestDepth = -1;
+        var bestOffset = 0;
+        var bestLength = 0;
+
+        for (var i = 0; i < count; i++)
+        {
+            var entry = bytes.AsSpan(IcoDirectorySize + i * IcoEntrySize, IcoEntrySize);
+            // The dimension fields are single bytes, so 256 — the largest size an icon may hold —
+            // is stored as 0.
+            int width = entry[0] == 0 ? 256 : entry[0];
+            int height = entry[1] == 0 ? 256 : entry[1];
+            int depth = BinaryPrimitives.ReadUInt16LittleEndian(entry[6..]);
+            var length = (int)BinaryPrimitives.ReadUInt32LittleEndian(entry[8..]);
+            var offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(entry[12..]);
+            if (length <= 0 || offset < IcoDirectorySize || (long)offset + length > bytes.Length) continue;
+
+            var pixels = (long)width * height;
+            // Same size at a richer depth wins: a file carrying both a legacy palettized entry and
+            // a 32bpp one lists them at equal dimensions.
+            if (pixels < bestPixels || (pixels == bestPixels && depth <= bestDepth)) continue;
+            bestPixels = pixels;
+            bestDepth = depth;
+            bestOffset = offset;
+            bestLength = length;
+        }
+
+        if (bestPixels < 0) return null;
+
+        var image = bytes.AsSpan(bestOffset, bestLength);
+        // Vista onwards stores the large entries as an embedded PNG; everything else is a bare DIB.
+        var decoded = image.StartsWith(PngSignature) ? DecodePng(image.ToArray()) : DecodeIconDib(image);
+
+        // Report the whole container, not the one entry that got picked: the caption is describing
+        // the file, and the hash has to change when any entry does or the texture goes stale.
+        return decoded == null
+            ? null
+            : decoded with { SourceBytes = bytes.Length, ContentHash = Fnv1A64(bytes) };
+    }
+
+    /// <summary>
+    /// Decodes one icon entry stored as a device-independent bitmap: a BITMAPINFOHEADER whose
+    /// height covers the colour rows *and* a trailing 1bpp AND mask, bottom-up BGRA/BGR/indexed
+    /// rows padded to 4 bytes.
+    /// </summary>
+    private static ImagePreview? DecodeIconDib(ReadOnlySpan<byte> dib)
+    {
+        if (dib.Length < BitmapInfoHeaderSize) return null;
+        // Icons in the wild only ever use the 40-byte header; the OS/2 and v4/v5 variants would
+        // shift every offset below.
+        if (BinaryPrimitives.ReadUInt32LittleEndian(dib) != BitmapInfoHeaderSize) return null;
+        if (BinaryPrimitives.ReadUInt32LittleEndian(dib[16..]) != 0) return null; // BI_RGB only
+
+        var width = BinaryPrimitives.ReadInt32LittleEndian(dib[4..]);
+        // The stored height stacks the colour rows and the mask, so it is twice the real height.
+        var height = BinaryPrimitives.ReadInt32LittleEndian(dib[8..]) / 2;
+        int bitCount = BinaryPrimitives.ReadUInt16LittleEndian(dib[14..]);
+        if (!IsWithinPixelBudget(width, height)) return null;
+
+        var declaredColors = (int)BinaryPrimitives.ReadUInt32LittleEndian(dib[32..]);
+        var paletteCount = bitCount <= 8 ? (declaredColors != 0 ? declaredColors : 1 << bitCount) : 0;
+        var paletteBytes = paletteCount * 4;
+
+        var colorStride = (width * bitCount + 31) / 32 * 4;
+        var maskStride = (width + 31) / 32 * 4;
+        var colorOffset = BitmapInfoHeaderSize + paletteBytes;
+        var maskOffset = colorOffset + colorStride * height;
+        if (colorOffset + (long)colorStride * height > dib.Length) return null;
+
+        // A 32bpp entry sometimes ships without the mask. Anything shallower has nowhere else to
+        // keep its transparency, so a missing mask there means the entry is malformed.
+        var hasMask = maskOffset + (long)maskStride * height <= dib.Length;
+        if (!hasMask && bitCount != 32) return null;
+
+        var palette = dib.Slice(BitmapInfoHeaderSize, paletteBytes);
+        var rgba = new byte[width * height * 4];
+        var anyAlpha = false;
+
+        for (var y = 0; y < height; y++)
+        {
+            var row = dib.Slice(colorOffset + (height - 1 - y) * colorStride, colorStride);
+            var o = y * width * 4;
+            for (var x = 0; x < width; x++, o += 4)
+            {
+                byte r, g, b, a = 255;
+                switch (bitCount)
+                {
+                    case 32:
+                        b = row[x * 4];
+                        g = row[x * 4 + 1];
+                        r = row[x * 4 + 2];
+                        a = row[x * 4 + 3];
+                        break;
+                    case 24:
+                        b = row[x * 3];
+                        g = row[x * 3 + 1];
+                        r = row[x * 3 + 2];
+                        break;
+                    case 8:
+                    case 4:
+                    case 1:
+                        var index = PaletteIndex(row, x, bitCount);
+                        if (index >= paletteCount) return null;
+                        b = palette[index * 4];
+                        g = palette[index * 4 + 1];
+                        r = palette[index * 4 + 2];
+                        break;
+                    default:
+                        return null;
+                }
+
+                rgba[o] = r;
+                rgba[o + 1] = g;
+                rgba[o + 2] = b;
+                rgba[o + 3] = a;
+                anyAlpha |= a != 0;
+            }
+        }
+
+        // Below 32bpp the transparency lives entirely in the mask. A 32bpp entry whose alpha is
+        // uniformly zero is fully invisible as written, which no author intends — Windows treats
+        // that as "no alpha channel" and falls back to the mask, so match it.
+        if (bitCount != 32 || !anyAlpha)
+        {
+            if (hasMask) ApplyAndMask(rgba, dib, maskOffset, maskStride, width, height);
+            else for (var o = 3; o < rgba.Length; o += 4) rgba[o] = 255;
+        }
+
+        return new ImagePreview(width, height, rgba, dib.Length, Fnv1A64(dib));
+    }
+
+    // A set bit means the colour pixel underneath it is transparent.
+    private static void ApplyAndMask(
+        byte[] rgba, ReadOnlySpan<byte> dib, int maskOffset, int maskStride, int width, int height)
+    {
+        for (var y = 0; y < height; y++)
+        {
+            var row = dib.Slice(maskOffset + (height - 1 - y) * maskStride, maskStride);
+            var o = y * width * 4 + 3;
+            for (var x = 0; x < width; x++, o += 4)
+                rgba[o] = (row[x >> 3] & (0x80 >> (x & 7))) != 0 ? (byte)0 : (byte)255;
+        }
+    }
+
+    private static int PaletteIndex(ReadOnlySpan<byte> row, int x, int bitCount) => bitCount switch
+    {
+        8 => row[x],
+        4 => (row[x >> 1] >> ((x & 1) == 0 ? 4 : 0)) & 0x0F,
+        _ => (row[x >> 3] >> (7 - (x & 7))) & 1,
+    };
 
     private static ImagePreview? DecodePng(byte[] bytes)
     {
