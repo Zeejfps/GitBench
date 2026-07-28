@@ -169,6 +169,10 @@ Partial-availability compounds (bare `.com` gone, not worth it given the table a
 
 **FULL SWEEP + meaning** — bare `.com` ✅ `.dev` ✅ `.app` ✅ NuGet ✅ GitHub 0 repos (one 0★ "diffosaurus" variant exists). The only full-sweep candidate that says what the app *does* (diff — and the Review layout is the product's center). Built-in dinosaur mascot; Docusaurus proved the "-saurus" register works for dev tools. Gates: **connector-vowel spell risk** (diffAsaurus vs diffOsaurus — Docusaurus primes "o"; needs the 3-strangers test more than anything else on the list), 4 syllables, and "-asaurus" connotes *huge and lumbering* — trades the speed story for the diff story. Tone is committed-goofy with no serious-mode fallback. If buying: `diffosaurus.com`/`.dev` are also free — grab both spellings and redirect, which neutralizes the main gate.
 
+### DiffDino (2026-07-28)
+
+**Near-full sweep; beats Diffasaurus.** `.dev` ✅ `.app` ✅ NuGet ✅ GitHub 0 (dinodiff also 0). `diffdino.com` is in **redemption period** (registered 2025-06, expired 2026-06-12, redemption since ~2026-07-24) — **drops ~late Aug 2026; place a backorder** (DropCatch/NameJet) or watch for the drop. Advantages over Diffasaurus: one unambiguous spelling (kills the a/o gate and the buy-both-domains tax), 3 syllables, D-D alliteration, Chrome-Dino friendly association, same mascot + red/green diff-offset icon concept. Caveats: even cuter register ("kids' app / weekend extension" risk), suggestive-not-fanciful mark. **If going dinosaur, this is the one.**
+
 ### P-names sweep (2026-07-27)
 
 16 probed on the speed/flight/boat/fork themes. Bare `.com`/`.dev`/`.app` taken for every real word except `posthaste.dev`. NuGet free except pintail/preflight.
