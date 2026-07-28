@@ -160,9 +160,37 @@ On a scratch repo, not the real one:
 5. Repeat with `SimpleWebSource` against the redirector to cover Phase 2, including a query-string
    feed request.
 
+### Result — win-x64, Velopack/vpk 1.1.1
+
+Run locally rather than against a scratch repo: a throwaway console app packed twice (`ProofOld`
+1.0.0 / `ProofOld.exe` / "Proof Old" → `ProofNew` 1.1.0 / `ProofNew.exe` / "Proof New"), the first
+installed for real, the second served from a localhost feed. Same coverage, no repo to clean up.
+
+| Assertion | Result |
+|---|---|
+| An update is offered across the `packId` change | **Yes** — `offered ProofNew 1.1.0` to a `ProofOld` install |
+| The exe rename carries | `current/` holds only `ProofNew.exe`; the app relaunches from it |
+| The install directory | Unchanged at `%LocalAppData%\ProofOld` — the expected, only cost |
+| Start Menu shortcut | `Proof Old.lnk` **renamed** to `Proof New.lnk` — not duplicated |
+| Programs & Features | Retitled; the registry key itself moved `ProofOld` → `ProofNew`, old key removed, `InstallLocation` still the old path |
+| Uninstall after the rename | Clean — directory, shortcut and registry entry all gone |
+
+Two findings the plan did not predict:
+
+**`AppId` follows the package, not the directory.** After apply, the install reports
+`AppId = ProofNew` while living in `...\ProofOld`. Identity is not sticky, so a *second* rename
+behaves exactly like the first — this does not get harder each time.
+
+**The old root stub survives and still works.** The install root ends up with both `ProofOld.exe`
+and `ProofNew.exe`; the orphaned one reads the manifest and forwards to `current\ProofNew.exe`. So
+pinned taskbar and desktop shortcuts pointing at the old stub keep working after the rename, at the
+cost of one inert extra exe in the root forever. This is the finding that most reduces R4's risk —
+it was the likeliest way to break users silently.
+
 - [ ] Re-run this whenever `Velopack`/`vpk` is bumped — it is the regression test for the one
-      assumption everything else rests on.
-- [ ] Also cover per platform: win-x64, osx-arm64, osx-x64, linux-x64.
+      assumption everything else rests on. (vpk 1.2.0 is already available; 1.1.1 is what shipped.)
+- [ ] Still unproven off Windows: osx-arm64, osx-x64, linux-x64. macOS carries the extra risk that
+      the bundle path and `bundleId` are both involved.
 
 ## Release sequence
 
