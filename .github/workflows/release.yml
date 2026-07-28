@@ -9,10 +9,37 @@ permissions:
   contents: write          # the publish job uses GITHUB_TOKEN to create/attach release assets
 
 jobs:
+  # Compile the Icon Composer .icon once on an Apple Silicon runner (actool needs Xcode 26,
+  # which is arm64-only) into Assets.car (macOS 26+ Liquid Glass) plus a backwards-compatible
+  # AppIcon.icns rendered from the same source for older macOS. Both macOS build jobs consume it.
+  icon:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Compile Icon Composer icon (Assets.car + icns)
+        shell: bash
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)"
+          mkdir -p macicon
+          xcrun actool GitBench/Assets/AppIcon.icon --compile macicon \
+            --output-format human-readable-text --warnings --errors \
+            --output-partial-info-plist macicon/partial.plist \
+            --app-icon AppIcon --include-all-app-icons \
+            --target-device mac --minimum-deployment-target 12.0 --platform macosx
+          test -f macicon/Assets.car && test -f macicon/AppIcon.icns
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac-icon
+          path: macicon/
+          if-no-files-found: error
+
   # Build + Velopack-pack each platform on its own runner (Native AOT can't cross-compile),
   # then hand the packaged output to the publish job as an artifact. No job touches GitHub
   # Releases here, so the matrix jobs never race over who creates the release.
   build:
+    needs: icon
     strategy:
       fail-fast: false     # one platform failing shouldn't abandon the others
       matrix:
@@ -27,13 +54,13 @@ jobs:
             rid: osx-arm64
             channel: osx-arm64
             exe: GitBench
-            icon: GitBench/Assets/app_icon_mac.icns
+            icon: macicon/AppIcon.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: macos-15-intel         # Intel runner (macos-13 was retired Dec 2025)
             rid: osx-x64
             channel: osx-x64
             exe: GitBench
-            icon: GitBench/Assets/app_icon_mac.icns
+            icon: macicon/AppIcon.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: ubuntu-latest
             rid: linux-x64
@@ -74,12 +101,12 @@ jobs:
         shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"   # v1.2.3 -> 1.2.3
 
-      # vpk pack --icon requires an .icns on macOS; convert the PNG with sips/iconutil
-      # (same logic local .app builds use). Windows (.ico) and Linux (.png) need no conversion.
-      - name: Generate macOS .icns
+      - name: Download compiled macOS icon
         if: runner.os == 'macOS'
-        shell: bash
-        run: bash GitBench/png-to-icns.sh GitBench/Assets/app_icon_mac.png GitBench/Assets/app_icon_mac.icns
+        uses: actions/download-artifact@v8
+        with:
+          name: mac-icon
+          path: macicon
 
       - name: Publish (Native AOT, per-RID)
         shell: bash
@@ -89,13 +116,37 @@ jobs:
           -p:Version=${{ steps.ver.outputs.version }}
           -o publish/${{ matrix.rid }}
 
+      # Hand vpk a pre-built .app on macOS so the bundle carries Assets.car + CFBundleIconName
+      # (macOS 26 only themes icons it resolves from the bundle; --icon/--plist alone can't get
+      # Assets.car into Contents/Resources). vpk copies a .app packDir verbatim into
+      # <packTitle>.app and still injects its updater bits, so update identity is unchanged.
+      - name: Assemble macOS .app bundle
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          APP=bundle/GitBench.app
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp -R publish/${{ matrix.rid }}/. "$APP/Contents/MacOS/"
+          cp macicon/Assets.car macicon/AppIcon.icns "$APP/Contents/Resources/"
+          sed "s/__VERSION__/${{ steps.ver.outputs.version }}/g" GitBench/Info.plist.in > "$APP/Contents/Info.plist"
+
+      - name: Choose pack directory
+        id: packdir
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            echo "dir=bundle/GitBench.app" >> "$GITHUB_OUTPUT"
+          else
+            echo "dir=publish/${{ matrix.rid }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Pack
         shell: bash
         run: >
           vpk pack
           --packId GitBench
           --packVersion ${{ steps.ver.outputs.version }}
-          --packDir publish/${{ matrix.rid }}
+          --packDir ${{ steps.packdir.outputs.dir }}
           --mainExe ${{ matrix.exe }}
           --packTitle GitBench
           --packAuthors Zeejfps

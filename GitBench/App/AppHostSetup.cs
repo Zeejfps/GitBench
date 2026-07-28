@@ -70,9 +70,10 @@ internal static class AppHostSetup
 
         public void UsePlatformIcons()
         {
-            // macOS is excluded: GLFW can't set the Dock icon there; it comes from the .app bundle.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 appHost.SetIcon("Assets/app_icon.rgba");
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                MacOsDockIcon.Set(PathUtils.ResolveLocalPath("Assets/app_icon_mac.png"));
 
             // The About dialog and welcome screen show the app icon, so load it into the canvas up
             // front. GL texture upload needs the main context current (a no-op on Metal). macOS
