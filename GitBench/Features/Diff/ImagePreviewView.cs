@@ -54,6 +54,20 @@ internal sealed record ImagePreviewView : Widget
         };
     }
 
+    /// <summary>
+    /// The height this body needs for <paramref name="preview"/> at a given width: the picture at its
+    /// fitted size — never magnified, never taller than <paramref name="maxImageHeight"/> — plus the
+    /// caption. For hosts that lay the body out themselves (the stacked review list) so the slot they
+    /// reserve matches what the view puts in it.
+    /// </summary>
+    internal static float MeasureHeight(ImagePreview preview, float width, float maxImageHeight)
+    {
+        var avail = MathF.Max(0f, width - ImagePreviewSurface.MatInset * 2f);
+        var w = MathF.Min(avail, preview.Width);
+        var h = MathF.Min(w * preview.Height / preview.Width, maxImageHeight);
+        return h + ImagePreviewSurface.MatInset * 2f + CaptionHeight;
+    }
+
     private static string? Caption(DiffViewModel vm, ILocalizationService loc)
     {
         if (vm.RenderState.Value is not DiffRenderState.Image image) return null;
@@ -79,7 +93,8 @@ internal sealed record ImagePreviewView : Widget
 /// </summary>
 internal sealed class ImagePreviewSurface : View
 {
-    private const float MatInset = 12f;
+    /// <summary>Padding between the pane edge and the mat the image is fitted into.</summary>
+    internal const float MatInset = 12f;
 
     private static int _nextInstance;
 

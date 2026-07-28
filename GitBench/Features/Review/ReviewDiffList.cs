@@ -84,6 +84,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private const float FullFileZoneWidth = 24f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
+    // Ceiling on an image body so a tall asset can't push every other file off the surface; the
+    // preview letterboxes inside it and the pop-out window still shows the picture full-size.
+    private const float MaxImageHeight = 420f;
 
     private static readonly TextStyle HeaderGlyphStyle = new()
     {
@@ -106,6 +109,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         VerticalAlignment = TextAlignment.Center,
     };
 
+    // Render states that take over a card's body with their own view instead of diff rows.
+    private enum BodyViewKind { None, Conflict, Image }
+
     // One file's slice of the flattened surface: the header row (gap band + header) plus its body
     // rows — the built diff rows once loaded, a single message row (loading / binary / error /
     // empty) otherwise, nothing while folded.
@@ -119,7 +125,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         public IDisposable? MarksSubscription;
         public DiffRenderState? Render;
         public DiffRowSet RowSet = DiffRowSet.Empty;
-        public View? ConflictView;
+        public View? BodyView;
+        public BodyViewKind BodyKind;
         public bool Folded;
         public int StartRow;
         public int BodyRows;
@@ -163,6 +170,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private bool _metricsResolved;
     private float _naturalWidth;
     private float _lastViewportHeight;
+    private float _lastViewportWidth;
 
     private float _scrollX;
     // A programmatic vertical scroll target re-asserted for a few frames — same guard as
@@ -327,7 +335,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         foreach (var s in _sections)
         {
             if (kept.Contains(s.File.Path)) continue;
-            RemoveConflictView(s);
+            RemoveBodyView(s);
             s.DisposeDiff();
         }
 
@@ -351,7 +359,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     {
         foreach (var s in _sections)
         {
-            RemoveConflictView(s);
+            RemoveBodyView(s);
             s.DisposeDiff();
         }
         _sections.Clear();
@@ -417,7 +425,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var s = _sections[_heightCursor];
         var local = i - s.StartRow;
         if (local == 0) return HeaderRowHeight;
-        if (s.ConflictView != null) return ConflictBodyHeight(s);
+        if (s.BodyView != null) return BodyViewHeight(s);
         return s.RowSet.Rows.Count == 0 ? MessageRowHeight : LineHeight();
     }
 
@@ -426,12 +434,16 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private float BodyHeight(Section s)
     {
         if (s.Folded) return 0f;
-        if (s.ConflictView != null) return ConflictBodyHeight(s);
+        if (s.BodyView != null) return BodyViewHeight(s);
         return s.RowSet.Rows.Count == 0 ? MessageRowHeight : s.RowSet.Rows.Count * LineHeight();
     }
 
-    private float ConflictBodyHeight(Section s)
-        => s.ConflictView!.MeasureHeight(ConflictPanelWidth(s.ConflictView));
+    // A conflict panel measures itself; an image is sized from the blob and the card width, since
+    // the preview fills whatever slot it is given rather than asking for one.
+    private float BodyViewHeight(Section s)
+        => s.Render is DiffRenderState.Image image
+            ? ImagePreviewView.MeasureHeight(image.Preview, CardViewportWidth(), MaxImageHeight)
+            : s.BodyView!.MeasureHeight(ConflictPanelWidth(s.BodyView));
 
     private float ConflictPanelWidth(View view)
         => Math.Max(CardViewportWidth(), view.MeasureWidth());
@@ -486,7 +498,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var oldRowCount = s.RowSet.Rows.Count;
         s.Render = state;
         s.RowSet = DiffRowSet.Build(state, _loc);
-        SyncConflictView(s);
+        SyncBodyView(s);
         // Row indices moved under a selection in this file (a gap expanded, the diff arrived). A
         // same-shape re-emit — the syntax highlight attaching — leaves them valid.
         if (s.RowSet.Rows.Count != oldRowCount) ClearSelectionIn(s.File.Path);
@@ -527,7 +539,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         foreach (var s in _sections)
         {
             GrowNaturalWidth(s);
-            if (s.ConflictView is { } conflict)
+            // An image body never scrolls horizontally — it is fitted to the card — so only the
+            // conflict panel can widen the surface past the viewport.
+            if (s.BodyKind == BodyViewKind.Conflict && s.BodyView is { } conflict)
             {
                 var w = conflict.MeasureWidth();
                 if (w > _naturalWidth) _naturalWidth = w;
@@ -544,48 +558,57 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         if (width > _naturalWidth) _naturalWidth = width;
     }
 
-    private void SyncConflictView(Section s)
+    // A conflicted file and an image blob each replace the card's diff rows with their own view,
+    // built against that section's diff view model and laid out over its single body row.
+    private void SyncBodyView(Section s)
     {
-        if (s.Render is not DiffRenderState.Conflict)
+        var kind = s.Render switch
         {
-            RemoveConflictView(s);
-            return;
-        }
-        if (s.ConflictView != null || s.Diff == null) return;
+            DiffRenderState.Conflict => BodyViewKind.Conflict,
+            DiffRenderState.Image => BodyViewKind.Image,
+            _ => BodyViewKind.None,
+        };
+        if (kind != s.BodyKind) RemoveBodyView(s);
+        if (kind == BodyViewKind.None || s.BodyView != null || s.Diff == null) return;
+
         var scope = new Context(_ctx);
         scope.AddService(s.Diff.Diff);
-        var view = new ConflictResolveView().BuildView(scope);
+        var view = kind == BodyViewKind.Conflict
+            ? new ConflictResolveView().BuildView(scope)
+            : new ImagePreviewView().BuildView(scope);
         view.ZIndex = 50;
-        s.ConflictView = view;
+        s.BodyView = view;
+        s.BodyKind = kind;
         AddChildToSelf(view);
         SetDirty();
     }
 
-    private void RemoveConflictView(Section s)
+    private void RemoveBodyView(Section s)
     {
-        if (s.ConflictView == null) return;
-        RemoveChildFromSelf(s.ConflictView);
-        s.ConflictView = null;
+        s.BodyKind = BodyViewKind.None;
+        if (s.BodyView == null) return;
+        RemoveChildFromSelf(s.BodyView);
+        s.BodyView = null;
         SetDirty();
     }
 
-    private Section? ConflictSectionOf(View child)
+    private Section? BodySectionOf(View child)
     {
         foreach (var s in _sections)
-            if (ReferenceEquals(s.ConflictView, child))
+            if (ReferenceEquals(s.BodyView, child))
                 return s;
         return null;
     }
 
     protected override void OnLayoutChild(in RectF position, View child)
     {
-        if (ConflictSectionOf(child) is { } s)
+        if (BodySectionOf(child) is { } s)
         {
             child.IsVisible = !s.Folded;
             if (s.Folded) return;
             var viewport = CardViewportWidth();
-            var width = ConflictPanelWidth(child);
-            var height = child.MeasureHeight(width);
+            var width = s.BodyKind == BodyViewKind.Image ? viewport : ConflictPanelWidth(child);
+            var height = BodyViewHeight(s);
             if (width > _naturalWidth) _naturalWidth = width;
             child.LeftConstraint = CardLeft() - (width > viewport ? _scrollX : 0f);
             child.WidthConstraint = width;
@@ -1013,10 +1036,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
         EnsureMetrics(c);
         _buttonBar.EnsureMetrics(c);
-        // The overscroll tail is viewport-sized, so a resize re-measures the offset table.
-        if (Math.Abs(_list.Position.Height - _lastViewportHeight) > 0.5f)
+        // The overscroll tail is viewport-sized and an image body is fitted to the card width, so
+        // a resize on either axis re-measures the offset table.
+        if (Math.Abs(_list.Position.Height - _lastViewportHeight) > 0.5f
+            || Math.Abs(_list.Position.Width - _lastViewportWidth) > 0.5f)
         {
             _lastViewportHeight = _list.Position.Height;
+            _lastViewportWidth = _list.Position.Width;
             _list.InvalidateRowHeights();
         }
         ClampHorizontalScroll();
@@ -1320,7 +1346,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         : _loc.Strings.Value.ReviewViewed;
 
     // The single body row of an unloaded / binary / errored / empty section: the card's body
-    // surface with a muted message.
+    // surface with a muted message. Sections that own a body view get the surface only.
     private void DrawMessageRow(ICanvas c, Section s, RectF rowRect, float cardLeft, float cardWidth, int z)
     {
         c.DrawRect(new DrawRectInputs
@@ -1335,7 +1361,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         {
             null => (str.CommonLoading, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Placeholder p => (p.Text, _theme.DiffContent.PlaceholderText),
-            DiffRenderState.Conflict => (string.Empty, _theme.DiffContent.PlaceholderText),
+            // Both draw their own body view over this surface — no message belongs under it.
+            DiffRenderState.Conflict or DiffRenderState.Image => (string.Empty, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded l when l.Result.ErrorMessage != null => (l.Result.ErrorMessage, _theme.DiffContent.ErrorText),
             DiffRenderState.Loaded l when l.Result.IsBinary => (str.DiffBinaryNotShown, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded => (str.DiffNoChanges, _theme.DiffContent.PlaceholderText),
