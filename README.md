@@ -1,4 +1,4 @@
-# GitBench
+# DiffDino
 
 A fast, cross-platform desktop Git client.
 
@@ -11,10 +11,10 @@ A fast, cross-platform desktop Git client.
 ![AI-assisted](https://img.shields.io/badge/AI--assisted-Claude%20Code-8A2BE2)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-GitBench is a lightweight Git GUI built on .NET 10 with a custom GPU-accelerated UI and
+DiffDino is a lightweight Git GUI built on .NET 10 with a custom GPU-accelerated UI and
 compiled to a native executable (Native AOT) — no runtime to install, quick to launch.
 
-![GitBench screenshot](docs/Screenshot.jpg)
+![DiffDino screenshot](docs/Screenshot.jpg)
 
 ## Features
 
@@ -37,10 +37,10 @@ platform directly from the [**latest release**](https://github.com/Zeejfps/GitBe
 - **macOS** (Apple Silicon & Intel) — open the `.pkg` / app bundle.
 - **Linux** — run the `.AppImage`.
 
-Once installed, GitBench keeps itself up to date automatically — when an update is ready it
+Once installed, DiffDino keeps itself up to date automatically — when an update is ready it
 shows a banner, and clicking **Restart** applies it.
 
-> GitBench drives the `git` command line, so make sure **[Git](https://git-scm.com/downloads)**
+> DiffDino drives the `git` command line, so make sure **[Git](https://git-scm.com/downloads)**
 > is installed and on your `PATH`.
 
 ## Building from source
@@ -79,12 +79,12 @@ Issues and pull requests are welcome — head to the
 
 ## Support
 
-If GitBench is useful to you, you can support its development:
+If DiffDino is useful to you, you can support its development:
 
 <a href="https://buymeacoffee.com/zeejfps"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?logo=buymeacoffee&logoColor=000" alt="Buy Me a Coffee"></a>
 
 ## License
 
-GitBench's own source is open source under the [MIT License](LICENSE). The bundled UI
+DiffDino's own source is open source under the [MIT License](LICENSE). The bundled UI
 framework ([ENV Game Framework](https://github.com/Zeejfps/ENV-Game-Framework)) is a separate
 dependency and is not yet covered by this license.
