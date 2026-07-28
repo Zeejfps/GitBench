@@ -6,7 +6,11 @@
 > piece was already out, you took the next and left a gap to fill later. Every copy was verified
 > against the master. It is distributed version control described in the 13th century.
 
-> **Status: not started.** Phase 0 gates everything else.
+> **Status: superseded in part.** The app was renamed to DiffDino, not Pecia, and the identity
+> analysis below is wrong: a `packId` change does *not* stop existing installs updating. Velopack
+> enforces no id match anywhere in the update path — see `rename-safe-identity.md` for the verified
+> behaviour and the current plan. The bridge-release design in Phase 1 is unnecessary. Phases 0, 5
+> and 6 (namespace reservation, assets, outward-facing) still read correctly for any rename.
 
 ## Verified
 

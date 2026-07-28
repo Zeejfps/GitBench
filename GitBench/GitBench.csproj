@@ -129,6 +129,9 @@
       <Content Include="..\docs\plans\rename-name-research.md">
         <Link>docs\plans\rename-name-research.md</Link>
       </Content>
+      <Content Include="..\docs\plans\rename-safe-identity.md">
+        <Link>docs\plans\rename-safe-identity.md</Link>
+      </Content>
       <Content Include="..\docs\plans\rename-to-pecia.md">
         <Link>docs\plans\rename-to-pecia.md</Link>
       </Content>
