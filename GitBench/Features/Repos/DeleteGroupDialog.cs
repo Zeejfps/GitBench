@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls.Dialogs;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -35,7 +36,7 @@ internal sealed record DeleteGroupDialog : Widget
             [
                 new Text
                 {
-                    Value = s.ReposGroupDeleteBody(Group.Name.Value),
+                    Value = s.ReposGroupDeleteBody(Group.Name.Value, AppInfo.DisplayName),
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },

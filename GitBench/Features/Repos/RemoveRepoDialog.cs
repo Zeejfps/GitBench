@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls.Dialogs;
 using GitBench.Git;
 using GitBench.Localization;
@@ -36,7 +37,7 @@ internal sealed record RemoveRepoDialog : Widget
             [
                 new Text
                 {
-                    Value = s.ReposRepoRemoveBody(Repo.DisplayName),
+                    Value = s.ReposRepoRemoveBody(Repo.DisplayName, AppInfo.DisplayName),
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
