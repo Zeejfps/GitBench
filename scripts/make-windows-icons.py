@@ -24,8 +24,8 @@ FILL = (34, 62, 181, 255)
 # that iOS/macOS use, which reads rounder than a plain rounded rectangle at the same radius.
 SQUIRCLE_N = 5.0
 
-# Regions of the 1024x1024 source. Below 48px the legs, tail and facial detail collapse into
-# noise, so the small entries zoom in: HEAD keeps the head and chest, FACE goes tighter still.
+# Regions of the 1024x1024 source. Up to 64px the legs, tail and facial detail collapse into
+# noise, so those entries zoom in: HEAD keeps the head and chest, FACE goes tighter still.
 # Both stop short of x=735, where the tail tip sits detached from the body and would otherwise
 # survive the crop as a stray sliver against the fill.
 BODY = (210, 111, 844, 921)
@@ -37,17 +37,21 @@ FACE = (230, 90, 700, 560)
 SHARPEN = (0.6, 60, 3)
 
 # size -> (crop, fraction of the tile the subject spans, unsharp settings or None)
+# HEAD holds the same framing from 32 through 64 so the taskbar looks the same whatever entry the
+# shell lands on: it asks for 32/40/48 at 100/125/150% scaling, and rounds up to the next entry
+# when there is no exact match.
 LADDER = {
     16: (FACE, 1.00, SHARPEN),
     32: (HEAD, 1.00, SHARPEN),
-    48: (BODY, 0.98, SHARPEN),
-    64: (BODY, 0.94, SHARPEN),
+    40: (HEAD, 1.00, SHARPEN),
+    48: (HEAD, 1.00, SHARPEN),
+    64: (HEAD, 1.00, SHARPEN),
     128: (BODY, 0.88, None),
     256: (BODY, 0.88, None),
     1024: (BODY, 0.88, None),
 }
 
-ICON_SIZES = [16, 32, 48, 64, 128, 256]
+ICON_SIZES = [16, 32, 40, 48, 64, 128, 256]
 
 # Anything larger is emitted as PNG inside the .ico; smaller entries stay uncompressed BMP,
 # which every shell surface can decode.
