@@ -11,7 +11,7 @@
         <PublishAot Condition="'$(Configuration)' == 'Release'">true</PublishAot>
         <IsAotCompatible>true</IsAotCompatible>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-        <ApplicationIcon>Assets\commit_bench_icon.ico</ApplicationIcon>
+        <ApplicationIcon>Assets\app_icon.ico</ApplicationIcon>
         <!-- Default for local/dev builds. CI overrides with a -p:Version=<tag> publish arg
              (see release.yml) so the version shown in-app matches the release tag. -->
         <Version>0.0.0-dev</Version>
@@ -34,14 +34,14 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Update="Assets\commit_bench_icon.rgba">
+        <None Update="Assets\app_icon.rgba">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
         <!-- Shown in-app (About dialog, welcome screen), loaded via GuiApp.LoadImage. -->
-        <None Update="Assets\commit_bench_icon.png">
+        <None Update="Assets\app_icon.png">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
-        <None Update="Assets\commit_bench_icon_mac.png">
+        <None Update="Assets\app_icon_mac.png">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
     </ItemGroup>

@@ -72,14 +72,14 @@ internal static class AppHostSetup
         {
             // macOS is excluded: GLFW can't set the Dock icon there; it comes from the .app bundle.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows) || RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-                appHost.SetIcon("Assets/commit_bench_icon.rgba");
+                appHost.SetIcon("Assets/app_icon.rgba");
 
             // The About dialog and welcome screen show the app icon, so load it into the canvas up
             // front. GL texture upload needs the main context current (a no-op on Metal). macOS
             // gets the bundle-style artwork. A load failure just falls back to a glyph.
             var iconPng = RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                ? "Assets/commit_bench_icon_mac.png"
-                : "Assets/commit_bench_icon.png";
+                ? "Assets/app_icon_mac.png"
+                : "Assets/app_icon.png";
             try
             {
                 appHost.MakeMainContextCurrent();

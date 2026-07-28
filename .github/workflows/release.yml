@@ -21,25 +21,25 @@ jobs:
             rid: win-x64
             channel: win-x64
             exe: GitBench.exe
-            icon: GitBench/Assets/commit_bench_icon.ico
+            icon: GitBench/Assets/app_icon.ico
             extra: ""
           - os: macos-latest          # Apple Silicon runner
             rid: osx-arm64
             channel: osx-arm64
             exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon_mac.icns
+            icon: GitBench/Assets/app_icon_mac.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: macos-15-intel         # Intel runner (macos-13 was retired Dec 2025)
             rid: osx-x64
             channel: osx-x64
             exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon_mac.icns
+            icon: GitBench/Assets/app_icon_mac.icns
             extra: "--bundleId com.builtbyzee.gitbench"
           - os: ubuntu-latest
             rid: linux-x64
             channel: linux-x64
             exe: GitBench
-            icon: GitBench/Assets/commit_bench_icon.png
+            icon: GitBench/Assets/app_icon.png
             extra: ""
     runs-on: ${{ matrix.os }}
     steps:
@@ -79,7 +79,7 @@ jobs:
       - name: Generate macOS .icns
         if: runner.os == 'macOS'
         shell: bash
-        run: bash GitBench/png-to-icns.sh GitBench/Assets/commit_bench_icon_mac.png GitBench/Assets/commit_bench_icon_mac.icns
+        run: bash GitBench/png-to-icns.sh GitBench/Assets/app_icon_mac.png GitBench/Assets/app_icon_mac.icns
 
       - name: Publish (Native AOT, per-RID)
         shell: bash
