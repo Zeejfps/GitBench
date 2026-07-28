@@ -1,6 +1,6 @@
 # Rename-safe identity
 
-> **Status: R1 implemented, R2–R5 pending.** Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
+> **Status: R1 shipped (v0.205.0). R2 code done, blocked on the redirector DNS.** Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
 > `packId` change silently strands existing installs. It does not — see Verified below.
 
 The app now presents as **DiffDino** while its update identity, data folder and executable are still
@@ -91,15 +91,23 @@ rename is a one-line prepend.
 301s to `/repositories/{id}/` and `HttpClient` follows), but an owner move or a deleted repo strands
 every install permanently. Put an indirection we control in front of it.
 
-- [ ] Stand up `updates.builtbyzee.com/{channel}/*` as a redirect to
-      `https://github.com/Zeejfps/GitBench/releases/latest/download/*` (a single Cloudflare wildcard
-      rule). This resolves because CI uploads every channel's assets to each release and packs
-      full-only packages, so the newest feed and the package it names are always on the latest
-      release.
-- [ ] Swap `GithubSource` for `SimpleWebSource(new Uri("https://updates.builtbyzee.com/{channel}/"))`.
-      It requests `{baseUri}/releases.{channel}.json` **with `arch`/`os`/`rid`/`id`/`localVersion`
-      query parameters appended** — confirm the redirect rule tolerates a query string — and then
-      fetches each asset as `{baseUri}/{FileName}`.
+- [x] **Infrastructure.** `updates.builtbyzee.com/*` 302s to
+      `https://github.com/Zeejfps/GitBench/releases/latest/download/*` — proxied `AAAA 100::`
+      record plus one Cloudflare redirect rule built on `http.request.uri.path`, query string not
+      forwarded. Verified live: first hop is 302 (a 301 would let clients cache away the
+      indirection), all four channels return their own feed under Velopack's real query string, and
+      a package fetched through the redirector hashes to the SHA256 the feed declares. Rule
+      propagation across edge PoPs took a couple of minutes, during which ~20% of requests fell
+      through to the placeholder origin as 522 — expected, and gone once settled.
+- [x] Swap `GithubSource` for `SimpleWebSource`. It requests `{baseUri}/releases.{channel}.json`
+      **with `arch`/`os`/`rid`/`id`/`localVersion` query parameters appended** — the redirect rule
+      must tolerate a query string — then fetches each asset as `{baseUri}/{FileName}`.
+- [x] Base URI is the subdomain root, not a per-app or per-channel path. The feed name already
+      carries the channel, and a path segment naming the product would put a renameable word inside
+      an identity value. A second app gets its own subdomain.
+- [x] Wrap both sources in `FallbackUpdateSource`: the redirector is tried first and GitHub answers
+      if it cannot be reached. Without it, R2 is the one release that can strand an install
+      permanently — a bad feed URL leaves no channel through which to ship the fix.
 - [ ] GitHub Releases stays the source of truth and the storage. The redirector is pure indirection,
       so there is no hosting cost and no new failure domain beyond DNS.
 - [ ] Ship this **before** any repo rename. Installs already in the wild keep asking GitHub directly;
