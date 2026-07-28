@@ -63,8 +63,9 @@ internal sealed record ImagePreviewView : Widget
     internal static float MeasureHeight(ImagePreview preview, float width, float maxImageHeight)
     {
         var avail = MathF.Max(0f, width - ImagePreviewSurface.MatInset * 2f);
-        var w = MathF.Min(avail, preview.Width);
-        var h = MathF.Min(w * preview.Height / preview.Width, maxImageHeight);
+        var h = preview.Frames.Count > 1
+            ? IconSheetLayout.Measure(preview.Frames, avail, maxImageHeight)
+            : MathF.Min(MathF.Min(avail, preview.Width) * preview.Height / preview.Width, maxImageHeight);
         return h + ImagePreviewSurface.MatInset * 2f + CaptionHeight;
     }
 
@@ -73,7 +74,12 @@ internal sealed record ImagePreviewView : Widget
         if (vm.RenderState.Value is not DiffRenderState.Image image) return null;
         var s = loc.Strings.Value;
         var p = image.Preview;
-        var caption = s.DiffImageCaption(p.Width, p.Height, FormatBytes(s, p.SourceBytes));
+        var size = FormatBytes(s, p.SourceBytes);
+        // A container's frames each carry their own size label, so the caption counts them instead
+        // of naming one entry's dimensions as though they were the file's.
+        var caption = p.Frames.Count > 1
+            ? $"{s.DiffImageSizeCount(p.Frames.Count)} · {size}"
+            : s.DiffImageCaption(p.Width, p.Height, size);
         return image.IsOldSide ? $"{s.DiffImagePreviousVersion} · {caption}" : caption;
     }
 
@@ -86,9 +92,10 @@ internal sealed record ImagePreviewView : Widget
 }
 
 /// <summary>
-/// Draws one decoded image, aspect-fitted and centered on a sunken mat. The pixels are uploaded
-/// to the canvas as a dynamic texture under an id unique to this surface, so two panes showing
-/// the same blob never share (and so never free) each other's texture; the texture is replaced
+/// Draws a decoded image on a sunken mat: a single picture aspect-fitted and centered, or — for a
+/// container carrying several drawings — every frame as a labelled contact sheet. The pixels are
+/// uploaded to the canvas as dynamic textures under ids unique to this surface, so two panes
+/// showing the same blob never share (and so never free) each other's textures; they are replaced
 /// when the content changes and released when the surface unmounts.
 /// </summary>
 internal sealed class ImagePreviewSurface : View
@@ -96,28 +103,42 @@ internal sealed class ImagePreviewSurface : View
     /// <summary>Padding between the pane edge and the mat the image is fitted into.</summary>
     internal const float MatInset = 12f;
 
+    private static readonly TextStyle LabelStyle = new()
+    {
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.Center,
+        VerticalAlignment = TextAlignment.Center,
+    };
+
     private static int _nextInstance;
 
     private readonly string _imageId = $"diff-image:{Interlocked.Increment(ref _nextInstance)}";
+    private readonly ILocalizationService _loc;
+    private readonly List<IconSheetCell> _cells = [];
 
     private ImagePreview? _preview;
+    private bool _labelDepths;
     private ulong _uploadedHash;
-    private bool _uploaded;
-    // Captured on draw so the unmount path can release the texture — a detaching view has no
+    private int _uploadedFrames;
+    // Captured on draw so the unmount path can release the textures — a detaching view has no
     // canvas of its own to ask.
     private ICanvas? _canvas;
 
     private uint _matColor;
     private uint _matBorderColor;
+    private uint _labelColor;
 
     public ImagePreviewSurface(Context ctx)
     {
+        _loc = ctx.Localization();
         this.BindThemed(ctx.Theme(), s =>
         {
             _matColor = s.Palette.SurfaceSunken;
             _matBorderColor = s.Palette.BorderSubtle;
+            _labelColor = s.DiffContent.PlaceholderText;
             SetDirty();
         });
+        this.Bind(_loc.Strings, _ => SetDirty());
         Behaviors.Add(new ReleaseTextureBehavior());
     }
 
@@ -125,6 +146,7 @@ internal sealed class ImagePreviewSurface : View
     {
         if (ReferenceEquals(_preview, preview)) return;
         _preview = preview;
+        _labelDepths = preview != null && HasRepeatedSize(preview.Frames);
         SetDirty();
     }
 
@@ -133,10 +155,34 @@ internal sealed class ImagePreviewSurface : View
         _canvas = c;
         if (_preview is not { } preview) return;
 
-        var rect = FitRect(preview);
+        var uploaded = Upload(c, preview);
+        var z = GetDrawZIndex();
+
+        if (preview.Frames.Count == 1)
+        {
+            DrawFrame(c, FitRect(preview.Primary), 0, uploaded, z);
+            return;
+        }
+
+        IconSheetLayout.Arrange(preview.Frames, ContentRect(), _cells);
+        LabelStyle.TextColor = _labelColor;
+        foreach (var cell in _cells)
+        {
+            DrawFrame(c, cell.Image, cell.FrameIndex, uploaded, z);
+            c.DrawText(new DrawTextInputs
+            {
+                Position = cell.Label,
+                Text = FrameLabel(preview.Frames[cell.FrameIndex]),
+                Style = LabelStyle,
+                ZIndex = z + 1,
+            });
+        }
+    }
+
+    private void DrawFrame(ICanvas c, RectF rect, int frameIndex, bool uploaded, int z)
+    {
         if (rect.Width < 1f || rect.Height < 1f) return;
 
-        var z = GetDrawZIndex();
         c.DrawRect(new DrawRectInputs
         {
             Position = rect,
@@ -149,32 +195,60 @@ internal sealed class ImagePreviewSurface : View
             ZIndex = z,
         });
 
-        if (!Upload(c, preview)) return;
+        if (!uploaded) return;
         c.DrawImage(new DrawImageInputs
         {
             Position = rect,
-            ImageId = _imageId,
+            ImageId = FrameId(frameIndex),
             ZIndex = z + 1,
             TintColor = 0xFFFFFFFF,
             Rotation = 0f,
         });
     }
 
-    // The image's on-screen rect: aspect-fitted inside the inset pane, and never magnified past
-    // its own pixel size — blowing a 16px icon up to fill the pane is blur, not information.
-    private RectF FitRect(ImagePreview preview)
+    // Two entries of the same size are different drawings, told apart only by the depth they were
+    // stored at. A container carrying such a pair labels every frame with its depth, so the sheet
+    // reads as one ladder rather than a few labels that grew an extra field.
+    private string FrameLabel(ImageFrame frame)
+    {
+        var s = _loc.Strings.Value;
+        return _labelDepths && frame.BitDepth is { } depth
+            ? s.DiffImageFrameSizeDepth(frame.Width, frame.Height, depth)
+            : s.DiffImageFrameSize(frame.Width, frame.Height);
+    }
+
+    private static bool HasRepeatedSize(IReadOnlyList<ImageFrame> frames)
+    {
+        for (var i = 1; i < frames.Count; i++)
+            if (frames[i].Width == frames[i - 1].Width && frames[i].Height == frames[i - 1].Height)
+                return true;
+        return false;
+    }
+
+    private RectF ContentRect()
     {
         var pos = Position;
-        var availW = pos.Width - MatInset * 2f;
-        var availH = pos.Height - MatInset * 2f;
-        if (availW <= 0f || availH <= 0f) return default;
+        return new RectF(
+            pos.Left + MatInset,
+            pos.Bottom + MatInset,
+            MathF.Max(0f, pos.Width - MatInset * 2f),
+            MathF.Max(0f, pos.Height - MatInset * 2f));
+    }
 
-        var w = MathF.Min(availW, preview.Width);
-        var h = MathF.Min(availH, preview.Height);
-        var aspect = (float)preview.Width / preview.Height;
+    // The image's on-screen rect: aspect-fitted inside the inset pane, and never magnified past
+    // its own pixel size — blowing a 16px icon up to fill the pane is blur, not information.
+    private RectF FitRect(ImageFrame frame)
+    {
+        var area = ContentRect();
+        if (area.Width <= 0f || area.Height <= 0f) return default;
+
+        var w = MathF.Min(area.Width, frame.Width);
+        var h = MathF.Min(area.Height, frame.Height);
+        var aspect = (float)frame.Width / frame.Height;
         if (w / h > aspect) w = h * aspect;
         else h = w / aspect;
 
+        var pos = Position;
         return new RectF(
             MathF.Round(pos.Left + (pos.Width - w) * 0.5f),
             MathF.Round(pos.Bottom + (pos.Height - h) * 0.5f),
@@ -182,21 +256,31 @@ internal sealed class ImagePreviewSurface : View
             MathF.Round(h));
     }
 
+    private string FrameId(int index) => $"{_imageId}#{index}";
+
     private bool Upload(ICanvas c, ImagePreview preview)
     {
-        if (_uploaded && _uploadedHash == preview.ContentHash) return true;
-        if (!c.CreateOrUpdateRgbaImage(_imageId, preview.Width, preview.Height, preview.Rgba))
-            return false;
-        _uploaded = true;
+        if (_uploadedFrames == preview.Frames.Count && _uploadedHash == preview.ContentHash) return true;
+
+        Release();
+        for (var i = 0; i < preview.Frames.Count; i++)
+        {
+            var frame = preview.Frames[i];
+            if (!c.CreateOrUpdateRgbaImage(FrameId(i), frame.Width, frame.Height, frame.Rgba))
+            {
+                Release();
+                return false;
+            }
+            _uploadedFrames = i + 1;
+        }
         _uploadedHash = preview.ContentHash;
         return true;
     }
 
     private void Release()
     {
-        if (!_uploaded) return;
-        _canvas?.RemoveImage(_imageId);
-        _uploaded = false;
+        for (var i = 0; i < _uploadedFrames; i++) _canvas?.RemoveImage(FrameId(i));
+        _uploadedFrames = 0;
     }
 
     private sealed class ReleaseTextureBehavior : IViewBehavior

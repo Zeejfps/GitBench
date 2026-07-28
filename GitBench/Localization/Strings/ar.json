@@ -348,6 +348,15 @@
   "diff.no_selection": "اختر ملفًا لعرض الفروق.",
   "diff.binary_not_shown": "لا يتم عرض الملف الثنائي",
   "diff.image_caption": "{width} × {height} · {size}",
+  "diff.image_frame_size": "{width} × {height}",
+  "diff.image_frame_size_depth": "{width} × {height} · {depth} بت",
+  "diff.image_size_count": {
+    "one": "حجم واحد",
+    "two": "حجمان",
+    "few": "{count} أحجام",
+    "many": "{count} حجمًا",
+    "other": "{count} حجم"
+  },
   "diff.image_previous_version": "الإصدار السابق",
   "diff.image_size_bytes": "{size} بايت",
   "diff.image_size_kilobytes": "{size} ك.ب",

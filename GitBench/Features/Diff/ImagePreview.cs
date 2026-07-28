@@ -6,11 +6,32 @@ using PngSharp.Spec.Chunks.IHDR;
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// An image blob decoded for display: straight-alpha RGBA8 with top-down rows, the shape
-/// <c>ICanvas.CreateOrUpdateRgbaImage</c> uploads. <see cref="ContentHash"/> identifies the
-/// source blob so the surface can key its texture on content rather than on file path.
+/// One decoded picture: straight-alpha RGBA8 with top-down rows, the shape
+/// <c>ICanvas.CreateOrUpdateRgbaImage</c> uploads. <see cref="BitDepth"/> is the colour depth the
+/// entry was stored at, carried only where a container lists several drawings of the same subject
+/// and the depth is what tells two same-sized entries apart; null when nothing lists it.
 /// </summary>
-internal sealed record ImagePreview(int Width, int Height, byte[] Rgba, int SourceBytes, ulong ContentHash);
+internal sealed record ImageFrame(int Width, int Height, byte[] Rgba, int? BitDepth = null);
+
+/// <summary>
+/// An image blob decoded for display. Ordinary formats yield a single frame; an icon container
+/// yields its whole ladder of separately drawn sizes, largest first.
+/// <see cref="ContentHash"/> identifies the source blob so the surface can key its textures on
+/// content rather than on file path.
+/// </summary>
+internal sealed record ImagePreview(IReadOnlyList<ImageFrame> Frames, int SourceBytes, ulong ContentHash)
+{
+    public ImagePreview(int width, int height, byte[] rgba, int sourceBytes, ulong contentHash)
+        : this([new ImageFrame(width, height, rgba)], sourceBytes, contentHash)
+    {
+    }
+
+    /// <summary>The frame that stands for the file: the largest, richest drawing it carries.</summary>
+    public ImageFrame Primary => Frames[0];
+
+    public int Width => Primary.Width;
+    public int Height => Primary.Height;
+}
 
 /// <summary>
 /// Turns a raw image blob into an <see cref="ImagePreview"/>. Format comes from the file's magic
@@ -25,6 +46,10 @@ internal static class ImagePreviewDecoder
     // Decoding expands to 4 bytes per pixel and the result is uploaded as a texture, so the
     // pixel count — not the compressed size — is what bounds memory. 16 MP ≈ 64 MB of RGBA.
     private const long MaxPixels = 16_000_000;
+
+    // An icon's entries are all decoded and all uploaded, so the count is bounded as well as the
+    // pixels. Real containers carry under a dozen; the directory can claim tens of thousands.
+    private const int MaxIconFrames = 64;
 
     private static readonly byte[] PngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
@@ -99,53 +124,49 @@ internal static class ImagePreviewDecoder
     }
 
     /// <summary>
-    /// Decodes the largest image in an icon container. An .ico is a ladder of separately drawn
-    /// artwork, and a single-image preview can only show one of them; the largest is the one that
-    /// carries the detail, so a change to it is what a reader is most likely looking for.
+    /// Decodes every image in an icon container. An .ico is a ladder of separately drawn artwork —
+    /// the 16px entry is not the 256px one shrunk — so all of it is the preview; a malformed entry
+    /// is dropped rather than failing the file. Frames come back largest first, and at equal size
+    /// the richer depth leads, so the frame standing for the file is the one carrying the detail.
     /// </summary>
     private static ImagePreview? DecodeIco(byte[] bytes)
     {
         var count = BinaryPrimitives.ReadUInt16LittleEndian(bytes.AsSpan(4));
         if (count == 0 || bytes.Length < IcoDirectorySize + count * IcoEntrySize) return null;
 
-        long bestPixels = -1;
-        var bestDepth = -1;
-        var bestOffset = 0;
-        var bestLength = 0;
+        var frames = new List<ImageFrame>(count);
+        long pixels = 0;
 
-        for (var i = 0; i < count; i++)
+        for (var i = 0; i < count && frames.Count < MaxIconFrames; i++)
         {
             var entry = bytes.AsSpan(IcoDirectorySize + i * IcoEntrySize, IcoEntrySize);
-            // The dimension fields are single bytes, so 256 — the largest size an icon may hold —
-            // is stored as 0.
-            int width = entry[0] == 0 ? 256 : entry[0];
-            int height = entry[1] == 0 ? 256 : entry[1];
             int depth = BinaryPrimitives.ReadUInt16LittleEndian(entry[6..]);
             var length = (int)BinaryPrimitives.ReadUInt32LittleEndian(entry[8..]);
             var offset = (int)BinaryPrimitives.ReadUInt32LittleEndian(entry[12..]);
             if (length <= 0 || offset < IcoDirectorySize || (long)offset + length > bytes.Length) continue;
 
-            var pixels = (long)width * height;
-            // Same size at a richer depth wins: a file carrying both a legacy palettized entry and
-            // a 32bpp one lists them at equal dimensions.
-            if (pixels < bestPixels || (pixels == bestPixels && depth <= bestDepth)) continue;
-            bestPixels = pixels;
-            bestDepth = depth;
-            bestOffset = offset;
-            bestLength = length;
+            var image = bytes.AsSpan(offset, length);
+            // Vista onwards stores the large entries as an embedded PNG; everything else is a bare DIB.
+            var decoded = image.StartsWith(PngSignature) ? DecodePng(image.ToArray()) : DecodeIconDib(image);
+            if (decoded == null) continue;
+
+            // The dimensions come from the decoded entry rather than the directory's single-byte
+            // fields, which cannot express 256 (it is stored as 0) and are not always truthful.
+            pixels += (long)decoded.Width * decoded.Height;
+            if (pixels > MaxPixels) break;
+            frames.Add(decoded.Primary with { BitDepth = depth > 0 ? depth : null });
         }
 
-        if (bestPixels < 0) return null;
+        if (frames.Count == 0) return null;
 
-        var image = bytes.AsSpan(bestOffset, bestLength);
-        // Vista onwards stores the large entries as an embedded PNG; everything else is a bare DIB.
-        var decoded = image.StartsWith(PngSignature) ? DecodePng(image.ToArray()) : DecodeIconDib(image);
+        var ordered = frames
+            .OrderByDescending(f => (long)f.Width * f.Height)
+            .ThenByDescending(f => f.BitDepth ?? 32)
+            .ToArray();
 
-        // Report the whole container, not the one entry that got picked: the caption is describing
-        // the file, and the hash has to change when any entry does or the texture goes stale.
-        return decoded == null
-            ? null
-            : decoded with { SourceBytes = bytes.Length, ContentHash = Fnv1A64(bytes) };
+        // Report the whole container, not the entry that leads it: the caption is describing the
+        // file, and the hash has to change when any entry does or the textures go stale.
+        return new ImagePreview(ordered, bytes.Length, Fnv1A64(bytes));
     }
 
     /// <summary>

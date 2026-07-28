@@ -339,6 +339,14 @@
   "diff.no_selection": "Выберите файл, чтобы посмотреть различия.",
   "diff.binary_not_shown": "Двоичный файл не показан",
   "diff.image_caption": "{width} × {height} · {size}",
+  "diff.image_frame_size": "{width} × {height}",
+  "diff.image_frame_size_depth": "{width} × {height} · {depth} бит",
+  "diff.image_size_count": {
+    "one": "{count} размер",
+    "few": "{count} размера",
+    "many": "{count} размеров",
+    "other": "{count} размера"
+  },
   "diff.image_previous_version": "Предыдущая версия",
   "diff.image_size_bytes": "{size} Б",
   "diff.image_size_kilobytes": "{size} КБ",

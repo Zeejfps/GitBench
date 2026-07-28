@@ -27,7 +27,7 @@ public class ImagePreviewDecoderTests
         Assert.NotNull(preview);
         Assert.Equal(2, preview.Width);
         Assert.Equal(1, preview.Height);
-        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 0, 255, 128], preview.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 0, 255, 128], preview.Primary.Rgba);
         Assert.Equal(png.Length, preview.SourceBytes);
     }
 
@@ -39,7 +39,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(png);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([10, 20, 30, 255, 40, 50, 60, 255], preview.Rgba);
+        Assert.Equal<byte[]>([10, 20, 30, 255, 40, 50, 60, 255], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(png);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([0, 0, 0, 255, 200, 200, 200, 255], preview.Rgba);
+        Assert.Equal<byte[]>([0, 0, 0, 255, 200, 200, 200, 255], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -61,7 +61,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(png);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([90, 90, 90, 255, 90, 90, 90, 0], preview.Rgba);
+        Assert.Equal<byte[]>([90, 90, 90, 255, 90, 90, 90, 0], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(png);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([0, 255, 0, 0, 255, 0, 0, 255], preview.Rgba);
+        Assert.Equal<byte[]>([0, 255, 0, 0, 255, 0, 0, 255], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(png);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 255, 255, 255, 0, 0, 0, 255], preview.Rgba);
+        Assert.Equal<byte[]>([255, 255, 255, 255, 0, 0, 0, 255], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -115,11 +115,11 @@ public class ImagePreviewDecoderTests
         Assert.NotNull(preview);
         Assert.Equal(8, preview.Width);
         Assert.Equal(8, preview.Height);
-        Assert.Equal(8 * 8 * 4, preview.Rgba.Length);
-        Assert.True(preview.Rgba[0] > 180, $"expected a red-dominant pixel, got R={preview.Rgba[0]}");
-        Assert.True(preview.Rgba[1] < 80, $"expected a low green channel, got G={preview.Rgba[1]}");
-        Assert.True(preview.Rgba[2] < 80, $"expected a low blue channel, got B={preview.Rgba[2]}");
-        Assert.Equal(255, preview.Rgba[3]);
+        Assert.Equal(8 * 8 * 4, preview.Primary.Rgba.Length);
+        Assert.True(preview.Primary.Rgba[0] > 180, $"expected a red-dominant pixel, got R={preview.Primary.Rgba[0]}");
+        Assert.True(preview.Primary.Rgba[1] < 80, $"expected a low green channel, got G={preview.Primary.Rgba[1]}");
+        Assert.True(preview.Primary.Rgba[2] < 80, $"expected a low blue channel, got B={preview.Primary.Rgba[2]}");
+        Assert.Equal(255, preview.Primary.Rgba[3]);
     }
 
     [Fact]
@@ -141,10 +141,10 @@ public class ImagePreviewDecoderTests
     }
 
     [Fact]
-    public void DecodesLargestIcoEntry()
+    public void DecodesEveryIcoEntryLargestFirst()
     {
-        // A one-pixel entry alongside a two-pixel one: only the larger should come back, and its
-        // stored BGRA has to arrive as RGBA.
+        // A one-pixel entry alongside a two-pixel one: both come back, the larger leading whatever
+        // order the file lists them in, and each entry's stored BGRA has to arrive as RGBA.
         var small = Dib32(1, 1, [0, 0, 255, 255]);
         var large = Dib32(2, 1, [255, 0, 0, 255, 0, 255, 0, 255]);
         var ico = BuildIco(new IcoEntry(1, 1, 32, small), new IcoEntry(2, 1, 32, large));
@@ -152,10 +152,57 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(ico);
 
         Assert.NotNull(preview);
+        Assert.Equal(2, preview.Frames.Count);
         Assert.Equal(2, preview.Width);
         Assert.Equal(1, preview.Height);
-        Assert.Equal<byte[]>([0, 0, 255, 255, 0, 255, 0, 255], preview.Rgba);
+        Assert.Equal<byte[]>([0, 0, 255, 255, 0, 255, 0, 255], preview.Primary.Rgba);
+        Assert.Equal(1, preview.Frames[1].Width);
+        Assert.Equal<byte[]>([255, 0, 0, 255], preview.Frames[1].Rgba);
         Assert.Equal(ico.Length, preview.SourceBytes);
+    }
+
+    [Fact]
+    public void OrdersEqualSizedIcoEntriesByDepth()
+    {
+        // The pair a legacy Windows icon carries: one size drawn twice, palettized and 32bpp. The
+        // richer one leads, and both keep the depth that is all that tells them apart on screen.
+        var palettized = Dib8(1, 1, [0, 0, 255, 0], [0, 0, 0, 0], new byte[4]);
+        var full = Dib32(1, 1, [0, 255, 0, 255]);
+        var ico = BuildIco(new IcoEntry(1, 1, 8, palettized), new IcoEntry(1, 1, 32, full));
+
+        var preview = ImagePreviewDecoder.TryDecode(ico);
+
+        Assert.NotNull(preview);
+        Assert.Equal(new int?[] { 32, 8 }, preview.Frames.Select(f => f.BitDepth));
+        Assert.Equal<byte[]>([0, 255, 0, 255], preview.Primary.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 255], preview.Frames[1].Rgba);
+    }
+
+    [Fact]
+    public void KeepsTheDecodableIcoEntriesWhenOneIsMalformed()
+    {
+        // A container is a ladder of independent drawings — a bad rung loses that rung, not the file.
+        var ico = BuildIco(
+            new IcoEntry(1, 1, 32, Dib32(1, 1, [0, 0, 255, 255])),
+            new IcoEntry(2, 1, 32, [1, 2, 3, 4]));
+
+        var preview = ImagePreviewDecoder.TryDecode(ico);
+
+        Assert.NotNull(preview);
+        Assert.Single(preview.Frames);
+        Assert.Equal(1, preview.Width);
+    }
+
+    [Fact]
+    public void GivesAPlainImageASingleUnlabelledFrame()
+    {
+        var png = Png.EncodeToByteArray(Png.CreateRgb(2, 1, [10, 20, 30, 40, 50, 60]));
+
+        var preview = ImagePreviewDecoder.TryDecode(png);
+
+        Assert.NotNull(preview);
+        Assert.Single(preview.Frames);
+        Assert.Null(preview.Primary.BitDepth);
     }
 
     [Fact]
@@ -167,7 +214,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(BuildIco(new IcoEntry(1, 2, 32, dib)));
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 255, 255, 255, 0, 0, 0, 255], preview.Rgba);
+        Assert.Equal<byte[]>([255, 255, 255, 255, 0, 0, 0, 255], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -179,7 +226,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(BuildIco(new IcoEntry(1, 1, 32, dib)));
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 0, 0, 128], preview.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 128], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -194,7 +241,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(BuildIco(new IcoEntry(2, 1, 32, dib)));
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 255, 0, 0], preview.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 255, 0, 0], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -208,7 +255,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(BuildIco(new IcoEntry(2, 1, 8, dib)));
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 255, 0, 0], preview.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 255, 0, 0], preview.Primary.Rgba);
     }
 
     [Fact]
@@ -222,7 +269,7 @@ public class ImagePreviewDecoderTests
         var preview = ImagePreviewDecoder.TryDecode(ico);
 
         Assert.NotNull(preview);
-        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 0, 255, 128], preview.Rgba);
+        Assert.Equal<byte[]>([255, 0, 0, 255, 0, 0, 255, 128], preview.Primary.Rgba);
         Assert.Equal(ico.Length, preview.SourceBytes);
     }
 
