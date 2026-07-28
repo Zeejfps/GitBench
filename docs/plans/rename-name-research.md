@@ -138,6 +138,58 @@ Three-letter initialism, unownable and collision-heavy: **NGF = Nerve Growth Fac
 - **Keep the fork joke safely** by punning on the *generic* fork (operation/utensil), not the product: **Unfork**, **Tine**, **Spork**.
 - Not legal advice — run a USPTO class 9/42 search before committing.
 
+## New candidates — 2026-07-27 batch (git-coinages, word-acronyms, compounds)
+
+Directions requested: Gitara/Gritic-style coinages, acronyms that spell a real word, and compounds for domain availability. Verified with rate-limit-safe rechecks (earlier Google-registry probes returned false "taken"s under 429 — always sleep ≥1s between `.dev`/`.app` calls).
+
+**Gitara — dead.** `distil-labs/gitara` is a live git-command-recall tool + "GitAra" git agent (same category, same fate as Glint), 199 repos total, `.com`/`.dev` taken ("gitara" = guitar in Polish/Russian/Filipino).
+
+**Gritic — viable coinage.** Grit + critic; the "critic" note fits a review-centric client. `.dev` ✅ `.app` ✅ NuGet ✅ `getgritic.com`/`griticapp.com` ✅; bare `.com` registered 2025 (squat-fresh, expires 2027). GitHub near-clean: top hit is a cancer-genomics tool, 21★, different space. Spells itself (GRIT-ik). Weakness: no bare `.com`, and "gritty" can read as *unpleasant*.
+
+**Word-acronyms (the RMFG idea, done right).** Letter-salad initialisms are already killed (see NGF note) — the workable form is an acronym that *is* a word. Best find: **GRIG** — dictionary word ("merry as a grig" = lively, quick) *and* expands to "**G**it **R**epo **I**nterface **G**UI". But bare `.com`/`.dev`/`.app` all taken (only `getgrig.com` free), 3.6k GitHub name-matches (surname Griggs). **BRIG** ("**B**ranch/**R**epo **I**nterface for **G**it", also a ship) and **TRIG** — same story, bare domains gone. Concept-winners, availability-losers, like WING/GNAT. If an acronym matters, GNAT (above) still beats these on ownability.
+
+**Compounds — the jackpot.** The user's instinct was right: `git‹harbor-word›` compounds are the first candidates in the whole search with **full sweeps** (bare `.com` + `.dev` + `.app` + NuGet all free):
+
+| Name | Says | `.com` | `.dev` | `.app` | NuGet | GitHub | Verdict |
+|---|---|---|---|---|---|---|---|
+| **Gitgale** | Gale = strong wind → speed theme | ✅ | ✅ | ✅ | ✅ | ~0 | **Best compound** — says speed, spells itself, full sweep |
+| **Gitskiff** | Ties to Skiff (#6) — smallest boat that carries you | ✅ | ✅ | ✅ | ✅ | 0 | Full sweep; inherits Skiff's self-explaining story |
+| **Gitperch** | Where a bird lands between flights | ✅ | ✅ | ✅ | ✅ | 0 | Full sweep; bird theme; "perch" = calm home base |
+| **Gitroost** | Where all your repos come home to roost | ✅ | ✅ | ✅ | ✅ | 0 | Full sweep; best *polyrepo* story of the compounds |
+| **Gitwharf** | A wharf berths many boats = many repos | ✅ | ✅ | ✅ | ✅ | 0 | Full sweep; spell risk (warf/wharve) |
+| **Gitberth** | Berth = your repo's docking spot | ✅ | ✅ | ✅ | ✅ | 0 | Full sweep; homophone "birth" |
+| Gitquay | Quay = harbor edge | ✅ | ✅ | ✅ | ✅ | 4 | Killed — "quay" says "key", fails say-it/spell-it |
+| Gitmast | Mast | ✅ | — | — | ✅ | 1288 | Killed — reads as truncated **GitMaster** (real git client) |
+
+Partial-availability compounds (bare `.com` gone, not worth it given the table above): gitdeck, gitport, githarbor, gitmoor, gitcove, githaven, gitnook, gitwick, repodeck. Also killed: **Fugit** (tempus fugit — lovely, but NuGet + `.com`/`.app` taken, fugit ruby gem), **Regit** (`.dev` only).
+
+**Pivex — checked 2026-07-27, viable but compromised.** `.dev` ✅ `.app` ✅ NuGet ✅ all `.com` modifiers ✅, GitHub clean (11 repos, all 0★). But bare `pivex.com` is **Pivex Funded, a live prop-trading firm** holding the domain since 2003 — they own the SERP, and prop-trading brands drag scam-review noise. Say-it risk: PIE-vex reading collides aurally with **pyvex** (angr's binary-analysis lib). No product story (pivot+ex says nothing about git). Ranks below Gritic/Vorgui.
+
+### Diffasaurus (2026-07-27)
+
+**FULL SWEEP + meaning** — bare `.com` ✅ `.dev` ✅ `.app` ✅ NuGet ✅ GitHub 0 repos (one 0★ "diffosaurus" variant exists). The only full-sweep candidate that says what the app *does* (diff — and the Review layout is the product's center). Built-in dinosaur mascot; Docusaurus proved the "-saurus" register works for dev tools. Gates: **connector-vowel spell risk** (diffAsaurus vs diffOsaurus — Docusaurus primes "o"; needs the 3-strangers test more than anything else on the list), 4 syllables, and "-asaurus" connotes *huge and lumbering* — trades the speed story for the diff story. Tone is committed-goofy with no serious-mode fallback. If buying: `diffosaurus.com`/`.dev` are also free — grab both spellings and redirect, which neutralizes the main gate.
+
+### P-names sweep (2026-07-27)
+
+16 probed on the speed/flight/boat/fork themes. Bare `.com`/`.dev`/`.app` taken for every real word except `posthaste.dev`. NuGet free except pintail/preflight.
+
+| Name | Says | Buyable | NuGet | GitHub | Verdict |
+|---|---|---|---|---|---|
+| **Posthaste** | "With all possible speed" — literal | **bare `posthaste.dev`** + `useposthaste`/`posthastegit`/`posthastehq`-`.com` | ✅ | 36, top 23★ | **Best P.** Says speed, spells itself; long (3 syl), "post" mail-adjacent |
+| **Pennon** | The small streaming flag — Pennant's (#9) little sibling | `usepennon`/`pennongit`/`pennonhq`/`pennonapp`-`.com` | ✅ | 21, top 32★ | Cleanest P namespace; pennon/pennant spell confusion |
+| Prong | Fork pun (like Tine) | `useprong`/`pronghq`/`prongapp`-`.com` | ✅ | 448 | Marginal — metal band Prong, mild slang |
+| Pipit | Small quick bird | `pipitgit`/`pipithq`-`.com` only | ✅ | 414, Wagtail-Pipit 256★ | Killed — noise + thin domains |
+| Pounce | The fast jump | `pouncegit.com` only | ✅ | pounce.nvim 366★ + pounce-keys 390★ | Killed — same "jump fast" dev space |
+| Pelorus | Ship's bearing instrument | `pelorusgit`/`pelorusapp` | ✅ | **dora-metrics/pelorus 253★** (DevOps metrics) | Killed — same industry |
+
+Also probed, all bare domains taken, no story strong enough to chase modifiers: pelt ("full pelt"), pronto, punt, pram, pinna, penna, plinth, pintle, pintail (NuGet ❌), preflight (NuGet ❌).
+
+**Pavora — checked 2026-07-27, pass.** `.dev` ✅ `.app` ✅ NuGet ✅ `getpavora`/`pavoraapp`/`pavorahq`-`.com` ✅, GitHub clean; bare `.com` held since 2007 but dormant (empty page). Killed by meaning + namesake: **"pavor" = dread/terror in Spanish/Portuguese** (*pavor nocturnus* = night terrors), and an active fashion micro-brand owns `usepavora.com`, `pavoraofficial.com`, and the @pavora.official socials. No product story. Below Pivex.
+
+All `Git‹X›` compounds must comply with the git trademark policy (see Legal note) — tolerated in practice (GitHub/GitLab/GitKraken precedent) but it's SFC's mark.
+
+**Recommendation:** if you want the compound + full domain sweep, **Gitgale** (speed story, zero ambiguity) or **Gitroost** (polyrepo story). If you want a coinage that hints at what the app *does*, **Gritic** — the review/critic angle matches the ChangeReview-centered product better than any bird. The non-git names at the top (Martlet, Glisk, Vorgui) remain stronger *marks*; the compounds win on domains.
+
 ## Names we did NOT use
 
 **Dev / .NET / git collision:** GitBench *(GitKraken)* · Kestrel · Fleet · Quilt · Stet · Gutter · Pact · Orchard · Splice · Register · Prow · Braid · Vilka · Etch · Sprig · Clasp · Trunk · Score · Keel · Stride · Nimble · Grit · Flit · Hurl · Truss · Crux · Weld · Astral · Rush · Posit · Arborist · Sidestep · Bounce · Quiver · Roundhouse · Octopus · Switchboard · Juggler · Juggle · Meta · Repo · Polyrepo · Monorepo · Poly · Polyglot · Polybase · Multipass · Multiplex · Manifold · Myriad · Omnia · Plural · Multiplicity · Manyfold · Hopscotch · Flip · Ferry · Dovecote · Flock · Hydra *(THC-Hydra cracker + FB config framework; also kills GitHydra)* · Shuffle · Shimmy · Skim · Swerve · Pluck · Glide · Riffle · Veer · Darter · Borzoi · Harrier · Saluki · Jerboa · Turnstone · Nest · Bevy · Swarm · Bundle · Harbor · Depot · Rack · Caddy · Loom · Warp · Harness · Relay · Shuttle · Conductor · Turnstile · Snap · Yank · Trice · Whoosh · Brisk · Briskly · Nimbly · Glance · Grain · Gossamer · Shearwater · Avocet · Curlew · Shrike · Fleck · Wisp · Glisten · Snell · Alacrity · Solano · Ostro · Chinook · Zonda · Levanter · Felucca · Vaka · Proa · Sloop · Foil · Caravel · Terral · Oroshi · Gusto · Subito · Presto · Allegro · Stretto · Kedge · Wimble · Levin · Dapple · Airglow · Foxfire · GitLeap · GitFlick · GitGlide · GitDart · Gleam · Lumen · Glow · Spark · Ember · Beam · Ray · Photon · Prism · Halo · Aurora · Nimbus · Sparkle · Scintilla · Lustre · Chroma · Iris · Candle · Torch · Glimpse · Glimmer · Moonbeam · Corona · Flare · Flash · Zephyr · Mistral · Vim · Tailwind · Helm · Updraft · Kata · Vertex · Lattice · Spine · Peregrine *(NuGet taken, 880 repos)* · Winnow *(winnow-rs Rust parser lib)* · Merlin *(Merlin C2 framework, 5576★)* · all `Omni-` · all `Git‹word›`.
@@ -157,6 +209,6 @@ Three-letter initialism, unownable and collision-heavy: **NGF = Nerve Growth Fac
 | Target | Method |
 |---|---|
 | `.com` | `rdap.verisign.com/com/v1/domain/<n>.com` — no rate limit |
-| `.dev` `.app` | `pubapi.registry.google/rdap/domain/<n>.dev` — 404 = free |
+| `.dev` `.app` | `pubapi.registry.google/rdap/domain/<n>.dev` — 404 = free. **Rate-limited: sleep ≥1s between calls or non-404 false-"taken"s appear; re-verify any "taken"** |
 | GitHub | `gh api search/repositories?q=<n>+in:name` |
 | Trademarks | `POST tmdn.org/tmview/api/search/results` — was down 2026-07-19, retry |
