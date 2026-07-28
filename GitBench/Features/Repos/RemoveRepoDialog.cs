@@ -37,7 +37,7 @@ internal sealed record RemoveRepoDialog : Widget
             [
                 new Text
                 {
-                    Value = s.ReposRepoRemoveBody(Repo.DisplayName, AppInfo.DisplayName),
+                    Value = s.ReposRepoRemoveBody(Repo.DisplayName, AppIdentity.DisplayName),
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },

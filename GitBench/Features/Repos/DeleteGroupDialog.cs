@@ -36,7 +36,7 @@ internal sealed record DeleteGroupDialog : Widget
             [
                 new Text
                 {
-                    Value = s.ReposGroupDeleteBody(Group.Name.Value, AppInfo.DisplayName),
+                    Value = s.ReposGroupDeleteBody(Group.Name.Value, AppIdentity.DisplayName),
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },

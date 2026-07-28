@@ -1,6 +1,6 @@
 # Rename-safe identity
 
-> **Status: proposed.** Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
+> **Status: R1 implemented, R2–R5 pending.** Supersedes the identity analysis in `rename-to-pecia.md`, which assumed a
 > `packId` change silently strands existing installs. It does not — see Verified below.
 
 The app now presents as **DiffDino** while its update identity, data folder and executable are still
@@ -68,15 +68,18 @@ internal static class AppIdentity
 }
 ```
 
-- [ ] `AppPaths.AppDataPath` resolves through it: honour `DataDirEnvVar`, then each legacy env var in
-      order, then `%APPDATA%/{DataFolderName}`.
-- [ ] One-time migration on first run: if the current data folder is absent and a legacy one exists,
+- [x] `AppPaths.AppDataPath` resolves through it: honour `DataDirEnvVar`, then each legacy env var in
+      order, then `%APPDATA%/{DataFolderName}`. An explicit override is taken verbatim and never
+      migrated into.
+- [x] One-time migration on first run: if the current data folder is absent and a legacy one exists,
       **copy** it (not move) so a rollback to an older build still finds its state. Accept that the
-      two then diverge; document it rather than trying to sync.
-- [ ] Keep `GITBENCH_DATA_DIR` working indefinitely — `.claude/skills/verify/SKILL.md` and the
+      two then diverge; document it rather than trying to sync. Staged through a temp folder and
+      moved into place, so a copy that dies part-way is retried next launch instead of leaving a
+      partial folder that looks migrated.
+- [x] Keep `GITBENCH_DATA_DIR` working indefinitely — `.claude/skills/verify/SKILL.md` and the
       automation/test tooling set it.
-- [ ] Headless test: first run with an existing legacy folder preserves prefs, repo list and layout.
-      This is the case that silently reads as data loss.
+- [x] Headless test: first run with an existing legacy folder preserves prefs, repo list and layout.
+      This is the case that silently reads as data loss. `GitBench.Tests/AppPathsTests.cs`.
 
 The data folder is ours, not Velopack's, so this phase alone removes the old name from the only
 place a user is likely to look — and it exercises the legacy-list machinery immediately, so the next
@@ -113,9 +116,9 @@ parts — only reach for it if the `latest/download` form fails the Phase 4 proo
 Given Phase 1 and 2, this is no longer load-bearing: it buys a clean internal name, not correctness.
 It is safe to do because, per Verified, existing installs keep updating throughout.
 
-- [ ] `release.yml`: `--packId GitBench` → `DiffDino`, `--packTitle GitBench` → `DiffDino`,
-      `--bundleId com.builtbyzee.gitbench` → `com.builtbyzee.diffdino`, matrix `exe:` →
-      `DiffDino` / `DiffDino.exe`, and the bundle assembled at `bundle/DiffDino.app`.
+- [ ] `release.yml`: `--packId GitBench` → `DiffDino`, `--bundleId com.builtbyzee.gitbench` →
+      `com.builtbyzee.diffdino`, matrix `exe:` → `DiffDino` / `DiffDino.exe`, and the bundle
+      assembled at `bundle/DiffDino.app`. (`--packTitle` already shipped in R1.)
 - [ ] `Info.plist.in`: `CFBundleExecutable` and `CFBundleIdentifier` follow the above.
 - [ ] Keep the version line **monotonic** across the change. A version that does not increase is the
       one way to genuinely strand installs here, and it is easy to trip by "restarting" versioning

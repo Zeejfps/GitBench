@@ -140,6 +140,9 @@ jobs:
             echo "dir=publish/${{ matrix.rid }}" >> "$GITHUB_OUTPUT"
           fi
 
+      # --packTitle is display and retitles existing installs' shortcuts and uninstall entry on
+      # apply; --packId is the install identity and deliberately still reads GitBench. Changing it
+      # is safe but leaves existing installs at the old path — see docs/plans/rename-safe-identity.md.
       - name: Pack
         shell: bash
         run: >
@@ -148,7 +151,7 @@ jobs:
           --packVersion ${{ steps.ver.outputs.version }}
           --packDir ${{ steps.packdir.outputs.dir }}
           --mainExe ${{ matrix.exe }}
-          --packTitle GitBench
+          --packTitle DiffDino
           --packAuthors Zeejfps
           --channel ${{ matrix.channel }}
           --runtime ${{ matrix.rid }}
@@ -198,7 +201,7 @@ jobs:
           gh release delete "$tag" --repo Zeejfps/GitBench --yes 2>/dev/null || true
           gh release create "$tag" \
             --repo Zeejfps/GitBench \
-            --title "GitBench ${{ steps.ver.outputs.version }}" \
+            --title "DiffDino ${{ steps.ver.outputs.version }}" \
             --generate-notes
           # Upload every packaged asset (nupkgs, installers, portable, releases.<channel>.json),
           # excluding vpk's local build metadata which the update feed doesn't reference.

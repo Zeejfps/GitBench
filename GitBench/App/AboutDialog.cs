@@ -61,7 +61,7 @@ internal sealed record AboutDialog : Widget<DialogState>
                                         new AppLogo(),
                                         new Text
                                         {
-                                            Value = AppInfo.DisplayName,
+                                            Value = AppIdentity.DisplayName,
                                             FontSize = FontSize.Title,
                                             HAlign = TextAlignment.Center,
                                             VAlign = TextAlignment.Center,

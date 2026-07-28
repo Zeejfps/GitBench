@@ -90,15 +90,15 @@ internal static class PlatformServices
                     {
                         new AppMenu
                         {
-                            Title = AppInfo.DisplayName,
+                            Title = AppIdentity.DisplayName,
                             Role = AppMenuRole.Application,
                             Items =
                             {
-                                new AppMenuItem { Title = s.MenuAppAbout(AppInfo.DisplayName), OnClick = ShowAbout },
+                                new AppMenuItem { Title = s.MenuAppAbout(AppIdentity.DisplayName), OnClick = ShowAbout },
                                 AppMenuItem.Separator,
                                 new AppMenuItem { Title = s.MenuAppCheckUpdates, OnClick = CheckForUpdates },
                                 AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppHide(AppInfo.DisplayName), Standard = AppMenuStandardAction.Hide, KeyEquivalent = "h" },
+                                new AppMenuItem { Title = s.MenuAppHide(AppIdentity.DisplayName), Standard = AppMenuStandardAction.Hide, KeyEquivalent = "h" },
                                 new AppMenuItem
                                 {
                                     Title = s.MenuAppHideOthers,
@@ -108,7 +108,7 @@ internal static class PlatformServices
                                 },
                                 new AppMenuItem { Title = s.MenuAppShowAll, Standard = AppMenuStandardAction.ShowAll },
                                 AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuAppQuit(AppInfo.DisplayName), Standard = AppMenuStandardAction.Quit, KeyEquivalent = "q" },
+                                new AppMenuItem { Title = s.MenuAppQuit(AppIdentity.DisplayName), Standard = AppMenuStandardAction.Quit, KeyEquivalent = "q" },
                             },
                         },
                         new AppMenu

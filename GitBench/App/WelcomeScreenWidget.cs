@@ -39,7 +39,7 @@ internal sealed record WelcomeScreenWidget : Widget
                             [
                                 new Text
                                 {
-                                    Value = AppInfo.DisplayName,
+                                    Value = AppIdentity.DisplayName,
                                     FontSize = FontSize.Title,
                                     Weight = FontWeight.Bold,
                                     HAlign = TextAlignment.Center,

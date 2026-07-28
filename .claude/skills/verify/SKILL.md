@@ -9,15 +9,16 @@ description: Build, launch, and drive GitBench to verify UI changes at runtime v
 
 ```bash
 dotnet build GitBench/GitBench.csproj            # errors only; warnings are pre-existing noise
-GITBENCH_DATA_DIR=<scratch>/gbdata ZGF_GUI_MCP=1 \
+DIFFDINO_DATA_DIR=<scratch>/gbdata ZGF_GUI_MCP=1 \
   dotnet run --project GitBench/GitBench.csproj --no-build > app.log 2>&1 &
 ```
 
 - `ZGF_GUI_MCP=1` starts an MCP Streamable HTTP server at `http://127.0.0.1:5577/mcp`
   (tools: `gui_snapshot`, `gui_screenshot`, `gui_click`, `gui_type`, `gui_key`).
   Port override: `ZGF_GUI_MCP_PORT`.
-- `GITBENCH_DATA_DIR` points at a scratch data folder so the run doesn't touch the real
-  one (`~/Library/Application Support/GitBench`). Pre-seed `<dir>/state.json` to open a
+- `DIFFDINO_DATA_DIR` points at a scratch data folder so the run doesn't touch the real
+  one (`~/Library/Application Support/DiffDino`). `GITBENCH_DATA_DIR` still works as a
+  legacy alias. Pre-seed `<dir>/state.json` to open a
   repo directly — minimal shape:
 
 ```json

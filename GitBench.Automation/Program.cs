@@ -14,7 +14,7 @@ using GitBench.Automation;
 // callbacks — the only way to exercise the platform layer that injection skips. It needs the window
 // to hold OS focus for the whole run, and the driver refuses to type if it ever loses it.
 //
-// Point GITBENCH_DATA_DIR at a scratch folder to keep a scripted run out of your real repo list.
+// Point DIFFDINO_DATA_DIR at a scratch folder to keep a scripted run out of your real repo list.
 Console.OutputEncoding = Encoding.UTF8;
 
 var useOsInput = args.Contains("--os-input");
