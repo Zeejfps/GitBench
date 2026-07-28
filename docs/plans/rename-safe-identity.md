@@ -153,6 +153,35 @@ On a scratch repo, not the real one:
       assumption everything else rests on.
 - [ ] Also cover per platform: win-x64, osx-arm64, osx-x64, linux-x64.
 
+## Release sequence
+
+Nothing here needs to land at once. Each release is independently useful, independently revertible,
+and changes one variable so a regression has one suspect.
+
+| Release | Changes | Visible outcome | Before shipping the next |
+|---|---|---|---|
+| **R1** | Phase 1 seam + data-folder migration, and `--packTitle` → `DiffDino` | Data moves to `%APPDATA%/DiffDino`; shortcut and Programs & Features retitle on apply | Confirm an existing install kept its prefs, repo list and layout |
+| **R2** | Phase 2 — `SimpleWebSource` at the redirector | None | — |
+| **R3** | Any ordinary release | None | **This is the proof of R2**: an R2 install must reach R3 through the redirector, not GitHub |
+| **R4** | Phase 3 — `--packId` and main exe name | Install path stays; relaunches into the renamed exe | Run the Phase 4 scratch-repo proof *first* — do not learn this on real users |
+| **R5** | `bundleId` (macOS, optional) | Resets `NSUserDefaults`, keychain and TCC grants for existing Mac installs | — |
+
+Two properties make this safe to stretch out:
+
+**There is never a cutover.** The redirector points at GitHub Releases, which stays the storage and
+the source of truth. An install on the old `GithubSource` and one on the redirector read the same
+bytes, so both paths work forever with no extra publishing. An install that never launches simply
+stays on the GitHub path indefinitely — that is fine, not a stranded user.
+
+**The GitHub repo name becomes permanent at R2.** Pre-R2 installs resolve through
+`github.com/Zeejfps/GitBench` (or its 301) forever, so the repo may be *renamed* at any point but
+the old name must never be re-occupied and the owner must not change. If an owner move is ever
+wanted, it waits until the pre-R2 population is negligible — release asset download counts are a
+crude but adequate signal.
+
+One direction-of-travel caveat: `AllowVersionDowngrade` is off, so a bad release is fixed by
+shipping forward, never by rolling back. Keep versions monotonic across every row above.
+
 ## The payoff: renaming later
 
 With Phases 1–2 done, a future rename is:
