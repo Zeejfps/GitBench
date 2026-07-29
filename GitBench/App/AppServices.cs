@@ -165,6 +165,7 @@ internal static class AppServices
             ctx.Require<IMessageBus>(),
             ctx.Require<LocalChangesViewModel>(),
             ctx.Require<IReviewProgressStore>(),
+            ctx.Require<IRepoOperationsStore>(),
             connection => new AssistantBackendRouter(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AssistantViewModel>();

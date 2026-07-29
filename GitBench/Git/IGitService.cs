@@ -132,6 +132,12 @@ public interface IGitService
     // Context for the conflict-resolution UI: the in-progress operation plus the ours/theirs
     // commit metadata and per-side change kind. Returns null when the path isn't conflicted.
     ConflictContext? GetConflictContext(Repo repo, string path);
+    // Every unmerged path in the repository, in index order, with what each side did to it. One
+    // read for the whole repo — asking per path turns a ten-file conflict into ten processes.
+    IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo);
+    // One unmerged path's three merge stages as text. Null when the path isn't unmerged at all,
+    // which is also the caller's is-this-a-conflict precondition.
+    ConflictStages? GetConflictStages(Repo repo, string path);
 }
 
 public enum MergeStrategy
@@ -255,3 +261,12 @@ public sealed record ConflictContext(
     ConflictSideInfo Ours,
     ConflictSideInfo Theirs,
     bool HasBase);
+
+// One unmerged path and what each side did to it, derived from which of git's merge stages
+// (1=base, 2=ours, 3=theirs) the index still holds for it.
+public sealed record ConflictedPath(string Path, ConflictChangeKind Ours, ConflictChangeKind Theirs);
+
+// The three sides of one unmerged path as text, straight from the index. A null side is one that
+// does not exist: no common ancestor for an add/add, or the side that deleted the file — which is
+// a different fact from that side being empty.
+public sealed record ConflictStages(string? Base, string? Ours, string? Theirs);

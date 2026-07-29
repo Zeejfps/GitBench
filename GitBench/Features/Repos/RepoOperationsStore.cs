@@ -24,6 +24,25 @@ public sealed record RepoOperations(
     public static readonly RepoOperations Idle = new(false, false, false, null);
 }
 
+// What a fetch or pull actually did, for a caller that has to report the outcome rather than only
+// start the work. AlreadyRunning is not a success: nothing was started, and resolving it to the
+// outcome of the op already in flight would report someone else's fetch as this caller's.
+public abstract record RemoteOpResult
+{
+    private RemoteOpResult() { }
+
+    public static readonly RemoteOpResult Ok = new Succeeded();
+
+    public sealed record Succeeded : RemoteOpResult;
+
+    // The message the error dialog carries, so the two accounts of one failure agree.
+    public sealed record Failed(string Message) : RemoteOpResult;
+
+    public sealed record Diverged : RemoteOpResult;
+
+    public sealed record AlreadyRunning : RemoteOpResult;
+}
+
 // Single source of truth for in-flight remote operations (push/pull/fetch), keyed by repo id so an
 // op started on one repo keeps running — and stays correctly tracked — after the user switches
 // away. Mirrors RepoSnapshotStore's shape: per-repo state, an "active" projection that swaps on
@@ -44,6 +63,12 @@ public interface IRepoOperationsStore
     void Push(Repo repo, bool force = false);
     void Pull(Repo repo, PullStrategy? strategy = null);
     void Fetch(Repo repo);
+
+    // The same operations the void methods start, for a caller that has to say what happened — the
+    // assistant's fetch and pull tools. Called on the UI thread like everything else here: the
+    // state read and the in-flight write both land before the task comes back.
+    Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null);
+    Task<RemoteOpResult> FetchAsync(Repo repo);
 }
 
 /// <summary>
@@ -115,12 +140,17 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
             optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: 0, Behind: null));
     }
 
-    public void Pull(Repo repo, PullStrategy? strategy = null)
+    public void Pull(Repo repo, PullStrategy? strategy = null) => _ = PullAsync(repo, strategy);
+
+    public void Fetch(Repo repo) => _ = FetchAsync(repo);
+
+    public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null)
     {
         var s = Get(repo.Id);
-        if (s.Value.IsPulling) return;
+        if (s.Value.IsPulling) return AlreadyRunning;
         s.Value = s.Value with { IsPulling = true, PendingError = null };
         var strings = _loc.Strings.Value;
+        var completion = Awaited();
         Run(repo, strings.ReposErrorPullFailed, strings.ToastPulled,
             () => _git.Pull(repo, strategy) switch
             {
@@ -130,17 +160,36 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
             },
             st => st with { IsPulling = false },
             // A successful pull leaves the branch level with the upstream it pulled from.
-            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: null, Behind: 0));
+            optimisticSync: new RemoteSyncOptimisticMessage(repo.Id, Ahead: null, Behind: 0),
+            completion: completion);
+        return completion.Task;
     }
 
-    public void Fetch(Repo repo)
+    public Task<RemoteOpResult> FetchAsync(Repo repo)
     {
         var s = Get(repo.Id);
-        if (s.Value.IsFetching) return;
+        if (s.Value.IsFetching) return AlreadyRunning;
         s.Value = s.Value with { IsFetching = true, PendingError = null };
+        var completion = Awaited();
         Run(repo, _loc.Strings.Value.ReposErrorFetchFailed, _loc.Strings.Value.ToastFetched,
             () => _git.Fetch(repo) is GitOutcome.Failed f ? (false, f.Message, false) : (true, null, false),
-            st => st with { IsFetching = false });
+            st => st with { IsFetching = false },
+            completion: completion);
+        return completion.Task;
+    }
+
+    private static readonly Task<RemoteOpResult> AlreadyRunning =
+        Task.FromResult<RemoteOpResult>(new RemoteOpResult.AlreadyRunning());
+
+    // Held so shutdown can settle whatever is still in flight: Complete is the only other place that
+    // resolves one, and it arrives on a dispatcher hop Dispose has already taken away.
+    private readonly HashSet<TaskCompletionSource<RemoteOpResult>> _outstanding = new();
+
+    private TaskCompletionSource<RemoteOpResult> Awaited()
+    {
+        var completion = new TaskCompletionSource<RemoteOpResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _outstanding.Add(completion);
+        return completion;
     }
 
     private State<RepoOperations> Get(Guid id)
@@ -184,7 +233,8 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         string successMessage,
         Func<(bool Success, string? Error, bool Diverged)> work,
         Func<RepoOperations, RepoOperations> clearInFlight,
-        RemoteSyncOptimisticMessage? optimisticSync = null)
+        RemoteSyncOptimisticMessage? optimisticSync = null,
+        TaskCompletionSource<RemoteOpResult>? completion = null)
     {
         var dispatcher = _dispatcher;
         Task.Run(() =>
@@ -194,7 +244,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
             bool diverged = false;
             try { (success, error, diverged) = work(); }
             catch (Exception ex) { error = ex.Message; }
-            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, optimisticSync, success, error, diverged));
+            dispatcher.Post(() => Complete(repo, failureTitle, successMessage, clearInFlight, optimisticSync, completion, success, error, diverged));
         });
     }
 
@@ -204,11 +254,13 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         string successMessage,
         Func<RepoOperations, RepoOperations> clearInFlight,
         RemoteSyncOptimisticMessage? optimisticSync,
+        TaskCompletionSource<RemoteOpResult>? completion,
         bool success,
         string? error,
         bool diverged)
     {
         if (_disposed) return;
+        if (completion != null) _outstanding.Remove(completion);
         var s = Get(repo.Id);
         var next = clearInFlight(s.Value);
 
@@ -220,8 +272,11 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
             // reconciles, so it doesn't trail the toast by a beat.
             if (optimisticSync is { } sync) _bus.Broadcast(sync);
             _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(successMessage)));
+            completion?.TrySetResult(RemoteOpResult.Ok);
             return;
         }
+
+        var message = error ?? _loc.Strings.Value.CommonUnknownError;
 
         // A diverged pull on the repo you're looking at is recoverable in-app: hand it to the view
         // model to open the reconcile dialog. For a background repo there's nothing to interact with,
@@ -230,6 +285,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         {
             s.Value = next;
             _bus.Broadcast(new PullDivergedMessage(repo));
+            completion?.TrySetResult(new RemoteOpResult.Diverged());
             return;
         }
 
@@ -238,12 +294,16 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         if (_registry.Active.Value?.Id == repo.Id)
         {
             s.Value = next;
-            _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, error ?? _loc.Strings.Value.CommonUnknownError));
+            _bus.Broadcast(new ShowOperationErrorMessage(failureTitle, message));
         }
         else
         {
-            s.Value = next with { PendingError = new PendingOperationError(failureTitle, error ?? _loc.Strings.Value.CommonUnknownError) };
+            s.Value = next with { PendingError = new PendingOperationError(failureTitle, message) };
         }
+
+        // Which repo was on screen decides where the failure is shown, not what it was: a diverged
+        // pull that only reached the badge is still a divergence to whoever asked for it.
+        completion?.TrySetResult(diverged ? new RemoteOpResult.Diverged() : new RemoteOpResult.Failed(message));
     }
 
     public void Dispose()
@@ -254,5 +314,10 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
         _active.Dispose();
         foreach (var s in _states.Values) s.Dispose();
         _states.Clear();
+        // The completion that would have resolved these was posted to a dispatcher that will not
+        // run it now, and an awaiter left on one is a hang in whatever was waiting for the report.
+        foreach (var completion in _outstanding)
+            completion.TrySetResult(new RemoteOpResult.Failed("The app shut down before the operation reported a result."));
+        _outstanding.Clear();
     }
 }

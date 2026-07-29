@@ -80,7 +80,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
             repo,
             AgentCatalog.LoadEmbedded().Get(AgentCatalog.GeneralAgent),
             new ReviewProgressStore(),
-            new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox));
+            new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations()));
 
     public void Dispose()
     {
@@ -96,9 +96,10 @@ public sealed class AssistantWriteToolsTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "commit", "create_tag", "get_branches", "get_commit_details", "get_commit_history",
-                "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
-                "get_review_stack", "get_status", "mark_viewed", "push_tag", "read_file",
+                "commit", "create_tag", "fetch", "get_branches", "get_commit_details",
+                "get_commit_history", "get_conflict", "get_conflicts", "get_diff",
+                "get_file_at_base", "get_local_changes", "get_review_diff", "get_review_stack",
+                "get_status", "mark_viewed", "pull", "push_tag", "read_file", "resolve_conflict",
                 "set_commit_message", "stage_files", "unstage_files",
             },
             _toolset.Tools.Select(t => t.Name));
@@ -107,8 +108,8 @@ public sealed class AssistantWriteToolsTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "commit", "create_tag", "mark_viewed", "push_tag", "set_commit_message",
-                "stage_files", "unstage_files",
+                "commit", "create_tag", "fetch", "mark_viewed", "pull", "push_tag",
+                "resolve_conflict", "set_commit_message", "stage_files", "unstage_files",
             },
             writes);
         Assert.All(_toolset.Tools, t => JsonDocument.Parse(t.JsonSchema).Dispose());

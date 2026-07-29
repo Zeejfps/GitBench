@@ -293,6 +293,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
             _bus,
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new IdleRemoteOperations(),
             _ => new FakeAssistantBackend());
         _store.Start();
         _vm = new AssistantViewModel(_store, _loc, _bus);
@@ -556,6 +557,7 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
             _bus,
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new IdleRemoteOperations(),
             connection =>
             {
                 _connection = connection;
@@ -747,6 +749,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
             new MessageBus(),
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new IdleRemoteOperations(),
             _ => backend);
         store.Start();
         Pump.WaitFor(_dispatcher, () => store.Active.Value is not null, "the repository's session");
