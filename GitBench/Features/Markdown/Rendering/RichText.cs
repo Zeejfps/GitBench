@@ -1,5 +1,7 @@
 using GitBench.Platform;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Markdown.Rendering;
@@ -26,6 +28,16 @@ internal sealed record RichText : Widget
 
     protected override View CreateView(Context ctx)
     {
-        throw new NotImplementedException();
+        var view = new RichTextView(ctx.Canvas);
+        Runs.Apply(ctx, view, static (v, runs) => v.Runs = runs);
+        CodeChipBackground.Apply(ctx, view, static (v, color) => v.CodeChipBackground = color);
+        LinkHoverColor.Apply(ctx, view, static (v, color) => v.LinkHoverColor = color);
+
+        // IPlatformShell is an interface, so Get returns null (not a transient) when no shell is
+        // registered — links then render styled but inert.
+        if (ctx.Get<IPlatformShell>() is { } shell)
+            view.UseController(ctx.Require<InputSystem>(), () => new LinkController(view, shell));
+
+        return view;
     }
 }

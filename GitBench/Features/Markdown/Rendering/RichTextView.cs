@@ -25,8 +25,35 @@ namespace GitBench.Features.Markdown.Rendering;
 /// </summary>
 internal sealed class RichTextView : View
 {
+    private const float UnderlineThickness = 1f;
+    private const float ChipCornerRadius = 3f;
+
     private readonly ICanvas _canvas;
     private IReadOnlyList<RichTextRun> _runs = Array.Empty<RichTextRun>();
+
+    // Wrapped layout cache, TextView's _wrappedForWidth pattern: valid while the width is
+    // (nearly) unchanged and the runs are the same list instance.
+    private RichTextLayoutResult? _layout;
+    private float _layoutForWidth;
+    private IReadOnlyList<RichTextRun>? _layoutForRuns;
+
+    // Natural (unwrapped) layout for intrinsic width / unconstrained height, cached separately so
+    // alternating measure-width / measure-height calls don't evict each other.
+    private RichTextLayoutResult? _natural;
+    private IReadOnlyList<RichTextRun>? _naturalForRuns;
+
+    // Per-segment slice strings for DrawText, rebuilt only when the layout instance changes so
+    // steady-state draws allocate nothing.
+    private readonly List<string> _segmentTexts = new();
+    private RichTextLayoutResult? _segmentTextsFor;
+
+    // Hover recolor styles, one copy per run so each DrawText call hands the canvas a style
+    // instance whose values are stable — never a shared instance mutated between calls.
+    private TextStyle?[]? _hoverStyles;
+    private IReadOnlyList<RichTextRun>? _hoverStylesForRuns;
+    private uint _hoverStylesColor;
+
+    private readonly RectStyle _chipStyle = new() { BorderRadius = BorderRadiusStyle.All(ChipCornerRadius) };
 
     public RichTextView(ICanvas canvas)
     {
@@ -57,7 +84,10 @@ internal sealed class RichTextView : View
     /// clears hover when null; redraws on change. Driven by <see cref="LinkController"/>.</summary>
     public void SetHoveredLink(string? url)
     {
-        throw new NotImplementedException();
+        if (HoveredLinkUrl == url)
+            return;
+        HoveredLinkUrl = url;
+        SetDirty();
     }
 
     /// <summary>The <see cref="RichTextRun.LinkUrl"/> of the link segment under
@@ -65,21 +95,154 @@ internal sealed class RichTextView : View
     /// point is over no link segment.</summary>
     public string? LinkAt(PointF point)
     {
-        throw new NotImplementedException();
+        if (_runs.Count == 0)
+            return null;
+
+        var layout = LayoutFor(Position.Width);
+        var left = Position.Left;
+        var top = Position.Top;
+        foreach (var line in layout.Lines)
+        {
+            var bottom = top - line.Height;
+            if (point.Y <= top && point.Y > bottom)
+            {
+                foreach (var seg in line.Segments)
+                {
+                    var segLeft = left + seg.X;
+                    if (point.X >= segLeft && point.X < segLeft + seg.Width)
+                        return _runs[seg.RunIndex].LinkUrl;
+                }
+                return null;
+            }
+            top = bottom;
+        }
+
+        return null;
     }
 
     protected override float MeasureWidthIntrinsic()
     {
-        throw new NotImplementedException();
+        if (Width.IsSet)
+            return Width;
+        return NaturalLayout().MaxLineWidth;
     }
 
     protected override float MeasureHeightIntrinsic(float availableWidth)
     {
-        throw new NotImplementedException();
+        // availableWidth <= 0 means "unconstrained": natural, '\n'-only line breaks.
+        return availableWidth > 0f ? LayoutFor(availableWidth).Height : NaturalLayout().Height;
     }
 
     protected override void OnDrawSelf(ICanvas c)
     {
-        throw new NotImplementedException();
+        var layout = LayoutFor(Position.Width);
+        if (layout.Lines.Count == 0)
+            return;
+
+        EnsureSegmentTexts(layout);
+
+        var z = GetDrawZIndex();
+        var left = Position.Left;
+        var top = Position.Top;
+        var segmentText = 0;
+        foreach (var line in layout.Lines)
+        {
+            var bottom = top - line.Height;
+            foreach (var seg in line.Segments)
+            {
+                var run = _runs[seg.RunIndex];
+                var rect = new RectF(left + seg.X, bottom, seg.Width, line.Height);
+                var hovered = HoveredLinkUrl != null && run.LinkUrl == HoveredLinkUrl;
+                var style = hovered ? HoverStyleFor(seg.RunIndex) : run.Style;
+
+                if (run.IsCode && CodeChipBackground != 0)
+                {
+                    _chipStyle.BackgroundColor = CodeChipBackground;
+                    c.DrawRect(new DrawRectInputs
+                    {
+                        Position = rect,
+                        Style = _chipStyle,
+                        ZIndex = z, // strictly below the segment's text
+                    });
+                }
+
+                if (run.Underline)
+                {
+                    var y = bottom + UnderlineThickness;
+                    c.DrawLine(new DrawLineInputs
+                    {
+                        Start = new PointF(rect.Left, y),
+                        End = new PointF(rect.Right, y),
+                        Thickness = UnderlineThickness,
+                        Color = style.TextColor.Value,
+                        ZIndex = z + 1,
+                    });
+                }
+
+                c.DrawText(new DrawTextInputs
+                {
+                    Position = rect,
+                    Text = _segmentTexts[segmentText++],
+                    Style = style,
+                    ZIndex = z + 1,
+                });
+            }
+            top = bottom;
+        }
+    }
+
+    private RichTextLayoutResult LayoutFor(float maxWidth)
+    {
+        if (_layout == null
+            || !ReferenceEquals(_layoutForRuns, _runs)
+            || Math.Abs(maxWidth - _layoutForWidth) >= 0.5f)
+        {
+            _layout = RichTextLayout.Layout(_canvas, _runs, maxWidth);
+            _layoutForWidth = maxWidth;
+            _layoutForRuns = _runs;
+        }
+        return _layout;
+    }
+
+    private RichTextLayoutResult NaturalLayout()
+    {
+        if (_natural == null || !ReferenceEquals(_naturalForRuns, _runs))
+        {
+            _natural = RichTextLayout.Layout(_canvas, _runs, 0f);
+            _naturalForRuns = _runs;
+        }
+        return _natural;
+    }
+
+    private void EnsureSegmentTexts(RichTextLayoutResult layout)
+    {
+        if (ReferenceEquals(_segmentTextsFor, layout))
+            return;
+
+        _segmentTexts.Clear();
+        foreach (var line in layout.Lines)
+        {
+            foreach (var seg in line.Segments)
+            {
+                var text = _runs[seg.RunIndex].Text;
+                _segmentTexts.Add(seg.Start == 0 && seg.Length == text.Length
+                    ? text
+                    : text.Substring(seg.Start, seg.Length));
+            }
+        }
+        _segmentTextsFor = layout;
+    }
+
+    private TextStyle HoverStyleFor(int runIndex)
+    {
+        if (_hoverStyles == null
+            || !ReferenceEquals(_hoverStylesForRuns, _runs)
+            || _hoverStylesColor != LinkHoverColor)
+        {
+            _hoverStyles = new TextStyle?[_runs.Count];
+            _hoverStylesForRuns = _runs;
+            _hoverStylesColor = LinkHoverColor;
+        }
+        return _hoverStyles[runIndex] ??= _runs[runIndex].Style with { TextColor = LinkHoverColor };
     }
 }
