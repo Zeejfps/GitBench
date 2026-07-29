@@ -34,6 +34,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
     private readonly AssistantToolset _toolset;
     private readonly Repo _repo;
     private readonly Repo _inactive;
+    private string? _remote;
 
     public AssistantWriteToolsTests()
     {
@@ -86,6 +87,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
         _commitBox.Dispose();
         Delete(_root);
         Delete(_other);
+        if (_remote is not null) Delete(_remote);
     }
 
     [Fact]
@@ -94,7 +96,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "commit", "get_branches", "get_commit_details", "get_commit_history",
+                "commit", "create_tag", "get_branches", "get_commit_details", "get_commit_history",
                 "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
                 "get_review_stack", "get_status", "mark_viewed", "read_file",
                 "set_commit_message", "stage_files", "unstage_files",
@@ -103,7 +105,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
 
         var writes = _toolset.Tools.Where(t => t.IsWrite).Select(t => t.Name).ToArray();
         Assert.Equal(
-            new[] { "commit", "mark_viewed", "set_commit_message", "stage_files", "unstage_files" },
+            new[] { "commit", "create_tag", "mark_viewed", "set_commit_message", "stage_files", "unstage_files" },
             writes);
         Assert.All(_toolset.Tools, t => JsonDocument.Parse(t.JsonSchema).Dispose());
     }
@@ -250,6 +252,95 @@ public sealed class AssistantWriteToolsTests : IDisposable
 
         Assert.True(invocation.IsError);
     }
+
+    [Fact]
+    public void CreateTag_NamesHeadAndTellsTheApp()
+    {
+        var told = 0;
+        _bus.Subscribe<RefsChangedMessage>(_ => told++);
+
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0"}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Contains("v1.0.0", Tags());
+        Assert.Equal(1, told);
+        // A lightweight tag is the ref itself pointing at the commit; nothing else was created.
+        Assert.Equal("commit", GitOut(_root, "cat-file", "-t", "v1.0.0").Trim());
+    }
+
+    [Fact]
+    public void CreateTag_WithAMessage_IsAnnotated()
+    {
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0","message":"the first one"}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Equal("tag", GitOut(_root, "cat-file", "-t", "v1.0.0").Trim());
+        Assert.Contains("the first one", GitOut(_root, "tag", "-n", "-l", "v1.0.0"));
+    }
+
+    [Fact]
+    public void CreateTag_OnTheCommitYouName_LeavesHeadAlone()
+    {
+        var first = GitOut(_root, "rev-parse", "HEAD").Trim();
+        Git(_root, "add", "b.txt");
+        Git(_root, "-c", "commit.gpgsign=false", "commit", "-m", "second");
+
+        var invocation = Invoke("create_tag", $$"""{"name":"v0.9.0","commit_sha":"{{first}}"}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Contains("v0.9.0", GitOut(_root, "tag", "--points-at", first));
+        Assert.Empty(GitOut(_root, "tag", "--points-at", "HEAD").Trim());
+    }
+
+    [Fact]
+    public void CreateTag_WithANameGitWouldNotTake_IsRefusedBeforeAnythingIsWritten()
+    {
+        var invocation = Invoke("create_tag", """{"name":"v 1.0"}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Empty(Tags());
+    }
+
+    [Fact]
+    public void CreateTag_OnACommitThatDoesNotResolve_IsAnError()
+    {
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0","commit_sha":"deadbee"}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Empty(Tags());
+    }
+
+    [Fact]
+    public void CreateTag_WithPush_PutsTheTagOnTheRemote()
+    {
+        AddOrigin();
+
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0","message":"ship it","push":true}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Contains("refs/tags/v1.0.0", GitOut(_root, "ls-remote", "--tags", "origin"));
+        Assert.Contains("origin", invocation.Content, StringComparison.Ordinal);
+    }
+
+    // Asked to publish with nowhere to publish to. Creating the tag anyway would report a failure
+    // and leave the tag behind, which is the state nobody asked for.
+    [Fact]
+    public void CreateTag_WithPush_AndNoRemote_LeavesNoTagBehind()
+    {
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0","push":true}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Empty(Tags());
+    }
+
+    private void AddOrigin()
+    {
+        _remote = NewDir("gitbench-assistant-remote-");
+        Git(_remote, "init", "--bare", "--initial-branch=main");
+        Git(_root, "remote", "add", "origin", _remote);
+    }
+
+    private string Tags() => GitOut(_root, "tag", "--list");
 
     private IReadOnlyList<string> Staged()
     {

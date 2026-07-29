@@ -1,4 +1,5 @@
 using System.Text.Json;
+using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -46,8 +47,8 @@ internal sealed record AssistantWriteSurface(
 }
 
 /// <summary>
-/// The tools that change one repository: staging, the commit message, and the commit itself. Each
-/// one pauses the turn for the user's approval before it runs.
+/// The tools that change one repository: staging, the commit message, the commit itself, and tagging
+/// a commit. Each one pauses the turn for the user's approval before it runs.
 /// </summary>
 internal static class WriteTools
 {
@@ -69,6 +70,7 @@ internal static class WriteTools
             surface),
         new SetCommitMessageTool(repo, surface),
         new CommitTool(git, repo, surface),
+        new CreateTagTool(git, repo, surface),
     ];
 
     internal const string PathsSchema =
@@ -261,5 +263,97 @@ internal sealed class CommitTool : IAssistantTool
 
         editor.SetTitle(string.Empty);
         editor.SetDescription(string.Empty);
+    }
+}
+
+/// <summary>
+/// Names a commit with a tag, and publishes it when asked.
+/// </summary>
+/// <remarks>
+/// Pushing is the same reach the tag dialog's checkbox has — every configured remote, not just
+/// origin — so the two produce the same tag from the same request. It is off unless it is asked for:
+/// a tag that only exists locally can be deleted and forgotten, and one that reached a remote is
+/// something other people have already fetched.
+/// </remarks>
+internal sealed class CreateTagTool : IAssistantTool
+{
+    private readonly IGitService _git;
+    private readonly Repo _repo;
+    private readonly AssistantWriteSurface _surface;
+
+    public CreateTagTool(IGitService git, Repo repo, AssistantWriteSurface surface)
+    {
+        _git = git;
+        _repo = repo;
+        _surface = surface;
+    }
+
+    public string Name => "create_tag";
+
+    public string Description =>
+        "Tags a commit — HEAD unless commit_sha names another one. A message makes it an annotated "
+        + "tag; without one the tag is lightweight. push=true also pushes the tag to every remote "
+        + "the repository has, which publishes it — leave it out unless publishing was asked for.";
+
+    public string JsonSchema =>
+        """
+        {"type":"object","properties":{"name":{"type":"string","description":"The tag name, e.g. v1.4.0."},"commit_sha":{"type":"string","description":"Commit to tag, full or abbreviated. Defaults to HEAD."},"message":{"type":"string","description":"Annotation message. Omit for a lightweight tag."},"push":{"type":"boolean","description":"Push the new tag to every configured remote. Default false."}},"required":["name"],"additionalProperties":false}
+        """;
+
+    public bool IsWrite => true;
+
+    public async Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
+    {
+        var name = ToolJson.String(args, "name")?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return ToolInvocation.Error("Argument 'name' is required.");
+        if (!RefNameRules.IsValid(name))
+            return ToolInvocation.Error(
+                $"'{name}' is not a usable tag name: no whitespace, no leading '-', no '..' and no trailing '/'.");
+
+        var target = ToolJson.String(args, "commit_sha")?.Trim();
+        // A revision reaches git as a positional argument, so one starting with '-' would be read as
+        // an option rather than a commit.
+        if (target?.StartsWith('-') == true)
+            return ToolInvocation.Error("A commit sha may not begin with '-'.");
+        if (string.IsNullOrEmpty(target)) target = "HEAD";
+
+        if (_git.LoadDetails(_repo, target) is not Fetched<CommitDetails>.Ok commit)
+            return ToolInvocation.Error($"'{target}' does not resolve to a commit in this repository.");
+
+        var push = ToolJson.Bool(args, "push", false);
+        IReadOnlyList<string> remotes = push ? _git.GetRemoteNames(_repo) : [];
+        // Asked to publish with nowhere to publish to: creating the local tag anyway would report a
+        // failure while leaving the tag behind.
+        if (push && remotes.Count == 0)
+            return ToolInvocation.Error(
+                "This repository has no remotes, so the tag cannot be pushed. Call again without "
+                + "'push' to tag locally.");
+
+        var message = ToolJson.String(args, "message") ?? string.Empty;
+        if (_git.CreateTag(_repo, name, message, commit.Value.Sha, push) is GitOutcome.Failed failed)
+            return ToolInvocation.Error(push
+                ? $"{failed.Message} The tag is created before it is pushed, so it may exist locally "
+                  + "even though this failed — check before tagging again."
+                : failed.Message);
+
+        await _surface.OnUiThreadAsync(
+            () => _surface.Bus.Broadcast(new RefsChangedMessage(_repo.Id)), ct).ConfigureAwait(false);
+
+        return ToolInvocation.Ok(ToolJson.Write(writer =>
+        {
+            writer.WriteBoolean("ok", true);
+            writer.WriteString("name", name);
+            writer.WriteString("sha", ReadTools.ShortSha(commit.Value.Sha));
+            writer.WriteString("summary", commit.Value.MessageShort);
+            writer.WriteBoolean("annotated", message.Length > 0);
+            if (!push) return;
+
+            writer.WritePropertyName("pushed_to");
+            writer.WriteStartArray();
+            foreach (var remote in remotes)
+                writer.WriteStringValue(remote);
+            writer.WriteEndArray();
+        }));
     }
 }

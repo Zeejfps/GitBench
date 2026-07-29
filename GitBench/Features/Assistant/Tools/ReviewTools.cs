@@ -335,11 +335,7 @@ internal sealed class MarkViewedTool : IAssistantTool
         if (paths.Count == 0)
             return ToolInvocation.Error("Argument 'paths' must list at least one repo-relative path.");
 
-        var viewed = args.ValueKind == JsonValueKind.Object
-            && args.TryGetProperty("viewed", out var flag)
-            && flag.ValueKind == JsonValueKind.False
-                ? false
-                : true;
+        var viewed = ToolJson.Bool(args, "viewed", true);
 
         var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
         if (scope is null) return ToolInvocation.Error(error!);

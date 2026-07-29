@@ -91,6 +91,20 @@ internal static class ToolJson
         return Math.Clamp(parsed, min, max);
     }
 
+    public static bool Bool(JsonElement args, string name, bool fallback)
+    {
+        if (args.ValueKind != JsonValueKind.Object || !args.TryGetProperty(name, out var value))
+            return fallback;
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String when bool.TryParse(value.GetString(), out var parsed) => parsed,
+            _ => fallback,
+        };
+    }
+
     public static void WriteIso(Utf8JsonWriter writer, string name, DateTimeOffset when) =>
         writer.WriteString(name, when.ToString("O"));
 }

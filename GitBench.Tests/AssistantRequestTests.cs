@@ -134,7 +134,7 @@ public sealed class AssistantRequestTests
         Assert.Equal(
             new[]
             {
-                "commit", "get_branches", "get_commit_details", "get_commit_history",
+                "commit", "create_tag", "get_branches", "get_commit_details", "get_commit_history",
                 "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
                 "get_review_stack", "get_status", "mark_viewed", "read_file",
                 "set_commit_message", "stage_files", "unstage_files",
