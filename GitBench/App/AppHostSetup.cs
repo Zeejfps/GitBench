@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Theming;
@@ -57,6 +58,7 @@ internal static class AppHostSetup
             var fontAssembly = typeof(LucideIcons).Assembly;
             appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
             appHost.RegisterFont(DiffOptions.MonoFontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
+            appHost.RegisterFont(MarkdownFonts.ItalicFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Inter-Italic.ttf"), 16);
 
             // Glyph fallbacks come from system fonts so we don't bundle any. CJK registers one font
             // per script family (JP/SC/KR); the shape layer picks per glyph by cmap coverage. Arabic

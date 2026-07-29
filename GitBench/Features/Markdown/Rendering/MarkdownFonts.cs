@@ -8,5 +8,5 @@ namespace GitBench.Features.Markdown.Rendering;
 /// </summary>
 internal static class MarkdownFonts
 {
-    public const string ItalicFamily = "";
+    public const string ItalicFamily = "inter-italic";
 }
