@@ -59,8 +59,17 @@ public class MarkdownWidgetTests
     private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell) Create(
         string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
     {
+        var (harness, clipboard, shell, _) = CreateWithDispatcher(markdown, width, height, mode);
+        return (harness, clipboard, shell);
+    }
+
+    private static (GuiTestHarness Harness, FakeClipboard Clipboard, FakeShell Shell, QueuedDispatcher Dispatcher)
+        CreateWithDispatcher(
+            string markdown, int width = 800, int height = 600, ThemeMode mode = ThemeMode.Dark)
+    {
         var clipboard = new FakeClipboard();
         var shell = new FakeShell();
+        var dispatcher = new QueuedDispatcher();
         var harness = GuiTestHarness.Create(
             ctx => new MarkdownWidget { Document = Parse(markdown) }.BuildView(ctx),
             width, height,
@@ -72,8 +81,27 @@ public class MarkdownWidgetTests
                     new LocalizationService(new State<Locale>(Locale.En)));
                 ctx.AddService<IClipboard>(clipboard);
                 ctx.AddService<IPlatformShell>(shell);
+                ctx.AddService<IUiDispatcher>(dispatcher);
             });
-        return (harness, clipboard, shell);
+        return (harness, clipboard, shell, dispatcher);
+    }
+
+    // Code-block highlighting lands from a background lane (CodeBlockViewModel), so a test that
+    // wants the colored runs pumps the dispatcher until they show up rather than reading the
+    // first frame.
+    private static RecordingCanvas RenderHighlighted(
+        GuiTestHarness h, QueuedDispatcher dispatcher, uint slotColor)
+    {
+        var canvas = h.Render();
+        Pump.WaitFor(
+            dispatcher,
+            () =>
+            {
+                canvas = h.Render();
+                return canvas.Texts.Any(t => t.Inputs.Style.TextColor.Value == slotColor);
+            },
+            "the code block's syntax spans");
+        return canvas;
     }
 
     private static ThemeStyles Dark => ThemeStyles.Dark;
@@ -461,10 +489,10 @@ public class MarkdownWidgetTests
     [Fact]
     public void ClosedCsharpCodeBlockGetsSyntaxColoredRuns()
     {
-        var (h, _, _) = Create("```csharp\nint count = 42; // note\n```");
+        var (h, _, _, dispatcher) = CreateWithDispatcher("```csharp\nint count = 42; // note\n```");
         using (h)
         {
-            var canvas = h.Render();
+            var canvas = RenderHighlighted(h, dispatcher, Dark.DiffContent.Syntax.Number);
 
             var number = DrawContaining(canvas, "42");
             Assert.Equal(Dark.DiffContent.Syntax.Number, number.Inputs.Style.TextColor.Value);

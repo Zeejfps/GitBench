@@ -66,6 +66,7 @@ public class MarkdownStreamTests
                     new LocalizationService(new State<Locale>(Locale.En)));
                 ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
+                ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
             });
         return (harness, list!);
     }

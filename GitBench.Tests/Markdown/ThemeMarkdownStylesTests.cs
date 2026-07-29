@@ -95,6 +95,7 @@ public class ThemeMarkdownStylesTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(themeMode));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
             });
         return (harness, themeMode);
     }

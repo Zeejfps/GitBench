@@ -19,41 +19,38 @@ namespace GitBench.Features.Markdown.Rendering;
 /// <para>
 /// Pinned behavior (see <c>MarkdownWidgetTests</c>):
 /// when <see cref="CodeBlock.IsClosed"/> is true and <see cref="CodeBlock.Language"/> resolves a
-/// grammar, lines are colored via <c>SyntaxHighlighter.Highlight(Text, Language)</c> with slot
-/// colors from the active theme's <c>DiffContent.Syntax</c> (the same slots the diff uses);
-/// while the fence is open, or when the language is null/unknown, the text renders plain in
-/// <c>MarkdownStyles.CodeBlockText</c> — verbatim either way, one visual line per source line,
-/// never inline-parsed. Long lines live inside a <c>HorizontalScrollArea</c> (structure pinned,
-/// not scroll physics). The copy button is labeled/tooltipped with the localized
+/// grammar, lines are colored with slot colors from the active theme's <c>DiffContent.Syntax</c>
+/// (the same slots the diff uses) as soon as <see cref="CodeBlockViewModel"/>'s background pass
+/// lands; until then, while the fence is open, or when the language is null/unknown, the text
+/// renders plain in <c>MarkdownStyles.CodeBlockText</c> — verbatim either way, one visual line per
+/// source line, never inline-parsed. Long lines live inside a <c>HorizontalScrollArea</c>
+/// (structure pinned, not scroll physics). The copy button is labeled/tooltipped with the localized
 /// <c>markdown.copy_code</c> string and writes <see cref="CodeBlock.Text"/> to the context's
 /// <c>IClipboard</c> (no clipboard registered → button is inert, never a throw). Code text pins
 /// <c>BaseDirection.Ltr</c> like the diff's mono runs.
 /// </para>
 /// </summary>
-internal sealed record CodeBlockWidget : Widget
+internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
 {
     /// <summary>The code block to render.</summary>
     public required CodeBlock Block { get; init; }
 
-    // One process-wide highlighter, the DiffHighlightCoordinator precedent: the grammar cache is
-    // expensive to warm and the instance serializes engine access internally, so sharing is both
-    // cheap and safe. Tokenization happens once per Build (spans are theme-independent); only the
-    // span → color resolution re-runs on a theme flip.
-    private static readonly SyntaxHighlighter Highlighter = new();
+    // The highlighter is an optional context override so tests can count tokenize passes; the app
+    // registers none, which leaves the shared instance to be resolved on the worker.
+    protected override CodeBlockViewModel CreateState(Context ctx) =>
+        new(Block, ctx.Require<IUiDispatcher>(), ctx.Get<ISyntaxHighlighter>());
 
-    protected override IWidget Build(Context ctx)
+    protected override IWidget Build(Context ctx, CodeBlockViewModel vm)
     {
         var block = Block;
         var clipboard = ctx.Get<IClipboard>();
         var copyLabel = ctx.Localization().Strings.Value.MarkdownCopyCode;
+        var theme = ctx.Theme().Styles;
 
         // Tab-expanded display lines, because token spans arrive in tab-expanded column space
         // (the highlighter expands the same way — see DiffText). Copy still uses the verbatim
         // Block.Text.
         var lines = SplitLines(block.Text);
-        var spans = block.IsClosed && block.Language is { } language
-            ? Highlighter.Highlight(block.Text, language)
-            : null;
 
         return new Box
         {
@@ -79,8 +76,10 @@ internal sealed record CodeBlockWidget : Widget
                                     {
                                         Child = new RichText
                                         {
-                                            Runs = Theme.Styled<IReadOnlyList<RichTextRun>>(
-                                                s => CodeRuns(lines, spans, s)),
+                                            // Tracks both sources: the spans land once, a theme
+                                            // flip re-resolves their colors without re-tokenizing.
+                                            Runs = Prop.Bind(
+                                                () => CodeRuns(lines, vm.Spans.Value, theme.Value)),
                                         },
                                     },
                                 },
