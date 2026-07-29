@@ -14,8 +14,16 @@ namespace GitBench.Features.Diff;
 /// tokenize failure / per-line timeout. It never throws to callers, so highlighting failures
 /// degrade silently to today's plain rendering.
 /// </summary>
-internal sealed class SyntaxHighlighter
+internal sealed class SyntaxHighlighter : ISyntaxHighlighter
 {
+    /// <summary>
+    /// The one instance every highlighting surface shares — diffs and markdown code blocks alike.
+    /// Constructing it builds the TextMate registry, and each instance warms its own grammar cache,
+    /// so a second instance means paying both costs twice. First touch is what builds the registry:
+    /// reach for this only from a background lane, never during a widget build.
+    /// </summary>
+    public static SyntaxHighlighter Shared { get; } = new();
+
     // Files larger than this skip highlighting entirely (GitHub Desktop uses a comparable
     // ~256 KB heuristic). Bounds worst-case tokenize cost on a huge blob.
     public const int MaxFileChars = 256 * 1024;

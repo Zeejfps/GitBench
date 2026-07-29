@@ -40,6 +40,7 @@ public sealed partial record ThemeStyles
     public required ContextMenuStyles ContextMenu { get; init; }
     public required CommitsViewStyles CommitsView { get; init; }
     public required RowSelectionStyles RowSelection { get; init; }
+    public required MarkdownStyles Markdown { get; init; }
 
     public static readonly ThemeStyles Dark = BuildDark();
     public static readonly ThemeStyles Light = BuildLight();

@@ -617,5 +617,7 @@
     "other": "您有 {count} 项未暂存的本地更改。"
   },
   "commits.reset_dirty_both": "您有 {staged} 项已暂存和 {unstaged} 项未暂存的本地更改。",
-  "localchanges.files_header_empty": "文件"
+  "localchanges.files_header_empty": "文件",
+
+  "markdown.copy_code": "复制代码"
 }

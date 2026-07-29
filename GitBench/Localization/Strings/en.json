@@ -616,5 +616,7 @@
     "other": "You have {count} unstaged local changes."
   },
   "commits.reset_dirty_both": "You have {staged} staged and {unstaged} unstaged local changes.",
-  "localchanges.files_header_empty": "Files"
+  "localchanges.files_header_empty": "Files",
+
+  "markdown.copy_code": "Copy code"
 }

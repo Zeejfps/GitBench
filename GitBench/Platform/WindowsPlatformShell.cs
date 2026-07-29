@@ -25,7 +25,14 @@ public sealed class WindowsPlatformShell : IPlatformShell
     {
         // UseShellExecute lets the shell hand the URL to the default browser.
         var psi = new ProcessStartInfo(url) { UseShellExecute = true };
-        using var _ = Process.Start(psi);
+        try
+        {
+            using var _ = Process.Start(psi);
+        }
+        catch (Win32Exception e)
+        {
+            Console.WriteLine($"[PlatformShell] Failed to open url '{url}': {e.Message}");
+        }
     }
 
     public void OpenTerminal(string path)

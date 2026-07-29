@@ -50,5 +50,6 @@ public partial record ThemeStyles
             ContextMenu = BuildContextMenu(p),
             CommitsView = BuildCommitsView(p, commitBadge),
             RowSelection = BuildRowSelection(p),
+            Markdown = BuildMarkdown(p),
         };
 }

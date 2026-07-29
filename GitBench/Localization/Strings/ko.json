@@ -617,5 +617,7 @@
     "other": "스테이징되지 않은 로컬 변경 사항이 {count}개 있습니다."
   },
   "commits.reset_dirty_both": "스테이징된 변경 사항 {staged}개와 스테이징되지 않은 변경 사항 {unstaged}개가 있습니다.",
-  "localchanges.files_header_empty": "파일"
+  "localchanges.files_header_empty": "파일",
+
+  "markdown.copy_code": "코드 복사"
 }

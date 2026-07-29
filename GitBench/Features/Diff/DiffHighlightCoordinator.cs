@@ -13,10 +13,6 @@ namespace GitBench.Features.Diff;
 /// </summary>
 internal static class DiffHighlightCoordinator
 {
-    // Shared across all diff view models: the engine is internally locked (thread-safe) and
-    // caches loaded grammars, so one instance keeps the grammar cache warm app-wide.
-    private static readonly SyntaxHighlighter Highlighter = new();
-
     public static DiffHighlight? Compute(IGitService git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
     {
         if (!DiffOptions.SyntaxHighlightingEnabled) return null;
@@ -57,6 +53,6 @@ internal static class DiffHighlightCoordinator
         // On the old side of a rename, the content lives at the pre-rename path.
         var path = oldSide && diff.OldPath != null ? diff.OldPath : diff.Path;
         var text = git.GetFileText(repo, path, diff.Side, oldSide, commitSha, baseSha);
-        return text == null ? null : Highlighter.Highlight(text, languageId);
+        return text == null ? null : SyntaxHighlighter.Shared.Highlight(text, languageId);
     }
 }

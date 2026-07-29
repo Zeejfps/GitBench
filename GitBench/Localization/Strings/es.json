@@ -617,5 +617,7 @@
     "other": "Tienes {count} cambios locales sin preparar."
   },
   "commits.reset_dirty_both": "Tienes {staged} cambios preparados y {unstaged} sin preparar.",
-  "localchanges.files_header_empty": "Archivos"
+  "localchanges.files_header_empty": "Archivos",
+
+  "markdown.copy_code": "Copiar código"
 }
