@@ -6,16 +6,34 @@ namespace GitBench.Features.Markdown.Parsing;
 /// structural (value) equality across the whole tree, including the list-typed properties, so
 /// two parses of the same text compare equal and unchanged blocks keep their views.
 /// </summary>
-internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks);
+internal sealed record MarkdownDocument(IReadOnlyList<MarkdownBlock> Blocks)
+{
+    public bool Equals(MarkdownDocument? other)
+        => other is not null && AstEquality.ListsEqual(Blocks, other.Blocks);
+
+    public override int GetHashCode() => AstEquality.ListHash(Blocks);
+}
 
 /// <summary>Base of every block-level node.</summary>
 internal abstract record MarkdownBlock;
 
 /// <summary>ATX heading, level 1–6.</summary>
-internal sealed record HeadingBlock(int Level, IReadOnlyList<InlineRun> Runs) : MarkdownBlock;
+internal sealed record HeadingBlock(int Level, IReadOnlyList<InlineRun> Runs) : MarkdownBlock
+{
+    public bool Equals(HeadingBlock? other)
+        => other is not null && Level == other.Level && AstEquality.ListsEqual(Runs, other.Runs);
+
+    public override int GetHashCode() => HashCode.Combine(Level, AstEquality.ListHash(Runs));
+}
 
 /// <summary>A paragraph of inline runs. Raw line breaks survive in the run text for Step 2.</summary>
-internal sealed record ParagraphBlock(IReadOnlyList<InlineRun> Runs) : MarkdownBlock;
+internal sealed record ParagraphBlock(IReadOnlyList<InlineRun> Runs) : MarkdownBlock
+{
+    public bool Equals(ParagraphBlock? other)
+        => other is not null && AstEquality.ListsEqual(Runs, other.Runs);
+
+    public override int GetHashCode() => AstEquality.ListHash(Runs);
+}
 
 /// <summary>
 /// Fenced code block. <paramref name="Language"/> is the first word of the info string (null when
@@ -26,16 +44,37 @@ internal sealed record ParagraphBlock(IReadOnlyList<InlineRun> Runs) : MarkdownB
 internal sealed record CodeBlock(string? Language, string Text, bool IsClosed) : MarkdownBlock;
 
 /// <summary>Ordered or unordered list. <paramref name="Start"/> is the first item's number.</summary>
-internal sealed record ListBlock(bool Ordered, int Start, IReadOnlyList<ListItem> Items) : MarkdownBlock;
+internal sealed record ListBlock(bool Ordered, int Start, IReadOnlyList<ListItem> Items) : MarkdownBlock
+{
+    public bool Equals(ListBlock? other)
+        => other is not null
+           && Ordered == other.Ordered
+           && Start == other.Start
+           && AstEquality.ListsEqual(Items, other.Items);
+
+    public override int GetHashCode() => HashCode.Combine(Ordered, Start, AstEquality.ListHash(Items));
+}
 
 /// <summary>
 /// One list item: nested blocks plus the GFM task state — true/false for <c>[x]</c>/<c>[ ]</c>,
 /// null for a plain item.
 /// </summary>
-internal sealed record ListItem(IReadOnlyList<MarkdownBlock> Blocks, bool? TaskChecked);
+internal sealed record ListItem(IReadOnlyList<MarkdownBlock> Blocks, bool? TaskChecked)
+{
+    public bool Equals(ListItem? other)
+        => other is not null && TaskChecked == other.TaskChecked && AstEquality.ListsEqual(Blocks, other.Blocks);
+
+    public override int GetHashCode() => HashCode.Combine(TaskChecked, AstEquality.ListHash(Blocks));
+}
 
 /// <summary>Blockquote wrapping nested blocks; quotes nest by containing another quote.</summary>
-internal sealed record QuoteBlock(IReadOnlyList<MarkdownBlock> Blocks) : MarkdownBlock;
+internal sealed record QuoteBlock(IReadOnlyList<MarkdownBlock> Blocks) : MarkdownBlock
+{
+    public bool Equals(QuoteBlock? other)
+        => other is not null && AstEquality.ListsEqual(Blocks, other.Blocks);
+
+    public override int GetHashCode() => AstEquality.ListHash(Blocks);
+}
 
 /// <summary>Thematic break (horizontal rule).</summary>
 internal sealed record ThematicBreakBlock : MarkdownBlock;
@@ -48,7 +87,19 @@ internal sealed record ThematicBreakBlock : MarkdownBlock;
 internal sealed record TableBlock(
     IReadOnlyList<ColumnAlignment> Columns,
     IReadOnlyList<IReadOnlyList<InlineRun>> Header,
-    IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> Rows) : MarkdownBlock;
+    IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> Rows) : MarkdownBlock
+{
+    public bool Equals(TableBlock? other)
+        => other is not null
+           && AstEquality.ListsEqual(Columns, other.Columns)
+           && AstEquality.CellsEqual(Header, other.Header)
+           && AstEquality.RowsEqual(Rows, other.Rows);
+
+    public override int GetHashCode() => HashCode.Combine(
+        AstEquality.ListHash(Columns),
+        AstEquality.CellsHash(Header),
+        AstEquality.RowsHash(Rows));
+}
 
 /// <summary>Per-column alignment parsed from the table delimiter row.</summary>
 internal enum ColumnAlignment
@@ -71,3 +122,78 @@ internal sealed record InlineRun(
     bool Code = false,
     bool Strikethrough = false,
     string? LinkUrl = null);
+
+/// <summary>
+/// Sequence equality/hash for the AST's list-typed properties. Record equality compares the
+/// element types by value (blocks route through their own overrides), so a flat element-wise
+/// walk gives whole-tree structural equality; the nested table shapes get explicit overloads
+/// because a cell list's elements are themselves lists.
+/// </summary>
+internal static class AstEquality
+{
+    public static bool ListsEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        var comparer = EqualityComparer<T>.Default;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!comparer.Equals(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    public static int ListHash<T>(IReadOnlyList<T> list)
+    {
+        var hash = new HashCode();
+        for (var i = 0; i < list.Count; i++)
+        {
+            hash.Add(list[i]);
+        }
+        return hash.ToHashCode();
+    }
+
+    public static bool CellsEqual(IReadOnlyList<IReadOnlyList<InlineRun>> a, IReadOnlyList<IReadOnlyList<InlineRun>> b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!ListsEqual(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    public static int CellsHash(IReadOnlyList<IReadOnlyList<InlineRun>> cells)
+    {
+        var hash = new HashCode();
+        for (var i = 0; i < cells.Count; i++)
+        {
+            hash.Add(ListHash(cells[i]));
+        }
+        return hash.ToHashCode();
+    }
+
+    public static bool RowsEqual(
+        IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> a,
+        IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!CellsEqual(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    public static int RowsHash(IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> rows)
+    {
+        var hash = new HashCode();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            hash.Add(CellsHash(rows[i]));
+        }
+        return hash.ToHashCode();
+    }
+}
