@@ -4,11 +4,10 @@ using Xunit;
 namespace GitBench.Tests.Markdown;
 
 /// <summary>
-/// Step 1 block-grammar contract for <see cref="BasicMarkdownParser"/>. Inline parsing is Step 2,
-/// so every paragraph, heading, and table cell here must hold exactly one unstyled
-/// <see cref="InlineRun"/> of raw text (<see cref="RawText"/> asserts that shape). Consecutive
-/// paragraph lines join with "\n" (trailing spaces preserved for Step 2's hard breaks); an empty
-/// table cell is an empty run list.
+/// Block-grammar contract for <see cref="BasicMarkdownParser"/>. The inputs here are markup-free,
+/// so every paragraph, heading, and table cell must hold exactly one unstyled
+/// <see cref="InlineRun"/> (<see cref="RawText"/> asserts that shape). Consecutive paragraph
+/// lines join with "\n"; an empty table cell is an empty run list.
 /// </summary>
 public class BlockParserTests
 {
@@ -21,7 +20,7 @@ public class BlockParserTests
         return Assert.IsType<T>(block);
     }
 
-    // Step 1 keeps inline content as one unstyled raw run; assert exactly that and return it.
+    // Markup-free text yields one unstyled run; assert exactly that and return it.
     private static string RawText(IReadOnlyList<InlineRun> runs)
     {
         var run = Assert.Single(runs);
@@ -139,11 +138,14 @@ public class BlockParserTests
     }
 
     [Fact]
-    public void TrailingSpacesOnParagraphLinesArePreserved()
+    public void TrailingSpacesBecomeHardBreakRun()
     {
-        // Step 2's hard-break detection needs the trailing double space intact.
+        // Trailing double spaces survive the line join and reach the inline parser, which turns
+        // them into the dedicated unstyled "\n" hard-break run.
         var para = SingleBlock<ParagraphBlock>("a  \nb");
-        Assert.Equal("a  \nb", RawText(para.Runs));
+        Assert.Equal(
+            new[] { new InlineRun("a"), new InlineRun("\n"), new InlineRun("b") },
+            para.Runs);
     }
 
     [Fact]

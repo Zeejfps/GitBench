@@ -112,8 +112,8 @@ internal enum ColumnAlignment
 
 /// <summary>
 /// One flat, pre-resolved styled run — the AST's entire inline model. The parser flattens any
-/// emphasis nesting; the renderer never sees a tree. In Step 1 (block parsing only) every
-/// paragraph, heading, and cell holds a single unstyled run of raw inline text.
+/// emphasis nesting; the renderer never sees a tree. A hard line break is a dedicated run whose
+/// <paramref name="Text"/> is exactly "\n", always unstyled and never merged into neighbors.
 /// </summary>
 internal sealed record InlineRun(
     string Text,

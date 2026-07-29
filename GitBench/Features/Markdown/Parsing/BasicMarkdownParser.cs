@@ -5,8 +5,9 @@ namespace GitBench.Features.Markdown.Parsing;
 
 /// <summary>
 /// Hand-rolled line-based block scanner for the GFM-flavored subset (see
-/// docs/plans/markdown-renderer.md). Step 1 covers block structure only: inline content is kept
-/// as a single unstyled <see cref="InlineRun"/> of raw text until the inline parser lands.
+/// docs/plans/markdown-renderer.md). Block structure is resolved here; the raw inline text of
+/// every paragraph, heading, and table cell routes through <see cref="InlineParser"/>, while
+/// code-block content stays verbatim and is never inline-parsed.
 ///
 /// The scanner walks the input line by line, dispatching each line to the block construct it
 /// opens; anything unrecognized accumulates into a paragraph, so malformed syntax degrades to
@@ -89,14 +90,12 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         return blocks;
     }
 
-    private static IReadOnlyList<InlineRun> SingleRun(string text) => new[] { new InlineRun(text) };
-
     // ------------------------------------------------------------------ paragraphs
 
     private static ParagraphBlock ParseParagraph(IReadOnlyList<string> lines, ref int i)
     {
         // Leading whitespace is insignificant (indented code blocks are out of scope); trailing
-        // spaces survive for Step 2's hard-break detection.
+        // spaces survive for the inline parser's hard-break detection.
         var text = new StringBuilder(lines[i].TrimStart());
         i++;
         while (i < lines.Count && !StartsNewBlock(lines, i))
@@ -104,7 +103,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
             text.Append('\n').Append(lines[i].TrimStart());
             i++;
         }
-        return new ParagraphBlock(SingleRun(text.ToString()));
+        return new ParagraphBlock(InlineParser.Parse(text.ToString()));
     }
 
     private static bool StartsNewBlock(IReadOnlyList<string> lines, int i)
@@ -139,7 +138,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         {
             text = text[..end].TrimEnd();
         }
-        heading = new HeadingBlock(level, SingleRun(text));
+        heading = new HeadingBlock(level, InlineParser.Parse(text));
         return true;
     }
 
@@ -375,7 +374,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         for (var c = 0; c < columnCount; c++)
         {
             var text = c < raw.Count ? raw[c].Trim() : string.Empty;
-            cells.Add(text.Length == 0 ? Array.Empty<InlineRun>() : SingleRun(text));
+            cells.Add(InlineParser.Parse(text));
         }
         return cells;
     }
