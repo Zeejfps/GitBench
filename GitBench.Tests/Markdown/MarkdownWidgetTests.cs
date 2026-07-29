@@ -522,6 +522,29 @@ public class MarkdownWidgetTests
     }
 
     [Fact]
+    public void CodeBlockWithLinesWiderThanThePaneReservesOnlyTheHeightItDraws()
+    {
+        // A scrolled code block does not wrap, so a block whose lines overflow sideways must be
+        // exactly as tall as the same block with short lines — no phantom wrapped lines below.
+        var narrow = CodeBlockBoxHeight("```\nalpha\nbeta\n```");
+        var wide = CodeBlockBoxHeight("```\n" + new string('x', 300) + "\n" + new string('y', 300) + "\n```");
+
+        Assert.Equal(narrow, wide, 3);
+    }
+
+    private static float CodeBlockBoxHeight(string markdown)
+    {
+        var (h, _, _) = Create(markdown);
+        using (h)
+        {
+            var canvas = h.Render();
+            var box = canvas.Rects.First(
+                r => r.Inputs.Style.BackgroundColor == Dark.Markdown.CodeBlockBackground);
+            return box.Inputs.Position.Height;
+        }
+    }
+
+    [Fact]
     public void CopyButtonWritesTheCodeTextToTheClipboard()
     {
         var (h, clipboard, _) = Create("```csharp\nint count = 42; // note\n```");
