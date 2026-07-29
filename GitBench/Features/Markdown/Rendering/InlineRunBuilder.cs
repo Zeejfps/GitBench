@@ -18,8 +18,8 @@ namespace GitBench.Features.Markdown.Rendering;
 /// italic → <see cref="MarkdownFonts.ItalicFamily"/>; bold-italic → italic family + Bold;
 /// code → <c>IsCode</c> + mono family (<c>DiffOptions.MonoFontFamily</c>) +
 /// <see cref="MarkdownStyles.CodeChipText"/>; link → <c>LinkUrl</c> + <c>Underline</c> +
-/// <see cref="MarkdownStyles.Link"/>. Strikethrough has no decoration channel in
-/// <see cref="RichTextRun"/> yet and renders as plain text (deliberately unpinned).
+/// <see cref="MarkdownStyles.Link"/>; strikethrough → <c>Strikethrough</c>, which composes with
+/// every other flag (a struck link keeps its underline and link color).
 /// </para>
 /// </summary>
 internal static class InlineRunBuilder
@@ -65,6 +65,7 @@ internal static class InlineRunBuilder
                 style,
                 IsCode: run.Code,
                 Underline: isLink,
+                Strikethrough: run.Strikethrough,
                 LinkUrl: run.LinkUrl);
         }
 

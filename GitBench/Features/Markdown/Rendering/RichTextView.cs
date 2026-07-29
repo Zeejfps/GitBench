@@ -11,9 +11,10 @@ namespace GitBench.Features.Markdown.Rendering;
 /// <c>_wrappedForWidth</c> pattern), because measure and draw run every frame.
 /// <para>
 /// Drawing, bottom layer first: inline-code chip backgrounds (a themed rect behind every
-/// <see cref="RichTextRun.IsCode"/> segment, below the text's z), underline rules
-/// (<see cref="ICanvas.DrawLine"/> in the segment's text color for <see cref="RichTextRun.Underline"/>
-/// segments), then one <see cref="ICanvas.DrawText"/> per segment in the run's own style. A
+/// <see cref="RichTextRun.IsCode"/> segment, below the text's z), decoration rules
+/// (<see cref="ICanvas.DrawLine"/> in the segment's text color under
+/// <see cref="RichTextRun.Underline"/> segments and through <see cref="RichTextRun.Strikethrough"/>
+/// ones), then one <see cref="ICanvas.DrawText"/> per segment in the run's own style. A
 /// hovered link (<see cref="SetHoveredLink"/>) draws its segments in <see cref="LinkHoverColor"/>
 /// instead of the run's color. Lines stack from <c>Position.Top</c> downward.
 /// </para>

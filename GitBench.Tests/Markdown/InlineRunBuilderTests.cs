@@ -12,9 +12,9 @@ namespace GitBench.Tests.Markdown;
 // pin flag mapping, not segmentation: bold → FontWeight.Bold; italic → the true italic family
 // (MarkdownFonts.ItalicFamily); bold-italic → italic family + Bold; code → IsCode + mono family
 // (DiffOptions.MonoFontFamily) + the theme's chip text color; link → LinkUrl + Underline + the
-// theme's link color; hard-break "\n" runs pass through as "\n" RichTextRuns with no decoration
-// (Step 4's layout interprets them). Strikethrough is deliberately unpinned — RichTextRun has no
-// strikethrough channel yet, so it degrades to plain text.
+// theme's link color; strikethrough → Strikethrough, which composes with every other flag;
+// hard-break "\n" runs pass through as "\n" RichTextRuns with no decoration (Step 4's layout
+// interprets them).
 public class InlineRunBuilderTests
 {
     private const float BodySize = 13f;
@@ -78,6 +78,7 @@ public class InlineRunBuilderTests
         Assert.NotEqual(DiffOptions.MonoFontFamily, run.Style.FontFamily.Value);
         Assert.False(run.IsCode);
         Assert.False(run.Underline);
+        Assert.False(run.Strikethrough);
         Assert.Null(run.LinkUrl);
     }
 
@@ -174,6 +175,52 @@ public class InlineRunBuilderTests
         Assert.Equal(Styles.Link, run.Style.TextColor.Value);
     }
 
+    // ---------- strikethrough ----------
+
+    [Fact]
+    public void StruckRunCarriesTheStrikeChannelAndKeepsBaseStyling()
+    {
+        var run = Single(new InlineRun("gone", Strikethrough: true));
+
+        Assert.True(run.Strikethrough);
+        Assert.Equal(BaseColor, run.Style.TextColor.Value);
+        Assert.False(run.IsCode);
+        Assert.False(run.Underline);
+        Assert.Null(run.LinkUrl);
+    }
+
+    [Fact]
+    public void StruckLinkCarriesStrikeAndUnderlineTogether()
+    {
+        var run = Single(new InlineRun("docs", Strikethrough: true, LinkUrl: "https://example.com/docs"));
+
+        Assert.True(run.Strikethrough);
+        Assert.True(run.Underline);
+        Assert.Equal("https://example.com/docs", run.LinkUrl);
+        Assert.Equal(Styles.Link, run.Style.TextColor.Value);
+    }
+
+    [Fact]
+    public void StruckCodeKeepsTheChipAndTheStrike()
+    {
+        var run = Single(new InlineRun("x = 1", Code: true, Strikethrough: true));
+
+        Assert.True(run.Strikethrough);
+        Assert.True(run.IsCode);
+        Assert.Equal(DiffOptions.MonoFontFamily, run.Style.FontFamily.Value);
+        Assert.Equal(Styles.CodeChipText, run.Style.TextColor.Value);
+    }
+
+    [Fact]
+    public void StrikeComposesWithBoldItalic()
+    {
+        var run = Single(new InlineRun("all", Bold: true, Italic: true, Strikethrough: true));
+
+        Assert.True(run.Strikethrough);
+        Assert.Equal(MarkdownFonts.ItalicFamily, run.Style.FontFamily.Value);
+        Assert.Equal(FontWeight.Bold, run.Style.FontWeight.Value);
+    }
+
     // ---------- hard breaks ----------
 
     [Fact]
@@ -184,6 +231,7 @@ public class InlineRunBuilderTests
         Assert.Equal("\n", run.Text);
         Assert.False(run.IsCode);
         Assert.False(run.Underline);
+        Assert.False(run.Strikethrough);
         Assert.Null(run.LinkUrl);
     }
 

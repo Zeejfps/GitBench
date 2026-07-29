@@ -16,10 +16,11 @@ namespace GitBench.Features.Markdown.Rendering;
 /// would alias; give each distinct look its own instance.
 /// </para>
 /// <para>
-/// The flags are the view's decoration contract, orthogonal to <paramref name="Style"/>:
-/// <paramref name="IsCode"/> draws the inline-code chip background behind the run's segments,
-/// <paramref name="Underline"/> draws a rule under them in the run's text color, and a non-null
-/// <paramref name="LinkUrl"/> makes them link targets for hit-testing
+/// The flags are the view's decoration contract, orthogonal to <paramref name="Style"/> and to
+/// each other: <paramref name="IsCode"/> draws the inline-code chip background behind the run's
+/// segments, <paramref name="Underline"/> draws a rule under them and
+/// <paramref name="Strikethrough"/> a rule through them (both in the run's text color), and a
+/// non-null <paramref name="LinkUrl"/> makes them link targets for hit-testing
 /// (<see cref="RichTextView.LinkAt"/>) and hover recoloring.
 /// </para>
 /// <para>
@@ -33,4 +34,5 @@ internal sealed record RichTextRun(
     TextStyle Style,
     bool IsCode = false,
     bool Underline = false,
+    bool Strikethrough = false,
     string? LinkUrl = null);

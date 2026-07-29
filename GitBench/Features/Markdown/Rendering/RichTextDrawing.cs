@@ -17,6 +17,19 @@ internal static class RichTextDrawing
     /// segments.</summary>
     public const float UnderlineThickness = 1f;
 
+    /// <summary>Thickness of the strike rule drawn through <see cref="RichTextRun.Strikethrough"/>
+    /// segments.</summary>
+    public const float StrikeThickness = 1f;
+
+    /// <summary>
+    /// Height of the strike rule above a segment's line band, as a fraction of the band height.
+    /// <see cref="ICanvas"/> exposes line height only — no ascent, descent or x-height — so this
+    /// approximates the x-height midpoint from the proportions common to UI text faces: a
+    /// descent of about 0.2 of the line height puts the baseline there, and an x-height of about
+    /// 0.42 of it puts its midpoint about 0.2 higher again.
+    /// </summary>
+    public const float StrikeHeightFraction = 0.4f;
+
     /// <summary>Corner radius of the inline-code chip drawn behind <see cref="RichTextRun.IsCode"/>
     /// segments.</summary>
     public const float ChipCornerRadius = 3f;
@@ -24,8 +37,9 @@ internal static class RichTextDrawing
     /// <summary>
     /// Draws one laid-out segment, bottom layer first: the inline-code chip (when the run is code
     /// and <paramref name="chipBackground"/> is nonzero) at <paramref name="z"/>, strictly below
-    /// the underline rule and the text at <paramref name="z"/> + 1. The underline draws in the
-    /// drawn text color, i.e. <paramref name="style"/>'s.
+    /// the decoration rules and the text at <paramref name="z"/> + 1. The rules are independent —
+    /// a struck link draws both — and draw in the drawn text color, i.e. <paramref name="style"/>'s,
+    /// so a hover recolor carries them along.
     /// </summary>
     public static void DrawSegment(
         ICanvas c,
@@ -56,6 +70,19 @@ internal static class RichTextDrawing
                 Start = new PointF(rect.Left, y),
                 End = new PointF(rect.Right, y),
                 Thickness = UnderlineThickness,
+                Color = style.TextColor.Value,
+                ZIndex = z + 1,
+            });
+        }
+
+        if (run.Strikethrough)
+        {
+            var y = rect.Bottom + rect.Height * StrikeHeightFraction;
+            c.DrawLine(new DrawLineInputs
+            {
+                Start = new PointF(rect.Left, y),
+                End = new PointF(rect.Right, y),
+                Thickness = StrikeThickness,
                 Color = style.TextColor.Value,
                 ZIndex = z + 1,
             });

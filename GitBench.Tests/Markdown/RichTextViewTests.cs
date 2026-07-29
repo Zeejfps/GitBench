@@ -8,8 +8,9 @@ namespace GitBench.Tests.Markdown;
 
 // Harness-driven tests for RichTextView: it must measure exactly like its RichTextLayout,
 // emit one DrawText per segment in that segment's run style, decorate code segments with a
-// chip rect (below the text's z) and underlined segments with a DrawLine, and answer LinkAt
-// in the same coordinate space mouse events arrive in. Synthetic metrics pin the geometry:
+// chip rect (below the text's z) and underlined/struck segments with a DrawLine each, and
+// answer LinkAt in the same coordinate space mouse events arrive in. Decorations compose: a
+// struck link draws both rules. Synthetic metrics pin the geometry:
 // 8px per UTF-16 unit, 16px line height; the harness root is the view itself, so with a
 // 600px-tall viewport the first line's rect is [.., 584 16] and lines stack downward.
 //
@@ -38,6 +39,12 @@ public class RichTextViewTests
 
     private static RichTextRun Link(string text, string url = Url) =>
         new(text, Style(LinkColor), Underline: true, LinkUrl: url);
+
+    private static RichTextRun Struck(string text, uint color = PlainColor) =>
+        new(text, Style(color), Strikethrough: true);
+
+    private static RichTextRun StruckLink(string text, string url = Url) =>
+        new(text, Style(LinkColor), Underline: true, Strikethrough: true, LinkUrl: url);
 
     private static (GuiTestHarness Harness, RichTextView View) Create(
         IReadOnlyList<RichTextRun> runs, int width = 800, int height = 600)
@@ -234,6 +241,77 @@ public class RichTextViewTests
         }
     }
 
+    [Fact]
+    public void StrikeCrossesTheStruckSegmentInItsTextColor()
+    {
+        var (h, _) = Create(new[] { Run("still "), Struck("gone") });
+        using (h)
+        {
+            var canvas = h.Render();
+
+            var strike = Assert.Single(canvas.Lines);
+            Assert.Equal(strike.Inputs.Start.Y, strike.Inputs.End.Y);
+            Assert.Equal(6 * W, Math.Min(strike.Inputs.Start.X, strike.Inputs.End.X), 3);
+            Assert.Equal(10 * W, Math.Max(strike.Inputs.Start.X, strike.Inputs.End.X), 3);
+            Assert.Equal(PlainColor, strike.Inputs.Color);
+            // Crosses the glyphs rather than skimming the band edges (where an underline lives).
+            Assert.InRange(
+                strike.Inputs.Start.Y, LineBottom(0) + 0.25f * LineH, LineBottom(0) + 0.75f * LineH);
+        }
+    }
+
+    [Fact]
+    public void NoStrikeIsDrawnForUnstruckRuns()
+    {
+        var (h, _) = Create(new[] { Run("plain "), Code("x=1"), Run(" text", SecondColor) });
+        using (h)
+        {
+            var canvas = h.Render();
+
+            Assert.Empty(canvas.Lines);
+        }
+    }
+
+    [Fact]
+    public void WrappedStruckRunGetsAStrikePerLineSegment()
+    {
+        var (h, _) = Create(new[] { Struck("aaaa bbbb") }, width: 40);
+        using (h)
+        {
+            var canvas = h.Render();
+
+            Assert.Equal(2, canvas.Lines.Count);
+            var second = canvas.Lines.Single(l => l.Inputs.Start.Y < LineBottom(0));
+            Assert.InRange(second.Inputs.Start.Y, LineBottom(1), LineBottom(0));
+        }
+    }
+
+    [Fact]
+    public void StruckLinkDrawsBothTheStrikeAndTheUnderline()
+    {
+        var (h, _) = Create(new[] { StruckLink("gone") });
+        using (h)
+        {
+            var canvas = h.Render();
+
+            Assert.Equal(2, canvas.Lines.Count);
+            Assert.All(canvas.Lines, l =>
+            {
+                Assert.Equal(l.Inputs.Start.Y, l.Inputs.End.Y);
+                Assert.Equal(0f, Math.Min(l.Inputs.Start.X, l.Inputs.End.X), 3);
+                Assert.Equal(4 * W, Math.Max(l.Inputs.Start.X, l.Inputs.End.X), 3);
+                Assert.Equal(LinkColor, l.Inputs.Color);
+            });
+
+            // Y grows upward, so the strike must sit clear of the underline under the glyphs.
+            var underline = canvas.Lines.MinBy(l => l.Inputs.Start.Y)!;
+            var strike = canvas.Lines.MaxBy(l => l.Inputs.Start.Y)!;
+            Assert.InRange(underline.Inputs.Start.Y, LineBottom(0), LineBottom(0) + 0.25f * LineH);
+            Assert.InRange(
+                strike.Inputs.Start.Y, LineBottom(0) + 0.25f * LineH, LineBottom(0) + 0.75f * LineH);
+        }
+    }
+
     // ---------- link hit-testing ----------
 
     [Fact]
@@ -283,6 +361,20 @@ public class RichTextViewTests
             view.SetHoveredLink(null);
             canvas = h.Render();
             Assert.Equal(LinkColor, canvas.Texts.Single(t => t.Inputs.Text == "here").Inputs.Style.TextColor.Value);
+        }
+    }
+
+    [Fact]
+    public void HoveredStruckLinkDrawsBothRulesInTheHoverColor()
+    {
+        var (h, view) = Create(new[] { StruckLink("gone") });
+        using (h)
+        {
+            view.SetHoveredLink(Url);
+            var canvas = h.Render();
+
+            Assert.Equal(2, canvas.Lines.Count);
+            Assert.All(canvas.Lines, l => Assert.Equal(HoverColor, l.Inputs.Color));
         }
     }
 }
