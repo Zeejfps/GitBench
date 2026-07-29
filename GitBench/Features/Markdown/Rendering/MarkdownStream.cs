@@ -1,4 +1,7 @@
+using GitBench.Features.Markdown.Parsing;
+using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 
 namespace GitBench.Features.Markdown.Rendering;
@@ -18,12 +21,9 @@ namespace GitBench.Features.Markdown.Rendering;
 /// <item><description>In-progress constructs render as their eventual shape: an open fence is a
 /// live code block, a header+delimiter-only table is a table.</description></item>
 /// </list>
-/// Implementation notes (implementer's latitude): the per-item template resolves its
-/// <see cref="Parsing.MarkdownBlock"/> from the item scope <c>Each</c> creates
-/// (<c>ctx.Require&lt;MarkdownBlock&gt;()</c>) and should reuse <see cref="MarkdownWidget"/>'s
-/// block dispatch — exposing that per-block mapping as an internal helper on
-/// <see cref="MarkdownWidget"/> is an accepted refactor. Match <see cref="MarkdownWidget"/>'s
-/// column shape (gap, stretch) so static and streamed documents look identical.
+/// The column shape (gap, stretch) matches <see cref="MarkdownWidget"/> so static and streamed
+/// documents look identical; each row renders through the same
+/// <see cref="MarkdownWidget.BlockWidget"/> dispatch.
 /// </summary>
 internal sealed record MarkdownStream : Widget
 {
@@ -32,5 +32,19 @@ internal sealed record MarkdownStream : Widget
     public required MarkdownBlockList Source { get; init; }
 
     protected override IWidget Build(Context ctx) =>
-        throw new NotImplementedException("Step 7: MarkdownStream");
+        Each.Of(Source.Blocks, new BlockRow(), gap: Spacing.Md)
+            with { CrossAxis = CrossAxisAlignment.Stretch };
+
+    /// <summary>The per-row template: resolves its block from the item scope <c>Each</c> creates
+    /// and defers to <see cref="MarkdownWidget.BlockWidget"/>. A row's view is only ever rebuilt
+    /// when its slot receives a list event, which is what keeps untouched blocks' views (and their
+    /// layout caches) alive while the tail streams.</summary>
+    private sealed record BlockRow : Widget
+    {
+        protected override IWidget Build(Context ctx) =>
+            MarkdownWidget.BlockWidget(ctx.Require<MarkdownBlock>(), static s => s.Palette.TextBody)
+            // Unknown blocks degrade to an empty row (MarkdownWidget skips them; Each needs one
+            // view per slot) — the parser produces none today.
+            ?? new Column();
+    }
 }

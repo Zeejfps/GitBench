@@ -63,7 +63,12 @@ internal sealed record MarkdownWidget : Widget
         return widgets.ToArray();
     }
 
-    private static IWidget? BlockWidget(MarkdownBlock block, Func<ThemeStyles, uint> bodyColor) =>
+    /// <summary>Dispatches one block to its widget — the single per-block mapping, shared with
+    /// <see cref="MarkdownStream"/>'s row template so static and streamed documents render
+    /// identically. <paramref name="bodyColor"/> is the paragraph text color for the block's
+    /// nesting scope (<c>TextBody</c> at the top level). Unknown blocks yield null: the caller
+    /// skips them, never throws.</summary>
+    internal static IWidget? BlockWidget(MarkdownBlock block, Func<ThemeStyles, uint> bodyColor) =>
         block switch
         {
             HeadingBlock heading => Heading(heading),
