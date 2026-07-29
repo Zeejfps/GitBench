@@ -12,13 +12,18 @@ namespace GitBench.Widgets;
 /// </summary>
 public static class Theme
 {
-    /// <summary>A text/background/border color selected from the active theme styles.</summary>
-    public static Prop<uint> Color(Func<ThemeStyles, uint> select) =>
+    /// <summary>Any value selected from the active theme styles — the general form behind
+    /// <see cref="Color"/> and <see cref="BorderColor"/>, for props whose value is derived from
+    /// the theme rather than a single color slot.</summary>
+    public static Prop<T> Styled<T>(Func<ThemeStyles, T> select) =>
         Prop.Deferred(ctx => ctx.Theme().Styles.Bind(select));
+
+    /// <summary>A text/background/border color selected from the active theme styles.</summary>
+    public static Prop<uint> Color(Func<ThemeStyles, uint> select) => Styled(select);
 
     /// <summary>A per-edge border color selected from the active theme styles.</summary>
     public static Prop<BorderColorStyle> BorderColor(Func<ThemeStyles, BorderColorStyle> select) =>
-        Prop.Deferred(ctx => ctx.Theme().Styles.Bind(select));
+        Styled(select);
 
     /// <summary>The active theme's scrollbar colors, for a <c>ScrollArea</c>/<c>ScrollBar</c>.</summary>
     public static Prop<ScrollBarStyle> ScrollBar() =>

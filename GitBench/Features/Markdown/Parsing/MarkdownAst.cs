@@ -126,8 +126,8 @@ internal sealed record InlineRun(
 /// <summary>
 /// Sequence equality/hash for the AST's list-typed properties. Record equality compares the
 /// element types by value (blocks route through their own overrides), so a flat element-wise
-/// walk gives whole-tree structural equality; the nested table shapes get explicit overloads
-/// because a cell list's elements are themselves lists.
+/// walk gives whole-tree structural equality; the nested table shapes stack the comparer-taking
+/// overloads because a cell list's elements are themselves lists.
 /// </summary>
 internal static class AstEquality
 {
@@ -143,6 +143,17 @@ internal static class AstEquality
         return true;
     }
 
+    public static bool ListsEqual<T>(IReadOnlyList<T> a, IReadOnlyList<T> b, Func<T, T, bool> equals)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a.Count != b.Count) return false;
+        for (var i = 0; i < a.Count; i++)
+        {
+            if (!equals(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
     public static int ListHash<T>(IReadOnlyList<T> list)
     {
         var hash = new HashCode();
@@ -153,47 +164,28 @@ internal static class AstEquality
         return hash.ToHashCode();
     }
 
-    public static bool CellsEqual(IReadOnlyList<IReadOnlyList<InlineRun>> a, IReadOnlyList<IReadOnlyList<InlineRun>> b)
-    {
-        if (ReferenceEquals(a, b)) return true;
-        if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (!ListsEqual(a[i], b[i])) return false;
-        }
-        return true;
-    }
-
-    public static int CellsHash(IReadOnlyList<IReadOnlyList<InlineRun>> cells)
+    public static int ListHash<T>(IReadOnlyList<T> list, Func<T, int> hashOf)
     {
         var hash = new HashCode();
-        for (var i = 0; i < cells.Count; i++)
+        for (var i = 0; i < list.Count; i++)
         {
-            hash.Add(ListHash(cells[i]));
+            hash.Add(hashOf(list[i]));
         }
         return hash.ToHashCode();
     }
+
+    public static bool CellsEqual(
+        IReadOnlyList<IReadOnlyList<InlineRun>> a, IReadOnlyList<IReadOnlyList<InlineRun>> b)
+        => ListsEqual(a, b, ListsEqual);
+
+    public static int CellsHash(IReadOnlyList<IReadOnlyList<InlineRun>> cells)
+        => ListHash(cells, ListHash);
 
     public static bool RowsEqual(
         IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> a,
         IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> b)
-    {
-        if (ReferenceEquals(a, b)) return true;
-        if (a.Count != b.Count) return false;
-        for (var i = 0; i < a.Count; i++)
-        {
-            if (!CellsEqual(a[i], b[i])) return false;
-        }
-        return true;
-    }
+        => ListsEqual(a, b, CellsEqual);
 
     public static int RowsHash(IReadOnlyList<IReadOnlyList<IReadOnlyList<InlineRun>>> rows)
-    {
-        var hash = new HashCode();
-        for (var i = 0; i < rows.Count; i++)
-        {
-            hash.Add(CellsHash(rows[i]));
-        }
-        return hash.ToHashCode();
-    }
+        => ListHash(rows, CellsHash);
 }

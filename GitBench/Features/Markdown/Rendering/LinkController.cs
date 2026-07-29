@@ -19,7 +19,6 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
 {
     private readonly RichTextView _view;
     private readonly IPlatformShell _shell;
-    private string? _hoveredUrl;
 
     public LinkController(RichTextView view, IPlatformShell shell)
     {
@@ -27,8 +26,9 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
         _shell = shell;
     }
 
-    /// <summary>Hand over a link segment, default arrow elsewhere.</summary>
-    public MouseCursor Cursor => _hoveredUrl != null ? MouseCursor.Hand : MouseCursor.Default;
+    /// <summary>Hand over a link segment, default arrow elsewhere. The view's hover state is the
+    /// single source of truth — this controller only writes it via <see cref="UpdateHover"/>.</summary>
+    public MouseCursor Cursor => _view.HoveredLinkUrl != null ? MouseCursor.Hand : MouseCursor.Default;
 
     // Enter matters as much as move: hover is established by the input system's RefreshHover,
     // which fires enter with the real pointer position but delivers no move to a freshly hovered
@@ -45,11 +45,7 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
         UpdateHover(e.Mouse.Point);
     }
 
-    public override void OnMouseExit(ref MouseExitEvent e)
-    {
-        _hoveredUrl = null;
-        _view.SetHoveredLink(null);
-    }
+    public override void OnMouseExit(ref MouseExitEvent e) => _view.SetHoveredLink(null);
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
@@ -62,9 +58,5 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
         e.Consume();
     }
 
-    private void UpdateHover(PointF point)
-    {
-        _hoveredUrl = _view.LinkAt(point);
-        _view.SetHoveredLink(_hoveredUrl);
-    }
+    private void UpdateHover(PointF point) => _view.SetHoveredLink(_view.LinkAt(point));
 }

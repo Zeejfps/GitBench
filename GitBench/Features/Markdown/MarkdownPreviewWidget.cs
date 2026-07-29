@@ -35,8 +35,9 @@ internal sealed record MarkdownPreviewWidget : Widget
     {
         // Seeded through the streaming model rather than a static MarkdownWidget: this is the
         // hand-off shape (MarkdownBlockList + Each-bound MarkdownStream), so the preview exercises
-        // the same runtime path the assistant's streamed turns will.
-        var list = new MarkdownBlockList(new BasicMarkdownParser(), ctx.Require<IFrameTicker>());
+        // the same runtime path the assistant's streamed turns will. No ticker: the fixture is
+        // applied once via SetText, so the throttled path never runs here.
+        var list = new MarkdownBlockList(new BasicMarkdownParser());
         list.SetText(MarkdownPreviewFixture.Text);
 
         var themeMode = ctx.Require<State<ThemeMode>>();

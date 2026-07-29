@@ -56,11 +56,9 @@ internal sealed class MarkdownTableView : View
     /// <summary>The hairline between consecutive data rows.</summary>
     public const float RowSeparatorThickness = 1f;
 
-    private const float ChipCornerRadius = 3f;
-    private const float UnderlineThickness = 1f;
-
     private readonly ICanvas _canvas;
-    private readonly RectStyle _chipStyle = new() { BorderRadius = BorderRadiusStyle.All(ChipCornerRadius) };
+    private readonly RectStyle _chipStyle =
+        new() { BorderRadius = BorderRadiusStyle.All(RichTextDrawing.ChipCornerRadius) };
 
     // Solved table cache, the _wrappedForWidth pattern: valid while the width is (nearly)
     // unchanged and the three cell inputs are the same list instances.
@@ -180,7 +178,7 @@ internal sealed class MarkdownTableView : View
     private readonly record struct CellLayout(
         IReadOnlyList<RichTextRun> Runs,
         RichTextLayoutResult Layout,
-        string[] SegmentTexts);
+        IReadOnlyList<string> SegmentTexts);
 
     private Solved SolveFor(float availableWidth)
     {
@@ -248,51 +246,24 @@ internal sealed class MarkdownTableView : View
         return height;
     }
 
-    private static string[] SegmentTexts(IReadOnlyList<RichTextRun> runs, RichTextLayoutResult layout)
+    private static IReadOnlyList<string> SegmentTexts(
+        IReadOnlyList<RichTextRun> runs, RichTextLayoutResult layout)
     {
-        var count = 0;
-        foreach (var line in layout.Lines)
-            count += line.Segments.Count;
-        if (count == 0)
-            return Array.Empty<string>();
-
-        var texts = new string[count];
-        var t = 0;
-        foreach (var line in layout.Lines)
-        {
-            foreach (var seg in line.Segments)
-            {
-                var text = runs[seg.RunIndex].Text;
-                texts[t++] = seg.Start == 0 && seg.Length == text.Length
-                    ? text
-                    : text.Substring(seg.Start, seg.Length);
-            }
-        }
+        var texts = new List<string>();
+        RichTextDrawing.BuildSegmentTexts(runs, layout, texts);
         return texts;
     }
 
-    /// <summary>The min-content table width: Σ column min-content + 2 × <see cref="CellPaddingX"/>
-    /// per column — the view's intrinsic width (see the class doc).</summary>
+    /// <summary>The min-content table width (<see cref="TableLayout.MinTableWidth"/>) — the
+    /// view's intrinsic width (see the class doc). This wrapper only caches.</summary>
     private float MinTableWidth()
     {
         if (!ReferenceEquals(_minForHeader, _header)
             || !ReferenceEquals(_minForRows, _rows)
             || !ReferenceEquals(_minForAlignments, _alignments))
         {
-            var columnCount = _alignments.Count;
-            var sum = 0f;
-            for (var j = 0; j < columnCount; j++)
-            {
-                var min = j < _header.Count ? TableLayout.MinContentWidth(_canvas, _header[j]) : 0f;
-                for (var i = 0; i < _rows.Count; i++)
-                {
-                    var row = _rows[i];
-                    if (j < row.Count)
-                        min = Math.Max(min, TableLayout.MinContentWidth(_canvas, row[j]));
-                }
-                sum += min;
-            }
-            _minTableWidth = columnCount > 0 ? sum + 2f * CellPaddingX * columnCount : 0f;
+            _minTableWidth = TableLayout.MinTableWidth(
+                _canvas, _header, _rows, _alignments.Count, CellPaddingX);
             _minForHeader = _header;
             _minForRows = _rows;
             _minForAlignments = _alignments;
@@ -316,43 +287,14 @@ internal sealed class MarkdownTableView : View
             foreach (var line in cell.Layout.Lines)
             {
                 var bottom = lineTop - line.Height;
-                var offset = AlignmentOffset(solved.Columns.Alignments[j], columnWidth, line.Width);
+                var offset = AlignmentOffset(_alignments[j], columnWidth, line.Width);
                 foreach (var seg in line.Segments)
                 {
                     var run = cell.Runs[seg.RunIndex];
                     var rect = new RectF(x + offset + seg.X, bottom, seg.Width, line.Height);
-
-                    if (run.IsCode && CodeChipBackground != 0)
-                    {
-                        _chipStyle.BackgroundColor = CodeChipBackground;
-                        c.DrawRect(new DrawRectInputs
-                        {
-                            Position = rect,
-                            Style = _chipStyle,
-                            ZIndex = z, // strictly below the segment's text
-                        });
-                    }
-
-                    if (run.Underline)
-                    {
-                        var underlineY = bottom + UnderlineThickness;
-                        c.DrawLine(new DrawLineInputs
-                        {
-                            Start = new PointF(rect.Left, underlineY),
-                            End = new PointF(rect.Right, underlineY),
-                            Thickness = UnderlineThickness,
-                            Color = run.Style.TextColor.Value,
-                            ZIndex = z + 1,
-                        });
-                    }
-
-                    c.DrawText(new DrawTextInputs
-                    {
-                        Position = rect,
-                        Text = cell.SegmentTexts[segText++],
-                        Style = run.Style,
-                        ZIndex = z + 1,
-                    });
+                    RichTextDrawing.DrawSegment(
+                        c, rect, run, run.Style, cell.SegmentTexts[segText++],
+                        CodeChipBackground, _chipStyle, z);
                 }
                 lineTop = bottom;
             }

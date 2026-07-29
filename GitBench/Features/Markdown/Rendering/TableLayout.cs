@@ -20,8 +20,7 @@ internal enum TableFitMode
 
 /// <summary>
 /// A solved column layout. <paramref name="Widths"/> are per-column <b>content</b> widths (cell
-/// padding excluded), one per column, in column order. <paramref name="Alignments"/> passes the
-/// input alignments through untouched so the view has one object to render from.
+/// padding excluded), one per column, in column order.
 /// <paramref name="TableWidth"/> is the table's total drawn width — Σ widths plus
 /// 2 × cellPaddingX per column: Σmax + padding in <see cref="TableFitMode.AllMax"/>, exactly the
 /// available width in <see cref="TableFitMode.Distributed"/>, and Σmin + padding (wider than
@@ -29,7 +28,6 @@ internal enum TableFitMode
 /// </summary>
 internal sealed record TableColumns(
     IReadOnlyList<float> Widths,
-    IReadOnlyList<ColumnAlignment> Alignments,
     TableFitMode Mode,
     float TableWidth);
 
@@ -83,6 +81,33 @@ internal static class TableLayout
     public static float MaxContentWidth(ICanvas canvas, IReadOnlyList<RichTextRun> cell) =>
         RichTextLayout.Layout(canvas, cell, 0f).MaxLineWidth;
 
+    /// <summary>The min-content <b>table</b> width: per column, the maximum
+    /// <see cref="MinContentWidth"/> over the column's cells (header included), summed, plus
+    /// 2 × <paramref name="cellPaddingX"/> per column; 0 for a zero-column table. This is the
+    /// narrowest width the table can lay out at without splitting unbreakable chunks —
+    /// <see cref="MarkdownTableView"/>'s intrinsic width.</summary>
+    public static float MinTableWidth(
+        ICanvas canvas,
+        IReadOnlyList<IReadOnlyList<RichTextRun>> header,
+        IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>> rows,
+        int columnCount,
+        float cellPaddingX)
+    {
+        var sum = 0f;
+        for (var j = 0; j < columnCount; j++)
+        {
+            var min = j < header.Count ? MinContentWidth(canvas, header[j]) : 0f;
+            for (var i = 0; i < rows.Count; i++)
+            {
+                var row = rows[i];
+                if (j < row.Count)
+                    min = Math.Max(min, MinContentWidth(canvas, row[j]));
+            }
+            sum += min;
+        }
+        return columnCount > 0 ? sum + 2f * cellPaddingX * columnCount : 0f;
+    }
+
     /// <summary>Solves the column widths for a table — see the class doc for the algorithm.
     /// <paramref name="alignments"/> defines the column count; <paramref name="header"/> and every
     /// row of <paramref name="rows"/> carry exactly that many cells.</summary>
@@ -124,11 +149,11 @@ internal static class TableLayout
 
         // Unconstrained, or everything fits: every column at max-content.
         if (availableWidth <= 0f || maxSum <= contentAvail)
-            return new TableColumns(maxes, alignments, TableFitMode.AllMax, maxSum + padding);
+            return new TableColumns(maxes, TableFitMode.AllMax, maxSum + padding);
 
         // Even the min-content widths overflow: stay at min, the widget scrolls the overhang.
         if (minSum > contentAvail)
-            return new TableColumns(mins, alignments, TableFitMode.OverflowAtMin, minSum + padding);
+            return new TableColumns(mins, TableFitMode.OverflowAtMin, minSum + padding);
 
         // Distribute the remainder proportionally to each column's growth headroom, in exact
         // float math — no pixel rounding — so the widths sum to contentAvail exactly, a column
@@ -141,6 +166,6 @@ internal static class TableLayout
         for (var j = 0; j < columnCount; j++)
             widths[j] = mins[j] + remainder * (maxes[j] - mins[j]) / growthSum;
 
-        return new TableColumns(widths, alignments, TableFitMode.Distributed, availableWidth);
+        return new TableColumns(widths, TableFitMode.Distributed, availableWidth);
     }
 }

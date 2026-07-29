@@ -96,8 +96,9 @@ internal static class RichTextLayout
     /// The width of the widest <i>unbreakable chunk</i> in <paramref name="runs"/> — the
     /// narrowest width <see cref="Layout"/> can be given without ever force-splitting between
     /// code points, which is exactly a table cell's min-content width (see
-    /// <see cref="TableLayout"/>). The chunk scan is <see cref="WrapForcedLine"/>'s, running over
-    /// the same concatenated view: spaces separate chunks and belong to none, a chunk extends
+    /// <see cref="TableLayout"/>). The chunk scan (<see cref="ScanChunkEnd"/>) is shared with
+    /// <see cref="WrapForcedLine"/>, running over the same concatenated view: spaces separate
+    /// chunks and belong to none, a chunk extends
     /// while no break opportunity exists between consecutive code points
     /// (<see cref="BreakAllowedBetween"/> — separator punctuation ends its chunk, CJK breaks
     /// per code point, kinsoku glues punctuation), a '\n' terminates a chunk, and a run seam is
@@ -121,15 +122,7 @@ internal static class RichTextLayout
             }
 
             var chunkStart = i;
-            var prev = ReadCodePoint(text, ref i, end);
-            while (i < end && text[i] != ' ' && text[i] != '\n')
-            {
-                var next = PeekCodePoint(text, i, end, out var nextLen);
-                if (BreakAllowedBetween(prev, next))
-                    break;
-                prev = next;
-                i += nextLen;
-            }
+            i = ScanChunkEnd(text, i, end);
 
             var width = map.MeasureRange(chunkStart, i);
             if (width > widest)
@@ -137,6 +130,26 @@ internal static class RichTextLayout
         }
 
         return widest;
+    }
+
+    /// <summary>Advances from <paramref name="start"/> (which must sit on a non-space character)
+    /// to the end of the unbreakable chunk beginning there: the chunk extends while no break
+    /// opportunity exists between consecutive code points (<see cref="BreakAllowedBetween"/>) and
+    /// stops before a space or '\n' (the wrap path's forced lines contain no '\n', so that guard
+    /// is inert there).</summary>
+    private static int ScanChunkEnd(string text, int start, int end)
+    {
+        var i = start;
+        var prev = ReadCodePoint(text, ref i, end);
+        while (i < end && text[i] != ' ' && text[i] != '\n')
+        {
+            var next = PeekCodePoint(text, i, end, out var nextLen);
+            if (BreakAllowedBetween(prev, next))
+                break;
+            prev = next;
+            i += nextLen;
+        }
+        return i;
     }
 
     /// <summary>Builds the concatenated <see cref="RunMap"/> over <paramref name="runs"/>, or
@@ -194,15 +207,7 @@ internal static class RichTextLayout
                 break;
 
             var chunkStart = i;
-            var prev = ReadCodePoint(text, ref i, end);
-            while (i < end && text[i] != ' ')
-            {
-                var next = PeekCodePoint(text, i, end, out var nextLen);
-                if (BreakAllowedBetween(prev, next))
-                    break;
-                prev = next;
-                i += nextLen;
-            }
+            i = ScanChunkEnd(text, i, end);
 
             var chunkWidth = map.MeasureRange(chunkStart, i);
             var sep = map.MeasureRange(spacesStart, chunkStart);

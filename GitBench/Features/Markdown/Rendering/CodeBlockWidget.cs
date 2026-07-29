@@ -79,8 +79,8 @@ internal sealed record CodeBlockWidget : Widget
                                     {
                                         Child = new RichText
                                         {
-                                            Runs = Prop.Deferred<IReadOnlyList<RichTextRun>>(c =>
-                                                c.Theme().Styles.Bind(s => CodeRuns(lines, spans, s))),
+                                            Runs = Theme.Styled<IReadOnlyList<RichTextRun>>(
+                                                s => CodeRuns(lines, spans, s)),
                                         },
                                     },
                                 },
@@ -111,13 +111,13 @@ internal sealed record CodeBlockWidget : Widget
     /// <summary>One mono run per colored slice, '\n' runs between source lines — so the layout
     /// yields exactly one visual line per source line (empty lines included). Highlighted lines
     /// interleave slot-colored token runs with <c>CodeBlockText</c> gaps; plain lines are a single
-    /// run.</summary>
+    /// run, and a wholly unhighlighted block is one run of the joined text ('\n' breaks lines
+    /// either way, so the layout is identical).</summary>
     private static IReadOnlyList<RichTextRun> CodeRuns(
         IReadOnlyList<string> lines,
         IReadOnlyList<IReadOnlyList<TokenSpan>>? spans,
         ThemeStyles theme)
     {
-        var runs = new List<RichTextRun>(lines.Count * 2);
         // Style instances are cached per color: RichTextRun requires a stable instance per look,
         // and lines of the same color can share one safely (nothing mutates them after build).
         var styles = new Dictionary<uint, TextStyle>();
@@ -141,6 +141,10 @@ internal sealed record CodeBlockWidget : Widget
         }
 
         var plain = theme.Markdown.CodeBlockText;
+        if (spans == null)
+            return new[] { Run(string.Join("\n", lines), plain) };
+
+        var runs = new List<RichTextRun>(lines.Count * 2);
         for (var i = 0; i < lines.Count; i++)
         {
             if (i > 0)
@@ -150,7 +154,7 @@ internal sealed record CodeBlockWidget : Widget
             if (line.Length == 0)
                 continue;
 
-            var lineSpans = spans != null && i < spans.Count ? spans[i] : null;
+            var lineSpans = i < spans.Count ? spans[i] : null;
             if (lineSpans == null || lineSpans.Count == 0)
             {
                 runs.Add(Run(line, plain));

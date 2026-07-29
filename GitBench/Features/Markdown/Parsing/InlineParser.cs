@@ -23,10 +23,9 @@ internal static class InlineParser
     /// <summary>Resolves <paramref name="text"/> into flat styled runs. Never throws.</summary>
     internal static IReadOnlyList<InlineRun> Parse(string text)
     {
-        if (string.IsNullOrEmpty(text)) return Array.Empty<InlineRun>();
         var nodes = Scan(text);
         ResolveEmphasis(nodes, 0);
-        return Flatten(nodes, 0, nodes.Count);
+        return Flatten(nodes, 0);
     }
 
     // --------------------------------------------------------------------- scan
@@ -201,26 +200,14 @@ internal static class InlineParser
         // The link text resolves its own emphasis in isolation — delimiters inside never pair
         // with delimiters outside the brackets.
         ResolveEmphasis(nodes, oi + 1);
-        var inner = Flatten(nodes, oi + 1, nodes.Count);
+        var inner = Flatten(nodes, oi + 1);
         var linked = new List<InlineRun>(inner.Count);
         foreach (var run in inner)
         {
-            // Hard breaks stay unstyled and unlinked; everything else takes the URL, and runs
-            // that only differed by URL (e.g. an autolink in the text) may now merge.
-            if (IsHardBreak(run))
-            {
-                linked.Add(run);
-                continue;
-            }
-            var r = run with { LinkUrl = url };
-            if (linked.Count > 0 && linked[^1] is var last && !IsHardBreak(last) && SameStyle(last, r))
-            {
-                linked[^1] = last with { Text = last.Text + r.Text };
-            }
-            else
-            {
-                linked.Add(r);
-            }
+            // Hard breaks stay unstyled and unlinked; everything else takes the URL. Runs that
+            // now agree on every style (e.g. an autolink that only differed by URL) merge later,
+            // when the consuming Flatten's Emit walks this atom.
+            linked.Add(IsHardBreak(run) ? run : run with { LinkUrl = url });
         }
 
         nodes.RemoveRange(oi, nodes.Count - oi);
@@ -366,7 +353,7 @@ internal static class InlineParser
 
     // ------------------------------------------------------------------ flatten
 
-    private static List<InlineRun> Flatten(List<Node> nodes, int from, int to)
+    private static List<InlineRun> Flatten(List<Node> nodes, int from)
     {
         var runs = new List<InlineRun>();
         var bold = 0;
@@ -391,7 +378,7 @@ internal static class InlineParser
             lastIsBreak = false;
         }
 
-        for (var idx = from; idx < to; idx++)
+        for (var idx = from; idx < nodes.Count; idx++)
         {
             switch (nodes[idx])
             {
@@ -460,10 +447,6 @@ internal static class InlineParser
 
     private static bool IsHardBreak(InlineRun r)
         => r is { Text: "\n", Bold: false, Italic: false, Code: false, Strikethrough: false, LinkUrl: null };
-
-    private static bool SameStyle(InlineRun a, InlineRun b)
-        => a.Bold == b.Bold && a.Italic == b.Italic && a.Code == b.Code
-           && a.Strikethrough == b.Strikethrough && a.LinkUrl == b.LinkUrl;
 
     // -------------------------------------------------------------------- nodes
 

@@ -415,20 +415,6 @@ public class TableLayoutTests
         Assert.Equal(TableFitMode.AllMax, result.Mode);
     }
 
-    // ---------- alignment passthrough ----------
-
-    [Fact]
-    public void AlignmentsPassThroughUnchangedInEveryMode()
-    {
-        var alignments = new[] { ColumnAlignment.Right, ColumnAlignment.Center };
-
-        var allMax = Measure(400f, GrowHeader, GrowRows, alignments);
-        Assert.Equal(alignments, allMax.Alignments);
-
-        var overflow = Measure(10f, GrowHeader, GrowRows, alignments);
-        Assert.Equal(alignments, overflow.Alignments);
-    }
-
     // ---------- upstream assumption: cells are rectangular ----------
 
     [Fact]

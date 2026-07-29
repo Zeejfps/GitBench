@@ -37,10 +37,10 @@ internal sealed record MarkdownTable : Widget
             Child = new TableContent
             {
                 Alignments = block.Columns,
-                Header = Prop.Deferred<IReadOnlyList<IReadOnlyList<RichTextRun>>>(c =>
-                    c.Theme().Styles.Bind(s => HeaderCells(block, s))),
-                Rows = Prop.Deferred<IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>>>(c =>
-                    c.Theme().Styles.Bind(s => RowCells(block, s))),
+                Header = Theme.Styled<IReadOnlyList<IReadOnlyList<RichTextRun>>>(
+                    s => HeaderCells(block, s)),
+                Rows = Theme.Styled<IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>>>(
+                    s => RowCells(block, s)),
                 HeaderRuleColor = Theme.Color(s => s.Markdown.TableHeaderRule),
                 RowSeparatorColor = Theme.Color(s => s.Markdown.TableRowSeparator),
                 CodeChipBackground = Theme.Color(s => s.Markdown.CodeChipBackground),

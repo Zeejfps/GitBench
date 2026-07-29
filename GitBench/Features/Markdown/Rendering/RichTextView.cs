@@ -25,9 +25,6 @@ namespace GitBench.Features.Markdown.Rendering;
 /// </summary>
 internal sealed class RichTextView : View
 {
-    private const float UnderlineThickness = 1f;
-    private const float ChipCornerRadius = 3f;
-
     private readonly ICanvas _canvas;
     private IReadOnlyList<RichTextRun> _runs = Array.Empty<RichTextRun>();
 
@@ -53,7 +50,8 @@ internal sealed class RichTextView : View
     private IReadOnlyList<RichTextRun>? _hoverStylesForRuns;
     private uint _hoverStylesColor;
 
-    private readonly RectStyle _chipStyle = new() { BorderRadius = BorderRadiusStyle.All(ChipCornerRadius) };
+    private readonly RectStyle _chipStyle =
+        new() { BorderRadius = BorderRadiusStyle.All(RichTextDrawing.ChipCornerRadius) };
 
     public RichTextView(ICanvas canvas)
     {
@@ -154,38 +152,9 @@ internal sealed class RichTextView : View
                 var rect = new RectF(left + seg.X, bottom, seg.Width, line.Height);
                 var hovered = HoveredLinkUrl != null && run.LinkUrl == HoveredLinkUrl;
                 var style = hovered ? HoverStyleFor(seg.RunIndex) : run.Style;
-
-                if (run.IsCode && CodeChipBackground != 0)
-                {
-                    _chipStyle.BackgroundColor = CodeChipBackground;
-                    c.DrawRect(new DrawRectInputs
-                    {
-                        Position = rect,
-                        Style = _chipStyle,
-                        ZIndex = z, // strictly below the segment's text
-                    });
-                }
-
-                if (run.Underline)
-                {
-                    var y = bottom + UnderlineThickness;
-                    c.DrawLine(new DrawLineInputs
-                    {
-                        Start = new PointF(rect.Left, y),
-                        End = new PointF(rect.Right, y),
-                        Thickness = UnderlineThickness,
-                        Color = style.TextColor.Value,
-                        ZIndex = z + 1,
-                    });
-                }
-
-                c.DrawText(new DrawTextInputs
-                {
-                    Position = rect,
-                    Text = _segmentTexts[segmentText++],
-                    Style = style,
-                    ZIndex = z + 1,
-                });
+                RichTextDrawing.DrawSegment(
+                    c, rect, run, style, _segmentTexts[segmentText++],
+                    CodeChipBackground, _chipStyle, z);
             }
             top = bottom;
         }
@@ -220,16 +189,7 @@ internal sealed class RichTextView : View
             return;
 
         _segmentTexts.Clear();
-        foreach (var line in layout.Lines)
-        {
-            foreach (var seg in line.Segments)
-            {
-                var text = _runs[seg.RunIndex].Text;
-                _segmentTexts.Add(seg.Start == 0 && seg.Length == text.Length
-                    ? text
-                    : text.Substring(seg.Start, seg.Length));
-            }
-        }
+        RichTextDrawing.BuildSegmentTexts(_runs, layout, _segmentTexts);
         _segmentTextsFor = layout;
     }
 

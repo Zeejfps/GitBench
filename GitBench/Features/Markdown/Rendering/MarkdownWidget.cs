@@ -37,12 +37,16 @@ internal sealed record MarkdownWidget : Widget
     /// <summary>The parsed document to render.</summary>
     public required MarkdownDocument Document { get; init; }
 
+    /// <summary>The vertical gap between top-level blocks — shared with
+    /// <see cref="MarkdownStream"/>'s row gap so static and streamed documents can't drift.</summary>
+    internal const float BlockGap = Spacing.Md;
+
     // The quote accent bar's width; the bar always reads as a vertical stripe, taller than wide.
     private const float QuoteBarWidth = 3f;
 
     protected override IWidget Build(Context ctx) => new Column
     {
-        Gap = Spacing.Md,
+        Gap = BlockGap,
         CrossAxis = CrossAxisAlignment.Stretch,
         Children = BlockWidgets(Document.Blocks, static s => s.Palette.TextBody),
     };
@@ -102,8 +106,8 @@ internal sealed record MarkdownWidget : Widget
         IReadOnlyList<InlineRun> runs, float fontSize, bool bold, Func<ThemeStyles, uint> textColor) =>
         new RichText
         {
-            Runs = Prop.Deferred<IReadOnlyList<RichTextRun>>(ctx => ctx.Theme().Styles.Bind(
-                s => InlineRunBuilder.Build(runs, s.Markdown, fontSize, textColor(s), bold))),
+            Runs = Theme.Styled<IReadOnlyList<RichTextRun>>(
+                s => InlineRunBuilder.Build(runs, s.Markdown, fontSize, textColor(s), bold)),
             CodeChipBackground = Theme.Color(s => s.Markdown.CodeChipBackground),
             LinkHoverColor = Theme.Color(s => s.Markdown.LinkHover),
         };

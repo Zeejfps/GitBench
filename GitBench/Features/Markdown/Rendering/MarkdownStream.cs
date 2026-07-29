@@ -1,5 +1,4 @@
 using GitBench.Features.Markdown.Parsing;
-using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
@@ -32,7 +31,7 @@ internal sealed record MarkdownStream : Widget
     public required MarkdownBlockList Source { get; init; }
 
     protected override IWidget Build(Context ctx) =>
-        Each.Of(Source.Blocks, new BlockRow(), gap: Spacing.Md)
+        Each.Of(Source.Blocks, new BlockRow(), gap: MarkdownWidget.BlockGap)
             with { CrossAxis = CrossAxisAlignment.Stretch };
 
     /// <summary>The per-row template: resolves its block from the item scope <c>Each</c> creates

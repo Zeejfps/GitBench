@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace GitBench.Features.Markdown.Parsing;
@@ -16,11 +15,7 @@ namespace GitBench.Features.Markdown.Parsing;
 /// </summary>
 internal sealed class BasicMarkdownParser : IMarkdownParser
 {
-    public MarkdownDocument Parse(string text)
-    {
-        if (string.IsNullOrEmpty(text)) return new MarkdownDocument(Array.Empty<MarkdownBlock>());
-        return new MarkdownDocument(ParseBlocks(SplitLines(text)));
-    }
+    public MarkdownDocument Parse(string text) => new(ParseBlocks(SplitLines(text)));
 
     // CRLF normalizes to LF; a trailing newline terminates the last line rather than opening an
     // empty one (an unterminated fence's text must not grow a phantom blank line).
@@ -44,47 +39,71 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         return lines;
     }
 
+    /// <summary>What block construct the line at <paramref name="i"/> opens — every kind but
+    /// <see cref="Text"/> interrupts a paragraph.</summary>
+    private enum LineKind
+    {
+        Blank,
+        ThematicBreak,
+        Heading,
+        Fence,
+        Quote,
+        ListItem,
+        TableStart,
+        Text,
+    }
+
+    // The one copy of the dispatch order (ParseBlocks dispatches on it, paragraphs end on it).
+    // The order is load-bearing: break before list so "- - -" reads as a rule, not a one-item
+    // list. Classification is cheap — block construction (including inline parsing) happens only
+    // in ParseBlocks' dispatch.
+    private static LineKind Classify(IReadOnlyList<string> lines, int i)
+    {
+        var line = lines[i];
+        if (string.IsNullOrWhiteSpace(line)) return LineKind.Blank;
+        if (IsThematicBreak(line)) return LineKind.ThematicBreak;
+        if (IsHeadingLine(line)) return LineKind.Heading;
+        if (TryParseFenceOpener(line, out _, out _, out _)) return LineKind.Fence;
+        if (IsQuoteLine(line)) return LineKind.Quote;
+        if (TryParseListMarker(line, out _)) return LineKind.ListItem;
+        if (IsTableStart(lines, i)) return LineKind.TableStart;
+        return LineKind.Text;
+    }
+
     private static IReadOnlyList<MarkdownBlock> ParseBlocks(IReadOnlyList<string> lines)
     {
         var blocks = new List<MarkdownBlock>();
         var i = 0;
         while (i < lines.Count)
         {
-            var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line))
+            switch (Classify(lines, i))
             {
-                i++;
-            }
-            // Break before list so "- - -" reads as a rule, not a one-item list.
-            else if (IsThematicBreak(line))
-            {
-                blocks.Add(new ThematicBreakBlock());
-                i++;
-            }
-            else if (TryParseHeading(line, out var heading))
-            {
-                blocks.Add(heading);
-                i++;
-            }
-            else if (TryParseFenceOpener(line, out _, out _, out _))
-            {
-                blocks.Add(ParseFence(lines, ref i));
-            }
-            else if (IsQuoteLine(line))
-            {
-                blocks.Add(ParseQuote(lines, ref i));
-            }
-            else if (TryParseListMarker(line, out _))
-            {
-                blocks.Add(ParseList(lines, ref i));
-            }
-            else if (IsTableStart(lines, i))
-            {
-                blocks.Add(ParseTable(lines, ref i));
-            }
-            else
-            {
-                blocks.Add(ParseParagraph(lines, ref i));
+                case LineKind.Blank:
+                    i++;
+                    break;
+                case LineKind.ThematicBreak:
+                    blocks.Add(new ThematicBreakBlock());
+                    i++;
+                    break;
+                case LineKind.Heading:
+                    blocks.Add(ParseHeading(lines[i]));
+                    i++;
+                    break;
+                case LineKind.Fence:
+                    blocks.Add(ParseFence(lines, ref i));
+                    break;
+                case LineKind.Quote:
+                    blocks.Add(ParseQuote(lines, ref i));
+                    break;
+                case LineKind.ListItem:
+                    blocks.Add(ParseList(lines, ref i));
+                    break;
+                case LineKind.TableStart:
+                    blocks.Add(ParseTable(lines, ref i));
+                    break;
+                default:
+                    blocks.Add(ParseParagraph(lines, ref i));
+                    break;
             }
         }
         return blocks;
@@ -98,7 +117,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         // spaces survive for the inline parser's hard-break detection.
         var text = new StringBuilder(lines[i].TrimStart());
         i++;
-        while (i < lines.Count && !StartsNewBlock(lines, i))
+        while (i < lines.Count && Classify(lines, i) == LineKind.Text)
         {
             text.Append('\n').Append(lines[i].TrimStart());
             i++;
@@ -106,28 +125,24 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         return new ParagraphBlock(InlineParser.Parse(text.ToString()));
     }
 
-    private static bool StartsNewBlock(IReadOnlyList<string> lines, int i)
-    {
-        var line = lines[i];
-        return string.IsNullOrWhiteSpace(line)
-               || IsThematicBreak(line)
-               || TryParseHeading(line, out _)
-               || TryParseFenceOpener(line, out _, out _, out _)
-               || IsQuoteLine(line)
-               || TryParseListMarker(line, out _)
-               || IsTableStart(lines, i);
-    }
-
     // -------------------------------------------------------------------- headings
 
-    private static bool TryParseHeading(string line, [NotNullWhen(true)] out HeadingBlock? heading)
+    // The cheap classification half: 1–6 '#'s, then space, tab, or end of line.
+    private static bool IsHeadingLine(string line)
     {
-        heading = null;
         var t = line.TrimStart();
         var level = 0;
         while (level < t.Length && t[level] == '#') level++;
         if (level is < 1 or > 6) return false;
-        if (level < t.Length && t[level] is not (' ' or '\t')) return false;
+        return level >= t.Length || t[level] is ' ' or '\t';
+    }
+
+    // Construction half; only called on lines IsHeadingLine accepted.
+    private static HeadingBlock ParseHeading(string line)
+    {
+        var t = line.TrimStart();
+        var level = 0;
+        while (level < t.Length && t[level] == '#') level++;
 
         var text = t[level..].Trim();
         // A trailing #-run is decoration only when a space precedes it: "# title ##" -> "title",
@@ -138,8 +153,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         {
             text = text[..end].TrimEnd();
         }
-        heading = new HeadingBlock(level, InlineParser.Parse(text));
-        return true;
+        return new HeadingBlock(level, InlineParser.Parse(text));
     }
 
     // --------------------------------------------------------------- thematic breaks
@@ -348,7 +362,7 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         if (i + 1 >= lines.Count) return false;
         if (!ContainsUnescapedPipe(lines[i])) return false;
         if (!TryParseDelimiterRow(lines[i + 1], out var alignments)) return false;
-        return alignments.Count > 0 && SplitTableCells(lines[i]).Count == alignments.Count;
+        return SplitTableCells(lines[i]).Count == alignments.Count;
     }
 
     private static TableBlock ParseTable(IReadOnlyList<string> lines, ref int i)
