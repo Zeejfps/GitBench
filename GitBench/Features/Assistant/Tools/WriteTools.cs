@@ -11,28 +11,39 @@ namespace GitBench.Features.Assistant.Tools;
 
 /// <summary>
 /// The app a write tool acts through, beyond git itself: the commit box it types into, the bus that
-/// tells the rest of the app what changed, the registry that says which repository is on screen, and
-/// the dispatcher those touches run on.
+/// tells the rest of the app what changed, the registry that says which repository is on screen, the
+/// store the remote operations run through, and the dispatcher those touches run on.
 /// </summary>
 internal sealed record AssistantWriteSurface(
     IUiDispatcher Dispatcher,
     IMessageBus Bus,
     IRepoRegistry Registry,
-    ICommitEditor CommitEditor)
+    ICommitEditor CommitEditor,
+    IRepoOperationsStore Operations)
 {
     public bool IsActive(Repo repo) => Registry.Active.Value?.Id == repo.Id;
 
     /// <summary>Runs <paramref name="action"/> where view models and the bus live, and waits for it
     /// — a tool result reports what happened, so it cannot return before it has.</summary>
-    public Task OnUiThreadAsync(Action action, CancellationToken ct)
+    public Task OnUiThreadAsync(Action action, CancellationToken ct) =>
+        OnUiThreadAsync<object?>(
+            () =>
+            {
+                action();
+                return null;
+            },
+            ct);
+
+    /// <summary>The same hop for a call that has something to hand back — the in-flight operation a
+    /// remote tool then waits on, which only the UI thread may ask the store to start.</summary>
+    public Task<T> OnUiThreadAsync<T>(Func<T> work, CancellationToken ct)
     {
-        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
         Dispatcher.Post(() =>
         {
             try
             {
-                action();
-                completion.TrySetResult();
+                completion.TrySetResult(work());
             }
             catch (Exception ex)
             {

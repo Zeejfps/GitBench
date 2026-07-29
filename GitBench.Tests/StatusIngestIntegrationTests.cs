@@ -144,5 +144,7 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }
+        public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
+        public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
     }
 }

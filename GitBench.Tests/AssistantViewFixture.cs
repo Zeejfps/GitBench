@@ -98,6 +98,7 @@ internal sealed class AssistantViewFixture : IDisposable
             Bus,
             CommitBox,
             new ReviewProgressStore(),
+            new IdleRemoteOperations(),
             _ => backend);
         _store = store;
 

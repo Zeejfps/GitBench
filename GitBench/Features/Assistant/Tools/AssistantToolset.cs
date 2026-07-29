@@ -53,6 +53,8 @@ internal sealed class AssistantToolset
                 .. Reads(git, repo),
                 .. WriteTools.CreateAll(git, repo, writes),
                 .. ReviewTools.CreateWrites(git, repo, reviewProgress, writes),
+                .. ConflictTools.CreateAll(git, repo, writes),
+                .. RemoteTools.CreateAll(repo, writes),
             ],
             agent.AllowedTools);
 

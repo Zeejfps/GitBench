@@ -374,7 +374,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     }
 
     private AssistantWriteSurface WriteSurface() =>
-        new(_dispatcher, _bus, _registry, _commitBox);
+        new(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations());
 
     private AssistantViewModel Start(
         FakeAssistantBackend backend,
@@ -392,6 +392,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             _bus,
             _commitBox,
             new ReviewProgressStore(),
+            new IdleRemoteOperations(),
             _ => backend);
         _store.Start();
 

@@ -1272,6 +1272,68 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    // `-z` both terminates each record with NUL and stops git C-quoting a non-ASCII path — a quoted
+    // path is not one any other call would accept back.
+    public IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return [];
+
+            var output = RunGit(repo.Path, out _, "ls-files", "-u", "-z");
+            if (string.IsNullOrEmpty(output)) return [];
+
+            var stages = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+            var order = new List<string>();
+            foreach (var record in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var tab = record.IndexOf('\t');
+                if (tab < 0) continue;
+                var meta = record[..tab].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (meta.Length < 3 || !int.TryParse(meta[2], out var stage)) continue;
+
+                var path = record[(tab + 1)..];
+                if (!stages.TryGetValue(path, out var present))
+                {
+                    stages[path] = present = new HashSet<int>();
+                    order.Add(path);
+                }
+                present.Add(stage);
+            }
+
+            return order
+                .Select(path => new ConflictedPath(
+                    path,
+                    ChangeKind(stages[path].Contains(1), stages[path].Contains(2)),
+                    ChangeKind(stages[path].Contains(1), stages[path].Contains(3))))
+                .ToArray();
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    public ConflictStages? GetConflictStages(Repo repo, string path)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return null;
+
+            var stages = GetUnmergedStages(repo.Path, path);
+            if (stages.Count == 0) return null;
+
+            return new ConflictStages(
+                stages.Contains(1) ? ShowStage(repo.Path, 1, path) : null,
+                stages.Contains(2) ? ShowStage(repo.Path, 2, path) : null,
+                stages.Contains(3) ? ShowStage(repo.Path, 3, path) : null);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static ConflictChangeKind ChangeKind(bool hasBase, bool present)
     {
         if (!present) return ConflictChangeKind.Deleted;

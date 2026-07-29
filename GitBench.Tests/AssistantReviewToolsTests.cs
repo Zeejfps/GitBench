@@ -93,7 +93,8 @@ public sealed class AssistantReviewToolsTests : IDisposable
             _dispatcher,
             new MessageBus(),
             new RepoRegistry(RepoStateStore.Load(statePath), statePath),
-            new NoopCommitEditor());
+            new NoopCommitEditor(),
+            new IdleRemoteOperations());
     }
 
     public void Dispose()
