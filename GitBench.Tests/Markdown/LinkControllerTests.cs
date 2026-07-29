@@ -13,7 +13,8 @@ namespace GitBench.Tests.Markdown;
 // harness's InputSystem over a real RichTextView, synthetic geometry (8px advance, 16px lines,
 // 600px-tall viewport → first line's y-center is 592). Clicking a link segment must open its
 // url through IPlatformShell.OpenUrl; hover must show the hand cursor (IProvidesCursor, read
-// off InputSystem.DesiredCursor) and recolor the link via RichTextView.SetHoveredLink.
+// off InputSystem.DesiredCursor) and recolor the link via RichTextView.SetHoveredLink. Only
+// http(s) urls are links: markdown here is untrusted, so anything else is inert.
 public class LinkControllerTests
 {
     private const uint PlainColor = 0xFF111111;
@@ -55,8 +56,8 @@ public class LinkControllerTests
     }
 
     // "Read the " spans x [0,72), the link "docs" [72,104), " now." [104,144).
-    private static IReadOnlyList<RichTextRun> Sample() =>
-        new[] { Run("Read the "), Link("docs"), Run(" now.") };
+    private static IReadOnlyList<RichTextRun> Sample(string url = Url) =>
+        new[] { Run("Read the "), Link("docs", url), Run(" now.") };
 
     [Fact]
     public void ClickOnALinkSegmentOpensItsUrl()
@@ -67,6 +68,47 @@ public class LinkControllerTests
             h.Click(80f, FirstLineY);
 
             Assert.Equal(new[] { Url }, shell.OpenedUrls);
+        }
+    }
+
+    [Fact]
+    public void ClickOnAnHttpLinkSegmentOpensItsUrl()
+    {
+        var (h, _, shell) = Create(Sample("http://example.com/docs"));
+        using (h)
+        {
+            h.Click(80f, FirstLineY);
+
+            Assert.Equal(new[] { "http://example.com/docs" }, shell.OpenedUrls);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"\\attacker\share\payload.exe")]
+    [InlineData(@"C:\Windows\System32\calc.exe")]
+    [InlineData("file:///C:/Windows/System32/calc.exe")]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("./docs/setup.md")]
+    public void ClickOnANonWebLinkOpensNothing(string url)
+    {
+        var (h, _, shell) = Create(Sample(url));
+        using (h)
+        {
+            h.Click(80f, FirstLineY);
+
+            Assert.Empty(shell.OpenedUrls);
+        }
+    }
+
+    [Fact]
+    public void HoveringANonWebLinkLeavesTheDefaultCursor()
+    {
+        var (h, _, _) = Create(Sample(@"\\attacker\share\payload.exe"));
+        using (h)
+        {
+            h.MoveTo(80f, FirstLineY);
+
+            Assert.Equal(MouseCursor.Default, h.Input.DesiredCursor);
         }
     }
 

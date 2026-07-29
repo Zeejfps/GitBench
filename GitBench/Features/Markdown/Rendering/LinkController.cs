@@ -9,11 +9,12 @@ namespace GitBench.Features.Markdown.Rendering;
 /// <summary>
 /// Pointer behavior for links inside a <see cref="RichTextView"/>: hover shows the hand cursor
 /// (<see cref="IProvidesCursor"/>, read by the input system while this controller is the hovered
-/// target) and recolors the link via <see cref="RichTextView.SetHoveredLink"/>; a left click on a
-/// link segment opens its url through <see cref="IPlatformShell.OpenUrl"/> and consumes the
-/// press. Everything routes through <see cref="RichTextView.LinkAt"/>, so hit-testing lives in
-/// one place. Attached by <see cref="RichText"/> per mounted lifetime, the diff pane's
-/// <c>DiffMouseController</c> pattern.
+/// target) and recolors the link via <see cref="RichTextView.SetHoveredLink"/>; a left click on an
+/// http(s) link segment opens its url through <see cref="IPlatformShell.OpenUrl"/> and consumes
+/// the press. Any other url is inert — no cursor, no hover, no open. Everything routes through
+/// <see cref="OpenableLinkAt"/>, so hit-testing lives in one place. Attached by
+/// <see cref="RichText"/> per mounted lifetime, the diff pane's <c>DiffMouseController</c>
+/// pattern.
 /// </summary>
 internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
 {
@@ -53,10 +54,21 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
         // Open on the press alone so a click (press + release) opens exactly once.
         if (e.Button != MouseButton.Left || e.State != InputState.Pressed) return;
 
-        if (_view.LinkAt(e.Mouse.Point) is not { } url) return;
+        if (OpenableLinkAt(e.Mouse.Point) is not { } url) return;
         _shell.OpenUrl(url);
         e.Consume();
     }
 
-    private void UpdateHover(PointF point) => _view.SetHoveredLink(_view.LinkAt(point));
+    private void UpdateHover(PointF point) => _view.SetHoveredLink(OpenableLinkAt(point));
+
+    // The markdown rendered here is untrusted (assistant output, README content) and the shell
+    // launches whatever it is handed — a UNC or local path would run an executable — so only
+    // http(s) counts as a link at all; everything else never reaches the shell and is given no
+    // clickable affordance either.
+    private string? OpenableLinkAt(PointF point)
+    {
+        if (_view.LinkAt(point) is not { } url) return null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        return uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps ? url : null;
+    }
 }
