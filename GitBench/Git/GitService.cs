@@ -3243,13 +3243,42 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     }
 
     // Untracked file: `git diff` ignores it, so render it as an addition by diffing against the
-    // platform null device.
+    // platform null device. `--no-index` is the one diff that reads whatever the filesystem offers
+    // rather than something git already tracks, so the path is confined to the checkout here too.
     private string? RunUntrackedFileDiff(Repo repo, string path, string contextArg, out string? error)
     {
+        if (!TryResolveInsideRepo(repo.Path, path, out var absPath))
+        {
+            error = "Diff paths must be repository-relative.";
+            return null;
+        }
+
         var nullPath = OperatingSystem.IsWindows() ? "NUL" : "/dev/null";
-        var absPath = Path.IsPathRooted(path) ? path : Path.Combine(repo.Path, path);
         return RunGitDiff(repo.Path, out error,
             "diff", "--no-color", "--no-index", contextArg, "--", nullPath, absPath);
+    }
+
+    private static bool TryResolveInsideRepo(string repoPath, string path, out string fullPath)
+    {
+        fullPath = string.Empty;
+        if (Path.IsPathRooted(path)) return false;
+
+        string root;
+        try
+        {
+            root = Path.GetFullPath(repoPath);
+            fullPath = Path.GetFullPath(Path.Combine(root, path));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        var relative = Path.GetRelativePath(root, fullPath);
+        return !Path.IsPathRooted(relative)
+            && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar)
+            && !relative.StartsWith("../", StringComparison.Ordinal);
     }
 
     public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null)
@@ -3411,6 +3440,20 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     void IGitRawConfigReader.AttachIdentityResolver(GitIdentityService identity)
         => _runner.IdentityPrefixResolver = identity.ResolvePrefixArgs;
+
+    public bool IsPathTracked(Repo repo, string relativePath) => IsTracked(repo.Path, relativePath);
+
+    // `check-ignore -q` exits 0 when a rule matches and 1 when none does. `--no-index` is what
+    // makes the answer the rules' own: without it git short-circuits on tracked paths and reports
+    // "not ignored" for a file whose rule says otherwise.
+    public bool IsPathIgnored(Repo repo, string relativePath)
+    {
+        var result = _runner.Run(
+            repo.Path,
+            new[] { "check-ignore", "--no-index", "-q", "--", relativePath },
+            GitProcessRunner.GitLaunch.Direct);
+        return result.Ok;
+    }
 
     private bool IsTracked(string workingDir, string path)
     {

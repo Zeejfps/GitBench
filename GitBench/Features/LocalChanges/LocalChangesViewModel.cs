@@ -33,7 +33,7 @@ namespace GitBench.Features.LocalChanges;
 /// error and of the revalidation that reconciles the optimistic move. The base <c>Gen</c> lane is
 /// left to the amend head-files refresh, which is a load and should supersede.
 /// </summary>
-internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>
+internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, ICommitEditor
 {
     private static readonly IReadOnlyList<FileChange> Empty = [];
 

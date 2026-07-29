@@ -31,14 +31,17 @@ internal sealed record ToolbarButton : Widget
 internal sealed record ToolbarIconButton : Widget
 {
     public ICommand? Command { get; init; }
-    public required Prop<string?> Icon { get; init; }
+    public Prop<string?> Icon { get; init; }
     public Prop<string?> Tooltip { get; init; }
+
+    /// <summary>Takes the glyph's place for a button whose mark is an image rather than a font icon.</summary>
+    public IWidget? Content { get; init; }
 
     protected override IWidget Build(Context ctx) => new ButtonWidget
     {
         Command = Command,
         ContentInset = ButtonStyle.Plain.IconOnlyInset,
-        Children = [new ButtonIcon { Value = Icon }],
+        Children = [Content ?? new ButtonIcon { Value = Icon }],
     }.WithTooltip(Tooltip).WithController<KbmController>();
 }
 

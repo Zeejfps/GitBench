@@ -1,12 +1,10 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
-using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Fonts;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -43,8 +41,6 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
     protected override IWidget Build(Context ctx, CodeBlockViewModel vm)
     {
         var block = Block;
-        var clipboard = ctx.Get<IClipboard>();
-        var copyLabel = ctx.Localization().Strings.Value.MarkdownCopyCode;
         var theme = ctx.Theme().Styles;
 
         // Tab-expanded display lines, because token spans arrive in tab-expanded column space
@@ -80,10 +76,16 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
                                             // flip re-resolves their colors without re-tokenizing.
                                             Runs = Prop.Bind(
                                                 () => CodeRuns(lines, vm.Spans.Value, theme.Value)),
+                                            SelectionBackground =
+                                                Theme.Color(s => s.Markdown.SelectionBackground),
                                         },
                                     },
                                 },
-                                CopyButton(copyLabel, clipboard, block.Text),
+                                new CopyIconButton
+                                {
+                                    Label = static s => s.MarkdownCopyCode,
+                                    GetText = () => block.Text,
+                                },
                             ],
                         },
                     ],
@@ -91,21 +93,6 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
             ],
         };
     }
-
-    // Icon-only copy button in the block's top-right corner. The accessible label carries the
-    // localized copy_code string (the glyph is a PUA codepoint and reads as nothing), the tooltip
-    // stays live-localized, and a missing clipboard leaves the press inert.
-    private static IWidget CopyButton(string label, IClipboard? clipboard, string text) =>
-        new IconButtonWidget
-        {
-            Command = new Command(() => clipboard?.SetText(text)),
-            Icon = LucideIcons.Copy,
-            Width = Sizes.RowHeight,
-            Height = Sizes.RowHeight,
-            Accessibility = new AccessibilityInfo(AccessibilityRole.Button, label),
-            Surface = s => Theme.Color(t => s.Hovered.Value ? t.Palette.SurfaceHover : 0u),
-            Foreground = s => Theme.Color(t => s.Hovered.Value ? t.Palette.TextPrimary : t.Palette.TextMuted),
-        }.WithTooltip(L.T(s => s.MarkdownCopyCode)).WithController<KbmController>();
 
     /// <summary>One mono run per colored slice, '\n' runs between source lines — so the layout
     /// yields exactly one visual line per source line (empty lines included). Highlighted lines

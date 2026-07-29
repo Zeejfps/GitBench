@@ -1,4 +1,6 @@
 using GitBench.Controls;
+using GitBench.Features.Assistant;
+using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
@@ -21,6 +23,10 @@ namespace GitBench.App;
 
 internal static class AppServices
 {
+    // One client for the app's lifetime. No timeout: a turn streams for as long as the model takes,
+    // and cancellation is the CancellationToken's job, not the client's.
+    private static readonly HttpClient AssistantHttp = new() { Timeout = Timeout.InfiniteTimeSpan };
+
     public static void AddAppServices(this Context context, PreferencesService preferences)
     {
         context.AddService(preferences);
@@ -135,6 +141,33 @@ internal static class AppServices
             ctx.Require<IUiDispatcher>()));
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
         context.AddHostedService<IRepoStatusStore, RepoStatusStore>();
+
+        // The assistant's conversations, one per repo, in memory for the app session. The backend is
+        // built by the store rather than registered on its own: it needs a live read of the
+        // connection the store resolves off the UI thread, which a plain registration would make
+        // circular. Which provider that is survives restarts the way the theme and language do.
+        var assistantSettings = new State<AssistantSettings>(AssistantSettings.From(
+            preferences.Current.AssistantProviderId,
+            preferences.Current.AssistantProviderPreferences
+                .Select(c => (c.ProviderId, c.Model, c.BaseUrl))));
+        assistantSettings.Changed += s => preferences.SetAssistantProvider(
+            s.ProviderId,
+            s.Choices.Select(c => new AssistantProviderPreference(c.Key, c.Value.Model, c.Value.BaseUrl)).ToArray());
+        context.AddService(assistantSettings);
+        context.AddSingleton(ctx => new AssistantCredentials(ctx.Require<ISecretStore>()));
+        context.AddHostedService<IAssistantSessionStore, AssistantSessionStore>(ctx => new AssistantSessionStore(
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<AssistantCredentials>(),
+            ctx.Require<State<AssistantSettings>>(),
+            ctx.Require<ILocalizationService>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<LocalChangesViewModel>(),
+            ctx.Require<IReviewProgressStore>(),
+            connection => new AssistantBackendRouter(AssistantHttp, connection)));
+        context.AddSingleton<AssistantPanelPlacement>();
+        context.AddSingleton<AssistantViewModel>();
 
         context.AddHostedService<IToastService, ToastService>();
 

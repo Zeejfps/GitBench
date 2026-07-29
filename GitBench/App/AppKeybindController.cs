@@ -1,3 +1,4 @@
+using GitBench.Features.Assistant;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -23,19 +24,22 @@ internal sealed class AppKeybindController : KeyboardMouseController
     private readonly RepoBarCollapseState _repoBarCollapse;
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
+    private readonly AssistantViewModel _assistant;
 
     public AppKeybindController(
         IRepoRegistry registry,
         RepoHoverState hover,
         RepoBarCollapseState repoBarCollapse,
         ILocalizationService loc,
-        IMessageBus bus)
+        IMessageBus bus,
+        AssistantViewModel assistant)
     {
         _registry = registry;
         _hover = hover;
         _repoBarCollapse = repoBarCollapse;
         _loc = loc;
         _bus = bus;
+        _assistant = assistant;
     }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
@@ -52,6 +56,22 @@ internal sealed class AppKeybindController : KeyboardMouseController
         if (e.Key == KeyboardKey.B && (e.Modifiers & RelevantMask) == PrimaryModifier)
         {
             _repoBarCollapse.Toggle();
+            e.Consume();
+            return;
+        }
+
+        if (e.Key == KeyboardKey.K && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        {
+            _assistant.Toggle.Execute();
+            e.Consume();
+            return;
+        }
+
+        // Esc closes the overlay only on the way back out: anything nearer the pointer — a dialog, a
+        // rename field, a search bar — gets its own Esc first and consumes it.
+        if (e.Key == KeyboardKey.Escape && e.Phase == EventPhase.Bubbling && _assistant.IsOpen.Value)
+        {
+            _assistant.Close.Execute();
             e.Consume();
             return;
         }

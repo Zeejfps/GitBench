@@ -89,6 +89,14 @@ internal static class AppHostSetup
                 AppLogo.IconImageId.Value = appHost.LoadImage(iconPng);
             }
             catch (Exception ex) { Console.WriteLine($"[AppLogo] icon load failed: {ex.Message}"); }
+
+            // Loaded separately so a missing mark can't take the app icon down with it.
+            try
+            {
+                appHost.MakeMainContextCurrent();
+                AssistantMark.ImageId.Value = appHost.LoadImage("Assets/assistant_mark.png");
+            }
+            catch (Exception ex) { Console.WriteLine($"[AssistantMark] mark load failed: {ex.Message}"); }
         }
     }
 

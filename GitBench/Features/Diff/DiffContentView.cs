@@ -1,6 +1,8 @@
 using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Desktop;
@@ -70,8 +72,15 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
+    private readonly Context _ctx;
+    private readonly IMessageBus? _bus;
     private readonly DiffSelectionModel _selection = new();
     private readonly DiffSelectionController _selectionController;
+
+    /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
+    /// window's diff sets it: the assistant overlay is a child of that window, so an answer asked
+    /// for from a pop-out would arrive somewhere the reader is not looking.</summary>
+    public bool AssistantActions { get; set; }
 
     private float _scrollX;
     // A programmatic vertical scroll target that must be re-asserted across frames. Setting a
@@ -95,6 +104,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
+        _ctx = ctx;
+        _bus = ctx.Get<IMessageBus>();
         _loc = ctx.Localization();
         _painter = new DiffRowPainter(_loc);
         _buttonBar = new HunkButtonBar(_loc);
@@ -644,6 +655,16 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) => _rowSet.Rows;
     void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
     void IDiffSelectionSurface.RequestRedraw() => SetDirty();
+
+    bool IDiffSelectionSurface.ShowSelectionMenu(PointF point)
+    {
+        if (!AssistantActions || _bus is null) return false;
+        if (DescribeState(_renderState).Path is not { } path) return false;
+        if (DiffSelectionQuote.Build(_rowSet.Rows, _selection.Start, _selection.End, path) is not { } quote)
+            return false;
+
+        return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, _bus, quote)) != null;
+    }
 
     bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
     {

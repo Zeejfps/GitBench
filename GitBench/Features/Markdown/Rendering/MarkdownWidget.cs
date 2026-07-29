@@ -44,11 +44,14 @@ internal sealed record MarkdownWidget : Widget
     // The quote accent bar's width; the bar always reads as a vertical stripe, taller than wide.
     private const float QuoteBarWidth = 3f;
 
-    protected override IWidget Build(Context ctx) => new Column
+    protected override IWidget Build(Context ctx) => new MarkdownSelectionLayer
     {
-        Gap = BlockGap,
-        CrossAxis = CrossAxisAlignment.Stretch,
-        Children = BlockWidgets(Document.Blocks, static s => s.Palette.TextBody),
+        Child = new Column
+        {
+            Gap = BlockGap,
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children = BlockWidgets(Document.Blocks, static s => s.Palette.TextBody),
+        },
     };
 
     /// <summary>Builds the widget list for a block sequence — the document's top level and, via
@@ -110,6 +113,7 @@ internal sealed record MarkdownWidget : Widget
                 s => InlineRunBuilder.Build(runs, s.Markdown, fontSize, textColor(s), bold)),
             CodeChipBackground = Theme.Color(s => s.Markdown.CodeChipBackground),
             LinkHoverColor = Theme.Color(s => s.Markdown.LinkHover),
+            SelectionBackground = Theme.Color(s => s.Markdown.SelectionBackground),
         };
 
     private static IWidget List(ListBlock list, Func<ThemeStyles, uint> bodyColor) => new Column

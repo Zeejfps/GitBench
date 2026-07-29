@@ -70,6 +70,29 @@ public sealed class PreferencesService : IDisposable
 
     public void SetEnableUntrackedCache(bool on) => Mutate(p => p with { EnableUntrackedCache = on });
 
+    /// <summary>Records which provider the assistant talks to and what every provider was last
+    /// given.</summary>
+    public void SetAssistantProvider(string providerId, IReadOnlyList<AssistantProviderPreference> choices) =>
+        Mutate(p => p with
+        {
+            AssistantProviderId = providerId,
+            AssistantProviderPreferences = choices,
+        });
+
+    /// <summary>Records where the assistant panel was left and how big it was, measured from the
+    /// host's top leading corner.</summary>
+    public void SetAssistantPanelPlacement(float x, float y, float width, float height)
+    {
+        if (width <= 0f || height <= 0f) return;
+        Mutate(p => p with
+        {
+            AssistantPanelX = x,
+            AssistantPanelY = y,
+            AssistantPanelWidth = width,
+            AssistantPanelHeight = height,
+        });
+    }
+
     private void Mutate(Func<Preferences, Preferences> mutator)
     {
         lock (_gate)

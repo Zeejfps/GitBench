@@ -33,8 +33,10 @@ namespace GitBench.Features.Markdown;
 /// drivable in tests without a ticker.</description></item>
 /// </list>
 /// Single-threaded, like the <see cref="ObservableList{T}"/> it owns: call from the UI thread.
+/// Disposing drops any pending text and leaves the ticker, so a surface that goes away takes its
+/// registration with it.
 /// </summary>
-internal sealed class MarkdownBlockList
+internal sealed class MarkdownBlockList : IDisposable
 {
     private readonly IMarkdownParser _parser;
     private readonly IFrameTicker? _ticker;
@@ -95,6 +97,11 @@ internal sealed class MarkdownBlockList
         ClearPending();
         Apply(text);
     }
+
+    /// <summary>Abandons the pending update and the ticker registration behind it: the owner calls
+    /// this when the surface bound to these blocks is gone, so no parse runs for a view that no
+    /// longer exists.</summary>
+    public void Dispose() => ClearPending();
 
     /// <summary>Drops any pending throttled text and parks the frame tick, so the loop only stays
     /// awake while an update is actually pending.</summary>

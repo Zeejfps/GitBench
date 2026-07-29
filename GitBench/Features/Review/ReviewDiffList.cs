@@ -952,6 +952,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
     void IDiffSelectionSurface.RequestRedraw() => SetDirty();
 
+    // No assistant actions here. A review runs in its own OS window and the assistant overlay is a
+    // child of the main one, so an answer asked for from a review would render behind it, in a
+    // window the reviewer left. Giving the review window an overlay of its own is the fix, and it is
+    // its own piece of work — the panel is a reusable widget precisely so it stays possible.
+    bool IDiffSelectionSurface.ShowSelectionMenu(PointF point) => false;
+
     IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) =>
         scope is string path && _byPath.TryGetValue(path, out var s) && s.RowSet.Rows.Count > 0
             ? s.RowSet.Rows

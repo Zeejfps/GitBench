@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.Assistant;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -101,5 +102,6 @@ internal sealed record ActionsToolbar : Widget
             Icon = LucideIcons.SquareTerminal,
             Tooltip = L.T(s => s.ToolbarOpenTerminalTooltip),
         },
+        new AssistantToolbarButton(),
     ];
 }

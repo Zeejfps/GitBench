@@ -152,26 +152,37 @@ internal static class RichTextLayout
         return i;
     }
 
+    /// <summary>
+    /// The runs' text as one string, with <paramref name="runStarts"/> receiving each run's start
+    /// offset in it (and the total length one past the last run). This is the offset space break
+    /// decisions are made in, and the one a selection over the laid-out runs is expressed in — a
+    /// <see cref="RichTextSegment"/> begins at <c>runStarts[RunIndex] + Start</c>.
+    /// </summary>
+    public static string ConcatenateRuns(IReadOnlyList<RichTextRun> runs, out int[] runStarts)
+    {
+        runStarts = new int[runs.Count + 1];
+        var total = 0;
+        for (var i = 0; i < runs.Count; i++)
+        {
+            runStarts[i] = total;
+            total += runs[i].Text.Length;
+        }
+        runStarts[runs.Count] = total;
+        return total == 0 ? string.Empty : Concatenate(runs, total);
+    }
+
     /// <summary>Builds the concatenated <see cref="RunMap"/> over <paramref name="runs"/>, or
     /// returns false when the runs carry no text at all.</summary>
     private static bool TryCreateMap(ICanvas canvas, IReadOnlyList<RichTextRun> runs, out RunMap map)
     {
-        var starts = new int[runs.Count + 1];
-        var total = 0;
-        for (var i = 0; i < runs.Count; i++)
-        {
-            starts[i] = total;
-            total += runs[i].Text.Length;
-        }
-        starts[runs.Count] = total;
-
-        if (total == 0)
+        var text = ConcatenateRuns(runs, out var starts);
+        if (text.Length == 0)
         {
             map = default;
             return false;
         }
 
-        map = new RunMap(canvas, runs, starts, Concatenate(runs, total));
+        map = new RunMap(canvas, runs, starts, text);
         return true;
     }
 

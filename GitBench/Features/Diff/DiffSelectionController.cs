@@ -38,6 +38,10 @@ internal interface IDiffSelectionSurface
     /// <summary>The rows of a scope, for building clipboard text and Select All spans.</summary>
     IReadOnlyList<DiffRow>? RowsOf(object? scope);
 
+    /// <summary>Opens the actions a right-click offers over a live selection, if this surface has
+    /// any. False for one that does not, and the press falls through untouched.</summary>
+    bool ShowSelectionMenu(PointF point);
+
     /// <summary>Scrolls the viewport by a delta in content pixels (positive scrolls down).</summary>
     void ScrollBy(float dy);
 
@@ -132,6 +136,17 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
+        // A right-click over a selection asks about it. Anywhere else — a right-click with nothing
+        // selected, or one outside the body — is somebody else's, so it falls through unconsumed.
+        if (e.Button == MouseButton.Right)
+        {
+            if (e.Phase != EventPhase.Capturing || e.State != InputState.Pressed) return;
+            if (!_surface.Selection.HasRange) return;
+            if (!_surface.SelectionViewport.ContainsPoint(e.Mouse.Point)) return;
+            if (_surface.ShowSelectionMenu(e.Mouse.Point)) e.Consume();
+            return;
+        }
+
         if (e.Button != MouseButton.Left) return;
 
         if (e.State == InputState.Released)

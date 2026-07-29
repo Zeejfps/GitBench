@@ -40,6 +40,31 @@ public static class PreferencesStore
         public WorkingChangesLayout? WorkingChangesLayout { get; set; } = Features.LocalChanges.WorkingChangesLayout.Diff;
         public bool? HideRemoteOnlyBranches { get; set; } = false;
         public bool? EnableUntrackedCache { get; set; } = false;
+
+        // Stored as free text rather than an enum: an unknown provider id resolves back to the
+        // default instead of discarding every other preference with it.
+        public string? AssistantProviderId { get; set; }
+
+        // Read, never written: the flat pair a pre-list file carries, which ReadAssistantChoices
+        // folds into the per-provider list.
+        public string? AssistantModel { get; set; }
+        public string? AssistantBaseUrl { get; set; }
+
+        public List<AssistantProviderShape>? AssistantProviderChoices { get; set; }
+
+        public float? AssistantPanelWidth { get; set; } = 380f;
+        public float? AssistantPanelHeight { get; set; } = 460f;
+
+        // Null (the default) means "never moved" — the panel rests in the top trailing corner.
+        public float? AssistantPanelX { get; set; }
+        public float? AssistantPanelY { get; set; }
+    }
+
+    internal sealed class AssistantProviderShape
+    {
+        public string? Id { get; set; }
+        public string? Model { get; set; }
+        public string? BaseUrl { get; set; }
     }
 
     public static Preferences Load(string path)
@@ -76,6 +101,12 @@ public static class PreferencesStore
                 WorkingChangesLayout = file.WorkingChangesLayout ?? defaults.WorkingChangesLayout,
                 HideRemoteOnlyBranches = file.HideRemoteOnlyBranches ?? defaults.HideRemoteOnlyBranches,
                 EnableUntrackedCache = file.EnableUntrackedCache ?? defaults.EnableUntrackedCache,
+                AssistantProviderId = file.AssistantProviderId,
+                AssistantProviderPreferences = ReadAssistantChoices(file),
+                AssistantPanelWidth = file.AssistantPanelWidth is > 0 ? file.AssistantPanelWidth.Value : defaults.AssistantPanelWidth,
+                AssistantPanelHeight = file.AssistantPanelHeight is > 0 ? file.AssistantPanelHeight.Value : defaults.AssistantPanelHeight,
+                AssistantPanelX = file.AssistantPanelX,
+                AssistantPanelY = file.AssistantPanelY,
             };
         }
         catch (Exception ex)
@@ -109,9 +140,38 @@ public static class PreferencesStore
             WorkingChangesLayout = preferences.WorkingChangesLayout,
             HideRemoteOnlyBranches = preferences.HideRemoteOnlyBranches,
             EnableUntrackedCache = preferences.EnableUntrackedCache,
+            AssistantProviderId = preferences.AssistantProviderId,
+            AssistantProviderChoices = preferences.AssistantProviderPreferences
+                .Select(c => new AssistantProviderShape { Id = c.ProviderId, Model = c.Model, BaseUrl = c.BaseUrl })
+                .ToList(),
+            AssistantPanelWidth = preferences.AssistantPanelWidth,
+            AssistantPanelHeight = preferences.AssistantPanelHeight,
+            AssistantPanelX = preferences.AssistantPanelX,
+            AssistantPanelY = preferences.AssistantPanelY,
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);
+    }
+
+    // Before this list existed the model and endpoint were kept flat, for whichever provider was
+    // selected. A file written then still carries them, so they are read as that provider's entry
+    // rather than dropped: a model configured before the app remembered them per provider is still
+    // the model that provider was configured with.
+    private static IReadOnlyList<AssistantProviderPreference> ReadAssistantChoices(FileShape file)
+    {
+        var choices = new List<AssistantProviderPreference>();
+        foreach (var entry in file.AssistantProviderChoices ?? [])
+            if (entry.Id is { Length: > 0 } id)
+                choices.Add(new AssistantProviderPreference(id, entry.Model, entry.BaseUrl));
+
+        var selected = file.AssistantProviderId;
+        if (selected is not { Length: > 0 }) return choices;
+        if (file.AssistantModel is null && file.AssistantBaseUrl is null) return choices;
+        if (choices.Any(c => string.Equals(c.ProviderId, selected, StringComparison.OrdinalIgnoreCase)))
+            return choices;
+
+        choices.Add(new AssistantProviderPreference(selected, file.AssistantModel, file.AssistantBaseUrl));
+        return choices;
     }
 
     private static Locale? ParseLocale(string? value) =>

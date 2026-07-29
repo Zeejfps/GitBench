@@ -8,6 +8,7 @@ using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Views;
+using ZGF.KeyboardModule;
 using ZGF.Observable;
 
 namespace GitBench.Controls;
@@ -31,9 +32,20 @@ internal sealed class GrowingDescriptionField : ContainerView
     private readonly float _maxHeight;
 
     private readonly TextInputView _input;
-    private readonly TextInputViewKbmController _inputController;
+    private readonly FieldController _inputController;
     private readonly ScrollPane _scrollPane;
     private readonly VerticalScrollBarView _scrollBar;
+
+    /// <summary>
+    /// Claims plain Enter for the owner (send, commit) instead of breaking the line; Shift+Enter
+    /// still inserts a newline, as does Enter when this is unset — which is how a field with no
+    /// submit action of its own behaves.
+    /// </summary>
+    public Action? OnSubmit
+    {
+        get => _inputController.OnSubmit;
+        set => _inputController.OnSubmit = value;
+    }
 
     public string? PlaceholderText
     {
@@ -91,7 +103,7 @@ internal sealed class GrowingDescriptionField : ContainerView
             _input.SelectionRectColor = s.TextInput.Selection;
             _input.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _inputController = new TextInputViewKbmController(_input, inputSystem, ctx.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
+        _inputController = new FieldController(_input, inputSystem, ctx.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
         _input.UseController(inputSystem, _inputController);
 
         _scrollPane = new ScrollPane();
@@ -134,6 +146,43 @@ internal sealed class GrowingDescriptionField : ContainerView
 
         // Start at the min size; the first OnLayoutChildren pass will refine this.
         Height = _minHeight;
+    }
+
+    // Intercepts the newline the multi-line editor would insert, rather than the key event that
+    // produced it: by the time the base calls this, an IME composition has already returned earlier
+    // (its Enter picks a candidate and must never submit), and a pasted or typed newline arrives on
+    // the span overload instead. Modifiers are recorded on the way past because Enter(char) doesn't
+    // carry them.
+    private sealed class FieldController : BaseTextInputKbmController
+    {
+        private const InputModifiers RelevantMask =
+            InputModifiers.Shift | InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
+
+        private InputModifiers _modifiers;
+
+        public FieldController(TextInputView textInput, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard)
+            : base(textInput, inputSystem, clipboard)
+        {
+        }
+
+        public Action? OnSubmit { get; set; }
+
+        public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
+        {
+            _modifiers = e.Modifiers;
+            base.OnKeyboardKeyStateChanged(ref e);
+        }
+
+        protected override void Enter(char c)
+        {
+            if (c == '\n' && OnSubmit != null && (_modifiers & RelevantMask) == InputModifiers.None)
+            {
+                OnSubmit();
+                return;
+            }
+
+            base.Enter(c);
+        }
     }
 
     protected override void OnLayoutChildren()

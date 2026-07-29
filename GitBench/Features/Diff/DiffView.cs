@@ -25,12 +25,17 @@ internal enum DiffBodyKind { Diff, Conflict, Image }
 /// </summary>
 internal sealed record DiffView : Widget
 {
+    /// <summary>Whether a selection here offers the assistant's quick actions. Set by the main
+    /// window's diff pane only — see <see cref="DiffContentView.AssistantActions"/>.</summary>
+    public bool AssistantActions { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<DiffViewModel>();
 
         var content = new DiffContentView(ctx)
         {
+            AssistantActions = AssistantActions,
             OnStageHunk = vm.StageHunk,
             OnUnstageHunk = vm.UnstageHunk,
             OnDiscardHunk = vm.RequestDiscardHunk,

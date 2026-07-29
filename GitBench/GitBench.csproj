@@ -48,6 +48,10 @@
         <None Update="Assets\app_icon_mac.png">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
+        <!-- Small dino mark for assistant surfaces, loaded via GuiApp.LoadImage. -->
+        <None Update="Assets\assistant_mark.png">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
     <!-- Fonts are embedded into the assembly instead of shipped as loose files. -->
@@ -63,6 +67,15 @@
     <ItemGroup>
         <None Remove="Assets\Grammars\**\*.json" />
         <EmbeddedResource Include="Assets\Grammars\**\*.json">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <!-- Assistant agent prompts. AgentCatalog enumerates every embedded .md by LogicalName, so
+         adding an agent is adding a file here — no registration step. -->
+    <ItemGroup>
+        <None Remove="Features\Assistant\Agents\**\*.md" />
+        <EmbeddedResource Include="Features\Assistant\Agents\**\*.md">
             <LogicalName>%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>
     </ItemGroup>

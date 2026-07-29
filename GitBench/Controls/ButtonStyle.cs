@@ -46,6 +46,11 @@ internal sealed record ButtonStyle
     /// the button's interaction state). For inline icon buttons in a toolbar/header that own no chrome.</summary>
     public static ButtonStyle Bare(Func<IInteractable, Prop<uint>> foreground) => new(fill: null, bareForeground: foreground);
 
+    /// <summary>The <see cref="Bare"/> ramp a chrome-less glyph normally wants: muted at rest, primary
+    /// under the pointer.</summary>
+    public static readonly ButtonStyle BareMuted =
+        Bare(state => Theme.Color(s => state.Hovered.Value ? s.Palette.TextPrimary : s.Palette.TextMuted));
+
     /// <summary>A bordered chip with a transparent fill: the border and glyph/label take <paramref name="select"/>'s
     /// accent (dimmed when disabled, subtle surface on hover). The secondary look beside a <see cref="Filled"/>
     /// primary — one solid call-to-action, the rest outlined.</summary>

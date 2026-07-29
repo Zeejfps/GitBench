@@ -126,6 +126,8 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null) => inner.GetDiff(repo, path, side, commitSha, baseSha);
     public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null) => inner.GetFileText(repo, path, side, oldSide, commitSha, baseSha);
     public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null) => inner.GetFileBytes(repo, path, side, oldSide, maxBytes, commitSha, baseSha);
+    public bool IsPathTracked(Repo repo, string relativePath) => inner.IsPathTracked(repo, relativePath);
+    public bool IsPathIgnored(Repo repo, string relativePath) => inner.IsPathIgnored(repo, relativePath);
     public RepoOperationState GetOperationState(Repo repo) => inner.GetOperationState(repo);
     public RepoOperation? GetOperation(Repo repo) => inner.GetOperation(repo);
     public bool HasUnmergedPaths(Repo repo) => inner.HasUnmergedPaths(repo);

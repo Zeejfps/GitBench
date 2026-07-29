@@ -29,5 +29,28 @@ public sealed record Preferences
     public bool HideRemoteOnlyBranches { get; init; }
     public bool EnableUntrackedCache { get; init; }
 
+    /// <summary>Which model provider the assistant talks to. Null until one is chosen, which reads
+    /// as the default provider.</summary>
+    public string? AssistantProviderId { get; init; }
+
+    /// <summary>What each provider was last given, so selecting one restores the model and endpoint
+    /// used with it rather than starting from its defaults every time.</summary>
+    public IReadOnlyList<AssistantProviderPreference> AssistantProviderPreferences { get; init; } = [];
+
+    /// <summary>The assistant panel's size, remembered the way a window's is — one placement for the
+    /// app, not one per session or per repository.</summary>
+    public float AssistantPanelWidth { get; init; } = 380f;
+    public float AssistantPanelHeight { get; init; } = 460f;
+
+    /// <summary>Where the panel was left, measured from the host's top leading corner. Null until it
+    /// has been moved once, which reads as the resting spot in the top trailing corner.</summary>
+    public float? AssistantPanelX { get; init; }
+    public float? AssistantPanelY { get; init; }
+
     public static Preferences Default { get; } = new();
 }
+
+/// <summary>The model and endpoint remembered for one assistant provider. Null on either means the
+/// provider's own default. Held as plain strings so the preferences layer stays free of assistant
+/// types.</summary>
+public sealed record AssistantProviderPreference(string ProviderId, string? Model, string? BaseUrl);

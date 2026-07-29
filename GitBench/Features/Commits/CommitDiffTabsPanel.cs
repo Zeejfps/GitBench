@@ -180,7 +180,8 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
         var diffView = new Provide<DiffViewModel>
         {
             Value = tab.Diff,
-            Child = new DiffView(),
+            // The main window's diff, and the only one with the assistant overlay above it.
+            Child = new DiffView { AssistantActions = true },
         }.BuildView(_ctx);
         var header = new Provide<DiffViewModel>
         {

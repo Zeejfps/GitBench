@@ -11,7 +11,7 @@ namespace GitBench.Features.Markdown.Rendering;
 /// (<see cref="IProvidesCursor"/>, read by the input system while this controller is the hovered
 /// target) and recolors the link via <see cref="RichTextView.SetHoveredLink"/>; a left click on an
 /// http(s) link segment opens its url through <see cref="IPlatformShell.OpenUrl"/> and consumes
-/// the press. Any other url is inert — no cursor, no hover, no open. Everything routes through
+/// the release. Any other url is inert — no cursor, no hover, no open. Everything routes through
 /// <see cref="OpenableLinkAt"/>, so hit-testing lives in one place. Attached by
 /// <see cref="RichText"/> per mounted lifetime, the diff pane's <c>DiffMouseController</c>
 /// pattern.
@@ -20,6 +20,9 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
 {
     private readonly RichTextView _view;
     private readonly IPlatformShell _shell;
+
+    private string? _pressedUrl;
+    private PointF _pressPoint;
 
     public LinkController(RichTextView view, IPlatformShell shell)
     {
@@ -43,20 +46,46 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
     public override void OnMouseMoved(ref MouseMoveEvent e)
     {
         if (e.Phase != EventPhase.Capturing) return;
+        if (_pressedUrl != null && Travelled(e.Mouse.Point)) _pressedUrl = null;
         UpdateHover(e.Mouse.Point);
     }
 
-    public override void OnMouseExit(ref MouseExitEvent e) => _view.SetHoveredLink(null);
+    public override void OnMouseExit(ref MouseExitEvent e)
+    {
+        _pressedUrl = null;
+        _view.SetHoveredLink(null);
+    }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Capturing) return;
-        // Open on the press alone so a click (press + release) opens exactly once.
-        if (e.Button != MouseButton.Left || e.State != InputState.Pressed) return;
+        if (e.Button != MouseButton.Left) return;
 
-        if (OpenableLinkAt(e.Mouse.Point) is not { } url) return;
+        if (e.State == InputState.Pressed)
+        {
+            // The press is only armed, never acted on: link text has to stay draggable, and it is
+            // the travel before the release that decides whether the reader was following the link
+            // or quoting it.
+            _pressedUrl = OpenableLinkAt(e.Mouse.Point);
+            _pressPoint = e.Mouse.Point;
+            return;
+        }
+
+        var url = _pressedUrl;
+        _pressedUrl = null;
+        if (url == null || Travelled(e.Mouse.Point)) return;
+        if (OpenableLinkAt(e.Mouse.Point) != url) return;
+
         Open(url);
         e.Consume();
+    }
+
+    // The pointer has left the press behind, so the gesture is a drag and belongs to the selection
+    // controller — which recognizes it against the same threshold.
+    private bool Travelled(PointF point)
+    {
+        var threshold = MarkdownSelectionController.DragThreshold;
+        return (point - _pressPoint).LengthSquared() >= threshold * threshold;
     }
 
     // IPlatformShell.OpenUrl is contracted not to throw, but the shell is injected and this runs

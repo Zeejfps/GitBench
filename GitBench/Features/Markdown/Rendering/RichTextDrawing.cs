@@ -34,12 +34,21 @@ internal static class RichTextDrawing
     /// segments.</summary>
     public const float ChipCornerRadius = 3f;
 
+    /// <summary>The layer a surface paints a selection band into, relative to a segment's
+    /// <paramref name="z"/>: above the inline-code chip, so a chip cannot paint the highlight out,
+    /// and below the glyphs, so selected text stays readable.</summary>
+    public const int SelectionLayer = 1;
+
+    /// <summary>Where a segment's decorations and glyphs draw, relative to its background layer —
+    /// two above, leaving <see cref="SelectionLayer"/> free between them.</summary>
+    public const int TextLayer = 2;
+
     /// <summary>
     /// Draws one laid-out segment, bottom layer first: the inline-code chip (when the run is code
-    /// and <paramref name="chipBackground"/> is nonzero) at <paramref name="z"/>, strictly below
-    /// the decoration rules and the text at <paramref name="z"/> + 1. The rules are independent —
-    /// a struck link draws both — and draw in the drawn text color, i.e. <paramref name="style"/>'s,
-    /// so a hover recolor carries them along.
+    /// and <paramref name="chipBackground"/> is nonzero) at <paramref name="z"/>, then the
+    /// decoration rules and the text at <paramref name="z"/> + <see cref="TextLayer"/>. The rules
+    /// are independent — a struck link draws both — and draw in the drawn text color, i.e.
+    /// <paramref name="style"/>'s, so a hover recolor carries them along.
     /// </summary>
     public static void DrawSegment(
         ICanvas c,
@@ -58,7 +67,7 @@ internal static class RichTextDrawing
             {
                 Position = rect,
                 Style = chipStyle,
-                ZIndex = z, // strictly below the segment's text
+                ZIndex = z,
             });
         }
 
@@ -71,7 +80,7 @@ internal static class RichTextDrawing
                 End = new PointF(rect.Right, y),
                 Thickness = UnderlineThickness,
                 Color = style.TextColor.Value,
-                ZIndex = z + 1,
+                ZIndex = z + TextLayer,
             });
         }
 
@@ -84,7 +93,7 @@ internal static class RichTextDrawing
                 End = new PointF(rect.Right, y),
                 Thickness = StrikeThickness,
                 Color = style.TextColor.Value,
-                ZIndex = z + 1,
+                ZIndex = z + TextLayer,
             });
         }
 
@@ -93,7 +102,7 @@ internal static class RichTextDrawing
             Position = rect,
             Text = text,
             Style = style,
-            ZIndex = z + 1,
+            ZIndex = z + TextLayer,
         });
     }
 

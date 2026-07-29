@@ -1,3 +1,5 @@
+using ZGF.Observable;
+
 namespace GitBench.Features.Review;
 
 /// <summary>
@@ -11,6 +13,11 @@ namespace GitBench.Features.Review;
 /// </summary>
 internal interface IReviewProgressStore
 {
+    /// <summary>Bumped on every change to a Viewed mark, whoever made it. A branch's marks can be
+    /// written by something other than the window showing them — the assistant's mark_viewed — and
+    /// without this those windows would keep drawing the marks they last read.</summary>
+    IReadable<int> MarksRevision { get; }
+
     /// <summary>Whether <paramref name="path"/> is marked Viewed at exactly <paramref name="contentId"/>
     /// — a mark made against a different content identity (the file has since changed) reads false.</summary>
     bool IsViewed(Guid repoId, string headRef, string path, string? contentId);
@@ -35,6 +42,10 @@ internal sealed class ReviewProgressStore : IReviewProgressStore
     // (repo, head ref) → the base ref the reviewer last explicitly picked for that branch.
     private readonly Dictionary<(Guid RepoId, string HeadRef), string> _preferredBases = new();
 
+    private readonly State<int> _marksRevision = new(0);
+
+    public IReadable<int> MarksRevision => _marksRevision;
+
     public bool IsViewed(Guid repoId, string headRef, string path, string? contentId) =>
         _byBranch.TryGetValue((repoId, headRef), out var marks)
         && marks.TryGetValue(path, out var viewedAt)
@@ -53,6 +64,8 @@ internal sealed class ReviewProgressStore : IReviewProgressStore
         {
             marks.Remove(path);
         }
+
+        _marksRevision.Value++;
     }
 
     public string? PreferredBase(Guid repoId, string headRef) =>

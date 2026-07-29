@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Assistant;
 using GitBench.Features.Operations;
 using GitBench.Features.StatusBar;
 using GitBench.Localization;
@@ -25,6 +26,11 @@ namespace GitBench.Features.LocalChanges;
 /// </summary>
 internal sealed record CommitBarWidget : Widget
 {
+    /// <summary>Ids so automation can address the assistant entry point on either bar.</summary>
+    public const string AssistantButtonId = "commit-assistant";
+
+    public const string MergeAssistantButtonId = "merge-commit-assistant";
+
     private const float CommitButtonWidth = 120f;
     private const float DescriptionMinHeight = 0f;
     private const float DescriptionMaxHeight = 240f;
@@ -47,6 +53,7 @@ internal sealed record CommitBarWidget : Widget
         var input = ctx.Require<InputSystem>();
         var loc = ctx.Localization();
         var operation = ctx.Require<OperationViewModel>();
+        var assistant = ctx.Require<AssistantViewModel>();
 
         // Ids so automation (GuiDriver, the MCP server) can address the fields by name.
         var titleInput = new TextInputView(ctx.Canvas)
@@ -109,24 +116,30 @@ internal sealed record CommitBarWidget : Widget
 
         IWidget[] ColumnRows()
         {
-            var rows = new List<IWidget>(5);
+            var rows = new List<IWidget>(6);
             if (ShowOperationChrome) rows.Add(new OperationStatusHeader());
             rows.Add(new ErrorBarView { Message = vm.OpError });
+            rows.Add(new ErrorBarView { Message = assistant.CommitMessageError });
             rows.Add(TitleBox(titleInput));
             rows.Add(new Raw { View = descriptionField });
             rows.Add(ButtonRow());
             return rows.ToArray();
         }
 
-        // Commit button always anchors the right edge (via the grow spacer); the normal bar puts the
-        // amend toggle at the left, the merge bar puts the abort button to the commit's right.
+        // Commit button always anchors the right edge (via the grow spacer), with the assistant's
+        // menu beside it; the normal bar puts the amend toggle at the left, the merge bar puts the
+        // abort button to the commit's right.
         IWidget ButtonRow()
         {
-            var children = new List<IWidget>(4);
+            var children = new List<IWidget>(5);
             if (!ShowOperationChrome)
                 children.Add(new CheckboxWidget { Label = L.T(s => s.LocalchangesAmendCheckbox), Checked = amend }
                     .WithController<KbmController>());
             children.Add(new Grow { Child = Empty.Widget });
+            children.Add(new CommitAssistantButton
+            {
+                Id = ShowOperationChrome ? MergeAssistantButtonId : AssistantButtonId,
+            });
             children.Add(new Raw { View = commitButton });
             if (ShowOperationChrome)
                 children.Add(AbortButton(operation));

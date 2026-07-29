@@ -29,7 +29,9 @@ public sealed record MarkdownStyles(
     // The header rule must read stronger than the row separator, so the two slots are distinct
     // colors (as well as thicknesses) — MarkdownWidgetTableTests pins them non-equal.
     uint TableHeaderRule,
-    uint TableRowSeparator);
+    uint TableRowSeparator,
+    // Highlight behind text a drag has selected inside one rendered markdown surface.
+    uint SelectionBackground);
 
 public partial record ThemeStyles
 {
@@ -54,5 +56,8 @@ public partial record ThemeStyles
             // Border, matching the thematic-break rule. Distinct colors on top of distinct
             // thicknesses keep the header reading heavier in both palettes.
             TableHeaderRule: p.BorderMuted,
-            TableRowSeparator: p.Border);
+            TableRowSeparator: p.Border,
+            // The same slot the text input's selection paints with, so selected prose reads
+            // identically wherever the reader drags across it.
+            SelectionBackground: p.Selection);
 }

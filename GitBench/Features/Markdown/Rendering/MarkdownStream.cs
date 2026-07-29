@@ -30,9 +30,11 @@ internal sealed record MarkdownStream : Widget
     /// VM feeds it); this widget only binds it.</summary>
     public required MarkdownBlockList Source { get; init; }
 
-    protected override IWidget Build(Context ctx) =>
-        Each.Of(Source.Blocks, new BlockRow(), gap: MarkdownWidget.BlockGap)
-            with { CrossAxis = CrossAxisAlignment.Stretch };
+    protected override IWidget Build(Context ctx) => new MarkdownSelectionLayer
+    {
+        Child = Each.Of(Source.Blocks, new BlockRow(), gap: MarkdownWidget.BlockGap)
+            with { CrossAxis = CrossAxisAlignment.Stretch },
+    };
 
     /// <summary>The per-row template: resolves its block from the item scope <c>Each</c> creates
     /// and defers to <see cref="MarkdownWidget.BlockWidget"/>. A row's view is only ever rebuilt

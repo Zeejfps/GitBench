@@ -40,7 +40,7 @@ internal sealed record IdentityDeleteConfirmPopup : Widget
             BackgroundColor = 0xB0000000,
             BorderRadius = BorderRadiusStyle.All(DialogFrame.DefaultBorderRadius),
         };
-        backdrop.UseController(input, () => new DialogInputBlockingController());
+        backdrop.UseController(input, () => new SurfacePointerBlocker { BubblingOnly = false });
 
         var root = new ContainerView
         {

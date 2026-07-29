@@ -83,7 +83,7 @@ public sealed class DialogSurfaceView : ContainerView
         {
             BackgroundColor = 0xB0000000,
         };
-        backdrop.UseController(_input, new DialogInputBlockingController());
+        backdrop.UseController(_input, new SurfacePointerBlocker { BubblingOnly = false });
         overlay.Children.Add(backdrop);
         overlay.Children.Add(new CenterView { Children = { dialog } });
 
@@ -165,23 +165,5 @@ public sealed class DialogSurfaceView : ContainerView
             }
             CompletedHandler = null;
         }
-    }
-}
-
-internal sealed class DialogInputBlockingController : KeyboardMouseController
-{
-    public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
-    {
-        e.Consume();
-    }
-
-    public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-    {
-        e.Consume();
-    }
-
-    public override void OnMouseMoved(ref MouseMoveEvent e)
-    {
-        e.Consume();
     }
 }

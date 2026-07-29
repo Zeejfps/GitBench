@@ -26,6 +26,11 @@ internal static class PlatformServices
             // registers the right one for the current platform under IFilePicker.
             context.AddNativeFilePicker();
 
+            // Same deal for the OS credential store (DPAPI / Keychain / Secret Service), under
+            // ISecretStore. The folder name is the app's stable identity: change it and saved
+            // secrets stop resolving.
+            context.AddNativeSecretStore(AppIdentity.DataFolderName);
+
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());

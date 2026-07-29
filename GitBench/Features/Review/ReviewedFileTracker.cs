@@ -19,6 +19,7 @@ internal sealed class BranchReviewedFiles : IReviewedFileTracker, IDisposable
     private readonly Guid _repoId;
     private readonly string _headRef;
     private readonly State<int> _revision = new(0);
+    private readonly IDisposable _storeChanged;
 
     private IReadOnlyDictionary<string, string?> _fingerprints = NoFingerprints;
 
@@ -27,6 +28,9 @@ internal sealed class BranchReviewedFiles : IReviewedFileTracker, IDisposable
         _store = store;
         _repoId = repoId;
         _headRef = headRef;
+        // Every mark change is the store's, whether this window made it or the assistant did, so the
+        // revision follows the store rather than only the calls that came through here.
+        _storeChanged = store.MarksRevision.Subscribe(_ => _revision.Value++);
     }
 
     public IReadable<int> Revision => _revision;
@@ -38,15 +42,12 @@ internal sealed class BranchReviewedFiles : IReviewedFileTracker, IDisposable
         var contentId = Fingerprint(path);
         var viewed = _store.IsViewed(_repoId, _headRef, path, contentId);
         _store.SetViewed(_repoId, _headRef, path, contentId, !viewed);
-        _revision.Value++;
     }
 
     public void SetViewed(IReadOnlyList<string> paths, bool viewed)
     {
-        if (paths.Count == 0) return;
         foreach (var path in paths)
             _store.SetViewed(_repoId, _headRef, path, Fingerprint(path), viewed);
-        _revision.Value++;
     }
 
     // Adopts the loaded range's per-file content identities. A file whose identity shifted (or dropped
@@ -61,5 +62,9 @@ internal sealed class BranchReviewedFiles : IReviewedFileTracker, IDisposable
     private string? Fingerprint(string path) =>
         _fingerprints.TryGetValue(path, out var contentId) ? contentId : null;
 
-    public void Dispose() => _revision.Dispose();
+    public void Dispose()
+    {
+        _storeChanged.Dispose();
+        _revision.Dispose();
+    }
 }

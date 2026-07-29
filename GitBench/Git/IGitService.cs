@@ -82,6 +82,13 @@ public interface IGitService
     // binary content survives. Backs the diff view's image preview. Returns null when that side
     // has no content, on any failure, or when the blob exceeds maxBytes.
     byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null);
+    // Whether git tracks a repo-relative working-tree path (`git ls-files --error-unmatch`).
+    // The assistant's file reads resolve through this instead of the filesystem, so an untracked
+    // file — a stray .env, a scratch dump — is invisible to them.
+    bool IsPathTracked(Repo repo, string relativePath);
+    // Whether the ignore rules match a path, asked with `--no-index` so the answer is the rules'
+    // and not "it is tracked, so no".
+    bool IsPathIgnored(Repo repo, string relativePath);
     RepoOperationState GetOperationState(Repo repo);
     RepoOperation? GetOperation(Repo repo);
     bool HasUnmergedPaths(Repo repo);
