@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Platform;
 using Xunit;
@@ -26,10 +27,16 @@ public class LinkControllerTests
     private sealed class FakeShell : IPlatformShell
     {
         public readonly List<string> OpenedUrls = new();
+        public Exception? OpenUrlThrows;
         public void OpenFolder(string path) { }
         public void OpenTerminal(string path) { }
         public void OpenFile(string path) { }
-        public void OpenUrl(string url) => OpenedUrls.Add(url);
+
+        public void OpenUrl(string url)
+        {
+            OpenedUrls.Add(url);
+            if (OpenUrlThrows is { } e) throw e;
+        }
     }
 
     private static TextStyle Style(uint color) => new() { TextColor = color };
@@ -80,6 +87,22 @@ public class LinkControllerTests
             h.Click(80f, FirstLineY);
 
             Assert.Equal(new[] { "http://example.com/docs" }, shell.OpenedUrls);
+        }
+    }
+
+    // No browser registered, broken shell association: Process.Start throws, and the click path
+    // runs on the UI thread, so an escape would be a crash rather than a dead link.
+    [Fact]
+    public void ClickOnALinkSurvivesAShellThatFailsToLaunch()
+    {
+        var (h, _, shell) = Create(Sample());
+        using (h)
+        {
+            shell.OpenUrlThrows = new Win32Exception("no application is associated");
+
+            h.Click(80f, FirstLineY);
+
+            Assert.Equal(new[] { Url }, shell.OpenedUrls);
         }
     }
 

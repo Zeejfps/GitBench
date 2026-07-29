@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 
@@ -25,7 +26,14 @@ public sealed class MacOSPlatformShell : IPlatformShell
         // `open` hands http(s) URLs to the default browser.
         var psi = new ProcessStartInfo("/usr/bin/open");
         psi.ArgumentList.Add(url);
-        using var _ = Process.Start(psi);
+        try
+        {
+            using var _ = Process.Start(psi);
+        }
+        catch (Win32Exception e)
+        {
+            Console.WriteLine($"[PlatformShell] Failed to open url '{url}': {e.Message}");
+        }
     }
 
     public void OpenTerminal(string path)

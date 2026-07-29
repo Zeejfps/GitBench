@@ -55,8 +55,22 @@ internal sealed class LinkController : KeyboardMouseController, IProvidesCursor
         if (e.Button != MouseButton.Left || e.State != InputState.Pressed) return;
 
         if (OpenableLinkAt(e.Mouse.Point) is not { } url) return;
-        _shell.OpenUrl(url);
+        Open(url);
         e.Consume();
+    }
+
+    // IPlatformShell.OpenUrl is contracted not to throw, but the shell is injected and this runs
+    // inside input dispatch, where anything that escapes takes the window down with it.
+    private void Open(string url)
+    {
+        try
+        {
+            _shell.OpenUrl(url);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[LinkController] Failed to open '{url}': {e.Message}");
+        }
     }
 
     private void UpdateHover(PointF point) => _view.SetHoveredLink(OpenableLinkAt(point));
