@@ -40,11 +40,13 @@ Follow the repo's stated rules (CLAUDE.md, project memory) on comment density, s
 ## Verify before reporting
 
 ```
-dotnet build GitBench\GitBench.csproj --artifacts-path <scratchpad>
+dotnet build GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 dotnet test  GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 ```
 
 Always the isolated artifacts path — never the default `obj/bin`. Never launch, stop, or restart GitBench; the user runs the app.
+
+**Build in batches, not after every edit.** The solution is 23 projects and a build dominates your loop — the tests do not, they carry barely a second of sleeps in total. Make a coherent set of related edits, then compile-check once. `GitBench.Tests` references `GitBench`, so building the test project alone type-checks both. Add `--no-restore` after the first restore, and don't build the `.sln` or `framework/` unless you changed framework code. Narrow iteration runs with `--filter`; run the full suite at the end so your reported result is a real whole-suite comparison against the baseline.
 
 Run the **full** relevant test project, not only the new tests — you need to know if you broke something. Never report green without having run it. If tests fail, show the actual output and say plainly which are red.
 

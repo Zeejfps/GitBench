@@ -76,10 +76,14 @@ When escalating an architectural question, make the case concretely — what the
 ## Build and run
 
 ```
-dotnet build GitBench\GitBench.csproj --artifacts-path <scratchpad>
+dotnet build GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 dotnet test  GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 ```
 
 Always the isolated artifacts path — never the default `obj/bin`. Never launch, stop, or restart GitBench; the user runs the app. Framework work belongs in `framework/ZGF.Gui.Tests` and friends, app work in `GitBench.Tests`.
+
+**Build in batches, not after every edit.** The solution is 23 projects, so a build is the most expensive thing in your loop — far more expensive than the tests, which carry barely a second of sleeps in total. Make a coherent set of related edits, then compile-check once. `GitBench.Tests` references `GitBench`, so building the test project alone type-checks both; you rarely need a separate `GitBench.csproj` build. Add `--no-restore` on iteration builds after the first restore, and never build the `.sln` or anything under `framework/` unless you actually changed framework code.
+
+While iterating, narrow the run with `--filter "FullyQualifiedName~YourClass"`. Run the full suite at phase boundaries and once before reporting — the final report still needs a whole-suite result compared against the baseline you took at the start.
 
 **Update your agent memory** with what makes this pipeline work better here: briefs that produced good or bad output, recurring seam disagreements and how the user resolved them, and stages that turned out to need more or less rigor than expected.

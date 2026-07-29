@@ -44,10 +44,12 @@ Put the test where the code under test lives. Framework behavior does not get te
 
 **Build and test commands** — always pass an isolated artifacts path so the user's IDE build is untouched:
 ```
-dotnet build GitBench\GitBench.csproj --artifacts-path <scratchpad>
+dotnet build GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 dotnet test GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 ```
 Never build into the default `obj/`/`bin/`. Never launch, stop, or restart GitBench itself — the user owns running the app.
+
+**Build in batches, not after every edit.** The solution is 23 projects, so the build — not the test run — is the expensive part of the loop. Write a coherent batch of tests, then compile-check once. `GitBench.Tests` references `GitBench`, so building the test project alone type-checks both. Add `--no-restore` after the first restore, and never build the `.sln` or `framework/` unless framework code changed. Use `--filter "FullyQualifiedName~YourClass"` while iterating on a suite, and the full run only once you're done.
 
 **Widget and view tests** go through `GuiTestHarness` (`ZGF.Gui.Testing`): headless, real input dispatch and hit-testing, `RecordingCanvas`/`RasterCanvas` for draw capture, clock control for animation, tree queries by `Id`, plus `HarnessAssertions` and `HeadlessContextMenuHost`. Drive real input (`harness.ClickOn("id")`) rather than calling handlers directly — routing is part of the contract. See `HarnessSmokeTests`, `VirtualWidgetListTests`, `DataGridEditLifecycleTests` for the idioms.
 

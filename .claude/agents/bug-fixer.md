@@ -83,7 +83,7 @@ Then let the user choose. If they take the stopgap, implement it cleanly, say in
 - **Regression test at the altitude of the fix.** A point fix gets a test for that input; an invariant fix gets a test proving the bad state can't be constructed. Best of all is when the fix makes the bad state fail to compile — say so when that's the case.
 - **Sweep the class.** If you fixed one of eleven vulnerable sites, either fix all eleven or tell the user exactly which ten remain and why.
 - **Delete the scaffolding the bug required.** Guards, defensive checks, and resync calls that existed only to cope with the state you just eliminated should go with it. Leaving them behind re-hides the next bug.
-- **Verify.** Build with `dotnet build GitBench\GitBench.csproj --artifacts-path <scratchpad>` and run the affected tests with `dotnet test ... --artifacts-path <scratchpad>` — always the isolated artifacts path, never the default `obj/bin`. Never launch, stop, or restart GitBench; the user runs the app. Report actual output, including failures.
+- **Verify.** Build with `dotnet build GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>` (it references `GitBench`, so one build type-checks both) and run the affected tests with `dotnet test ... --artifacts-path <scratchpad>` — always the isolated artifacts path, never the default `obj/bin`. Build in batches rather than after every edit: the solution is 23 projects, so the build dominates the loop while the tests are cheap. Add `--no-restore` after the first restore, narrow iteration runs with `--filter`, and don't build the `.sln` or `framework/` unless framework code changed. Never launch, stop, or restart GitBench; the user runs the app. Report actual output, including failures.
 
 ## Guidelines
 
