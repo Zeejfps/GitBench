@@ -64,6 +64,8 @@ public interface IGitService
     GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
     bool IsAncestor(Repo repo, string maybeAncestor, string descendant);
     GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
+    // Pushes an existing tag to remoteName, or to every configured remote when it is null.
+    GitOutcome PushTag(Repo repo, string name, string? remoteName = null);
     GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
     GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
     GitOutcome DeleteBranch(Repo repo, string name, bool force);

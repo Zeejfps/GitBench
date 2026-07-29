@@ -136,7 +136,7 @@ public sealed class AssistantRequestTests
             {
                 "commit", "create_tag", "get_branches", "get_commit_details", "get_commit_history",
                 "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
-                "get_review_stack", "get_status", "mark_viewed", "read_file",
+                "get_review_stack", "get_status", "mark_viewed", "push_tag", "read_file",
                 "set_commit_message", "stage_files", "unstage_files",
             },
             agent.AllowedTools.OrderBy(t => t, StringComparer.Ordinal));

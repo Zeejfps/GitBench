@@ -115,6 +115,7 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => inner.MoveBranch(repo, branchName, commitSha, checkout);
     public bool IsAncestor(Repo repo, string maybeAncestor, string descendant) => inner.IsAncestor(repo, maybeAncestor, descendant);
     public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes) => inner.CreateTag(repo, name, message, commitSha, pushToAllRemotes);
+    public GitOutcome PushTag(Repo repo, string name, string? remoteName = null) => inner.PushTag(repo, name, remoteName);
     public GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes) => inner.DeleteTag(repo, name, deleteFromRemotes);
     public GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force) => inner.RenameBranch(repo, oldName, newName, force);
     public GitOutcome DeleteBranch(Repo repo, string name, bool force) => inner.DeleteBranch(repo, name, force);

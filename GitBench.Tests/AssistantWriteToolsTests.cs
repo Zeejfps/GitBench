@@ -98,14 +98,18 @@ public sealed class AssistantWriteToolsTests : IDisposable
             {
                 "commit", "create_tag", "get_branches", "get_commit_details", "get_commit_history",
                 "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
-                "get_review_stack", "get_status", "mark_viewed", "read_file",
+                "get_review_stack", "get_status", "mark_viewed", "push_tag", "read_file",
                 "set_commit_message", "stage_files", "unstage_files",
             },
             _toolset.Tools.Select(t => t.Name));
 
         var writes = _toolset.Tools.Where(t => t.IsWrite).Select(t => t.Name).ToArray();
         Assert.Equal(
-            new[] { "commit", "create_tag", "mark_viewed", "set_commit_message", "stage_files", "unstage_files" },
+            new[]
+            {
+                "commit", "create_tag", "mark_viewed", "push_tag", "set_commit_message",
+                "stage_files", "unstage_files",
+            },
             writes);
         Assert.All(_toolset.Tools, t => JsonDocument.Parse(t.JsonSchema).Dispose());
     }
@@ -331,6 +335,69 @@ public sealed class AssistantWriteToolsTests : IDisposable
 
         Assert.True(invocation.IsError);
         Assert.Empty(Tags());
+    }
+
+    // The failure the assistant actually walked into: it tagged without pushing, was then asked to
+    // push, and had nothing but create_tag to reach for. The error has to hand it the tool that can.
+    [Fact]
+    public void CreateTag_OnANameThatIsAlreadyTaken_PointsAtPushTag()
+    {
+        Invoke("create_tag", """{"name":"v1.0.0"}""");
+
+        var invocation = Invoke("create_tag", """{"name":"v1.0.0","push":true}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Contains("push_tag", invocation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PushTag_PublishesATagThatWasCreatedWithoutPushing()
+    {
+        AddOrigin();
+        Invoke("create_tag", """{"name":"v1.0.0"}""");
+        Assert.Empty(GitOut(_root, "ls-remote", "--tags", "origin").Trim());
+
+        var invocation = Invoke("push_tag", """{"name":"v1.0.0","remote":"origin"}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Contains("refs/tags/v1.0.0", GitOut(_root, "ls-remote", "--tags", "origin"));
+    }
+
+    [Fact]
+    public void PushTag_WithoutARemote_ReachesEveryRemoteTheRepositoryHas()
+    {
+        AddOrigin();
+        Invoke("create_tag", """{"name":"v1.0.0","message":"ship it"}""");
+
+        var invocation = Invoke("push_tag", """{"name":"v1.0.0"}""");
+
+        Assert.False(invocation.IsError, invocation.Content);
+        Assert.Contains("refs/tags/v1.0.0", GitOut(_root, "ls-remote", "--tags", "origin"));
+        Assert.Contains("origin", invocation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PushTag_OnATagThatDoesNotExist_SaysSoRatherThanFailingAtTheRemote()
+    {
+        AddOrigin();
+
+        var invocation = Invoke("push_tag", """{"name":"v9.9.9"}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Contains("v9.9.9", invocation.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PushTag_ToARemoteTheRepositoryDoesNotHave_NamesTheOnesItDoes()
+    {
+        AddOrigin();
+        Invoke("create_tag", """{"name":"v1.0.0"}""");
+
+        var invocation = Invoke("push_tag", """{"name":"v1.0.0","remote":"upstream"}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Contains("origin", invocation.Content, StringComparison.Ordinal);
+        Assert.Empty(GitOut(_root, "ls-remote", "--tags", "origin").Trim());
     }
 
     private void AddOrigin()

@@ -48,7 +48,7 @@ internal sealed record AssistantWriteSurface(
 
 /// <summary>
 /// The tools that change one repository: staging, the commit message, the commit itself, and tagging
-/// a commit. Each one pauses the turn for the user's approval before it runs.
+/// a commit or publishing that tag. Each one pauses the turn for the user's approval before it runs.
 /// </summary>
 internal static class WriteTools
 {
@@ -71,6 +71,7 @@ internal static class WriteTools
         new SetCommitMessageTool(repo, surface),
         new CommitTool(git, repo, surface),
         new CreateTagTool(git, repo, surface),
+        new PushTagTool(git, repo),
     ];
 
     internal const string PathsSchema =
@@ -311,6 +312,13 @@ internal sealed class CreateTagTool : IAssistantTool
             return ToolInvocation.Error(
                 $"'{name}' is not a usable tag name: no whitespace, no leading '-', no '..' and no trailing '/'.");
 
+        // A tag that already exists is the common way this call fails, and the answer is almost
+        // always to publish the one that is there — which is a different tool.
+        if (_git.LoadDetails(_repo, "refs/tags/" + name) is Fetched<CommitDetails>.Ok existing)
+            return ToolInvocation.Error(
+                $"A tag named '{name}' already exists, on {ReadTools.ShortSha(existing.Value.Sha)}. "
+                + "Use push_tag to publish that one, or tag under another name.");
+
         var target = ToolJson.String(args, "commit_sha")?.Trim();
         // A revision reaches git as a positional argument, so one starting with '-' would be read as
         // an option rather than a commit.
@@ -355,5 +363,71 @@ internal sealed class CreateTagTool : IAssistantTool
                 writer.WriteStringValue(remote);
             writer.WriteEndArray();
         }));
+    }
+}
+
+/// <summary>
+/// Publishes a tag that already exists locally — the second half of <see cref="CreateTagTool"/>, for
+/// the tag that was created without it.
+/// </summary>
+/// <remarks>
+/// Tagging and publishing are one call when the person asks for both up front, and two when they
+/// decide to publish afterwards; without this tool the only way to reach a remote is to create the
+/// tag again, which the tag already existing makes impossible.
+/// </remarks>
+internal sealed class PushTagTool : IAssistantTool
+{
+    private readonly IGitService _git;
+    private readonly Repo _repo;
+
+    public PushTagTool(IGitService git, Repo repo)
+    {
+        _git = git;
+        _repo = repo;
+    }
+
+    public string Name => "push_tag";
+
+    public string Description =>
+        "Pushes a tag that already exists to a remote — 'origin' unless remote names another one, "
+        + "and every configured remote when it is omitted. This is how a tag created without push "
+        + "gets published; nothing else about the repository moves.";
+
+    public string JsonSchema =>
+        """
+        {"type":"object","properties":{"name":{"type":"string","description":"The existing tag's name."},"remote":{"type":"string","description":"Remote to push to. Omit to push to every configured remote."}},"required":["name"],"additionalProperties":false}
+        """;
+
+    public bool IsWrite => true;
+
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
+    {
+        var name = ToolJson.String(args, "name")?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+            return Task.FromResult(ToolInvocation.Error("Argument 'name' is required."));
+
+        var configured = _git.GetRemoteNames(_repo);
+        if (configured.Count == 0)
+            return Task.FromResult(ToolInvocation.Error("This repository has no remotes, so there is nowhere to push."));
+
+        var remote = ToolJson.String(args, "remote")?.Trim();
+        if (remote is { Length: > 0 } && !configured.Contains(remote))
+            return Task.FromResult(ToolInvocation.Error(
+                $"'{remote}' is not a remote of this repository. It has: {string.Join(", ", configured)}."));
+
+        if (_git.PushTag(_repo, name, remote) is GitOutcome.Failed failed)
+            return Task.FromResult(ToolInvocation.Error(failed.Message));
+
+        IReadOnlyList<string> reached = remote is { Length: > 0 } named ? [named] : configured;
+        return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
+        {
+            writer.WriteBoolean("ok", true);
+            writer.WriteString("name", name);
+            writer.WritePropertyName("pushed_to");
+            writer.WriteStartArray();
+            foreach (var pushed in reached)
+                writer.WriteStringValue(pushed);
+            writer.WriteEndArray();
+        })));
     }
 }

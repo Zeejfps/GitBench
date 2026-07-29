@@ -2260,6 +2260,32 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return GitOutcome.Ok;
         });
 
+    // Publishes a tag that already exists locally (`git push <remote> refs/tags/<name>`) — to
+    // remoteName, or to every configured remote when it is null, which is the reach CreateTag's
+    // push flag has. Network-only: nothing local moves, so it takes the remote lock and can run
+    // alongside work in the index.
+    public GitOutcome PushTag(Repo repo, string name, string? remoteName = null)
+        => RunRemoteOperation(repo, () =>
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                return new GitOutcome.Failed("Tag name is required.");
+
+            if (RunGit(repo.Path, out _, "rev-parse", "--verify", "--quiet", "refs/tags/" + name) is null)
+                return new GitOutcome.Failed($"There is no tag named '{name}' in this repository.");
+
+            var remotes = remoteName is { Length: > 0 } named ? [named] : GetRemoteNames(repo);
+            if (remotes.Count == 0)
+                return new GitOutcome.Failed("This repository has no remotes configured.");
+
+            foreach (var remote in remotes)
+            {
+                var (pushed, error) = RunMutation(repo.Path, new[] { "push", remote, "refs/tags/" + name });
+                if (!pushed) return new GitOutcome.Failed(error ?? $"Failed to push tag to '{remote}'.");
+            }
+
+            return GitOutcome.Ok;
+        });
+
     // Deletes a tag locally (`git tag -d`). When deleteFromRemotes is set, the tag is also
     // removed from every configured remote (`git push <remote> --delete refs/tags/<name>`) —
     // mirroring CreateTag's push-to-all-remotes loop. Local deletion happens first; a later
