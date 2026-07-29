@@ -53,7 +53,8 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         Text,
     }
 
-    // The one copy of the dispatch order (ParseBlocks dispatches on it, paragraphs end on it).
+    // The one copy of the dispatch order (ParseBlocks dispatches on it, paragraphs and lists end
+    // on it).
     // The order is load-bearing: break before list so "- - -" reads as a rule, not a one-item
     // list. Classification is cheap — block construction (including inline parsing) happens only
     // in ParseBlocks' dispatch.
@@ -304,8 +305,11 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
         var baseIndent = first.Indent;
         var items = new List<ListItem>();
 
-        // A marker of the other type (ordered vs. unordered) at this indent starts a new list.
+        // Continuation runs through Classify so the dispatch order holds here too: a line the
+        // scanner would read as something else (a spaced "- - -" rule) ends the list rather than
+        // becoming an item. A marker of the other type (ordered vs. unordered) starts a new list.
         while (i < lines.Count
+               && Classify(lines, i) == LineKind.ListItem
                && TryParseListMarker(lines[i], out var marker)
                && marker.Indent <= baseIndent
                && marker.Ordered == first.Ordered)

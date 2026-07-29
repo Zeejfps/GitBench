@@ -540,6 +540,31 @@ public class BlockParserTests
         Assert.DoesNotContain(doc.Blocks, b => b is HeadingBlock);
     }
 
+    [Theory]
+    [InlineData("- item\n---")]
+    [InlineData("- item\n- - -")]
+    [InlineData("* item\n***")]
+    [InlineData("* item\n* * *")]
+    public void BreakAfterListItemEndsTheList(string markdown)
+    {
+        // The spaced forms also parse as a list marker; the break wins, so the list ends here.
+        var doc = Parse(markdown);
+        Assert.Equal(2, doc.Blocks.Count);
+        var list = Assert.IsType<ListBlock>(doc.Blocks[0]);
+        Assert.Equal("item", ItemText(Assert.Single(list.Items)));
+        Assert.IsType<ThematicBreakBlock>(doc.Blocks[1]);
+    }
+
+    [Fact]
+    public void IndentedBreakStaysInsideTheListItem()
+    {
+        var list = SingleBlock<ListBlock>("- item\n  - - -");
+        var item = Assert.Single(list.Items);
+        Assert.Equal(2, item.Blocks.Count);
+        Assert.Equal("item", RawText(Assert.IsType<ParagraphBlock>(item.Blocks[0]).Runs));
+        Assert.IsType<ThematicBreakBlock>(item.Blocks[1]);
+    }
+
     [Fact]
     public void BreakSeparatesParagraphs()
     {
