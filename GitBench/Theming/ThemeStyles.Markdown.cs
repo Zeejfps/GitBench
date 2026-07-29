@@ -24,7 +24,12 @@ public sealed record MarkdownStyles(
     uint QuoteBar,
     uint QuoteText,
     // Thematic break rule color.
-    uint Rule);
+    uint Rule,
+    // Table (Step 6): the heavier rule under the header row and the hairline between body rows.
+    // The header rule must read stronger than the row separator, so the two slots are distinct
+    // colors (as well as thicknesses) — MarkdownWidgetTableTests pins them non-equal.
+    uint TableHeaderRule,
+    uint TableRowSeparator);
 
 public partial record ThemeStyles
 {
@@ -42,5 +47,10 @@ public partial record ThemeStyles
             CodeBlockText: p.TextPrimary,
             QuoteBar: p.BorderMuted,
             QuoteText: p.TextSecondary,
-            Rule: p.Border);
+            Rule: p.Border,
+            // Step 6 placeholders: intentionally identical so the table tests stay red until the
+            // implementer picks a stronger header rule and a lighter row separator (e.g. Border
+            // over BorderMuted). Kept non-zero so the Step 5 every-slot-non-zero pins stay green.
+            TableHeaderRule: p.Border,
+            TableRowSeparator: p.Border);
 }

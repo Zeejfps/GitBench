@@ -31,7 +31,9 @@ public class InlineRunBuilderTests
         CodeBlockText: 0xFFD0D0D0,
         QuoteBar: 0xFF446688,
         QuoteText: 0xFF8899AA,
-        Rule: 0xFF555555);
+        Rule: 0xFF555555,
+        TableHeaderRule: 0xFF666666,
+        TableRowSeparator: 0xFF444444);
 
     private static IReadOnlyList<RichTextRun> Build(params InlineRun[] runs) =>
         InlineRunBuilder.Build(runs, Styles, BodySize, BaseColor);
