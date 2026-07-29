@@ -22,9 +22,9 @@ namespace GitBench.Features.Markdown.Rendering;
 /// gutter ("•" bullets, "n." numbers honoring <c>Start</c>, display-only Lucide
 /// square/check-square glyphs for task items) plus nested, indented children; blockquotes →
 /// themed accent bar + inset children, nesting stacks bars/insets; thematic break → thin themed
-/// rule; code blocks → <see cref="CodeBlockWidget"/>. <c>TableBlock</c> is Step 6: it renders as
-/// a skipped block (no output) — pinned only as "a document containing a table renders its other
-/// blocks and never throws", so Step 6 can drop the real table in without touching Step 5 tests.
+/// rule; code blocks → <see cref="CodeBlockWidget"/>; tables → <see cref="MarkdownTable"/>
+/// (auto-sized columns in a horizontal scroll fallback, pinned by
+/// <c>MarkdownWidgetTableTests</c>). Anything unknown renders as a skipped block, never a throw.
 /// </para>
 /// <para>
 /// Context: theme via <c>ctx.Theme()</c>, localization via <c>L.T</c> (copy button), optional
@@ -71,9 +71,9 @@ internal sealed record MarkdownWidget : Widget
             CodeBlock code => new CodeBlockWidget { Block = code },
             ListBlock list => List(list, bodyColor),
             QuoteBlock quote => Quote(quote),
+            TableBlock table => new MarkdownTable { Block = table },
             ThematicBreakBlock => Rule(),
-            // TableBlock renders as a skipped block until Step 6 lands MarkdownTable; anything
-            // unknown degrades the same way rather than throwing.
+            // Anything unknown degrades to a skipped block rather than throwing.
             _ => null,
         };
 

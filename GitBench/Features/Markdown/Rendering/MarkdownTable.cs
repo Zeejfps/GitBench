@@ -1,4 +1,7 @@
+using GitBench.Controls;
 using GitBench.Features.Markdown.Parsing;
+using GitBench.Theming;
+using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
 
@@ -28,6 +31,78 @@ internal sealed record MarkdownTable : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        throw new NotImplementedException("Step 6: MarkdownTable.Build");
+        var block = Block;
+        return new HorizontalScrollArea
+        {
+            Child = new TableContent
+            {
+                Alignments = block.Columns,
+                Header = Prop.Deferred<IReadOnlyList<IReadOnlyList<RichTextRun>>>(c =>
+                    c.Theme().Styles.Bind(s => HeaderCells(block, s))),
+                Rows = Prop.Deferred<IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>>>(c =>
+                    c.Theme().Styles.Bind(s => RowCells(block, s))),
+                HeaderRuleColor = Theme.Color(s => s.Markdown.TableHeaderRule),
+                RowSeparatorColor = Theme.Color(s => s.Markdown.TableRowSeparator),
+                CodeChipBackground = Theme.Color(s => s.Markdown.CodeChipBackground),
+            },
+        };
+    }
+
+    /// <summary>Header cells as bold <c>TextStrong</c> runs — rebuilt per theme flip so the
+    /// colors track the active palette.</summary>
+    private static IReadOnlyList<IReadOnlyList<RichTextRun>> HeaderCells(
+        TableBlock block, ThemeStyles styles)
+    {
+        var cells = new IReadOnlyList<RichTextRun>[block.Header.Count];
+        for (var j = 0; j < cells.Length; j++)
+        {
+            cells[j] = InlineRunBuilder.Build(
+                block.Header[j], styles.Markdown, FontSize.Body, styles.Palette.TextStrong,
+                bold: true);
+        }
+        return cells;
+    }
+
+    /// <summary>Body cells as plain <c>TextBody</c> runs at Body size, inline styling flowing
+    /// through <see cref="InlineRunBuilder"/> exactly like paragraphs.</summary>
+    private static IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>> RowCells(
+        TableBlock block, ThemeStyles styles)
+    {
+        var rows = new IReadOnlyList<IReadOnlyList<RichTextRun>>[block.Rows.Count];
+        for (var i = 0; i < rows.Length; i++)
+        {
+            var row = block.Rows[i];
+            var cells = new IReadOnlyList<RichTextRun>[row.Count];
+            for (var j = 0; j < cells.Length; j++)
+            {
+                cells[j] = InlineRunBuilder.Build(
+                    row[j], styles.Markdown, FontSize.Body, styles.Palette.TextBody);
+            }
+            rows[i] = cells;
+        }
+        return rows;
+    }
+
+    /// <summary>The scroll area's content: constructs the view and applies the theme-bound props,
+    /// mirroring <see cref="RichText"/>'s CreateView shape.</summary>
+    private sealed record TableContent : Widget
+    {
+        public required IReadOnlyList<ColumnAlignment> Alignments { get; init; }
+        public Prop<IReadOnlyList<IReadOnlyList<RichTextRun>>> Header { get; init; }
+        public Prop<IReadOnlyList<IReadOnlyList<IReadOnlyList<RichTextRun>>>> Rows { get; init; }
+        public Prop<uint> HeaderRuleColor { get; init; }
+        public Prop<uint> RowSeparatorColor { get; init; }
+        public Prop<uint> CodeChipBackground { get; init; }
+
+        protected override View CreateView(Context ctx)
+        {
+            var view = new MarkdownTableView(ctx.Canvas) { Alignments = Alignments };
+            Header.Apply(ctx, view, static (v, cells) => v.Header = cells);
+            Rows.Apply(ctx, view, static (v, rows) => v.Rows = rows);
+            HeaderRuleColor.Apply(ctx, view, static (v, color) => v.HeaderRuleColor = color);
+            RowSeparatorColor.Apply(ctx, view, static (v, color) => v.RowSeparatorColor = color);
+            CodeChipBackground.Apply(ctx, view, static (v, color) => v.CodeChipBackground = color);
+            return view;
+        }
     }
 }

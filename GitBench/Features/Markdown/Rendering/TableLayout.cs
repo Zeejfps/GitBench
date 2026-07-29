@@ -75,17 +75,13 @@ internal static class TableLayout
 {
     /// <summary>The width of the widest unbreakable chunk of <paramref name="cell"/> — see the
     /// class doc for the operational definition. Empty (or all-empty-runs) cells measure 0.</summary>
-    public static float MinContentWidth(ICanvas canvas, IReadOnlyList<RichTextRun> cell)
-    {
-        throw new NotImplementedException("Step 6: TableLayout.MinContentWidth");
-    }
+    public static float MinContentWidth(ICanvas canvas, IReadOnlyList<RichTextRun> cell) =>
+        RichTextLayout.MeasureWidestChunk(canvas, cell);
 
     /// <summary>The cell's unwrapped width: <see cref="RichTextLayout.Layout"/> at non-positive
     /// maxWidth ('\n' still breaks), widest line. Empty cells measure 0.</summary>
-    public static float MaxContentWidth(ICanvas canvas, IReadOnlyList<RichTextRun> cell)
-    {
-        throw new NotImplementedException("Step 6: TableLayout.MaxContentWidth");
-    }
+    public static float MaxContentWidth(ICanvas canvas, IReadOnlyList<RichTextRun> cell) =>
+        RichTextLayout.Layout(canvas, cell, 0f).MaxLineWidth;
 
     /// <summary>Solves the column widths for a table — see the class doc for the algorithm.
     /// <paramref name="alignments"/> defines the column count; <paramref name="header"/> and every
@@ -98,6 +94,53 @@ internal static class TableLayout
         float availableWidth,
         float cellPaddingX)
     {
-        throw new NotImplementedException("Step 6: TableLayout.Measure");
+        var columnCount = alignments.Count;
+        var mins = new float[columnCount];
+        var maxes = new float[columnCount];
+        var minSum = 0f;
+        var maxSum = 0f;
+        for (var j = 0; j < columnCount; j++)
+        {
+            // Column-wise maxima over header + row cells. Per cell min <= max, and the maxima
+            // preserve the invariant, so a column's growth (max - min) is never negative.
+            var min = j < header.Count ? MinContentWidth(canvas, header[j]) : 0f;
+            var max = j < header.Count ? MaxContentWidth(canvas, header[j]) : 0f;
+            for (var r = 0; r < rows.Count; r++)
+            {
+                var row = rows[r];
+                if (j >= row.Count)
+                    continue;
+                min = Math.Max(min, MinContentWidth(canvas, row[j]));
+                max = Math.Max(max, MaxContentWidth(canvas, row[j]));
+            }
+            mins[j] = min;
+            maxes[j] = max;
+            minSum += min;
+            maxSum += max;
+        }
+
+        var padding = 2f * cellPaddingX * columnCount;
+        var contentAvail = availableWidth - padding;
+
+        // Unconstrained, or everything fits: every column at max-content.
+        if (availableWidth <= 0f || maxSum <= contentAvail)
+            return new TableColumns(maxes, alignments, TableFitMode.AllMax, maxSum + padding);
+
+        // Even the min-content widths overflow: stay at min, the widget scrolls the overhang.
+        if (minSum > contentAvail)
+            return new TableColumns(mins, alignments, TableFitMode.OverflowAtMin, minSum + padding);
+
+        // Distribute the remainder proportionally to each column's growth headroom, in exact
+        // float math — no pixel rounding — so the widths sum to contentAvail exactly, a column
+        // at max (or empty) never grows, and none overshoots its max (the remainder is strictly
+        // smaller than the total growth). growthSum > 0 here because maxSum > contentAvail >=
+        // minSum.
+        var remainder = contentAvail - minSum;
+        var growthSum = maxSum - minSum;
+        var widths = mins; // reuse: min is the distribution's base
+        for (var j = 0; j < columnCount; j++)
+            widths[j] = mins[j] + remainder * (maxes[j] - mins[j]) / growthSum;
+
+        return new TableColumns(widths, alignments, TableFitMode.Distributed, availableWidth);
     }
 }

@@ -60,19 +60,10 @@ internal static class RichTextLayout
     /// <paramref name="maxWidth"/>, measuring through <paramref name="canvas"/>.</summary>
     public static RichTextLayoutResult Layout(ICanvas canvas, IReadOnlyList<RichTextRun> runs, float maxWidth)
     {
-        var starts = new int[runs.Count + 1];
-        var total = 0;
-        for (var i = 0; i < runs.Count; i++)
-        {
-            starts[i] = total;
-            total += runs[i].Text.Length;
-        }
-        starts[runs.Count] = total;
-
-        if (total == 0)
+        if (!TryCreateMap(canvas, runs, out var map))
             return EmptyResult;
 
-        var map = new RunMap(canvas, runs, starts, Concatenate(runs, total));
+        var total = map.Text.Length;
 
         // Forced breaks first, mirroring TextWrapper.WrapRanges: a '\n' terminates a line and
         // belongs to none, so consecutive or trailing newlines yield empty (zero-length) ranges.
@@ -99,6 +90,76 @@ internal static class RichTextLayout
         }
 
         return new RichTextLayoutResult(lines, height, maxLineWidth);
+    }
+
+    /// <summary>
+    /// The width of the widest <i>unbreakable chunk</i> in <paramref name="runs"/> — the
+    /// narrowest width <see cref="Layout"/> can be given without ever force-splitting between
+    /// code points, which is exactly a table cell's min-content width (see
+    /// <see cref="TableLayout"/>). The chunk scan is <see cref="WrapForcedLine"/>'s, running over
+    /// the same concatenated view: spaces separate chunks and belong to none, a chunk extends
+    /// while no break opportunity exists between consecutive code points
+    /// (<see cref="BreakAllowedBetween"/> — separator punctuation ends its chunk, CJK breaks
+    /// per code point, kinsoku glues punctuation), a '\n' terminates a chunk, and a run seam is
+    /// not a break by itself. Every chunk is measured per run slice in that run's own style.
+    /// </summary>
+    public static float MeasureWidestChunk(ICanvas canvas, IReadOnlyList<RichTextRun> runs)
+    {
+        if (!TryCreateMap(canvas, runs, out var map))
+            return 0f;
+
+        var text = map.Text;
+        var end = text.Length;
+        var widest = 0f;
+        var i = 0;
+        while (i < end)
+        {
+            if (text[i] is ' ' or '\n')
+            {
+                i++;
+                continue;
+            }
+
+            var chunkStart = i;
+            var prev = ReadCodePoint(text, ref i, end);
+            while (i < end && text[i] != ' ' && text[i] != '\n')
+            {
+                var next = PeekCodePoint(text, i, end, out var nextLen);
+                if (BreakAllowedBetween(prev, next))
+                    break;
+                prev = next;
+                i += nextLen;
+            }
+
+            var width = map.MeasureRange(chunkStart, i);
+            if (width > widest)
+                widest = width;
+        }
+
+        return widest;
+    }
+
+    /// <summary>Builds the concatenated <see cref="RunMap"/> over <paramref name="runs"/>, or
+    /// returns false when the runs carry no text at all.</summary>
+    private static bool TryCreateMap(ICanvas canvas, IReadOnlyList<RichTextRun> runs, out RunMap map)
+    {
+        var starts = new int[runs.Count + 1];
+        var total = 0;
+        for (var i = 0; i < runs.Count; i++)
+        {
+            starts[i] = total;
+            total += runs[i].Text.Length;
+        }
+        starts[runs.Count] = total;
+
+        if (total == 0)
+        {
+            map = default;
+            return false;
+        }
+
+        map = new RunMap(canvas, runs, starts, Concatenate(runs, total));
+        return true;
     }
 
     /// <summary>

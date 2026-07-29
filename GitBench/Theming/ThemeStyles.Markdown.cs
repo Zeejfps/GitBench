@@ -48,9 +48,11 @@ public partial record ThemeStyles
             QuoteBar: p.BorderMuted,
             QuoteText: p.TextSecondary,
             Rule: p.Border,
-            // Step 6 placeholders: intentionally identical so the table tests stay red until the
-            // implementer picks a stronger header rule and a lighter row separator (e.g. Border
-            // over BorderMuted). Kept non-zero so the Step 5 every-slot-non-zero pins stay green.
-            TableHeaderRule: p.Border,
+            // The header rule rides BorderMuted — the palette's more visible border step in both
+            // modes (lighter than Border on dark, darker than Border on light) and the same
+            // accent the quote bar uses — while the row separator stays at the standard hairline
+            // Border, matching the thematic-break rule. Distinct colors on top of distinct
+            // thicknesses keep the header reading heavier in both palettes.
+            TableHeaderRule: p.BorderMuted,
             TableRowSeparator: p.Border);
 }
