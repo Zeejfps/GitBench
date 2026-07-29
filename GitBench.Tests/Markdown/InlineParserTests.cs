@@ -12,8 +12,9 @@ namespace GitBench.Tests.Markdown;
 /// <item>Hard break: two or more trailing spaces before a newline yield a run whose Text is
 /// exactly "\n", always unstyled (no flags, no link) — there is no LineBreak node in the AST, so
 /// the renderer treats a lone "\n" run as a break. The break-forming spaces are consumed. Soft
-/// breaks (a bare "\n") stay literal inside run text, and trailing spaces at end of input (no
-/// newline after them) stay literal too.</item>
+/// breaks (a bare "\n") collapse to a single space, taking the line's trailing spaces with them,
+/// so no run text but a hard break ever contains a "\n"; trailing spaces at end of input (no
+/// newline after them) stay literal.</item>
 /// <item>Merging: parsing never emits two adjacent runs with identical
 /// (Bold, Italic, Code, Strikethrough, LinkUrl), and never emits an empty-text run. Hard-break
 /// "\n" runs are the sole exception — they never merge into their neighbors.</item>
@@ -103,10 +104,12 @@ public class InlineParserTests
     }
 
     [Fact]
-    public void SoftBreakStaysLiteralInsideRunText()
+    public void SoftBreakBecomesASpaceInsideRunText()
     {
+        // A source line wrap is not a break the reader asked for: it renders as a space so the
+        // paragraph reflows to the width it is drawn at.
         var run = Assert.Single(Parse("line one\nline two"));
-        Assert.Equal(new InlineRun("line one\nline two"), run);
+        Assert.Equal(new InlineRun("line one line two"), run);
     }
 
     // ---------------------------------------------------------------- emphasis
@@ -179,8 +182,8 @@ public class InlineParserTests
     [Fact]
     public void DelimitersMatchAcrossSoftBreaks()
     {
-        // One paragraph is one inline text: emphasis spans the embedded "\n".
-        AssertRuns("*a\nb*", "I:a\nb");
+        // One paragraph is one inline text: emphasis spans the line ending.
+        AssertRuns("*a\nb*", "I:a b");
     }
 
     // ------------------------------------------------------------- inline code
@@ -418,10 +421,22 @@ public class InlineParserTests
     }
 
     [Fact]
-    public void SingleTrailingSpaceIsASoftBreakKeptVerbatim()
+    public void SingleTrailingSpaceIsASoftBreakAndDoesNotDoubleTheSpace()
     {
+        // One space is too few for a hard break; it is the line's trailing whitespace and goes
+        // away with the line ending, leaving the soft break's single space.
         var run = Assert.Single(Parse("a \nb"));
-        Assert.Equal(new InlineRun("a \nb"), run);
+        Assert.Equal(new InlineRun("a b"), run);
+    }
+
+    [Fact]
+    public void SoftAndHardBreaksProduceDifferentRuns()
+    {
+        // The two must never be confusable: only the hard break reaches the renderer as "\n".
+        Assert.Equal(new[] { new InlineRun("a b") }, Parse("a\nb"));
+        Assert.Equal(
+            new[] { new InlineRun("a"), new InlineRun("\n"), new InlineRun("b") },
+            Parse("a  \nb"));
     }
 
     [Fact]

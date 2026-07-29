@@ -232,6 +232,36 @@ public class MarkdownWidgetTests
     }
 
     [Fact]
+    public void SourceWrappedParagraphReflowsInsteadOfKeepingItsSourceLineBreaks()
+    {
+        // An 80-column README must not render with the author's line breaks frozen in: the source
+        // line ending is a soft break, so both lines join into one visual line when they fit.
+        var (h, _, _) = Create("alpha beta gamma\ndelta epsilon zeta");
+        using (h)
+        {
+            var canvas = h.Render();
+
+            Assert.Equal("alpha beta gamma delta epsilon zeta", canvas.Texts.Single().Inputs.Text);
+        }
+    }
+
+    [Fact]
+    public void SourceWrappedParagraphRewrapsToANarrowerPane()
+    {
+        // Narrow enough (15 characters at 8px) that the wrap points land inside the source lines,
+        // so one visual line spans the source line ending — impossible if it were still a break.
+        var (h, _, _) = Create("alpha beta gamma\ndelta epsilon zeta", width: 120);
+        using (h)
+        {
+            var canvas = h.Render();
+
+            Assert.Contains(canvas.Texts, t =>
+                t.Inputs.Text.Contains("gamma", StringComparison.Ordinal)
+                && t.Inputs.Text.Contains("delta", StringComparison.Ordinal));
+        }
+    }
+
+    [Fact]
     public void HardBreakSplitsAParagraphAcrossTwoLines()
     {
         var (h, _, _) = Create("alpha  \nbeta");

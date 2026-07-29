@@ -35,10 +35,11 @@ public class BlockInlineIntegrationTests
     [Fact]
     public void MultiLineParagraphIsInlineParsedAsOneText()
     {
-        // Consecutive lines join with "\n" before inline parsing, so emphasis may span the join.
+        // Consecutive lines join before inline parsing, so emphasis may span the join and the
+        // line ending resolves to a soft break's space.
         var para = SingleBlock<ParagraphBlock>("*a\nb* c");
         Assert.Equal(
-            new[] { new InlineRun("a\nb", Italic: true), new InlineRun(" c") },
+            new[] { new InlineRun("a b", Italic: true), new InlineRun(" c") },
             para.Runs);
     }
 

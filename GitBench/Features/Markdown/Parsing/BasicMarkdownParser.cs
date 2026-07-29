@@ -114,7 +114,8 @@ internal sealed class BasicMarkdownParser : IMarkdownParser
     private static ParagraphBlock ParseParagraph(IReadOnlyList<string> lines, ref int i)
     {
         // Leading whitespace is insignificant (indented code blocks are out of scope); trailing
-        // spaces survive for the inline parser's hard-break detection.
+        // spaces and the joining newline survive so the inline parser can tell a hard break from
+        // a soft one.
         var text = new StringBuilder(lines[i].TrimStart());
         i++;
         while (i < lines.Count && Classify(lines, i) == LineKind.Text)

@@ -7,7 +7,8 @@ namespace GitBench.Tests.Markdown;
 /// Block-grammar contract for <see cref="BasicMarkdownParser"/>. The inputs here are markup-free,
 /// so every paragraph, heading, and table cell must hold exactly one unstyled
 /// <see cref="InlineRun"/> (<see cref="RawText"/> asserts that shape). Consecutive paragraph
-/// lines join with "\n"; an empty table cell is an empty run list.
+/// lines join into one text whose line endings are soft breaks — they render as spaces, so the
+/// paragraph reflows; an empty table cell is an empty run list.
 /// </summary>
 public class BlockParserTests
 {
@@ -116,8 +117,9 @@ public class BlockParserTests
     [Fact]
     public void ConsecutiveLinesMergeIntoOneParagraph()
     {
+        // The source line endings are soft breaks: they render as spaces, not as forced breaks.
         var para = SingleBlock<ParagraphBlock>("line one\nline two\nline three");
-        Assert.Equal("line one\nline two\nline three", RawText(para.Runs));
+        Assert.Equal("line one line two line three", RawText(para.Runs));
     }
 
     [Fact]
@@ -153,7 +155,7 @@ public class BlockParserTests
     {
         // Indented code blocks are out of scope, so indentation is not significant here.
         var para = SingleBlock<ParagraphBlock>("  lead\n    indented");
-        Assert.Equal("lead\nindented", RawText(para.Runs));
+        Assert.Equal("lead indented", RawText(para.Runs));
     }
 
     [Fact]
@@ -174,7 +176,7 @@ public class BlockParserTests
         var doc = Parse("# h\r\n\r\npara\r\nmore");
         Assert.Equal(2, doc.Blocks.Count);
         Assert.Equal("h", RawText(Assert.IsType<HeadingBlock>(doc.Blocks[0]).Runs));
-        Assert.Equal("para\nmore", RawText(Assert.IsType<ParagraphBlock>(doc.Blocks[1]).Runs));
+        Assert.Equal("para more", RawText(Assert.IsType<ParagraphBlock>(doc.Blocks[1]).Runs));
     }
 
     // -------------------------------------------------------------- code fences
@@ -387,7 +389,7 @@ public class BlockParserTests
     {
         var list = SingleBlock<ListBlock>("- first\n  second\n- next");
         Assert.Equal(2, list.Items.Count);
-        Assert.Equal("first\nsecond", ItemText(list.Items[0]));
+        Assert.Equal("first second", ItemText(list.Items[0]));
         Assert.Equal("next", ItemText(list.Items[1]));
     }
 
@@ -425,7 +427,7 @@ public class BlockParserTests
     {
         var quote = SingleBlock<QuoteBlock>("> a\n> b");
         var para = Assert.IsType<ParagraphBlock>(Assert.Single(quote.Blocks));
-        Assert.Equal("a\nb", RawText(para.Runs));
+        Assert.Equal("a b", RawText(para.Runs));
     }
 
     [Fact]
@@ -586,7 +588,7 @@ public class BlockParserTests
         var doc = Parse("| a | b |\n| 1 | 2 |");
         Assert.DoesNotContain(doc.Blocks, b => b is TableBlock);
         var para = Assert.IsType<ParagraphBlock>(Assert.Single(doc.Blocks));
-        Assert.Equal("| a | b |\n| 1 | 2 |", RawText(para.Runs));
+        Assert.Equal("| a | b | | 1 | 2 |", RawText(para.Runs));
     }
 
     [Fact]
@@ -676,7 +678,7 @@ public class BlockParserTests
     public void RawHtmlStaysLiteralParagraphText()
     {
         var para = SingleBlock<ParagraphBlock>("<div>\nhello\n</div>");
-        Assert.Equal("<div>\nhello\n</div>", RawText(para.Runs));
+        Assert.Equal("<div> hello </div>", RawText(para.Runs));
     }
 
     [Fact]
@@ -694,7 +696,7 @@ public class BlockParserTests
         var doc = Parse("text\n===");
         Assert.DoesNotContain(doc.Blocks, b => b is HeadingBlock);
         var para = Assert.IsType<ParagraphBlock>(Assert.Single(doc.Blocks));
-        Assert.Equal("text\n===", RawText(para.Runs));
+        Assert.Equal("text ===", RawText(para.Runs));
     }
 
     // -------------------------------------------------------------- robustness

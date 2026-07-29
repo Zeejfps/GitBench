@@ -26,7 +26,8 @@ internal sealed record HeadingBlock(int Level, IReadOnlyList<InlineRun> Runs) : 
     public override int GetHashCode() => HashCode.Combine(Level, AstEquality.ListHash(Runs));
 }
 
-/// <summary>A paragraph of inline runs. Raw line breaks survive in the run text for Step 2.</summary>
+/// <summary>A paragraph of inline runs. Source line wraps are soft breaks and arrive as spaces, so
+/// the paragraph reflows to whatever width it is rendered at.</summary>
 internal sealed record ParagraphBlock(IReadOnlyList<InlineRun> Runs) : MarkdownBlock
 {
     public bool Equals(ParagraphBlock? other)
@@ -113,7 +114,8 @@ internal enum ColumnAlignment
 /// <summary>
 /// One flat, pre-resolved styled run — the AST's entire inline model. The parser flattens any
 /// emphasis nesting; the renderer never sees a tree. A hard line break is a dedicated run whose
-/// <paramref name="Text"/> is exactly "\n", always unstyled and never merged into neighbors.
+/// <paramref name="Text"/> is exactly "\n", always unstyled and never merged into neighbors; no
+/// other run's text ever contains a '\n', so the renderer can treat one as a forced break.
 /// </summary>
 internal sealed record InlineRun(
     string Text,

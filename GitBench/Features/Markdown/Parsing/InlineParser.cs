@@ -7,9 +7,10 @@ namespace GitBench.Features.Markdown.Parsing;
 /// and produces the flat, pre-resolved <see cref="InlineRun"/> list the renderer consumes.
 /// Covers the scoped subset (docs/plans/markdown-renderer.md): emphasis (<c>*</c>/<c>**</c>/
 /// <c>***</c>/<c>_</c>), inline code (backtick runs, code wins over emphasis), strikethrough,
-/// links, bare-URL autolinks, backslash escapes, and hard breaks. Nesting resolves into style
-/// flags on flat runs; adjacent runs with identical styling merge; unmatched delimiters degrade
-/// to literal text. Never throws.
+/// links, bare-URL autolinks, backslash escapes, and line breaks — a hard break becomes a
+/// dedicated "\n" run, a soft break collapses to a space. Nesting resolves into style flags on
+/// flat runs; adjacent runs with identical styling merge; unmatched delimiters degrade to literal
+/// text. Never throws.
 ///
 /// Shape: a single left-to-right scan turns the text into a node list — literal text, resolved
 /// atoms (code spans, links, autolinks), hard breaks, '[' openers, and emphasis delimiter runs.
@@ -141,6 +142,16 @@ internal static class InlineParser
                     }
                     break;
                 }
+
+                case '\n':
+                    // A newline that did not form a hard break is a soft break: CommonMark renders
+                    // a source line wrap as a space, and the line's trailing spaces are not
+                    // content. Only the hard break above survives as a "\n" run, so a '\n' in run
+                    // text always means "force a line here".
+                    while (text.Length > 0 && text[^1] == ' ') text.Length--;
+                    text.Append(' ');
+                    i++;
+                    break;
 
                 case 'h':
                     if ((i == 0 || !char.IsLetterOrDigit(s[i - 1])) && TryMatchAutolink(s, i, out var urlEnd))
