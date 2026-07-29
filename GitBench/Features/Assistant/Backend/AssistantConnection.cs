@@ -37,6 +37,10 @@ internal sealed record AssistantConnection(
 
     public string ModelFor(ModelTier tier) => tier == ModelTier.Quick ? QuickModel : ChatModel;
 
+    /// <summary>What the model answering this tier accepts. Read per turn rather than per provider:
+    /// a user-set model applies to both tiers, so the tier alone cannot say what is on offer.</summary>
+    public AssistantModel Capabilities(ModelTier tier) => Provider.Capabilities(ModelFor(tier));
+
     /// <summary>The turn's own cap, held under whatever the provider will actually accept.</summary>
     public int MaxTokensFor(AssistantTurn turn) => Math.Min(turn.MaxTokens, Provider.MaxOutputTokens);
 

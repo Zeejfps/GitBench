@@ -16,6 +16,7 @@ internal static class AnthropicRequestWriter
 {
     public static byte[] Write(AssistantTurn turn, IReadOnlyList<IAssistantTool> tools, AssistantConnection connection)
     {
+        var model = connection.Capabilities(turn.Tier);
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer, ToolJson.WriterOptions))
         {
@@ -23,11 +24,11 @@ internal static class AnthropicRequestWriter
             writer.WriteString("model", connection.ModelFor(turn.Tier));
             writer.WriteNumber("max_tokens", connection.MaxTokensFor(turn));
             writer.WriteBoolean("stream", true);
-            if (connection.Provider.SupportsServerSideFallbacks(turn.Tier))
+            if (model.ServerSideFallbacks)
                 writer.WriteString("fallbacks", "default");
             WriteTools(writer, tools);
             WriteSystem(writer, turn.SystemPrompt);
-            WriteMessages(writer, turn, connection);
+            WriteMessages(writer, turn, model);
             writer.WriteEndObject();
         }
 
@@ -71,7 +72,7 @@ internal static class AnthropicRequestWriter
         writer.WriteEndArray();
     }
 
-    private static void WriteMessages(Utf8JsonWriter writer, AssistantTurn turn, AssistantConnection connection)
+    private static void WriteMessages(Utf8JsonWriter writer, AssistantTurn turn, AssistantModel model)
     {
         writer.WritePropertyName("messages");
         writer.WriteStartArray();
@@ -82,8 +83,7 @@ internal static class AnthropicRequestWriter
                 case AssistantMessage.User user:
                     WriteTextMessage(writer, "user", user.Text);
                     break;
-                case AssistantMessage.RepoContext context
-                    when connection.Provider.SupportsMidConversationSystem(turn.Tier):
+                case AssistantMessage.RepoContext context when model.MidConversationSystem:
                     writer.WriteStartObject();
                     writer.WriteString("role", "system");
                     writer.WriteString("content", context.Text);

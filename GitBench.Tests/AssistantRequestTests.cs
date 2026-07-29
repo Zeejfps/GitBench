@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
@@ -13,8 +14,11 @@ public sealed class AssistantRequestTests
 
     private static readonly AssistantConnection Anthropic = AssistantConnection.Default;
 
-    private static string Body(AssistantTurn turn, IReadOnlyList<IAssistantTool> tools) =>
-        Encoding.UTF8.GetString(AnthropicRequestWriter.Write(turn, tools, Anthropic));
+    private static string Body(
+        AssistantTurn turn,
+        IReadOnlyList<IAssistantTool> tools,
+        AssistantConnection? connection = null) =>
+        Encoding.UTF8.GetString(AnthropicRequestWriter.Write(turn, tools, connection ?? Anthropic));
 
     private static AssistantTurn Turn(ModelTier tier, params AssistantMessage[] messages) =>
         new(tier, "system prompt", messages);
@@ -90,6 +94,33 @@ public sealed class AssistantRequestTests
         Assert.Equal("user", quickContext.GetProperty("role").GetString());
         Assert.Equal("claude-haiku-4-5-20251001", quick.RootElement.GetProperty("model").GetString());
         Assert.False(quick.RootElement.TryGetProperty("fallbacks", out _));
+    }
+
+    // A chosen model answers the chat tier too, and Sonnet 5 rejects both of the parameters the
+    // frontier models take. Sending them because the *tier* was Chat is what 400'd the turn.
+    [Fact]
+    public void AChatModelThatTakesNeitherOptionalParameter_IsSentNeither()
+    {
+        var sonnet = AssistantSettings
+            .For(AssistantProviders.Anthropic.Id, "claude-sonnet-5")
+            .Connect("sk-ant");
+
+        var messages = new AssistantMessage[]
+        {
+            new AssistantMessage.User("hi"),
+            new AssistantMessage.RepoContext("branch: main"),
+        };
+
+        using var body = JsonDocument.Parse(
+            Body(Turn(ModelTier.Chat, messages), Array.Empty<IAssistantTool>(), sonnet));
+
+        Assert.Equal("claude-sonnet-5", body.RootElement.GetProperty("model").GetString());
+        Assert.False(body.RootElement.TryGetProperty("fallbacks", out _));
+
+        // And the repo block falls back to the user turn rather than a system entry it would refuse.
+        var context = body.RootElement.GetProperty("messages")[1];
+        Assert.Equal("user", context.GetProperty("role").GetString());
+        Assert.Equal("branch: main", context.GetProperty("content")[0].GetProperty("text").GetString());
     }
 
     [Fact]

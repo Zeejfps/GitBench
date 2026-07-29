@@ -32,38 +32,20 @@ internal sealed record AssistantProvider
 
     public required string QuickModel { get; init; }
 
-    /// <summary>Models offered besides the two the tiers already name. The picker's list is this
-    /// table widened rather than a second one, so the tier defaults cannot drift out of it.</summary>
-    public IReadOnlyList<string> OtherModels { get; init; } = [];
-
-    /// <summary>False where the endpoint serves whatever the user has loaded rather than a published
-    /// catalogue, so any list would be a guess and the model stays free text.</summary>
-    public bool KnownModels { get; init; } = true;
+    /// <summary>Every model this build knows the provider serves, in the order the picker offers them.
+    /// The tier defaults name entries here rather than standing beside them, so the models the tiers
+    /// run on cannot drift out of the list. Empty where the endpoint serves whatever the user has
+    /// loaded rather than a published catalogue.</summary>
+    public IReadOnlyList<AssistantModel> Models { get; init; } = [];
 
     /// <summary>The variable read when no key is saved, or null for a provider with no such convention.</summary>
     public string? EnvironmentVariable { get; init; }
 
     public int MaxOutputTokens { get; init; } = 8192;
 
-    /// <summary>Whether <c>{"role": "system"}</c> is accepted part-way through the message list, which
-    /// is what keeps the live repo-state block out of the cached prefix.</summary>
-    public bool MidConversationSystem { get; init; }
-
-    /// <summary>Whether a policy decline can be re-served rather than surfaced as a dead turn.</summary>
-    public bool ServerSideFallbacks { get; init; }
-
     /// <summary>Whether the endpoint is the user's to set — true for the self-hosted providers, whose
     /// address is a local port rather than a product.</summary>
     public bool CustomBaseUrl { get; init; }
-
-    /// <summary>Newer OpenAI models reject <c>max_tokens</c> and take <c>max_completion_tokens</c>.</summary>
-    public bool UsesMaxCompletionTokens { get; init; }
-
-    /// <summary>The <c>reasoning_effort</c> a request offering tools has to state, or null where the
-    /// parameter means nothing here. OpenAI's current models reason by default and then refuse
-    /// function tools on <c>/v1/chat/completions</c>, so leaving it unsaid is what fails; naming the
-    /// opt-out is what makes a toolset usable at all.</summary>
-    public string? ToolReasoningEffort { get; init; }
 
     /// <summary>False where tool calling depends on whichever model happens to be loaded, so a turn
     /// that never calls a tool is worth reporting rather than trusting.</summary>
@@ -79,11 +61,19 @@ internal sealed record AssistantProvider
     /// <summary>The name this provider's key is kept under in the OS secret store.</summary>
     public string SecretName => Id + "-api-key";
 
+    /// <summary>False where the endpoint serves whatever the user has loaded rather than a published
+    /// catalogue, so any list would be a guess and the model stays free text.</summary>
+    public bool KnownModels => Models.Count > 0;
+
     /// <summary>The models offered as a starting point — a default and never a whitelist, so a model
     /// typed by hand is taken as typed. Empty where the served models are the user's own.</summary>
-    public IReadOnlyList<string> ModelPresets => KnownModels
-        ? new[] { ChatModel, QuickModel }.Concat(OtherModels).Distinct(StringComparer.Ordinal).ToArray()
-        : [];
+    public IReadOnlyList<string> ModelPresets => [.. Models.Select(m => m.Id)];
+
+    /// <summary>What this build knows the named model accepts, or <see cref="AssistantModel.Unlisted"/>
+    /// for one it has never heard of.</summary>
+    public AssistantModel Capabilities(string model) =>
+        Models.FirstOrDefault(m => string.Equals(m.Id, model, StringComparison.OrdinalIgnoreCase))
+        ?? AssistantModel.Unlisted;
 
     public string ModelFor(ModelTier tier) => tier == ModelTier.Quick ? QuickModel : ChatModel;
 }
@@ -106,10 +96,17 @@ internal static class AssistantProviders
         EnvironmentVariable = "ANTHROPIC_API_KEY",
         ChatModel = "claude-opus-5",
         QuickModel = "claude-haiku-4-5-20251001",
-        OtherModels = ["claude-sonnet-5", "claude-fable-5"],
+        // Mid-conversation system entries and a server-side fallback policy are the frontier models'
+        // alone. Sonnet 5 and Haiku 4.5 reject both by name, so they say so here rather than
+        // inheriting an Anthropic-wide yes.
+        Models =
+        [
+            new() { Id = "claude-opus-5", MidConversationSystem = true, ServerSideFallbacks = true },
+            new() { Id = "claude-haiku-4-5-20251001" },
+            new() { Id = "claude-sonnet-5" },
+            new() { Id = "claude-fable-5", MidConversationSystem = true, ServerSideFallbacks = true },
+        ],
         MaxOutputTokens = AssistantTurn.DefaultMaxTokens,
-        MidConversationSystem = true,
-        ServerSideFallbacks = true,
     };
 
     public static AssistantProvider OpenAi { get; } = new()
@@ -122,10 +119,13 @@ internal static class AssistantProviders
         EnvironmentVariable = "OPENAI_API_KEY",
         ChatModel = "gpt-5.6-sol",
         QuickModel = "gpt-5.6-luna",
-        OtherModels = ["gpt-5.6-terra"],
+        Models =
+        [
+            new() { Id = "gpt-5.6-sol", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
+            new() { Id = "gpt-5.6-luna", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
+            new() { Id = "gpt-5.6-terra", UsesMaxCompletionTokens = true, ToolReasoningEffort = "none" },
+        ],
         MaxOutputTokens = 32000,
-        UsesMaxCompletionTokens = true,
-        ToolReasoningEffort = "none",
     };
 
     public static AssistantProvider OpenRouter { get; } = new()
@@ -138,12 +138,16 @@ internal static class AssistantProviders
         EnvironmentVariable = "OPENROUTER_API_KEY",
         ChatModel = "openai/gpt-5.6-sol",
         QuickModel = "openai/gpt-5.6-luna",
-        OtherModels =
+        // The gateway normalizes the request shape across the models it fronts, so none of them
+        // needs the per-model parameters their first-party endpoints do.
+        Models =
         [
-            "openai/gpt-5.6-terra",
-            "anthropic/claude-opus-5",
-            "anthropic/claude-sonnet-5",
-            "google/gemini-3.6-flash",
+            new() { Id = "openai/gpt-5.6-sol" },
+            new() { Id = "openai/gpt-5.6-luna" },
+            new() { Id = "openai/gpt-5.6-terra" },
+            new() { Id = "anthropic/claude-opus-5" },
+            new() { Id = "anthropic/claude-sonnet-5" },
+            new() { Id = "google/gemini-3.6-flash" },
         ],
         MaxOutputTokens = 16000,
     };
@@ -158,7 +162,13 @@ internal static class AssistantProviders
         EnvironmentVariable = "GROQ_API_KEY",
         ChatModel = "openai/gpt-oss-120b",
         QuickModel = "openai/gpt-oss-20b",
-        OtherModels = ["groq/compound", "groq/compound-mini"],
+        Models =
+        [
+            new() { Id = "openai/gpt-oss-120b" },
+            new() { Id = "openai/gpt-oss-20b" },
+            new() { Id = "groq/compound" },
+            new() { Id = "groq/compound-mini" },
+        ],
     };
 
     public static AssistantProvider Together { get; } = new()
@@ -171,12 +181,14 @@ internal static class AssistantProviders
         EnvironmentVariable = "TOGETHER_API_KEY",
         ChatModel = "deepseek-ai/DeepSeek-V4-Pro",
         QuickModel = "openai/gpt-oss-20b",
-        OtherModels =
+        Models =
         [
-            "moonshotai/Kimi-K3",
-            "zai-org/GLM-5.2",
-            "openai/gpt-oss-120b",
-            "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+            new() { Id = "deepseek-ai/DeepSeek-V4-Pro" },
+            new() { Id = "openai/gpt-oss-20b" },
+            new() { Id = "moonshotai/Kimi-K3" },
+            new() { Id = "zai-org/GLM-5.2" },
+            new() { Id = "openai/gpt-oss-120b" },
+            new() { Id = "meta-llama/Llama-3.3-70B-Instruct-Turbo" },
         ],
     };
 
@@ -189,7 +201,6 @@ internal static class AssistantProviders
         RequiresApiKey = false,
         ChatModel = "gpt-oss:20b",
         QuickModel = "gpt-oss:20b",
-        KnownModels = false,
         MaxOutputTokens = 4096,
         CustomBaseUrl = true,
         ToolCalling = false,
@@ -204,7 +215,6 @@ internal static class AssistantProviders
         RequiresApiKey = false,
         ChatModel = "local-model",
         QuickModel = "local-model",
-        KnownModels = false,
         MaxOutputTokens = 4096,
         CustomBaseUrl = true,
         ToolCalling = false,
@@ -219,7 +229,6 @@ internal static class AssistantProviders
         RequiresApiKey = false,
         ChatModel = "local-model",
         QuickModel = "local-model",
-        KnownModels = false,
         MaxOutputTokens = 4096,
         CustomBaseUrl = true,
         ToolCalling = false,

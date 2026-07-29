@@ -29,21 +29,59 @@ public sealed class AssistantProviderTests
         }
 
         // The two capabilities the Anthropic writer branches on are Anthropic's alone.
-        foreach (var provider in AssistantProviders.All.Where(p => p.Wire == AssistantWireFormat.OpenAiCompatible))
+        foreach (var model in AssistantProviders.All
+                     .Where(p => p.Wire == AssistantWireFormat.OpenAiCompatible)
+                     .SelectMany(p => p.Models))
         {
-            Assert.False(provider.SupportsMidConversationSystem(ModelTier.Chat));
-            Assert.False(provider.SupportsServerSideFallbacks(ModelTier.Chat));
+            Assert.False(model.MidConversationSystem);
+            Assert.False(model.ServerSideFallbacks);
         }
     }
 
+    // The bug this replaced: capabilities hung off the provider and the tier, so a user who picked
+    // Sonnet 5 as their chat model still got `fallbacks` and a mid-conversation system entry — both
+    // of which that model rejects outright.
     [Fact]
-    public void CapabilitiesAreProviderAndTierTogether()
+    public void CapabilitiesFollowTheModelRatherThanTheTierItAnswers()
     {
-        Assert.True(AssistantProviders.Anthropic.SupportsMidConversationSystem(ModelTier.Chat));
-        // Haiku rejects them, so the quick tier stays on the user-turn fallback.
-        Assert.False(AssistantProviders.Anthropic.SupportsMidConversationSystem(ModelTier.Quick));
-        Assert.True(AssistantProviders.Anthropic.SupportsServerSideFallbacks(ModelTier.Chat));
-        Assert.False(AssistantProviders.Anthropic.SupportsServerSideFallbacks(ModelTier.Quick));
+        var anthropic = AssistantProviders.Anthropic;
+
+        foreach (var id in new[] { "claude-opus-5", "claude-fable-5" })
+        {
+            Assert.True(anthropic.Capabilities(id).MidConversationSystem);
+            Assert.True(anthropic.Capabilities(id).ServerSideFallbacks);
+        }
+
+        foreach (var id in new[] { "claude-sonnet-5", "claude-haiku-4-5-20251001" })
+        {
+            Assert.False(anthropic.Capabilities(id).MidConversationSystem);
+            Assert.False(anthropic.Capabilities(id).ServerSideFallbacks);
+        }
+
+        // Choosing one for the chat tier is what used to send the parameters it rejects.
+        var sonnet = AssistantSettings.For(anthropic.Id, "claude-sonnet-5").Connect("sk-ant");
+        Assert.False(sonnet.Capabilities(ModelTier.Chat).ServerSideFallbacks);
+        Assert.False(sonnet.Capabilities(ModelTier.Chat).MidConversationSystem);
+    }
+
+    // A model this build has never seen states nothing optional: every capability is an opt-in the
+    // request works without, so guessing costs a rejected turn and abstaining costs nothing.
+    [Fact]
+    public void AModelTheBuildDoesNotListClaimsNoOptionalParameters()
+    {
+        var unlisted = AssistantProviders.Anthropic.Capabilities("claude-opus-9-released-next-year");
+
+        Assert.False(unlisted.MidConversationSystem);
+        Assert.False(unlisted.ServerSideFallbacks);
+        Assert.False(unlisted.UsesMaxCompletionTokens);
+        Assert.Null(unlisted.ToolReasoningEffort);
+
+        // Which is also every model a local endpoint serves, since the user pulled them, not us.
+        Assert.Empty(AssistantProviders.Ollama.Models);
+        Assert.Null(AssistantProviders.Ollama.Capabilities("qwen3:8b").ToolReasoningEffort);
+
+        // A listed model matches however the user cased it.
+        Assert.True(AssistantProviders.Anthropic.Capabilities("Claude-Opus-5").ServerSideFallbacks);
     }
 
     // The presets are the tier table widened rather than a second list, so the models the tiers run

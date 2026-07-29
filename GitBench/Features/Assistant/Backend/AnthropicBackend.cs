@@ -74,7 +74,7 @@ internal sealed class AnthropicBackend : IAssistantBackend
         using var request = new HttpRequestMessage(HttpMethod.Post, connection.Endpoint(Path));
         request.Headers.TryAddWithoutValidation("x-api-key", key);
         request.Headers.TryAddWithoutValidation("anthropic-version", ApiVersion);
-        if (connection.Provider.SupportsServerSideFallbacks(turn.Tier))
+        if (connection.Capabilities(turn.Tier).ServerSideFallbacks)
             request.Headers.TryAddWithoutValidation("anthropic-beta", FallbackBeta);
         request.Content = new ByteArrayContent(AnthropicRequestWriter.Write(turn, tools, connection));
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");

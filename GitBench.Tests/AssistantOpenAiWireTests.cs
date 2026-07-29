@@ -184,10 +184,10 @@ public sealed class AssistantOpenAiWireTests
         var withoutTools = Bytes(OpenAi, messages);
         Assert.DoesNotContain("reasoning_effort", Encoding.UTF8.GetString(withoutTools), StringComparison.Ordinal);
 
-        // A provider that declares no opt-out carries none, tools or not.
+        // A model that declares no opt-out carries none, tools or not.
         var local = Bytes(Ollama, messages, new StubTool("get_status"));
         Assert.DoesNotContain("reasoning_effort", Encoding.UTF8.GetString(local), StringComparison.Ordinal);
-        Assert.Null(AssistantProviders.Ollama.ToolReasoningEffort);
+        Assert.Null(Ollama.Capabilities(ModelTier.Chat).ToolReasoningEffort);
     }
 
     [Fact]

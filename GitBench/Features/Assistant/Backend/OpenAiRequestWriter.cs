@@ -19,17 +19,18 @@ internal static class OpenAiRequestWriter
 {
     public static byte[] Write(AssistantTurn turn, IReadOnlyList<IAssistantTool> tools, AssistantConnection connection)
     {
+        var model = connection.Capabilities(turn.Tier);
         var buffer = new ArrayBufferWriter<byte>();
         using (var writer = new Utf8JsonWriter(buffer, ToolJson.WriterOptions))
         {
             writer.WriteStartObject();
             writer.WriteString("model", connection.ModelFor(turn.Tier));
             writer.WriteNumber(
-                connection.Provider.UsesMaxCompletionTokens ? "max_completion_tokens" : "max_tokens",
+                model.UsesMaxCompletionTokens ? "max_completion_tokens" : "max_tokens",
                 connection.MaxTokensFor(turn));
             writer.WriteBoolean("stream", true);
             WriteTools(writer, tools);
-            WriteToolReasoningEffort(writer, tools, connection.Provider);
+            WriteToolReasoningEffort(writer, tools, model);
             WriteMessages(writer, turn);
             writer.WriteEndObject();
         }
@@ -64,14 +65,14 @@ internal static class OpenAiRequestWriter
 
     // Saying nothing is not the safe option it looks like: OpenAI's models reason by default and
     // then refuse a request that also carries function tools, so a toolset — which is every turn
-    // here — 400s unless the body opts out by name. Providers that take reasoning alongside tools
-    // declare no effort and keep whatever the model does on its own.
+    // here — 400s unless the body opts out by name. Models that take reasoning alongside tools
+    // declare no effort and keep whatever they do on their own.
     private static void WriteToolReasoningEffort(
         Utf8JsonWriter writer,
         IReadOnlyList<IAssistantTool> tools,
-        AssistantProvider provider)
+        AssistantModel model)
     {
-        if (tools.Count > 0 && provider.ToolReasoningEffort is { } effort)
+        if (tools.Count > 0 && model.ToolReasoningEffort is { } effort)
             writer.WriteString("reasoning_effort", effort);
     }
 

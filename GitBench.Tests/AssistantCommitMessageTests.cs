@@ -79,7 +79,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.CommitMessageAgent);
 
         Assert.Equal(ModelTier.Quick, agent.Tier);
-        Assert.False(AssistantProviders.Anthropic.SupportsMidConversationSystem(agent.Tier));
+        Assert.False(AssistantConnection.Default.Capabilities(agent.Tier).MidConversationSystem);
         Assert.NotEmpty(agent.SystemPrompt);
         Assert.DoesNotContain("---", agent.SystemPrompt);
         Assert.Equal(
