@@ -1,5 +1,7 @@
+using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Theming;
+using ZGF.Gui;
 
 namespace GitBench.Features.Markdown.Rendering;
 
@@ -35,6 +37,37 @@ internal static class InlineRunBuilder
         uint textColor,
         bool bold = false)
     {
-        throw new NotImplementedException("Step 5: InlineRunBuilder.Build is not implemented yet.");
+        if (runs.Count == 0)
+            return Array.Empty<RichTextRun>();
+
+        var result = new RichTextRun[runs.Count];
+        for (var i = 0; i < runs.Count; i++)
+        {
+            var run = runs[i];
+            var isLink = run.LinkUrl != null;
+
+            // Each run gets its own TextStyle instance — the view hands styles to the canvas per
+            // segment, so a shared mutated instance would alias (see RichTextRun's doc).
+            var style = new TextStyle
+            {
+                FontSize = fontSize,
+                TextColor = isLink ? styles.Link : run.Code ? styles.CodeChipText : textColor,
+            };
+            if (bold || run.Bold)
+                style.FontWeight = FontWeight.Bold;
+            if (run.Code)
+                style.FontFamily = DiffOptions.MonoFontFamily;
+            else if (run.Italic)
+                style.FontFamily = MarkdownFonts.ItalicFamily;
+
+            result[i] = new RichTextRun(
+                run.Text,
+                style,
+                IsCode: run.Code,
+                Underline: isLink,
+                LinkUrl: run.LinkUrl);
+        }
+
+        return result;
     }
 }

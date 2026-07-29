@@ -617,5 +617,7 @@
     "other": "{count}個のステージされていないローカル変更があります。"
   },
   "commits.reset_dirty_both": "{staged}個のステージされた変更と{unstaged}個のステージされていない変更があります。",
-  "localchanges.files_header_empty": "ファイル"
+  "localchanges.files_header_empty": "ファイル",
+
+  "markdown.copy_code": "コードをコピー"
 }

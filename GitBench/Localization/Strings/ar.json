@@ -718,5 +718,7 @@
     "other": "لديك {count} تغيير محلي غير مجهّز."
   },
   "commits.reset_dirty_both": "لديك {staged} تغييرات مجهّزة و{unstaged} تغييرات غير مجهّزة.",
-  "localchanges.files_header_empty": "الملفات"
+  "localchanges.files_header_empty": "الملفات",
+
+  "markdown.copy_code": "نسخ الكود"
 }

@@ -687,5 +687,7 @@
     "other": "У вас {count} непроиндексированных локальных изменений."
   },
   "commits.reset_dirty_both": "Локальные изменения: проиндексировано — {staged}, непроиндексировано — {unstaged}.",
-  "localchanges.files_header_empty": "Файлы"
+  "localchanges.files_header_empty": "Файлы",
+
+  "markdown.copy_code": "Копировать код"
 }

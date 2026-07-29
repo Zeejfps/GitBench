@@ -28,20 +28,19 @@ public sealed record MarkdownStyles(
 
 public partial record ThemeStyles
 {
-    // PLACEHOLDER (Step 5 red phase): all-zero colors so the project compiles while the tests
-    // pin real per-palette values. The implementer replaces this with genuine derivations from
-    // the palette (and/or literals) — both palettes must end up with non-zero, appropriately
-    // differing values; see ThemeMarkdownStylesTests for the pinned contract.
+    // Derived from the palette like the other Build* methods, so both modes stay coherent with
+    // the surrounding chrome: links ride the accent ramp; code surfaces reuse the sunken/muted
+    // surface ladder with the standard border; quotes read as secondary prose behind a muted bar.
     private static MarkdownStyles BuildMarkdown(ThemePalette p) =>
         new(
-            Link: 0u,
-            LinkHover: 0u,
-            CodeChipText: 0u,
-            CodeChipBackground: 0u,
-            CodeBlockBackground: 0u,
-            CodeBlockBorder: 0u,
-            CodeBlockText: 0u,
-            QuoteBar: 0u,
-            QuoteText: 0u,
-            Rule: 0u);
+            Link: p.Accent,
+            LinkHover: p.AccentHover,
+            CodeChipText: p.TextPrimary,
+            CodeChipBackground: p.SurfaceMuted,
+            CodeBlockBackground: p.SurfaceSunken,
+            CodeBlockBorder: p.Border,
+            CodeBlockText: p.TextPrimary,
+            QuoteBar: p.BorderMuted,
+            QuoteText: p.TextSecondary,
+            Rule: p.Border);
 }
