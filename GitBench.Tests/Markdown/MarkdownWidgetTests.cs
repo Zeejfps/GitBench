@@ -360,6 +360,69 @@ public class MarkdownWidgetTests
         }
     }
 
+    // Every width, not one: the item's text wraps against the pane minus the bullet and its gap,
+    // and the height the item reports has to be the height of that wrap at whatever width it gets.
+    // Both regimes are pinned deliberately — a scrollbar appearing or disappearing moves the pane
+    // between them, and a fix that trades one for the other is not a fix.
+    [Theory]
+    [InlineData(200)]
+    [InlineData(184)]
+    [InlineData(201)]
+    [InlineData(185)]
+    [InlineData(320)]
+    [InlineData(304)]
+    [InlineData(640)]
+    [InlineData(624)]
+    public void AWrappingListItemPushesTheFollowingBlockBelowItsLastLine(int width)
+    {
+        var words = string.Join(' ', Enumerable.Repeat("wwww", 40));
+        var (h, _, _) = Create($"- {words}\n\nafter", width: width);
+        using (h)
+        {
+            var canvas = h.Render();
+
+            var lastItemLine = canvas.Texts
+                .Where(t => t.Inputs.Text.StartsWith("wwww", StringComparison.Ordinal))
+                .Min(t => t.Inputs.Position.Bottom);
+            var after = Draw(canvas, "after");
+            Assert.True(after.Inputs.Position.Top <= lastItemLine,
+                $"at width {width} the following paragraph (top {after.Inputs.Position.Top}) must "
+                + $"clear the item's last line (bottom {lastItemLine})");
+        }
+    }
+
+    // The structural half of the same guarantee: nothing in a rendered document may need more
+    // height than the box it was laid out in, at any width. Catches an overflow wherever it lands,
+    // not only under the one block the width-sweep above inspects.
+    [Theory]
+    [InlineData("- {0}\n\nafter")]
+    [InlineData("- one two\n- {0}\n\nafter")]
+    [InlineData("1. {0}\n2. second\n\nafter")]
+    [InlineData("- parent\n  - {0}\n\nafter")]
+    [InlineData("> {0}\n\nafter")]
+    public void NoBlockEverNeedsMoreHeightThanItWasGiven(string template)
+    {
+        var words = string.Join(' ', Enumerable.Repeat("wwww", 25));
+        var markdown = string.Format(template, words);
+        for (var width = 160; width <= 700; width += 7)
+        {
+            var (h, _, _) = Create(markdown, width: width, height: 4000);
+            using (h)
+            {
+                h.Render();
+
+                foreach (var view in h.Root.SelfAndDescendants())
+                {
+                    if (!view.IsVisible || view.Position.Width <= 0f) continue;
+                    var needed = view.MeasureHeight(view.Position.Width);
+                    Assert.True(needed <= view.Position.Height + 0.05f,
+                        $"at width {width}, {view.GetType().Name} needs {needed} but was given "
+                        + $"{view.Position.Height} at width {view.Position.Width}");
+                }
+            }
+        }
+    }
+
     [Fact]
     public void TaskListItemsRenderLucideCheckboxGlyphsMatchingTheirState()
     {
