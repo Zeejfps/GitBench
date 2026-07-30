@@ -277,7 +277,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         // The toolset is bound to this one checkout, so the assistant cannot reach the others.
         var toolset = AssistantToolset.ForRepo(_git, repo, _agent, _reviewProgress, _writes);
         var session = new AssistantSession(
-            repo, new AssistantAgentLoop(_backend, _agent, toolset, ToolCallingIsUnproven), _loc, _dispatcher);
+            repo, _git, new AssistantAgentLoop(_backend, _agent, toolset, ToolCallingIsUnproven), _loc, _dispatcher);
         _sessions[repo.Id] = session;
         return session;
     }
@@ -292,6 +292,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         var toolset = AssistantToolset.ForRepo(_git, repo, _commitMessageAgent, _reviewProgress, _writes);
         var action = new CommitMessageQuickAction(
             repo,
+            _git,
             new AssistantAgentLoop(_backend, _commitMessageAgent, toolset, ToolCallingIsUnproven),
             _writes,
             _loc,

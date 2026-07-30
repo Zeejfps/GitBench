@@ -30,7 +30,7 @@ internal sealed record ReviewScope(
     /// <summary>Resolves the range, or the sentence explaining why there is nothing to review.</summary>
     public static (ReviewScope? Scope, string? Error) Resolve(IGitService git, Repo repo, string? baseRef)
     {
-        if (repo.Branch is not { Length: > 0 } headRef)
+        if (RepoHead.Branch(git, repo) is not { } headRef)
             return (null, "This repository has no checked-out branch (detached HEAD), so there is no review range.");
 
         ResolvedReviewBase resolved;

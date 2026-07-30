@@ -39,6 +39,7 @@ internal sealed class CommitMessageQuickAction : IDisposable
         + "set_commit_message.";
 
     private readonly Repo _repo;
+    private readonly IGitService _git;
     private readonly AssistantAgentLoop _loop;
     private readonly AssistantWriteSurface _writes;
     private readonly ILocalizationService _loc;
@@ -53,12 +54,14 @@ internal sealed class CommitMessageQuickAction : IDisposable
 
     public CommitMessageQuickAction(
         Repo repo,
+        IGitService git,
         AssistantAgentLoop loop,
         AssistantWriteSurface writes,
         ILocalizationService loc,
         IUiDispatcher dispatcher)
     {
         _repo = repo;
+        _git = git;
         _loop = loop;
         _writes = writes;
         _loc = loc;
@@ -101,7 +104,7 @@ internal sealed class CommitMessageQuickAction : IDisposable
         try
         {
             await foreach (var e in _loop
-                               .RunAsync(conversation, AssistantAgentLoop.RepoStateBlock(_repo, _loc), ApproveTheCommitBox.Instance, cts.Token)
+                               .RunAsync(conversation, AssistantAgentLoop.RepoStateBlock(_git, _repo, _loc), ApproveTheCommitBox.Instance, cts.Token)
                                .ConfigureAwait(false))
             {
                 switch (e)

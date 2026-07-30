@@ -50,9 +50,9 @@ internal sealed class AssistantAgentLoop
     /// <remarks>The language is taken from the active catalog's own culture, so the language list
     /// lives in one place; the synthetic Pseudo locale is built on the reference catalog's culture and
     /// so reads as English rather than asking the model for gibberish.</remarks>
-    public static string RepoStateBlock(Repo repo, ILocalizationService loc)
+    public static string RepoStateBlock(IGitService git, Repo repo, ILocalizationService loc)
     {
-        var branch = string.IsNullOrWhiteSpace(repo.Branch) ? "(detached or unknown)" : repo.Branch;
+        var branch = RepoHead.Branch(git, repo) ?? "(detached or unknown)";
         return $"Repository: {repo.DisplayName}\nPath: {repo.Path}\nChecked-out branch: {branch}\n"
                + $"Reply in {loc.Strings.Value.Culture.EnglishName}.";
     }

@@ -121,6 +121,7 @@ internal sealed class AssistantRow : IDisposable
 internal sealed class AssistantSession : IDisposable
 {
     private readonly Repo _repo;
+    private readonly IGitService _git;
     private readonly AssistantAgentLoop _loop;
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
@@ -156,9 +157,15 @@ internal sealed class AssistantSession : IDisposable
     private bool _produced;
     private bool _disposed;
 
-    public AssistantSession(Repo repo, AssistantAgentLoop loop, ILocalizationService loc, IUiDispatcher dispatcher)
+    public AssistantSession(
+        Repo repo,
+        IGitService git,
+        AssistantAgentLoop loop,
+        ILocalizationService loc,
+        IUiDispatcher dispatcher)
     {
         _repo = repo;
+        _git = git;
         _loop = loop;
         _loc = loc;
         _dispatcher = dispatcher;
@@ -377,7 +384,7 @@ internal sealed class AssistantSession : IDisposable
         string? failure = null;
         try
         {
-            await foreach (var e in _turnLoop.RunAsync(_turnMessages, AssistantAgentLoop.RepoStateBlock(_repo, _loc), _approvals, cts.Token).ConfigureAwait(false))
+            await foreach (var e in _turnLoop.RunAsync(_turnMessages, AssistantAgentLoop.RepoStateBlock(_git, _repo, _loc), _approvals, cts.Token).ConfigureAwait(false))
             {
                 var captured = e;
                 _dispatcher.Post(() => Apply(captured));

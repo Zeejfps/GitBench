@@ -135,7 +135,7 @@ public sealed class AssistantEmptyTurnTests : IDisposable
             AssistantToolset.Create([new StubTool("alpha")], ["alpha"]),
             () => toolCallingIsUnproven);
         var repo = new Repo(Guid.NewGuid(), Path.Combine(Path.GetTempPath(), "repo"), "repo");
-        return new AssistantSession(repo, loop, _loc, _dispatcher);
+        return new AssistantSession(repo, new GitService(new NullActivityTracker()), loop, _loc, _dispatcher);
     }
 
     private void Ask(AssistantSession session, string message)

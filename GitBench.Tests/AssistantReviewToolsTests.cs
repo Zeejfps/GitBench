@@ -186,6 +186,31 @@ public sealed class AssistantReviewToolsTests : IDisposable
                 .Select(f => f.GetProperty("path").GetString()).OrderBy(s => s, StringComparer.Ordinal));
     }
 
+    // What is under review is the checkout, not the Repo record the toolset was handed. The record is
+    // immutable and the registry publishes a branch switch by replacing it, so a session built before
+    // the switch holds the old branch for good — here the record still says "feature".
+    [Fact]
+    public void GetReviewStack_FollowsABranchSwitchMadeAfterTheToolsetWasBuilt()
+    {
+        Git("checkout", "-b", "second", "main");
+        Write("d.txt", "added on second\n");
+        Git("add", ".");
+        Commit("add d");
+
+        using var json = InvokeOk("get_review_stack");
+        var root = json.RootElement;
+
+        Assert.Equal("feature", _repo.Branch);
+        Assert.Equal("second", root.GetProperty("head_ref").GetString());
+        Assert.Equal("main", root.GetProperty("base_ref").GetString());
+        Assert.Equal(
+            new[] { "add d" },
+            root.GetProperty("commits").EnumerateArray().Select(c => c.GetProperty("summary").GetString()));
+        Assert.Equal(
+            new[] { "d.txt" },
+            root.GetProperty("files").EnumerateArray().Select(f => f.GetProperty("path").GetString()));
+    }
+
     // The review's diff is base→tip, not the last commit: a.txt changed in the first commit only, so
     // a HEAD-relative diff would come back empty here.
     [Fact]
@@ -343,14 +368,16 @@ public sealed class AssistantReviewToolsTests : IDisposable
         Assert.Contains("b.txt", invocation.Content, StringComparison.Ordinal);
     }
 
+    // Detachment is a fact about the checkout, so it is the checkout that gets detached here: the
+    // record still names "feature", and a leftover branch name must not stand in for a review.
     [Fact]
     public void ADetachedHead_HasNoReviewAndSaysSoRatherThanGuessing()
     {
-        var toolset = ReviewToolsetFor(new Repo(Guid.NewGuid(), _root, "test"));
+        Git("checkout", "--detach", "HEAD");
 
-        var invocation = toolset.Find("get_review_stack")!
-            .InvokeAsync(AssistantTestJson.Empty, CancellationToken.None).GetAwaiter().GetResult();
+        var invocation = Invoke("get_review_stack");
 
+        Assert.Equal("feature", _repo.Branch);
         Assert.True(invocation.IsError);
         Assert.Contains("detached", invocation.Content, StringComparison.OrdinalIgnoreCase);
     }
