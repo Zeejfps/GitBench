@@ -666,6 +666,7 @@
   "assistant.commit_menu_tooltip": "Assistant",
   "assistant.generate_message": "Generate commit message",
   "assistant.generating_message": "Generating commit message…",
+  "assistant.review_branch": "Review changes",
   "assistant.chat": "Chat…",
   "assistant.ask_explain": "Explain this",
   "assistant.ask_breakage": "What could break?",

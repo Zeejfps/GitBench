@@ -667,6 +667,7 @@
   "assistant.commit_menu_tooltip": "Asistente",
   "assistant.generate_message": "Generar mensaje de confirmación",
   "assistant.generating_message": "Generando mensaje de confirmación…",
+  "assistant.review_branch": "Revisar los cambios",
   "assistant.chat": "Chat…",
   "assistant.ask_explain": "Explicar esto",
   "assistant.ask_breakage": "¿Qué podría romperse?",

@@ -667,6 +667,7 @@
   "assistant.commit_menu_tooltip": "助手",
   "assistant.generate_message": "生成提交信息",
   "assistant.generating_message": "正在生成提交信息…",
+  "assistant.review_branch": "审查更改",
   "assistant.chat": "聊天…",
   "assistant.ask_explain": "解释这段",
   "assistant.ask_breakage": "可能会出什么问题？",

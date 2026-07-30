@@ -768,6 +768,7 @@
   "assistant.commit_menu_tooltip": "المساعد",
   "assistant.generate_message": "إنشاء رسالة الإيداع",
   "assistant.generating_message": "جارٍ إنشاء رسالة الإيداع…",
+  "assistant.review_branch": "مراجعة التغييرات",
   "assistant.chat": "محادثة…",
   "assistant.ask_explain": "اشرح هذا",
   "assistant.ask_breakage": "ما الذي قد يتعطل؟",

@@ -17,6 +17,9 @@ internal sealed class AgentCatalog
 
     public const string CommitMessageAgent = "commit-message";
 
+    /// The one-shot agent behind the commit bar's "Review changes".
+    public const string ReviewBranchAgent = "review-branch";
+
     /// The one-shot agents behind the diff selection's quick actions.
     public const string ExplainSelectionAgent = "explain-selection";
 

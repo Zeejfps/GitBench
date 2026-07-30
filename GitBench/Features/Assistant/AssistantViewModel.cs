@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
@@ -17,6 +18,10 @@ namespace GitBench.Features.Assistant;
 /// </summary>
 internal sealed class AssistantViewModel : IDisposable
 {
+    private const string ReviewAsk =
+        "Review my changes — what is uncommitted in the working tree, and what the checked-out "
+        + "branch adds on top of its base.";
+
     private readonly IAssistantSessionStore _store;
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
@@ -36,6 +41,7 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<bool> _canSend;
     private readonly Derived<bool> _generatingMessage;
     private readonly Derived<bool> _canGenerateMessage;
+    private readonly Derived<bool> _canReviewBranch;
     private readonly Derived<string?> _commitMessageError;
     private readonly Derived<bool> _showSettings;
     private readonly Derived<bool> _wantsKey;
@@ -84,6 +90,10 @@ internal sealed class AssistantViewModel : IDisposable
             && !store.CommitMessage.Value.IsBusy.Value
             && store.IsConfigured.Value);
         _commitMessageError = new Derived<string?>(() => store.CommitMessage.Value?.Error.Value);
+        _canReviewBranch = new Derived<bool>(() =>
+            store.Active.Value is not null
+            && !store.Active.Value.IsBusy.Value
+            && store.IsConfigured.Value);
 
         // Onboarding and settings are the same card: one is the other with nothing configured yet.
         _showSettings = new Derived<bool>(() => _settingsOpen.Value || !store.IsConfigured.Value);
@@ -104,6 +114,7 @@ internal sealed class AssistantViewModel : IDisposable
         Stop = new Command(() => store.Active.Value?.Cancel(), _busy);
         ClearConversation = new Command(ClearActiveConversation, _canClear);
         GenerateCommitMessage = new Command(() => store.CommitMessage.Value?.Run(), _canGenerateMessage);
+        ReviewBranch = new Command(RunBranchReview, _canReviewBranch);
         OpenSettings = new Command(ShowSettingsCard);
         // Dismissing the card is only offered once there is a working connection behind it.
         CloseSettings = new Command(() => _settingsOpen.Value = false, store.IsConfigured);
@@ -134,6 +145,18 @@ internal sealed class AssistantViewModel : IDisposable
         }
 
         _draft.Value = m.Prompt + "\n\n";
+    }
+
+    // The review runs the moment it is picked, in the overlay, as a one-shot detached from the
+    // thread — the same shape as the diff's presets. The ask is addressed to the model rather than
+    // read by anyone, so it is written here in English like the diff's are. What there is to review
+    // is the agent's to work out from its tools: the uncommitted work and the branch's own commits
+    // are both in scope, either can be empty, and neither is a thing this menu could pin down at the
+    // moment it was opened.
+    private void RunBranchReview()
+    {
+        _open.Value = true;
+        _store.RunPreset(AgentCatalog.ReviewBranchAgent, ReviewAsk);
     }
 
     /// <summary>The active repo's conversation, or null when no repo is active.</summary>
@@ -219,6 +242,12 @@ internal sealed class AssistantViewModel : IDisposable
     public ICommand ClearConversation { get; }
 
     public ICommand GenerateCommitMessage { get; }
+
+    /// <summary>Reviews the work in front of the person — what is uncommitted, and what the
+    /// checked-out branch adds on top of its base — answering in the transcript. Offered whenever the
+    /// assistant can answer at all and this repository's conversation is not already mid-turn.</summary>
+    public ICommand ReviewBranch { get; }
+
     public ICommand OpenSettings { get; }
     public ICommand CloseSettings { get; }
     public ICommand SaveSettings { get; }
@@ -235,6 +264,11 @@ internal sealed class AssistantViewModel : IDisposable
                 GenerateCommitMessage.Execute,
                 LucideIcons.PencilLine,
                 Enabled: GenerateCommitMessage.CanExecute.Value),
+            new RepoBarContextMenu.Item(
+                s.AssistantReviewBranch,
+                ReviewBranch.Execute,
+                LucideIcons.Search,
+                Enabled: ReviewBranch.CanExecute.Value),
             new RepoBarContextMenu.Item(
                 s.AssistantChat,
                 Open.Execute,
@@ -469,6 +503,7 @@ internal sealed class AssistantViewModel : IDisposable
         _providerDraft.Dispose();
         _settingsOpen.Dispose();
         _commitMessageError.Dispose();
+        _canReviewBranch.Dispose();
         _canGenerateMessage.Dispose();
         _generatingMessage.Dispose();
         _canSend.Dispose();

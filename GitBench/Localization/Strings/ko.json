@@ -667,6 +667,7 @@
   "assistant.commit_menu_tooltip": "어시스턴트",
   "assistant.generate_message": "커밋 메시지 생성",
   "assistant.generating_message": "커밋 메시지 생성 중…",
+  "assistant.review_branch": "변경 사항 검토",
   "assistant.chat": "채팅…",
   "assistant.ask_explain": "이 부분 설명",
   "assistant.ask_breakage": "무엇이 깨질 수 있나요?",

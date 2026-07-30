@@ -667,6 +667,7 @@
   "assistant.commit_menu_tooltip": "アシスタント",
   "assistant.generate_message": "コミットメッセージを生成",
   "assistant.generating_message": "コミットメッセージを生成中…",
+  "assistant.review_branch": "変更をレビュー",
   "assistant.chat": "チャット…",
   "assistant.ask_explain": "これを説明",
   "assistant.ask_breakage": "何が壊れる可能性が？",

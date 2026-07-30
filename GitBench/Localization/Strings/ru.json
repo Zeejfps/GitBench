@@ -737,6 +737,7 @@
   "assistant.commit_menu_tooltip": "Ассистент",
   "assistant.generate_message": "Создать сообщение коммита",
   "assistant.generating_message": "Создание сообщения коммита…",
+  "assistant.review_branch": "Проверить изменения",
   "assistant.chat": "Чат…",
   "assistant.ask_explain": "Объяснить это",
   "assistant.ask_breakage": "Что может сломаться?",
