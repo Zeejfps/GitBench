@@ -1,3 +1,4 @@
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
@@ -15,7 +16,8 @@ internal sealed class MoveBranchDialogViewModel : IDialogViewModel
         MoveBranchRequest request,
         IGitService gitService,
         IUiDispatcher dispatcher,
-        IMessageBus bus)
+        IMessageBus bus,
+        IRepoHeadStore head)
     {
         Move = AsyncCommand.ForOutcome(
             dispatcher,
@@ -29,7 +31,10 @@ internal sealed class MoveBranchDialogViewModel : IDialogViewModel
                 bus.Broadcast(new RefsChangedMessage(request.Repo.Id));
                 bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
                 CloseRequested?.Invoke();
-            });
+            },
+            // `checkout -B` lands HEAD on the branch it just moved — a detached HEAD becomes an
+            // attached one, which every reader of "current branch" needs to know is coming.
+            onStart: () => head.BeginMove(request.Repo, request.BranchName));
     }
 
     public void Dispose() { }

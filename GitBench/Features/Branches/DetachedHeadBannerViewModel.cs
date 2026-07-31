@@ -17,6 +17,7 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly IRepoHeadStore _head;
     private readonly ILocalizationService _loc;
 
     public IReadable<bool> IsVisible { get; }
@@ -33,12 +34,14 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
+        IRepoHeadStore head,
         ILocalizationService loc)
         : base(dispatcher, DetachedHeadBannerState.Initial)
     {
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _head = head;
         _loc = loc;
 
         // The banner text is bound reactively (not snapshotted at build time) so it stays correct
@@ -60,9 +63,9 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         Subscriptions.Add(_bus.SubscribeScoped<CommitCreatedMessage>(_ => Reload()));
     }
 
-    // Seeds the CreateBranchDialog with "HEAD" so the branch is created at the detached
-    // commit; the dialog's "checkout after create" box defaults on, so the common flow
-    // captures the commits onto a branch and lands the user on it (clearing this banner).
+    // Creates the branch at the detached commit — GitRef.Head is literally where we are. The
+    // dialog's "checkout after create" box defaults on, so the common flow captures the commits onto
+    // a branch and lands the user on it (clearing this banner).
     private void DoCreateBranch()
     {
         var repo = _registry.Active.Value;
@@ -70,7 +73,8 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
         {
             Repo = repo,
-            SuggestedStartPoint = "HEAD",
+            StartPoint = GitRef.Head,
+            StartPointLabel = "HEAD",
             OnClose = onClose,
         }));
     }
@@ -83,18 +87,12 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         var branch = State.Value.Branch;
         if (repo == null || string.IsNullOrEmpty(branch)) return;
 
+        // Attaching lands HEAD on a branch, so it's a branch switch as far as every other component
+        // is concerned. Run through the head store rather than this view model's background helpers:
+        // those are load semantics and drop their continuation once the VM is disposed, which for a
+        // mutation would lose the error, the refresh, and the settle that ends the declaration.
         var service = _gitService;
-        var bus = _bus;
-        RunOutcome(
-            work: () => service.AttachDetachedHead(repo, branch),
-            onResult: outcome =>
-            {
-                if (outcome is GitOutcome.Failed failed)
-                    bus.Broadcast(new ShowOperationErrorMessage(
-                        _loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
-                else
-                    bus.Broadcast(new RefsChangedMessage(repo.Id));
-            });
+        _head.RunMove(repo, branch, () => service.AttachDetachedHead(repo, branch));
     }
 
     private void Reload()

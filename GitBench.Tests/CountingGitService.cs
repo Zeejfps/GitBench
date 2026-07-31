@@ -10,10 +10,15 @@ using GitBench.Git;
 namespace GitBench.Tests;
 
 // Wraps a real IGitService and counts GetStatusSummary calls, so a test can assert which triggers
-// actually run the summary probe (vs. rely on RepoSnapshotStore's ingest). Every other member
-// delegates unchanged. The counter uses Interlocked because probes run off the UI thread.
+// actually run the summary probe (vs. rely on RepoSnapshotStore's ingest). It also records the
+// GitRef CreateBranch was handed, so a test can assert what a view model actually sent git rather
+// than only what the resulting branch points at. Every other member delegates unchanged. The
+// counters use Interlocked because probes run off the UI thread.
 internal sealed class CountingGitService(IGitService inner) : IGitService
 {
+    // The start point of the last CreateBranch call, or null if there hasn't been one.
+    public GitRef? LastCreateBranchStartPoint { get; private set; }
+
     private int _statusSummaryCalls;
     private int _localChangesCalls;
     private int _headMessageCalls;
@@ -111,7 +116,11 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => inner.CheckoutLocalBranch(repo, branchName);
     public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => inner.CheckoutRemoteBranch(repo, localName, remoteName, remoteBranchName, track);
     public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode) => inner.ResetCurrent(repo, commitSha, mode);
-    public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout) => inner.CreateBranch(repo, name, startPoint, checkout);
+    public GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout)
+    {
+        LastCreateBranchStartPoint = startPoint;
+        return inner.CreateBranch(repo, name, startPoint, checkout);
+    }
     public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => inner.MoveBranch(repo, branchName, commitSha, checkout);
     public bool IsAncestor(Repo repo, string maybeAncestor, string descendant) => inner.IsAncestor(repo, maybeAncestor, descendant);
     public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes) => inner.CreateTag(repo, name, message, commitSha, pushToAllRemotes);

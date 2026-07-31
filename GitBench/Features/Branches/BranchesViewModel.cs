@@ -818,13 +818,14 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        // Mirror the toolbar's Branch action: seed the starting point with the current
-        // HEAD branch, falling back to "HEAD" when detached (no branch name to seed from).
-        var suggested = GetHeadBranchName() ?? "HEAD";
+        // Mirror the toolbar's Branch action: the branch is created from wherever HEAD is when
+        // Create runs (git resolves it), labelled with the current branch name for orientation —
+        // falling back to "HEAD" when detached, where there's no name to show.
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
         {
             Repo = repo,
-            SuggestedStartPoint = suggested,
+            StartPoint = GitRef.Head,
+            StartPointLabel = GetHeadBranchName() ?? "HEAD",
             InitialName = namePrefix,
             OnClose = onClose,
         }));

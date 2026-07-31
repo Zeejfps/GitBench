@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -31,7 +32,8 @@ internal sealed record MoveBranchDialog : Widget
             new MoveBranchRequest(Repo, BranchName, Sha),
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>());
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IRepoHeadStore>());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog

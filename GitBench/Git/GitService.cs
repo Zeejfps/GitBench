@@ -2180,12 +2180,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader
 
     // Shells out so post-checkout hooks run when `checkout` is true, and the error wording
     // matches the user's terminal experience (e.g. "fatal: A branch named 'x' already exists.").
-    public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout)
+    public GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout)
         => RunOperation(repo, () =>
         {
+            // GitRef.Head reaches git as the literal "HEAD" and resolves right here, inside the lock
+            // — after any checkout queued ahead of us has finished. That is what makes "branch from
+            // where I am" correct by construction rather than by the UI reading the right name.
+            var start = startPoint.Argument;
             var args = checkout
-                ? new[] { "checkout", "-b", name, startPoint }
-                : new[] { "branch", name, startPoint };
+                ? new[] { "checkout", "-b", name, start }
+                : new[] { "branch", name, start };
             var result = _runner.Run(repo.Path, args);
             return result.Ok
                 ? GitOutcome.Ok

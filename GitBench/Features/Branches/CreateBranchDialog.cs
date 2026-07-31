@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -19,7 +20,15 @@ namespace GitBench.Features.Branches;
 internal sealed record CreateBranchDialog : Widget
 {
     public required Repo Repo { get; init; }
-    public required string SuggestedStartPoint { get; init; }
+
+    /// What the branch is created from. <see cref="GitRef.Head"/> means "wherever HEAD is when
+    /// Create runs", resolved by git under the repo lock — pass it rather than the current branch's
+    /// name, so a name read while HEAD was moving can't become the starting point.
+    public required GitRef StartPoint { get; init; }
+
+    /// What the starting-point field shows for <see cref="StartPoint"/> — a branch name reads better
+    /// than "HEAD". Purely a label: editing it is what replaces the ref.
+    public required string StartPointLabel { get; init; }
 
     /// Pre-fills the branch-name field (e.g. "feature/admin/" to create inside a folder).
     /// Empty for a plain create. Editable — the user can change or clear it.
@@ -31,11 +40,13 @@ internal sealed record CreateBranchDialog : Widget
     {
         var vm = new CreateBranchDialogViewModel(
             Repo,
-            SuggestedStartPoint,
+            StartPoint,
+            StartPointLabel,
             InitialName,
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
+            ctx.Require<IRepoHeadStore>(),
             ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;

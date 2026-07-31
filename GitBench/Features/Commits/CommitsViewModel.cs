@@ -34,6 +34,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     private readonly IRepoRegistry _registry;
     private readonly IGitService _gitService;
     private readonly IMessageBus _bus;
+    private readonly IRepoHeadStore _head;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
 
@@ -78,6 +79,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoSnapshotStore store,
+        IRepoHeadStore head,
         ILocalizationService loc,
         PreferencesService preferences)
         : base(dispatcher, CommitsState.Initial with
@@ -88,6 +90,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         _registry = registry;
         _gitService = gitService;
         _bus = bus;
+        _head = head;
         _loc = loc;
         _preferences = preferences;
 
@@ -271,20 +274,22 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     // ---- create branch ----
 
-    // Opens the CreateBranchDialog seeded with the given starting point (a commit SHA, or
-    // "HEAD" for the detached-HEAD banner). The dialog defaults its "checkout after create"
-    // box on, so the common flow captures the commits onto a branch and lands you on it.
-    // Branch creation never touches the working tree, so no probe is needed.
-    public void RequestCreateBranch(string startPoint)
+    // Opens the CreateBranchDialog at one specific commit — a named ref, not HEAD: the user picked
+    // this row, so the SHA is exactly what they mean and must survive whatever HEAD does meanwhile.
+    // The dialog defaults its "checkout after create" box on, so the common flow captures the
+    // commits onto a branch and lands you on it. Branch creation never touches the working tree, so
+    // no probe is needed.
+    public void RequestCreateBranch(string sha)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
         var capturedRepo = repo;
-        var capturedStart = startPoint;
+        var capturedSha = sha;
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
         {
             Repo = capturedRepo,
-            SuggestedStartPoint = capturedStart,
+            StartPoint = GitRef.Named(capturedSha),
+            StartPointLabel = capturedSha,
             OnClose = onClose,
         }));
     }
@@ -296,6 +301,11 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // ancestry off-thread — a fast-forward (the branch tip is an ancestor of this commit) is
     // safe and applied immediately; otherwise the move would orphan the branch's unique
     // commits, so we open MoveBranchDialog to confirm first.
+    //
+    // The probe is a read and stays on this VM's lane; the move it may lead to is a mutation and
+    // runs in the head store, which declares the destination and settles it whatever happens. Doing
+    // the move here would tie both the settle and the refresh to this view model outliving the git
+    // command — a repo switch mid-move would strand the declaration and wedge later checkouts shut.
     public void RequestMoveBranch(string branchName, string sha)
     {
         var snap = _snapshot;
@@ -309,12 +319,9 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         TryRunBackground<MoveBranchProbe>(
             _moveGen,
-            work: () =>
-            {
-                if (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha))
-                    return (new MoveBranchProbe.Moved(_gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true)), null);
-                return (new MoveBranchProbe.NeedsConfirm(), null);
-            },
+            work: () => (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha)
+                ? MoveBranchProbe.FastForward
+                : MoveBranchProbe.NeedsConfirm, null),
             onResult: (probe, error) =>
             {
                 var strings = _loc.Strings.Value;
@@ -323,38 +330,32 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                     _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, error));
                     return;
                 }
-                switch (probe)
+                if (probe == MoveBranchProbe.FastForward)
                 {
-                    case MoveBranchProbe.Moved { Outcome: GitOutcome.Failed failed }:
-                        _bus.Broadcast(new ShowOperationErrorMessage(strings.CommitsErrorResetBranchFailed, failed.Message));
-                        break;
-                    case MoveBranchProbe.Moved:
-                        _bus.Broadcast(new RefsChangedMessage(capturedRepo.Id));
-                        _bus.Broadcast(new WorkingTreeChangedMessage(capturedRepo.Id));
-                        break;
-                    case MoveBranchProbe.NeedsConfirm:
-                        var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
-                        var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
-                        _bus.Broadcast(new ShowDialogMessage(onClose => new MoveBranchDialog
-                        {
-                            Repo = capturedRepo,
-                            BranchName = capturedBranch,
-                            Sha = capturedSha,
-                            ShortSha = shortSha,
-                            Summary = summary,
-                            OnClose = onClose,
-                        }));
-                        break;
+                    _head.RunMove(
+                        capturedRepo,
+                        capturedBranch,
+                        () => _gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true),
+                        strings.CommitsErrorResetBranchFailed);
+                    return;
                 }
+                var shortSha = capturedSha.Length >= 7 ? capturedSha[..7] : capturedSha;
+                var summary = LookupSummary(snap, capturedSha) ?? string.Empty;
+                _bus.Broadcast(new ShowDialogMessage(onClose => new MoveBranchDialog
+                {
+                    Repo = capturedRepo,
+                    BranchName = capturedBranch,
+                    Sha = capturedSha,
+                    ShortSha = shortSha,
+                    Summary = summary,
+                    OnClose = onClose,
+                }));
             });
     }
 
-    // Outcome of the off-thread move probe, handed from work to onResult above.
-    private abstract record MoveBranchProbe
-    {
-        public sealed record Moved(GitOutcome Outcome) : MoveBranchProbe;
-        public sealed record NeedsConfirm : MoveBranchProbe;
-    }
+    // Outcome of the off-thread ancestry probe: whether moving the branch here would orphan its
+    // unique commits, and so needs confirming first.
+    private enum MoveBranchProbe { FastForward, NeedsConfirm }
 
     // ---- delete tag ----
 

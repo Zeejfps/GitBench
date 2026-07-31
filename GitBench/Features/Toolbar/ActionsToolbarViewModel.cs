@@ -196,18 +196,18 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         var status = State.Value.Status;
-        // EffectiveBranchName, not CurrentBranchName: this string is passed to git as the starting
-        // point, and a checkout in flight leaves the probe naming the branch the user just left.
-        // Detached HEAD has no branch name to seed from; "HEAD" still works as a starting ref for
-        // `git branch newname HEAD` and matches Fork's default.
+        // GitRef.Head, not a branch name: "branch from where I am" is resolved by git when Create
+        // runs, so no name this view model read can end up as the starting point. The label is only
+        // what the field shows — a branch name when there is one, else plain "HEAD".
         var branch = status.EffectiveBranchName;
-        var suggested = string.IsNullOrEmpty(branch) || (status.IsDetached && !status.IsHeadInMotion)
+        var label = string.IsNullOrEmpty(branch) || (status.IsDetached && !status.IsHeadInMotion)
             ? "HEAD"
             : branch;
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
         {
             Repo = repo,
-            SuggestedStartPoint = suggested,
+            StartPoint = GitRef.Head,
+            StartPointLabel = label,
             OnClose = onClose,
         }));
     }

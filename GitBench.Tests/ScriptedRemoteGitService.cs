@@ -119,7 +119,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => inner.CheckoutLocalBranch(repo, branchName);
     public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => inner.CheckoutRemoteBranch(repo, localName, remoteName, remoteBranchName, track);
     public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode) => inner.ResetCurrent(repo, commitSha, mode);
-    public GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout) => inner.CreateBranch(repo, name, startPoint, checkout);
+    public GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout) => inner.CreateBranch(repo, name, startPoint, checkout);
     public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => inner.MoveBranch(repo, branchName, commitSha, checkout);
     public bool IsAncestor(Repo repo, string maybeAncestor, string descendant) => inner.IsAncestor(repo, maybeAncestor, descendant);
     public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes) => inner.CreateTag(repo, name, message, commitSha, pushToAllRemotes);

@@ -141,6 +141,8 @@ public sealed class StatusIngestIntegrationTests : IDisposable
     {
         public RepoHead For(Guid repoId) => RepoHead.Settled;
         public void Checkout(Repo repo, string branchName) { }
+        public void RunMove(Repo repo, string branchName, Func<GitOutcome> work, string? failureTitle = null) { }
+        public Action<bool> BeginMove(Repo repo, string branchName) => _ => { };
         public void Confirm(Guid repoId) { }
     }
 

@@ -19,8 +19,14 @@ internal sealed class AsyncCommand : ICommand
     private readonly Func<string?> _work;
     private readonly Action _onSuccess;
     private readonly Action<string>? _onError;
+    private readonly Func<Action<bool>?>? _onStart;
     private readonly State<bool> _isRunning = new(false);
     private readonly State<string?> _error = new(null);
+
+    // The completion half of the current execution's onStart bracket. Held rather than passed
+    // through the work delegate so it is invoked on the UI thread, alongside every other completion
+    // effect. CanExecute gates on IsRunning, so there is only ever one execution to track.
+    private Action<bool>? _settle;
 
     public IReadable<bool> CanExecute { get; }
     public IReadable<bool> IsRunning => _isRunning;
@@ -36,17 +42,24 @@ internal sealed class AsyncCommand : ICommand
     /// message already published to <see cref="Error"/>. Lets a VM react to failure — toggle a
     /// retry mode, close and route the error to a dialog — beyond the default of surfacing
     /// <see cref="Error"/>. Pass null to leave failure handling to <see cref="Error"/> alone.</param>
+    /// <param name="onStart">Invoked on the UI thread when execution begins, before the work is
+    /// dispatched, and may return a completion callback invoked — also on the UI thread — with
+    /// whether the work succeeded. For state the rest of the app must see for exactly the command's
+    /// lifetime, such as declaring where HEAD is about to move: waiting for the result would leave
+    /// the window this exists to close. Return null to declare nothing for this execution.</param>
     public AsyncCommand(
         IUiDispatcher dispatcher,
         Func<string?> work,
         Action onSuccess,
         IReadable<bool>? gate = null,
-        Action<string>? onError = null)
+        Action<string>? onError = null,
+        Func<Action<bool>?>? onStart = null)
     {
         _dispatcher = dispatcher;
         _work = work;
         _onSuccess = onSuccess;
         _onError = onError;
+        _onStart = onStart;
 
         CanExecute = gate is null
             ? new Derived<bool>(() => !_isRunning.Value)
@@ -63,15 +76,17 @@ internal sealed class AsyncCommand : ICommand
         Func<T> work,
         Action onSuccess,
         IReadable<bool>? gate = null,
-        Action<string>? onError = null)
+        Action<string>? onError = null,
+        Func<Action<bool>?>? onStart = null)
         where T : IOutcome<T>
-        => new(dispatcher, () => work().FailureMessage, onSuccess, gate, onError);
+        => new(dispatcher, () => work().FailureMessage, onSuccess, gate, onError, onStart);
 
     public void Execute()
     {
         if (!CanExecute.Value) return;
         _error.Value = null;
         _isRunning.Value = true;
+        _settle = _onStart?.Invoke();
 
         Task.Run(() =>
         {
@@ -85,6 +100,11 @@ internal sealed class AsyncCommand : ICommand
     private void Complete(string? error)
     {
         _isRunning.Value = false;
+        // Before the success/error effects: those broadcast, and a listener reading the state the
+        // bracket holds should see it already settled.
+        var settle = _settle;
+        _settle = null;
+        settle?.Invoke(error is null);
         if (error is null) { _onSuccess(); return; }
         _error.Value = error;
         _onError?.Invoke(error);

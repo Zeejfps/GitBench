@@ -60,7 +60,9 @@ public interface IGitService
     GitOutcome CheckoutLocalBranch(Repo repo, string branchName);
     GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
     GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
-    GitOutcome CreateBranch(Repo repo, string name, string startPoint, bool checkout);
+    // startPoint is a GitRef rather than a string so "from the current branch" is expressed as
+    // GitRef.Head and resolved here, under the lock — never as a branch name the UI captured.
+    GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout);
     GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
     bool IsAncestor(Repo repo, string maybeAncestor, string descendant);
     GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);

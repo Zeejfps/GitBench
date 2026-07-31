@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -24,6 +25,8 @@ internal sealed class RenameBranchDialogViewModel : IDialogViewModel
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
+        IRepoStatusStore status,
+        IRepoHeadStore head,
         ILocalizationService loc)
     {
         Name = new State<string>(request.CurrentName);
@@ -53,7 +56,13 @@ internal sealed class RenameBranchDialogViewModel : IDialogViewModel
                 bus.Broadcast(new RefsChangedMessage(repoId));
                 CloseRequested?.Invoke();
             },
-            gate: gate);
+            gate: gate,
+            // Renaming the checked-out branch doesn't move HEAD to a different commit, but it does
+            // change what HEAD is called — which is the thing every "current branch" reader holds.
+            // Renaming any other branch leaves HEAD alone and declares nothing.
+            onStart: () => status.Active.Value.EffectiveBranchName == oldName
+                ? head.BeginMove(request.Repo, Name.Value)
+                : null);
     }
 
     public void Dispose() { }

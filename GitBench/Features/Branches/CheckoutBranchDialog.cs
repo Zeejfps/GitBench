@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -30,6 +31,7 @@ internal sealed record CheckoutBranchDialog : Widget
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
+            ctx.Require<IRepoHeadStore>(),
             ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;

@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -29,6 +30,8 @@ internal sealed record RenameBranchDialog : Widget
             ctx.Require<IGitService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
+            ctx.Require<IRepoStatusStore>(),
+            ctx.Require<IRepoHeadStore>(),
             ctx.Require<ILocalizationService>());
 
         var s = ctx.Localization().Strings.Value;

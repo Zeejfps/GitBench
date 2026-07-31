@@ -24,6 +24,7 @@ public sealed class RepoHeadStoreTests : IDisposable
     private readonly GitReadGate _gate = new();
     private readonly MessageBus _bus = new();
     private readonly LocalizationService _loc = new(new State<Locale>(Locale.En));
+    private readonly GitService _gitService = new(new RepoActivityTracker());
     private readonly RepoHeadStore _head;
     private readonly RepoStatusStore _status;
 
@@ -34,10 +35,9 @@ public sealed class RepoHeadStoreTests : IDisposable
 
         var statePath = Path.Combine(_root, "repos.json");
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
-        var git = new GitService(new RepoActivityTracker());
-        _head = new RepoHeadStore(git, _bus, _loc, _dispatcher);
+        _head = new RepoHeadStore(_gitService, _bus, _loc, _dispatcher);
         _status = new RepoStatusStore(
-            new IdleOperations(), _registry, git, _bus, new StartupSweepCoordinator(_gate),
+            new IdleOperations(), _registry, _gitService, _bus, new StartupSweepCoordinator(_gate),
             _gate, _dispatcher, _head, _head);
     }
 
@@ -84,7 +84,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         var repo = StartWithRepo("solo", "main");
 
         _head.Checkout(repo, "no-such-branch");
-        DrainUntil(() => !_head.For(repo.Id).IsCheckoutRunning, "the failed checkout to report");
+        DrainUntil(() => !_head.For(repo.Id).IsMoving, "the failed checkout to report");
 
         Assert.Null(_status.Active.Value.PendingBranchName);
         Assert.Equal("main", _status.Active.Value.EffectiveBranchName);
@@ -105,7 +105,109 @@ public sealed class RepoHeadStoreTests : IDisposable
         Assert.Null(_head.For(beta.Id).PendingBranch);
     }
 
+    // ---- overlapping declarations ----
+    //
+    // A settle must end only its own declaration. With a single slot, a second declaration overwrote
+    // the first and then whichever settled first cleared a move that was still running — putting
+    // every reader back on the stale probed name mid-switch, which is the failure this whole store
+    // exists to prevent.
+
+    [Fact]
+    public void A_second_declaration_settling_first_leaves_the_still_running_move_declared()
+    {
+        var repo = Unbacked();
+
+        var first = _head.BeginMove(repo, "feature");
+        var second = _head.BeginMove(repo, "other");
+
+        // The overlapping one reports first, and reports that it never moved anything.
+        second(false);
+
+        Assert.Equal("feature", _head.For(repo.Id).PendingBranch);
+        Assert.True(_head.For(repo.Id).IsMoving);
+
+        first(true);
+        Assert.Equal("feature", _head.For(repo.Id).PendingBranch);
+        Assert.False(_head.For(repo.Id).IsMoving);
+    }
+
+    // Two moves genuinely queued on the repo lock run in declaration order, so the newest one names
+    // where HEAD ends up — and it holds that name until the older one is out of the way too.
+    [Fact]
+    public void The_newest_open_declaration_names_the_destination()
+    {
+        var repo = Unbacked();
+
+        var first = _head.BeginMove(repo, "feature");
+        _head.BeginMove(repo, "other");
+        Assert.Equal("other", _head.For(repo.Id).PendingBranch);
+
+        first(true);
+        Assert.Equal("other", _head.For(repo.Id).PendingBranch);
+        Assert.True(_head.For(repo.Id).IsMoving);
+    }
+
+    // A read landing while another command is still open observed a HEAD that is about to move
+    // again, so it settles nothing.
+    [Fact]
+    public void A_read_arriving_mid_move_does_not_confirm_the_pending_name()
+    {
+        var repo = Unbacked();
+
+        var first = _head.BeginMove(repo, "feature");
+        var second = _head.BeginMove(repo, "other");
+        first(true);
+
+        ((IRepoHeadConfirm)_head).Confirm(repo.Id);
+        Assert.Equal("other", _head.For(repo.Id).PendingBranch);
+
+        second(true);
+        ((IRepoHeadConfirm)_head).Confirm(repo.Id);
+        Assert.Null(_head.For(repo.Id).PendingBranch);
+    }
+
+    // Settling is idempotent: a caller that settles twice must not consume a later declaration's slot.
+    [Fact]
+    public void Settling_twice_ends_only_the_one_declaration()
+    {
+        var repo = Unbacked();
+
+        var first = _head.BeginMove(repo, "feature");
+        first(false);
+        var second = _head.BeginMove(repo, "other");
+        first(false);
+
+        Assert.Equal("other", _head.For(repo.Id).PendingBranch);
+        Assert.True(_head.For(repo.Id).IsMoving);
+        second(false);
+        Assert.Null(_head.For(repo.Id).PendingBranch);
+    }
+
+    // RunMove owns the command, so its settle and its refresh don't depend on the view model that
+    // started it still being alive — a repo switch mid-move used to strand the declaration, and a
+    // stranded declaration wedges every later checkout shut.
+    [Fact]
+    public void RunMove_settles_without_help_from_the_caller()
+    {
+        var repo = StartWithRepo("solo", "main");
+        Git(repo.Path, "branch", "feature");
+
+        _head.RunMove(repo, "feature", () => _gitService.CheckoutLocalBranch(repo, "feature"));
+        Assert.True(_head.For(repo.Id).IsMoving);
+
+        DrainUntil(() => !_status.Active.Value.IsHeadInMotion, "the move to settle on its own");
+        Assert.Equal("feature", _status.Active.Value.CurrentBranchName);
+
+        // And the store is left able to move HEAD again, which a stranded declaration would prevent.
+        _head.Checkout(repo, "main");
+        Assert.Equal("main", _head.For(repo.Id).PendingBranch);
+    }
+
     // ---- helpers ----
+
+    // A repo identity with nothing on disk behind it, for the declaration bookkeeping — which is
+    // pure and never reaches git. Keeps those cases off the process-spawning path.
+    private static Repo Unbacked() => new(Guid.NewGuid(), "not-on-disk", "solo");
 
     private Repo StartWithRepo(string name, string branch)
     {

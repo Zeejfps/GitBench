@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -24,6 +25,7 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
         IGitService gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
+        IRepoHeadStore head,
         ILocalizationService loc)
     {
         Name = new State<string>(request.SuggestedLocalName);
@@ -62,7 +64,10 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
             {
                 CloseRequested?.Invoke();
                 bus.Broadcast(new ShowOperationErrorMessage(loc.Strings.Value.BranchesErrorCheckoutFailed, error));
-            });
+            },
+            // `checkout -b` lands HEAD on the new local branch, so this is a branch switch like any
+            // other — declare it, or the toolbar keeps seeding the branch being left behind.
+            onStart: () => head.BeginMove(request.Repo, Name.Value));
     }
 
     public void Dispose() { }
