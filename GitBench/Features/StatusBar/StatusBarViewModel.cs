@@ -350,9 +350,11 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         if (!State.Value.HasActiveRepo) return;
         Update(s => s with
         {
-            Branch = status.CurrentBranchName ?? s.Branch,
+            // The branch being switched to, while one is: the status bar shouldn't keep naming the
+            // branch the user just left while the sidebar header already shows the destination.
+            Branch = status.EffectiveBranchName ?? s.Branch,
             HasUpstream = status.HasUpstream,
-            IsDetached = status.IsDetached,
+            IsDetached = status.IsDetached && !status.IsHeadInMotion,
             Ahead = status.Ahead,
             Behind = status.Behind,
         });

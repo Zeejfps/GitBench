@@ -72,9 +72,13 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Push = new Command(DoPush, Slice(ComputePushEnabled));
         Pull = new Command(DoPull, Slice(ComputePullEnabled));
         Fetch = new Command(DoFetch, Slice(s => !s.IsFetching && s.HasActiveRepo));
-        Branch = new Command(DoBranch, repoActionsEnabled);
+        // Branch and Review both take the current branch name as a git argument, so they stand down
+        // while a checkout is moving HEAD: until it settles, every name we could pass names the
+        // branch the user just left.
+        Branch = new Command(DoBranch, Slice(s => s.HasActiveRepo && !s.Status.IsHeadInMotion));
         Review = new Command(DoReview, Slice(s =>
-            s.HasActiveRepo && !s.Status.IsDetached && !string.IsNullOrEmpty(s.Status.CurrentBranchName)));
+            s.HasActiveRepo && !s.Status.IsHeadInMotion
+            && !s.Status.IsDetached && !string.IsNullOrEmpty(s.Status.CurrentBranchName)));
         Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
         DiscardAll = new Command(DoDiscardAll, Slice(s => s.HasUnstaged));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);
@@ -139,8 +143,11 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         else spinner.Stop();
     }
 
+    // Both stand down while HEAD is in motion: the ahead/behind counts still describe the branch
+    // being left, and publish would push that branch's name rather than the one being switched to.
     private static bool ComputePushEnabled(ActionsToolbarState s)
     {
+        if (s.Status.IsHeadInMotion) return false;
         var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
         var canPublish = !s.Status.IsDetached && !s.Status.HasUpstream
             && !string.IsNullOrEmpty(s.Status.CurrentBranchName);
@@ -149,6 +156,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
 
     private static bool ComputePullEnabled(ActionsToolbarState s)
     {
+        if (s.Status.IsHeadInMotion) return false;
         var hasBranchUpstream = !s.Status.IsDetached && s.Status.HasUpstream;
         return !s.IsPulling && hasBranchUpstream && s.Status.Behind > 0;
     }
@@ -188,11 +196,14 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         var repo = _registry.Active.Value;
         if (repo == null) return;
         var status = State.Value.Status;
-        // Detached HEAD has no branch name to seed from; "HEAD" still works as a starting
-        // ref for `git branch newname HEAD` and matches Fork's default.
-        var suggested = status.IsDetached || string.IsNullOrEmpty(status.CurrentBranchName)
+        // EffectiveBranchName, not CurrentBranchName: this string is passed to git as the starting
+        // point, and a checkout in flight leaves the probe naming the branch the user just left.
+        // Detached HEAD has no branch name to seed from; "HEAD" still works as a starting ref for
+        // `git branch newname HEAD` and matches Fork's default.
+        var branch = status.EffectiveBranchName;
+        var suggested = string.IsNullOrEmpty(branch) || (status.IsDetached && !status.IsHeadInMotion)
             ? "HEAD"
-            : status.CurrentBranchName;
+            : branch;
         _bus.Broadcast(new ShowDialogMessage(onClose => new CreateBranchDialog
         {
             Repo = repo,
@@ -205,7 +216,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        var branch = State.Value.Status.CurrentBranchName;
+        var branch = State.Value.Status.EffectiveBranchName;
         if (string.IsNullOrEmpty(branch)) return;
         _bus.Broadcast(new OpenReviewWindowMessage(repo.Id, branch, branch, BaseRef: null));
     }
@@ -244,7 +255,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             && !status.HasUpstream
             && !string.IsNullOrEmpty(status.CurrentBranchName))
         {
-            var localBranch = status.CurrentBranchName!;
+            var localBranch = status.EffectiveBranchName!;
             _bus.Broadcast(new ShowDialogMessage(onClose => new PublishBranchDialog
             {
                 Repo = repo,
@@ -259,7 +270,7 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
             && status.Ahead > 0
             && status.Behind > 0)
         {
-            var branchName = status.CurrentBranchName ?? string.Empty;
+            var branchName = status.EffectiveBranchName ?? string.Empty;
             _bus.Broadcast(new ShowDialogMessage(onClose => new ForcePushDialog
             {
                 Repo = repo,

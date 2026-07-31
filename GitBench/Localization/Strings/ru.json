@@ -178,6 +178,7 @@
   "branches.section_stashes": "Отложенные",
   "branches.header_on": "на",
   "branches.header_at": "в",
+  "branches.header_switching_to": "переключение на",
   "branches.header_detached": "(отсоединённый HEAD)",
   "branches.context_new_branch": "Новая ветка…",
   "branches.context_clean": "Очистить…",

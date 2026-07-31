@@ -143,6 +143,7 @@
   "branches.section_stashes": "贮藏",
   "branches.header_on": "在",
   "branches.header_at": "位于",
+  "branches.header_switching_to": "正在切换到",
   "branches.header_detached": "(分离 HEAD)",
   "branches.context_new_branch": "新建分支…",
   "branches.context_clean": "清理…",

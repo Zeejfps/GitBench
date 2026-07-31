@@ -36,7 +36,13 @@ internal sealed record BranchesHeader : Widget
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [
-                                new BranchLabel { BranchName = vm.BranchName, IsDetached = vm.IsDetached },
+                                new BranchLabel
+                                {
+                                    BranchName = vm.BranchName,
+                                    IsDetached = vm.IsDetached,
+                                    IsSwitching = vm.IsSwitching,
+                                    SwitchRotation = vm.SwitchRotation,
+                                },
                             ],
                         },
                     ],
@@ -46,11 +52,17 @@ internal sealed record BranchesHeader : Widget
     }
 }
 
-/// <summary>Branch icon, "on"/"at" prefix, and branch name; hidden when there's no branch.</summary>
+/// <summary>
+/// Branch icon, "on"/"at" prefix, and branch name; hidden when there's no branch. While a checkout is
+/// switching branches the icon turns into a spinner and the prefix reads "switching to", so the app's
+/// most prominent branch claim never states a pending move as settled fact.
+/// </summary>
 internal sealed record BranchLabel : Widget
 {
     public required IReadable<string?> BranchName { get; init; }
     public required IReadable<bool> IsDetached { get; init; }
+    public required IReadable<bool> IsSwitching { get; init; }
+    public required IReadable<float> SwitchRotation { get; init; }
 
     protected override IWidget Build(Context ctx) => new Padding
     {
@@ -66,15 +78,18 @@ internal sealed record BranchLabel : Widget
                 [
                     new Text
                     {
-                        Value = LucideIcons.Branch,
+                        Value = Prop.Bind(() => IsSwitching.Value ? LucideIcons.Loader : LucideIcons.Branch),
                         FontFamily = LucideIcons.FontFamily,
                         FontSize = FontSize.Heading,
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => IsDetached.Value ? s.BranchesHeader.DetachedText : s.BranchesHeader.ActiveText),
+                        Rotation = Prop.Bind(() => IsSwitching.Value ? SwitchRotation.Value : 0f),
                     },
                     new Text
                     {
-                        Value = L.T(s => IsDetached.Value ? s.BranchesHeaderAt : s.BranchesHeaderOn),
+                        Value = L.T(s => IsSwitching.Value ? s.BranchesHeaderSwitchingTo
+                            : IsDetached.Value ? s.BranchesHeaderAt
+                            : s.BranchesHeaderOn),
                         VAlign = TextAlignment.Center,
                         Color = Theme.Color(s => s.BranchesHeader.PrefixText),
                     },

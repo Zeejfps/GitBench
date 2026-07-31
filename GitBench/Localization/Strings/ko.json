@@ -143,6 +143,7 @@
   "branches.section_stashes": "스태시",
   "branches.header_on": "브랜치",
   "branches.header_at": "커밋",
+  "branches.header_switching_to": "전환 중:",
   "branches.header_detached": "(분리된 HEAD)",
   "branches.context_new_branch": "새 브랜치…",
   "branches.context_clean": "정리…",

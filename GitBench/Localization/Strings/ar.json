@@ -185,6 +185,7 @@
   "branches.section_stashes": "المخبوءات",
   "branches.header_on": "على",
   "branches.header_at": "عند",
+  "branches.header_switching_to": "يتم التبديل إلى",
   "branches.header_detached": "(HEAD منفصل)",
   "branches.context_new_branch": "فرع جديد…",
   "branches.context_clean": "تنظيف…",

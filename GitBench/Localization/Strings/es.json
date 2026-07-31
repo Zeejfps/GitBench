@@ -143,6 +143,7 @@
   "branches.section_stashes": "Stashes",
   "branches.header_on": "en",
   "branches.header_at": "en",
+  "branches.header_switching_to": "cambiando a",
   "branches.header_detached": "(HEAD desacoplada)",
   "branches.context_new_branch": "Nueva rama…",
   "branches.context_clean": "Limpiar…",

@@ -32,9 +32,10 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         var statePath = Path.Combine(_root, "repos.json");
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         _sweep = new StartupSweepCoordinator(_gate);
+        var head = new SettledHead();
         _store = new RepoStatusStore(
             new IdleOperations(), _registry, new GitService(new RepoActivityTracker()),
-            new MessageBus(), _sweep, _gate, _dispatcher);
+            new MessageBus(), _sweep, _gate, _dispatcher, head, head);
     }
 
     [Fact]
@@ -276,7 +277,8 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     private RepoStatusStore NewStore(IGitService git, IUiDispatcher dispatcher)
     {
         var gate = new GitReadGate();
-        return new(new IdleOperations(), _registry, git, new MessageBus(), new StartupSweepCoordinator(gate), gate, dispatcher);
+        var head = new SettledHead();
+        return new(new IdleOperations(), _registry, git, new MessageBus(), new StartupSweepCoordinator(gate), gate, dispatcher, head, head);
     }
 
     // Two real repos with "active" made the active one, over a store wired to a counting GitService.
@@ -404,10 +406,21 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         public readonly GitReadGate Gate = new();
         public readonly RepoStatusStore Store;
 
-        public CountingHarness(IRepoRegistry registry) =>
-            Store = new RepoStatusStore(new IdleOperations(), registry, Git, Bus, new StartupSweepCoordinator(Gate), Gate, Dispatcher);
+        public CountingHarness(IRepoRegistry registry)
+        {
+            var head = new SettledHead();
+            Store = new RepoStatusStore(new IdleOperations(), registry, Git, Bus, new StartupSweepCoordinator(Gate), Gate, Dispatcher, head, head);
+        }
 
         public void Dispose() => Store.Dispose();
+    }
+
+    // No checkout ever in flight, so these tests keep measuring probes rather than HEAD motion.
+    private sealed class SettledHead : IRepoHeadStore, IRepoHeadConfirm
+    {
+        public RepoHead For(Guid repoId) => RepoHead.Settled;
+        public void Checkout(Repo repo, string branchName) { }
+        public void Confirm(Guid repoId) { }
     }
 
     private sealed class IdleOperations : IRepoOperationsStore

@@ -25,10 +25,14 @@ namespace GitBench.Features.Branches;
 /// Section/folder open-state is mirrored into <see cref="IRepoRegistry.SetBranchesUi"/>
 /// after every toggle so it persists across repo switches.
 ///
-/// A single <see cref="BranchesState.IsBranchOpInFlight"/> flag serializes checkout /
-/// rename / delete from the UI's perspective; the per-repo GitService lock serializes at
-/// the actual command level. Stash apply has its own flag because it's a different
-/// concept the user wouldn't expect to be blocked by a branch op.
+/// <see cref="IsBranchOpInFlight"/> serializes rename / delete / fast-forward and checkout from the
+/// UI's perspective; the per-repo GitService lock serializes at the actual command level. Stash apply
+/// has its own flag because it's a different concept the user wouldn't expect to be blocked by a
+/// branch op.
+///
+/// Checkout itself is <em>not</em> run here — it goes through <see cref="IRepoHeadStore"/>, so the
+/// branch HEAD is moving to is one value the whole app reads rather than an optimistic guess private
+/// to this view model. <see cref="PendingHead"/> is that value projected back out.
 /// </summary>
 internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 {
@@ -38,6 +42,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly State<MainViewMode> _mode;
     private readonly ILocalizationService _loc;
     private readonly IRepoOperationsStore _ops;
+    private readonly IRepoHeadStore _head;
 
     // One spinner for every row that spins, so they turn in phase off a single frame tick.
     private readonly SpinnerAnimation _syncSpinner;
@@ -53,7 +58,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public IReadable<string?> BusyBranch { get; }
     public IReadable<string?> SyncingBranch { get; }
     public IReadable<string?> SyncedBranch { get; }
-    public IReadable<string?> PendingHead { get; }
     public IReadable<string?> LoadError { get; }
     public IReadable<bool> IsLoading { get; }
     public IReadable<IReadOnlySet<string>> WorktreeBranches { get; }
@@ -74,13 +78,18 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     public IReadable<string?> PlaceholderText => _placeholderText;
     public IReadable<BranchesContentKind> ContentKind => _contentKind;
 
+    // The branch a checkout is switching to, or null once HEAD has settled. Projected from the head
+    // store via the status store rather than written here, so the row that renders it and the toolbar
+    // that gates on it can never disagree.
+    public IReadable<string?> PendingHead => _pendingHead;
+
     private Guid _activeRepoId;
 
-    // Op lanes for the mutating commands. Checkout and fast-forward share one lane because
-    // BusyBranch already serializes them; stash apply runs exclusively on its own lane (it's
-    // a distinct concept from branch ops — don't fold it into IsBranchOpInFlight). They are
-    // deliberately separate from the default Gen lane, which is only bumped by loads/repo-
-    // switch — a mutation must still report its result after a switch.
+    // Op lanes for the mutating commands run here — fast-forward on one, stash apply exclusively on
+    // its own (it's a distinct concept from branch ops — don't fold it into IsBranchOpInFlight).
+    // Checkout has no lane: the head store owns it. They are deliberately separate from the default
+    // Gen lane, which is only bumped by loads/repo-switch — a mutation must still report its result
+    // after a switch.
     private readonly GenerationGuard _branchOpGen;
     private readonly GenerationGuard _stashGen;
 
@@ -88,6 +97,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly KeyedViewModelList<BranchRow, BranchRow, BranchRow> _rows;
     private readonly Derived<string?> _placeholderText;
     private readonly Derived<BranchesContentKind> _contentKind;
+    private readonly Derived<string?> _pendingHead;
 
     public BranchesViewModel(
         IRepoRegistry registry,
@@ -98,6 +108,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IRepoSnapshotStore store,
         IRepoStatusStore status,
         IRepoOperationsStore ops,
+        IRepoHeadStore head,
         IFrameTicker ticker,
         ILocalizationService loc)
         : base(dispatcher, BranchesState.Initial)
@@ -108,6 +119,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _mode = mode;
         _loc = loc;
         _ops = ops;
+        _head = head;
         _syncSpinner = new SpinnerAnimation(ticker);
         _syncMark = new Tween(ticker, Transitions.SyncMarkSeconds);
         _syncMark.Completed += () => Update(s => s with { SyncedBranch = null });
@@ -121,7 +133,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         BusyBranch = Slice(s => s.BusyBranch);
         SyncingBranch = Slice(s => s.SyncingBranch);
         SyncedBranch = Slice(s => s.SyncedBranch);
-        PendingHead = Slice(s => s.PendingHead);
         LoadError = Slice(s => s.LoadError);
         IsLoading = Slice(s => s.IsLoading);
         WorktreeBranches = Slice(s => s.WorktreeBranches);
@@ -131,6 +142,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _rowModels = new Derived<IReadOnlyList<BranchRow>>(
             () => BranchTreeBuilder.BuildRows(Listing.Value, Ui.Value, status.Active.Value));
         _rows = new KeyedViewModelList<BranchRow, BranchRow, BranchRow>(_rowModels, r => r, r => r);
+        _pendingHead = new Derived<string?>(() => status.Active.Value.PendingBranchName);
         _placeholderText = new Derived<string?>(() =>
             LoadError.Value is { } err ? _loc.Strings.Value.BranchesLoadError(err) : null);
         // Loading shows the skeleton (no text); a failure shows the message; otherwise — listed, or no
@@ -153,6 +165,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // both sources feed one animation rather than each row driving its own tick.
         Subscriptions.Add(_ops.Active.Subscribe(_ => UpdateSyncSpinner()));
         Subscriptions.Add(SyncingBranch.Subscribe(_ => UpdateSyncSpinner()));
+        Subscriptions.Add(_pendingHead.Subscribe(_ => UpdateSyncSpinner()));
 
         // The operations store broadcasts this only after a push or pull has actually succeeded, and
         // both move HEAD — so it doubles as "HEAD just went in sync" without a second signal. Fetch
@@ -172,6 +185,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     /// </summary>
     public BranchBadgeKind BadgeKind(LocalBranchRow row)
     {
+        // A checkout moving HEAD onto this row outranks everything else, upstream or not: the row is
+        // not the current branch yet, and the spinner is what says so.
+        if (PendingHead.Value == row.Name) return BranchBadgeKind.Syncing;
         if (row.Upstream != BranchUpstreamKind.Tracked) return BranchBadgeKind.Counts;
         if (IsSyncing(row)) return BranchBadgeKind.Syncing;
         return SyncedBranch.Value == row.Name ? BranchBadgeKind.Synced : BranchBadgeKind.Counts;
@@ -199,7 +215,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private void UpdateSyncSpinner()
     {
         var ops = _ops.Active.Value;
-        if (SyncingBranch.Value != null || ops.IsPushing || ops.IsPulling || ops.IsFetching)
+        if (SyncingBranch.Value != null || PendingHead.Value != null || ops.IsPushing || ops.IsPulling || ops.IsFetching)
             _syncSpinner.Start();
         else
             _syncSpinner.Stop();
@@ -272,8 +288,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         // here we only refresh the per-repo UI fold state, drop the previous repo's selection,
         // and recompute the worktree-branch set. Listing is deliberately left untouched.
         // SyncedBranch is dropped rather than carried: the mark belongs to the repo whose operation
-        // earned it, and a same-named branch here didn't.
-        Update(s => s with { Ui = ui, Selection = null, PendingHead = null, SyncedBranch = null });
+        // earned it, and a same-named branch here didn't. PendingHead needs no reset — it's the head
+        // store's per-repo value, which swaps with the active repo on its own.
+        Update(s => s with { Ui = ui, Selection = null, SyncedBranch = null });
         RefreshWorktreeBranches();
     }
 
@@ -322,17 +339,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             if (selection.HasValue && !RefStillExists(selection.Value, listing))
                 selection = null;
 
-            var pendingHead = s.PendingHead;
-            if (pendingHead != null && ListingHeadIs(listing, pendingHead))
-                pendingHead = null;
-
             return s with
             {
                 Listing = listing,
                 LoadError = null,
                 IsLoading = false,
                 Selection = selection,
-                PendingHead = pendingHead,
             };
         });
 
@@ -364,13 +376,6 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
         foreach (var b in listing.LocalBranches)
             if (b.Name == sel.FullPath) return true;
-        return false;
-    }
-
-    private static bool ListingHeadIs(BranchListing listing, string branchName)
-    {
-        foreach (var b in listing.LocalBranches)
-            if (b is LocalBranchEntry.Head) return b.Name == branchName;
         return false;
     }
 
@@ -533,7 +538,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     public void ActivateLocalBranch(string fullPath, bool isHead)
     {
-        if (State.Value.IsBranchOpInFlight) return;
+        if (IsBranchOpInFlight) return;
         if (isHead) return;
         // Branch is checked out in a sibling worktree (or in the primary while a worktree
         // is active) — git will refuse the checkout. Surface the sibling instead so the
@@ -567,7 +572,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     public void ActivateRemoteBranch(string remoteName, string fullPath)
     {
-        if (State.Value.IsBranchOpInFlight) return;
+        if (IsBranchOpInFlight) return;
         if (LocalBranchExists(fullPath))
         {
             StartCheckoutLocal(fullPath);
@@ -636,33 +641,26 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         return false;
     }
 
+    // The head store runs it, holds the pending name, and reports the failure — everything this
+    // method used to do privately. What's left here is the guard, so a checkout can't start on top of
+    // a rename or a fast-forward.
     private void StartCheckoutLocal(string branchName)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        if (State.Value.IsBranchOpInFlight) return;
-
-        Update(s => s with { BusyBranch = branchName, PendingHead = branchName });
-
-        RunOutcome(
-            work: () => _gitService.CheckoutLocalBranch(repo, branchName),
-            onResult: outcome =>
-            {
-                var failed = outcome as GitOutcome.Failed;
-                Update(s => s with { BusyBranch = null, PendingHead = failed == null ? s.PendingHead : null });
-                _bus.Broadcast(new RefsChangedMessage(repo.Id));
-                _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
-                if (failed != null)
-                    _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.BranchesErrorCheckoutFailed, failed.Message));
-            },
-            lane: _branchOpGen);
+        if (IsBranchOpInFlight) return;
+        _head.Checkout(repo, branchName);
     }
+
+    // A branch op is in flight while this view model is running one (fast-forward, rename) or while
+    // HEAD is in motion. Both have to block a second mutation, and only one of them lives here.
+    private bool IsBranchOpInFlight => State.Value.BusyBranch != null || _pendingHead.Value != null;
 
     private void StartFastForwardLocal(string branchName, string remoteName, string remoteBranch)
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        if (State.Value.IsBranchOpInFlight) return;
+        if (IsBranchOpInFlight) return;
 
         Update(s => s with { BusyBranch = branchName, SyncingBranch = branchName });
 
@@ -844,7 +842,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     // Shared inputs for the local-branch context menu, resolved once from the active repo/state.
     private readonly record struct LocalBranchMenu(
-        Repo Repo, string Name, bool IsHead, Strings S, BranchesState State,
+        Repo Repo, string Name, bool IsHead, Strings S, bool OpInFlight,
         bool ThisRowBusy, bool CheckedOutElsewhere, string? HeadBranch, LocalBranchEntry? Entry);
 
     public IReadOnlyList<RepoBarContextMenu.Item> BuildLocalBranchMenuItems(string fullPath, bool isHead)
@@ -854,8 +852,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         var state = State.Value;
         var menu = new LocalBranchMenu(
-            repo, fullPath, isHead, _loc.Strings.Value, state,
-            ThisRowBusy: state.BusyBranch == fullPath,
+            repo, fullPath, isHead, _loc.Strings.Value, IsBranchOpInFlight,
+            // The row a checkout is switching to counts as busy too — it's the one git is working on.
+            ThisRowBusy: state.BusyBranch == fullPath || _pendingHead.Value == fullPath,
             CheckedOutElsewhere: state.WorktreeBranches.Contains(fullPath),
             HeadBranch: GetHeadBranchName(),
             Entry: FindLocalBranchEntry(fullPath));
@@ -878,7 +877,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
                 () => SwitchToSiblingHoldingBranch(name),
                 LucideIcons.Branch));
 
-        var checkoutDisabled = m.IsHead || m.State.IsBranchOpInFlight || m.CheckedOutElsewhere;
+        var checkoutDisabled = m.IsHead || m.OpInFlight || m.CheckedOutElsewhere;
         items.Add(new RepoBarContextMenu.Item(
             s.CommonCheckout,
             () => StartCheckoutLocal(name),
@@ -901,7 +900,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var ffBranch = tracked.Branch;
         var ffDisabled = m.ThisRowBusy
             || m.CheckedOutElsewhere
-            || m.State.IsBranchOpInFlight
+            || m.OpInFlight
             || tracked.Sync.Behind == 0;
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextFastForward(ffRemote, ffBranch),
@@ -919,7 +918,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = m.Repo;
         var name = m.Name;
         var head = m.HeadBranch;
-        var canMerge = !m.State.IsBranchOpInFlight;
+        var canMerge = !m.OpInFlight;
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextMerge(name, head),
             () => _bus.Broadcast(new ShowDialogMessage(onClose => new MergeBranchDialog
@@ -1028,8 +1027,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = _registry.Active.Value;
         if (repo == null) return Array.Empty<RepoBarContextMenu.Item>();
 
-        var state = State.Value;
-        var checkoutDisabled = state.IsBranchOpInFlight;
+        var checkoutDisabled = IsBranchOpInFlight;
         var headBranch = GetHeadBranchName();
 
         var capturedRepo = repo;
@@ -1052,7 +1050,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
             LucideIcons.Search));
 
         if (headBranch != null)
-            AddRemoteMergeRebaseMenuItems(items, s, capturedRepo, remoteRef, headBranch, state.IsBranchOpInFlight);
+            AddRemoteMergeRebaseMenuItems(items, s, capturedRepo, remoteRef, headBranch, IsBranchOpInFlight);
 
         items.Add(new RepoBarContextMenu.Item(
             s.BranchesContextDeleteRemoteBranch,
@@ -1131,8 +1129,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         };
     }
 
+    // Prefers the branch a checkout is switching to. Every caller hands this name to git — as a
+    // starting point, a merge target, a review ref — and while HEAD is in motion the listing still
+    // names the branch the user just left, which is the one thing none of them means.
     private string? GetHeadBranchName()
     {
+        if (_pendingHead.Value is { } pending) return pending;
         var listing = State.Value.Listing;
         if (listing == null) return null;
         foreach (var b in listing.LocalBranches)
@@ -1195,6 +1197,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _rowModels.Dispose();
         _placeholderText.Dispose();
         _contentKind.Dispose();
+        _pendingHead.Dispose();
         base.Dispose();
     }
 }
@@ -1217,15 +1220,10 @@ internal sealed record BranchesState(
     string? SyncingBranch,
     // The branch that just went in sync, held for the mark's lifetime (Transitions.SyncMarkSeconds).
     string? SyncedBranch,
-    string? PendingHead,
     bool IsLoading,
     string? LoadError,
     IReadOnlySet<string> WorktreeBranches)
 {
-    // A branch op is in flight whenever BusyBranch is non-null. Reading state should
-    // prefer this property over checking BusyBranch directly for intent clarity.
-    public bool IsBranchOpInFlight => BusyBranch != null;
-
     public static BranchesState Initial { get; } = new(
         Listing: null,
         Ui: new BranchesUiState(),
@@ -1233,7 +1231,6 @@ internal sealed record BranchesState(
         BusyBranch: null,
         SyncingBranch: null,
         SyncedBranch: null,
-        PendingHead: null,
         IsLoading: false,
         LoadError: null,
         WorktreeBranches: new HashSet<string>());

@@ -143,6 +143,7 @@
   "branches.section_stashes": "Stashes",
   "branches.header_on": "on",
   "branches.header_at": "at",
+  "branches.header_switching_to": "switching to",
   "branches.header_detached": "(detached HEAD)",
   "branches.context_new_branch": "New branch…",
   "branches.context_clean": "Clean…",

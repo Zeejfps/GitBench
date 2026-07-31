@@ -140,7 +140,21 @@ internal static class AppServices
             ctx.Require<IGitReadGate>(),
             ctx.Require<IUiDispatcher>()));
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
-        context.AddHostedService<IRepoStatusStore, RepoStatusStore>();
+        // The head store owns the checkout; the status store composes its pending branch into
+        // RepoStatus and, in return, tells it when a fresh read has landed. Same factory-plus-cast
+        // shape as the ingest wiring above, and for the same reason: the container can't cast, and a
+        // second delegating registration would dispose the store twice.
+        context.AddSingleton<IRepoHeadStore, RepoHeadStore>();
+        context.AddHostedService<IRepoStatusStore, RepoStatusStore>(ctx => new RepoStatusStore(
+            ctx.Require<IRepoOperationsStore>(),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IGitService>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IStartupSweepCoordinator>(),
+            ctx.Require<IGitReadGate>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IRepoHeadStore>(),
+            (IRepoHeadConfirm)ctx.Require<IRepoHeadStore>()));
 
         // The assistant's conversations, one per repo, in memory for the app session. The backend is
         // built by the store rather than registered on its own: it needs a live read of the

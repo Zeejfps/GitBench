@@ -17,9 +17,20 @@ public sealed record RepoStatus(
     int Behind,
     bool IsDirty,
     bool IsBusy,
-    bool HasUnseenError)
+    bool HasUnseenError,
+    // The branch a checkout is switching to, held until a fresh read confirms HEAD landed. Non-null
+    // means CurrentBranchName is still the branch the user just left.
+    string? PendingBranchName)
 {
-    public static readonly RepoStatus Unknown = new(null, false, false, 0, 0, false, false, false);
+    public static readonly RepoStatus Unknown = new(null, false, false, 0, 0, false, false, false, null);
+
+    // True while HEAD is moving and no fresh read has confirmed where to. Every branch name on this
+    // record is provisional until it clears — gate anything that would hand one to git as an argument.
+    public bool IsHeadInMotion => PendingBranchName != null;
+
+    // The branch HEAD is on, or is about to be on: the name to show the user, and the only one safe
+    // to seed a follow-up operation with.
+    public string? EffectiveBranchName => PendingBranchName ?? CurrentBranchName;
 }
 
 // Single source of truth for the cheap per-repo signals, including the checked-out branch's
@@ -69,6 +80,8 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     private readonly IStartupSweepCoordinator _sweep;
     private readonly IGitReadGate _gate;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IRepoHeadStore _head;
+    private readonly IRepoHeadConfirm _headConfirm;
     private bool _started;
     private bool _disposed;
 
@@ -89,7 +102,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep, IGitReadGate gate, IUiDispatcher dispatcher)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
     {
         _ops = ops;
         _registry = registry;
@@ -98,6 +111,8 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _sweep = sweep;
         _gate = gate;
         _dispatcher = dispatcher;
+        _head = head;
+        _headConfirm = headConfirm;
         // Recomputes whenever the active repo, its probe, or its op state changes — all tracked.
         _active = new Derived<RepoStatus>(() =>
         {
@@ -138,7 +153,10 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         return new RepoStatus(
             p.Branch, p.IsDetached, p.HasUpstream, p.Ahead, p.Behind, p.IsDirty,
             IsBusy: _ops.IsBusy(repoId),
-            HasUnseenError: _ops.HasUnseenError(repoId));
+            HasUnseenError: _ops.HasUnseenError(repoId),
+            // The probe names the branch the user left until a checkout settles; carrying the pending
+            // name here is what stops five view models each answering "current branch" differently.
+            PendingBranchName: _head.For(repoId).PendingBranch);
     }
 
     private void OnRepoListChange(ListChange<Repo> change)
@@ -230,6 +248,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         if (!_epoch.TryGetValue(repoId, out var cur) || cur != reservation) return;
         if (summary == null) { Refresh(repoId); return; }
         Probe(repoId).Value = summary;
+        _headConfirm.Confirm(repoId);
     }
 
     private void Refresh(Guid repoId)
@@ -254,8 +273,11 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
                 if (_epoch.TryGetValue(repoId, out var cur) && cur != gen) return;
                 // A failed probe (null) keeps the last known status: zeroing ahead/upstream here
                 // would silently disable push/pull in the toolbar while the branches view still
-                // shows the cached counts. The actual operations report their own errors.
-                if (summary != null) state.Value = summary;
+                // shows the cached counts. The actual operations report their own errors. It also
+                // settles nothing — a read that told us nothing can't confirm where HEAD landed.
+                if (summary == null) return;
+                state.Value = summary;
+                _headConfirm.Confirm(repoId);
             });
         });
     }

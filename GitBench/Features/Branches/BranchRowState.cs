@@ -22,10 +22,12 @@ internal sealed class BranchRowState(BranchRow row, BranchesViewModel vm) : IBra
     public State<bool> Hovered { get; } = new(false);
     public State<bool> ContextHighlighted { get; } = new(false);
 
-    // Non-null only for the rows whose badge an op can ever move — a local branch with a tracked
-    // upstream; every other kind carries no subscription at all.
+    // Non-null only for the rows whose trailing slot an op can ever change — any local branch, since
+    // a checkout puts a spinner there whether or not the branch has an upstream. Folders, remotes and
+    // stashes carry no subscription at all. An untracked row's Derived reads only the pending-head
+    // name, so the widening costs one cheap dependency per row rather than the full badge graph.
     public Derived<BranchBadgeKind>? Badge { get; } =
-        row is LocalBranchRow { Upstream: BranchUpstreamKind.Tracked } branch
+        row is LocalBranchRow branch
             ? new Derived<BranchBadgeKind>(() => vm.BadgeKind(branch))
             : null;
 

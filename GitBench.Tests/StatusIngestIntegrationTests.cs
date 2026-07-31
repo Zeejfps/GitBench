@@ -33,7 +33,8 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         var git = new GitService(new RepoActivityTracker());
         _sweep = new StartupSweepCoordinator(_gate);
-        _status = new RepoStatusStore(new IdleOperations(), _registry, git, _bus, _sweep, _gate, _dispatcher);
+        var head = new SettledHead();
+        _status = new RepoStatusStore(new IdleOperations(), _registry, git, _bus, _sweep, _gate, _dispatcher, head, head);
         _snapshots = new RepoSnapshotStore(_registry, git, _bus, _sweep, _status, _gate, _dispatcher);
     }
 
@@ -133,6 +134,14 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         {
             while (_queue.TryDequeue(out var action)) action();
         }
+    }
+
+    // No checkout ever in flight — these tests are about the ingest path, not HEAD motion.
+    private sealed class SettledHead : IRepoHeadStore, IRepoHeadConfirm
+    {
+        public RepoHead For(Guid repoId) => RepoHead.Settled;
+        public void Checkout(Repo repo, string branchName) { }
+        public void Confirm(Guid repoId) { }
     }
 
     private sealed class IdleOperations : IRepoOperationsStore

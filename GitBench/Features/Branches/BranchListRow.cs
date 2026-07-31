@@ -35,7 +35,10 @@ internal sealed record BranchListRow : Widget<BranchRowState>
         RowSelectionStyles RS() => theme.Styles.Value.RowSelection;
         bool Selected() => key is { } k && BranchRowKey.From(vm.Selection.Value) == k;
         bool Busy() => row is LocalBranchRow lb && vm.BusyBranch.Value == lb.Name;
-        bool Head() => row is LocalBranchRow lb && (vm.PendingHead.Value is { } ph ? lb.Name == ph : lb.IsHead);
+        // Head is what git says; Pending is where a checkout is heading. Kept apart deliberately —
+        // a row we've only *asked* to switch to must never render as the branch you're already on.
+        bool Head() => row is LocalBranchRow lb && lb.IsHead;
+        bool Pending() => row is LocalBranchRow lb && vm.PendingHead.Value == lb.Name;
         bool Worktree() => row is LocalBranchRow lb && vm.WorktreeBranches.Value.Contains(lb.Name);
 
         var treeRow = new TreeRow
@@ -54,7 +57,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
                     case FolderRow: return bv.SectionHeaderText;
                     case StashRow: return Selected() ? RS().Text : bv.RowText;
                     case LocalBranchRow lb:
-                        if (Busy() && !Head()) return bv.RowTextDim;
+                        if (Pending() || (Busy() && !Head())) return bv.RowTextDim;
                         return lb.Upstream switch
                         {
                             BranchUpstreamKind.Tracked => bv.AheadColor,
@@ -72,10 +75,14 @@ internal sealed record BranchListRow : Widget<BranchRowState>
                 if (Selected()) return RS().Text;
                 if (row is LocalHeaderRow or RemotesHeaderRow or StashesHeaderRow or RemoteHeaderRow)
                     return bv.SectionHeaderText;
+                if (Pending()) return bv.RowTextDim;
                 if (Head()) return bv.HeadIdleText;
                 if (Busy() || Worktree()) return bv.RowTextDim;
                 return bv.RowText;
             }),
+            // Only the confirmed head is bold. A pending row stays dim and normal-weight until git
+            // says otherwise — that difference, plus the spinner in the trailing slot, is the whole
+            // signal that the switch hasn't landed.
             NameWeight = Prop.Bind(() => Head() ? FontWeight.Bold : FontWeight.Normal),
             // Section headers (LOCAL / REMOTES / STASHES) match the repo bar's group headers: caption
             // sized, indented to the group-header indent (Hair, outdented from content), with a

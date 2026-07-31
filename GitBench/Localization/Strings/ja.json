@@ -143,6 +143,7 @@
   "branches.section_stashes": "スタッシュ",
   "branches.header_on": "ブランチ",
   "branches.header_at": "コミット",
+  "branches.header_switching_to": "切り替え中:",
   "branches.header_detached": "（HEAD切り離し）",
   "branches.context_new_branch": "新規ブランチ…",
   "branches.context_clean": "クリーンアップ…",

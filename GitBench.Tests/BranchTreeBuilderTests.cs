@@ -17,7 +17,8 @@ public class BranchTreeBuilderTests
         bool hasUpstream = true,
         int ahead = 0,
         int behind = 0) =>
-        new(branch, detached, hasUpstream, ahead, behind, IsDirty: false, IsBusy: false, HasUnseenError: false);
+        new(branch, detached, hasUpstream, ahead, behind, IsDirty: false, IsBusy: false, HasUnseenError: false,
+            PendingBranchName: null);
 
     private static LocalBranchEntry.Head Head(
         string name = "main", HeadUpstreamState upstream = HeadUpstreamState.Tracked) =>
