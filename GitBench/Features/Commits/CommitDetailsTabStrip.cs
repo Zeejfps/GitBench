@@ -35,6 +35,7 @@ internal sealed record CommitDetailsTabStrip : Widget
             // the strip it clips them and the wheel — the vertical wheel included — pans it sideways.
             new HorizontalScrollArea
             {
+                VerticalWheelPans = true,
                 Child = new Row
                 {
                     CrossAxis = CrossAxisAlignment.Stretch,

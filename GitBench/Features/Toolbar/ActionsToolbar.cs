@@ -38,6 +38,7 @@ internal sealed record ActionsToolbar : Widget
                     [
                         new HorizontalScrollArea
                         {
+                            VerticalWheelPans = true,
                             Child = new Row
                             {
                                 Gap = WithinClusterGap,
