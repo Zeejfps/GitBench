@@ -75,7 +75,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
 {
     private readonly IRepoOperationsStore _ops;
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitStatusReader _git;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
     private readonly IGitReadGate _gate;
@@ -102,7 +102,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitService git, IMessageBus bus, IStartupSweepCoordinator sweep, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitStatusReader git, IMessageBus bus, IStartupSweepCoordinator sweep, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
     {
         _ops = ops;
         _registry = registry;

@@ -18,7 +18,8 @@ namespace GitBench.Features.Operations;
 internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitStatusReader _gitStatus;
+    private readonly IGitIntegrationOperations _gitIntegration;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly SpinnerAnimation _spinner;
@@ -50,7 +51,8 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
 
     public OperationViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitStatusReader gitStatus,
+        IGitIntegrationOperations gitIntegration,
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
         IMessageBus bus,
@@ -58,7 +60,8 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         : base(dispatcher, OperationVmState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
+        _gitStatus = gitStatus;
+        _gitIntegration = gitIntegration;
         _bus = bus;
         _loc = loc;
         _spinner = new SpinnerAnimation(ticker);
@@ -109,7 +112,7 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         var op = Operation.Value;
         if (repo == null || op == null) return;
 
-        var service = _gitService;
+        var service = _gitIntegration;
         var bus = _bus;
         var started = TryRunOutcome(
             _continueLane,
@@ -148,11 +151,11 @@ internal sealed class OperationViewModel : ViewModelBase<OperationVmState>
         }
 
         var repoId = repo.Id;
-        var service = _gitService;
+        var status = _gitStatus;
         RunBackground<RepoOperation?>(
             () =>
             {
-                try { return (service.GetOperation(repo), null); }
+                try { return (status.GetOperation(repo), null); }
                 catch { return (null, null); }
             },
             (op, _) =>

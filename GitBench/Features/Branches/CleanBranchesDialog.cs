@@ -36,7 +36,7 @@ internal sealed record CleanBranchesDialog : Widget
         var vm = new CleanBranchesDialogViewModel(
             Repo,
             Candidates,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

@@ -34,7 +34,7 @@ internal sealed record ResetCommitDialog : Widget
     {
         var vm = new ResetCommitDialogViewModel(
             new ResetCommitRequest(Repo, Sha),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

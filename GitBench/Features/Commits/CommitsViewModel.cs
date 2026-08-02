@@ -32,7 +32,10 @@ public abstract record CommitsRenderState
 internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitStatusReader _gitStatus;
+    private readonly IGitHistoryReader _gitHistory;
+    private readonly IGitBranchOperations _gitBranches;
+    private readonly IGitIntegrationOperations _gitIntegration;
     private readonly IMessageBus _bus;
     private readonly IRepoHeadStore _head;
     private readonly ILocalizationService _loc;
@@ -75,7 +78,10 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     public CommitsViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitStatusReader gitStatus,
+        IGitHistoryReader gitHistory,
+        IGitBranchOperations gitBranches,
+        IGitIntegrationOperations gitIntegration,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoSnapshotStore store,
@@ -88,7 +94,10 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         })
     {
         _registry = registry;
-        _gitService = gitService;
+        _gitStatus = gitStatus;
+        _gitHistory = gitHistory;
+        _gitBranches = gitBranches;
+        _gitIntegration = gitIntegration;
         _bus = bus;
         _head = head;
         _loc = loc;
@@ -191,7 +200,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
     private (ResetProbe?, string?) ProbeReset(Repo repo, string sha)
     {
-        var fetched = _gitService.GetLocalChanges(repo);
+        var fetched = _gitStatus.GetLocalChanges(repo);
         if (fetched is Fetched<LocalChangesSnapshot>.Failed failed)
             return (new ResetProbe.Failed(failed.Message), null);
 
@@ -199,7 +208,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
         var staged = changes.Staged.Count;
         var unstaged = changes.Unstaged.Count;
         if (staged == 0 && unstaged == 0)
-            return (new ResetProbe.CleanReset(_gitService.ResetCurrent(repo, sha, ResetMode.Hard)), null);
+            return (new ResetProbe.CleanReset(_gitBranches.ResetCurrent(repo, sha, ResetMode.Hard)), null);
         return (new ResetProbe.NeedsDialog(staged, unstaged), null);
     }
 
@@ -319,7 +328,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
 
         TryRunBackground<MoveBranchProbe>(
             _moveGen,
-            work: () => (_gitService.IsAncestor(capturedRepo, capturedBranch, capturedSha)
+            work: () => (_gitHistory.IsAncestor(capturedRepo, capturedBranch, capturedSha)
                 ? MoveBranchProbe.FastForward
                 : MoveBranchProbe.NeedsConfirm, null),
             onResult: (probe, error) =>
@@ -335,7 +344,7 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
                     _head.RunMove(
                         capturedRepo,
                         capturedBranch,
-                        () => _gitService.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true),
+                        () => _gitBranches.MoveBranch(capturedRepo, capturedBranch, capturedSha, checkout: true),
                         strings.CommitsErrorResetBranchFailed);
                     return;
                 }
@@ -386,12 +395,12 @@ internal sealed class CommitsViewModel : ViewModelBase<CommitsState>
     // same and lets the banner (which detects CHERRY_PICK_HEAD) drive resolve/continue/abort; a
     // hard failure (dirty tree, bad ref, …) surfaces an error.
     public void RequestCherryPick(string sha) =>
-        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorCherryPickFailed, (repo, s) => _gitService.CherryPick(repo, s));
+        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorCherryPickFailed, (repo, s) => _gitIntegration.CherryPick(repo, s));
 
     // Creates a new commit that undoes the named commit. Same off-thread flow as cherry-pick;
     // its conflict sentinel is REVERT_HEAD, also handled by the operation banner.
     public void RequestRevert(string sha) =>
-        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorRevertFailed, (repo, s) => _gitService.RevertCommit(repo, s));
+        RunCommitApply(sha, _loc.Strings.Value.CommitsErrorRevertFailed, (repo, s) => _gitIntegration.RevertCommit(repo, s));
 
     // Shared driver for the cherry-pick / revert one-shot ops: gate re-entry, run the git op
     // off-thread on the apply lane, then either refresh (success, incl. Conflicted — the

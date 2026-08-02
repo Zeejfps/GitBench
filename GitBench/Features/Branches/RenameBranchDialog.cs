@@ -27,7 +27,7 @@ internal sealed record RenameBranchDialog : Widget
     {
         var vm = new RenameBranchDialogViewModel(
             new RenameBranchRequest(Repo, CurrentName),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoStatusStore>(),

@@ -38,7 +38,7 @@ internal sealed record EditRemoteDialog : Widget
 
         var vm = new EditRemoteDialogViewModel(
             request,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

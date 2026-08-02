@@ -23,7 +23,7 @@ internal sealed record MergeBranchDialog : Widget
     {
         var vm = new MergeBranchDialogViewModel(
             Request,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitIntegrationOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

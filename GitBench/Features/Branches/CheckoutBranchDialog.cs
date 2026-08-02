@@ -28,7 +28,7 @@ internal sealed record CheckoutBranchDialog : Widget
     {
         var vm = new CheckoutBranchDialogViewModel(
             new CheckoutRequest(Repo, RemoteName, RemoteBranchName, SuggestedLocalName),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoHeadStore>(),

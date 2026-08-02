@@ -17,7 +17,7 @@ internal sealed record StashFileRow(string Path, FileChange Display, bool IsUntr
 internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, IDialogViewModel
 {
     private readonly Repo _repo;
-    private readonly IGitService _gitService;
+    private readonly IGitStashOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly HashSet<string> _untrackedPaths = new();
     private readonly string _doneToast;
@@ -38,7 +38,7 @@ internal sealed class StashDialogViewModel : ViewModelBase<StashDialogState>, ID
     public StashDialogViewModel(
         StashRequest request,
         LocalChangesSnapshot snapshot,
-        IGitService gitService,
+        IGitStashOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         LocalChangesSelectionStore selectionStore,

@@ -138,10 +138,10 @@ internal static class ReadTools
 
 internal sealed class GetStatusTool : IAssistantTool
 {
-    private readonly IGitService _git;
+    private readonly IGitStatusReader _git;
     private readonly Repo _repo;
 
-    public GetStatusTool(IGitService git, Repo repo)
+    public GetStatusTool(IGitStatusReader git, Repo repo)
     {
         _git = git;
         _repo = repo;
@@ -171,10 +171,10 @@ internal sealed class GetStatusTool : IAssistantTool
 
 internal sealed class GetLocalChangesTool : IAssistantTool
 {
-    private readonly IGitService _git;
+    private readonly IGitStatusReader _git;
     private readonly Repo _repo;
 
-    public GetLocalChangesTool(IGitService git, Repo repo)
+    public GetLocalChangesTool(IGitStatusReader git, Repo repo)
     {
         _git = git;
         _repo = repo;
@@ -282,10 +282,10 @@ internal sealed class GetCommitHistoryTool : IAssistantTool
     private const int DefaultLimit = 40;
     private const int MaxLimit = 300;
 
-    private readonly IGitService _git;
+    private readonly IGitHistoryReader _git;
     private readonly Repo _repo;
 
-    public GetCommitHistoryTool(IGitService git, Repo repo)
+    public GetCommitHistoryTool(IGitHistoryReader git, Repo repo)
     {
         _git = git;
         _repo = repo;
@@ -356,10 +356,10 @@ internal sealed class GetCommitHistoryTool : IAssistantTool
 
 internal sealed class GetCommitDetailsTool : IAssistantTool
 {
-    private readonly IGitService _git;
+    private readonly IGitHistoryReader _git;
     private readonly Repo _repo;
 
-    public GetCommitDetailsTool(IGitService git, Repo repo)
+    public GetCommitDetailsTool(IGitHistoryReader git, Repo repo)
     {
         _git = git;
         _repo = repo;
@@ -406,10 +406,10 @@ internal sealed class GetCommitDetailsTool : IAssistantTool
 
 internal sealed class GetBranchesTool : IAssistantTool
 {
-    private readonly IGitService _git;
+    private readonly IGitBranchOperations _git;
     private readonly Repo _repo;
 
-    public GetBranchesTool(IGitService git, Repo repo)
+    public GetBranchesTool(IGitBranchOperations git, Repo repo)
     {
         _git = git;
         _repo = repo;

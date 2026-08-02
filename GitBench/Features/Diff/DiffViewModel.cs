@@ -100,7 +100,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     private readonly IReadable<DiffTarget?> _target;
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitDiffReader _gitDiff;
+    private readonly IGitWorkingTreeOperations _gitWorkingTree;
+    private readonly IGitConflictOperations _gitConflicts;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService? _loc;
     // When set, this pane is pinned to a specific repo (a commit diff in the Review window or a
@@ -155,7 +157,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public DiffViewModel(
         IReadable<DiffTarget?> target,
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitDiffReader gitDiff,
+        IGitWorkingTreeOperations gitWorkingTree,
+        IGitConflictOperations gitConflicts,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IPlatformShell? shell = null,
@@ -166,7 +170,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         _target = target;
         _registry = registry;
-        _gitService = gitService;
+        _gitDiff = gitDiff;
+        _gitWorkingTree = gitWorkingTree;
+        _gitConflicts = gitConflicts;
         _bus = bus;
         _shell = shell;
         _loc = loc;
@@ -281,7 +287,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var diff = loaded.Result;
         if (target.Path != diff.Path || target.Side != diff.Side) return;
 
-        var git = _gitService;
+        var git = _gitDiff;
         RunBackground<List<string>>(
             work: () =>
             {
@@ -361,8 +367,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         RunMutation(
             MutationEffects.Index(_bus, repo.Id, path),
             work: () => stage
-                ? _gitService.Stage(repo, new[] { path })
-                : _gitService.Unstage(repo, new[] { path }),
+                ? _gitWorkingTree.Stage(repo, new[] { path })
+                : _gitWorkingTree.Unstage(repo, new[] { path }),
             onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
@@ -381,7 +387,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // side. For conflicts resolved outside the app (an external editor / merge tool).
     public void ResolveMarkResolved() => RunResolve((svc, repo, path) => svc.MarkResolved(repo, path));
 
-    private void RunResolve(Func<IGitService, Repo, string, GitOutcome> op)
+    private void RunResolve(Func<IGitConflictOperations, Repo, string, GitOutcome> op)
     {
         var repo = ResolveRepo();
         if (repo == null) return;
@@ -390,7 +396,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var path = conflict.Path;
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id),
-            work: () => op(_gitService, repo, path),
+            work: () => op(_gitConflicts, repo, path),
             onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
@@ -446,7 +452,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     {
         if (!TryGetPatchContext(hunkIndex, out var repo, out var shown)) return;
         var span = spanOf(shown.Hunks[hunkIndex]);
-        var service = _gitService;
+        var service = _gitDiff;
+        var workingTree = _gitWorkingTree;
         var bus = _bus;
         var dispatcher = Dispatcher;
         var repoId = repo.Id;
@@ -459,7 +466,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             {
                 try
                 {
-                    var outcome = service.ApplyPatch(repo, patch, cached: true, reverse: r);
+                    var outcome = workingTree.ApplyPatch(repo, patch, cached: true, reverse: r);
                     error = outcome.FailureMessage;
                 }
                 catch (Exception ex) { error = ex.Message; }
@@ -495,7 +502,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // Worker-side: the file's per-side diff, filtered to the hunks whose shared-side lines
     // intersect the span. Nothing = that side has no content left in the region (or at all).
     private static (string? Patch, bool Nothing, string? Error) MapWorkingTreeHunk(
-        IGitService service,
+        IGitDiffReader service,
         Repo repo,
         string path,
         DiffSide mapSide,
@@ -526,7 +533,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (!HunkPatchBuilder.CanPatchHunk(shown)) return;
         var repo = ResolveRepo();
         if (repo == null) return;
-        var service = _gitService;
+        var service = _gitDiff;
         var dispatcher = Dispatcher;
         var gen = ++_hunkStateGen;
         Task.Run(() =>
@@ -618,7 +625,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private void RunApplyPatch(Repo repo, string patch, bool cached, bool reverse, DiffResult original)
         => RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id),
-            work: () => _gitService.ApplyPatch(repo, patch, cached, reverse),
+            work: () => _gitWorkingTree.ApplyPatch(repo, patch, cached, reverse),
             onResult: outcome =>
             {
                 Update(s => s with { OpError = outcome.FailureMessage });
@@ -693,7 +700,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var commitSha = target.CommitSha;
         var baseSha = target.BaseSha;
         var mode = State.Value.Mode;
-        var git = _gitService;
+        var git = _gitDiff;
+        var conflicts = _gitConflicts;
         // Capture localized placeholder text up front so the background worker doesn't touch the
         // observable off the UI thread.
         var binaryText = _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown";
@@ -702,15 +710,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
         // file off the same worker thread.
         RunBackground<LoadResult>(
-            work: () => LoadDiffAndRender(git, repo, path, side, commitSha, baseSha, mode, binaryText, noVersionText),
+            work: () => LoadDiffAndRender(git, conflicts, repo, path, side, commitSha, baseSha, mode, binaryText, noVersionText),
             onResult: (result, error) => OnDiffLoaded(result, error, repo, commitSha, baseSha));
     }
 
     // Runs on the background worker: no `this` capture, no observable access. Loads the diff (and,
     // in FullFile mode, the whole new-side file) and packages the render to show.
     private static (LoadResult? Result, string? Error) LoadDiffAndRender(
-        IGitService git, Repo repo, string path, DiffSide side, string? commitSha, string? baseSha,
-        DiffViewMode mode, string binaryText, string noVersionText)
+        IGitDiffReader git, IGitConflictOperations conflicts, Repo repo, string path, DiffSide side,
+        string? commitSha, string? baseSha, DiffViewMode mode, string binaryText, string noVersionText)
     {
         // A conflicted working-tree file gets the resolution header, not a normal diff — but only
         // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
@@ -718,7 +726,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // null for the common non-conflict case.
         if (side is DiffSide.Unstaged or DiffSide.WorkingTree && mode == DiffViewMode.Diff)
         {
-            var conflict = git.GetConflictContext(repo, path);
+            var conflict = conflicts.GetConflictContext(repo, path);
             if (conflict != null)
                 return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
         }
@@ -738,7 +746,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // rendering as it did before (non-image path, unreadable/oversized blob, LFS pointer standing
     // in for the real bytes, a format neither codec handles).
     private static DiffRenderState? BuildImagePreview(
-        IGitService git, Repo repo, DiffResult diff, string path, DiffSide side,
+        IGitDiffReader git, Repo repo, DiffResult diff, string path, DiffSide side,
         string? commitSha, string? baseSha)
     {
         if (!diff.IsBinary || diff.ErrorMessage != null) return null;
@@ -787,7 +795,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // and marks which lines were added. Returns a Placeholder for cases with no readable current
     // version (binary, diff error, or a deleted/absent file).
     private static DiffRenderState BuildFullFile(
-        IGitService git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha,
+        IGitDiffReader git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha,
         string? baseSha, string binaryText, string noVersionText)
     {
         if (diff.IsBinary) return new DiffRenderState.Placeholder(binaryText);
@@ -846,7 +854,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // to the still-current diff — an optimistic hunk apply may have swapped Result underneath us.
     private void StartHighlight(Repo repo, DiffResult diff, string? commitSha, string? baseSha)
     {
-        var git = _gitService;
+        var git = _gitDiff;
         RunBackground<DiffHighlight>(
             work: () => (DiffHighlightCoordinator.Compute(git, repo, diff, commitSha, baseSha), null),
             onResult: (highlight, _) =>

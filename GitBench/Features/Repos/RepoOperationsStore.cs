@@ -86,7 +86,7 @@ public interface IRepoOperationsStore
 internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitRemoteOperations _git;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
@@ -104,7 +104,7 @@ internal sealed class RepoOperationsStore : IRepoOperationsStore, IHostedService
 
     public IReadable<RepoOperations> Active => _active;
 
-    public RepoOperationsStore(IRepoRegistry registry, IGitService git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
+    public RepoOperationsStore(IRepoRegistry registry, IGitRemoteOperations git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
     {
         _registry = registry;
         _git = git;

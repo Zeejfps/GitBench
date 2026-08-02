@@ -43,7 +43,7 @@ internal sealed record CreateBranchDialog : Widget
             StartPoint,
             StartPointLabel,
             InitialName,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoHeadStore>(),

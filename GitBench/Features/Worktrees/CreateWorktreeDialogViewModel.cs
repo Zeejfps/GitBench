@@ -24,7 +24,7 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
 
     public CreateWorktreeDialogViewModel(
         CreateWorktreeRequest request,
-        IGitService gitService,
+        IGitWorktreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

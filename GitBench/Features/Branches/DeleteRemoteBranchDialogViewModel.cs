@@ -12,7 +12,7 @@ internal sealed class DeleteRemoteBranchDialogViewModel : IDialogViewModel
 
     public DeleteRemoteBranchDialogViewModel(
         DeleteRemoteBranchRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

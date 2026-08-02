@@ -20,7 +20,7 @@ namespace GitBench.Features.Worktrees;
 internal sealed class WorktreeSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitWorktreeOperations _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
@@ -30,7 +30,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
 
     public WorktreeSyncService(
         IRepoRegistry registry,
-        IGitService git,
+        IGitWorktreeOperations git,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IStartupSweepCoordinator sweep)

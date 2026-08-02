@@ -15,7 +15,7 @@ internal sealed class ReconcilePullDialogViewModel : IDialogViewModel
 
     public ReconcilePullDialogViewModel(
         Repo repo,
-        IGitService gitService,
+        IGitRemoteOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

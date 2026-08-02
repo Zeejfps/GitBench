@@ -27,7 +27,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
     private readonly Guid? _targetGroupId;
 
     public CloneRepoDialogViewModel(
-        IGitService gitService,
+        IGitRemoteOperations gitService,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,

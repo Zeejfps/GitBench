@@ -28,7 +28,7 @@ internal sealed record DropStashDialog : Widget
         var vm = new DropStashViewModel(
             Repo,
             Index,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitStashOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

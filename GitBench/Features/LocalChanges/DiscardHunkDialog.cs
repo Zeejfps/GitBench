@@ -21,7 +21,7 @@ internal sealed record DiscardHunkDialog : Widget
     {
         var vm = new DiscardHunkViewModel(
             new DiscardHunkRequest(Repo, Patch),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitWorkingTreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 
@@ -61,7 +61,7 @@ internal sealed class DiscardHunkViewModel : IDialogViewModel
 
     public DiscardHunkViewModel(
         DiscardHunkRequest request,
-        IGitService gitService,
+        IGitWorkingTreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

@@ -13,7 +13,7 @@ internal sealed class ForcePushDialogViewModel : IDialogViewModel
 
     public ForcePushDialogViewModel(
         Repo repo,
-        IGitService gitService,
+        IGitRemoteOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

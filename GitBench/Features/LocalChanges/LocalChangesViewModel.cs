@@ -38,7 +38,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private static readonly IReadOnlyList<FileChange> Empty = [];
 
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitStatusReader _gitStatus;
+    private readonly IGitWorkingTreeOperations _gitWorkingTree;
+    private readonly IGitConflictOperations _gitConflicts;
+    private readonly IGitStashOperations _gitStash;
+    private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IMessageBus _bus;
     private readonly LocalChangesSelectionStore _selectionStore;
     private readonly IPlatformShell _shell;
@@ -97,7 +101,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
     public LocalChangesViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitStatusReader gitStatus,
+        IGitWorkingTreeOperations gitWorkingTree,
+        IGitConflictOperations gitConflicts,
+        IGitStashOperations gitStash,
+        IGitSubmoduleOperations gitSubmodules,
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
         IMessageBus bus,
@@ -110,7 +118,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
+        _gitStatus = gitStatus;
+        _gitWorkingTree = gitWorkingTree;
+        _gitConflicts = gitConflicts;
+        _gitStash = gitStash;
+        _gitSubmodules = gitSubmodules;
         _bus = bus;
         _selectionStore = selectionStore;
         _shell = shell;
@@ -293,7 +305,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             // The staged panel is seeded with the index-vs-HEAD list the panel already holds; the
             // amend diff (index-vs-HEAD^) is deferred to the async refresh kicked below.
             var repo = _registry.Active.Value;
-            var head = repo != null ? _gitService.GetHeadCommitMessage(repo) : null;
+            var head = repo != null ? _gitStatus.GetHeadCommitMessage(repo) : null;
             var session = AmendSession.Begin(
                 State.Value.Title,
                 State.Value.Description,
@@ -634,7 +646,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 GitOutcome.Failed? firstFailure = null;
                 foreach (var path in paths)
                 {
-                    if (_gitService.MarkResolved(repo, path) is GitOutcome.Failed failed)
+                    if (_gitConflicts.MarkResolved(repo, path) is GitOutcome.Failed failed)
                         firstFailure ??= failed;
                 }
                 return firstFailure ?? GitOutcome.Ok;
@@ -665,7 +677,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         var primaryId = repo.IsPrimary ? repo.Id : (repo.ParentRepoId ?? repo.Id);
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(primaryId),
-            work: () => _gitService.UpdateSubmodules(repo, req),
+            work: () => _gitSubmodules.UpdateSubmodules(repo, req),
             onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
@@ -715,7 +727,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id).AndRefs(),
-            work: () => _gitService.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths),
+            work: () => _gitStash.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths),
             onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
     }
 
@@ -783,7 +795,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // snapshot through OnStoreLocalChanges.
         RunMutation(
             MutationEffects.Commit(_bus, repo.Id),
-            work: () => _gitService.Commit(repo, message, amend),
+            work: () => _gitWorkingTree.Commit(repo, message, amend),
             onResult: outcome =>
             {
                 _commitSpinner.Stop();
@@ -958,7 +970,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void RefreshAmendStaged(Repo repo)
     {
         RunBackground<IReadOnlyList<FileChange>>(
-            work: () => (_gitService.GetAmendStagedFiles(repo), null),
+            work: () => (_gitStatus.GetAmendStagedFiles(repo), null),
             onResult: (stagedFiles, _) =>
             {
                 if (_registry.Active.Value?.Id != repo.Id) return;
@@ -1077,8 +1089,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         ApplyOptimisticMove(paths, isStage ? DiffSide.Unstaged : DiffSide.Staged);
 
         RunIndexMutation(repo, () => isStage
-            ? _gitService.Stage(repo, paths)
-            : _gitService.Unstage(repo, paths),
+            ? _gitWorkingTree.Stage(repo, paths)
+            : _gitWorkingTree.Unstage(repo, paths),
             paths.Count == 1 ? paths[0] : null);
     }
 
@@ -1137,10 +1149,10 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
         RunIndexMutation(repo, () =>
         {
-            if (toUnstage.Count > 0 && _gitService.Unstage(repo, toUnstage) is GitOutcome.Failed failed)
+            if (toUnstage.Count > 0 && _gitWorkingTree.Unstage(repo, toUnstage) is GitOutcome.Failed failed)
                 return failed;
             return toResetToParent.Count > 0
-                ? _gitService.ResetToParent(repo, toResetToParent)
+                ? _gitWorkingTree.ResetToParent(repo, toResetToParent)
                 : GitOutcome.Ok;
         }, movedToUnstaged.Count == 1 ? movedToUnstaged[0] : null);
     }

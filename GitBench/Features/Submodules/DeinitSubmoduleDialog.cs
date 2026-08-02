@@ -24,7 +24,7 @@ internal sealed record DeinitSubmoduleDialog : Widget
     {
         var vm = new DeinitSubmoduleDialogViewModel(
             new DeinitSubmoduleViewRequest(Primary, Submodule),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitSubmoduleOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

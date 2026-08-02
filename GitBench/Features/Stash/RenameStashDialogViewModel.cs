@@ -15,7 +15,7 @@ internal sealed class RenameStashDialogViewModel : IDialogViewModel
 
     public RenameStashDialogViewModel(
         RenameStashRequest request,
-        IGitService gitService,
+        IGitStashOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

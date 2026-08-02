@@ -60,7 +60,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
 
         _commitBox = new LocalChangesViewModel(
             _registry,
-            _git,
+            _git, _git, _git, _git, _git,
             _dispatcher,
             new FrameTicker(),
             _bus,

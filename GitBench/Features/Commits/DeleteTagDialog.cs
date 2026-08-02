@@ -28,7 +28,7 @@ internal sealed record DeleteTagDialog : Widget
     {
         var vm = new DeleteTagDialogViewModel(
             new DeleteTagRequest(Repo, TagName),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitTagOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

@@ -24,7 +24,7 @@ namespace GitBench.Features.Submodules;
 internal sealed class SubmoduleSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitSubmoduleOperations _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
@@ -34,7 +34,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
 
     public SubmoduleSyncService(
         IRepoRegistry registry,
-        IGitService git,
+        IGitSubmoduleOperations git,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IStartupSweepCoordinator sweep)

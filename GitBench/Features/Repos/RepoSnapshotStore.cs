@@ -52,7 +52,10 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     private const int ActiveReadyFallbackMs = 5000;
 
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitHistoryReader _gitHistory;
+    private readonly IGitStatusReader _gitStatus;
+    private readonly IGitBranchOperations _gitBranches;
+    private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
     private readonly IRepoStatusIngest _statusIngest;
@@ -94,7 +97,10 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
 
     public RepoSnapshotStore(
         IRepoRegistry registry,
-        IGitService git,
+        IGitHistoryReader gitHistory,
+        IGitStatusReader gitStatus,
+        IGitBranchOperations gitBranches,
+        IGitSubmoduleOperations gitSubmodules,
         IMessageBus bus,
         IStartupSweepCoordinator sweep,
         IRepoStatusIngest statusIngest,
@@ -102,7 +108,10 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         IUiDispatcher dispatcher)
     {
         _registry = registry;
-        _git = git;
+        _gitHistory = gitHistory;
+        _gitStatus = gitStatus;
+        _gitBranches = gitBranches;
+        _gitSubmodules = gitSubmodules;
         _bus = bus;
         _sweep = sweep;
         _statusIngest = statusIngest;
@@ -278,7 +287,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     // swallowed into a perpetual "Loading…".
     private Fetched<CommitSnapshot> LoadCommits(Repo repo)
     {
-        try { return _git.Load(repo, MaxCommits); }
+        try { return _gitHistory.Load(repo, MaxCommits); }
         catch (Exception ex)
         {
             return new Fetched<CommitSnapshot>.Failed(ex.Message);
@@ -286,7 +295,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     }
 
     private void ReloadBranches(Repo repo) =>
-        LoadSlice(repo, GitReadKind.Branches, _branchesLane, _branchesCache, _branches, r => _git.GetBranches(r));
+        LoadSlice(repo, GitReadKind.Branches, _branchesLane, _branchesCache, _branches, r => _gitBranches.GetBranches(r));
 
     // The active/warm repo's file-list read carries the same `git status --branch` summary the status
     // store would otherwise probe for separately. Reserve the status slot's next epoch before the read
@@ -303,7 +312,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         => (result as Fetched<LocalChangesData>.Ok)?.Value.Snapshot.Summary;
 
     private Fetched<LocalChangesData> LoadLocalChanges(Repo repo)
-        => _git.GetLocalChanges(repo).Map(snap => BuildLocalData(repo, snap));
+        => _gitStatus.GetLocalChanges(repo).Map(snap => BuildLocalData(repo, snap));
 
     private LocalChangesData BuildLocalData(Repo repo, LocalChangesSnapshot snap)
     {
@@ -311,7 +320,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         // Submodules are one level deep in our model, so a submodule row has no nested drift.
         if (!repo.IsSubmodule)
         {
-            var subs = _git.ListSubmodules(repo);
+            var subs = _gitSubmodules.ListSubmodules(repo);
             if (subs.Count > 0)
             {
                 var driftList = new List<SubmoduleInfo>();
@@ -327,7 +336,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
                 drift = driftList;
             }
         }
-        return new LocalChangesData(snap, drift, _git.GetMergeMessage(repo));
+        return new LocalChangesData(snap, drift, _gitStatus.GetMergeMessage(repo));
     }
 
     // ---- warm loads (non-active repos: refresh the cache only, never the exposed state) ----
@@ -336,7 +345,7 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         WarmSlice(repo, GitReadKind.Commits, _commitsCache, LoadCommits, static s => s is Fetched<CommitSnapshot>.Failed);
 
     private void WarmBranches(Repo repo) =>
-        WarmSlice(repo, GitReadKind.Branches, _branchesCache, r => _git.GetBranches(r), static b => b is Fetched<BranchListing>.Failed);
+        WarmSlice(repo, GitReadKind.Branches, _branchesCache, r => _gitBranches.GetBranches(r), static b => b is Fetched<BranchListing>.Failed);
 
     private void WarmLocal(Repo repo) =>
         WarmSlice(repo, GitReadKind.Status, _localCache, LoadLocalChanges, static d => d is Fetched<LocalChangesData>.Failed);

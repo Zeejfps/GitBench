@@ -20,10 +20,10 @@ internal sealed class FindFilesTool : IAssistantTool
     public const int DefaultLimit = 30;
     public const int MaxLimit = 200;
 
-    private readonly IGitService _git;
+    private readonly IGitRepositoryReader _git;
     private readonly Repo _repo;
 
-    public FindFilesTool(IGitService git, Repo repo)
+    public FindFilesTool(IGitRepositoryReader git, Repo repo)
     {
         _git = git;
         _repo = repo;

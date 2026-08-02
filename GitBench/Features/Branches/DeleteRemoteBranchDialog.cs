@@ -25,7 +25,7 @@ internal sealed record DeleteRemoteBranchDialog : Widget
     {
         var vm = new DeleteRemoteBranchDialogViewModel(
             new DeleteRemoteBranchRequest(Repo, RemoteName, BranchName),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

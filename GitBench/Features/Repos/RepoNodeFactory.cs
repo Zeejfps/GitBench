@@ -17,7 +17,8 @@ internal sealed class RepoNodeFactory
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
     private readonly IMessageBus _bus;
-    private readonly IGitService _git;
+    private readonly IGitRemoteOperations _gitRemotes;
+    private readonly IGitWorktreeOperations _gitWorktrees;
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
     private readonly IClipboard? _clipboard;
@@ -27,7 +28,8 @@ internal sealed class RepoNodeFactory
         IRepoRegistry registry,
         IRepoStatusStore status,
         IMessageBus bus,
-        IGitService git,
+        IGitRemoteOperations gitRemotes,
+        IGitWorktreeOperations gitWorktrees,
         IPlatformShell? shell,
         ILocalizationService loc,
         IClipboard? clipboard,
@@ -36,7 +38,8 @@ internal sealed class RepoNodeFactory
         _registry = registry;
         _status = status;
         _bus = bus;
-        _git = git;
+        _gitRemotes = gitRemotes;
+        _gitWorktrees = gitWorktrees;
         _shell = shell;
         _loc = loc;
         _clipboard = clipboard;
@@ -44,5 +47,5 @@ internal sealed class RepoNodeFactory
     }
 
     public RepoNodeViewModel Create(Repo repo, int depth) =>
-        new(repo, depth, _registry, _status, _bus, _git, _shell, _loc, _clipboard, _dispatcher, this);
+        new(repo, depth, _registry, _status, _bus, _gitRemotes, _gitWorktrees, _shell, _loc, _clipboard, _dispatcher, this);
 }

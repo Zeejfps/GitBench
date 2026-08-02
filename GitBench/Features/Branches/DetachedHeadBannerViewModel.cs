@@ -15,7 +15,8 @@ namespace GitBench.Features.Branches;
 internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBannerState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitStatusReader _gitStatus;
+    private readonly IGitBranchOperations _gitBranches;
     private readonly IMessageBus _bus;
     private readonly IRepoHeadStore _head;
     private readonly ILocalizationService _loc;
@@ -31,7 +32,8 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
 
     public DetachedHeadBannerViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitStatusReader gitStatus,
+        IGitBranchOperations gitBranches,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoHeadStore head,
@@ -39,7 +41,8 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         : base(dispatcher, DetachedHeadBannerState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
+        _gitStatus = gitStatus;
+        _gitBranches = gitBranches;
         _bus = bus;
         _head = head;
         _loc = loc;
@@ -91,8 +94,8 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         // is concerned. Run through the head store rather than this view model's background helpers:
         // those are load semantics and drop their continuation once the VM is disposed, which for a
         // mutation would lose the error, the refresh, and the settle that ends the declaration.
-        var service = _gitService;
-        _head.RunMove(repo, branch, () => service.AttachDetachedHead(repo, branch));
+        var branches = _gitBranches;
+        _head.RunMove(repo, branch, () => branches.AttachDetachedHead(repo, branch));
     }
 
     private void Reload()
@@ -105,11 +108,11 @@ internal sealed class DetachedHeadBannerViewModel : ViewModelBase<DetachedHeadBa
         }
 
         var repoId = repo.Id;
-        var service = _gitService;
+        var status = _gitStatus;
         RunBackground<DetachedHeadReport>(
             () =>
             {
-                try { return (service.GetDetachedHeadReport(repo), null); }
+                try { return (status.GetDetachedHeadReport(repo), null); }
                 catch { return (DetachedHeadReport.None, null); }
             },
             (report, _) =>

@@ -21,7 +21,7 @@ internal sealed record ForcePushDialog : Widget
     {
         var vm = new ForcePushDialogViewModel(
             Repo,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

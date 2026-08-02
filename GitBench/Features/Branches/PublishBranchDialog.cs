@@ -24,7 +24,8 @@ internal sealed record PublishBranchDialog : Widget
     {
         var vm = new PublishBranchDialogViewModel(
             new PublishBranchRequest(Repo, LocalBranch),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
+            ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Localization());

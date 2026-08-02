@@ -8,7 +8,7 @@ namespace GitBench.Features.Worktrees;
 
 internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
 {
-    private readonly IGitService _gitService;
+    private readonly IGitWorktreeOperations _gitService;
     private readonly Repo _primary;
     private readonly string _worktreePath;
     private readonly Strings _strings;
@@ -21,7 +21,7 @@ internal sealed class RemoveWorktreeDialogViewModel : IDialogViewModel
 
     public RemoveWorktreeDialogViewModel(
         RemoveWorktreeRequest request,
-        IGitService gitService,
+        IGitWorktreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

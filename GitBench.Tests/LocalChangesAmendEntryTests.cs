@@ -87,7 +87,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
 
         _preferences = new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json"));
         _vm = new LocalChangesViewModel(
-            _registry, _git, _dispatcher, new FrameTicker(), new MessageBus(),
+            _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), new MessageBus(),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
             _preferences, _store, _loc);
     }

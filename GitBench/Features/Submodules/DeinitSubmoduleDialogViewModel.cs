@@ -15,7 +15,7 @@ internal sealed class DeinitSubmoduleDialogViewModel : IDialogViewModel
 
     public DeinitSubmoduleDialogViewModel(
         DeinitSubmoduleViewRequest request,
-        IGitService gitService,
+        IGitSubmoduleOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

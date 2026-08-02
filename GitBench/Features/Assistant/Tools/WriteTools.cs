@@ -213,11 +213,11 @@ internal sealed class SetCommitMessageTool : IAssistantTool
 
 internal sealed class CommitTool : IAssistantTool
 {
-    private readonly IGitService _git;
+    private readonly IGitWorkingTreeOperations _git;
     private readonly Repo _repo;
     private readonly AssistantWriteSurface _surface;
 
-    public CommitTool(IGitService git, Repo repo, AssistantWriteSurface surface)
+    public CommitTool(IGitWorkingTreeOperations git, Repo repo, AssistantWriteSurface surface)
     {
         _git = git;
         _repo = repo;

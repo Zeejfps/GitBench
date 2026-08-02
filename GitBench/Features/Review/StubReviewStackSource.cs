@@ -8,7 +8,7 @@ namespace GitBench.Features.Review;
 /// Stand-in <see cref="IReviewStackSource"/> for Phase 3: it ignores <see cref="ReviewSession.BaseRef"/>
 /// and pretends the range is the last <see cref="FakeRangeSize"/> first-parent commits from HEAD, so
 /// the review GUI renders a believable stack on real diffs end-to-end before the git range backend
-/// (Phase 4) exists. It reuses the existing history walk (<see cref="IGitService.Load"/>) and follows
+/// (Phase 4) exists. It reuses the existing history walk (<see cref="IGitHistoryReader.Load"/>) and follows
 /// the first-parent chain through the returned snapshot — no new git plumbing.
 /// </summary>
 internal sealed class StubReviewStackSource : IReviewStackSource
@@ -17,9 +17,9 @@ internal sealed class StubReviewStackSource : IReviewStackSource
     private const int FakeRangeSize = 12;
 
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitHistoryReader _gitService;
 
-    public StubReviewStackSource(IRepoRegistry registry, IGitService gitService)
+    public StubReviewStackSource(IRepoRegistry registry, IGitHistoryReader gitService)
     {
         _registry = registry;
         _gitService = gitService;

@@ -37,7 +37,8 @@ namespace GitBench.Features.Branches;
 internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitBranchOperations _gitBranches;
+    private readonly IGitStashOperations _gitStash;
     private readonly IMessageBus _bus;
     private readonly State<MainViewMode> _mode;
     private readonly ILocalizationService _loc;
@@ -101,7 +102,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
     public BranchesViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitBranchOperations gitBranches,
+        IGitStashOperations gitStash,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         State<MainViewMode> mode,
@@ -114,7 +116,8 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
-        _gitService = gitService;
+        _gitBranches = gitBranches;
+        _gitStash = gitStash;
         _bus = bus;
         _mode = mode;
         _loc = loc;
@@ -605,7 +608,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
 
         TryRunOutcome(
             _stashGen,
-            work: () => _gitService.ApplyStash(repo, index),
+            work: () => _gitStash.ApplyStash(repo, index),
             onResult: outcome =>
             {
                 switch (outcome)
@@ -667,7 +670,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var bus = _bus;
 
         RunOutcome(
-            work: () => _gitService.FastForwardBranch(repo, branchName, remoteName, remoteBranch),
+            work: () => _gitBranches.FastForwardBranch(repo, branchName, remoteName, remoteBranch),
             onResult: outcome =>
             {
                 Update(s => s with { BusyBranch = null, SyncingBranch = null });

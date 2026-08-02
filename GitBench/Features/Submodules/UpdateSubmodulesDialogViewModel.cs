@@ -17,7 +17,7 @@ internal sealed class UpdateSubmodulesDialogViewModel : IDialogViewModel
 
     public UpdateSubmodulesDialogViewModel(
         UpdateSubmodulesViewRequest request,
-        IGitService gitService,
+        IGitSubmoduleOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

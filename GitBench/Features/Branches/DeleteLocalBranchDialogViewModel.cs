@@ -10,7 +10,7 @@ namespace GitBench.Features.Branches;
 internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
 {
     private readonly DeleteLocalBranchRequest _request;
-    private readonly IGitService _gitService;
+    private readonly IGitBranchOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     // Plain field, not a State<T>: it carries the remote-delete outcome out of the background
@@ -29,7 +29,7 @@ internal sealed class DeleteLocalBranchDialogViewModel : IDialogViewModel
 
     public DeleteLocalBranchDialogViewModel(
         DeleteLocalBranchRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

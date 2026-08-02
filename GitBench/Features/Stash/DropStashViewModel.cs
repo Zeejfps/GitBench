@@ -14,7 +14,7 @@ internal sealed class DropStashViewModel : IDialogViewModel
     public DropStashViewModel(
         Repo repo,
         int index,
-        IGitService gitService,
+        IGitStashOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

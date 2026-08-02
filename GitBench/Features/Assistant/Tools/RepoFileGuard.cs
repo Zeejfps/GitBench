@@ -47,15 +47,15 @@ internal static class RepoFileGuard
     private static readonly string[] DeniedDirectories = [".ssh", ".aws", ".gnupg", ".gpg"];
 
     /// <summary>Settles a path a tool means to open in the working tree.</summary>
-    public static RepoFileResolution Resolve(IGitService git, Repo repo, string? requested) =>
+    public static RepoFileResolution Resolve(IGitRepositoryReader git, Repo repo, string? requested) =>
         Resolve(git, repo, requested, requireInWorkingTree: true);
 
     /// <summary>Settles a path a tool means to diff, at any side or commit.</summary>
-    public static RepoFileResolution ResolveForDiff(IGitService git, Repo repo, string? requested) =>
+    public static RepoFileResolution ResolveForDiff(IGitRepositoryReader git, Repo repo, string? requested) =>
         Resolve(git, repo, requested, requireInWorkingTree: false);
 
     private static RepoFileResolution Resolve(
-        IGitService git, Repo repo, string? requested, bool requireInWorkingTree)
+        IGitRepositoryReader git, Repo repo, string? requested, bool requireInWorkingTree)
     {
         if (string.IsNullOrWhiteSpace(requested))
             return RepoFileResolution.Refused("Argument 'path' is required.");
@@ -119,7 +119,7 @@ internal static class RepoFileGuard
     // A wrong path is nearly always a near-miss of a real one — the wrong directory, a swapped pair
     // of letters — so the refusal carries the candidates rather than making the model guess again.
     // Only paid for on the failure path: one `ls-files` after the read has already been refused.
-    private static string Nearby(IGitService git, Repo repo, string relative)
+    private static string Nearby(IGitRepositoryReader git, Repo repo, string relative)
     {
         try
         {

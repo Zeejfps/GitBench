@@ -24,7 +24,7 @@ internal sealed record AddSubmoduleDialog : Widget
     {
         var vm = new AddSubmoduleDialogViewModel(
             new AddSubmoduleViewRequest(Primary),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitSubmoduleOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

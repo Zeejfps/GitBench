@@ -29,7 +29,7 @@ internal sealed record StashDialog : Widget
         var vm = new StashDialogViewModel(
             new StashRequest(Repo),
             snapshot,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitStashOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<LocalChangesSelectionStore>(),

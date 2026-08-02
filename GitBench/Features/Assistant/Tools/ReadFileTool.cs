@@ -30,10 +30,10 @@ internal sealed class ReadFileTool : IAssistantTool
     // total_lines is then a floor rather than a count — which truncated says.
     public const int MaxScannedLines = 200_000;
 
-    private readonly IGitService _git;
+    private readonly IGitRepositoryReader _git;
     private readonly Repo _repo;
 
-    public ReadFileTool(IGitService git, Repo repo)
+    public ReadFileTool(IGitRepositoryReader git, Repo repo)
     {
         _git = git;
         _repo = repo;

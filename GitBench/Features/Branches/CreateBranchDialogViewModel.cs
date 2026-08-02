@@ -37,7 +37,7 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
         GitRef startPoint,
         string startPointLabel,
         string initialName,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoHeadStore head,

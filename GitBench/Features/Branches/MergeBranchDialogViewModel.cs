@@ -16,7 +16,7 @@ internal sealed class MergeBranchDialogViewModel : IDialogViewModel
 
     public MergeBranchDialogViewModel(
         MergeBranchRequest request,
-        IGitService gitService,
+        IGitIntegrationOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
@@ -37,7 +37,7 @@ internal sealed class MergeBranchDialogViewModel : IDialogViewModel
         StartPreview(request, gitService, dispatcher);
     }
 
-    private void StartPreview(MergeBranchRequest request, IGitService gitService, IUiDispatcher dispatcher)
+    private void StartPreview(MergeBranchRequest request, IGitIntegrationOperations gitService, IUiDispatcher dispatcher)
     {
         Task.Run(() =>
         {

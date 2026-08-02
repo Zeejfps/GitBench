@@ -29,7 +29,7 @@ internal sealed class EditRemoteDialogViewModel : IDialogViewModel
 
     public EditRemoteDialogViewModel(
         EditRemoteRequest request,
-        IGitService gitService,
+        IGitRemoteOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

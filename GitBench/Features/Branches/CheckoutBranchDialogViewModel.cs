@@ -22,7 +22,7 @@ internal sealed class CheckoutBranchDialogViewModel : IDialogViewModel
 
     public CheckoutBranchDialogViewModel(
         CheckoutRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoHeadStore head,

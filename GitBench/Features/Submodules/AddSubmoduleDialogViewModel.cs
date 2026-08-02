@@ -24,7 +24,7 @@ internal sealed class AddSubmoduleDialogViewModel : IDialogViewModel
 
     public AddSubmoduleDialogViewModel(
         AddSubmoduleViewRequest request,
-        IGitService gitService,
+        IGitSubmoduleOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

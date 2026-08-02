@@ -23,7 +23,7 @@ internal sealed class CreateTagDialogViewModel : IDisposable
 
     public CreateTagDialogViewModel(
         CreateTagRequest request,
-        IGitService gitService,
+        IGitTagOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

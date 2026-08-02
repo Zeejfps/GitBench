@@ -29,7 +29,7 @@ internal sealed record AbortOperationDialog : Widget
     {
         var vm = new AbortOperationDialogViewModel(
             new AbortOperationRequest(Repo, State),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitIntegrationOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Localization());

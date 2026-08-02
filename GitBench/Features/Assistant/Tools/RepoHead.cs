@@ -12,6 +12,6 @@ namespace GitBench.Features.Assistant.Tools;
 /// </remarks>
 internal static class RepoHead
 {
-    public static string? Branch(IGitService git, Repo repo) =>
+    public static string? Branch(IGitStatusReader git, Repo repo) =>
         git.GetStatusSummary(repo) is { IsDetached: false, Branch: { Length: > 0 } branch } ? branch : null;
 }

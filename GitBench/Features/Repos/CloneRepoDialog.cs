@@ -25,7 +25,7 @@ internal sealed record CloneRepoDialog : Widget
     protected override IWidget Build(Context ctx)
     {
         var vm = new CloneRepoDialogViewModel(
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),

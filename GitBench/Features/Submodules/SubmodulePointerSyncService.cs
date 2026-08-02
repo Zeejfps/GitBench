@@ -19,14 +19,14 @@ namespace GitBench.Features.Submodules;
 internal sealed class SubmodulePointerSyncService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitSubmoduleOperations _git;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private IDisposable? _refsChangedSub;
 
     public SubmodulePointerSyncService(
         IRepoRegistry registry,
-        IGitService git,
+        IGitSubmoduleOperations git,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

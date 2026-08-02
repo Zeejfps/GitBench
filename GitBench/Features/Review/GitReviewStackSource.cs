@@ -15,10 +15,10 @@ namespace GitBench.Features.Review;
 internal sealed class GitReviewStackSource : IReviewStackSource
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitHistoryReader _gitService;
     private readonly ILocalizationService _loc;
 
-    public GitReviewStackSource(IRepoRegistry registry, IGitService gitService, ILocalizationService loc)
+    public GitReviewStackSource(IRepoRegistry registry, IGitHistoryReader gitService, ILocalizationService loc)
     {
         _registry = registry;
         _gitService = gitService;

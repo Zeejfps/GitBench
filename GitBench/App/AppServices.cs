@@ -75,13 +75,31 @@ internal static class AppServices
         // serialize on GitRepoLocks and never touch it.
         context.AddSingleton<IGitReadGate, GitReadGate>();
         context.AddSingleton<IRepoActivityTracker, RepoActivityTracker>();
-        context.AddSingleton<IGitService>(ctx =>
-            new GitService(ctx.Require<IRepoActivityTracker>()));
+        // One GitService, registered under every capability it implements as well as the whole
+        // IGitService. Consumers depend on the narrowest facet they use; the instance is added
+        // rather than factory-registered so the fourteen keys can't ever mean fourteen owners.
+        var gitService = new GitService(context.Require<IRepoActivityTracker>());
+        context.AddService<IGitService>(gitService);
+        context.AddService<IGitRepositoryReader>(gitService);
+        context.AddService<IGitStatusReader>(gitService);
+        context.AddService<IGitDiffReader>(gitService);
+        context.AddService<IGitHistoryReader>(gitService);
+        context.AddService<IGitBranchOperations>(gitService);
+        context.AddService<IGitWorkingTreeOperations>(gitService);
+        context.AddService<IGitStashOperations>(gitService);
+        context.AddService<IGitRemoteOperations>(gitService);
+        context.AddService<IGitTagOperations>(gitService);
+        context.AddService<IGitIntegrationOperations>(gitService);
+        context.AddService<IGitConflictOperations>(gitService);
+        context.AddService<IGitWorktreeOperations>(gitService);
+        context.AddService<IGitSubmoduleOperations>(gitService);
+        context.AddService<IGitConfigOperations>(gitService);
+        context.AddService<IGitRawConfigReader>(gitService);
         // Reads config through gitService and back-wires itself into it (its hosted Start) so every
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo
         // config. Hosted via a factory because its deps need an interface cast the container can't do.
         context.AddHostedService(ctx => new GitIdentityService(
-            (IGitRawConfigReader)ctx.Require<IGitService>(), ctx.Require<IdentityProfileService>(),
+            ctx.Require<IGitRawConfigReader>(), ctx.Require<IdentityProfileService>(),
             ctx.Require<IMessageBus>(), (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
         context.AddSingleton<IDragController, DragController>();
         context.AddSingleton<RepoHoverState>();
@@ -90,7 +108,8 @@ internal static class AppServices
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IRepoStatusStore>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitRemoteOperations>(),
+            ctx.Require<IGitWorktreeOperations>(),
             ctx.Get<IPlatformShell>(),
             ctx.Require<ILocalizationService>(),
             ctx.Get<IClipboard>(),
@@ -107,7 +126,11 @@ internal static class AppServices
         context.AddSingleton(ctx => new WorkingTreeReviewViewModel(
             ctx.Require<LocalChangesViewModel>(),
             new CommitDetailsViewModel(
-                ctx.Require<IGitService>(),
+                ctx.Require<IGitHistoryReader>(),
+                ctx.Require<IGitDiffReader>(),
+                ctx.Require<IGitWorkingTreeOperations>(),
+                ctx.Require<IGitConflictOperations>(),
+                ctx.Require<IGitSubmoduleOperations>(),
                 ctx.Require<IRepoRegistry>(),
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>(),
@@ -133,7 +156,10 @@ internal static class AppServices
         // registration would dispose RepoStatusStore twice.
         context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>(ctx => new RepoSnapshotStore(
             ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitHistoryReader>(),
+            ctx.Require<IGitStatusReader>(),
+            ctx.Require<IGitBranchOperations>(),
+            ctx.Require<IGitSubmoduleOperations>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IStartupSweepCoordinator>(),
             (IRepoStatusIngest)ctx.Require<IRepoStatusStore>(),
@@ -148,7 +174,7 @@ internal static class AppServices
         context.AddHostedService<IRepoStatusStore, RepoStatusStore>(ctx => new RepoStatusStore(
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitStatusReader>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IStartupSweepCoordinator>(),
             ctx.Require<IGitReadGate>(),

@@ -1,148 +1,23 @@
-using GitBench.Features.Branches;
-using GitBench.Features.Commits;
-using GitBench.Features.Identity;
-using GitBench.Features.LocalChanges;
-using GitBench.Features.Review;
-using GitBench.Features.Submodules;
-using GitBench.Features.Worktrees;
-
 namespace GitBench.Git;
 
-public interface IGitService
+// The whole of git, for the few callers that genuinely span capabilities. Prefer depending on the
+// narrowest capability interface a type actually uses — that is what keeps its test doubles small.
+public interface IGitService :
+    IGitRepositoryReader,
+    IGitStatusReader,
+    IGitDiffReader,
+    IGitHistoryReader,
+    IGitBranchOperations,
+    IGitWorkingTreeOperations,
+    IGitStashOperations,
+    IGitRemoteOperations,
+    IGitTagOperations,
+    IGitIntegrationOperations,
+    IGitConflictOperations,
+    IGitWorktreeOperations,
+    IGitSubmoduleOperations,
+    IGitConfigOperations
 {
-    Fetched<CommitSnapshot> Load(Repo repo, int cap);
-    // Lists base..head as a linear review stack — the first-parent commits reachable from head
-    // but not base, oldest→newest. base/head accept any ref or SHA; the returned stack carries
-    // their resolved SHAs and short-sha labels (the caller overrides labels with branch names).
-    Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap);
-    // The combined net file list of a review range (base→head as one diff), for the Review window's
-    // Combined mode. base/head are resolved SHAs; the list is the same FileChange shape as a commit's.
-    Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha);
-    // The merge-base (common-ancestor) SHA of two refs/SHAs, or null when none exists (unrelated
-    // histories) or git fails. Anchors a review range's base at the divergence point.
-    string? MergeBase(Repo repo, string a, string b);
-    // The default review base for headRef when no explicit base is pinned: the merge-base with the
-    // branch's upstream, else with the repo's default branch — carrying the ref name + kind it came
-    // from (so the header can name it). Null when neither resolves.
-    ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef);
-    Fetched<CommitDetails> LoadDetails(Repo repo, string sha);
-    Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo);
-    // Unknown = not a repo; null = the probe failed (caller keeps its last known value).
-    GitStatusSummary? GetStatusSummary(Repo repo);
-    Fetched<BranchListing> GetBranches(Repo repo);
-    GitOutcome Stage(Repo repo, IReadOnlyList<string> paths);
-    GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths);
-    GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths);
-    GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths);
-    GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse);
-    GitOutcome Commit(Repo repo, string message, bool amend);
-    HeadCommitMessage? GetHeadCommitMessage(Repo repo);
-    IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo);
-    DetachedHeadReport GetDetachedHeadReport(Repo repo);
-    GitOutcome AttachDetachedHead(Repo repo, string branch);
-    GitOutcome Push(Repo repo, bool force = false);
-    GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream);
-    IReadOnlyList<string> GetRemoteNames(Repo repo);
-    string? GetRemoteUrl(Repo repo, string remoteName);
-    GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config);
-    // Enables core.untrackedCache in the repo's --local config, once, if the filesystem supports it
-    // and the user hasn't already set the key. Idempotent and respectful: an existing value (either
-    // way) is left as the user left it. Never writes --global.
-    GitOutcome ApplyUntrackedCache(Repo repo);
-    GitOutcome EditRemote(Repo repo, string oldName, string newName, string url);
-    GitOutcome AddRemote(Repo repo, string name, string url);
-    PullOutcome Pull(Repo repo, PullStrategy? strategy = null);
-    GitOutcome Fetch(Repo repo);
-    // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's
-    // progress output. On success RepoPath carries the absolute path of the new working tree.
-    CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null);
-    GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null);
-    GitOutcome CheckoutLocalBranch(Repo repo, string branchName);
-    GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track);
-    GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode);
-    // startPoint is a GitRef rather than a string so "from the current branch" is expressed as
-    // GitRef.Head and resolved here, under the lock — never as a branch name the UI captured.
-    GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout);
-    GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout);
-    bool IsAncestor(Repo repo, string maybeAncestor, string descendant);
-    GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes);
-    // Pushes an existing tag to remoteName, or to every configured remote when it is null.
-    GitOutcome PushTag(Repo repo, string name, string? remoteName = null);
-    GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes);
-    GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force);
-    GitOutcome DeleteBranch(Repo repo, string name, bool force);
-    GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName);
-    GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths);
-    MergeLikeOutcome ApplyStash(Repo repo, int index);
-    GitOutcome DropStash(Repo repo, int index);
-    GitOutcome RenameStash(Repo repo, int index, string newMessage);
-    DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null);
-    // Full file text for one side of a diff, used by syntax highlighting's whole-file tokenize.
-    // oldSide picks the "before" content (removed lines), else the "after" content (added/
-    // context). Returns null when that side has no content (root commit's parent, pure add/
-    // delete) or on any failure — the caller then renders that side plain.
-    string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null);
-    // Same addressing as GetFileText, but the blob's raw bytes — nothing is decoded as text, so
-    // binary content survives. Backs the diff view's image preview. Returns null when that side
-    // has no content, on any failure, or when the blob exceeds maxBytes.
-    byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null);
-    // Whether git tracks a repo-relative working-tree path (`git ls-files --error-unmatch`).
-    // The assistant's file reads resolve through this instead of the filesystem, so an untracked
-    // file — a stray .env, a scratch dump — is invisible to them.
-    bool IsPathTracked(Repo repo, string relativePath);
-    // Whether the ignore rules match a path, asked with `--no-index` so the answer is the rules'
-    // and not "it is tracked, so no".
-    bool IsPathIgnored(Repo repo, string relativePath);
-    // Every repo-relative path git tracks (`git ls-files --cached`), sorted and deduplicated.
-    // Backs the assistant's file search, so a path it half-remembers can be resolved to a real one.
-    IReadOnlyList<string> ListTrackedFiles(Repo repo);
-    RepoOperationState GetOperationState(Repo repo);
-    RepoOperation? GetOperation(Repo repo);
-    bool HasUnmergedPaths(Repo repo);
-    // The default merge commit message (MERGE_MSG) when a merge is in progress, else null.
-    // Used to pre-fill the commit box so committing finishes the merge.
-    string? GetMergeMessage(Repo repo);
-    AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false);
-    ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state);
-    ContinueOutcome SkipOperation(Repo repo, RepoOperationState state);
-    IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary);
-    GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
-    GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
-    GitOutcome UnlockWorktree(Repo primary, string worktreePath);
-    GitOutcome PruneWorktrees(Repo primary);
-    IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary);
-    GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request);
-    MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request);
-    GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force);
-    // Stages the parent's gitlink for a submodule whose HEAD has moved, so the pointer update
-    // becomes a deliberate staged change instead of a lingering unstaged "modified" entry.
-    // relativePath is the submodule's path within parent's working tree. Returns true when the
-    // recorded pointer differed and was staged; false when it was already in sync (a no-op).
-    bool StageSubmodulePointer(Repo parent, string relativePath);
-    IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha);
-    MergePreviewResult PreviewMerge(Repo repo, string sourceRef);
-    MergeLikeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy);
-    RebasePreviewResult PreviewRebase(Repo repo, string targetRef);
-    MergeLikeOutcome Rebase(Repo repo, string targetRef, bool autostash);
-    MergeLikeOutcome CherryPick(Repo repo, string commitSha);
-    MergeLikeOutcome RevertCommit(Repo repo, string commitSha);
-    // Per-file conflict resolution. TakeOurs/TakeTheirs check out the chosen side and stage
-    // it; MarkResolved stages the working-tree file as-is (manual-edit path). Each returns a
-    // ResolveOutcome and broadcasting is left to the caller.
-    GitOutcome TakeOurs(Repo repo, string path);
-    GitOutcome TakeTheirs(Repo repo, string path);
-    // Resolves by keeping both sides: writes ours' content followed by theirs' content and stages.
-    GitOutcome TakeBoth(Repo repo, string path);
-    GitOutcome MarkResolved(Repo repo, string path);
-    // Context for the conflict-resolution UI: the in-progress operation plus the ours/theirs
-    // commit metadata and per-side change kind. Returns null when the path isn't conflicted.
-    ConflictContext? GetConflictContext(Repo repo, string path);
-    // Every unmerged path in the repository, in index order, with what each side did to it. One
-    // read for the whole repo — asking per path turns a ten-file conflict into ten processes.
-    IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo);
-    // One unmerged path's three merge stages as text. Null when the path isn't unmerged at all,
-    // which is also the caller's is-this-a-conflict precondition.
-    ConflictStages? GetConflictStages(Repo repo, string path);
 }
 
 public enum MergeStrategy

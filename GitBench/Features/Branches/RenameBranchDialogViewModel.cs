@@ -22,7 +22,7 @@ internal sealed class RenameBranchDialogViewModel : IDialogViewModel
 
     public RenameBranchDialogViewModel(
         RenameBranchRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoStatusStore status,

@@ -22,7 +22,7 @@ internal sealed record RebaseBranchDialog : Widget
     {
         var vm = new RebaseBranchDialogViewModel(
             Request,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitIntegrationOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

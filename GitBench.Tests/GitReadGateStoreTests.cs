@@ -35,7 +35,7 @@ public sealed class GitReadGateStoreTests : IDisposable
         var git = new GitService(new RepoActivityTracker());
         var probe = new ConcurrencyProbeGate(new GitReadGate(), GitReadGate.MaxConcurrentReads);
         using var store = new RepoSnapshotStore(
-            _registry, git, new MessageBus(),
+            _registry, git, git, git, git, new MessageBus(),
             new StartupSweepCoordinator(new GitReadGate()), new NoIngest(), probe, _dispatcher);
 
         // Subscribing fires OnActiveChanged for the active repo, which issues exactly the three-slice

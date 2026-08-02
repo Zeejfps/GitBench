@@ -33,7 +33,8 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
     private readonly IMessageBus _bus;
-    private readonly IGitService _git;
+    private readonly IGitRemoteOperations _gitRemotes;
+    private readonly IGitWorktreeOperations _gitWorktrees;
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
     private readonly IClipboard? _clipboard;
@@ -93,7 +94,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         IRepoRegistry registry,
         IRepoStatusStore status,
         IMessageBus bus,
-        IGitService git,
+        IGitRemoteOperations gitRemotes,
+        IGitWorktreeOperations gitWorktrees,
         IPlatformShell? shell,
         ILocalizationService loc,
         IClipboard? clipboard,
@@ -105,7 +107,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         _registry = registry;
         _status = status;
         _bus = bus;
-        _git = git;
+        _gitRemotes = gitRemotes;
+        _gitWorktrees = gitWorktrees;
         _shell = shell;
         _loc = loc;
         _clipboard = clipboard;
@@ -277,7 +280,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         items.Add(new RepoBarContextMenu.Item(s.ReposRepoPruneWorktrees,
             () =>
             {
-                Task.Run(() => _git.PruneWorktrees(repo));
+                Task.Run(() => _gitWorktrees.PruneWorktrees(repo));
                 _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
             },
             LucideIcons.Trash));
@@ -327,9 +330,9 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (shell is null) return;
         Task.Run(() =>
         {
-            var remotes = _git.GetRemoteNames(repo);
+            var remotes = _gitRemotes.GetRemoteNames(repo);
             var remoteName = remotes.Contains("origin") ? "origin" : remotes.FirstOrDefault();
-            var rawUrl = remoteName is null ? null : _git.GetRemoteUrl(repo, remoteName);
+            var rawUrl = remoteName is null ? null : _gitRemotes.GetRemoteUrl(repo, remoteName);
             var webUrl = rawUrl is null ? null : RemoteWebUrl.FromRemoteUrl(rawUrl);
             if (webUrl is not null)
             {

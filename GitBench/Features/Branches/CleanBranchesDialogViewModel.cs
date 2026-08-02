@@ -16,7 +16,7 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
 {
     private readonly Repo _repo;
     private readonly IReadOnlyList<CleanBranchCandidate> _candidates;
-    private readonly IGitService _gitService;
+    private readonly IGitBranchOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
 
@@ -53,7 +53,7 @@ internal sealed class CleanBranchesDialogViewModel : IDialogViewModel
     public CleanBranchesDialogViewModel(
         Repo repo,
         IReadOnlyList<CleanBranchCandidate> candidates,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

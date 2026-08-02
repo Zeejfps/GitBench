@@ -23,7 +23,7 @@ internal sealed class AbortOperationDialogViewModel : IDialogViewModel
 
     public AbortOperationDialogViewModel(
         AbortOperationRequest request,
-        IGitService gitService,
+        IGitIntegrationOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

@@ -22,7 +22,7 @@ internal sealed record DeleteLocalBranchDialog : Widget
     {
         var vm = new DeleteLocalBranchDialogViewModel(
             new DeleteLocalBranchRequest(Repo, BranchName, UpstreamRemote, UpstreamBranch),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

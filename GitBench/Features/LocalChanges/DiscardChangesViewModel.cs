@@ -14,7 +14,7 @@ internal sealed record DiscardFileRow(string Path, FileChange Display);
 internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesState>, IDialogViewModel
 {
     private readonly Repo _repo;
-    private readonly IGitService _gitService;
+    private readonly IGitWorkingTreeOperations _gitService;
     private readonly IMessageBus _bus;
     private readonly string _doneToast;
 
@@ -31,7 +31,7 @@ internal sealed class DiscardChangesViewModel : ViewModelBase<DiscardChangesStat
     public DiscardChangesViewModel(
         DiscardChangesRequest request,
         LocalChangesSnapshot snapshot,
-        IGitService gitService,
+        IGitWorkingTreeOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

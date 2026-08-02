@@ -2,19 +2,28 @@ using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
-using GitBench.Features.Review;
 using GitBench.Features.Submodules;
-using GitBench.Features.Worktrees;
 using GitBench.Git;
 
 namespace GitBench.Tests;
 
-// Wraps a real IGitService and counts GetStatusSummary calls, so a test can assert which triggers
+// Wraps a real GitService and counts GetStatusSummary calls, so a test can assert which triggers
 // actually run the summary probe (vs. rely on RepoSnapshotStore's ingest). It also records the
 // GitRef CreateBranch was handed, so a test can assert what a view model actually sent git rather
 // than only what the resulting branch points at. Every other member delegates unchanged. The
 // counters use Interlocked because probes run off the UI thread.
-internal sealed class CountingGitService(IGitService inner) : IGitService
+//
+// It implements only the capabilities its subjects ask for — the status/working-tree/conflict/
+// stash/submodule/branch/config facets — not the whole of git. Adding a facet here is the signal
+// that a new subject was pointed at it.
+internal sealed class CountingGitService(IGitService inner) :
+    IGitStatusReader,
+    IGitWorkingTreeOperations,
+    IGitConflictOperations,
+    IGitStashOperations,
+    IGitSubmoduleOperations,
+    IGitBranchOperations,
+    IGitConfigOperations
 {
     // The start point of the last CreateBranch call, or null if there hasn't been one.
     public GitRef? LastCreateBranchStartPoint { get; private set; }
@@ -57,32 +66,20 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
         return inner.GetStatusSummary(repo);
     }
 
-    // ---- everything else delegates ----
-    public Fetched<CommitSnapshot> Load(Repo repo, int cap) => inner.Load(repo, cap);
-    public Fetched<ReviewStack> LoadReviewStack(Repo repo, string baseRef, string headRef, int cap) => inner.LoadReviewStack(repo, baseRef, headRef, cap);
-    public Fetched<IReadOnlyList<FileChange>> LoadRangeFiles(Repo repo, string baseSha, string headSha) => inner.LoadRangeFiles(repo, baseSha, headSha);
-    public string? MergeBase(Repo repo, string a, string b) => inner.MergeBase(repo, a, b);
-    public ResolvedReviewBase? ResolveAutoReviewBase(Repo repo, string headRef) => inner.ResolveAutoReviewBase(repo, headRef);
-    public Fetched<CommitDetails> LoadDetails(Repo repo, string sha) => inner.LoadDetails(repo, sha);
     public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo)
     {
         Interlocked.Increment(ref _localChangesCalls);
         if (ThrowOnReads) throw new InvalidOperationException("GetLocalChanges must not run here.");
         return inner.GetLocalChanges(repo);
     }
-    public Fetched<BranchListing> GetBranches(Repo repo) => inner.GetBranches(repo);
-    public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths) => inner.Stage(repo, paths);
-    public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths) => inner.Unstage(repo, paths);
-    public GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths) => inner.ResetToParent(repo, paths);
-    public GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths) => inner.DiscardChanges(repo, paths);
-    public GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse) => inner.ApplyPatch(repo, patch, cached, reverse);
-    public GitOutcome Commit(Repo repo, string message, bool amend) => inner.Commit(repo, message, amend);
+
     public HeadCommitMessage? GetHeadCommitMessage(Repo repo)
     {
         Interlocked.Increment(ref _headMessageCalls);
         if (ThrowOnReads) throw new InvalidOperationException("GetHeadCommitMessage must not run here.");
         return inner.GetHeadCommitMessage(repo);
     }
+
     public IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo)
     {
         AmendStagedGate?.Wait();
@@ -90,13 +87,7 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
         if (ThrowOnReads) throw new InvalidOperationException("GetAmendStagedFiles must not run here.");
         return inner.GetAmendStagedFiles(repo);
     }
-    public DetachedHeadReport GetDetachedHeadReport(Repo repo) => inner.GetDetachedHeadReport(repo);
-    public GitOutcome AttachDetachedHead(Repo repo, string branch) => inner.AttachDetachedHead(repo, branch);
-    public GitOutcome Push(Repo repo, bool force = false) => inner.Push(repo, force);
-    public GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream) => inner.PublishBranch(repo, localBranch, remoteName, remoteBranchName, setUpstream);
-    public IReadOnlyList<string> GetRemoteNames(Repo repo) => inner.GetRemoteNames(repo);
-    public string? GetRemoteUrl(Repo repo, string remoteName) => inner.GetRemoteUrl(repo, remoteName);
-    public GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config) => inner.PinLocalIdentity(repo, config);
+
     public GitOutcome ApplyUntrackedCache(Repo repo)
     {
         Interlocked.Increment(ref _applyUntrackedCacheCalls);
@@ -107,62 +98,27 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
         lock (_appliedUntrackedCache) _appliedUntrackedCache.Add(repo);
         return outcome;
     }
-    public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url) => inner.EditRemote(repo, oldName, newName, url);
-    public GitOutcome AddRemote(Repo repo, string name, string url) => inner.AddRemote(repo, name, url);
-    public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => inner.Pull(repo, strategy);
-    public GitOutcome Fetch(Repo repo) => inner.Fetch(repo);
-    public CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null) => inner.Clone(url, targetPath, onLine);
-    public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null) => inner.FastForwardBranch(repo, localBranch, remoteName, remoteBranch, onLine);
-    public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => inner.CheckoutLocalBranch(repo, branchName);
-    public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => inner.CheckoutRemoteBranch(repo, localName, remoteName, remoteBranchName, track);
-    public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode) => inner.ResetCurrent(repo, commitSha, mode);
+
     public GitOutcome CreateBranch(Repo repo, string name, GitRef startPoint, bool checkout)
     {
         LastCreateBranchStartPoint = startPoint;
         return inner.CreateBranch(repo, name, startPoint, checkout);
     }
-    public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => inner.MoveBranch(repo, branchName, commitSha, checkout);
-    public bool IsAncestor(Repo repo, string maybeAncestor, string descendant) => inner.IsAncestor(repo, maybeAncestor, descendant);
-    public GitOutcome CreateTag(Repo repo, string name, string message, string commitSha, bool pushToAllRemotes) => inner.CreateTag(repo, name, message, commitSha, pushToAllRemotes);
-    public GitOutcome PushTag(Repo repo, string name, string? remoteName = null) => inner.PushTag(repo, name, remoteName);
-    public GitOutcome DeleteTag(Repo repo, string name, bool deleteFromRemotes) => inner.DeleteTag(repo, name, deleteFromRemotes);
-    public GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force) => inner.RenameBranch(repo, oldName, newName, force);
-    public GitOutcome DeleteBranch(Repo repo, string name, bool force) => inner.DeleteBranch(repo, name, force);
-    public GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName) => inner.DeleteRemoteBranch(repo, remoteName, branchName);
-    public GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths) => inner.CreateStash(repo, message, includeUntracked, keepIndex, paths);
-    public MergeLikeOutcome ApplyStash(Repo repo, int index) => inner.ApplyStash(repo, index);
-    public GitOutcome DropStash(Repo repo, int index) => inner.DropStash(repo, index);
-    public GitOutcome RenameStash(Repo repo, int index, string newMessage) => inner.RenameStash(repo, index, newMessage);
-    public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null) => inner.GetDiff(repo, path, side, commitSha, baseSha);
-    public string? GetFileText(Repo repo, string path, DiffSide side, bool oldSide, string? commitSha = null, string? baseSha = null) => inner.GetFileText(repo, path, side, oldSide, commitSha, baseSha);
-    public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null) => inner.GetFileBytes(repo, path, side, oldSide, maxBytes, commitSha, baseSha);
-    public bool IsPathTracked(Repo repo, string relativePath) => inner.IsPathTracked(repo, relativePath);
-    public bool IsPathIgnored(Repo repo, string relativePath) => inner.IsPathIgnored(repo, relativePath);
-    public IReadOnlyList<string> ListTrackedFiles(Repo repo) => inner.ListTrackedFiles(repo);
+
+    // ---- everything else delegates ----
+    public DetachedHeadReport GetDetachedHeadReport(Repo repo) => inner.GetDetachedHeadReport(repo);
     public RepoOperationState GetOperationState(Repo repo) => inner.GetOperationState(repo);
     public RepoOperation? GetOperation(Repo repo) => inner.GetOperation(repo);
     public bool HasUnmergedPaths(Repo repo) => inner.HasUnmergedPaths(repo);
     public string? GetMergeMessage(Repo repo) => inner.GetMergeMessage(repo);
-    public AbortOutcome AbortOperation(Repo repo, RepoOperationState state, bool forceQuit = false) => inner.AbortOperation(repo, state, forceQuit);
-    public ContinueOutcome ContinueOperation(Repo repo, RepoOperationState state) => inner.ContinueOperation(repo, state);
-    public ContinueOutcome SkipOperation(Repo repo, RepoOperationState state) => inner.SkipOperation(repo, state);
-    public IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary) => inner.ListWorktrees(primary);
-    public GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request) => inner.AddWorktree(primary, request);
-    public GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => inner.RemoveWorktree(primary, worktreePath, force);
-    public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => inner.UnlockWorktree(primary, worktreePath);
-    public GitOutcome PruneWorktrees(Repo primary) => inner.PruneWorktrees(primary);
-    public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary) => inner.ListSubmodules(primary);
-    public GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request) => inner.AddSubmodule(primary, request);
-    public MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request) => inner.UpdateSubmodules(primary, request);
-    public GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force) => inner.DeinitSubmodule(primary, submodulePath, force);
-    public bool StageSubmodulePointer(Repo parent, string relativePath) => inner.StageSubmodulePointer(parent, relativePath);
-    public IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha) => inner.GetSubmodulePointerChanges(repo, commitSha);
-    public MergePreviewResult PreviewMerge(Repo repo, string sourceRef) => inner.PreviewMerge(repo, sourceRef);
-    public MergeLikeOutcome Merge(Repo repo, string sourceRef, MergeStrategy strategy) => inner.Merge(repo, sourceRef, strategy);
-    public RebasePreviewResult PreviewRebase(Repo repo, string targetRef) => inner.PreviewRebase(repo, targetRef);
-    public MergeLikeOutcome Rebase(Repo repo, string targetRef, bool autostash) => inner.Rebase(repo, targetRef, autostash);
-    public MergeLikeOutcome CherryPick(Repo repo, string commitSha) => inner.CherryPick(repo, commitSha);
-    public MergeLikeOutcome RevertCommit(Repo repo, string commitSha) => inner.RevertCommit(repo, commitSha);
+
+    public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths) => inner.Stage(repo, paths);
+    public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths) => inner.Unstage(repo, paths);
+    public GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths) => inner.ResetToParent(repo, paths);
+    public GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths) => inner.DiscardChanges(repo, paths);
+    public GitOutcome ApplyPatch(Repo repo, string patch, bool cached, bool reverse) => inner.ApplyPatch(repo, patch, cached, reverse);
+    public GitOutcome Commit(Repo repo, string message, bool amend) => inner.Commit(repo, message, amend);
+
     public GitOutcome TakeOurs(Repo repo, string path) => inner.TakeOurs(repo, path);
     public GitOutcome TakeTheirs(Repo repo, string path) => inner.TakeTheirs(repo, path);
     public GitOutcome TakeBoth(Repo repo, string path) => inner.TakeBoth(repo, path);
@@ -170,4 +126,30 @@ internal sealed class CountingGitService(IGitService inner) : IGitService
     public ConflictContext? GetConflictContext(Repo repo, string path) => inner.GetConflictContext(repo, path);
     public IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo) => inner.GetConflictedPaths(repo);
     public ConflictStages? GetConflictStages(Repo repo, string path) => inner.GetConflictStages(repo, path);
+
+    public GitOutcome CreateStash(Repo repo, string message, bool includeUntracked, bool keepIndex, IReadOnlyList<string> paths) => inner.CreateStash(repo, message, includeUntracked, keepIndex, paths);
+    public MergeLikeOutcome ApplyStash(Repo repo, int index) => inner.ApplyStash(repo, index);
+    public GitOutcome DropStash(Repo repo, int index) => inner.DropStash(repo, index);
+    public GitOutcome RenameStash(Repo repo, int index, string newMessage) => inner.RenameStash(repo, index, newMessage);
+
+    public IReadOnlyList<SubmoduleInfo> ListSubmodules(Repo primary) => inner.ListSubmodules(primary);
+    public GitOutcome AddSubmodule(Repo primary, SubmoduleAddRequest request) => inner.AddSubmodule(primary, request);
+    public MergeLikeOutcome UpdateSubmodules(Repo primary, SubmoduleUpdateRequest request) => inner.UpdateSubmodules(primary, request);
+    public GitOutcome DeinitSubmodule(Repo primary, string submodulePath, bool force) => inner.DeinitSubmodule(primary, submodulePath, force);
+    public bool StageSubmodulePointer(Repo parent, string relativePath) => inner.StageSubmodulePointer(parent, relativePath);
+    public IReadOnlyList<SubmodulePointerChange> GetSubmodulePointerChanges(Repo repo, string commitSha) => inner.GetSubmodulePointerChanges(repo, commitSha);
+
+    public Fetched<BranchListing> GetBranches(Repo repo) => inner.GetBranches(repo);
+    public GitOutcome RenameBranch(Repo repo, string oldName, string newName, bool force) => inner.RenameBranch(repo, oldName, newName, force);
+    public GitOutcome DeleteBranch(Repo repo, string name, bool force) => inner.DeleteBranch(repo, name, force);
+    public GitOutcome DeleteRemoteBranch(Repo repo, string remoteName, string branchName) => inner.DeleteRemoteBranch(repo, remoteName, branchName);
+    public GitOutcome MoveBranch(Repo repo, string branchName, string commitSha, bool checkout) => inner.MoveBranch(repo, branchName, commitSha, checkout);
+    public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => inner.CheckoutLocalBranch(repo, branchName);
+    public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => inner.CheckoutRemoteBranch(repo, localName, remoteName, remoteBranchName, track);
+    public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null) => inner.FastForwardBranch(repo, localBranch, remoteName, remoteBranch, onLine);
+    public GitOutcome PublishBranch(Repo repo, string localBranch, string remoteName, string remoteBranchName, bool setUpstream) => inner.PublishBranch(repo, localBranch, remoteName, remoteBranchName, setUpstream);
+    public GitOutcome AttachDetachedHead(Repo repo, string branch) => inner.AttachDetachedHead(repo, branch);
+    public GitOutcome ResetCurrent(Repo repo, string commitSha, ResetMode mode) => inner.ResetCurrent(repo, commitSha, mode);
+
+    public GitOutcome PinLocalIdentity(Repo repo, LocalIdentityConfig config) => inner.PinLocalIdentity(repo, config);
 }

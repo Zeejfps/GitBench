@@ -15,7 +15,7 @@ internal sealed class DeleteTagDialogViewModel : IDialogViewModel
 
     public DeleteTagDialogViewModel(
         DeleteTagRequest request,
-        IGitService gitService,
+        IGitTagOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {

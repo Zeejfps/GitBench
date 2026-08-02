@@ -30,7 +30,7 @@ internal sealed record MoveBranchDialog : Widget
     {
         var vm = new MoveBranchDialogViewModel(
             new MoveBranchRequest(Repo, BranchName, Sha),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitBranchOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoHeadStore>());

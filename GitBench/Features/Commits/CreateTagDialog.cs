@@ -17,7 +17,7 @@ namespace GitBench.Features.Commits;
 /// Modal shown when the user picks "Create Tag" on a commit in the history. Mirrors Fork's
 /// "Create Tag" dialog: the target commit, a tag name, an optional annotation message, and a
 /// "push to all remotes" toggle. A non-empty message yields an annotated tag, otherwise a
-/// lightweight one — see <see cref="IGitService.CreateTag"/>.
+/// lightweight one — see <see cref="IGitTagOperations.CreateTag"/>.
 /// </summary>
 internal sealed record CreateTagDialog : Widget
 {
@@ -31,7 +31,7 @@ internal sealed record CreateTagDialog : Widget
     {
         var vm = new CreateTagDialogViewModel(
             new CreateTagRequest(Repo, Sha),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitTagOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

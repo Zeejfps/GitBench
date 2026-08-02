@@ -32,7 +32,7 @@ internal sealed record DiscardChangesDialog : Widget
         var vm = new DiscardChangesViewModel(
             new DiscardChangesRequest(Repo, Paths),
             snapshot,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitWorkingTreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Localization());

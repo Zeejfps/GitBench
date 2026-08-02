@@ -11,7 +11,7 @@ namespace GitBench.Features.Stash;
 
 /// <summary>
 /// Modal shown when the user picks "Rename…" on a stash row. Edits the stash's
-/// description. git has no native stash rename, so <see cref="IGitService.RenameStash"/>
+/// description. git has no native stash rename, so <see cref="IGitStashOperations.RenameStash"/>
 /// drops the entry and re-stores it under the new message — which moves the renamed
 /// stash to the top of the list (stash@{0}).
 /// </summary>
@@ -26,7 +26,7 @@ internal sealed record RenameStashDialog : Widget
     {
         var vm = new RenameStashDialogViewModel(
             new RenameStashRequest(Repo, Index, CurrentMessage),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitStashOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

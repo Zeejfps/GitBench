@@ -29,7 +29,11 @@ internal sealed record CommitDetailsState(
 
 internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
 {
-    private readonly IGitService _gitService;
+    private readonly IGitHistoryReader _gitHistory;
+    private readonly IGitDiffReader _gitDiff;
+    private readonly IGitWorkingTreeOperations _gitWorkingTree;
+    private readonly IGitConflictOperations _gitConflicts;
+    private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
@@ -61,7 +65,11 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public ObservableList<CommitFileTab> OpenTabs { get; } = new();
 
     public CommitDetailsViewModel(
-        IGitService gitService,
+        IGitHistoryReader gitHistory,
+        IGitDiffReader gitDiff,
+        IGitWorkingTreeOperations gitWorkingTree,
+        IGitConflictOperations gitConflicts,
+        IGitSubmoduleOperations gitSubmodules,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
@@ -72,7 +80,11 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
             null, preferences.Current.FileViewMode, EmptyCollapsed, null))
     {
-        _gitService = gitService;
+        _gitHistory = gitHistory;
+        _gitDiff = gitDiff;
+        _gitWorkingTree = gitWorkingTree;
+        _gitConflicts = gitConflicts;
+        _gitSubmodules = gitSubmodules;
         _registry = registry;
         _bus = bus;
         _loc = loc;
@@ -207,7 +219,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -220,9 +232,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public CommitFileTab? CreateFileDiff(string path)
     {
         if (_workingTree)
-            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc);
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc);
         if (string.IsNullOrEmpty(_currentSha)) return null;
-        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitService, Dispatcher, _bus, _loc, _currentBaseSha);
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc, _currentBaseSha);
     }
 
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>
@@ -329,12 +341,12 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         RunBackground<CommitDetailsRenderState>(
             work: () =>
             {
-                var fetched = _gitService.LoadDetails(repo, sha);
+                var fetched = _gitHistory.LoadDetails(repo, sha);
                 if (fetched is Fetched<CommitDetails>.Failed failed)
                     return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
 
                 var details = ((Fetched<CommitDetails>.Ok)fetched).Value;
-                var pointerChanges = _gitService.GetSubmodulePointerChanges(repo, sha);
+                var pointerChanges = _gitSubmodules.GetSubmodulePointerChanges(repo, sha);
                 if (pointerChanges.Count > 0)
                     details = MergePointerChanges(details, pointerChanges);
                 return (new CommitDetailsRenderState.Loaded(details), null);
@@ -371,7 +383,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         RunBackground<CommitDetailsRenderState>(
             work: () =>
             {
-                var fetched = _gitService.LoadRangeFiles(repo, baseSha, headSha);
+                var fetched = _gitDiff.LoadRangeFiles(repo, baseSha, headSha);
                 if (fetched is Fetched<IReadOnlyList<FileChange>>.Failed failed)
                     return (new CommitDetailsRenderState.Placeholder(failed.Message), null);
 

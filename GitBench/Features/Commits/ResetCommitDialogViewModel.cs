@@ -17,7 +17,7 @@ internal sealed class ResetCommitDialogViewModel : IDialogViewModel
 
     public ResetCommitDialogViewModel(
         ResetCommitRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)

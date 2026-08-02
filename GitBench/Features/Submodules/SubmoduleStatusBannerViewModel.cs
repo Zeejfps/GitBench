@@ -14,7 +14,7 @@ namespace GitBench.Features.Submodules;
 internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleStatusBannerState>
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitSubmoduleOperations _gitService;
     private readonly IMessageBus _bus;
 
     public IReadable<bool> IsOutdated { get; }
@@ -23,7 +23,7 @@ internal sealed class SubmoduleStatusBannerViewModel : ViewModelBase<SubmoduleSt
 
     public SubmoduleStatusBannerViewModel(
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitSubmoduleOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
         : base(dispatcher, SubmoduleStatusBannerState.Initial)

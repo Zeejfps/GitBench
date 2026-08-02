@@ -25,7 +25,7 @@ internal sealed record CreateWorktreeDialog : Widget
     {
         var vm = new CreateWorktreeDialogViewModel(
             new CreateWorktreeRequest(Primary),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<ILocalizationService>());

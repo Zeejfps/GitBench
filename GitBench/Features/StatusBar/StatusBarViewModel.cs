@@ -26,7 +26,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly IRepoRegistry _registry;
     private readonly GitIdentityService _identity;
     private readonly IdentityProfileService _profiles;
-    private readonly IGitService _git;
+    private readonly IGitConfigOperations _git;
     private readonly IMessageBus _bus;
     private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
@@ -65,7 +65,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IRepoStatusStore status,
         GitIdentityService identity,
         IdentityProfileService profiles,
-        IGitService git,
+        IGitConfigOperations git,
         IMessageBus bus,
         State<ThemeMode> themeMode,
         UpdateService updateService,

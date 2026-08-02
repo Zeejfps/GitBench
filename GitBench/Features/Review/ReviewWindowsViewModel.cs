@@ -18,7 +18,11 @@ internal sealed class ReviewWindowsViewModel : IDisposable
     private readonly IMessageBus _bus;
     private readonly IReviewStackSource _source;
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _gitService;
+    private readonly IGitHistoryReader _gitHistory;
+    private readonly IGitDiffReader _gitDiff;
+    private readonly IGitWorkingTreeOperations _gitWorkingTree;
+    private readonly IGitConflictOperations _gitConflicts;
+    private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IRepoSnapshotStore _snapshots;
     private readonly IReviewProgressStore _reviewProgress;
     private readonly IUiDispatcher _dispatcher;
@@ -37,7 +41,11 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         IMessageBus bus,
         IReviewStackSource source,
         IRepoRegistry registry,
-        IGitService gitService,
+        IGitHistoryReader gitHistory,
+        IGitDiffReader gitDiff,
+        IGitWorkingTreeOperations gitWorkingTree,
+        IGitConflictOperations gitConflicts,
+        IGitSubmoduleOperations gitSubmodules,
         IRepoSnapshotStore snapshots,
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
@@ -47,7 +55,11 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         _bus = bus;
         _source = source;
         _registry = registry;
-        _gitService = gitService;
+        _gitHistory = gitHistory;
+        _gitDiff = gitDiff;
+        _gitWorkingTree = gitWorkingTree;
+        _gitConflicts = gitConflicts;
+        _gitSubmodules = gitSubmodules;
         _snapshots = snapshots;
         _reviewProgress = reviewProgress;
         _dispatcher = dispatcher;
@@ -70,7 +82,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         // The window's own commit-details VM, opted out of the selection bus so the History pane's
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
-            _gitService, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
+            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
         Windows.Add(new ReviewWindowViewModel(
             session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress));
     }

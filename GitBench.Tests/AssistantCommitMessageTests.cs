@@ -59,7 +59,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
 
         _commitBox = new LocalChangesViewModel(
             _registry,
-            _git,
+            _git, _git, _git, _git, _git,
             _dispatcher,
             new FrameTicker(),
             _bus,

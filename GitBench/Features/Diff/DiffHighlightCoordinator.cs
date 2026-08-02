@@ -5,7 +5,7 @@ namespace GitBench.Features.Diff;
 
 /// <summary>
 /// Orchestrates syntax highlighting for one diff: detect the language, fetch the needed file
-/// blob(s) via <see cref="IGitService"/>, tokenize each whole file, and package the result as a
+/// blob(s) via <see cref="IGitDiffReader"/>, tokenize each whole file, and package the result as a
 /// <see cref="DiffHighlight"/>. Pure orchestration with no threading of its own — the caller
 /// (<see cref="DiffViewModel"/>) runs it on a background, generation-guarded lane so navigating
 /// away discards stale results. Returns null whenever the diff should render plain (feature off,
@@ -13,7 +13,7 @@ namespace GitBench.Features.Diff;
 /// </summary>
 internal static class DiffHighlightCoordinator
 {
-    public static DiffHighlight? Compute(IGitService git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
+    public static DiffHighlight? Compute(IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
     {
         if (!DiffOptions.SyntaxHighlightingEnabled) return null;
         if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
@@ -48,7 +48,7 @@ internal static class DiffHighlightCoordinator
     }
 
     private static IReadOnlyList<IReadOnlyList<TokenSpan>>? HighlightSide(
-        IGitService git, Repo repo, DiffResult diff, string? commitSha, string? baseSha, bool oldSide, string languageId)
+        IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha, bool oldSide, string languageId)
     {
         // On the old side of a rename, the content lives at the pre-rename path.
         var path = oldSide && diff.OldPath != null ? diff.OldPath : diff.Path;

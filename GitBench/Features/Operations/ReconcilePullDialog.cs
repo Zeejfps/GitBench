@@ -28,7 +28,7 @@ internal sealed record ReconcilePullDialog : Widget
     {
         var vm = new ReconcilePullDialogViewModel(
             Repo,
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

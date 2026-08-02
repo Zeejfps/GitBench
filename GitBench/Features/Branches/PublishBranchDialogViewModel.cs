@@ -9,7 +9,8 @@ namespace GitBench.Features.Branches;
 internal sealed class PublishBranchDialogViewModel : IDialogViewModel
 {
     private readonly PublishBranchRequest _request;
-    private readonly IGitService _gitService;
+    private readonly IGitBranchOperations _gitBranches;
+    private readonly IGitRemoteOperations _gitRemotes;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
@@ -31,13 +32,15 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
 
     public PublishBranchDialogViewModel(
         PublishBranchRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitBranches,
+        IGitRemoteOperations gitRemotes,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)
     {
         _request = request;
-        _gitService = gitService;
+        _gitBranches = gitBranches;
+        _gitRemotes = gitRemotes;
         _dispatcher = dispatcher;
         _bus = bus;
         _loc = loc;
@@ -53,7 +56,7 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
                 var remote = SelectedRemote.Value;
                 var setUpstream = SetUpstream.Value;
                 var local = _request.LocalBranch;
-                var outcome = _gitService.PublishBranch(_request.Repo, local, remote, local, setUpstream);
+                var outcome = _gitBranches.PublishBranch(_request.Repo, local, remote, local, setUpstream);
                 return outcome;
             },
             onSuccess: () =>
@@ -69,7 +72,7 @@ internal sealed class PublishBranchDialogViewModel : IDialogViewModel
     private void LoadRemotes()
     {
         var repo = _request.Repo;
-        var service = _gitService;
+        var service = _gitRemotes;
         var dispatcher = _dispatcher;
 
         Task.Run(() =>

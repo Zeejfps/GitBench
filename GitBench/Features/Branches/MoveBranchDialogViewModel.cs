@@ -14,7 +14,7 @@ internal sealed class MoveBranchDialogViewModel : IDialogViewModel
 
     public MoveBranchDialogViewModel(
         MoveBranchRequest request,
-        IGitService gitService,
+        IGitBranchOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoHeadStore head)

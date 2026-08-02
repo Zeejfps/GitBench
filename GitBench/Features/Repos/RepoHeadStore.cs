@@ -70,7 +70,7 @@ internal interface IRepoHeadConfirm
 /// </summary>
 internal sealed class RepoHeadStore : IRepoHeadStore, IRepoHeadConfirm, IDisposable
 {
-    private readonly IGitService _git;
+    private readonly IGitBranchOperations _git;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
@@ -94,7 +94,7 @@ internal sealed class RepoHeadStore : IRepoHeadStore, IRepoHeadConfirm, IDisposa
         public string? Landed;
     }
 
-    public RepoHeadStore(IGitService git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
+    public RepoHeadStore(IGitBranchOperations git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
     {
         _git = git;
         _bus = bus;

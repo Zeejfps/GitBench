@@ -16,7 +16,7 @@ internal sealed class RebaseBranchDialogViewModel : IDialogViewModel
 
     public RebaseBranchDialogViewModel(
         RebaseBranchRequest request,
-        IGitService gitService,
+        IGitIntegrationOperations gitService,
         IUiDispatcher dispatcher,
         IMessageBus bus)
     {
@@ -37,7 +37,7 @@ internal sealed class RebaseBranchDialogViewModel : IDialogViewModel
         StartPreview(request, gitService, dispatcher);
     }
 
-    private void StartPreview(RebaseBranchRequest request, IGitService gitService, IUiDispatcher dispatcher)
+    private void StartPreview(RebaseBranchRequest request, IGitIntegrationOperations gitService, IUiDispatcher dispatcher)
     {
         Task.Run(() =>
         {

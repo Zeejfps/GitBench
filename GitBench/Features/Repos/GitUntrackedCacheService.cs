@@ -13,12 +13,12 @@ namespace GitBench.Features.Repos;
 internal sealed class GitUntrackedCacheService : IHostedService, IDisposable
 {
     private readonly IRepoRegistry _registry;
-    private readonly IGitService _git;
+    private readonly IGitConfigOperations _git;
     private readonly State<bool> _enabled;
     private IDisposable? _enabledSub;
     private IDisposable? _reposSub;
 
-    public GitUntrackedCacheService(IRepoRegistry registry, IGitService git, State<bool> enabled)
+    public GitUntrackedCacheService(IRepoRegistry registry, IGitConfigOperations git, State<bool> enabled)
     {
         _registry = registry;
         _git = git;

@@ -27,7 +27,7 @@ internal sealed record UpdateSubmodulesDialog : Widget
     {
         var vm = new UpdateSubmodulesDialogViewModel(
             new UpdateSubmodulesViewRequest(Primary, Target),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitSubmoduleOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>());
 

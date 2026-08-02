@@ -29,7 +29,7 @@ internal sealed record RemoveWorktreeDialog : Widget
     {
         var vm = new RemoveWorktreeDialogViewModel(
             new RemoveWorktreeRequest(Primary, Worktree),
-            ctx.Require<IGitService>(),
+            ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Localization());
