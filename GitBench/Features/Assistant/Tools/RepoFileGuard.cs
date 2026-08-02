@@ -91,14 +91,48 @@ internal static class RepoFileGuard
         {
             if (!git.IsPathTracked(repo, relative))
                 return RepoFileResolution.Refused(
-                    $"Git does not track '{relative}'. This tool reads tracked files only — use "
-                    + "get_local_changes or get_diff to see what is in the working tree.");
+                    $"Git does not track '{relative}'.{Nearby(git, repo, relative)} This tool reads "
+                    + "tracked files only — use get_local_changes or get_diff to see what is in the "
+                    + "working tree.");
 
             if (!File.Exists(fullPath))
                 return RepoFileResolution.Refused($"'{relative}' is tracked but not present in the working tree.");
         }
 
         return RepoFileResolution.Allowed(fullPath, relative);
+    }
+
+    /// <summary>The tracked paths a search may return: everything but the credential-shaped ones,
+    /// which stay invisible whether they are asked for or stumbled upon.</summary>
+    public static IReadOnlyList<string> Searchable(IReadOnlyList<string> trackedPaths)
+    {
+        var visible = new List<string>(trackedPaths.Count);
+        foreach (var path in trackedPaths)
+        {
+            var segments = path.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0 && !IsDenied(segments)) visible.Add(path);
+        }
+
+        return visible;
+    }
+
+    // A wrong path is nearly always a near-miss of a real one — the wrong directory, a swapped pair
+    // of letters — so the refusal carries the candidates rather than making the model guess again.
+    // Only paid for on the failure path: one `ls-files` after the read has already been refused.
+    private static string Nearby(IGitService git, Repo repo, string relative)
+    {
+        try
+        {
+            var matches = PathSearch.Rank(Searchable(git.ListTrackedFiles(repo)), relative, 3)
+                .Where(match => match.Score >= PathSearch.SuggestionFloor)
+                .Select(match => $"'{match.Path}'")
+                .ToArray();
+            return matches.Length == 0 ? string.Empty : " Did you mean " + string.Join(", ", matches) + "?";
+        }
+        catch (Exception)
+        {
+            return string.Empty;
+        }
     }
 
     private static RepoFileResolution Outside(string requested) =>

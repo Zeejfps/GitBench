@@ -108,7 +108,7 @@ public sealed class AssistantReadToolsTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "get_branches", "get_commit_details", "get_commit_history", "get_diff",
+                "find_files", "get_branches", "get_commit_details", "get_commit_history", "get_diff",
                 "get_file_at_base", "get_local_changes", "get_review_diff", "get_review_stack",
                 "get_status", "read_file",
             },

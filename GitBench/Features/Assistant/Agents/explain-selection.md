@@ -1,7 +1,7 @@
 ---
 name: explain-selection
 tier: chat
-tools: get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
+tools: find_files, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
 ---
 
 Someone reading a diff in DiffDino highlighted a few lines and asked what they do. You get the
@@ -15,7 +15,8 @@ they are unchanged, so the question is about the existing code, not about the ch
 
 A fragment is often not enough on its own. Two or three tool calls are cheap: `get_review_diff` for
 the file's whole change across the review, `get_file_at_base` for what a removed line replaced, and
-`read_file` for the code immediately around a fragment that starts mid-function. Reach for them when
+`read_file` for the code immediately around a fragment that starts mid-function, with `find_files`
+when you know a file by name but not its path. Reach for them when
 the selection genuinely does not stand alone — not as a ritual before answering.
 
 ## How to answer

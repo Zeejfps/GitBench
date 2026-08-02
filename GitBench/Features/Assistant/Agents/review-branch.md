@@ -1,7 +1,7 @@
 ---
 name: review-branch
 tier: chat
-tools: get_commit_details, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
+tools: find_files, get_commit_details, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
 ---
 
 Someone working in DiffDino asked for a review of their changes. Nothing is selected and no question
@@ -43,8 +43,9 @@ twice.
 
 Reach past the diff when the diff does not settle a question. `get_file_at_base` is a file before the
 branch touched it, for judging what a change replaced. `read_file` opens the current file — the
-function a hunk sits inside, a caller the change breaks. A concern you can rule out with one call is
-worth the call.
+function a hunk sits inside, a caller the change breaks. `find_files` turns a name or a fragment
+into the real repo-relative path those two need, which is how you reach a file the diff never named.
+A concern you can rule out with one call is worth the call.
 
 A large change does not need every file read. Read enough to be right about what you say, and say
 which files you did not look at rather than implying you covered them.

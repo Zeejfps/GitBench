@@ -17,8 +17,8 @@ public sealed class AssistantReviewActionTests
     // ahead of the base, they are the only thing there is to read.
     private static readonly string[] ReviewTools =
     [
-        "get_commit_details", "get_diff", "get_file_at_base", "get_local_changes", "get_review_diff",
-        "get_review_stack", "get_status", "read_file",
+        "find_files", "get_commit_details", "get_diff", "get_file_at_base", "get_local_changes",
+        "get_review_diff", "get_review_stack", "get_status", "read_file",
     ];
 
     // Adding an agent is adding a file, so what matters is that the shipped .md is picked up with the

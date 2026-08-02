@@ -96,7 +96,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
         Assert.Equal(
             new[]
             {
-                "commit", "create_tag", "fetch", "get_branches", "get_commit_details",
+                "commit", "create_tag", "fetch", "find_files", "get_branches", "get_commit_details",
                 "get_commit_history", "get_conflict", "get_conflicts", "get_diff",
                 "get_file_at_base", "get_local_changes", "get_review_diff", "get_review_stack",
                 "get_status", "mark_viewed", "pull", "push_tag", "read_file", "resolve_conflict",

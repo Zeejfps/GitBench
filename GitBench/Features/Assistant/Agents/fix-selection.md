@@ -1,7 +1,7 @@
 ---
 name: fix-selection
 tier: chat
-tools: get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
+tools: find_files, get_diff, get_file_at_base, get_local_changes, get_review_diff, get_review_stack, get_status, read_file
 ---
 
 Someone reading a diff in DiffDino highlighted a few lines and asked for a fix. You get the selection
@@ -15,8 +15,9 @@ mode here.
 
 Read enough to write something that would compile. `read_file` gives you the surrounding function,
 the imports and the names in scope; `get_file_at_base` gives you what the code looked like before, in
-case the change already threw away the thing that handled this. A patch that invents a helper that
-does not exist is worse than a sentence describing the fix.
+case the change already threw away the thing that handled this. `find_files` finds the path of a
+file you only know by name, since `read_file` takes exact repo-relative paths. A patch that invents
+a helper that does not exist is worse than a sentence describing the fix.
 
 You cannot edit files. What you produce is a suggestion the person applies themselves.
 

@@ -3547,6 +3547,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         return result.Ok;
     }
 
+    // `--cached -z` lists index entries, so an unmerged path arrives once per stage; the set
+    // collapses those back to one path.
+    public IReadOnlyList<string> ListTrackedFiles(Repo repo)
+    {
+        var output = RunGit(repo.Path, out _, "ls-files", "--cached", "-z");
+        if (output == null) return [];
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            seen.Add(path);
+
+        var paths = seen.ToList();
+        paths.Sort(StringComparer.Ordinal);
+        return paths;
+    }
+
     private bool IsTracked(string workingDir, string path)
     {
         var result = _runner.Run(

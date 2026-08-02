@@ -59,5 +59,10 @@ internal sealed class AssistantToolset
             agent.AllowedTools);
 
     private static IEnumerable<IAssistantTool> Reads(IGitService git, Repo repo) =>
-        [.. ReadTools.CreateAll(git, repo), .. ReviewTools.CreateReads(git, repo), new ReadFileTool(git, repo)];
+    [
+        .. ReadTools.CreateAll(git, repo),
+        .. ReviewTools.CreateReads(git, repo),
+        new ReadFileTool(git, repo),
+        new FindFilesTool(git, repo),
+    ];
 }
