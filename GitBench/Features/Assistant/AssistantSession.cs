@@ -36,10 +36,12 @@ internal sealed class AssistantRow : IDisposable
         string text,
         string? toolName,
         bool running,
-        PendingToolApproval? pending = null)
+        PendingToolApproval? pending = null,
+        string? toolDetail = null)
     {
         Kind = kind;
         ToolName = toolName;
+        ToolDetail = toolDetail;
         Pending = pending;
         _text = new State<string>(text);
         _running = new State<bool>(running);
@@ -50,6 +52,10 @@ internal sealed class AssistantRow : IDisposable
 
     /// <summary>The tool this row reports, for <see cref="AssistantRowKind.Tool"/> rows.</summary>
     public string? ToolName { get; }
+
+    /// <summary>What that call was about — the path, the sha, the pattern — clipped to a line, or
+    /// null for a tool that takes no arguments.</summary>
+    public string? ToolDetail { get; }
 
     /// <summary>The run this row opened, for the first tool row of a run. The rest of the run lives
     /// inside it rather than in the transcript, so the reader sees one line for the whole thing.</summary>
@@ -66,7 +72,8 @@ internal sealed class AssistantRow : IDisposable
 
     public static AssistantRow Reply() => new(AssistantRowKind.Reply, string.Empty, null, running: true);
 
-    public static AssistantRow Tool(string name) => new(AssistantRowKind.Tool, string.Empty, name, running: true);
+    public static AssistantRow Tool(string name, string? detail = null) =>
+        new(AssistantRowKind.Tool, string.Empty, name, running: true, toolDetail: detail);
 
     public static AssistantRow Approval(PendingToolApproval pending) =>
         new(AssistantRowKind.Approval, string.Empty, pending.ToolName, running: false, pending);
@@ -430,7 +437,7 @@ internal sealed class AssistantSession : IDisposable
             case AssistantEvent.ToolStarted started:
                 _thinking.Value = false;
                 FinishReply();
-                var row = AssistantRow.Tool(started.Name);
+                var row = AssistantRow.Tool(started.Name, ToolCallSummary.Describe(started.Input));
                 _toolRows[started.Id] = row;
                 Add(row);
                 break;
