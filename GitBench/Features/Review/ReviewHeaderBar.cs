@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -45,6 +46,7 @@ internal sealed record ReviewHeaderBar : Widget
                             Children =
                             [
                                 new Grow { Child = BaseRange(vm, ctx) },
+                                ReadingGroup(vm),
                                 ProgressGroup(vm),
                                 HelpButton(vm),
                             ],
@@ -87,6 +89,49 @@ internal sealed record ReviewHeaderBar : Widget
                         s.ReviewBaseSearchPlaceholder, s.ReviewBaseNoMatches);
                 }),
             new Grow { Child = new Box() },
+        ],
+    };
+
+    // Reading mode: the toggle, and beside it the one line that says how much of the change is
+    // being hidden. That line is counted from the diff itself, never reported by the model — a
+    // reader deciding whether to trust an abridgement needs a number nobody could have made up.
+    // A build with no assistant configured has no coordinator, and the group is hidden — but a
+    // hidden widget's props are still built and bound, so every read of it stays null-safe.
+    private static IWidget ReadingGroup(ReviewWindowViewModel vm) => new Row
+    {
+        Gap = Spacing.Sm,
+        CrossAxis = CrossAxisAlignment.Center,
+        Visible = Prop.Bind(vm.CanRead),
+        Children =
+        [
+            new Text
+            {
+                Value = Prop.Bind(() => vm.Reading?.Status.Value ?? string.Empty),
+                Visible = Prop.Bind(() => !string.IsNullOrEmpty(vm.Reading?.Status.Value)),
+                FontSize = FontSize.Caption,
+                Color = Theme.Color(s => s.Palette.TextSecondary),
+                Overflow = TextOverflow.Ellipsis,
+                VAlign = TextAlignment.Center,
+            },
+            // A glyph rather than a tint on the label: the phase lives on its own observable, and a
+            // bound Value tracks it, where a theme-selected color would only re-run on theme change.
+            new Text
+            {
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = FontSize.Body,
+                Value = Prop.Bind(() => vm.Reading?.Phase.Value == ReadingPhase.On
+                    ? LucideIcons.CircleCheck
+                    : LucideIcons.FileText),
+                Color = Theme.Color(s => s.Palette.TextSecondary),
+                VAlign = TextAlignment.Center,
+            },
+            new ButtonWidget
+            {
+                Style = ButtonStyle.Bare(_ => Theme.Color(t => t.Palette.TextSecondary)),
+                Command = new Command(vm.ToggleReading),
+                ContentInset = new PaddingStyle { Left = Spacing.Xs, Right = Spacing.Xs },
+                Children = [new ButtonLabel { Value = L.T(s => s.ReadingMode) }],
+            }.WithController<KbmController>(),
         ],
     };
 

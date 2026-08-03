@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
@@ -207,6 +208,9 @@ internal static class AppServices
             ctx.Require<IReviewProgressStore>(),
             ctx.Require<IRepoOperationsStore>(),
             connection => new AssistantBackendRouter(AssistantHttp, connection)));
+        // Reading mode reaches the review surfaces through the session store, which is the one
+        // place that knows whether a model can be reached at all.
+        context.AddSingleton<IReadingModeFactory>(ctx => ctx.Require<IAssistantSessionStore>());
         context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AssistantViewModel>();
 

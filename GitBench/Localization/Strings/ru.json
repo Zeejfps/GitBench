@@ -644,6 +644,12 @@
   "diff.diff_truncated": "Различия усечены. Показано строк: {count}.",
   "diff.file_truncated": "Файл усечён. Показано строк: {count}.",
   "diff.hidden_lines": "… скрыто строк: {count}",
+  "reading.mode": "Чтение",
+  "reading.nothing_to_abridge": "Нечего сокращать.",
+  "reading.no_plan_produced": "Ассистент не создал план чтения.",
+  "reading.working": "Сокращение…",
+  "reading.kept": "показано {shown} из {total} изменённых строк в {files} из {total_files} файлов",
+  "reading.all_hidden": "Все изменения в этом файле скрыты.",
 
   "identity.author_email_placeholder": "ivan@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

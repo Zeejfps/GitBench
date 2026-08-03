@@ -578,6 +578,12 @@
   "diff.diff_truncated": "차이가 잘렸습니다 — 처음 {count}줄만 표시됩니다.",
   "diff.file_truncated": "파일이 잘렸습니다 — 처음 {count}줄만 표시됩니다.",
   "diff.hidden_lines": "… 숨겨진 {count}줄",
+  "reading.mode": "리딩",
+  "reading.nothing_to_abridge": "요약할 내용이 없습니다.",
+  "reading.no_plan_produced": "어시스턴트가 리딩 플랜을 만들지 못했습니다.",
+  "reading.working": "요약하는 중…",
+  "reading.kept": "파일 {total_files}개 중 {files}개에서 변경된 {total}줄 중 {shown}줄 표시",
+  "reading.all_hidden": "이 파일의 모든 변경 사항이 생략되었습니다.",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

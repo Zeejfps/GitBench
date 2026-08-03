@@ -578,6 +578,12 @@
   "diff.diff_truncated": "差分が省略されました — 最初の {count} 行のみ表示しています。",
   "diff.file_truncated": "ファイルが省略されました — 最初の {count} 行のみ表示しています。",
   "diff.hidden_lines": "… 非表示の {count} 行",
+  "reading.mode": "リーディング",
+  "reading.nothing_to_abridge": "要約する変更がありません。",
+  "reading.no_plan_produced": "アシスタントはリーディングプランを作成しませんでした。",
+  "reading.working": "要約しています…",
+  "reading.kept": "{total_files} 個中 {files} 個のファイルで、変更行 {total} 行中 {shown} 行を表示",
+  "reading.all_hidden": "このファイルの変更はすべて省略されました。",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

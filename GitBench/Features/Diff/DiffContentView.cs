@@ -70,6 +70,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public Action<int>? OnDiscardHunk { get; set; }
     public Action<int, GapExpandDirection>? OnExpandGap { get; set; }
 
+    /// <summary>A folded run was clicked; the argument is the fold's start row ordinal.</summary>
+    public Action<int>? OnExpandFold { get; set; }
+
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
     private readonly Context _ctx;
@@ -553,7 +556,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public void OnHunkPointerMove(PointF point)
     {
         // Expander hover is independent of hunk buttons: it applies to read-only sides too.
-        SetExpanderHover(HitTestExpander(point)?.Row ?? -1);
+        // A folded run shares the hover slot — both are "click to see what's hidden".
+        SetExpanderHover(HitTestExpander(point)?.Row ?? HitTestFold(point)?.Row ?? -1);
 
         if (!HasHunkButtons()) { SetHunkHover(-1, HunkAction.None); return; }
 
@@ -576,9 +580,26 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     public bool TryClickExpander(PointF point)
     {
-        if (HitTestExpander(point) is not { } hit) return false;
-        OnExpandGap?.Invoke(hit.GapIndex, hit.Dir);
-        return true;
+        if (HitTestExpander(point) is { } hit)
+        {
+            OnExpandGap?.Invoke(hit.GapIndex, hit.Dir);
+            return true;
+        }
+        if (HitTestFold(point) is { } fold)
+        {
+            OnExpandFold?.Invoke(fold.StartRow);
+            return true;
+        }
+        return false;
+    }
+
+    private (int Row, int StartRow)? HitTestFold(PointF point)
+    {
+        if (_lineHeight <= 0) return null;
+        if (!_list.Position.ContainsPoint(point)) return null;
+        var rowIndex = HitTestListRow(point);
+        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Fold fold) return null;
+        return (rowIndex, fold.StartRow);
     }
 
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
@@ -669,6 +690,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
     {
         if (HitTestExpander(point) != null) return true;
+        if (HitTestFold(point) != null) return true;
         if (!HasHunkButtons()) return false;
         var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
         return hunkIndex >= 0 && HitTestButton(point, hunkIndex) != HunkAction.None;

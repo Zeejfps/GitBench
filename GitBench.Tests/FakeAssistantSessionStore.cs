@@ -1,5 +1,6 @@
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
+using GitBench.Features.Diff.Reading;
 using ZGF.Observable;
 
 namespace GitBench.Tests;
@@ -97,4 +98,6 @@ internal sealed class FakeAssistantSessionStore : IAssistantSessionStore, IDispo
         _configured.Dispose();
         _keys.Dispose();
     }
+
+    public ReadingModeCoordinator? Create(Guid repoId) => null;
 }

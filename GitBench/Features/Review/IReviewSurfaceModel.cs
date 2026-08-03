@@ -1,5 +1,7 @@
 using GitBench.Features.Diff;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.Repos;
+using GitBench.Git;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Observable;
 
@@ -43,6 +45,12 @@ internal interface IReviewSurfaceModel
     IReadable<ReviewHud> Hud { get; }
 
     IReadable<bool> CheatsheetOpen { get; }
+
+    /// <summary>Reading mode for this surface, or null where it is not offered.</summary>
+    ReadingModeCoordinator? Reading => null;
+
+    /// <summary>Flips reading mode over the whole surface. Does nothing where it is not offered.</summary>
+    void ToggleReading() { }
 
     /// <summary>Raised when a navigation wants the stacked list to scroll a file into view.</summary>
     event Action<string>? ScrollToFileRequested;

@@ -121,6 +121,9 @@ internal sealed class DiffRowPainter
             case DiffRow.Line l:
                 DrawLineRow(c, l, p);
                 break;
+            case DiffRow.Fold f:
+                DrawFoldRow(c, f, p);
+                break;
         }
     }
 
@@ -323,6 +326,47 @@ internal sealed class DiffRowPainter
         if (gap.ShowDown) return DownOnly;
         if (gap.ShowUp) return UpOnly;
         return NoExpanders;
+    }
+
+    // A folded run reads as a dimmed ellipsis sitting at the run's own indent, tinted with the
+    // side it stands for so the eye still sees an addition or a deletion there. The hidden count
+    // trails it, and the whole row is the click target that brings the source back.
+    private void DrawFoldRow(ICanvas c, DiffRow.Fold f, in DiffRowPaint p)
+    {
+        var bg = p.ExpanderHovered
+            ? Styles.ExpanderHoverBackground
+            : f.Kind switch
+            {
+                DiffLineKind.Added => Styles.LineAddedBackground,
+                DiffLineKind.Removed => Styles.LineRemovedBackground,
+                _ => Styles.Background,
+            };
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(p.Left, p.Bottom, p.Width, LineHeight),
+            Style = SolidBgStyle(bg),
+            ZIndex = p.Z,
+        });
+
+        var (glyph, glyphColor) = f.Kind switch
+        {
+            DiffLineKind.Added => ("+", Styles.LineAddedGlyph),
+            DiffLineKind.Removed => ("-", Styles.LineRemovedGlyph),
+            _ => (" ", Styles.LineContextGlyph),
+        };
+        var x = p.Left;
+        if (!p.SingleGutter) x += p.GutterWidth + ColumnGap;
+        x += p.GutterWidth + ColumnGap;
+        DrawMonoText(c, glyph, x, p.Bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, p.Z + 2);
+
+        var textLeft = LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter);
+        var ellipsisWidth = DiffText.VisualCells(f.Text) * MonoAdvance;
+        DrawMonoText(c, f.Text, textLeft, p.Bottom, ellipsisWidth,
+            Styles.SectionMutedText, TextAlignment.Start, p.Z + 2);
+
+        var label = _loc.Strings.Value.DiffHiddenLines(f.HiddenCount);
+        DrawMonoText(c, label, textLeft + ellipsisWidth + HunkHeaderGap, p.Bottom,
+            DiffText.VisualCells(label) * MonoAdvance, Styles.LineNumberText, TextAlignment.Start, p.Z + 2);
     }
 
     private void DrawLineRow(ICanvas c, DiffRow.Line l, in DiffRowPaint p)

@@ -577,6 +577,12 @@
   "diff.diff_truncated": "Diff truncated — only the first {count} lines are shown.",
   "diff.file_truncated": "File truncated — only the first {count} lines are shown.",
   "diff.hidden_lines": "… {count} hidden lines",
+  "reading.mode": "Reading",
+  "reading.nothing_to_abridge": "Nothing here to abridge.",
+  "reading.no_plan_produced": "The assistant did not produce a reading plan.",
+  "reading.working": "Abridging…",
+  "reading.kept": "kept {shown}/{total} changed lines in {files}/{total_files} files",
+  "reading.all_hidden": "All changes in this file were elided.",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

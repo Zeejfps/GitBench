@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
@@ -28,6 +29,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
     private readonly IUiDispatcher _dispatcher;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
+    private readonly IReadingModeFactory? _readingModes;
     private readonly IDisposable _subscription;
 
     public ObservableList<ReviewWindowViewModel> Windows { get; } = new();
@@ -50,8 +52,10 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
         ILocalizationService loc,
-        PreferencesService preferences)
+        PreferencesService preferences,
+        IReadingModeFactory? readingModes = null)
     {
+        _readingModes = readingModes;
         _bus = bus;
         _source = source;
         _registry = registry;
@@ -84,7 +88,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         var details = new CommitDetailsViewModel(
             _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
         Windows.Add(new ReviewWindowViewModel(
-            session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress));
+            session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress, _readingModes));
     }
 
     private ReviewWindowViewModel? FindOpenWindow(Guid repoId, string headRef)

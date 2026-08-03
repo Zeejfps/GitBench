@@ -26,6 +26,14 @@ internal abstract record DiffRow
     /// has <c>ShowUnfold</c> set and an exact <c>HiddenCount</c>.</summary>
     public sealed record Tear(GapBar Gap) : DiffRow;
     /// <summary>
+    /// A run of source rows a reading plan folded away, standing in as one ellipsis at the run's
+    /// own indent and marker. <see cref="StartRow"/> is the fold's first row ordinal, which is how
+    /// a click asks for it back.
+    /// </summary>
+    /// <remarks>The text is generated from the source rows, never supplied by a plan, so a fold
+    /// can only ever say that something was hidden — not what it was.</remarks>
+    public sealed record Fold(DiffLineKind Kind, string Text, int HiddenCount, int StartRow) : DiffRow;
+    /// <summary>
     /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
     /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the
     /// same tab-expanded column space as <see cref="Text"/>; null/empty means plain rendering.

@@ -92,60 +92,13 @@ internal sealed class CommitMessageQuickAction : IDisposable
 
     private async Task RunAsync(CancellationTokenSource cts)
     {
-        // A fresh conversation every time: this is a one-shot, and nothing about the last generated
-        // message should steer the next one.
-        var conversation = new List<AssistantMessage> { new AssistantMessage.User(Instruction) };
-        var answer = new StringBuilder();
-        var wrote = false;
-        var toolsWereNeverPossible = false;
-        string? failure = null;
-        var cancelled = false;
+        var run = new OneShotAgentRun(_loop, ApproveTheCommitBox.Instance, SetCommitMessageTool.ToolName);
+        var outcome = await run
+            .RunAsync(Instruction, AssistantAgentLoop.RepoStateBlock(_git, _repo, _loc), cts.Token)
+            .ConfigureAwait(false);
 
-        try
-        {
-            await foreach (var e in _loop
-                               .RunAsync(conversation, AssistantAgentLoop.RepoStateBlock(_git, _repo, _loc), ApproveTheCommitBox.Instance, cts.Token)
-                               .ConfigureAwait(false))
-            {
-                switch (e)
-                {
-                    case AssistantEvent.TextDelta delta:
-                        answer.Append(delta.Text);
-                        break;
-                    case AssistantEvent.ToolFinished finished
-                        when finished.Name == SetCommitMessageTool.ToolName:
-                        wrote = !finished.IsError;
-                        break;
-                    case AssistantEvent.NoToolSupport:
-                        toolsWereNeverPossible = true;
-                        break;
-                    case AssistantEvent.Refused refused:
-                        failure = refused.Explanation ?? Strings.AssistantGenerateMessageEmpty;
-                        break;
-                    case AssistantEvent.Failed failed:
-                        failure = failed.Message;
-                        break;
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            cancelled = true;
-        }
-        catch (Exception ex)
-        {
-            failure = ex.Message;
-        }
-
-        var outcome = new Outcome(wrote, toolsWereNeverPossible, answer.ToString(), failure, cancelled);
         _dispatcher.Post(() => Complete(cts, outcome));
     }
-
-    /// <summary>How one run ended, as the UI thread needs to read it: whether the tool wrote the
-    /// message, whether tool calling was available at all, whatever the model said in prose, and
-    /// whether the run failed or was stopped.</summary>
-    private readonly record struct Outcome(
-        bool Wrote, bool ToolsWereNeverPossible, string Reply, string? Failure, bool Cancelled);
 
     // Everything the agent needs beyond its tools. The reply language rides here rather than in the
     // system prompt for the same reason it does in the chat session: the system block is the cached
@@ -156,7 +109,7 @@ internal sealed class CommitMessageQuickAction : IDisposable
     // this block as a user turn instead. That branch is the reason this is passed to the loop rather
     // than folded into the instruction above.
     // A stopped run reports nothing — the person stopped it.
-    private void Complete(CancellationTokenSource cts, Outcome outcome)
+    private void Complete(CancellationTokenSource cts, OneShotOutcome outcome)
     {
         if (!_disposed)
         {
@@ -168,16 +121,18 @@ internal sealed class CommitMessageQuickAction : IDisposable
         cts.Dispose();
     }
 
-    private void Apply(Outcome outcome)
+    private void Apply(OneShotOutcome outcome)
     {
+        // A refusal arrives with no explanation more often than not, and an empty reason reads as
+        // a bug rather than an answer.
         if (outcome.Failure is { } failure)
         {
-            Fail(failure);
+            Fail(failure.Length == 0 ? Strings.AssistantGenerateMessageEmpty : failure);
             return;
         }
 
         // The tool has already typed into the box; what is left is the way back out of it.
-        if (outcome.Wrote)
+        if (outcome.ArtifactLanded)
         {
             OfferUndo();
             return;

@@ -673,6 +673,12 @@
   "diff.diff_truncated": "تم اقتطاع الفروق — تُعرض أول {count} سطر فقط.",
   "diff.file_truncated": "تم اقتطاع الملف — تُعرض أول {count} سطر فقط.",
   "diff.hidden_lines": "… {count} أسطر مخفية",
+  "reading.mode": "قراءة",
+  "reading.nothing_to_abridge": "لا يوجد ما يمكن اختصاره.",
+  "reading.no_plan_produced": "لم يُنتج المساعد خطة قراءة.",
+  "reading.working": "جارٍ الاختصار…",
+  "reading.kept": "تم الإبقاء على {shown} من {total} سطرًا مُعدَّلًا في {files} من {total_files} ملفًا",
+  "reading.all_hidden": "تم حذف جميع التغييرات في هذا الملف.",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

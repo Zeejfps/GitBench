@@ -1,6 +1,7 @@
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
@@ -22,7 +23,7 @@ internal delegate IAssistantBackend AssistantBackendFactory(Func<AssistantConnec
 /// The one place assistant conversations live: one per repository, in memory, for the app session.
 /// View models project from it.
 /// </summary>
-internal interface IAssistantSessionStore
+internal interface IAssistantSessionStore : IReadingModeFactory
 {
     /// <summary>The active repo's conversation, or null when no repo is active. Swaps on repo switch.</summary>
     IReadable<AssistantSession?> Active { get; }
@@ -141,6 +142,31 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     public IReadable<bool> IsConfigured => _isConfigured;
 
     public IReadable<AssistantKeyring> Keys => _keys;
+
+    /// <summary>
+    /// Reading mode for one repository, or null when there is no such repository.
+    /// </summary>
+    /// <remarks>Whether a model can actually be reached is answered by the coordinator's
+    /// <see cref="ReadingModeCoordinator.Available"/> rather than here, because credentials resolve
+    /// asynchronously and a window opened before they land would otherwise never offer the toggle.
+    ///
+    /// The connection is read per run rather than captured, so switching provider or model between
+    /// runs takes effect on the next one; the model id is also part of the plan cache key, so a
+    /// switch produces a fresh plan rather than reusing the old model's.</remarks>
+    public ReadingModeCoordinator? Create(Guid repoId)
+    {
+        var repo = _registry.Repos.FirstOrDefault(r => r.Id == repoId);
+        if (repo is null) return null;
+
+        return new ReadingModeCoordinator(repo, _git, _loc, _dispatcher, () => !_isConfigured.Value ? null : new DiffAbridger(
+            _git,
+            repo,
+            _catalog,
+            _backend,
+            _loc,
+            () => Volatile.Read(ref _connection).Provider.ModelFor(_catalog.Get(DiffAbridger.AgentName).Tier)),
+            _isConfigured);
+    }
 
     public void Start()
     {

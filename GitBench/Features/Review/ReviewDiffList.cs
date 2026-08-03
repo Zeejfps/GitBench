@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -255,6 +256,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         this.Bind(_vm.ActiveFile, _ => SetDirty());
         this.Bind(_loc.Strings, _ => { _buttonBar.InvalidateMetrics(); SetDirty(); });
 
+        // One plan covers the whole change, so turning reading mode on or off re-renders every pane
+        // that is already loaded; the rest pick it up as they load.
+        if (_vm.Reading is { } reading)
+            this.Bind(reading.Overlay, ApplyReadingToLoadedSections);
+
         // Navigation (tree click, j/k, mark-viewed advance) scrolls the file's section here.
         this.Use(() =>
         {
@@ -486,10 +492,19 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var diff = _details.CreateFileDiff(s.File.Path);
         if (diff == null) return;
         s.Diff = diff;
+        // A pane that scrolls into view after a plan already landed draws through it from its first
+        // render; one whose diff is not in the plan renders raw.
+        if (_vm.Reading?.Overlay.Value is { } overlay) diff.Diff.SetReading(overlay);
         // Fires immediately with the current state, then on load / highlight / expansion updates.
         s.Subscription = diff.Diff.RenderState.Subscribe(state => OnSectionRender(s, state));
         // The per-hunk index states repaint the action pills; nothing else re-renders on them.
         s.MarksSubscription = diff.Diff.WorkingTreeHunkStates.Subscribe(_ => SetDirty());
+    }
+
+    private void ApplyReadingToLoadedSections(ReadingOverlay? overlay)
+    {
+        foreach (var s in _sections)
+            s.Diff?.Diff.SetReading(overlay);
     }
 
     private void OnSectionRender(Section s, DiffRenderState state)
@@ -893,6 +908,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         }
 
         var row = s.RowSet.Rows[local - 1];
+        if (row is DiffRow.Fold fold)
+        {
+            s.Diff?.Diff.ExpandFold(fold.StartRow);
+            return;
+        }
         if (DiffRowPainter.GapBarOf(row) is not { } gap) return;
         var contentLeft = CardLeft() - _scrollX;
         if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is { } dir)

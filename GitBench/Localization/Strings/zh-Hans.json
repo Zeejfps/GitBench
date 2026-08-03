@@ -578,6 +578,12 @@
   "diff.diff_truncated": "差异已截断 — 仅显示前 {count} 行。",
   "diff.file_truncated": "文件已截断 — 仅显示前 {count} 行。",
   "diff.hidden_lines": "… 已隐藏 {count} 行",
+  "reading.mode": "精读",
+  "reading.nothing_to_abridge": "没有可精简的内容。",
+  "reading.no_plan_produced": "助手未生成精读方案。",
+  "reading.working": "正在精简…",
+  "reading.kept": "在 {total_files} 个文件中的 {files} 个里保留了 {total} 行改动中的 {shown} 行",
+  "reading.all_hidden": "该文件的全部改动均已省略。",
 
   "identity.author_email_placeholder": "jane@company.com",
   "identity.ssh_key_placeholder": "~/.ssh/id_work",

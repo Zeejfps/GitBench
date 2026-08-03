@@ -1,3 +1,4 @@
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
@@ -35,6 +36,18 @@ internal sealed record ContextExpansion(
     bool Truncated,
     IReadOnlyDictionary<int, GapShown> Gaps);
 
+/// <summary>
+/// Reading mode's presentation state: the compiled plan plus the folds the reader has clicked
+/// back open, keyed by fold start row.
+/// </summary>
+/// <remarks>Like <see cref="ContextExpansion"/> this only ever changes what is drawn. The
+/// <see cref="DiffResult"/> underneath is the real diff, so staging, discarding and hunk
+/// selection keep acting on the change as it actually is.</remarks>
+internal sealed record ReadingView(ReadingOverlay Overlay, IReadOnlySet<int>? ExpandedFolds = null)
+{
+    public bool IsExpanded(int startRow) => ExpandedFolds?.Contains(startRow) == true;
+}
+
 internal abstract record DiffRenderState
 {
     public sealed record Placeholder(string Text) : DiffRenderState;
@@ -46,7 +59,8 @@ internal abstract record DiffRenderState
     public sealed record Loaded(
         DiffResult Result,
         DiffHighlight? Highlight = null,
-        ContextExpansion? Expansion = null) : DiffRenderState;
+        ContextExpansion? Expansion = null,
+        ReadingView? Reading = null) : DiffRenderState;
     // Full after-side file. AddedLineNumbers are 1-based new-file line numbers tinted as additions
     // (derived from the diff's Added rows); every other line renders as context. Removed lines are
     // absent — this is the current state of the file. Highlight reuses the new-side spans.
@@ -340,6 +354,29 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     }
 
     public void ToggleCollapse() => _isCollapsed.Value = !_isCollapsed.Value;
+
+    /// <summary>
+    /// Puts the pane into reading mode with an already-compiled plan, or back to the raw diff when
+    /// given null.
+    /// </summary>
+    /// <remarks>Nothing about the loaded <see cref="DiffResult"/> changes, so this is safe to flip
+    /// at any time — including mid-review with hunks staged.</remarks>
+    public void SetReading(ReadingOverlay? overlay)
+    {
+        if (State.Value.Render is not DiffRenderState.Loaded loaded) return;
+        var reading = overlay is null ? null : new ReadingView(overlay);
+        Update(s => s with { Render = loaded with { Reading = reading } });
+    }
+
+    public bool IsReading => State.Value.Render is DiffRenderState.Loaded { Reading: not null };
+
+    /// <summary>Brings one folded run back, leaving the rest of the plan applied.</summary>
+    public void ExpandFold(int startRow)
+    {
+        if (State.Value.Render is not DiffRenderState.Loaded { Reading: { } reading } loaded) return;
+        var expanded = new HashSet<int>(reading.ExpandedFolds ?? (IReadOnlySet<int>)new HashSet<int>()) { startRow };
+        Update(s => s with { Render = loaded with { Reading = reading with { ExpandedFolds = expanded } } });
+    }
 
     // Flips this pane between Diff and FullFile, then reloads so the render state is rebuilt for
     // the current target under the new mode. Sticky: the new mode carries to the next file too.

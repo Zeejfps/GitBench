@@ -1,3 +1,4 @@
+using GitBench.Features.Diff.Reading;
 using GitBench.Git;
 using GitBench.Localization;
 
@@ -21,6 +22,10 @@ internal sealed class DiffRowSet
     private readonly List<HunkRowRange> _hunkRanges = new();
     private int[] _rowToHunk = Array.Empty<int>();
     private ILocalizationService _loc = null!;
+    // Set only while flattening a diff in reading mode, and only when the overlay actually covers
+    // this file — every other render walks the exact path it did before.
+    private ReadingView? _reading;
+    private ReadingFileOverlay? _readingFile;
 
     public IReadOnlyList<DiffRow> Rows => _rows;
     public IReadOnlyList<HunkRowRange> HunkRanges => _hunkRanges;
@@ -48,7 +53,7 @@ internal sealed class DiffRowSet
         switch (state)
         {
             case DiffRenderState.Loaded loaded:
-                set.FlattenRows(loaded.Result, loaded.Highlight, loaded.Expansion);
+                set.FlattenRows(loaded.Result, loaded.Highlight, loaded.Expansion, loaded.Reading);
                 break;
             case DiffRenderState.FullFile fullFile:
                 set.FlattenFullFile(fullFile);
@@ -57,11 +62,19 @@ internal sealed class DiffRowSet
         return set;
     }
 
-    private void FlattenRows(DiffResult r, DiffHighlight? highlight, ContextExpansion? expansion)
+    private void FlattenRows(
+        DiffResult r,
+        DiffHighlight? highlight,
+        ContextExpansion? expansion,
+        ReadingView? reading = null)
     {
         if (r.ErrorMessage != null) return;
         if (r.IsBinary) return;
         if (r.Hunks.Count == 0 && !r.IsModeOnly && r.OldPath == null) return;
+
+        _reading = reading;
+        _readingFile = reading?.Overlay.ForFile(r);
+        if (_readingFile is null) _reading = null;
 
         AddChangeBanners(r);
 
@@ -92,6 +105,12 @@ internal sealed class DiffRowSet
     private int EmitHunk(DiffResult r, int hunkIndex, DiffGap gap, ContextExpansion? expansion, DiffHighlight? highlight)
     {
         var h = r.Hunks[hunkIndex];
+
+        // A hunk the plan emptied drops its separator too, so reading mode never leaves chrome
+        // pointing at nothing.
+        if (_readingFile is { } file && !HunkSurvives(file, r, hunkIndex))
+            return h.Lines.Count;
+
         var (top, bottom, remaining) = GapState(gap, expansion);
 
         if (top > 0)
@@ -106,7 +125,7 @@ internal sealed class DiffRowSet
         // anchors on the bar only while the two are still adjacent.
         var firstHunkRow = barRowIndex >= 0 && bottom == 0 ? barRowIndex : _rows.Count;
 
-        EmitHunkLines(h, highlight);
+        EmitHunkLines(h, highlight, hunkIndex);
         _hunkRanges.Add(new HunkRowRange(hunkIndex, firstHunkRow, _rows.Count - 1));
         return h.Lines.Count;
     }
@@ -151,7 +170,7 @@ internal sealed class DiffRowSet
         return barRowIndex;
     }
 
-    private void EmitHunkLines(DiffHunk h, DiffHighlight? highlight)
+    private void EmitHunkLines(DiffHunk h, DiffHighlight? highlight, int hunkIndex = -1)
     {
         // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
         // tab-expanded column space so it aligns with Spans and the glyph grid.
@@ -166,6 +185,33 @@ internal sealed class DiffRowSet
         {
             var l = h.Lines[j];
             var text = expanded[j];
+
+            if (_readingFile is { } file)
+            {
+                if (file.FoldAt(hunkIndex, j) is { } fold && !_reading!.IsExpanded(fold.StartRow))
+                {
+                    EmitFoldRow(fold);
+                    continue;
+                }
+                if (file.IsHidden(hunkIndex, j) && !IsRevealedFoldBody(file, hunkIndex, j))
+                    continue;
+                if (file.ElidedText(hunkIndex, j) is { } elided)
+                {
+                    // An elided row's text no longer matches the tokenizer's columns, so it drops
+                    // its highlight rather than wearing colors that have slid off their glyphs.
+                    var elidedText = DiffText.ExpandTabs(elided);
+                    _rows.Add(new DiffRow.Line(
+                        l.Kind,
+                        l.OldLineNumber?.ToString() ?? string.Empty,
+                        l.NewLineNumber?.ToString() ?? string.Empty,
+                        elidedText,
+                        elidedText.Length));
+                    var elidedCells = DiffText.VisualCells(elidedText);
+                    if (elidedCells > MaxRowCells) MaxRowCells = elidedCells;
+                    continue;
+                }
+            }
+
             // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
             var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
             if (spans != null && spans.Count == 0) spans = null;
@@ -181,6 +227,29 @@ internal sealed class DiffRowSet
             if (cells > MaxRowCells) MaxRowCells = cells;
         }
     }
+
+    private void EmitFoldRow(ReadingFoldRow fold)
+    {
+        var text = DiffText.ExpandTabs(fold.Indent) + ReadingElisionRule.Marker;
+        _rows.Add(new DiffRow.Fold(fold.Kind, text, fold.HiddenCount, fold.StartRow));
+        var cells = DiffText.VisualCells(text) + 12;
+        if (cells > MaxRowCells) MaxRowCells = cells;
+    }
+
+    // A row hidden by a fold the reader has clicked open is drawn again as ordinary source.
+    // Rows hidden by a removal stay gone: the toggle back to the raw diff is how those come back.
+    private bool IsRevealedFoldBody(ReadingFileOverlay file, int hunkIndex, int lineIndex)
+    {
+        for (var j = lineIndex; j >= 0; j--)
+        {
+            if (file.FoldAt(hunkIndex, j) is not { } fold) continue;
+            return fold.EndRow - fold.StartRow >= lineIndex - j && _reading!.IsExpanded(fold.StartRow);
+        }
+        return false;
+    }
+
+    private bool HunkSurvives(ReadingFileOverlay file, DiffResult r, int hunkIndex) =>
+        file.HunkHasVisibleRows(r, hunkIndex);
 
     // The EOF gap: expanded rows grow downward from the last hunk; the trailing bar shows while
     // lines remain below (before the fetch the count is unknown and the trailing-context heuristic

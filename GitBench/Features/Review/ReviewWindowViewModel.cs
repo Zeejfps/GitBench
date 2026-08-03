@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Diff.Reading;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -56,6 +57,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     private readonly IRepoSnapshotStore _snapshots;
     private readonly IReviewProgressStore _reviewProgress;
     private readonly BranchReviewedFiles _reviewedFiles;
+
+    // Null in a build with no assistant configured, which is how the header knows not to offer the
+    // toggle at all. The coordinator itself is made on first use: a review that is never read in
+    // reading mode never builds one.
+    // Built in the constructor rather than on first press. The header binds through its observables,
+    // and a compute binding that reads nothing on its first pass registers no dependency and would
+    // never re-run — so a coordinator that appeared later would leave the status line dead.
+    private readonly ReadingModeCoordinator? _reading;
 
     // The reviewer's in-window base override (the header base dropdown); null = auto-resolve. Only
     // the base varies — the window stays pinned to its repo + head. Setting it re-resolves the range
@@ -155,9 +164,12 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
         ILocalizationService loc,
         IMessageBus bus,
         IRepoSnapshotStore snapshots,
-        IReviewProgressStore reviewProgress)
+        IReviewProgressStore reviewProgress,
+        IReadingModeFactory? readingModes = null)
         : base(dispatcher, new ReviewState(new ReviewRenderState.Loading()))
     {
+        _reading = readingModes?.Create(session.RepoId);
+        CanRead = _reading?.Available ?? new State<bool>(false);
         Session = session;
         _source = source;
         _details = details;
@@ -379,6 +391,29 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
 
     /// <summary>Whether a file of the loaded range is marked Viewed — the section header
     /// checkboxes in the stacked diff list read through here.</summary>
+    public ReadingModeCoordinator? Reading => _reading;
+
+    /// <summary>Whether the toggle should be offered: a coordinator exists and it can currently
+    /// reach a model. Observable, so a key that resolves after the window opened still lights it
+    /// up rather than leaving the surface permanently plain.</summary>
+    public IReadable<bool> CanRead { get; }
+
+    /// <summary>
+    /// Flips reading mode over the whole range. The plan is made against every file at once, so the
+    /// model can explain a row in one file by a change in another.
+    /// </summary>
+    public void ToggleReading()
+    {
+        if (_reading is null) return;
+        if (CurrentStack() is not { } stack) return;
+
+        var files = Files();
+        var targets = new List<(string Path, string? CommitSha, string? BaseSha, DiffSide Side)>(files.Count);
+        foreach (var f in files)
+            targets.Add((f.Path, stack.HeadSha, stack.BaseSha, DiffSide.Range));
+        _reading.Toggle(targets);
+    }
+
     public bool IsFileViewed(string path) => _reviewedFiles.IsViewed(path);
 
     /// <summary>Flips a file's Viewed mark (a section header checkbox click).</summary>
@@ -420,6 +455,7 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     // two-column layout), then the base (slices/subscriptions).
     public override void Dispose()
     {
+        _reading?.Dispose();
         _reviewedFiles.Dispose();
         _details.Dispose();
         base.Dispose();
