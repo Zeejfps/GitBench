@@ -40,7 +40,11 @@ internal static class ReadingPlanCompiler
         if (problems.Count > 0)
             return new ReadingCompilation(null, problems);
 
-        var stats = Measure(index, hidden, foldAt, removedByPlan, mandatory, folded, out var fileEmpty);
+        // Structure the plan did not mean to take: a closing row whose opener is still on screen
+        // comes back, so the result reads as code rather than as a method that never ends.
+        ReadingDelimiters.KeepDanglingClosers(index, hidden, foldAt);
+
+        var stats = Measure(index, hidden, foldAt, removedByPlan, mandatory, out var fileEmpty);
         return new ReadingCompilation(
             new ReadingOverlay(index, hidden, foldAt, elided, fileEmpty, stats, plan.Summary),
             []);
@@ -210,7 +214,6 @@ internal static class ReadingPlanCompiler
         ReadingFoldRow?[] foldAt,
         bool[] removedByPlan,
         bool[] mandatory,
-        List<ReadingFoldRow> folds,
         out bool[] fileEmpty)
     {
         fileEmpty = new bool[index.Files.Count];
@@ -252,9 +255,19 @@ internal static class ReadingPlanCompiler
             visibleChanged,
             removedChanged,
             foldedChanged,
-            folds.Count,
+            FoldCount(foldAt),
             index.Files.Count,
             visibleFiles);
+    }
+
+    // Counted from the placed folds rather than the plan's, because the delimiter pass can shrink
+    // a fold off a closing row or drop one that had nothing left to stand for.
+    private static int FoldCount(ReadingFoldRow?[] foldAt)
+    {
+        var count = 0;
+        foreach (var fold in foldAt)
+            if (fold != null) count++;
+        return count;
     }
 
     private static string CommonIndent(ReadingRowIndex index, int start, int end)
