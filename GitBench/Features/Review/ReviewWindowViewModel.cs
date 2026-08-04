@@ -402,16 +402,36 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     /// Flips reading mode over the whole range. The plan is made against every file at once, so the
     /// model can explain a row in one file by a change in another.
     /// </summary>
+    /// <summary>Draws the abridged diff, asking for a plan the first time.</summary>
+    public void ShowAbridged()
+    {
+        if (_reading is null || ReadingTargets() is not { } targets) return;
+        _reading.ShowAbridged(targets);
+    }
+
+    /// <summary>Puts the full diff back. Instant — the plan is kept for the next flip.</summary>
+    public void ShowFullDiff() => _reading?.ShowFullDiff();
+
+    /// <summary>Abandons a run in flight rather than paying out a request nobody wants.</summary>
+    public void CancelAbridging() => _reading?.Cancel();
+
+    /// <summary>Flips between the two, for the keyboard and the menu.</summary>
     public void ToggleReading()
     {
-        if (_reading is null) return;
-        if (CurrentStack() is not { } stack) return;
+        if (_reading is null || ReadingTargets() is not { } targets) return;
+        _reading.Toggle(targets);
+    }
 
+    // Every file of the range, in list order, so the numbering a plan is written against is the
+    // same on every run. Null while the range is still resolving.
+    private IReadOnlyList<(string Path, string? CommitSha, string? BaseSha, DiffSide Side)>? ReadingTargets()
+    {
+        if (CurrentStack() is not { } stack) return null;
         var files = Files();
         var targets = new List<(string Path, string? CommitSha, string? BaseSha, DiffSide Side)>(files.Count);
         foreach (var f in files)
             targets.Add((f.Path, stack.HeadSha, stack.BaseSha, DiffSide.Range));
-        _reading.Toggle(targets);
+        return targets;
     }
 
     public bool IsFileViewed(string path) => _reviewedFiles.IsViewed(path);
