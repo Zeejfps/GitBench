@@ -51,7 +51,9 @@ internal static class ReadingPlanToolProtocol
         var summary = withSummary
             ? ""","summary":{"type":"string","description":"One line describing what the change does."}"""
             : "";
-        var required = withSummary ? """"remove","replace","fold","summary"""" : """"remove","replace","fold"""";
+        var required = withSummary
+            ? "\"remove\",\"replace\",\"fold\",\"summary\""
+            : "\"remove\",\"replace\",\"fold\"";
         return $$"""
             {"type":"object","additionalProperties":false,"properties":{"remove":{"type":"array","description":"Inclusive row ranges to hide. Coordinates always refer to the original numbering and never shift.","items":{{RangeItem}}},"replace":{"type":"array","description":"Within-line elisions. new must be old with spans deleted and each deletion shown as an ellipsis.","items":{{ElisionItem}}},"fold":{"type":"array","description":"Inclusive ranges of two or more contiguous same-marker rows in one hunk, replaced by one generated ellipsis row.","items":{{RangeItem}}}{{summary}}},"required":[{{required}}]}
             """;

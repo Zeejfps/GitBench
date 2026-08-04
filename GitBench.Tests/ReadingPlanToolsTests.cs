@@ -32,6 +32,39 @@ public class ReadingPlanToolsTests
 
     private static JsonElement Args(string json) => JsonDocument.Parse(json).RootElement.Clone();
 
+    // The schema is handed to the provider verbatim. It is never parsed on the way out, so a
+    // malformed one is not caught until a request is already in flight — which is where a broken
+    // "required" list first showed up, as a parse error the moment reading mode was switched on.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheAdvertisedSchemaIsValidJson(bool withSummary)
+    {
+        using var doc = JsonDocument.Parse(ReadingPlanToolProtocol.Schema(withSummary));
+        var root = doc.RootElement;
+
+        Assert.Equal("object", root.GetProperty("type").GetString());
+        var required = root.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Contains("remove", required);
+        Assert.Contains("replace", required);
+        Assert.Contains("fold", required);
+        Assert.Equal(withSummary, required.Contains("summary"));
+
+        var properties = root.GetProperty("properties");
+        foreach (var name in required)
+            Assert.True(properties.TryGetProperty(name!, out _), $"'{name}' is required but not declared.");
+    }
+
+    [Fact]
+    public void EveryPlanToolAdvertisesParsableJson()
+    {
+        foreach (var tool in Abridgement().Tools)
+        {
+            using var doc = JsonDocument.Parse(tool.JsonSchema);
+            Assert.Equal(JsonValueKind.Object, doc.RootElement.ValueKind);
+        }
+    }
+
     [Fact]
     public async Task PreviewReportsRetentionAndTheResultingDiff()
     {
