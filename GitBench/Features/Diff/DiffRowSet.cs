@@ -228,10 +228,26 @@ internal sealed class DiffRowSet
         }
     }
 
+    // Folds that end up next to each other on screen are drawn as one row. A plan often folds a
+    // run in several pieces — around rows it then removed, or just because it reasoned about them
+    // separately — and a stack of five "… N hidden lines" rows tells the reader nothing that one
+    // row saying 55 does not. Merging keeps the first fold's indent and start row, so clicking it
+    // still reopens the piece it names.
     private void EmitFoldRow(ReadingFoldRow fold)
     {
         var text = DiffText.ExpandTabs(fold.Indent) + ReadingElisionRule.Marker;
-        _rows.Add(new DiffRow.Fold(fold.Kind, text, fold.HiddenCount, fold.StartRow));
+
+        if (_rows.Count > 0 && _rows[^1] is DiffRow.Fold previous && previous.Kind == fold.Kind)
+        {
+            _rows[^1] = previous with
+            {
+                HiddenCount = previous.HiddenCount + fold.HiddenCount,
+                StartRows = [.. previous.StartRows, fold.StartRow],
+            };
+            return;
+        }
+
+        _rows.Add(new DiffRow.Fold(fold.Kind, text, fold.HiddenCount, [fold.StartRow]));
         var cells = DiffText.VisualCells(text) + 12;
         if (cells > MaxRowCells) MaxRowCells = cells;
     }

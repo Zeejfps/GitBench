@@ -910,7 +910,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var row = s.RowSet.Rows[local - 1];
         if (row is DiffRow.Fold fold)
         {
-            s.Diff?.Diff.ExpandFold(fold.StartRow);
+            s.Diff?.Diff.ExpandFold(fold.StartRows);
             return;
         }
         if (DiffRowPainter.GapBarOf(row) is not { } gap) return;

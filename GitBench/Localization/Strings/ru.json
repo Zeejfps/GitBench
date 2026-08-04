@@ -645,6 +645,7 @@
   "diff.file_truncated": "Файл усечён. Показано строк: {count}.",
   "diff.hidden_lines": "… скрыто строк: {count}",
   "reading.mode": "Чтение",
+  "reading.hidden_lines": "скрыто строк: {count}",
   "reading.full": "Полный",
   "reading.abridged": "Кратко",
   "reading.retry": "Повторить",

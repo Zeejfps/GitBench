@@ -578,6 +578,7 @@
   "diff.file_truncated": "File truncated — only the first {count} lines are shown.",
   "diff.hidden_lines": "… {count} hidden lines",
   "reading.mode": "Reading",
+  "reading.hidden_lines": "{count} hidden lines",
   "reading.full": "Full",
   "reading.abridged": "Abridged",
   "reading.retry": "Try again",

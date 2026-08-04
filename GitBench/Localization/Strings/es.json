@@ -579,6 +579,7 @@
   "diff.file_truncated": "Archivo truncado: solo se muestran las primeras {count} líneas.",
   "diff.hidden_lines": "… {count} líneas ocultas",
   "reading.mode": "Lectura",
+  "reading.hidden_lines": "{count} líneas ocultas",
   "reading.full": "Completo",
   "reading.abridged": "Resumido",
   "reading.retry": "Reintentar",

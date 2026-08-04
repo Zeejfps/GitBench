@@ -579,6 +579,7 @@
   "diff.file_truncated": "파일이 잘렸습니다 — 처음 {count}줄만 표시됩니다.",
   "diff.hidden_lines": "… 숨겨진 {count}줄",
   "reading.mode": "리딩",
+  "reading.hidden_lines": "숨겨진 {count}줄",
   "reading.full": "전체",
   "reading.abridged": "요약",
   "reading.retry": "다시 시도",

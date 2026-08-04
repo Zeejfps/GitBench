@@ -370,11 +370,16 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public bool IsReading => State.Value.Render is DiffRenderState.Loaded { Reading: not null };
 
-    /// <summary>Brings one folded run back, leaving the rest of the plan applied.</summary>
-    public void ExpandFold(int startRow)
+    /// <summary>
+    /// Brings folded runs back, leaving the rest of the plan applied.
+    /// </summary>
+    /// <remarks>Takes every fold the clicked row stood for: adjacent folds render as one ellipsis,
+    /// and reopening only the first would hand back less than the row said was hidden.</remarks>
+    public void ExpandFold(IReadOnlyList<int> startRows)
     {
         if (State.Value.Render is not DiffRenderState.Loaded { Reading: { } reading } loaded) return;
-        var expanded = new HashSet<int>(reading.ExpandedFolds ?? (IReadOnlySet<int>)new HashSet<int>()) { startRow };
+        var expanded = new HashSet<int>(reading.ExpandedFolds ?? (IReadOnlySet<int>)new HashSet<int>());
+        foreach (var row in startRows) expanded.Add(row);
         Update(s => s with { Render = loaded with { Reading = reading with { ExpandedFolds = expanded } } });
     }
 

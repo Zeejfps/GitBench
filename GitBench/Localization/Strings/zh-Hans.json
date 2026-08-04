@@ -579,6 +579,7 @@
   "diff.file_truncated": "文件已截断 — 仅显示前 {count} 行。",
   "diff.hidden_lines": "… 已隐藏 {count} 行",
   "reading.mode": "精读",
+  "reading.hidden_lines": "隐藏了 {count} 行",
   "reading.full": "完整",
   "reading.abridged": "精简",
   "reading.retry": "重试",

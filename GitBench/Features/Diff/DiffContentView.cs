@@ -70,8 +70,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public Action<int>? OnDiscardHunk { get; set; }
     public Action<int, GapExpandDirection>? OnExpandGap { get; set; }
 
-    /// <summary>A folded run was clicked; the argument is the fold's start row ordinal.</summary>
-    public Action<int>? OnExpandFold { get; set; }
+    /// <summary>A folded run was clicked; the argument is every fold the row stood for.</summary>
+    public Action<IReadOnlyList<int>>? OnExpandFold { get; set; }
 
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
@@ -587,19 +587,19 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         }
         if (HitTestFold(point) is { } fold)
         {
-            OnExpandFold?.Invoke(fold.StartRow);
+            OnExpandFold?.Invoke(fold.StartRows);
             return true;
         }
         return false;
     }
 
-    private (int Row, int StartRow)? HitTestFold(PointF point)
+    private (int Row, IReadOnlyList<int> StartRows)? HitTestFold(PointF point)
     {
         if (_lineHeight <= 0) return null;
         if (!_list.Position.ContainsPoint(point)) return null;
         var rowIndex = HitTestListRow(point);
         if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Fold fold) return null;
-        return (rowIndex, fold.StartRow);
+        return (rowIndex, fold.StartRows);
     }
 
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)

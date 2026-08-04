@@ -82,6 +82,56 @@ public class ReadingRowSetTests
         Assert.Equal(["func f() {", "}"], LineTexts(set));
     }
 
+    // A plan routinely folds one run in several pieces. Drawn literally that is a stack of "… N
+    // hidden lines" rows saying nothing a single row would not, so they merge — and the merged row
+    // has to name every piece, or clicking it hands back less than it claimed was there.
+    [Fact]
+    public void DrawsAdjacentFoldsAsOneRowThatReopensAllOfThem()
+    {
+        var file = File("a.txt", Hunk(
+            Add(1, "keep"),
+            Add(2, "a1"), Add(3, "a2"),
+            Add(4, "b1"), Add(5, "b2"), Add(6, "b3"),
+            Add(7, "tail")));
+        var index = ReadingRowIndex.Build([file]);
+        var overlay = ReadingPlanCompiler
+            .Compile(index, new ReadingPlan([], [], [new ReadingFold(2, 3), new ReadingFold(4, 6)]))
+            .Overlay!;
+
+        var set = Flatten(file, overlay);
+        var fold = Assert.Single(set.Rows.OfType<DiffRow.Fold>());
+
+        Assert.Equal(5, fold.HiddenCount);
+        Assert.Equal([2, 4], fold.StartRows);
+        Assert.Equal(["keep", "tail"], LineTexts(set));
+
+        var reopened = Flatten(file, overlay, expandedFolds: [.. fold.StartRows]);
+        Assert.Empty(reopened.Rows.OfType<DiffRow.Fold>());
+        Assert.Equal(["keep", "a1", "a2", "b1", "b2", "b3", "tail"], LineTexts(reopened));
+    }
+
+    // Folds on opposite sides of the diff stay apart: merging a removed run into an added one would
+    // draw a single ellipsis standing for both, which reads as one edit rather than two.
+    [Fact]
+    public void KeepsFoldsOfDifferentSidesSeparate()
+    {
+        var file = File("a.txt", Hunk(
+            new DiffLine(DiffLineKind.Removed, 1, null, "r1"),
+            new DiffLine(DiffLineKind.Removed, 2, null, "r2"),
+            Add(1, "a1"),
+            Add(2, "a2")));
+        var index = ReadingRowIndex.Build([file]);
+        var overlay = ReadingPlanCompiler
+            .Compile(index, new ReadingPlan([], [], [new ReadingFold(1, 2), new ReadingFold(3, 4)]))
+            .Overlay!;
+
+        var folds = Flatten(file, overlay).Rows.OfType<DiffRow.Fold>().ToArray();
+
+        Assert.Equal(2, folds.Length);
+        Assert.Equal(DiffLineKind.Removed, folds[0].Kind);
+        Assert.Equal(DiffLineKind.Added, folds[1].Kind);
+    }
+
     // Clicking a fold gives the source back without disturbing the rest of the plan.
     [Fact]
     public void ExpandingAFoldRestoresItsRowsOnly()

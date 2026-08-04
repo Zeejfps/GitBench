@@ -27,12 +27,20 @@ internal abstract record DiffRow
     public sealed record Tear(GapBar Gap) : DiffRow;
     /// <summary>
     /// A run of source rows a reading plan folded away, standing in as one ellipsis at the run's
-    /// own indent and marker. <see cref="StartRow"/> is the fold's first row ordinal, which is how
-    /// a click asks for it back.
+    /// own indent and marker.
     /// </summary>
-    /// <remarks>The text is generated from the source rows, never supplied by a plan, so a fold
-    /// can only ever say that something was hidden — not what it was.</remarks>
-    public sealed record Fold(DiffLineKind Kind, string Text, int HiddenCount, int StartRow) : DiffRow;
+    /// <remarks>
+    /// The text is generated from the source rows, never supplied by a plan, so a fold can only
+    /// ever say that something was hidden — not what it was.
+    /// <para><see cref="StartRows"/> holds every fold this row stands for: adjacent folds are drawn
+    /// as one, and a click has to reopen all of them or the reader gets back a fragment of what the
+    /// row said was there.</para>
+    /// </remarks>
+    public sealed record Fold(
+        DiffLineKind Kind,
+        string Text,
+        int HiddenCount,
+        IReadOnlyList<int> StartRows) : DiffRow;
     /// <summary>
     /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
     /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the

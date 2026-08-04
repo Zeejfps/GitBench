@@ -674,6 +674,7 @@
   "diff.file_truncated": "تم اقتطاع الملف — تُعرض أول {count} سطر فقط.",
   "diff.hidden_lines": "… {count} أسطر مخفية",
   "reading.mode": "قراءة",
+  "reading.hidden_lines": "{count} أسطر مخفية",
   "reading.full": "كامل",
   "reading.abridged": "مختصر",
   "reading.retry": "إعادة المحاولة",

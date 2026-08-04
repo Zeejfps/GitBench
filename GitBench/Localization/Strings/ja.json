@@ -579,6 +579,7 @@
   "diff.file_truncated": "ファイルが省略されました — 最初の {count} 行のみ表示しています。",
   "diff.hidden_lines": "… 非表示の {count} 行",
   "reading.mode": "リーディング",
+  "reading.hidden_lines": "非表示の {count} 行",
   "reading.full": "全体",
   "reading.abridged": "要約",
   "reading.retry": "再試行",

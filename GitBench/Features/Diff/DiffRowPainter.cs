@@ -364,7 +364,9 @@ internal sealed class DiffRowPainter
         DrawMonoText(c, f.Text, textLeft, p.Bottom, ellipsisWidth,
             Styles.SectionMutedText, TextAlignment.Start, p.Z + 2);
 
-        var label = _loc.Strings.Value.DiffHiddenLines(f.HiddenCount);
+        // The fold row draws its own ellipsis, so the count beside it must not carry a second one
+        // the way the gap-bar string does.
+        var label = _loc.Strings.Value.ReadingHiddenLines(f.HiddenCount);
         DrawMonoText(c, label, textLeft + ellipsisWidth + HunkHeaderGap, p.Bottom,
             DiffText.VisualCells(label) * MonoAdvance, Styles.LineNumberText, TextAlignment.Start, p.Z + 2);
     }
