@@ -56,6 +56,193 @@ public sealed class GitReadGateTests
         for (var i = 1; i < held.Count; i++) held[i].Dispose();
     }
 
+    // ---- priority: the repo the user is looking at goes first ----
+    //
+    // Ordering alone would still leave a foreground read behind whatever is already running — on a
+    // cold spindle a status walk is seconds — so one permit is held back for it. These pin both
+    // halves: the queue order and the reserved permit.
+
+    [Fact]
+    public async Task A_foreground_read_takes_the_reserved_permit_while_background_saturates_the_rest()
+    {
+        var gate = new GitReadGate();
+        var active = Guid.NewGuid();
+        gate.SetForegroundRepo(active);
+
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads - 1; i++)
+            held.Add(await gate.Acquire(Guid.NewGuid(), GitReadKind.Status));
+
+        var queued = gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        await Task.Delay(100);
+        Assert.False(queued.IsCompleted, "background must not take the permit held for the active repo");
+
+        // No release, no wait: the whole point is that the user's read doesn't queue at all.
+        var foreground = gate.Acquire(active, GitReadKind.Sync);
+        Assert.True(foreground.IsCompleted, "the reserved permit must admit a foreground read immediately");
+
+        (await foreground).Dispose();
+        held[0].Dispose();
+        (await queued.WaitAsync(Wait)).Dispose();
+        for (var i = 1; i < held.Count; i++) held[i].Dispose();
+    }
+
+    [Fact]
+    public async Task A_foreground_waiter_is_admitted_before_background_waiters_that_queued_first()
+    {
+        var gate = new GitReadGate();
+        var active = Guid.NewGuid();
+        gate.SetForegroundRepo(active);
+
+        var background = await gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        var other = await gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        var reserved = await gate.Acquire(active, GitReadKind.Status);
+
+        var queuedFirst = gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        await Task.Delay(50);
+        var queuedSecond = gate.Acquire(active, GitReadKind.Commits);
+        await Task.Delay(50);
+        Assert.False(queuedFirst.IsCompleted);
+        Assert.False(queuedSecond.IsCompleted);
+
+        background.Dispose();
+
+        var admitted = await queuedSecond.WaitAsync(Wait);
+        await Task.Delay(50);
+        Assert.False(queuedFirst.IsCompleted, "the background waiter must not outrank the active repo's read");
+
+        admitted.Dispose();
+        other.Dispose();
+        reserved.Dispose();
+        (await queuedFirst.WaitAsync(Wait)).Dispose();
+    }
+
+    [Fact]
+    public async Task Background_and_sweep_reads_never_take_the_last_permit()
+    {
+        var gate = new GitReadGate();
+        gate.SetForegroundRepo(Guid.NewGuid());
+
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads - 1; i++)
+            held.Add(await gate.Acquire(Guid.NewGuid(), GitReadKind.Status));
+
+        var background = gate.Acquire(Guid.NewGuid(), GitReadKind.Commits);
+        var sweep = gate.Acquire(Guid.NewGuid(), GitReadKind.Discovery);
+        await Task.Delay(100);
+
+        Assert.False(background.IsCompleted);
+        Assert.False(sweep.IsCompleted);
+
+        // A freed permit goes to the background read: sweeps rank below it.
+        held[0].Dispose();
+        (await background.WaitAsync(Wait)).Dispose();
+        (await sweep.WaitAsync(Wait)).Dispose();
+        for (var i = 1; i < held.Count; i++) held[i].Dispose();
+    }
+
+    // The reservation is a floor on what the active repo can get, never a ceiling: its switch fan-out
+    // is three reads and the gate was sized to exactly that.
+    [Fact]
+    public async Task The_active_repo_can_still_fan_out_across_every_permit()
+    {
+        var gate = new GitReadGate();
+        var active = Guid.NewGuid();
+        gate.SetForegroundRepo(active);
+
+        var held = new List<IGitReadGate.Permit>();
+        foreach (var kind in new[] { GitReadKind.Commits, GitReadKind.Branches, GitReadKind.Status })
+        {
+            var read = gate.Acquire(active, kind);
+            Assert.True(read.IsCompleted, $"the active repo's {kind} read must not wait on its own fan-out");
+            held.Add(await read);
+        }
+
+        foreach (var permit in held) permit.Dispose();
+    }
+
+    // Enumerating the active repo's worktrees and submodules is sweep work nobody is waiting on, so
+    // it must not spend the permit held back for a read the user actually caused.
+    [Fact]
+    public async Task Discovery_for_the_active_repo_is_sweep_not_foreground()
+    {
+        var gate = new GitReadGate();
+        var active = Guid.NewGuid();
+        gate.SetForegroundRepo(active);
+
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads - 1; i++)
+            held.Add(await gate.Acquire(Guid.NewGuid(), GitReadKind.Status));
+
+        var discovery = gate.Acquire(active, GitReadKind.Discovery);
+        await Task.Delay(100);
+        Assert.False(discovery.IsCompleted, "discovery is sweep work even on the repo the user is on");
+
+        var foreground = gate.Acquire(active, GitReadKind.Status);
+        Assert.True(foreground.IsCompleted, "the permit was still there for the read that matters");
+
+        (await foreground).Dispose();
+        foreach (var permit in held) permit.Dispose();
+        (await discovery.WaitAsync(Wait)).Dispose();
+    }
+
+    // A waiter's class is computed when a permit frees, not when it queued — so switching repos
+    // while reads are parked re-ranks them instead of letting a stale label outrank the new repo.
+    [Fact]
+    public async Task Waiters_are_classified_when_a_permit_frees_not_when_they_queued()
+    {
+        var gate = new GitReadGate();
+        var alpha = Guid.NewGuid();
+        var beta = Guid.NewGuid();
+        gate.SetForegroundRepo(alpha);
+
+        var background = await gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        var other = await gate.Acquire(Guid.NewGuid(), GitReadKind.Status);
+        var reserved = await gate.Acquire(alpha, GitReadKind.Status);
+
+        var alphaWaiter = gate.Acquire(alpha, GitReadKind.Commits);
+        await Task.Delay(50);
+        var betaWaiter = gate.Acquire(beta, GitReadKind.Commits);
+        await Task.Delay(50);
+        Assert.False(alphaWaiter.IsCompleted);
+        Assert.False(betaWaiter.IsCompleted);
+
+        gate.SetForegroundRepo(beta);
+        background.Dispose();
+
+        var admitted = await betaWaiter.WaitAsync(Wait);
+        await Task.Delay(50);
+        Assert.False(alphaWaiter.IsCompleted, "alpha stopped being foreground the moment the user switched");
+
+        admitted.Dispose();
+        other.Dispose();
+        reserved.Dispose();
+        (await alphaWaiter.WaitAsync(Wait)).Dispose();
+    }
+
+    // Switching to a repo whose read is already parked admits it against the reserved permit, with
+    // nothing in flight finishing — the switch itself is what makes the read admissible.
+    [Fact]
+    public async Task Switching_to_a_repo_admits_its_parked_read_without_a_release()
+    {
+        var gate = new GitReadGate();
+        gate.SetForegroundRepo(Guid.NewGuid());
+        var next = Guid.NewGuid();
+
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads - 1; i++)
+            held.Add(await gate.Acquire(Guid.NewGuid(), GitReadKind.Status));
+
+        var parked = gate.Acquire(next, GitReadKind.Status);
+        await Task.Delay(100);
+        Assert.False(parked.IsCompleted);
+
+        gate.SetForegroundRepo(next);
+
+        (await parked.WaitAsync(Wait)).Dispose();
+        foreach (var permit in held) permit.Dispose();
+    }
+
     // ---- outstanding reads: what the RepoBar row spinner is projected from ----
 
     [Fact]

@@ -291,6 +291,31 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         slot3.Dispose();
     }
 
+    // The reported bug, end to end: a fetch on the repo the user is looking at must show its new
+    // ahead/behind in the time one refs-only read takes, not after the startup sweep drains. With
+    // every permit a background read can take held, the active repo's read still runs.
+    [Fact]
+    public void The_active_repos_refs_read_does_not_queue_behind_background_reads()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+        h.Gate.SetForegroundRepo(id);
+
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads - 1; i++)
+            held.Add(h.Gate.Acquire(Guid.NewGuid(), GitReadKind.Commits).GetAwaiter().GetResult());
+        var queued = h.Gate.Acquire(Guid.NewGuid(), GitReadKind.Commits);
+
+        var before = h.Git.SyncSummaryCalls;
+        h.Bus.Broadcast(new RefsChangedMessage(id));
+
+        DrainUntil(h.Dispatcher, () => h.Git.SyncSummaryCalls == before + 1, "the active repo's refs read");
+        Assert.False(queued.IsCompleted, "no background read completed, so none of them let it through");
+
+        foreach (var slot in held) slot.Dispose();
+        queued.GetAwaiter().GetResult().Dispose();
+    }
+
     // ---- §3 optimistic commit: the ahead count must not wait on the post-commit reload ----
     //
     // Nothing probes the active repo after a commit (§2) — the fresh count rides in on the file-list

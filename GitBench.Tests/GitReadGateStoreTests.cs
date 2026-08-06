@@ -111,6 +111,7 @@ public sealed class GitReadGateStoreTests : IDisposable
             });
         }
 
+        public void SetForegroundRepo(Guid? repoId) => _inner.SetForegroundRepo(repoId);
         public TimeSpan? LastStatusReadDuration(Guid repoId) => _inner.LastStatusReadDuration(repoId);
         public bool HasOutstandingReads(Guid repoId) => _inner.HasOutstandingReads(repoId);
 

@@ -179,6 +179,8 @@ public sealed class RepoLoadStoreTests
         public Task<IGitReadGate.Permit> Acquire(Guid repoId, GitReadKind kind)
             => Task.FromResult(new IGitReadGate.Permit(() => { }));
 
+        public void SetForegroundRepo(Guid? repoId) { }
+
         public TimeSpan? LastStatusReadDuration(Guid repoId) => null;
     }
 

@@ -5,7 +5,7 @@
 > read for the repo the user is staring at is admitted in the order it happened to arrive — behind
 > however many whole-tree sweeps for repos they are not looking at got there first.
 >
-> **Status: not implemented.** This is the third item of a three-part fix for "fetch completes but
+> **Status: landed.** This is the third item of a three-part fix for "fetch completes but
 > the ahead/behind number doesn't move for a minute". The first two shipped together:
 >
 > - **A — a fetch no longer answers with a working-tree walk.** `RefsChangedMessage` now takes
@@ -76,6 +76,9 @@ Ordering fixes (1). For (2), reserve one of the three permits for `Foreground`:
 
 - **Total in flight: 3** — unchanged. This is the disk-contention bound and it does not move.
 - **Of those, 1 is `Foreground`-only.** `Background` and `Sweep` can hold at most 2 concurrently.
+- **Unless there is no foreground repo at all** (as landed). With `SetForegroundRepo(null)` nothing
+  can ever classify as `Foreground`, so holding a permit back would idle a slot for a class that
+  cannot arrive; the reserve applies only while a repo is active.
 
 The active repo's own switch fan-out is three reads (commits + branches + local) and can still use
 all three permits, which is what `MaxConcurrentReads = 3` was sized for in the first place

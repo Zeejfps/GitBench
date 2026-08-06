@@ -186,6 +186,9 @@ internal static class AppServices
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IRepoHeadStore>(),
             (IRepoHeadConfirm)ctx.Require<IRepoHeadStore>()));
+        // Pushes the active repo's id into the read gate, which is what makes the gate admit that
+        // repo's reads ahead of the startup sweep instead of behind it.
+        context.AddHostedService<GitReadPriorityService>();
 
         // The assistant's conversations, one per repo, in memory for the app session. The backend is
         // built by the store rather than registered on its own: it needs a live read of the
