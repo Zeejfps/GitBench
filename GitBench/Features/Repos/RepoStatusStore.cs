@@ -70,6 +70,12 @@ internal interface IRepoStatusIngest
 /// / <see cref="CommitCreatedMessage"/> (the watcher emits these for all repos, not just active).
 /// Each refresh is generation-guarded so a slow result can't clobber a newer one, and every probe
 /// runs under the shared <see cref="IGitReadGate"/> so a big repo tree doesn't burst at startup.
+///
+/// A refresh asks for the narrowest read that can answer it: refs moving (a fetch) takes the
+/// refs-only <see cref="IGitStatusReader.GetSyncSummary"/>, and only a channel that can also have
+/// changed the working tree pays for the full status walk. Refreshes are coalesced per repo — one
+/// read in flight at a time, with at most one re-run queued behind it — so clicking fetch three
+/// times costs one extra read rather than three, and doesn't discard the answer already on its way.
 /// </summary>
 internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHostedService, IDisposable
 {
@@ -88,6 +94,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     // Per-repo probe result + a per-repo generation counter for ordered refreshes. UI-thread only.
     private readonly Dictionary<Guid, State<GitStatusSummary>> _probe = new();
     private readonly Dictionary<Guid, int> _epoch = new();
+    private readonly Dictionary<Guid, RefreshSlot> _refreshes = new();
 
     private readonly Derived<RepoStatus> _active;
 
@@ -130,7 +137,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         // working-tree walk twice. Refs (a fetch moving ahead/behind without touching the tree) and
         // the user's explicit refresh keep their probe.
         _workingTreeSub = _bus.SubscribeScoped<WorkingTreeChangedMessage>(m => RefreshUnlessActive(m.RepoId));
-        _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(m => Refresh(m.RepoId));
+        _refsSub = _bus.SubscribeScoped<RefsChangedMessage>(m => RefreshSync(m.RepoId));
         _commitSub = _bus.SubscribeScoped<CommitCreatedMessage>(m => RefreshUnlessActive(m.RepoId));
         _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(m => Refresh(m.RepoId));
         _optimisticSyncSub = _bus.SubscribeScoped<RemoteSyncOptimisticMessage>(ApplyOptimisticSync);
@@ -251,35 +258,110 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _headConfirm.Confirm(repoId);
     }
 
-    private void Refresh(Guid repoId)
+    // The full probe: a working-tree walk, so it answers the dirty flag as well as the sync half.
+    private void Refresh(Guid repoId) => Request(repoId, RefreshScope.Full);
+
+    // Refs moved and the working tree did not (a fetch, a push): the dirty flag this repo already
+    // carries still holds, so there is nothing to walk the tree for. The whole point of the split —
+    // this is the read that decides how soon "22 behind" and the enabled pull button appear.
+    private void RefreshSync(Guid repoId) => Request(repoId, RefreshScope.Sync);
+
+    private void Request(Guid repoId, RefreshScope scope)
     {
-        var dispatcher = _dispatcher;
         var repo = FindRepo(repoId);
         if (repo == null) return;
-        var state = Probe(repoId);
+        var slot = Slot(repoId);
+        if (slot.InFlight)
+        {
+            // A request arriving mid-read cannot be served by that read — it started before
+            // whatever prompted this one. Queue exactly one re-run, at the wider of the two scopes:
+            // starting a second read now would only bump the epoch and discard the answer already
+            // on its way, which is what made clicking fetch repeatedly push the number further out.
+            slot.Queued = slot.Queued == RefreshScope.Full ? RefreshScope.Full : scope;
+            return;
+        }
+        slot.InFlight = true;
+        Read(repo, scope);
+    }
+
+    private void Read(Repo repo, RefreshScope scope)
+    {
+        var repoId = repo.Id;
+        var dispatcher = _dispatcher;
         var gen = Reserve(repoId);
+        var full = scope == RefreshScope.Full;
         _ = Task.Run(async () =>
         {
-            GitStatusSummary? summary;
-            using (await _gate.Acquire(repoId, GitReadKind.Status))
+            GitStatusSummary? summary = null;
+            GitSyncSummary? sync = null;
+            try
             {
-                try { summary = _git.GetStatusSummary(repo); }
-                catch { summary = null; }
+                using (await _gate.Acquire(repoId, full ? GitReadKind.Status : GitReadKind.Sync))
+                {
+                    try
+                    {
+                        if (full) summary = _git.GetStatusSummary(repo);
+                        else sync = _git.GetSyncSummary(repo);
+                    }
+                    catch { /* a failed read lands as null below */ }
+                }
             }
-            dispatcher.Post(() =>
-            {
-                if (_disposed) return;
-                // Drop a result superseded by a newer refresh for the same repo.
-                if (_epoch.TryGetValue(repoId, out var cur) && cur != gen) return;
-                // A failed probe (null) keeps the last known status: zeroing ahead/upstream here
-                // would silently disable push/pull in the toolbar while the branches view still
-                // shows the cached counts. The actual operations report their own errors. It also
-                // settles nothing — a read that told us nothing can't confirm where HEAD landed.
-                if (summary == null) return;
-                state.Value = summary;
-                _headConfirm.Confirm(repoId);
-            });
+            catch { /* the gate went away under shutdown; still land, to free the slot */ }
+            dispatcher.Post(() => Land(repoId, gen, summary, sync));
         });
+    }
+
+    private void Land(Guid repoId, int gen, GitStatusSummary? summary, GitSyncSummary? sync)
+    {
+        if (_disposed) return;
+        var slot = Slot(repoId);
+        slot.InFlight = false;
+
+        // Drop a result superseded by a newer refresh for the same repo. A failed read (both null)
+        // keeps the last known status: zeroing ahead/upstream here would silently disable push/pull
+        // in the toolbar while the branches view still shows the cached counts. The actual
+        // operations report their own errors. It also settles nothing — a read that told us nothing
+        // can't confirm where HEAD landed.
+        if (!_epoch.TryGetValue(repoId, out var cur) || cur == gen)
+        {
+            if (summary != null) Probe(repoId).Value = summary;
+            // A sync read never looked at the working tree, so it patches the sync half onto the
+            // dirty flag the last full observation left. That flag is re-observed on every
+            // working-tree change, which is the only thing that can have moved it.
+            else if (sync != null) Probe(repoId).Value = Probe(repoId).Value.With(sync);
+
+            if (summary != null || sync != null) _headConfirm.Confirm(repoId);
+        }
+
+        if (slot.Queued is { } next)
+        {
+            slot.Queued = null;
+            Request(repoId, next);
+        }
+    }
+
+    private RefreshSlot Slot(Guid id)
+    {
+        if (!_refreshes.TryGetValue(id, out var slot))
+        {
+            slot = new RefreshSlot();
+            _refreshes[id] = slot;
+        }
+        return slot;
+    }
+
+    // How much of the status a refresh needs to read.
+    private enum RefreshScope
+    {
+        Sync,
+        Full,
+    }
+
+    // One repo's refresh slot: whether a read is in flight and the single re-run queued behind it.
+    private sealed class RefreshSlot
+    {
+        public bool InFlight;
+        public RefreshScope? Queued;
     }
 
     private Repo? FindRepo(Guid id)
@@ -304,5 +386,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _active.Dispose();
         foreach (var s in _probe.Values) s.Dispose();
         _probe.Clear();
+        _refreshes.Clear();
     }
 }

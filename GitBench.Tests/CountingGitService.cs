@@ -29,11 +29,13 @@ internal sealed class CountingGitService(IGitService inner) :
     public GitRef? LastCreateBranchStartPoint { get; private set; }
 
     private int _statusSummaryCalls;
+    private int _syncSummaryCalls;
     private int _localChangesCalls;
     private int _headMessageCalls;
     private int _amendStagedCalls;
     private int _applyUntrackedCacheCalls;
     public int StatusSummaryCalls => Volatile.Read(ref _statusSummaryCalls);
+    public int SyncSummaryCalls => Volatile.Read(ref _syncSummaryCalls);
     public int GetLocalChangesCalls => Volatile.Read(ref _localChangesCalls);
     public int GetHeadCommitMessageCalls => Volatile.Read(ref _headMessageCalls);
     public int GetAmendStagedFilesCalls => Volatile.Read(ref _amendStagedCalls);
@@ -64,6 +66,12 @@ internal sealed class CountingGitService(IGitService inner) :
     {
         Interlocked.Increment(ref _statusSummaryCalls);
         return inner.GetStatusSummary(repo);
+    }
+
+    public GitSyncSummary? GetSyncSummary(Repo repo)
+    {
+        Interlocked.Increment(ref _syncSummaryCalls);
+        return inner.GetSyncSummary(repo);
     }
 
     public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo)

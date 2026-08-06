@@ -115,19 +115,102 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         Assert.Equal(before + 1, h.Git.StatusSummaryCalls);
     }
 
+    // A fetch moves refs and nothing else, so the number it changes must come from the refs-only
+    // read. Answering this channel with the whole-worktree status walk is what left the ahead/behind
+    // number — and the pull button — trailing a completed fetch by tens of seconds on a cold disk.
     [Fact]
-    public void RefsChanged_for_the_active_repo_runs_one_summary_probe()
+    public void RefsChanged_reads_the_refs_and_never_walks_the_working_tree()
     {
         using var h = StartActive();
-        var before = h.Git.StatusSummaryCalls;
+        var beforeStatus = h.Git.StatusSummaryCalls;
+        var beforeSync = h.Git.SyncSummaryCalls;
 
-        // A fetch moves ahead/behind without touching the working tree, so the file-list reload
-        // never runs — this channel keeps its probe.
         h.Bus.Broadcast(new RefsChangedMessage(RepoId("active")));
 
-        DrainUntil(h.Dispatcher, () => h.Git.StatusSummaryCalls == before + 1, "the refs probe");
+        DrainUntil(h.Dispatcher, () => h.Git.SyncSummaryCalls == beforeSync + 1, "the refs read");
         Quiesce(h);
-        Assert.Equal(before + 1, h.Git.StatusSummaryCalls);
+        Assert.Equal(beforeSync + 1, h.Git.SyncSummaryCalls);
+        Assert.Equal(beforeStatus, h.Git.StatusSummaryCalls);
+    }
+
+    // The refs-only read observed no working tree, so it must not be able to answer for one: it
+    // patches the sync half over the dirty flag the last full observation established.
+    [Fact]
+    public void A_refs_read_leaves_the_dirty_flag_the_full_probe_established()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+        Seed(h, id, new GitStatusSummary("active-branch", false, false, 0, 0, IsDirty: true));
+        var before = h.Git.SyncSummaryCalls;
+
+        h.Bus.Broadcast(new RefsChangedMessage(id));
+
+        DrainUntil(h.Dispatcher, () => h.Git.SyncSummaryCalls == before + 1, "the refs read");
+        Quiesce(h);
+        Assert.True(h.Store.For(id).IsDirty);
+    }
+
+    // ---- coalescing: a click that arrives mid-read queues one re-run, it does not start one ----
+    //
+    // Every refresh reserves the repo's next epoch, so a second read started while one is in flight
+    // doesn't just cost an extra read — it discards the answer the first was about to deliver. That
+    // is what made clicking fetch repeatedly on a slow disk push the number further away.
+
+    [Fact]
+    public void Refreshes_arriving_while_a_read_is_in_flight_collapse_to_one_re_run()
+    {
+        using var h = StartActive();
+        var id = RepoId("active");
+
+        // Hold every read slot so the first refresh parks on the gate and stays in flight.
+        var slots = HoldEveryReadSlot(h);
+        var before = h.Git.SyncSummaryCalls;
+
+        h.Bus.Broadcast(new RefsChangedMessage(id));
+        h.Bus.Broadcast(new RefsChangedMessage(id));
+        h.Bus.Broadcast(new RefsChangedMessage(id));
+
+        Quiesce(h);
+        Assert.Equal(before, h.Git.SyncSummaryCalls); // all three are parked or queued, none has run
+
+        foreach (var slot in slots) slot.Dispose();
+
+        // The parked read, then exactly one re-run standing in for the two clicks behind it.
+        DrainUntil(h.Dispatcher, () => h.Git.SyncSummaryCalls == before + 2, "the read and its single re-run");
+        Quiesce(h);
+        Assert.Equal(before + 2, h.Git.SyncSummaryCalls);
+    }
+
+    // A working-tree change queued behind an in-flight refs read still needs the walk it asked for,
+    // so the coalesced re-run has to widen to the full probe rather than serve the cheaper scope.
+    [Fact]
+    public void A_queued_full_probe_is_not_downgraded_by_a_refs_request_behind_it()
+    {
+        using var h = StartActive();
+        var other = RepoId("other");
+
+        var slots = HoldEveryReadSlot(h);
+        var beforeStatus = h.Git.StatusSummaryCalls;
+        var beforeSync = h.Git.SyncSummaryCalls;
+
+        h.Bus.Broadcast(new RefsChangedMessage(other));        // starts, parks on the gate
+        h.Bus.Broadcast(new WorkingTreeChangedMessage(other)); // queues a full probe
+        h.Bus.Broadcast(new RefsChangedMessage(other));        // must not narrow the queued scope
+
+        foreach (var slot in slots) slot.Dispose();
+
+        DrainUntil(h.Dispatcher, () => h.Git.StatusSummaryCalls == beforeStatus + 1, "the widened re-run");
+        Quiesce(h);
+        Assert.Equal(beforeStatus + 1, h.Git.StatusSummaryCalls);
+        Assert.Equal(beforeSync + 1, h.Git.SyncSummaryCalls);
+    }
+
+    private static List<IGitReadGate.Permit> HoldEveryReadSlot(CountingHarness h)
+    {
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads; i++)
+            held.Add(h.Gate.Acquire(Guid.NewGuid(), GitReadKind.Commits).GetAwaiter().GetResult());
+        return held;
     }
 
     [Fact]

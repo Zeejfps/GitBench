@@ -11,6 +11,10 @@ namespace GitBench.Git;
 internal enum GitReadKind
 {
     Status,
+    // The refs-only ahead/behind read. Deliberately distinct from Status: it never walks the
+    // working tree, so timing it as one would tell §7's adaptive debounce a status read is far
+    // cheaper than it is.
+    Sync,
     Commits,
     Branches,
     Discovery,

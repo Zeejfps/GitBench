@@ -8,6 +8,9 @@ public interface IGitStatusReader
     Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo);
     // Unknown = not a repo; null = the probe failed (caller keeps its last known value).
     GitStatusSummary? GetStatusSummary(Repo repo);
+    // The refs-only half of the above, for a caller reacting to something that moved refs and not
+    // the working tree. Same null/Unknown contract.
+    GitSyncSummary? GetSyncSummary(Repo repo);
     HeadCommitMessage? GetHeadCommitMessage(Repo repo);
     IReadOnlyList<FileChange> GetAmendStagedFiles(Repo repo);
     DetachedHeadReport GetDetachedHeadReport(Repo repo);

@@ -85,6 +85,26 @@ public sealed record GitStatusSummary(
     bool IsDirty)
 {
     public static readonly GitStatusSummary Unknown = new(null, false, false, 0, 0, false);
+
+    // Replaces the sync half with a fresher refs-only observation, keeping the dirty flag this
+    // summary already carries — a GetSyncSummary read never looked at the working tree.
+    public GitStatusSummary With(GitSyncSummary sync) =>
+        new(sync.Branch, sync.IsDetached, sync.HasUpstream, sync.Ahead, sync.Behind, IsDirty);
+}
+
+// The sync half of GitStatusSummary — where HEAD is and how it stands against its upstream —
+// answered entirely out of `.git`. This is what a fetch actually changes, and reading it costs a
+// HEAD lookup plus an ahead/behind count bounded by the divergence, rather than the whole-worktree
+// walk GetStatusSummary pays to also learn whether the tree is dirty.
+public sealed record GitSyncSummary(
+    string? Branch,
+    bool IsDetached,
+    bool HasUpstream,
+    int Ahead,
+    int Behind)
+{
+    public static readonly GitSyncSummary Unknown = new(null, false, false, 0, 0);
+    public static readonly GitSyncSummary Detached = new(null, true, false, 0, 0);
 }
 
 

@@ -1102,6 +1102,93 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    // Where HEAD is and how it stands against its upstream, without touching the working tree:
+    // `symbolic-ref` reads .git/HEAD, and `for-each-ref` resolves the upstream and counts the
+    // divergence (a walk bounded by how far apart the two tips are, not by history size). A fetch
+    // changes exactly this and nothing else, so answering it with GetStatusSummary's whole-worktree
+    // walk is what left the ahead/behind number trailing a fetch by tens of seconds on a cold disk.
+    //
+    // Same contract as GetStatusSummary: Unknown when the path isn't a repo, null when the read
+    // itself failed and the caller should keep what it has.
+    public GitSyncSummary? GetSyncSummary(Repo repo)
+    {
+        try
+        {
+            if (!IsGitRepo(repo.Path)) return GitSyncSummary.Unknown;
+
+            var head = _runner.Run(
+                repo.Path,
+                new[] { "symbolic-ref", "--quiet", "--short", "HEAD" },
+                GitProcessRunner.GitLaunch.Direct);
+            // --quiet turns "HEAD isn't a branch" into a silent non-zero exit; anything on stderr
+            // means the read failed rather than that HEAD is detached.
+            if (!head.Ok)
+                return head.Started && string.IsNullOrWhiteSpace(head.Stderr) ? GitSyncSummary.Detached : null;
+
+            var branch = head.Stdout.Trim();
+            if (branch.Length == 0) return GitSyncSummary.Detached;
+
+            var refs = _runner.Run(
+                repo.Path,
+                new[] { "for-each-ref", "--format=%(refname:short)\t%(upstream)\t%(upstream:track)", "refs/heads/" + branch },
+                GitProcessRunner.GitLaunch.Direct);
+            if (!refs.Ok) return null;
+
+            return ParseSyncSummary(branch, refs.Stdout);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // for-each-ref matches a pattern at "/" boundaries, so a `refs/heads/feat` pattern can also
+    // return `refs/heads/feat/x` — take the line that names the branch we asked about.
+    private static GitSyncSummary ParseSyncSummary(string branch, string stdout)
+    {
+        foreach (var raw in stdout.Split('\n'))
+        {
+            var line = raw.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            var fields = line.Split('\t');
+            if (fields.Length < 3 || fields[0] != branch) continue;
+
+            var hasUpstream = fields[1].Length > 0;
+            // "gone" (the upstream ref no longer exists) and "" (level with it) both mean no
+            // divergence to report, which is how porcelain-v2 reports them too: a branch.upstream
+            // header with no branch.ab line.
+            ParseUpstreamTrack(fields[2], out var ahead, out var behind);
+            return new GitSyncSummary(branch, IsDetached: false, hasUpstream, ahead, behind);
+        }
+
+        // HEAD names a branch that has no ref yet — an unborn branch in a repo with no commits.
+        // Porcelain-v2 reports the same thing as a branch.head header with no upstream and no
+        // branch.ab, so report it as the named branch rather than as a failed read.
+        return new GitSyncSummary(branch, IsDetached: false, HasUpstream: false, 0, 0);
+    }
+
+    // "[ahead 3, behind 22]", "[behind 22]", "[gone]", or empty when the branch is level with its
+    // upstream. Brackets are stripped rather than suppressed with the `nobracket` modifier so the
+    // format string stays one every git version understands.
+    private static void ParseUpstreamTrack(string track, out int ahead, out int behind)
+    {
+        ahead = 0;
+        behind = 0;
+        var counting = string.Empty;
+        foreach (var tok in track.Split(TrackSeparators, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (tok is "ahead" or "behind") counting = tok;
+            else if (int.TryParse(tok, out var n))
+            {
+                if (counting == "ahead") ahead = n;
+                else if (counting == "behind") behind = n;
+                counting = string.Empty;
+            }
+        }
+    }
+
+    private static readonly char[] TrackSeparators = { ' ', ',', '[', ']' };
+
     // The `# branch.*` headers of a porcelain-v2 status, accumulated. Shared by the -z file-list read
     // and the \n summary probe so the two cannot drift: same headers, same order, same meaning.
     private struct StatusBranchHeaders

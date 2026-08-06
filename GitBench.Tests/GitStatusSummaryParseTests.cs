@@ -11,6 +11,10 @@ namespace GitBench.Tests;
 // behind / dirty summary. These drive the real GitService against a throwaway repo wired to a
 // throwaway bare "origin" and assert the parsed GitStatusSummary for each repo state — and, the
 // item's whole point, that GetLocalChanges(repo).Summary equals GetStatusSummary(repo) every time.
+//
+// GetSyncSummary is a third read of the same facts from refs alone, so it is held to the same bar:
+// AssertBothAgree checks it against the status probe's sync half in every state below. It is only
+// safe to answer a fetch with the cheap read if the two cannot disagree about where HEAD is.
 public sealed class GitStatusSummaryParseTests : IDisposable
 {
     private readonly string _work;
@@ -189,8 +193,56 @@ public sealed class GitStatusSummaryParseTests : IDisposable
     private LocalChangesSnapshot FileList() =>
         Assert.IsType<Fetched<LocalChangesSnapshot>.Ok>(_git.GetLocalChanges(_repo)).Value;
 
+    private GitSyncSummary Sync()
+    {
+        var s = _git.GetSyncSummary(_repo);
+        Assert.NotNull(s);
+        return s!;
+    }
+
     // The whole point of §2: both reads describe one observation, so their summaries must be equal.
-    private void AssertBothAgree() => Assert.Equal(Probe(), FileList().Summary);
+    // The refs-only read is the third account of the same repo state and must match the sync half.
+    private void AssertBothAgree()
+    {
+        var probe = Probe();
+        Assert.Equal(probe, FileList().Summary);
+        Assert.Equal(
+            new GitSyncSummary(probe.Branch, probe.IsDetached, probe.HasUpstream, probe.Ahead, probe.Behind),
+            Sync());
+    }
+
+    // An upstream configured but no longer present: porcelain-v2 emits a branch.upstream header
+    // with no branch.ab, and for-each-ref says "[gone]". Both mean "tracking, nothing to report".
+    [Fact]
+    public void A_gone_upstream_still_reports_tracking_with_zero_counts()
+    {
+        Commit("a.txt", "0", "base");
+        Git("push", "-u", "origin", "main");
+        Git("update-ref", "-d", "refs/remotes/origin/main");
+
+        var s = Sync();
+        Assert.True(s.HasUpstream);
+        Assert.Equal(0, s.Ahead);
+        Assert.Equal(0, s.Behind);
+        AssertBothAgree();
+    }
+
+    // The one number the whole fetch path exists to move: fetching while the remote is ahead must
+    // show up in the refs-only read, with no working-tree walk involved.
+    [Fact]
+    public void A_fetch_shows_up_in_the_refs_only_read()
+    {
+        Commit("a.txt", "0", "base");
+        Git("push", "-u", "origin", "main");
+        AdvanceOriginByOneCommit();
+
+        Assert.Equal(0, Sync().Behind);
+
+        Git("fetch");
+
+        Assert.Equal(1, Sync().Behind);
+        AssertBothAgree();
+    }
 
     private void AdvanceOriginByOneCommit()
     {

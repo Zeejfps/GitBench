@@ -96,6 +96,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public Fetched<CommitDetails> LoadDetails(Repo repo, string sha) => inner.LoadDetails(repo, sha);
     public Fetched<LocalChangesSnapshot> GetLocalChanges(Repo repo) => inner.GetLocalChanges(repo);
     public GitStatusSummary? GetStatusSummary(Repo repo) => inner.GetStatusSummary(repo);
+    public GitSyncSummary? GetSyncSummary(Repo repo) => inner.GetSyncSummary(repo);
     public Fetched<BranchListing> GetBranches(Repo repo) => inner.GetBranches(repo);
     public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths) => inner.Stage(repo, paths);
     public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths) => inner.Unstage(repo, paths);
