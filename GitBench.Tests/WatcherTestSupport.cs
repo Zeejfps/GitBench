@@ -20,6 +20,9 @@ internal sealed class FakeReadGate : IGitReadGate
 
     public Task<IGitReadGate.Permit> Acquire(Guid repoId, GitReadKind kind)
         => Task.FromResult(new IGitReadGate.Permit(() => { }));
+
+    // Nothing is ever throttled here, so no read is ever outstanding.
+    public bool HasOutstandingReads(Guid repoId) => false;
 }
 
 // Shared scaffolding for the filesystem-watcher and reconcile tests. Both drive real components

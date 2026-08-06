@@ -16,6 +16,7 @@ internal sealed class RepoNodeFactory
 {
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
+    private readonly IRepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
     private readonly IGitWorktreeOperations _gitWorktrees;
@@ -27,6 +28,7 @@ internal sealed class RepoNodeFactory
     public RepoNodeFactory(
         IRepoRegistry registry,
         IRepoStatusStore status,
+        IRepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
         IGitWorktreeOperations gitWorktrees,
@@ -37,6 +39,7 @@ internal sealed class RepoNodeFactory
     {
         _registry = registry;
         _status = status;
+        _load = load;
         _bus = bus;
         _gitRemotes = gitRemotes;
         _gitWorktrees = gitWorktrees;
@@ -47,5 +50,5 @@ internal sealed class RepoNodeFactory
     }
 
     public RepoNodeViewModel Create(Repo repo, int depth) =>
-        new(repo, depth, _registry, _status, _bus, _gitRemotes, _gitWorktrees, _shell, _loc, _clipboard, _dispatcher, this);
+        new(repo, depth, _registry, _status, _load, _bus, _gitRemotes, _gitWorktrees, _shell, _loc, _clipboard, _dispatcher, this);
 }

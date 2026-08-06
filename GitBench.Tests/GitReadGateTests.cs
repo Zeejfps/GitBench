@@ -56,6 +56,77 @@ public sealed class GitReadGateTests
         for (var i = 1; i < held.Count; i++) held[i].Dispose();
     }
 
+    // ---- outstanding reads: what the RepoBar row spinner is projected from ----
+
+    [Fact]
+    public async Task A_read_is_outstanding_from_when_it_is_asked_for_until_its_permit_is_released()
+    {
+        var gate = new GitReadGate();
+        var repo = Guid.NewGuid();
+        Assert.False(gate.HasOutstandingReads(repo));
+
+        var permit = await gate.Acquire(repo, GitReadKind.Status);
+        Assert.True(gate.HasOutstandingReads(repo));
+
+        permit.Dispose();
+        Assert.False(gate.HasOutstandingReads(repo));
+    }
+
+    // The queue wait is the part of a read the user actually notices on a slow disk, so a read
+    // parked on a full gate has to count — going by admission would blank the spinner for exactly
+    // the wait it exists to report.
+    [Fact]
+    public async Task A_read_still_waiting_for_a_permit_counts_as_outstanding()
+    {
+        var gate = new GitReadGate();
+        var held = new List<IGitReadGate.Permit>();
+        for (var i = 0; i < GitReadGate.MaxConcurrentReads; i++)
+            held.Add(await gate.Acquire(Guid.NewGuid(), GitReadKind.Status));
+
+        var waiting = Guid.NewGuid();
+        var parked = gate.Acquire(waiting, GitReadKind.Status);
+        await Task.Delay(50);
+
+        Assert.False(parked.IsCompleted, "the read must still be waiting for this to prove anything");
+        Assert.True(gate.HasOutstandingReads(waiting));
+
+        held[0].Dispose();
+        (await parked.WaitAsync(Wait)).Dispose();
+        Assert.False(gate.HasOutstandingReads(waiting));
+
+        for (var i = 1; i < held.Count; i++) held[i].Dispose();
+    }
+
+    [Fact]
+    public async Task One_repo_stays_outstanding_until_its_last_read_finishes()
+    {
+        var gate = new GitReadGate();
+        var repo = Guid.NewGuid();
+
+        var first = await gate.Acquire(repo, GitReadKind.Status);
+        var second = await gate.Acquire(repo, GitReadKind.Commits);
+
+        first.Dispose();
+        Assert.True(gate.HasOutstandingReads(repo));
+
+        second.Dispose();
+        Assert.False(gate.HasOutstandingReads(repo));
+    }
+
+    // A read is counted before it is admitted, so an Acquire that fails outright has already been
+    // counted and must undo it — otherwise a row spins forever for a read that never ran.
+    [Fact]
+    public async Task A_read_that_never_starts_is_not_left_outstanding()
+    {
+        var gate = new GitReadGate();
+        gate.Dispose();
+        var repo = Guid.NewGuid();
+
+        await Assert.ThrowsAnyAsync<ObjectDisposedException>(() => gate.Acquire(repo, GitReadKind.Status));
+
+        Assert.False(gate.HasOutstandingReads(repo));
+    }
+
     [Fact]
     public async Task Last_status_read_duration_is_null_before_a_read_and_reflects_a_timed_one()
     {

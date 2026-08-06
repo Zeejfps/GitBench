@@ -77,8 +77,13 @@ internal sealed record RepoBar : Widget
             ],
         };
 
-        return bar
-            .WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm)))
+        // Provided so the row spinners deep in the tree turn on this bar's single animation rather
+        // than each resolving a view model — and a spinner of their own — from the container.
+        return new Provide<RepoBarViewModel>
+        {
+            Value = vm,
+            Child = bar.WithController(input, () => new RepoBarContextMenuController(ctx, _ => BuildBackgroundMenuItems(ctx, vm))),
+        }
             .BindVm(vm)
             .Use(_ => activeId);
     }

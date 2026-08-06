@@ -16,6 +16,11 @@ namespace GitBench.Features.Repos;
 // here.
 internal sealed record RepoRowShell : Widget
 {
+    // The width the dot and the spinner both occupy, so swapping one for the other leaves the name
+    // column where it was. Sized to the spinner's glyph — the dot is padded out to match.
+    internal const float TrailingWidth = 12f;
+    private const int DotSize = 8;
+
     public required string Glyph { get; init; }
     public required float RowHeight { get; init; }
     public required float GlyphSize { get; init; }
@@ -26,15 +31,17 @@ internal sealed record RepoRowShell : Widget
         var vm = ctx.Require<RepoNodeViewModel>();
         var selectionBar = ctx.Require<TreeSelectionBar<Guid>>();
 
-        var statusDot = new Box
+        // Loading gives way to the dot rather than sitting beside it: the dot reports what the last
+        // read found, and while the next one is outstanding that is the thing in flux.
+        var trailing = new Switch<RepoRowBadge>
         {
-            Width = 8,
-            Height = 8,
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
-                ? s.RepoBarRow.BadgeError
-                : s.RepoBarRow.BadgeDirty),
-            Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
+            Value = vm.Badge,
+            Case = badge => badge switch
+            {
+                RepoRowBadge.Loading => new RepoRowSpinner(),
+                RepoRowBadge.Dirty or RepoRowBadge.Error => StatusDot(badge),
+                _ => Empty.Widget,
+            },
         };
 
         var nameColor = Theme.Color(s => s.RepoBarRow.Text(vm.IsActive.Value, vm.IsMissing.Value));
@@ -102,9 +109,28 @@ internal sealed record RepoRowShell : Widget
                 },
             },
             Background = Theme.Color(s => !vm.IsActive.Value && Hovered.Value ? s.RowSelection.FillHover : 0u),
-            Trailing = statusDot,
+            Trailing = trailing,
         };
 
         return row.Use(view => selectionBar.Register(vm.RepoId, () => view.Position));
     }
+
+    // Padded rather than centered so the dot lands on the spinner's centre line without a Center,
+    // whose default margin would collapse a child this small.
+    private static IWidget StatusDot(RepoRowBadge badge) => new Padding
+    {
+        Amount = new PaddingStyle { Left = (int)(TrailingWidth - DotSize) / 2, Right = (int)(TrailingWidth - DotSize) / 2 },
+        Children =
+        [
+            new Box
+            {
+                Width = DotSize,
+                Height = DotSize,
+                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+                Background = Theme.Color(s => badge == RepoRowBadge.Error
+                    ? s.RepoBarRow.BadgeError
+                    : s.RepoBarRow.BadgeDirty),
+            },
+        ],
+    };
 }

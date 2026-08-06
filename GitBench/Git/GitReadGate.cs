@@ -47,6 +47,15 @@ internal interface IGitReadGate
     TimeSpan? LastStatusReadDuration(Guid repoId);
 
     /// <summary>
+    /// Whether any background read for <paramref name="repoId"/> is outstanding — holding a permit or
+    /// still waiting for one. Because every background read passes through here, this is the one place
+    /// that can answer "is this repo loading" for all of them at once; the RepoBar row spinner is
+    /// projected from it. Thread-safe, and polled rather than observable: the answer changes on
+    /// background threads, and its only consumer samples it on the UI thread's frame tick.
+    /// </summary>
+    bool HasOutstandingReads(Guid repoId);
+
+    /// <summary>
     /// A held read slot. Disposing it times the read and releases the slot; do it inside the read
     /// block, before the result is posted to the UI.
     /// </summary>
@@ -76,21 +85,43 @@ internal sealed class GitReadGate : IGitReadGate, IDisposable
 
     private readonly SemaphoreSlim _slots = new(MaxConcurrentReads, MaxConcurrentReads);
     private readonly ConcurrentDictionary<Guid, TimeSpan> _lastStatusRead = new();
+    private readonly ConcurrentDictionary<Guid, int> _outstanding = new();
 
     public async Task<IGitReadGate.Permit> Acquire(Guid repoId, GitReadKind kind)
     {
-        await _slots.WaitAsync().ConfigureAwait(false);
+        // Counted from when the read is asked for, not from when it is admitted. A read parked on a
+        // full gate is one the user is waiting on — going by admission would blank the row's spinner
+        // for exactly the queue wait this gate exists to create.
+        _outstanding.AddOrUpdate(repoId, 1, static (_, n) => n + 1);
+        try
+        {
+            await _slots.WaitAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Disposal faults parked waiters; the read never runs, so it is no longer outstanding.
+            EndRead(repoId);
+            throw;
+        }
+
         var start = Stopwatch.GetTimestamp();
         return new IGitReadGate.Permit(() =>
         {
             if (kind == GitReadKind.Status)
                 _lastStatusRead[repoId] = Stopwatch.GetElapsedTime(start);
+            EndRead(repoId);
             _slots.Release();
         });
     }
 
     public TimeSpan? LastStatusReadDuration(Guid repoId)
         => _lastStatusRead.TryGetValue(repoId, out var duration) ? duration : null;
+
+    public bool HasOutstandingReads(Guid repoId)
+        => _outstanding.TryGetValue(repoId, out var count) && count > 0;
+
+    private void EndRead(Guid repoId)
+        => _outstanding.AddOrUpdate(repoId, 0, static (_, n) => n > 0 ? n - 1 : 0);
 
     public void Dispose() => _slots.Dispose();
 }

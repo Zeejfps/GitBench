@@ -12,11 +12,14 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
 
-// Which status dot a row shows; error takes priority over dirty.
+// What a row shows in its trailing slot. Error outranks Loading because it is the only one that
+// needs the user to do something, and on a slow disk a read can stay outstanding long enough to hide
+// it. Loading outranks Dirty because until a read lands, whether the tree is dirty isn't known yet.
 internal enum RepoRowBadge
 {
     None,
     Dirty,
+    Loading,
     Error,
 }
 
@@ -32,6 +35,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly Repo _initial;
     private readonly IRepoRegistry _registry;
     private readonly IRepoStatusStore _status;
+    private readonly IRepoLoadStore _load;
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
     private readonly IGitWorktreeOperations _gitWorktrees;
@@ -93,6 +97,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         int depth,
         IRepoRegistry registry,
         IRepoStatusStore status,
+        IRepoLoadStore load,
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
         IGitWorktreeOperations gitWorktrees,
@@ -106,6 +111,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         Depth = depth;
         _registry = registry;
         _status = status;
+        _load = load;
         _bus = bus;
         _gitRemotes = gitRemotes;
         _gitWorktrees = gitWorktrees;
@@ -123,7 +129,9 @@ internal sealed class RepoNodeViewModel : IDisposable
         _badge = new Derived<RepoRowBadge>(() =>
         {
             var st = _status.For(RepoId);
-            return st.HasUnseenError ? RepoRowBadge.Error : st.IsDirty ? RepoRowBadge.Dirty : RepoRowBadge.None;
+            if (st.HasUnseenError) return RepoRowBadge.Error;
+            if (_load.IsLoading(RepoId)) return RepoRowBadge.Loading;
+            return st.IsDirty ? RepoRowBadge.Dirty : RepoRowBadge.None;
         });
         _hasChildren = new Derived<bool>(() => HasAnyChild(RepoId));
         _canActivate = new Derived<bool>(() => Kind != RepoKind.Submodule || !IsMissing.Value);

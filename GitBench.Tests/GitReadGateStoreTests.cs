@@ -112,6 +112,7 @@ public sealed class GitReadGateStoreTests : IDisposable
         }
 
         public TimeSpan? LastStatusReadDuration(Guid repoId) => _inner.LastStatusReadDuration(repoId);
+        public bool HasOutstandingReads(Guid repoId) => _inner.HasOutstandingReads(repoId);
 
         private void UpdatePeak(int now)
         {

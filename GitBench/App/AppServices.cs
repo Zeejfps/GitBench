@@ -107,6 +107,7 @@ internal static class AppServices
         context.AddSingleton(ctx => new RepoNodeFactory(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IRepoStatusStore>(),
+            ctx.Require<IRepoLoadStore>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IGitWorktreeOperations>(),
@@ -166,6 +167,10 @@ internal static class AppServices
             ctx.Require<IGitReadGate>(),
             ctx.Require<IUiDispatcher>()));
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
+        // Samples the read gate + the operations store once a frame into the per-repo "loading" flag
+        // the RepoBar rows spin on. Registered after both, and hosted so its frame tick starts with
+        // the rest of the app rather than on first row build.
+        context.AddHostedService<IRepoLoadStore, RepoLoadStore>();
         // The head store owns the checkout; the status store composes its pending branch into
         // RepoStatus and, in return, tells it when a fresh read has landed. Same factory-plus-cast
         // shape as the ingest wiring above, and for the same reason: the container can't cast, and a
