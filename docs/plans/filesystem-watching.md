@@ -27,7 +27,9 @@ units. GitBench exhausting them is not a GitBench outage; it is a desktop-sessio
 
 - **The duplicate `.git` watcher is gone.** Each repo used to get a second recursive watcher rooted
   at `.git`, whose subtree the working-tree watcher already covered. `.git` paths now route off the
-  tree watcher into the existing `ClassifyGitChange`.
+  tree watcher into the existing `ClassifyGitChange`. (Phase 2 partly re-splits this *on Linux* — a
+  narrow, non-recursive gitdir root comes back there, because the tree watch that made it a
+  duplicate is exactly what Linux no longer does. Windows and macOS stay consolidated.)
 - **Failures are reported, not swallowed.** `WatcherDiagnostics` names the failing repo, the
   exception, the values read from `/proc/sys/fs/inotify/max_user_*`, and how many instances
   GitBench holds — and warns once when it crosses half the instance limit.
@@ -75,7 +77,8 @@ Two changes, neither needing a custom inotify layer:
 
 ### Linux watch roots
 
-Per repo, replacing the one recursive watch on the working tree:
+Per repo, replacing the one recursive watch on the working tree — `RepoWatchRoots.For` with
+`WatchCost.RecursiveIsOneWatchPerDirectory`:
 
 | root | recursive | ~watches | catches |
 | --- | --- | --- | --- |
@@ -98,12 +101,13 @@ also report top-level file edits, but acting on those would make refresh latency
 a file happens to be — worse than uniformly polled. It exists solely so an external `.gitmodules`
 edit still triggers submodule rediscovery, the one working-tree signal with no polling equivalent.
 
-**Blocker — `RepoWatcher` assumes `<repo>/.git` is a directory.** `_gitDirPrefix` is built as
+**Blocker — `RepoWatcher` assumed `<repo>/.git` is a directory.** `_gitDirPrefix` was built as
 `repo.Path + "/.git/"`. For worktrees and submodules `.git` is a gitlink *file* pointing elsewhere,
-so those entries have never had gitdir classification at all — they rely on the primary's
-`RefsChangedMessage` fan-out. Narrow roots need the resolved gitdir, so this must be fixed first
-(`git rev-parse --absolute-git-dir`, or read the gitlink). Doing so also gives worktrees and
-submodules real ref detection for the first time.
+so those entries had no gitdir classification at all — they relied on the primary's
+`RefsChangedMessage` fan-out. **Landed** as `RepoGitDir.Resolve`: read and parse the gitlink rather
+than shelling out to `git rev-parse --absolute-git-dir`, so there is no process spawn per repo while
+the registry loads and it still works when git isn't on `PATH`. Falls back to `<repo>/.git` for
+anything unreadable, which is exactly the old assumption, so it can't regress the primary case.
 
 ### Focus and poll — the mechanism already exists
 
@@ -126,15 +130,45 @@ is working-tree dirtiness, until that repo is activated and loads for real.
 
 ## Phases
 
-1. **Resolve the real gitdir** for every repo kind; pin it with tests for a primary, a linked
-   worktree, and a submodule. Unblocks the rest, and closes the pre-existing gap where worktrees and
-   submodules never classified their own refs.
-2. **Narrow roots on Linux.** Windows and macOS keep the single recursive tree watcher, where it is
-   one handle and instant local-edit feedback is free. `RepoWatcher` grows a per-platform set of
-   roots; the classifier and the debounce channels are untouched, since `ClassifyGitChange` already
-   takes gitdir-relative paths and already ignores everything the narrow roots exclude.
-3. **Measure.** Count watches actually held on Linux, report through `WatcherDiagnostics`, and
-   confirm both the drop and that no channel went silent.
+1. **Resolve the real gitdir** for every repo kind. ✅ **Landed** — `RepoGitDir.Resolve`, pinned
+   against real git for a primary, a linked worktree and a submodule, plus the gitlink's shapes
+   (absolute target, relative target, forward slashes, loose spacing) and its fallbacks.
+2. **Narrow roots on Linux.** ✅ **Landed** — `RepoWatchRoots.For(workingTree, gitDir, cost)`, a pure
+   function taking the cost as an argument rather than reading the OS, so both layouts are reachable
+   from a unit test on any platform: the Linux branch is the one nobody developing this can run.
+   Windows and macOS keep the single recursive tree watcher. The classifier and the debounce channels
+   are untouched, since `ClassifyGitChange` already takes gitdir-relative paths and already ignores
+   everything the narrow roots exclude.
+3. **Measure.** Not started; needs a Linux machine. Count watches actually held, report through
+   `WatcherDiagnostics`, and confirm both the drop and that no channel went silent.
+
+### What phases 1 and 2 actually built
+
+- `RepoGitDir` — the gitlink parser, and the only thing that knows `<repo>/.git` might be a file.
+- `RepoWatchRoots` — `WatchCost` (one handle vs one watch per directory), `WatchRootKind`
+  (`WorkingTree` / `GitDir` / `Gitmodules`), `WatchRoot`, and the pure layout function.
+- `RepoWatcher` — one `FileSystemWatcher` per root instead of one per repo, with a handler pair per
+  kind: the recursive tree root splits by path as before, a gitdir root goes straight to the
+  classifier, and the non-recursive working-tree root acts on `.gitmodules` alone.
+
+### Known gaps in what landed
+
+- **Narrow roots never re-attach.** `refs/` and `worktrees/` are attached only if they exist at
+  construction. A `git worktree add` into a repo that had no `worktrees/` yet leaves that root
+  unwatched until the app restarts — mitigated because the new worktree becomes its own registry
+  entry with its own roots, and because the non-recursive gitdir root still reports the directory
+  appearing. Same story if `refs/` is deleted and recreated wholesale.
+- **`ClassifyGitChange` ignores a bare `refs` path.** The roots table above claims the non-recursive
+  gitdir root catches `refs/` being created or removed; it sees the event, but the classifier maps
+  only `refs/…`, not `refs`. `worktrees` and `modules` bare *are* mapped. Left alone deliberately —
+  changing the classifier was out of scope for these phases.
+- **Worktrees and submodules gain their own ref detection on Linux only.** Their gitdir sits under
+  the *primary's* `.git`, so a single recursive watch on their own working tree never covered it, and
+  on Windows/macOS that is still the whole layout. Those platforms keep relying on the primary's
+  `RefsChangedMessage` fan-out, which is what they did before. Resolving the gitdir is necessary
+  either way — without it the narrow roots would point at a directory holding none of their refs.
+- **`WatcherDiagnostics.Created` now counts roots, not repos.** That is the right number for the
+  instance budget, but its warning text still says "watching N repositories". Phase 3's problem.
 
 ## What degrades
 

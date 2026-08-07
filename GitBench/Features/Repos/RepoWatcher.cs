@@ -8,14 +8,20 @@ namespace GitBench.Features.Repos;
 // app (editor saves, terminal `git` commands, builds, IDE checkouts, …) and turns
 // them into the same MessageBus signals the in-app presenters already use.
 //
-// One recursive watcher per repo, rooted at the working tree, split by path at delivery:
+// The set of roots watched depends on what a recursive watch costs — see RepoWatchRoots, which owns
+// that decision. On Windows and macOS it is one recursive watcher rooted at the working tree, split
+// by path at delivery:
 //   * Working tree edits → WorkingTreeChangedMessage.
-//   * `.git` paths → ClassifyGitChange → refs / worktrees / submodules.
+//   * gitdir paths → ClassifyGitChange → refs / worktrees / submodules.
+// A second watcher rooted at the gitdir would be a pure duplicate there, since the tree watcher's
+// subtree already covers it.
 //
-// A second watcher rooted at `.git` would be a pure duplicate, since the tree watcher's subtree
-// already covers it. On Linux that duplicate was not free: a recursive FileSystemWatcher costs one
+// On Linux it is a handful of narrow roots instead, because a recursive FileSystemWatcher costs one
 // inotify instance plus one watch per directory in the subtree, both drawn from a per-user budget
 // shared with every other application on the machine. See WatcherDiagnostics.
+//
+// Either way the gitdir is the *resolved* one: `<repo>/.git` is a gitlink file, not a directory, for
+// linked worktrees and submodules. See RepoGitDir.
 //
 // FSW fires events on threadpool threads in storms (a single editor save can be 3-5
 // events; a build or git checkout can be thousands), so we debounce per channel and
@@ -50,7 +56,7 @@ internal sealed class RepoWatcher : IDisposable
     private readonly IRepoActivityTracker _activity;
     private readonly IGitReadGate _readGate;
 
-    private readonly FileSystemWatcher? _treeWatcher;
+    private readonly List<Attached> _watchers;
     private readonly Channel _workingTree;
     private readonly Channel _refs;
     private readonly Channel _worktrees;
@@ -77,7 +83,8 @@ internal sealed class RepoWatcher : IDisposable
         _bus = bus;
         _activity = activity;
         _readGate = readGate;
-        _gitDirPrefix = Path.Combine(repo.Path, ".git") + Path.DirectorySeparatorChar;
+        var gitDir = RepoGitDir.Resolve(repo.Path);
+        _gitDirPrefix = gitDir + Path.DirectorySeparatorChar;
         _gitmodulesPath = Path.Combine(repo.Path, ".gitmodules");
 
         _workingTree = NewChannel(id => _bus.Broadcast(new WorkingTreeChangedMessage(id)));
@@ -86,21 +93,39 @@ internal sealed class RepoWatcher : IDisposable
         _submodules = NewChannel(id => _bus.Broadcast(new SubmodulesChangedMessage(id)));
         _channels = [_workingTree, _refs, _worktrees, _submodules];
 
-        _treeWatcher = TryCreateTreeWatcher(repo.Path);
+        _watchers = Attach(RepoWatchRoots.For(repo.Path, gitDir, RepoWatchRoots.CurrentCost));
+    }
+
+    // A watcher plus the delegates it was subscribed with, so Dispose can detach exactly what it
+    // attached — the handler pair differs per root kind.
+    private sealed record Attached(
+        FileSystemWatcher Watcher,
+        FileSystemEventHandler OnEvent,
+        RenamedEventHandler OnRenamed);
+
+    private List<Attached> Attach(IReadOnlyList<WatchRoot> roots)
+    {
+        var attached = new List<Attached>(roots.Count);
+        foreach (var root in roots)
+        {
+            if (root.Optional && !Directory.Exists(root.Path)) continue;
+            if (TryCreateWatcher(root) is { } watcher) attached.Add(watcher);
+        }
+        return attached;
     }
 
     // Null when the OS refuses the watch — a repo on a disconnected drive, an unreadable path, or
-    // an exhausted Linux inotify budget. We just won't notice external changes for this repo; the
-    // user can still refresh by switching repos or performing an in-app op. Reported rather than
+    // an exhausted Linux inotify budget. We just won't notice that class of change for this repo;
+    // the user can still refresh by switching repos or performing an in-app op. Reported rather than
     // swallowed, because the budget case has consequences well outside this process.
-    private FileSystemWatcher? TryCreateTreeWatcher(string path)
+    private Attached? TryCreateWatcher(WatchRoot root)
     {
         FileSystemWatcher? watcher = null;
         try
         {
-            watcher = new FileSystemWatcher(path)
+            watcher = new FileSystemWatcher(root.Path)
             {
-                IncludeSubdirectories = true,
+                IncludeSubdirectories = root.Recursive,
                 NotifyFilter = NotifyFilters.FileName
                              | NotifyFilters.DirectoryName
                              | NotifyFilters.LastWrite
@@ -108,24 +133,62 @@ internal sealed class RepoWatcher : IDisposable
                              | NotifyFilters.CreationTime,
                 InternalBufferSize = FswBufferBytes,
             };
-            watcher.Created += OnTreeEvent;
-            watcher.Changed += OnTreeEvent;
-            watcher.Deleted += OnTreeEvent;
-            watcher.Renamed += OnTreeRenamed;
+            var onEvent = EventHandlerFor(root.Kind);
+            var onRenamed = RenameHandlerFor(root.Kind);
+            watcher.Created += onEvent;
+            watcher.Changed += onEvent;
+            watcher.Deleted += onEvent;
+            watcher.Renamed += onRenamed;
             watcher.Error += OnError;
             // Enabled only once the handlers are attached, and separately from the initializer:
             // this is the call that allocates the inotify instance and walks the tree adding
             // watches, so it is the one that throws when the budget is gone.
             watcher.EnableRaisingEvents = true;
-            WatcherDiagnostics.Created(path);
-            return watcher;
+            WatcherDiagnostics.Created(root.Path);
+            return new Attached(watcher, onEvent, onRenamed);
         }
         catch (Exception e)
         {
             watcher?.Dispose();
-            WatcherDiagnostics.Failed(path, e);
+            WatcherDiagnostics.Failed(root.Path, e);
             return null;
         }
+    }
+
+    private FileSystemEventHandler EventHandlerFor(WatchRootKind kind) => kind switch
+    {
+        WatchRootKind.WorkingTree => OnTreeEvent,
+        WatchRootKind.GitDir => OnGitDirEvent,
+        _ => OnGitmodulesEvent,
+    };
+
+    private RenamedEventHandler RenameHandlerFor(WatchRootKind kind) => kind switch
+    {
+        WatchRootKind.WorkingTree => OnTreeRenamed,
+        WatchRootKind.GitDir => OnGitDirRenamed,
+        _ => OnGitmodulesRenamed,
+    };
+
+    // A gitdir root sees nothing else, so there is no working-tree half to split off here.
+    private void OnGitDirEvent(object sender, FileSystemEventArgs e)
+        => ClassifyGitChange(ToGitRelativePath(e.FullPath));
+
+    private void OnGitDirRenamed(object sender, RenamedEventArgs e)
+    {
+        ClassifyGitChange(ToGitRelativePath(e.FullPath));
+        ClassifyGitChange(ToGitRelativePath(e.OldFullPath));
+    }
+
+    // The non-recursive working-tree root deliberately acts on `.gitmodules` and nothing else; the
+    // reasoning is in RepoWatchRoots.
+    private void OnGitmodulesEvent(object sender, FileSystemEventArgs e)
+    {
+        if (IsGitmodules(e.FullPath)) Schedule(_submodules);
+    }
+
+    private void OnGitmodulesRenamed(object sender, RenamedEventArgs e)
+    {
+        if (IsGitmodules(e.FullPath) || IsGitmodules(e.OldFullPath)) Schedule(_submodules);
     }
 
     private void OnTreeEvent(object sender, FileSystemEventArgs e)
@@ -386,15 +449,15 @@ internal sealed class RepoWatcher : IDisposable
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
 
-        if (_treeWatcher != null)
+        foreach (var (watcher, onEvent, onRenamed) in _watchers)
         {
-            _treeWatcher.EnableRaisingEvents = false;
-            _treeWatcher.Created -= OnTreeEvent;
-            _treeWatcher.Changed -= OnTreeEvent;
-            _treeWatcher.Deleted -= OnTreeEvent;
-            _treeWatcher.Renamed -= OnTreeRenamed;
-            _treeWatcher.Error -= OnError;
-            _treeWatcher.Dispose();
+            watcher.EnableRaisingEvents = false;
+            watcher.Created -= onEvent;
+            watcher.Changed -= onEvent;
+            watcher.Deleted -= onEvent;
+            watcher.Renamed -= onRenamed;
+            watcher.Error -= OnError;
+            watcher.Dispose();
             WatcherDiagnostics.Disposed();
         }
         // Dispose the timers under the lock Schedule/Drain use. _disposed is already set above,
