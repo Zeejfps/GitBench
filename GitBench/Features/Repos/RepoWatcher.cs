@@ -108,11 +108,22 @@ internal sealed class RepoWatcher : IDisposable
         var attached = new List<Attached>(roots.Count);
         foreach (var root in roots)
         {
-            if (root.Optional && !Directory.Exists(root.Path)) continue;
+            if (!ShouldAttach(root)) continue;
             if (TryCreateWatcher(root) is { } watcher) attached.Add(watcher);
         }
         return attached;
     }
+
+    // A root git creates on demand is skipped while absent. The `.gitmodules` root is skipped when
+    // the file it exists for is absent, which is most repos: on Linux every root is its own inotify
+    // instance out of a 128-per-user budget, so an unused one is a third of a repo's cost for
+    // nothing. A `.gitmodules` appearing later is picked up by RepoReconcileService's focus gain,
+    // which broadcasts the submodules channel.
+    private bool ShouldAttach(WatchRoot root) => root.Kind switch
+    {
+        WatchRootKind.Gitmodules => File.Exists(_gitmodulesPath),
+        _ => !root.Optional || Directory.Exists(root.Path),
+    };
 
     // Null when the OS refuses the watch — a repo on a disconnected drive, an unreadable path, or
     // an exhausted Linux inotify budget. We just won't notice that class of change for this repo;

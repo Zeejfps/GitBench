@@ -167,6 +167,20 @@ is working-tree dirtiness, until that repo is activated and loads for real.
   on Windows/macOS that is still the whole layout. Those platforms keep relying on the primary's
   `RefsChangedMessage` fan-out, which is what they did before. Resolving the gitdir is necessary
   either way — without it the narrow roots would point at a directory holding none of their refs.
+- **On Linux a submodule's HEAD moving no longer reaches the primary.** `modules/` is deliberately
+  unwatched, so where the recursive tree watcher used to see `<primary>/.git/modules/<name>/refs/…`
+  and raise `SubmodulesChangedMessage(primary)`, the submodule's own entry now catches it and raises
+  `RefsChangedMessage(submodule)` — different message, different repo id, so the primary's submodule
+  view doesn't refresh. Submodules being *added or removed* are still caught, via the non-recursive
+  gitdir root seeing `modules` appear or vanish. The primary self-heals on focus gain, which
+  broadcasts the submodules channel; the 30s tick does not.
+- **The layout trades the watch budget for the instance budget.** Each repo is now 2–4
+  `FileSystemWatcher`s where it was 1 — every one an inotify instance out of a 128-per-user pool —
+  against ~5–50 watches where it was 10k–50k. Overwhelmingly the right trade, since watches was the
+  binding constraint by three orders of magnitude, but instances are the binding one now: roughly 40
+  repo entries rather than 128. The `.gitmodules` root is skipped when the file is absent to claw
+  some of that back. If the instance ceiling ever bites, the next cut is folding `refs/` into the
+  gitdir root and leaning on `packed-refs`.
 - **`WatcherDiagnostics.Created` now counts roots, not repos.** That is the right number for the
   instance budget, but its warning text still says "watching N repositories". Phase 3's problem.
 
