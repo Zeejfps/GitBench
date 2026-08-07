@@ -19,6 +19,10 @@ internal sealed class RepoReconcileService : IHostedService, IDisposable
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(30);
 
+    // How long a postponed focus reconcile waits before re-testing the activity gate. Short, because
+    // the whole point is to land promptly once git goes quiet, and the re-test is a flag read.
+    private static readonly TimeSpan FocusRetryDelay = TimeSpan.FromMilliseconds(250);
+
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly IUiDispatcher _dispatcher;
@@ -30,6 +34,9 @@ internal sealed class RepoReconcileService : IHostedService, IDisposable
     private IDisposable? _foregroundSub;
     private bool _started;
     private bool _sawInitialForeground;
+    // UI thread only, like everything Reconcile touches: set when a focus reconcile is postponed and
+    // cleared by the retry itself, so a long git op can only ever have one retry outstanding.
+    private bool _focusRetryQueued;
     private volatile bool _disposed;
 
     public RepoReconcileService(
@@ -65,7 +72,7 @@ internal sealed class RepoReconcileService : IHostedService, IDisposable
             _sawInitialForeground = true;
             return;
         }
-        if (foreground) _dispatcher.Post(Reconcile);
+        if (foreground) _dispatcher.Post(ReconcileOnFocus);
     }
 
     // PeriodicTimer rather than IFrameTicker: the ticker's onActivated hook pins the render loop at
@@ -77,23 +84,63 @@ internal sealed class RepoReconcileService : IHostedService, IDisposable
         try
         {
             while (await timer.WaitForNextTickAsync(_cts.Token).ConfigureAwait(false))
-                _dispatcher.Post(Reconcile);
+                _dispatcher.Post(ReconcileTick);
         }
         catch (OperationCanceledException) { /* disposed */ }
     }
 
+    // A tick and a focus gain are different events and must not behave alike.
+    //
+    // A tick is cheap liveness. Another is one interval away carrying identical information, so it
+    // may be dropped outright when git is busy, and it stays on the two channels a single status
+    // read already covers.
+    //
+    // A focus gain is one-shot: the app was away and may have missed anything at all, including
+    // changes with no other route in — so it covers every channel, and a git op in flight may only
+    // postpone it. Dropping one leaves the user looking at stale data until the next tick.
+    private void ReconcileTick() => Reconcile(allChannels: false, deferIfBusy: false);
+
+    private void ReconcileOnFocus() => Reconcile(allChannels: true, deferIfBusy: true);
+
     // Runs on the UI thread; every condition is re-read here rather than captured, so losing focus
     // or switching repos changes the next tick without tearing the loop down.
-    private void Reconcile()
+    private void Reconcile(bool allChannels, bool deferIfBusy)
     {
         if (_disposed || !_foreground.Value) return;
         if (_registry.Active.Value is not { } repo) return;
         // A repo whose reads take longer than the interval would otherwise accumulate a queue of
         // reconciles, each adding another pair of git reads to a disk already behind.
-        if (_activity.IsActive(repo.Path)) return;
+        if (_activity.IsActive(repo.Path))
+        {
+            if (deferIfBusy) ScheduleFocusRetry();
+            return;
+        }
 
         _bus.Broadcast(new WorkingTreeChangedMessage(repo.Id));
         _bus.Broadcast(new RefsChangedMessage(repo.Id));
+        if (!allChannels) return;
+        // Worktree and submodule discovery each cost their own git process, so they ride the rare
+        // focus gain rather than every tick.
+        _bus.Broadcast(new WorktreesChangedMessage(repo.Id));
+        _bus.Broadcast(new SubmodulesChangedMessage(repo.Id));
+    }
+
+    private void ScheduleFocusRetry()
+    {
+        if (_focusRetryQueued) return;
+        _focusRetryQueued = true;
+        _ = RetryFocusReconcileAsync();
+    }
+
+    private async Task RetryFocusReconcileAsync()
+    {
+        try { await Task.Delay(FocusRetryDelay, _cts.Token).ConfigureAwait(false); }
+        catch (OperationCanceledException) { return; }
+        _dispatcher.Post(() =>
+        {
+            _focusRetryQueued = false;
+            ReconcileOnFocus();
+        });
     }
 
     public void Dispose()

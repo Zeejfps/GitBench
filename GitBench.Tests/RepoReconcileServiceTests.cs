@@ -49,6 +49,57 @@ public sealed class RepoReconcileServiceTests : IDisposable
         Assert.Contains(repoId, _seen.RefsRepoIds);
     }
 
+    // A focus gain means the app was away and may have missed anything, including a worktree added
+    // or a submodule updated from a terminal — neither of which any other path re-checks. A tick
+    // deliberately stays on the two cheap channels; a focus gain must not.
+    [Fact]
+    public void Regaining_focus_reconciles_every_channel()
+    {
+        OpenRepo("alpha");
+        Start(Never);
+
+        _foreground.Set(true);
+
+        Pump.WaitFor(
+            _dispatcher,
+            () => _seen.WorkingTree >= 1 && _seen.Refs >= 1 && _seen.Worktrees >= 1 && _seen.Submodules >= 1,
+            "the focus-gain reconcile on all four channels");
+    }
+
+    [Fact]
+    public void A_tick_stays_on_the_two_cheap_channels()
+    {
+        OpenRepo("alpha");
+        _foreground.Set(true);
+        Start(Fast);
+
+        Pump.WaitFor(_dispatcher, () => _seen.WorkingTree >= 2 && _seen.Refs >= 2, "two reconcile ticks");
+        Assert.Equal(0, _seen.Worktrees);
+        Assert.Equal(0, _seen.Submodules);
+    }
+
+    // A tick may be dropped when git is busy — another is one interval behind it. A focus gain has
+    // no successor, so dropping it strands the user on stale data until the next tick, which is the
+    // same defect RepoWatcher's drain was fixed for.
+    [Fact]
+    public void A_focus_gain_during_a_git_read_is_deferred_not_dropped()
+    {
+        OpenRepo("alpha");
+        _gate.Active = true;
+        Start(Never);
+
+        _foreground.Set(true);
+        Pump.DrainFor(_dispatcher, TimeSpan.FromMilliseconds(700));
+        Assert.Equal(0, _seen.Total);
+
+        _gate.Active = false;
+
+        Pump.WaitFor(
+            _dispatcher,
+            () => _seen.WorkingTree >= 1 && _seen.Refs >= 1,
+            "the deferred focus-gain reconcile");
+    }
+
     // Subscribing to a State fires immediately with the current value. Startup is the one moment
     // every store has just loaded, so treating that first fire as a focus gain would reconcile a
     // repo that was read milliseconds ago.
