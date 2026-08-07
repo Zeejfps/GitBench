@@ -118,25 +118,22 @@ or submodule updated from a terminal has no other route in, least of all on Linu
 **postponed rather than dropped** when a git op is in flight — the same defect `RepoWatcher`'s drain
 was fixed for. One retry outstanding at a time, so a long op can't build a queue.
 
-**Still open — the reconcile covers the active repo only.** Every other repo's row (dirty marker,
-ahead/behind) stays as it was when the app lost focus. Sweeping the rest through
-`IStartupSweepCoordinator.RunThrottled` — which exists to gate exactly this kind of all-repos burst
-— is the natural fix, but it turns one focus gain into N git reads and wants a decision on cost
-before it ships. This matters much more on Linux, where a background repo has no watcher signal at
-all under the new roots.
+**Decided: the reconcile covers the active repo only.** Extending it to every repo would turn one
+focus gain into N git reads, and focus gains are frequent. The exposure is narrower than it looks —
+narrow roots are per repo *entry*, not per active repo, so every open repo still watches its own
+refs for a handful of watches and ahead/behind keeps updating. What goes stale on a background row
+is working-tree dirtiness, until that repo is activated and loads for real.
 
 ## Phases
 
 1. **Resolve the real gitdir** for every repo kind; pin it with tests for a primary, a linked
    worktree, and a submodule. Unblocks the rest, and closes the pre-existing gap where worktrees and
    submodules never classified their own refs.
-2. **Extend the focus reconcile to non-active repos** via the throttled sweep, once the cost
-   question above is settled. The other two reconcile gaps are already closed.
-3. **Narrow roots on Linux.** Windows and macOS keep the single recursive tree watcher, where it is
+2. **Narrow roots on Linux.** Windows and macOS keep the single recursive tree watcher, where it is
    one handle and instant local-edit feedback is free. `RepoWatcher` grows a per-platform set of
    roots; the classifier and the debounce channels are untouched, since `ClassifyGitChange` already
    takes gitdir-relative paths and already ignores everything the narrow roots exclude.
-4. **Measure.** Count watches actually held on Linux, report through `WatcherDiagnostics`, and
+3. **Measure.** Count watches actually held on Linux, report through `WatcherDiagnostics`, and
    confirm both the drop and that no channel went silent.
 
 ## What degrades
@@ -167,6 +164,9 @@ return to watching the tree.
   resource instead of not consuming it: needs a clock, a policy, an eviction path and a re-attach
   reconcile — and after all that, one monorepo can still exhaust `max_user_watches` alone. Narrow
   roots make the budget a non-issue instead of a thing to manage.
+- **Reconciling every repo on focus gain.** Focus gains are frequent and this makes each one cost a
+  git read per open repo. The active repo is the one the user is looking at; the rest can wait for
+  activation.
 - **Gitignore-driven subtree exclusion.** The biggest theoretical lever, unreachable through
   `FileSystemWatcher`, and the open VS Code bugs above show it is hard to get right even with a
   purpose-built native watcher. Note also that matching a gitignore rule does not mean git ignores
