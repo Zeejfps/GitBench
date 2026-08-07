@@ -8,9 +8,14 @@ namespace GitBench.Features.Repos;
 // app (editor saves, terminal `git` commands, builds, IDE checkouts, …) and turns
 // them into the same MessageBus signals the in-app presenters already use.
 //
-// Two watchers per repo:
-//   * Working tree (root, recursive, excluding .git): edits → WorkingTreeChangedMessage.
-//   * .git directory: HEAD/refs/packed-refs/FETCH_HEAD/ORIG_HEAD/MERGE_HEAD → RefsChangedMessage.
+// One recursive watcher per repo, rooted at the working tree, split by path at delivery:
+//   * Working tree edits → WorkingTreeChangedMessage.
+//   * `.git` paths → ClassifyGitChange → refs / worktrees / submodules.
+//
+// A second watcher rooted at `.git` would be a pure duplicate, since the tree watcher's subtree
+// already covers it. On Linux that duplicate was not free: a recursive FileSystemWatcher costs one
+// inotify instance plus one watch per directory in the subtree, both drawn from a per-user budget
+// shared with every other application on the machine. See WatcherDiagnostics.
 //
 // FSW fires events on threadpool threads in storms (a single editor save can be 3-5
 // events; a build or git checkout can be thousands), so we debounce per channel and
@@ -19,7 +24,7 @@ namespace GitBench.Features.Repos;
 // Design note — feedback loop avoidance:
 //   We intentionally do NOT call libgit2 inside the debounce callback (e.g. to hash
 //   a status snapshot and suppress no-op broadcasts). libgit2's RetrieveStatus updates
-//   `.git/index`'s stat cache as a side effect, which fires our own `.git` watcher, which
+//   `.git/index`'s stat cache as a side effect, which fires our own watcher, which
 //   schedules another debounce, which calls libgit2 again — an infinite loop. We also do
 //   NOT treat `.git/index` as a working-tree signal for the same reason: every read-side
 //   status call by the VM would re-trigger our watcher.
@@ -46,7 +51,6 @@ internal sealed class RepoWatcher : IDisposable
     private readonly IGitReadGate _readGate;
 
     private readonly FileSystemWatcher? _treeWatcher;
-    private readonly FileSystemWatcher? _gitWatcher;
     private readonly Channel _workingTree;
     private readonly Channel _refs;
     private readonly Channel _worktrees;
@@ -82,36 +86,19 @@ internal sealed class RepoWatcher : IDisposable
         _submodules = NewChannel(id => _bus.Broadcast(new SubmodulesChangedMessage(id)));
         _channels = [_workingTree, _refs, _worktrees, _submodules];
 
-        _treeWatcher = TryCreateWatcher(repo.Path);
-        if (_treeWatcher != null)
-        {
-            _treeWatcher.Created += OnTreeEvent;
-            _treeWatcher.Changed += OnTreeEvent;
-            _treeWatcher.Deleted += OnTreeEvent;
-            _treeWatcher.Renamed += OnTreeRenamed;
-            _treeWatcher.Error += OnError;
-        }
-
-        var gitDir = Path.Combine(repo.Path, ".git");
-        if (Directory.Exists(gitDir))
-        {
-            _gitWatcher = TryCreateWatcher(gitDir);
-            if (_gitWatcher != null)
-            {
-                _gitWatcher.Created += OnGitEvent;
-                _gitWatcher.Changed += OnGitEvent;
-                _gitWatcher.Deleted += OnGitEvent;
-                _gitWatcher.Renamed += OnGitRenamed;
-                _gitWatcher.Error += OnError;
-            }
-        }
+        _treeWatcher = TryCreateTreeWatcher(repo.Path);
     }
 
-    private static FileSystemWatcher? TryCreateWatcher(string path)
+    // Null when the OS refuses the watch — a repo on a disconnected drive, an unreadable path, or
+    // an exhausted Linux inotify budget. We just won't notice external changes for this repo; the
+    // user can still refresh by switching repos or performing an in-app op. Reported rather than
+    // swallowed, because the budget case has consequences well outside this process.
+    private FileSystemWatcher? TryCreateTreeWatcher(string path)
     {
+        FileSystemWatcher? watcher = null;
         try
         {
-            return new FileSystemWatcher(path)
+            watcher = new FileSystemWatcher(path)
             {
                 IncludeSubdirectories = true,
                 NotifyFilter = NotifyFilters.FileName
@@ -120,21 +107,37 @@ internal sealed class RepoWatcher : IDisposable
                              | NotifyFilters.Size
                              | NotifyFilters.CreationTime,
                 InternalBufferSize = FswBufferBytes,
-                EnableRaisingEvents = true,
             };
+            watcher.Created += OnTreeEvent;
+            watcher.Changed += OnTreeEvent;
+            watcher.Deleted += OnTreeEvent;
+            watcher.Renamed += OnTreeRenamed;
+            watcher.Error += OnError;
+            // Enabled only once the handlers are attached, and separately from the initializer:
+            // this is the call that allocates the inotify instance and walks the tree adding
+            // watches, so it is the one that throws when the budget is gone.
+            watcher.EnableRaisingEvents = true;
+            WatcherDiagnostics.Created(path);
+            return watcher;
         }
-        catch
+        catch (Exception e)
         {
-            // Best-effort: a repo on a disconnected drive, an unreadable path, etc.
-            // We just won't notice external changes for this repo. The user can still
-            // refresh by switching repos or performing an in-app op.
+            watcher?.Dispose();
+            WatcherDiagnostics.Failed(path, e);
             return null;
         }
     }
 
     private void OnTreeEvent(object sender, FileSystemEventArgs e)
     {
-        if (IsUnderGit(e.FullPath)) return;
+        // ToGitRelativePath yields null for anything outside *this* repo's gitdir, so a nested
+        // submodule's own `.git/` is dropped here exactly as it was when it fell to the bare
+        // early-return: its churn belongs to that submodule's watcher, not the parent's.
+        if (IsUnderGit(e.FullPath))
+        {
+            ClassifyGitChange(ToGitRelativePath(e.FullPath));
+            return;
+        }
         // .gitmodules lives in the working tree, but edits to it specifically should
         // re-run submodule discovery rather than just bumping the WorkingTree channel
         // (which would only re-read GetLocalChanges, not the submodule list).
@@ -147,17 +150,13 @@ internal sealed class RepoWatcher : IDisposable
     {
         if (IsGitmodules(e.FullPath) || IsGitmodules(e.OldFullPath))
             Schedule(_submodules);
-        if (IsUnderGit(e.FullPath) && IsUnderGit(e.OldFullPath)) return;
+
+        var newUnderGit = IsUnderGit(e.FullPath);
+        var oldUnderGit = IsUnderGit(e.OldFullPath);
+        if (newUnderGit) ClassifyGitChange(ToGitRelativePath(e.FullPath));
+        if (oldUnderGit) ClassifyGitChange(ToGitRelativePath(e.OldFullPath));
+        if (newUnderGit && oldUnderGit) return;
         Schedule(_workingTree);
-    }
-
-    private void OnGitEvent(object sender, FileSystemEventArgs e)
-        => ClassifyGitChange(ToGitRelativePath(e.FullPath));
-
-    private void OnGitRenamed(object sender, RenamedEventArgs e)
-    {
-        ClassifyGitChange(ToGitRelativePath(e.FullPath));
-        ClassifyGitChange(ToGitRelativePath(e.OldFullPath));
     }
 
     internal void ClassifyGitChange(string? gitRelativePath)
@@ -396,16 +395,7 @@ internal sealed class RepoWatcher : IDisposable
             _treeWatcher.Renamed -= OnTreeRenamed;
             _treeWatcher.Error -= OnError;
             _treeWatcher.Dispose();
-        }
-        if (_gitWatcher != null)
-        {
-            _gitWatcher.EnableRaisingEvents = false;
-            _gitWatcher.Created -= OnGitEvent;
-            _gitWatcher.Changed -= OnGitEvent;
-            _gitWatcher.Deleted -= OnGitEvent;
-            _gitWatcher.Renamed -= OnGitRenamed;
-            _gitWatcher.Error -= OnError;
-            _gitWatcher.Dispose();
+            WatcherDiagnostics.Disposed();
         }
         // Dispose the timers under the lock Schedule/Drain use. _disposed is already set above,
         // so anything that takes the lock after this skips its Change(); anything holding the

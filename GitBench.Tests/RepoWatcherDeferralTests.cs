@@ -167,6 +167,19 @@ public sealed class RepoWatcherDeferralTests : IDisposable
         Pump.WaitFor(_dispatcher, () => _seen.WorkingTree >= 1, "the deferred working-tree broadcast");
     }
 
+    // The dedicated `.git` watcher is gone: the recursive tree watcher's subtree already covered it,
+    // and on Linux that duplicate cost a second inotify instance plus one watch per directory under
+    // `.git` — from a budget shared with every other process on the machine. A real write to
+    // `.git/HEAD` must still land on the refs channel, and must not be mistaken for a tree edit.
+    [Fact]
+    public void A_real_write_under_dot_git_reaches_the_refs_channel()
+    {
+        File.WriteAllText(Path.Combine(_dir.Path, ".git", "HEAD"), "ref: refs/heads/main\n");
+
+        Pump.WaitFor(_dispatcher, () => _seen.Refs >= 1, "the refs broadcast from a real .git write");
+        Assert.Equal(0, _seen.WorkingTree);
+    }
+
     public void Dispose()
     {
         _watcher.Dispose();

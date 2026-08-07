@@ -76,7 +76,7 @@ internal sealed class RepoWatcherService : IHostedService, IDisposable
         }
         catch
         {
-            // RepoWatcher already swallows FSW construction failures internally; a throw
+            // RepoWatcher reports and absorbs FSW construction failures internally; a throw
             // here would be exceptional. Don't let it kill the registry subscription.
         }
     }
