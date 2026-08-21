@@ -32,6 +32,7 @@ internal sealed record CloneRepoDialog : Widget
             ctx.Require<GitIdentityService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
+            ctx.Localization(),
             TargetGroupId);
 
         var s = ctx.Localization().Strings.Value;

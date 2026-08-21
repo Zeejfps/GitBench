@@ -436,6 +436,7 @@
   "repos.clone_parent_dir_hint": "Родительская папка. Репозиторий клонируется в новую вложенную папку здесь.",
   "repos.clone_folder_name_label": "Имя папки",
   "repos.clone_identity_label": "Личность",
+  "repos.clone_warning_title": "Клонировано с предупреждениями",
   "repos.menu_open_from_folder": "Открыть из папки…",
   "repos.menu_clone_repository": "Клонировать репозиторий…",
   "repos.menu_new_group": "Новая группа",

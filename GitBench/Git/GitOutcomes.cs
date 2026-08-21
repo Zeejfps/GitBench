@@ -106,7 +106,10 @@ public abstract record CloneOutcome : IOutcome<CloneOutcome>
 
     public string? FailureMessage => (this as Failed)?.Message;
 
-    public sealed record Cloned(string RepoPath) : CloneOutcome;
+    // Warning carries git's complaint when the clone landed a usable repo but git still exited
+    // non-zero — a failing post-checkout hook is folded into `git clone`'s own exit status, so the
+    // working tree is fine and the hook is what needs reporting.
+    public sealed record Cloned(string RepoPath, string? Warning = null) : CloneOutcome;
 
     public sealed record Failed(string Message) : CloneOutcome;
 }

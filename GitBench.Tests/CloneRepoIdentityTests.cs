@@ -1,7 +1,9 @@
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Localization;
 using GitBench.Messages;
+using ZGF.Observable;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -15,6 +17,7 @@ public sealed class CloneRepoIdentityTests : IDisposable
     private readonly RepoRegistry _registry;
     private readonly QueuedDispatcher _dispatcher = new();
     private readonly MessageBus _bus = new();
+    private readonly LocalizationService _loc = new(new State<Locale>(Locale.En));
     private readonly RecordingClone _git = new();
 
     private static readonly IdentityProfile Work = new(
@@ -109,7 +112,7 @@ public sealed class CloneRepoIdentityTests : IDisposable
     {
         var profiles = new IdentityProfileService(seed, Path.Combine(_root, "profiles.json"));
         var identity = new GitIdentityService(new StubReader(), profiles, _bus, _registry);
-        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus);
+        return new CloneRepoDialogViewModel(_git, _registry, profiles, identity, _dispatcher, _bus, _loc);
     }
 
     private void RunClone(CloneRepoDialogViewModel vm)

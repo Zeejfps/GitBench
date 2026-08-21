@@ -386,6 +386,7 @@
   "repos.clone_parent_dir_hint": "親フォルダ。リポジトリはこの中の新しいサブフォルダにクローンされます。",
   "repos.clone_folder_name_label": "フォルダ名",
   "repos.clone_identity_label": "ID",
+  "repos.clone_warning_title": "クローンしましたが警告があります",
   "repos.menu_open_from_folder": "フォルダから開く…",
   "repos.menu_clone_repository": "リポジトリをクローン…",
   "repos.menu_new_group": "新規グループ",

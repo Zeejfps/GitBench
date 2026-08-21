@@ -386,6 +386,7 @@
   "repos.clone_parent_dir_hint": "Carpeta principal. El repositorio se clona en una nueva subcarpeta aquí.",
   "repos.clone_folder_name_label": "Nombre de la carpeta",
   "repos.clone_identity_label": "Identidad",
+  "repos.clone_warning_title": "Clonado, con advertencias",
   "repos.menu_open_from_folder": "Abrir desde carpeta…",
   "repos.menu_clone_repository": "Clonar repositorio…",
   "repos.menu_new_group": "Nuevo grupo",

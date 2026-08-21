@@ -386,6 +386,7 @@
   "repos.clone_parent_dir_hint": "父文件夹。仓库将克隆到此处的一个新子文件夹中。",
   "repos.clone_folder_name_label": "文件夹名称",
   "repos.clone_identity_label": "身份",
+  "repos.clone_warning_title": "已克隆，但有警告",
   "repos.menu_open_from_folder": "从文件夹打开…",
   "repos.menu_clone_repository": "克隆仓库…",
   "repos.menu_new_group": "新建分组",

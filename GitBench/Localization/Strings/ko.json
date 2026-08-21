@@ -386,6 +386,7 @@
   "repos.clone_parent_dir_hint": "상위 폴더. 저장소는 이 안의 새 하위 폴더에 복제됩니다.",
   "repos.clone_folder_name_label": "폴더 이름",
   "repos.clone_identity_label": "ID",
+  "repos.clone_warning_title": "복제했지만 경고가 있습니다",
   "repos.menu_open_from_folder": "폴더에서 열기…",
   "repos.menu_clone_repository": "저장소 복제…",
   "repos.menu_new_group": "새 그룹",

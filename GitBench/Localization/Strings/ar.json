@@ -446,6 +446,7 @@
   "repos.clone_parent_dir_hint": "المجلد الأصل. يُستنسخ المستودع في مجلد فرعي جديد هنا.",
   "repos.clone_folder_name_label": "اسم المجلد",
   "repos.clone_identity_label": "الهوية",
+  "repos.clone_warning_title": "تم الاستنساخ مع تحذيرات",
   "repos.menu_open_from_folder": "فتح من مجلد…",
   "repos.menu_clone_repository": "استنساخ مستودع…",
   "repos.menu_new_group": "مجموعة جديدة",

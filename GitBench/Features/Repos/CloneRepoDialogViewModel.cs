@@ -1,6 +1,7 @@
 using GitBench.Features.Identity;
 using GitBench.Git;
 using GitBench.Infrastructure;
+using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
 
@@ -38,6 +39,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
     // overwrite the field while it still matches what we last derived from the URL.
     private string _lastAutoName = string.Empty;
     private string? _clonedPath;
+    private string? _cloneWarning;
     private readonly Guid? _targetGroupId;
 
     public CloneRepoDialogViewModel(
@@ -47,6 +49,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
         GitIdentityService identity,
         IUiDispatcher dispatcher,
         IMessageBus bus,
+        ILocalizationService loc,
         Guid? targetGroupId = null)
     {
         _targetGroupId = targetGroupId;
@@ -80,6 +83,7 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
                         return failed.Message;
                     case CloneOutcome.Cloned cloned:
                         _clonedPath = cloned.RepoPath;
+                        _cloneWarning = cloned.Warning;
                         break;
                 }
                 return null;
@@ -92,6 +96,10 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
                     PinChoice(registry, identity, _clonedPath);
                 }
                 CloseRequested?.Invoke();
+                // Raised after the dialog closes and the repo is open, so it reads as "this repo is
+                // here, and git said something about it" rather than as the clone having failed.
+                if (_cloneWarning is { Length: > 0 } warning)
+                    bus.Broadcast(new ShowOperationErrorMessage(loc.Strings.Value.ReposCloneWarningTitle, warning));
             },
             gate: gate);
     }

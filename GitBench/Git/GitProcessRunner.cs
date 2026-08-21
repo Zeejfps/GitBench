@@ -458,6 +458,21 @@ internal sealed class GitProcessRunner
             || trimmed.StartsWith("remote:", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("!");
 
+    // The complaint at the end of an otherwise-successful run: everything from the first
+    // error/warning/hint/remote line onward, else the last non-empty line. Unlike
+    // FirstMeaningfulLine this keeps the whole block — hook output is usually several lines and
+    // often carries no git prefix at all, so the last line is the only anchor there is.
+    public static string ErrorTail(string text)
+    {
+        var cleaned = CleanStream(text);
+        if (cleaned.Length == 0) return string.Empty;
+        var lines = cleaned.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+            if (IsErrorBlockStart(lines[i].TrimStart()))
+                return string.Join("\n", lines[i..]);
+        return lines[^1];
+    }
+
     // Pulls the most relevant single line out of a git error blob — typically the
     // "fatal: …" / "error: …" line near the end. Used by callers that show the error in a
     // single-line banner (ErrorBar) where multi-line text would overflow.

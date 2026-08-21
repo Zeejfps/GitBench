@@ -386,6 +386,7 @@
   "repos.clone_parent_dir_hint": "Parent folder. The repository is cloned into a new subfolder here.",
   "repos.clone_folder_name_label": "Folder name",
   "repos.clone_identity_label": "Identity",
+  "repos.clone_warning_title": "Cloned, with warnings",
   "repos.menu_open_from_folder": "Open from Folder…",
   "repos.menu_clone_repository": "Clone Repository…",
   "repos.menu_new_group": "New group",

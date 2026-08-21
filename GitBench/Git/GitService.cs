@@ -2220,6 +2220,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             if (exitCode == 0)
                 return new CloneOutcome.Cloned(fullTarget);
 
+            // git clone folds the post-checkout hook's exit status into its own, so a hook that
+            // fails (husky, git-lfs) reports a failed clone over a repository that is entirely
+            // fine. A destination whose HEAD resolves got through fetch, ref setup and checkout —
+            // treat that as cloned and carry git's complaint as a warning, rather than discarding a
+            // working tree the user would then have to delete by hand before retrying.
+            if (RepoStateStore.IsGitRepo(fullTarget) && HasResolvableHead(fullTarget))
+            {
+                var warning = GitProcessRunner.ErrorTail(captureText);
+                return new CloneOutcome.Cloned(
+                    fullTarget,
+                    warning.Length > 0 ? warning : $"git clone exited with code {exitCode}.");
+            }
+
             var msg = GitProcessRunner.FirstMeaningfulLine(captureText);
             if (string.IsNullOrEmpty(msg)) msg = $"git clone exited with code {exitCode}.";
             return new CloneOutcome.Failed(GitProcessRunner.AugmentCredentialError(msg, captureText));
@@ -2229,6 +2242,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return new CloneOutcome.Failed(ex.Message);
         }
     }
+
+    private bool HasResolvableHead(string repoPath)
+        => _runner.Run(repoPath, new[] { "rev-parse", "--verify", "HEAD" }, GitProcessRunner.GitLaunch.Direct).Ok;
 
     public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
         => RunOperation(repo, () =>
