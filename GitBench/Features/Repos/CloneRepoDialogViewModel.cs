@@ -1,3 +1,4 @@
+using GitBench.Features.Identity;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
@@ -7,14 +8,27 @@ namespace GitBench.Features.Repos;
 
 /// <summary>
 /// Backs <see cref="CloneRepoDialog"/>. Collects a remote URL, a parent directory to clone
-/// into, and the subfolder name (auto-derived from the URL until the user edits it). On a
-/// successful clone it registers and activates the new repo, mirroring "Open from folder".
+/// into, the subfolder name (auto-derived from the URL until the user edits it), and the identity
+/// profile the clone runs under. On a successful clone it registers and activates the new repo,
+/// mirroring "Open from folder".
 /// </summary>
 internal sealed class CloneRepoDialogViewModel : IDialogViewModel
 {
     public State<string> Url { get; } = new(string.Empty);
     public State<string> ParentDir { get; } = new(string.Empty);
     public State<string> FolderName { get; } = new(string.Empty);
+
+    /// <summary>Explicitly chosen identity profile, or null to let the URL decide.</summary>
+    public State<Guid?> ProfileId { get; } = new(null);
+
+    /// <summary>Every profile the identity manager knows about; empty hides the picker entirely.</summary>
+    public IReadOnlyList<IdentityProfile> Profiles { get; }
+
+    /// <summary>The profile the clone will actually run under — the chosen one, else the URL match.</summary>
+    public IReadable<IdentityProfile?> EffectiveProfile { get; }
+
+    /// <summary>True while <see cref="EffectiveProfile"/> comes from the URL rather than a choice.</summary>
+    public IReadable<bool> ProfileIsAutoMatched { get; }
 
     public AsyncCommand Clone { get; }
 
@@ -29,11 +43,14 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
     public CloneRepoDialogViewModel(
         IGitRemoteOperations gitService,
         IRepoRegistry registry,
+        IdentityProfileService profiles,
+        GitIdentityService identity,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         Guid? targetGroupId = null)
     {
         _targetGroupId = targetGroupId;
+        Profiles = profiles.Snapshot;
 
         Url.Subscribe(url =>
         {
@@ -42,6 +59,9 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
             FolderName.Value = derived;
             _lastAutoName = derived;
         });
+
+        EffectiveProfile = new Derived<IdentityProfile?>(() => Resolve(profiles));
+        ProfileIsAutoMatched = new Derived<bool>(() => ProfileId.Value == null && EffectiveProfile.Value != null);
 
         var gate = new Derived<bool>(() =>
             Url.Value.Trim().Length > 0
@@ -53,7 +73,8 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
             work: () =>
             {
                 var target = Path.Combine(ParentDir.Value.Trim(), FolderName.Value.Trim());
-                switch (gitService.Clone(Url.Value.Trim(), target))
+                var config = Resolve(profiles) is { } profile ? LocalIdentityConfig.For(profile) : null;
+                switch (gitService.Clone(Url.Value.Trim(), target, config))
                 {
                     case CloneOutcome.Failed failed:
                         return failed.Message;
@@ -66,10 +87,32 @@ internal sealed class CloneRepoDialogViewModel : IDialogViewModel
             onSuccess: () =>
             {
                 if (!string.IsNullOrEmpty(_clonedPath))
+                {
                     registry.Open(_clonedPath, _targetGroupId);
+                    PinChoice(registry, identity, _clonedPath);
+                }
                 CloseRequested?.Invoke();
             },
             gate: gate);
+    }
+
+    private IdentityProfile? Resolve(IdentityProfileService profiles)
+        => ProfileId.Value is { } id
+            ? profiles.Find(id)
+            : IdentityProfileMatch.ForRemoteUrl(profiles.Snapshot, Url.Value);
+
+    // A deliberate pick has to outlive the clone: the profile that authenticated it must be the one
+    // the repo fetches and pushes with, and its match rules may not cover this remote at all (that
+    // being why the user picked it). An auto match needs nothing — the resolver reaches the same
+    // profile on its own. Flushed by path because opening the repo can memoize a resolution before
+    // the override lands.
+    private void PinChoice(IRepoRegistry registry, GitIdentityService identity, string path)
+    {
+        if (ProfileId.Value is not { } chosen) return;
+        var opened = registry.Repos.FirstOrDefault(r => PathKey.Comparer.Equals(r.Path, path));
+        if (opened is null) return;
+        registry.SetIdentityOverride(opened.Id, chosen);
+        identity.Flush(path);
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Identity;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -13,8 +14,8 @@ namespace GitBench.Features.Repos;
 
 /// <summary>
 /// Modal shown from the "Add Repository" menu's Clone entry. Collects a remote URL, a parent
-/// directory (with a Browse button), and the subfolder name, then runs <c>git clone</c> and
-/// opens the result. See <see cref="CloneRepoDialogViewModel"/>.
+/// directory (with a Browse button), the subfolder name, and the identity profile to clone under,
+/// then runs <c>git clone</c> and opens the result. See <see cref="CloneRepoDialogViewModel"/>.
 /// </summary>
 internal sealed record CloneRepoDialog : Widget
 {
@@ -27,6 +28,8 @@ internal sealed record CloneRepoDialog : Widget
         var vm = new CloneRepoDialogViewModel(
             ctx.Require<IGitRemoteOperations>(),
             ctx.Require<IRepoRegistry>(),
+            ctx.Require<IdentityProfileService>(),
+            ctx.Require<GitIdentityService>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             TargetGroupId);
@@ -45,6 +48,45 @@ internal sealed record CloneRepoDialog : Widget
             Height = DialogFrame.DefaultButtonHeight,
         }.WithController<KbmController>();
 
+        List<IWidget> body =
+        [
+            new LabeledInput
+            {
+                Label = s.CommonRepositoryUrl,
+                Value = vm.Url,
+                Placeholder = s.ReposCloneUrlPlaceholder,
+            },
+            new LabeledInput
+            {
+                Label = s.ReposCloneParentDirLabel,
+                Value = vm.ParentDir,
+                Hint = s.ReposCloneParentDirHint,
+                Accessory = browseButton,
+            },
+            new LabeledInput
+            {
+                Label = s.ReposCloneFolderNameLabel,
+                Value = vm.FolderName,
+            },
+        ];
+
+        // The row only exists when there's something to pick: with no profiles configured the
+        // dialog is exactly what it was before.
+        if (vm.Profiles.Count > 0)
+        {
+            body.Add(new LabeledRow
+            {
+                Label = s.ReposCloneIdentityLabel,
+                Value = new IdentityProfileDropdown
+                {
+                    Selected = vm.ProfileId,
+                    Effective = vm.EffectiveProfile,
+                    AutoMatched = vm.ProfileIsAutoMatched,
+                    Profiles = vm.Profiles,
+                },
+            });
+        }
+
         return new Dialog
         {
             Title = s.ReposCloneTitle,
@@ -52,27 +94,7 @@ internal sealed record CloneRepoDialog : Widget
             ViewModel = vm,
             Action = (s.ReposCloneAction, DialogButtonRole.Primary),
             Command = vm.Clone,
-            Body =
-            [
-                new LabeledInput
-                {
-                    Label = s.CommonRepositoryUrl,
-                    Value = vm.Url,
-                    Placeholder = s.ReposCloneUrlPlaceholder,
-                },
-                new LabeledInput
-                {
-                    Label = s.ReposCloneParentDirLabel,
-                    Value = vm.ParentDir,
-                    Hint = s.ReposCloneParentDirHint,
-                    Accessory = browseButton,
-                },
-                new LabeledInput
-                {
-                    Label = s.ReposCloneFolderNameLabel,
-                    Value = vm.FolderName,
-                },
-            ],
+            Body = [.. body],
         };
     }
 }

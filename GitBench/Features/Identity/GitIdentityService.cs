@@ -113,7 +113,7 @@ public sealed class GitIdentityService : IHostedService
             if (url == null || !RemoteUrl.TryGetHostAndOwner(url, out var host, out var owner))
                 return new Identity.Unmatched();
 
-            return MatchProfile(host, owner) is { } profile
+            return IdentityProfileMatch.ForHost(_profiles.Snapshot, host, owner) is { } profile
                 ? new Identity.FromProfile(profile)
                 : new Identity.Unmatched();
         }
@@ -122,26 +122,5 @@ public sealed class GitIdentityService : IHostedService
             // A git read threw (e.g. a held index.lock): transient, don't memoize.
             return new Identity.Pending();
         }
-    }
-
-    // Owner-specific rules beat host-only rules, so a profile pinned to one org wins over a
-    // catch-all "any repo on this host". An owner hit returns immediately; the first host-only hit
-    // is held as a fallback used only if no owner rule matches.
-    private IdentityProfile? MatchProfile(string host, string? owner)
-    {
-        IdentityProfile? hostOnly = null;
-        foreach (var p in _profiles.Snapshot)
-        {
-            if (p.Match == null) continue;
-            foreach (var r in p.Match)
-            {
-                if (!string.Equals(r.Host, host, StringComparison.OrdinalIgnoreCase)) continue;
-                if (r.Owner == null)
-                    hostOnly ??= p;
-                else if (owner != null && string.Equals(r.Owner, owner, StringComparison.OrdinalIgnoreCase))
-                    return p;
-            }
-        }
-        return hostOnly;
     }
 }

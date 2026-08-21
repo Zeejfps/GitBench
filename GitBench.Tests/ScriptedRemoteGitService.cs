@@ -115,7 +115,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public GitOutcome ApplyUntrackedCache(Repo repo) => inner.ApplyUntrackedCache(repo);
     public GitOutcome EditRemote(Repo repo, string oldName, string newName, string url) => inner.EditRemote(repo, oldName, newName, url);
     public GitOutcome AddRemote(Repo repo, string name, string url) => inner.AddRemote(repo, name, url);
-    public CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null) => inner.Clone(url, targetPath, onLine);
+    public CloneOutcome Clone(string url, string targetPath, LocalIdentityConfig? identity = null, Action<string>? onLine = null) => inner.Clone(url, targetPath, identity, onLine);
     public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null) => inner.FastForwardBranch(repo, localBranch, remoteName, remoteBranch, onLine);
     public GitOutcome CheckoutLocalBranch(Repo repo, string branchName) => inner.CheckoutLocalBranch(repo, branchName);
     public GitOutcome CheckoutRemoteBranch(Repo repo, string localName, string remoteName, string remoteBranchName, bool track) => inner.CheckoutRemoteBranch(repo, localName, remoteName, remoteBranchName, track);

@@ -2181,7 +2181,12 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // parent dir (created if missing) with an absolute destination so git places the working tree
     // exactly where the dialog asked. Streaming surfaces "Receiving objects" progress and lets us
     // augment auth failures the same way fetch/push do.
-    public CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null)
+    //
+    // The identity resolver can't help here (there's no repo yet), so an explicitly chosen profile
+    // is prepended as `-c key=value` args. They sit at the head of OUR arg list, after whatever the
+    // resolver injected for the parent directory, so a chosen profile wins if the parent happens to
+    // sit inside another repo.
+    public CloneOutcome Clone(string url, string targetPath, LocalIdentityConfig? identity = null, Action<string>? onLine = null)
     {
         try
         {
@@ -2205,7 +2210,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             try { Directory.CreateDirectory(parent); }
             catch (Exception ex) { return new CloneOutcome.Failed($"Could not create destination folder: {ex.Message}"); }
 
-            var args = new List<string> { "clone", "--progress", trimmedUrl, fullTarget };
+            var args = new List<string>();
+            if (identity != null) args.AddRange(identity.PrefixArgs());
+            args.AddRange(["clone", "--progress", trimmedUrl, fullTarget]);
             var (exitCode, captureText, started) = _runner.RunStreaming(parent, args, onLine);
 
             if (!started) return new CloneOutcome.Failed("Failed to start git.");

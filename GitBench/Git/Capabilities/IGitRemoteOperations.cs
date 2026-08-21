@@ -1,3 +1,5 @@
+using GitBench.Features.Identity;
+
 namespace GitBench.Git;
 
 public interface IGitRemoteOperations
@@ -11,5 +13,8 @@ public interface IGitRemoteOperations
     GitOutcome Fetch(Repo repo);
     // Clones url into targetPath (a not-yet-existing or empty directory). onLine streams git's
     // progress output. On success RepoPath carries the absolute path of the new working tree.
-    CloneOutcome Clone(string url, string targetPath, Action<string>? onLine = null);
+    // identity, when given, is applied as `-c key=value` overrides for this one invocation — the
+    // clone has no repo to resolve an identity from, so a private remote needing a specific SSH
+    // key can only authenticate if the caller names the profile up front.
+    CloneOutcome Clone(string url, string targetPath, LocalIdentityConfig? identity = null, Action<string>? onLine = null);
 }
