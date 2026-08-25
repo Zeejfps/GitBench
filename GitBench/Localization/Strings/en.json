@@ -592,6 +592,12 @@
   "commits.error_revert_failed": "Revert failed",
 
   "localchanges.error_status_failed": "Status failed",
+  "localchanges.error_commit_failed": "Commit failed",
+  "localchanges.error_stage_failed": "Stage failed",
+  "localchanges.error_unstage_failed": "Unstage failed",
+  "localchanges.error_stash_failed": "Stash failed",
+  "localchanges.error_mark_resolved_failed": "Mark as resolved failed",
+  "localchanges.error_submodule_update_failed": "Submodule update failed",
   "localchanges.files_header": "Files ({shown}/{total})",
 
   "operations.error_resolve_remaining": "Resolve remaining conflicts",
@@ -676,7 +682,7 @@
   "assistant.ask_breakage": "What could break?",
   "assistant.ask_fix": "Suggest a fix",
   "assistant.ask_freeform": "Ask…",
-  "assistant.generate_message_failed": "Couldn’t generate a commit message: {reason}",
+  "assistant.generate_message_failed": "Couldn’t generate a commit message",
   "assistant.generate_message_empty": "The assistant returned no commit message.",
   "assistant.generate_message_written": "Commit message written",
   "assistant.generate_message_undo": "Undo",

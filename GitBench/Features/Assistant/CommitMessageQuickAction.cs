@@ -45,7 +45,6 @@ internal sealed class CommitMessageQuickAction : IDisposable
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
     private readonly State<bool> _busy = new(false);
-    private readonly State<string?> _error = new(null);
 
     private CancellationTokenSource? _run;
     // What the commit box held when this run started, captured before the tool can overwrite it.
@@ -70,15 +69,10 @@ internal sealed class CommitMessageQuickAction : IDisposable
 
     public IReadable<bool> IsBusy => _busy;
 
-    /// <summary>Why the last attempt produced no message, ready to display. Cleared when the next one
-    /// starts and when a message lands.</summary>
-    public IReadable<string?> Error => _error;
-
     public void Run()
     {
         if (_busy.Value || _disposed) return;
 
-        _error.Value = null;
         _busy.Value = true;
         _replaced = (_writes.CommitEditor.Title.Value, _writes.CommitEditor.Description.Value);
 
@@ -199,7 +193,10 @@ internal sealed class CommitMessageQuickAction : IDisposable
         Fail(FirstLine(outcome.Reply) ?? Strings.AssistantGenerateMessageEmpty);
     }
 
-    private void Fail(string reason) => _error.Value = Strings.AssistantGenerateMessageFailed(reason);
+    // Failures go where every other failure in the app goes — the operation-error dialog — rather
+    // than a banner wedged above the commit box.
+    private void Fail(string reason) => _writes.Bus.Broadcast(
+        new ShowOperationErrorMessage(Strings.AssistantGenerateMessageFailed, reason));
 
     // Both fields go through the commit box's own setters, so the bar's bindings update the way they
     // do when the text is typed. A message with no body leaves the description alone — the model
@@ -286,7 +283,6 @@ internal sealed class CommitMessageQuickAction : IDisposable
         _disposed = true;
         Cancel();
         _busy.Dispose();
-        _error.Dispose();
     }
 }
 

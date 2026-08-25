@@ -17,7 +17,6 @@ internal readonly record struct LocalChangesState(
     IReadOnlyList<FileChange> Unstaged,
     IReadOnlyList<FileChange> Staged,
     Selection Selection,
-    string? OpError,
     bool CommitBusy,
     // Submodules whose current HEAD differs from the parent's recorded pointer. Empty
     // when nothing is drifted. Shown in a dedicated section above the file panels.
@@ -50,7 +49,6 @@ internal readonly record struct LocalChangesState(
         Unstaged: [],
         Staged: [],
         Selection: Selection.Empty,
-        OpError: null,
         CommitBusy: false,
         DriftedSubmodules: [],
         ViewMode: FileViewMode.Flat,

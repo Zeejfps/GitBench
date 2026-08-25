@@ -78,7 +78,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     public Command UnstageAll { get; }
     public Command DiscardAll { get; }
     public Command ToggleViewMode { get; }
-    public IReadable<string?> OpError { get; }
     public IReadable<bool> CommitEnabled { get; }
     public IReadable<bool> CommitBusy { get; }
     public IReadable<float> CommitRotation => _commitSpinner.Rotation;
@@ -163,7 +162,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         UnstageAll = new Command(DoUnstageAll, hasStaged);
         DiscardAll = new Command(DoDiscardAll, hasUnstaged);
         ToggleViewMode = new Command(DoToggleViewMode);
-        OpError = Slice(s => s.OpError);
         CommitEnabled = Slice(s => s.CommitEnabled);
         CommitBusy = Slice(s => s.CommitBusy);
 
@@ -642,7 +640,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             work: () =>
             {
                 // Every path is attempted even after one fails — the rest are independent
-                // resolutions — and the first failure is what the banner reports.
+                // resolutions — and the first failure is what the dialog reports.
                 GitOutcome.Failed? firstFailure = null;
                 foreach (var path in paths)
                 {
@@ -651,7 +649,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 }
                 return firstFailure ?? GitOutcome.Ok;
             },
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, s => s.LocalchangesErrorMarkResolvedFailed));
     }
 
     // Resets a submodule's working tree back to the SHA the parent has recorded. Runs
@@ -678,7 +676,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id).AndSubmodulesOf(primaryId),
             work: () => _gitSubmodules.UpdateSubmodules(repo, req),
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, s => s.LocalchangesErrorSubmoduleUpdateFailed));
     }
 
     public void Unstage(IReadOnlyList<string> paths)
@@ -728,7 +726,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id).AndRefs(),
             work: () => _gitStash.CreateStash(repo, string.Empty, includeUntracked, keepIndex: false, paths),
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, s => s.LocalchangesErrorStashFailed));
     }
 
     public void CopyPaths(IReadOnlyList<string> paths)
@@ -786,7 +784,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         var message = description.Length > 0 ? $"{title}\n\n{description}" : title;
         var amend = snapshot.Amend;
 
-        Update(s => s with { CommitBusy = true, OpError = null });
+        Update(s => s with { CommitBusy = true });
         _commitSpinner.Start();
 
         // The continuation always runs (resetting CommitBusy) because a mutation's result is never
@@ -801,7 +799,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 _commitSpinner.Stop();
                 if (outcome is GitOutcome.Failed failed)
                 {
-                    Update(s => s with { CommitBusy = false, OpError = failed.Message });
+                    Update(s => s with { CommitBusy = false });
+                    _bus.Broadcast(new ShowOperationErrorMessage(
+                        _loc.Strings.Value.LocalchangesErrorCommitFailed, failed.Message));
                     return;
                 }
 
@@ -823,7 +823,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 Update(s => s with
                 {
                     CommitBusy = false,
-                    OpError = null,
                     Editor = EditorMode.Idle,
                     Title = string.Empty,
                     Description = string.Empty,
@@ -889,7 +888,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             IsLoading = false,
             LoadError = null,
             LoadErrorDetail = null,
-            OpError = null,
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
@@ -908,7 +906,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             IsLoading = true,
             LoadError = null,
             LoadErrorDetail = null,
-            OpError = null,
             Staged = isCrossRepoSwitch ? Empty : s.Staged,
             Unstaged = isCrossRepoSwitch ? Empty : s.Unstaged,
             Selection = isCrossRepoSwitch ? LocalChanges.Selection.Empty : s.Selection,
@@ -1091,14 +1088,25 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         RunIndexMutation(repo, () => isStage
             ? _gitWorkingTree.Stage(repo, paths)
             : _gitWorkingTree.Unstage(repo, paths),
+            isStage,
             paths.Count == 1 ? paths[0] : null);
     }
 
-    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate, string? path = null)
+    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate, bool isStage, string? path = null)
         => RunMutation(
             MutationEffects.Index(_bus, repo.Id, path),
             work: mutate,
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, s => isStage
+                ? s.LocalchangesErrorStageFailed
+                : s.LocalchangesErrorUnstageFailed));
+
+    // Every git op here reports its failure the same way the rest of the app does — the modal
+    // operation-error dialog, which can hold git's whole stderr block and be copied out of.
+    private void ReportFailure<T>(T outcome, Func<Strings, string> title) where T : IOutcome<T>
+    {
+        if (outcome.FailureMessage is not { } message) return;
+        _bus.Broadcast(new ShowOperationErrorMessage(title(_loc.Strings.Value), message));
+    }
 
     private void ApplyOptimisticMove(IReadOnlyList<string> paths, DiffSide fromSide)
     {
@@ -1154,7 +1162,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             return toResetToParent.Count > 0
                 ? _gitWorkingTree.ResetToParent(repo, toResetToParent)
                 : GitOutcome.Ok;
-        }, movedToUnstaged.Count == 1 ? movedToUnstaged[0] : null);
+        }, isStage: false, movedToUnstaged.Count == 1 ? movedToUnstaged[0] : null);
     }
 
     private IReadOnlyList<FileChange> ComputeDisplayedStaged(EditorMode editor)

@@ -659,6 +659,12 @@
   "commits.error_revert_failed": "Не удалось выполнить откат",
 
   "localchanges.error_status_failed": "Не удалось получить статус",
+  "localchanges.error_commit_failed": "Не удалось создать коммит",
+  "localchanges.error_stage_failed": "Не удалось проиндексировать",
+  "localchanges.error_unstage_failed": "Не удалось убрать из индекса",
+  "localchanges.error_stash_failed": "Не удалось спрятать изменения",
+  "localchanges.error_mark_resolved_failed": "Не удалось отметить как разрешённое",
+  "localchanges.error_submodule_update_failed": "Не удалось обновить подмодуль",
   "localchanges.files_header": "Файлы ({shown}/{total})",
 
   "operations.error_resolve_remaining": "Разрешите оставшиеся конфликты",
@@ -747,7 +753,7 @@
   "assistant.ask_breakage": "Что может сломаться?",
   "assistant.ask_fix": "Предложить исправление",
   "assistant.ask_freeform": "Спросить…",
-  "assistant.generate_message_failed": "Не удалось создать сообщение коммита: {reason}",
+  "assistant.generate_message_failed": "Не удалось создать сообщение коммита",
   "assistant.generate_message_empty": "Ассистент не вернул сообщение коммита.",
   "assistant.generate_message_written": "Сообщение коммита заполнено",
   "assistant.generate_message_undo": "Отменить",

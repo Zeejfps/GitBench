@@ -593,6 +593,12 @@
   "commits.error_revert_failed": "还原失败",
 
   "localchanges.error_status_failed": "状态获取失败",
+  "localchanges.error_commit_failed": "提交失败",
+  "localchanges.error_stage_failed": "暂存失败",
+  "localchanges.error_unstage_failed": "取消暂存失败",
+  "localchanges.error_stash_failed": "储藏失败",
+  "localchanges.error_mark_resolved_failed": "标记为已解决失败",
+  "localchanges.error_submodule_update_failed": "子模块更新失败",
   "localchanges.files_header": "文件 ({shown}/{total})",
 
   "operations.error_resolve_remaining": "解决剩余的冲突",
@@ -677,7 +683,7 @@
   "assistant.ask_breakage": "可能会出什么问题？",
   "assistant.ask_fix": "建议修复",
   "assistant.ask_freeform": "提问…",
-  "assistant.generate_message_failed": "无法生成提交信息：{reason}",
+  "assistant.generate_message_failed": "无法生成提交信息",
   "assistant.generate_message_empty": "助手未返回提交信息。",
   "assistant.generate_message_written": "已填写提交信息",
   "assistant.generate_message_undo": "撤销",

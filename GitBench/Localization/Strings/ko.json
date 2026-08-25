@@ -593,6 +593,12 @@
   "commits.error_revert_failed": "되돌리기에 실패했습니다",
 
   "localchanges.error_status_failed": "상태 확인에 실패했습니다",
+  "localchanges.error_commit_failed": "커밋에 실패했습니다",
+  "localchanges.error_stage_failed": "스테이지에 실패했습니다",
+  "localchanges.error_unstage_failed": "스테이지 해제에 실패했습니다",
+  "localchanges.error_stash_failed": "스태시에 실패했습니다",
+  "localchanges.error_mark_resolved_failed": "해결됨으로 표시하지 못했습니다",
+  "localchanges.error_submodule_update_failed": "서브모듈 업데이트에 실패했습니다",
   "localchanges.files_header": "파일 ({shown}/{total})",
 
   "operations.error_resolve_remaining": "남은 충돌 해결",
@@ -677,7 +683,7 @@
   "assistant.ask_breakage": "무엇이 깨질 수 있나요?",
   "assistant.ask_fix": "수정 제안",
   "assistant.ask_freeform": "질문…",
-  "assistant.generate_message_failed": "커밋 메시지를 생성하지 못했습니다: {reason}",
+  "assistant.generate_message_failed": "커밋 메시지를 생성하지 못했습니다",
   "assistant.generate_message_empty": "어시스턴트가 커밋 메시지를 반환하지 않았습니다.",
   "assistant.generate_message_written": "커밋 메시지를 입력했습니다",
   "assistant.generate_message_undo": "실행 취소",

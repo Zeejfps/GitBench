@@ -688,6 +688,12 @@
   "commits.error_revert_failed": "فشل الإرجاع",
 
   "localchanges.error_status_failed": "فشلت الحالة",
+  "localchanges.error_commit_failed": "فشل الإيداع",
+  "localchanges.error_stage_failed": "فشل التجهيز",
+  "localchanges.error_unstage_failed": "فشل إلغاء التجهيز",
+  "localchanges.error_stash_failed": "فشل الإخفاء",
+  "localchanges.error_mark_resolved_failed": "فشل التعليم كمُحلّ",
+  "localchanges.error_submodule_update_failed": "فشل تحديث الوحدة الفرعية",
   "localchanges.files_header": "الملفات ({shown}/{total})",
 
   "operations.error_resolve_remaining": "حل التعارضات المتبقية",
@@ -778,7 +784,7 @@
   "assistant.ask_breakage": "ما الذي قد يتعطل؟",
   "assistant.ask_fix": "اقترح إصلاحًا",
   "assistant.ask_freeform": "اسأل…",
-  "assistant.generate_message_failed": "تعذّر إنشاء رسالة الإيداع: {reason}",
+  "assistant.generate_message_failed": "تعذّر إنشاء رسالة الإيداع",
   "assistant.generate_message_empty": "لم يُرجِع المساعد أي رسالة إيداع.",
   "assistant.generate_message_written": "تمت كتابة رسالة الإيداع",
   "assistant.generate_message_undo": "تراجع",

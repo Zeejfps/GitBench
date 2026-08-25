@@ -593,6 +593,12 @@
   "commits.error_revert_failed": "Error al revertir",
 
   "localchanges.error_status_failed": "Error al obtener el estado",
+  "localchanges.error_commit_failed": "Error al confirmar",
+  "localchanges.error_stage_failed": "Error al preparar",
+  "localchanges.error_unstage_failed": "Error al quitar de preparados",
+  "localchanges.error_stash_failed": "Error al guardar en stash",
+  "localchanges.error_mark_resolved_failed": "Error al marcar como resuelto",
+  "localchanges.error_submodule_update_failed": "Error al actualizar el submódulo",
   "localchanges.files_header": "Archivos ({shown}/{total})",
 
   "operations.error_resolve_remaining": "Resuelve los conflictos restantes",
@@ -677,7 +683,7 @@
   "assistant.ask_breakage": "¿Qué podría romperse?",
   "assistant.ask_fix": "Sugerir una corrección",
   "assistant.ask_freeform": "Preguntar…",
-  "assistant.generate_message_failed": "No se pudo generar un mensaje de confirmación: {reason}",
+  "assistant.generate_message_failed": "No se pudo generar un mensaje de confirmación",
   "assistant.generate_message_empty": "El asistente no devolvió ningún mensaje de confirmación.",
   "assistant.generate_message_written": "Mensaje de confirmación escrito",
   "assistant.generate_message_undo": "Deshacer",

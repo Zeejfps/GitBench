@@ -2,7 +2,6 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Assistant;
 using GitBench.Features.Operations;
-using GitBench.Features.StatusBar;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -53,7 +52,6 @@ internal sealed record CommitBarWidget : Widget
         var input = ctx.Require<InputSystem>();
         var loc = ctx.Localization();
         var operation = ctx.Require<OperationViewModel>();
-        var assistant = ctx.Require<AssistantViewModel>();
 
         // Ids so automation (GuiDriver, the MCP server) can address the fields by name.
         var titleInput = new TextInputView(ctx.Canvas)
@@ -116,10 +114,8 @@ internal sealed record CommitBarWidget : Widget
 
         IWidget[] ColumnRows()
         {
-            var rows = new List<IWidget>(6);
+            var rows = new List<IWidget>(4);
             if (ShowOperationChrome) rows.Add(new OperationStatusHeader());
-            rows.Add(new ErrorBarView { Message = vm.OpError });
-            rows.Add(new ErrorBarView { Message = assistant.CommitMessageError });
             rows.Add(TitleBox(titleInput));
             rows.Add(new Raw { View = descriptionField });
             rows.Add(ButtonRow());

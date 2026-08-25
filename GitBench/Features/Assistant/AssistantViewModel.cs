@@ -42,7 +42,6 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<bool> _generatingMessage;
     private readonly Derived<bool> _canGenerateMessage;
     private readonly Derived<bool> _canReviewBranch;
-    private readonly Derived<string?> _commitMessageError;
     private readonly Derived<bool> _showSettings;
     private readonly Derived<bool> _wantsKey;
     private readonly Derived<bool> _keyOptional;
@@ -89,7 +88,6 @@ internal sealed class AssistantViewModel : IDisposable
             store.CommitMessage.Value is not null
             && !store.CommitMessage.Value.IsBusy.Value
             && store.IsConfigured.Value);
-        _commitMessageError = new Derived<string?>(() => store.CommitMessage.Value?.Error.Value);
         _canReviewBranch = new Derived<bool>(() =>
             store.Active.Value is not null
             && !store.Active.Value.IsBusy.Value
@@ -183,10 +181,6 @@ internal sealed class AssistantViewModel : IDisposable
 
     /// <summary>True while a commit message is being written, for the commit bar's spinner.</summary>
     public IReadable<bool> IsGeneratingMessage => _generatingMessage;
-
-    /// <summary>Why the last generation produced no message, for the commit bar's banner. Null when
-    /// there is nothing to report.</summary>
-    public IReadable<string?> CommitMessageError => _commitMessageError;
 
     /// <summary>True while the panel shows the connection card instead of the composer — either
     /// because nothing is configured yet, or because the user opened it.</summary>
@@ -502,7 +496,6 @@ internal sealed class AssistantViewModel : IDisposable
         _modelDraft.Dispose();
         _providerDraft.Dispose();
         _settingsOpen.Dispose();
-        _commitMessageError.Dispose();
         _canReviewBranch.Dispose();
         _canGenerateMessage.Dispose();
         _generatingMessage.Dispose();

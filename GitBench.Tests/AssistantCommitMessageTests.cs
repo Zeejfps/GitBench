@@ -36,6 +36,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     private readonly MessageBus _bus = new();
     private readonly LocalizationService _loc = new(new State<Locale>(Locale.En));
     private readonly LocalChangesViewModel _commitBox;
+    private readonly List<ShowOperationErrorMessage> _errorDialogs = new();
 
     private AssistantSessionStore? _store;
     private AssistantViewModel? _vm;
@@ -69,6 +70,8 @@ public sealed class AssistantCommitMessageTests : IDisposable
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
             _loc);
+
+        _bus.Subscribe<ShowOperationErrorMessage>(_errorDialogs.Add);
     }
 
     // Adding an agent is adding a file, so the assertion that matters is that the shipped .md is
@@ -121,7 +124,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
 
         Assert.Equal("Add a second line to the seed file", _commitBox.Title.Value);
         Assert.Equal("The fixture needed a change to\ndiff against.", _commitBox.Description.Value);
-        Assert.Null(vm.CommitMessageError.Value);
+        Assert.Empty(_errorDialogs);
     }
 
     // The bug this call replaced: the reply used to be the message, so a preamble, a fence or a
@@ -137,7 +140,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         Settle(vm);
 
         Assert.Equal("Add a second line to the seed file", _commitBox.Title.Value);
-        Assert.Null(vm.CommitMessageError.Value);
+        Assert.Empty(_errorDialogs);
     }
 
     // And a turn that only talks has written no message at all. Saying so beats typing the sentence
@@ -152,8 +155,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         Settle(vm);
 
         Assert.Equal("Typed by hand", _commitBox.Title.Value);
-        Assert.NotNull(vm.CommitMessageError.Value);
-        Assert.Contains("nothing staged", vm.CommitMessageError.Value!, StringComparison.Ordinal);
+        Assert.Contains("nothing staged", Assert.Single(_errorDialogs).Message, StringComparison.Ordinal);
     }
 
     // Omitting the body is a decision the prompt licenses. The call says the message has no body, so
@@ -187,7 +189,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
 
         Assert.Equal("Add a second line", _commitBox.Title.Value);
         Assert.Equal("That is what the diff does.", _commitBox.Description.Value);
-        Assert.Null(vm.CommitMessageError.Value);
+        Assert.Empty(_errorDialogs);
     }
 
     // Two fields overwritten at once is more than the person can retype from memory, so the write
@@ -272,8 +274,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         vm.GenerateCommitMessage.Execute();
         Settle(vm);
 
-        Assert.NotNull(vm.CommitMessageError.Value);
-        Assert.Contains("overloaded", vm.CommitMessageError.Value!, StringComparison.Ordinal);
+        Assert.Contains("overloaded", Assert.Single(_errorDialogs).Message, StringComparison.Ordinal);
         Assert.Equal(string.Empty, _commitBox.Title.Value);
         // Reported, not stuck: the action can be tried again.
         Assert.True(vm.GenerateCommitMessage.CanExecute.Value);
@@ -292,7 +293,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         vm.GenerateCommitMessage.Execute();
         Settle(vm);
 
-        Assert.NotNull(vm.CommitMessageError.Value);
+        Assert.Single(_errorDialogs);
         Assert.Equal(string.Empty, _commitBox.Title.Value);
     }
 

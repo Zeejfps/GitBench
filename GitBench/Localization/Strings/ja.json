@@ -593,6 +593,12 @@
   "commits.error_revert_failed": "リバートに失敗しました",
 
   "localchanges.error_status_failed": "ステータスの取得に失敗しました",
+  "localchanges.error_commit_failed": "コミットに失敗しました",
+  "localchanges.error_stage_failed": "ステージに失敗しました",
+  "localchanges.error_unstage_failed": "ステージの解除に失敗しました",
+  "localchanges.error_stash_failed": "スタッシュに失敗しました",
+  "localchanges.error_mark_resolved_failed": "解決済みにする操作に失敗しました",
+  "localchanges.error_submodule_update_failed": "サブモジュールの更新に失敗しました",
   "localchanges.files_header": "ファイル ({shown}/{total})",
 
   "operations.error_resolve_remaining": "残りのコンフリクトを解決",
@@ -677,7 +683,7 @@
   "assistant.ask_breakage": "何が壊れる可能性が？",
   "assistant.ask_fix": "修正を提案",
   "assistant.ask_freeform": "質問…",
-  "assistant.generate_message_failed": "コミットメッセージを生成できませんでした: {reason}",
+  "assistant.generate_message_failed": "コミットメッセージを生成できませんでした",
   "assistant.generate_message_empty": "アシスタントはコミットメッセージを返しませんでした。",
   "assistant.generate_message_written": "コミットメッセージを入力しました",
   "assistant.generate_message_undo": "元に戻す",
