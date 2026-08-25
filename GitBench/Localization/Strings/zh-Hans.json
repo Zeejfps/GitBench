@@ -576,6 +576,7 @@
   "diff.hunk_nothing_to_discard": "此处没有可丢弃的未暂存更改。",
   "diff.hunk_nothing_to_unstage": "此块中没有已暂存的更改。",
   "diff.hunk_patch_unavailable": "此文件无法按块暂存。",
+  "diff.error_resolve_failed": "解决冲突失败",
   "diff.renamed": "已重命名: {old_name} → {new_name}",
   "diff.mode_changed": "模式: {old_mode} → {new_mode}",
   "diff.diff_truncated": "差异已截断 — 仅显示前 {count} 行。",

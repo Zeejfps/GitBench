@@ -642,6 +642,7 @@
   "diff.hunk_nothing_to_discard": "Здесь нет непроиндексированных изменений, которые можно отбросить.",
   "diff.hunk_nothing_to_unstage": "В этом фрагменте нет проиндексированных изменений.",
   "diff.hunk_patch_unavailable": "Этот файл нельзя индексировать по фрагментам.",
+  "diff.error_resolve_failed": "Не удалось разрешить конфликт",
   "diff.renamed": "Переименован: {old_name} → {new_name}",
   "diff.mode_changed": "Режим: {old_mode} → {new_mode}",
   "diff.diff_truncated": "Различия усечены. Показано строк: {count}.",

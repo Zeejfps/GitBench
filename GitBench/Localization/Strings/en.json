@@ -575,6 +575,7 @@
   "diff.hunk_nothing_to_discard": "No unstaged changes to discard here.",
   "diff.hunk_nothing_to_unstage": "Nothing staged in this hunk.",
   "diff.hunk_patch_unavailable": "This file can't be staged by hunk.",
+  "diff.error_resolve_failed": "Resolve conflict failed",
   "diff.renamed": "Renamed: {old_name} → {new_name}",
   "diff.mode_changed": "Mode: {old_mode} → {new_mode}",
   "diff.diff_truncated": "Diff truncated — only the first {count} lines are shown.",

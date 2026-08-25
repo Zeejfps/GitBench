@@ -87,7 +87,6 @@ internal readonly record struct WorkingTreeHunkState(bool HasStaged, bool HasUns
 
 internal sealed record DiffState(
     DiffRenderState Render,
-    string? OpError,
     DiffViewMode Mode,
     IReadOnlyList<WorkingTreeHunkState>? HunkStates = null);
 
@@ -130,7 +129,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public IReadable<DiffTarget?> Target => _target;
 
     public IReadable<DiffRenderState> RenderState { get; }
-    public IReadable<string?> OpError { get; }
     public IReadable<LfsBadge> LfsStatus { get; }
 
     // Per-hunk index state for the current WorkingTree render (aligned with its hunk list; null
@@ -166,7 +164,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         ILocalizationService? loc = null,
         Guid? pinnedRepoId = null)
         : base(dispatcher, new DiffState(
-            new DiffRenderState.Placeholder(loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder), null, DiffViewMode.Diff))
+            new DiffRenderState.Placeholder(loc?.Strings.Value.DiffNoSelection ?? EmptyPlaceholder), DiffViewMode.Diff))
     {
         _target = target;
         _registry = registry;
@@ -181,7 +179,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _expandLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
-        OpError = Slice(s => s.OpError);
         LfsStatus = Slice(s => s.Render switch
         {
             DiffRenderState.Loaded { Result.IsBinary: true } l =>
@@ -369,7 +366,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             work: () => stage
                 ? _gitWorkingTree.Stage(repo, new[] { path })
                 : _gitWorkingTree.Unstage(repo, new[] { path }),
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, stage ? StageFailedText : UnstageFailedText));
     }
 
     // Conflict resolution from the resolution header. Each writes the chosen content + stages
@@ -397,7 +394,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         RunMutation(
             MutationEffects.WorkingTree(_bus, repo.Id),
             work: () => op(_gitConflicts, repo, path),
-            onResult: outcome => Update(s => s with { OpError = outcome.FailureMessage }));
+            onResult: outcome => ReportFailure(outcome, ResolveFailedText));
     }
 
     // Opens the conflicted file in the OS default editor so the user can resolve markers by
@@ -429,8 +426,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // discard map through the index→worktree diff by disk lines (shared new side); unstage maps
     // through the HEAD→index diff by HEAD lines (shared old side). Stage applies --cached, unstage
     // --cached --reverse; discard confirms, then reverse-applies to the worktree, reverting the
-    // region to the index and leaving staged content alone. Outcomes surface as toasts: unlike the
-    // embedded pane, the review surface renders no OpError strip.
+    // region to the index and leaving staged content alone. Outcomes surface as toasts, because a
+    // hunk op that lands on nothing is a note rather than a failure worth a modal.
     private void StageWorkingTreeHunk(int hunkIndex)
         => RunWorkingTreeHunkOp(hunkIndex, reverse: false, DiffSide.Unstaged,
             HunkOverlap.NewSideChangeSpan, NothingToStageText);
@@ -578,6 +575,22 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private string PatchUnavailableText
         => _loc?.Strings.Value.DiffHunkPatchUnavailable ?? "This file can't be staged by hunk.";
 
+    private string StageFailedText
+        => _loc?.Strings.Value.LocalchangesErrorStageFailed ?? "Stage failed";
+
+    private string UnstageFailedText
+        => _loc?.Strings.Value.LocalchangesErrorUnstageFailed ?? "Unstage failed";
+
+    private string ResolveFailedText
+        => _loc?.Strings.Value.DiffErrorResolveFailed ?? "Resolve conflict failed";
+
+    // Failures here go to the app-wide operation-error dialog, the same as the file lists'.
+    private void ReportFailure<T>(T outcome, string title) where T : IOutcome<T>
+    {
+        if (outcome.FailureMessage is not { } message) return;
+        _bus.Broadcast(new ShowOperationErrorMessage(title, message));
+    }
+
     private void ApplyHunk(int hunkIndex, bool cached, bool reverse)
     {
         if (!TryGetPatchContext(hunkIndex, out var repo, out var diff)) return;
@@ -628,7 +641,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             work: () => _gitWorkingTree.ApplyPatch(repo, patch, cached, reverse),
             onResult: outcome =>
             {
-                Update(s => s with { OpError = outcome.FailureMessage });
+                ReportFailure(outcome, reverse ? UnstageFailedText : StageFailedText);
                 // Roll the optimistic diff state back to what the file actually still contains.
                 if (outcome is GitOutcome.Failed && State.Value.Render is DiffRenderState.Loaded)
                     Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
