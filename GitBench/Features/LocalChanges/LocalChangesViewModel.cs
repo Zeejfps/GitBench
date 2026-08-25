@@ -22,6 +22,9 @@ namespace GitBench.Features.LocalChanges;
 /// the only mutation primitive. Views subscribe to per-field slices (auto-deduped by
 /// equality) and call the command methods to drive git ops and row interactions.
 ///
+/// The commit box is per-repository: what is typed is held against the repo it was typed in, so
+/// switching away parks it and switching back puts it back.
+///
 /// Selection state lives here too — not in the panels — so the lists and the selection
 /// always change in lockstep through a single <see cref="Update"/> call. That makes
 /// invalid combinations (a selected path no longer in any list, the diff view targeting
@@ -84,6 +87,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
     private readonly SpinnerAnimation _commitSpinner;
 
+
+    // Every repository's unsent commit message, for this app run. The box mirrors into the entry
+    // for whichever repo it was typed in, and a repo switch swaps which entry that is.
+    private readonly Dictionary<Guid, CommitDraft> _drafts = new();
+    // The repo the box currently holds the message for. Distinct from _renderedRepoId, which tracks
+    // the file lists: the box swaps the moment the active repo changes, not when its status lands.
+    private Guid? _draftRepoId;
 
     private IReadOnlyList<FileChange> _stagedFromIndex = Empty;
     // Repo whose working-tree data is currently reflected in state; distinguishes a cross-repo
@@ -172,6 +182,11 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         // Working-tree file lists + submodule drift are projected from the store (which owns
         // loading, caching, and the soft refresh). The store reloads on working-tree / submodule /
         // commit changes, so this VM no longer subscribes to those messages directly.
+        // Before the store subscription below: the box has to be showing the active repo's draft
+        // before that repo's first snapshot lands and starts driving the merge editor.
+        Subscriptions.Add(_registry.Active.Subscribe(SwitchDraftTo));
+        Subscriptions.Add(Slice(s => (s.Title, s.Description, Amending: s.Editor is EditorMode.Amending))
+            .Subscribe(OnCommitMessageChanged));
         Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
         Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
@@ -188,6 +203,35 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         var active = _registry.Active.Value;
         if (active == null || active.Id != msg.RepoId) return;
         _deferStoreReloadUntilWorkingTreeChange = false;
+    }
+
+    // Parks the box under the repo it was typed in and refills it from the repo being switched to.
+    // Reached from the registry and again from the store push, whichever observes the switch first;
+    // the second call finds the box already swapped and does nothing.
+    private void SwitchDraftTo(Repo? repo)
+    {
+        if (_draftRepoId == repo?.Id) return;
+
+        // An amend's text is HEAD's message, not a draft — dropping the session first puts the
+        // displaced draft back in the box, which is what gets parked.
+        DropAmendSession();
+        _draftRepoId = repo?.Id;
+
+        var draft = repo == null ? CommitDraft.Empty : GetDraft(repo.Id);
+        Update(s => s with { Editor = EditorMode.Idle, Title = draft.Title, Description = draft.Description });
+    }
+
+    private CommitDraft GetDraft(Guid repoId)
+        => _drafts.TryGetValue(repoId, out var draft) ? draft : CommitDraft.Empty;
+
+    // Mirrors every edit into the active repo's draft, so a switch has nothing to collect. Amending
+    // is skipped for the reason above: the box is showing the commit being rewritten.
+    private void OnCommitMessageChanged((string Title, string Description, bool Amending) message)
+    {
+        if (_draftRepoId is not { } repoId || message.Amending) return;
+        var draft = new CommitDraft(message.Title, message.Description);
+        if (draft.IsEmpty) _drafts.Remove(repoId);
+        else _drafts[repoId] = draft;
     }
 
     private void OnHunkAppliedOptimistic(HunkAppliedOptimisticMessage msg)
@@ -841,6 +885,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void OnStoreLocalChanges(Fetched<LocalChangesData>? fetched)
     {
         var active = _registry.Active.Value;
+        SwitchDraftTo(active);
         if (active == null)
         {
             ApplyNoRepoState();
@@ -939,7 +984,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
         Update(s => s.HasRepo ? s : s with { HasRepo = true });
 
-        HandleMergeState(data.MergeMessage);
+        HandleMergeState(data.MergeMessage, isCrossRepoSwitch);
 
         if (State.Value.Editor is EditorMode.Amending)
         {
@@ -990,13 +1035,21 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // pre-fills the box with the default merge message (so committing finishes the merge); on
     // leaving (committed or aborted), clears it. Only the entry/exit transitions touch the
     // editor — staging a conflict mid-merge reloads but must not overwrite the user's edits.
-    private void HandleMergeState(string? mergeMessage)
+    private void HandleMergeState(string? mergeMessage, bool isCrossRepoSwitch)
     {
         var wasMerging = State.Value.Editor is EditorMode.Merging;
         var isMerging = mergeMessage != null;
         if (isMerging && !wasMerging)
         {
             DropAmendSession();
+            // Switching into a repo that was already merging is not the merge starting: the box has
+            // just been refilled from that repo's draft, which is the merge message as the user left
+            // it. Only a merge that begins under us — or one arriving at an untouched box — seeds.
+            if (isCrossRepoSwitch && !CurrentDraft().IsEmpty)
+            {
+                Update(s => s with { Editor = new EditorMode.Merging() });
+                return;
+            }
             var (title, description) = SplitMergeMessage(mergeMessage!);
             Update(s => s with { Editor = new EditorMode.Merging(), Title = title, Description = description });
         }
@@ -1005,6 +1058,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             Update(s => s with { Editor = EditorMode.Idle, Title = string.Empty, Description = string.Empty });
         }
     }
+
+    private CommitDraft CurrentDraft()
+        => new(State.Value.Title, State.Value.Description);
 
     // Splits the raw MERGE_MSG into editor title + description. The first line is the subject; the
     // rest becomes the body with git's '#'-prefixed annotation lines (the "Conflicts:" list)
