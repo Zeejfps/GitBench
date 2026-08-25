@@ -4,8 +4,8 @@ using ZGF.Observable;
 namespace GitBench.Features.Notifications;
 
 /// <summary>
-/// Backs one <see cref="ToastCard"/>. A toast is immutable once shown, so this holds plain values
-/// plus the two commands a card needs: dismiss, and (when present) invoke the toast's action and
+/// Backs one <see cref="ToastChip"/>. A toast is immutable once shown, so this holds plain values
+/// plus the two commands a chip needs: dismiss, and (when present) invoke the toast's action and
 /// dismiss it.
 /// </summary>
 internal sealed class ToastItemViewModel : IDisposable
@@ -21,7 +21,7 @@ internal sealed class ToastItemViewModel : IDisposable
     // the user must acknowledge do.
     public bool ShowDismiss => _toast.Intent.Lifetime is ToastLifetime.Sticky;
 
-    // True while the toast is animating out; the card reverses its enter tween off this.
+    // True while the toast is animating out; the chip reverses its enter tween off this.
     public IReadable<bool> Exiting { get; }
 
     public ICommand Dismiss { get; }

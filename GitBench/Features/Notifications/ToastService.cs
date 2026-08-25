@@ -5,21 +5,22 @@ using ZGF.Observable;
 namespace GitBench.Features.Notifications;
 
 /// <summary>
-/// Owns the toast stack and each toast's lifecycle. Mirrors the other stores' shape: a single
+/// Owns the live toasts and each one's lifecycle. Mirrors the other stores' shape: a single
 /// observable projection (<see cref="Active"/>) and a <see cref="Start"/> that wires the UI
 /// dispatcher once the loop exists. Dismissal is two-phase: <see cref="Dismiss"/> flags the toast
-/// "exiting" (its card observes this and plays an exit animation), then the toast is removed for
+/// "exiting" (its chip observes this and plays an exit animation), then the toast is removed for
 /// real after <see cref="ExitDuration"/>. Toasts are added/removed on the UI thread (bus broadcasts
 /// and direct callers both run there), so the lists and tables need no locking.
 /// </summary>
 internal sealed class ToastService : IToastService, IHostedService, IDisposable
 {
-    // The stack is capped so a burst (e.g. fetch-all across many repos) can't bury the screen;
-    // the oldest toast drops when a new one would exceed the cap.
-    private const int MaxVisible = 4;
+    // Only the newest toast is on screen (the status bar has one line), so this bounds the backlog
+    // waiting behind it: a burst (e.g. fetch-all across many repos) drops its oldest rather than
+    // queueing every one.
+    private const int MaxQueued = 4;
 
-    // How long a toast stays mounted after Dismiss so its card can animate out before removal.
-    // Matches the card's reverse-tween duration.
+    // How long a toast stays mounted after Dismiss so its chip can animate out before removal.
+    // Matches the chip's reverse-tween duration.
     private static readonly TimeSpan ExitDuration = TimeSpan.FromMilliseconds(300);
 
     // Returned for ids the service no longer tracks (already removed); never flips, never disposed.
@@ -55,9 +56,9 @@ internal sealed class ToastService : IToastService, IHostedService, IDisposable
 
         _exiting[id] = new State<bool>(false);
         var next = new List<Toast>(_active.Value) { new(id, intent) };
-        while (next.Count > MaxVisible)
+        while (next.Count > MaxQueued)
         {
-            // Over the cap: drop the oldest immediately (no exit animation for a capped-out toast).
+            // Over the cap: drop the oldest immediately (a queued-out toast never animates).
             DiscardTracking(next[0].Id);
             next.RemoveAt(0);
         }
@@ -74,7 +75,7 @@ internal sealed class ToastService : IToastService, IHostedService, IDisposable
         if (_disposed) return;
         if (!_exiting.TryGetValue(id, out var exiting) || exiting.Value) return; // gone or already exiting
 
-        // Cancel the auto-dismiss timer, flag the exit (the card reverses its tween), and remove for
+        // Cancel the auto-dismiss timer, flag the exit (the chip reverses its tween), and remove for
         // real once the exit animation has had time to play.
         CancelTimer(id);
         exiting.Value = true;
@@ -85,8 +86,8 @@ internal sealed class ToastService : IToastService, IHostedService, IDisposable
     {
         CancelTimer(id);
 
-        // Update the list first — that synchronously disposes the card's view model and unmounts its
-        // card (unsubscribing from the exit flag) — then dispose the flag.
+        // Update the list first — that synchronously disposes the chip's view model and unmounts its
+        // chip (unsubscribing from the exit flag) — then dispose the flag.
         var current = _active.Value;
         var next = new List<Toast>(current.Count);
         foreach (var toast in current)

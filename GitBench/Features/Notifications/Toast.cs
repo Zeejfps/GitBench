@@ -29,7 +29,7 @@ public abstract record ToastLifetime
 }
 
 /// <summary>
-/// Stable identity for a live toast, and the reconciliation key the host list uses. A distinct
+/// Stable identity for a live toast, and the reconciliation key the slot's list uses. A distinct
 /// type so a toast id can't be passed where some other id is expected.
 /// </summary>
 public readonly record struct ToastId(long Value);

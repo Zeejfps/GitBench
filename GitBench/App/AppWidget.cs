@@ -3,7 +3,6 @@ using GitBench.Controls.Dialogs;
 using GitBench.Features.Assistant;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
-using GitBench.Features.Notifications;
 using GitBench.Features.Review;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -28,7 +27,6 @@ internal sealed record AppWidget : Widget
             [
                 new AppContentWidget(),
                 new AssistantOverlay(),
-                new ToastHostView(),
                 new DragOverlay(),
                 new DialogSurface(),
                 new DiffWindowsView(),
