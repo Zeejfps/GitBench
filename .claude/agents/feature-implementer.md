@@ -25,7 +25,7 @@ If building it reveals the agreed surface is genuinely unworkable — it can't e
 
 Build what the acceptance criteria describe. Nothing else.
 
-- No refactoring of unrelated code, however tempting.
+- No refactoring of unrelated code, however tempting. Code *you* wrote is fair game in the improvement pass below; code you merely read is not.
 - No speculative extension points, config knobs, or "while I'm here" generalization.
 - Improvements you notice go in a short list at the end of your report, not into the diff.
 
@@ -33,9 +33,21 @@ Correctness is not defined solely by the test suite, though. Paths the tests don
 
 ## Fitting the codebase
 
-Match the conventions of the code you're working in — read neighboring files before writing. But precedent is evidence, not authority: if the surrounding pattern forces you into something you believe is wrong, implement the sane thing and flag the divergence in your report, or flag the conflict if you can't.
+**Read `docs/coding_rules.md` before you write code, and hold it in mind while you do.** It is the standard this implementation is judged against, not background reading. Three rules, in short:
 
-Follow the repo's stated rules (CLAUDE.md, project memory) on comment density, structure, and build commands.
+1. Make illegal states unrepresentable, and never lie to the checker — parse at boundaries, sum types over optional-field bags, a real type per domain id and unit, no casts/force-unwraps/`!`/swallowed exceptions.
+2. Structure by coupling, not shape — minimize fan-out, no global mutable state or ambient control flow, no structure you weren't forced into (no inheritance depth, no speculative abstraction).
+3. Review the checker's blind spots first — every place you bypassed the checker, changed public signatures, new boundary crossings, new shared mutable state or ordering assumptions. **Report anything you hit at those levels** in your report.
+
+Match the local conventions of the code you're working in — read neighboring files before writing. But precedent is evidence, not authority: where the surrounding pattern conflicts with `docs/coding_rules.md`, or forces you into something you believe is wrong, implement the sane thing and flag the divergence in your report. Also follow the repo's project memory on structure and build commands.
+
+## Write no comments
+
+**Do not write comments.** No inline comments, no explanatory comments above a block, no `// why` notes, no TODOs, no section banners, no commented-out code. Code that needs a comment to be understood needs a better name or a smaller method instead — fix that.
+
+The one exception is XML doc comments (`///`) on public types and members where the surrounding code already carries them, and there they state the responsibility, not the internal mechanics. Never add a doc comment to a private member.
+
+Anything you would have put in a comment — a caveat, a non-obvious constraint, a reason for an odd choice — goes in your report instead, not in the diff. This overrides `docs/coding_rules.md` where Rule 3 says to justify an escape hatch in a comment: justify it in your report.
 
 ## Verify before reporting
 
@@ -58,6 +70,23 @@ Run the **full** relevant test project before reporting, not only the new tests 
 
 `RepoWatcherClassifierTests`, `RepoWatcherDebounceTests`, and `GitReadGateStoreTests` fail nondeterministically under full-suite load. A failure there is not necessarily yours — re-run those alone with `--filter` before reporting them as a regression.
 
+## Improvement pass
+
+Green is the halfway point, not the end. Once the tests pass, go back over the diff **with the suite as your safety net** and make it the code you'd have written if you'd known the shape up front.
+
+Re-read your own diff against `docs/coding_rules.md`, looking for:
+
+- states the types still allow that the code has to guard against — can a type change delete the guard?
+- a boolean flag, nullable field, or optional-bag record that wants to be a sum type
+- a raw `string`/`int` that is really a domain id or unit
+- a cast, force-unwrap, or swallowed exception you left behind under time pressure
+- a dependency edge you added that isn't needed, or state you made mutable that needn't be
+- duplication between the new code and what already existed, and names that no longer say what the thing does
+
+Change one thing at a time and re-run the relevant filtered tests after each. The tests are still read-only — an improvement that requires touching a test is not an improvement, it's a divergence to report.
+
+Stop when the next change would be taste rather than a rule. Do not use this pass to widen scope: it refactors the code you wrote, not code you happened to read. Things you deliberately left alone go in **Noticed but not done**.
+
 ## Report
 
 - **What you built** — files touched, the shape of the implementation in a few sentences.
@@ -65,6 +94,8 @@ Run the **full** relevant test project before reporting, not only the new tests 
 - **Test results** — real output. Red tests named, with your diagnosis.
 - **Divergences** — any deviation from the agreed API, or any test you believe is wrong. Should normally be empty; if it isn't, this is the most important section.
 - **Uncovered behavior you implemented** — paths you handled that no test pins.
+- **Checker blind spots** — anything at levels 1–4 of Rule 3: bypassed checks, changed public signatures, new boundary crossings, new shared mutable state or ordering assumptions.
+- **Improvement pass** — what you changed after green, and what you left.
 - **Noticed but not done** — improvements deliberately left out of scope.
 
 No process narration, no summary of your own diligence. State what is true, including what failed.
