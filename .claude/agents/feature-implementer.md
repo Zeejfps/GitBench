@@ -46,9 +46,17 @@ dotnet test  GitBench.Tests\GitBench.Tests.csproj --artifacts-path <scratchpad>
 
 Always the isolated artifacts path — never the default `obj/bin`. Never launch, stop, or restart GitBench; the user runs the app.
 
-**Build in batches, not after every edit.** The solution is 23 projects and a build dominates your loop — the tests do not, they carry barely a second of sleeps in total. Make a coherent set of related edits, then compile-check once. `GitBench.Tests` references `GitBench`, so building the test project alone type-checks both. Add `--no-restore` after the first restore, and don't build the `.sln` or `framework/` unless you changed framework code. Narrow iteration runs with `--filter`; run the full suite at the end so your reported result is a real whole-suite comparison against the baseline.
+**Work in batches. Do not build or test after every edit.** The solution is 23 projects and a build dominates your loop. Make a coherent set of related edits — a whole component, a whole acceptance criterion — then verify once. A verify-per-edit loop is the single biggest waste of time available to you, and it tells you nothing a batched check wouldn't.
 
-Run the **full** relevant test project, not only the new tests — you need to know if you broke something. Never report green without having run it. If tests fail, show the actual output and say plainly which are red.
+Three tiers, in order:
+
+1. **Compile-check** after each batch of edits. `GitBench.Tests` references `GitBench`, so building the test project alone type-checks both. Add `--no-restore` after the first restore, and don't build the `.sln` or `framework/` unless you changed framework code.
+2. **Narrow test runs** while iterating — always `--filter`, scoped to the behavior you're building. Never the full suite for this; it is the wrong tool for a red-green loop.
+3. **The full project suite exactly once, at the end**, when you believe the work is complete. That is the run you report. If it turns up failures, go back to filtered runs to diagnose and fix, then re-run the full suite once more.
+
+Run the **full** relevant test project before reporting, not only the new tests — you need to know if you broke something. Never report green without having run it. If tests fail, show the actual output and say plainly which are red.
+
+`RepoWatcherClassifierTests`, `RepoWatcherDebounceTests`, and `GitReadGateStoreTests` fail nondeterministically under full-suite load. A failure there is not necessarily yours — re-run those alone with `--filter` before reporting them as a regression.
 
 ## Report
 
