@@ -90,8 +90,8 @@
   "app.update.check_failed": "Error al buscar actualizaciones",
   "app.update.ready_message": "La versión {version} está lista — haz clic en Reiniciar para actualizar.",
 
-  "terminal.placeholder_title": "Terminal próximamente",
-  "terminal.placeholder_hint": "Aquí se ejecutará una shell para el repositorio actual.",
+  "terminal.starting": "Iniciando la shell…",
+  "terminal.no_repo": "Abre un repositorio para usar la terminal.",
 
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",

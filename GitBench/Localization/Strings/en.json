@@ -90,8 +90,8 @@
   "app.update.check_failed": "Update check failed",
   "app.update.ready_message": "Version {version} is ready — click Restart to update.",
 
-  "terminal.placeholder_title": "Terminal coming soon",
-  "terminal.placeholder_hint": "This is where a shell for the current repository will run.",
+  "terminal.starting": "Starting shell…",
+  "terminal.no_repo": "Open a repository to use the terminal.",
 
   "toolbar.fetch": "Fetch",
   "toolbar.fetching": "Fetching",

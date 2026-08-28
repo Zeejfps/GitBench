@@ -9,11 +9,13 @@ using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
+using GitBench.Features.Terminal;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
+using GitBench.Pty;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Desktop;
@@ -149,6 +151,12 @@ internal static class AppServices
         // Review progress (marked-Viewed files) lives for the app session, shared across review
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
+
+        // The terminal pane's two halves: what spawns the shell, and what parses what it writes.
+        // Both stateless, and both registered rather than constructed at the pane — this is the only
+        // place that names a concrete VT engine, so replacing XtermSharp is a line here.
+        context.AddSingleton<IPtySessionFactory, PtySessionFactory>();
+        context.AddSingleton<ITerminalEngineFactory, XtermSharpEngineFactory>();
 
         // Factory because the snapshot store ingests the active repo's file-list summary into the
         // status store, an interface cast (IRepoStatusIngest) the container can't do by plain

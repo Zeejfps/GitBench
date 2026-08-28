@@ -82,9 +82,11 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
-        <!-- The terminal engine seam only. The XtermSharp adapter behind it is composed at
-             startup, so the app never binds to a concrete engine. -->
+        <!-- The terminal: the pseudo-terminal, the engine seam, and the XtermSharp adapter behind
+             it. Only AppServices names the adapter, so replacing the engine touches one line. -->
+        <ProjectReference Include="..\GitBench.Pty\GitBench.Pty.csproj" />
         <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
+        <ProjectReference Include="..\GitBench.Terminal.Vt.XtermSharp\GitBench.Terminal.Vt.XtermSharp.csproj" />
         <!-- Image codecs behind the diff view's image preview. PngSharp also arrives
              transitively through ZGF.Gui; referenced explicitly because the app decodes with it
              directly. -->
@@ -114,5 +116,14 @@
 
     <!-- macOS .app bundling is handled by `vpk pack` in the release workflow (it builds the
          bundle with the Velopack update structure embedded), so there's no MSBuild target here. -->
+
+    <ItemGroup>
+        <!--
+            NStack.Core arrives transitively with the vendored engine and declares its own
+            System.Rune, ambiguous with System.Text.Rune wherever the bare name is used. Same alias,
+            and for the same reason, as GitBench.Terminal.Vt.XtermSharp.
+        -->
+        <Using Include="System.Text.Rune" Alias="Rune" />
+    </ItemGroup>
 
 </Project>

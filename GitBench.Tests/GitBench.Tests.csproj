@@ -22,4 +22,13 @@
         <ProjectReference Include="..\framework\ZGF.Gui.Testing\ZGF.Gui.Testing.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+        <!--
+            NStack.Core arrives transitively with the vendored engine and declares its own
+            System.Rune, ambiguous with System.Text.Rune wherever the bare name is used. Same alias,
+            and for the same reason, as GitBench.Terminal.Vt.XtermSharp.
+        -->
+        <Using Include="System.Text.Rune" Alias="Rune" />
+    </ItemGroup>
+
 </Project>

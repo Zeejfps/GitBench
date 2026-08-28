@@ -132,8 +132,8 @@
   "app.update.check_failed": "فشل التحقق من التحديثات",
   "app.update.ready_message": "الإصدار {version} جاهز — انقر على إعادة التشغيل للتحديث.",
 
-  "terminal.placeholder_title": "الطرفية قريبًا",
-  "terminal.placeholder_hint": "هنا ستعمل صدفة للمستودع الحالي.",
+  "terminal.starting": "جارٍ بدء الصدفة…",
+  "terminal.no_repo": "افتح مستودعًا لاستخدام الطرفية.",
 
   "toolbar.fetch": "جلب",
   "toolbar.fetching": "جارٍ الجلب",

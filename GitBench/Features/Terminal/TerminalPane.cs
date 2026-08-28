@@ -1,67 +1,55 @@
-using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Localization;
-using GitBench.Widgets;
+using GitBench.Pty;
+using GitBench.Theming;
 using ZGF.Gui;
-using ZGF.Gui.Views;
+using ZGF.Gui.Bindings;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Terminal;
 
 /// <summary>
-/// The terminal pane: the mode slot a shell for the active repository will fill. Until the session
-/// backend lands it holds a centered placeholder so the mode reads as planned rather than broken.
+/// The terminal pane: a shell running in the active repository, drawn as a cell grid.
 /// </summary>
+/// <remarks>
+/// The mode switcher keeps this pane alive once it has been built, so the shell it starts survives
+/// switching to History and back — and, by the same token, nothing here runs until the user picks
+/// the Terminal mode for the first time.
+/// </remarks>
 internal sealed record TerminalPane : Widget
 {
-    protected override IWidget Build(Context ctx) => new Box
+    protected override View CreateView(Context ctx)
     {
-        Background = Theme.Color(s => s.Palette.Surface),
-        Children =
-        [
-            new Center
+        var theme = ctx.Require<IThemeService<ThemeStyles>>();
+        var loc = ctx.Require<ILocalizationService>();
+        var registry = ctx.Require<IRepoRegistry>();
+        var sessions = ctx.Require<IPtySessionFactory>();
+        var engines = ctx.Require<ITerminalEngineFactory>();
+        var dispatcher = ctx.Require<IUiDispatcher>();
+
+        var view = new TerminalGridView(theme)
+        {
+            StartingMessage = loc.Strings.Value.TerminalStarting,
+        };
+
+        view.Bind(loc.Strings, s => view.StartingMessage = s.TerminalStarting);
+
+        if (registry.Active.Value is not { } repo)
+        {
+            view.SetRenderState(new TerminalRenderState.Failed(loc.Strings.Value.TerminalNoRepo));
+            return view;
+        }
+
+        view.UseViewModel(
+            () => new TerminalViewModel(sessions, engines, dispatcher, repo.Path),
+            vm =>
             {
-                Child = new Column
-                {
-                    Gap = Spacing.Xl,
-                    CrossAxis = CrossAxisAlignment.Center,
-                    Children =
-                    [
-                        new Text
-                        {
-                            Value = LucideIcons.SquareTerminal,
-                            FontFamily = LucideIcons.FontFamily,
-                            FontSize = FontSize.Display,
-                            HAlign = TextAlignment.Center,
-                            VAlign = TextAlignment.Center,
-                            Color = Theme.Color(s => s.Palette.TextMuted),
-                        },
-                        new Column
-                        {
-                            Gap = Spacing.Md,
-                            CrossAxis = CrossAxisAlignment.Center,
-                            Children =
-                            [
-                                new Text
-                                {
-                                    Value = L.T(s => s.TerminalPlaceholderTitle),
-                                    FontSize = FontSize.Heading,
-                                    Weight = FontWeight.Bold,
-                                    HAlign = TextAlignment.Center,
-                                    VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(s => s.Palette.TextStrong),
-                                },
-                                new Text
-                                {
-                                    Value = L.T(s => s.TerminalPlaceholderHint),
-                                    HAlign = TextAlignment.Center,
-                                    VAlign = TextAlignment.Center,
-                                    Color = Theme.Color(s => s.Palette.TextSecondary),
-                                },
-                            ],
-                        },
-                    ],
-                },
-            },
-        ],
-    };
+                view.OnViewportChanged = vm.ReportViewport;
+                vm.Updated += view.Repaint;
+                view.Bind(vm.RenderState, view.SetRenderState);
+            });
+
+        return view;
+    }
 }

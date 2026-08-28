@@ -90,8 +90,8 @@
   "app.update.check_failed": "アップデートの確認に失敗しました",
   "app.update.ready_message": "バージョン{version}の準備ができました — 再起動で更新します。",
 
-  "terminal.placeholder_title": "ターミナルは近日公開",
-  "terminal.placeholder_hint": "ここで現在のリポジトリのシェルが実行されます。",
+  "terminal.starting": "シェルを起動中…",
+  "terminal.no_repo": "ターミナルを使うにはリポジトリを開いてください。",
 
   "toolbar.fetch": "フェッチ",
   "toolbar.fetching": "フェッチ中",
