@@ -15,11 +15,11 @@ internal sealed class UnixPtySession : IPtySession
         throw new NotImplementedException("Unix pseudo-terminal session is not implemented yet.");
     }
 
-    public Stream Output => throw new NotImplementedException();
+    public Task<PtyExit> Exited => throw new NotImplementedException();
 
-    public Task<int> Exited => throw new NotImplementedException();
+    public int ReadOutput(Span<byte> buffer) => throw new NotImplementedException();
 
-    public void Write(ReadOnlySpan<byte> bytes) => throw new NotImplementedException();
+    public void WriteInput(ReadOnlySpan<byte> bytes) => throw new NotImplementedException();
 
     public void Resize(PtySize size) => throw new NotImplementedException();
 

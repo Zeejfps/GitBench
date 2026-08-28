@@ -149,6 +149,32 @@ There is no passthrough mode. `consoleapi.h` in SDK 10.0.26100 declares exactly 
 `PSEUDOCONSOLE_INHERIT_CURSOR`. The reflow is not opt-out-able. (Win11 adds
 `ReleasePseudoConsole`, for detaching without killing the child — possibly useful in Phase 5.)
 
+**Teardown, measured separately.** Run because the end-of-stream contract on `IPtySession` hangs off
+it. Same host, same machine.
+
+| Check | Result |
+|---|---|
+| EOF on child exit alone | **No.** `cmd /c exit 7` exited with code 7; the reader drained 16 bytes and then blocked for 3s with no end of stream. |
+| EOF after `ClosePseudoConsole` | Yes — and 70 further bytes arrived first, then `ERROR_BROKEN_PIPE` (109). |
+| `ClosePseudoConsole` with nobody draining | Returned in 0ms, with the child alive (`STILL_ACTIVE`) and 4119 bytes sitting unread in the pipe. |
+| Kill, then close, then read | `TerminateProcess` → child gone in 1ms → close returned → the blocked reader saw EOF. 31ms end to end. |
+
+Three consequences, all of them now in the seam.
+
+**The session owns the teardown, and the caller keeps reading through it.** A child exiting does not
+close the terminal, so `Exited` completing is not the end of the output — the session must close the
+pseudoconsole once it observes the exit, and the reader must drain *past* that close, because the
+flush arrives after it. A reader that stops at `Exited` truncates the session's last output.
+
+**The `ClosePseudoConsole` deadlock does not reproduce.** The widely-repeated warning is that closing
+blocks unless something is draining; measured with the pipe demonstrably full and the child
+demonstrably alive, it returned immediately. Teardown ordering is therefore ours to choose rather
+than forced.
+
+**`Dispose` needs no cancellable I/O.** Killing the child runs the ordinary teardown, which ends the
+stream, which releases a reader blocked in a synchronous read. No overlapped reads, no `CancelIoEx`,
+and none of the handle-reuse races that come with cancelling a read from another thread.
+
 ## Risks
 
 | Risk | Note |
