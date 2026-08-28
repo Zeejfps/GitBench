@@ -1,5 +1,4 @@
 using GitBench.Infrastructure;
-using GitBench.Pty;
 using GitBench.Terminal.Vt;
 using ZGF.Observable;
 
@@ -37,25 +36,17 @@ internal sealed record TerminalPaneState(TerminalRenderState Render);
 /// </remarks>
 internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
 {
-    readonly IPtySessionFactory _sessions;
-    readonly ITerminalEngineFactory _engines;
-    readonly string _workingDirectory;
+    readonly ITerminalLaunch _launch;
 
     TerminalSession? _session;
-    TerminalSize? _viewport;
+    TerminalSize? _size;
     bool _starting;
     bool _closed;
 
-    public TerminalViewModel(
-        IPtySessionFactory sessions,
-        ITerminalEngineFactory engines,
-        IUiDispatcher dispatcher,
-        string workingDirectory)
+    public TerminalViewModel(ITerminalLaunch launch, IUiDispatcher dispatcher)
         : base(dispatcher, new TerminalPaneState(new TerminalRenderState.Starting()))
     {
-        _sessions = sessions;
-        _engines = engines;
-        _workingDirectory = workingDirectory;
+        _launch = launch;
 
         RenderState = Slice(s => s.Render);
     }
@@ -69,10 +60,13 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
     /// Tells the view model how many cells the pane can show. The first call starts the shell; later
     /// ones resize it.
     /// </summary>
-    public void ReportViewport(TerminalSize size)
+    public void ReportViewport(TerminalSize viewport)
     {
-        if (_closed || _viewport == size) return;
-        _viewport = size;
+        // What the pane can show and what the terminal runs at are not always the same number: a
+        // replayed recording keeps the size it was recorded at whatever the pane does.
+        var size = _launch.SizeFor(viewport);
+        if (_closed || _size == size) return;
+        _size = size;
 
         if (_session is { } session)
         {
@@ -87,7 +81,6 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
 
     void Start(TerminalSize size)
     {
-        var options = ShellCommand.For(_workingDirectory, new PtySize(size.Columns, size.Rows));
         var dispatcher = Dispatcher;
 
         // Not RunBackground: a spawn that lands after disposal has produced a live shell, and the
@@ -98,7 +91,7 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
         {
             try
             {
-                var session = TerminalSession.Start(_sessions, _engines, options, dispatcher);
+                var session = _launch.Start(size, dispatcher);
                 dispatcher.Post(() => Adopt(session));
             }
             catch (Exception ex)
@@ -122,7 +115,7 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
 
         // The pane may have been resized while the shell was starting, in which case the size it
         // was spawned at is already wrong.
-        if (_viewport is { } size) session.Resize(size);
+        if (_size is { } size) session.Resize(size);
 
         Update(s => s with { Render = new TerminalRenderState.Running(session) });
     }

@@ -55,14 +55,34 @@ internal sealed class TerminalSession : IDisposable
         ITerminalEngineFactory engines,
         PtySessionOptions options,
         IUiDispatcher dispatcher,
+        int scrollbackLines = DefaultScrollbackLines) =>
+        Start(
+            () => sessions.Start(options),
+            engines,
+            new TerminalSize(options.Size.Columns, options.Size.Rows),
+            dispatcher,
+            scrollbackLines);
+
+    /// <summary>
+    /// Starts on whatever pseudo-terminal <paramref name="open"/> produces, for a caller that has
+    /// one rather than a spawn to perform.
+    /// </summary>
+    /// <remarks>
+    /// The terminal is opened by a delegate so that a failure to open it disposes the engine that
+    /// was built to parse it, rather than leaking one on every failed start.
+    /// </remarks>
+    public static TerminalSession Start(
+        Func<IPtySession> open,
+        ITerminalEngineFactory engines,
+        TerminalSize size,
+        IUiDispatcher dispatcher,
         int scrollbackLines = DefaultScrollbackLines)
     {
-        var size = new TerminalSize(options.Size.Columns, options.Size.Rows);
         var engine = engines.Create(new TerminalSetup(size, scrollbackLines));
 
         try
         {
-            return new TerminalSession(sessions.Start(options), engine, dispatcher);
+            return new TerminalSession(open(), engine, dispatcher);
         }
         catch
         {
@@ -75,6 +95,13 @@ internal sealed class TerminalSession : IDisposable
     public ITerminalGrid Grid => _engine.Grid;
 
     public TerminalState State => _engine.State;
+
+    /// <summary>
+    /// Completes when the shell is gone, saying whether it finished on its own or the session ended
+    /// it. Not the end of the screen: output arrives after this, and the reader keeps draining until
+    /// the stream itself ends.
+    /// </summary>
+    public Task<PtyExit> Exited => _pty.Exited;
 
     /// <summary>
     /// Raised on the UI thread once the engine has taken a batch of output, whether or not anything
