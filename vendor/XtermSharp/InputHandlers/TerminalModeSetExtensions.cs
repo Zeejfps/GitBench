@@ -136,7 +136,7 @@
 					terminal.MouseMode = MouseMode.X10;
 					break;
 				case 12:
-					// this.cursorBlink = true;
+					terminal.SetCursorStyle (WithBlink (terminal.CursorStyle, blinking: true));
 					break;
 				case 40:
 					terminal.Allow80To132 = true;
@@ -214,6 +214,9 @@
 					break;
 				case 2004: // bracketed paste mode (https://cirw.in/blog/bracketed-paste)
 					terminal.BracketedPasteMode = true;
+					break;
+				case 2026: // synchronized output
+					terminal.BeginSynchronizedUpdate ();
 					break;
 				}
 			}
@@ -334,7 +337,7 @@
 					terminal.Wraparound = false;
 					break;
 				case 12:
-					// this.cursorBlink = false;
+					terminal.SetCursorStyle (WithBlink (terminal.CursorStyle, blinking: false));
 					break;
 				case 40:
 					terminal.Allow80To132 = false;
@@ -397,7 +400,24 @@
 				case 2004: // bracketed paste mode (https://cirw.in/blog/bracketed-paste)
 					terminal.BracketedPasteMode = false;
 					break;
+				case 2026: // synchronized output
+					terminal.EndSynchronizedUpdate ();
+					break;
 				}
+			}
+		}
+
+		static CursorStyle WithBlink (CursorStyle style, bool blinking)
+		{
+			switch (style) {
+			case CursorStyle.BlinkUnderline:
+			case CursorStyle.SteadyUnderline:
+				return blinking ? CursorStyle.BlinkUnderline : CursorStyle.SteadyUnderline;
+			case CursorStyle.BlinkingBar:
+			case CursorStyle.SteadyBar:
+				return blinking ? CursorStyle.BlinkingBar : CursorStyle.SteadyBar;
+			default:
+				return blinking ? CursorStyle.BlinkBlock : CursorStyle.SteadyBlock;
 			}
 		}
 	}

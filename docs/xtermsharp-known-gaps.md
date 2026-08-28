@@ -1,7 +1,19 @@
 # XtermSharp against the unified seam
 
-`dotnet test` on 2026-08-28, before gap 1 was fixed: **254 tests, 196 pass, 58 fail.**
-After gap 1: **210 of those 254 pass, 44 fail**, plus a new `ReflowSpec` of 10.
+`dotnet test` on 2026-08-28, before any gap was fixed: **254 tests, 196 pass, 58 fail.**
+
+Thirteen of the fifteen gaps are now fixed, across eleven patches applied in four passes. The suite
+stands at **276 tests, 270 pass, 6 fail**, and every remaining failure is one of the two open gaps or
+the golden that has not been authored yet:
+
+- four `KeyboardProtocolSpec` cases — gap 12, kitty keyboard flags, deliberately deferred
+- `UnicodeSpec.CombiningMark_JoinsTheCellItFollowsRatherThanTakingItsOwn` — the half of gap 8 that
+  needs `CharData` to carry a grapheme cluster and the adapter to project it
+- `Replay_ProducesTheGoldenScreens(claude)` — no golden, and it must be hand-audited against the
+  bytes rather than blessed from engine output
+
+Gap 14 (OSC 8 hyperlinks) is open but has no failing test: the URL is discarded rather than leaked
+onto the screen, so nothing can observe it through the seam until the seam carries a hyperlink.
 
 Every failure below is XtermSharp's. The suite is engine-agnostic — `TerminalEngines.cs` is the
 only file that names an implementation — and every expectation states what a correct xterm-class
@@ -98,7 +110,7 @@ gap 13, and stays red on gap 13.
 
 ## Wrong — silently corrupts the screen
 
-### 2. Every operating-system-command payload loses its first byte
+### 2. Every operating-system-command payload loses its first byte — FIXED
 
 `EscapeSequenceParser.cs:624`, `case ParserAction.OscPut`. The run is copied from `data[i+1]`
 instead of `data[i]`:
@@ -131,7 +143,14 @@ eight `ChunkInvarianceTests` cases (vim, less, git-log, smoke at 1-byte and 7-by
 boundary falls at byte 90, on that `S`. The golden has been corrected to the bytes and the smoke
 replay is now red. The correction is noted in the file's `;` provenance block.
 
-### 3. Non-ASCII operating-system-command payloads are mangled
+**Fixed by patch 2.** The run is copied from `data [i]`, the bound test no longer reads `data [len]`,
+and the payload accumulates as bytes decoded once at the terminator, so a UTF-8 scalar split across a
+feed survives. The dropped identifier digit went with it, so `OSC 1` and `OSC 2` dispatch correctly.
+Three `TitleAndHyperlinkSpec` cases, all eight `ChunkInvarianceTests` cases,
+`WholeSessionFedOneByteAtATime_ProducesTheSameGrid` and the smoke golden pass.
+
+
+### 3. Non-ASCII operating-system-command payloads are mangled — FIXED
 
 Same site, `EscapeSequenceParser.cs:626`. The run terminates on any byte in `0x80..0x9E`, which
 includes most UTF-8 continuation bytes, and the next run then loses its own first byte to defect 2.
@@ -139,7 +158,14 @@ A title containing an em dash does not survive.
 
 Failing: `TitleAndHyperlinkSpec.Title_MayContainNonAsciiText`.
 
-### 4. A multi-parameter DEC private mode is applied as an ANSI mode
+**Fixed by patch 2.** The scan loop and the transition table disagreed about what ends an OSC, so
+which applied depended on where a read boundary fell. They now agree, and 8-bit `ST` (`0x9C`) no
+longer terminates an OSC string: in a UTF-8 stream it is a continuation byte, and this parser
+dispatches on bytes rather than decoded scalars — its ground state already treated `0x9C` as
+printable. `Title_MayContainNonAsciiText` passes.
+
+
+### 4. A multi-parameter DEC private mode is applied as an ANSI mode — FIXED
 
 `InputHandlers/InputHandler.cs:808` (`SetMode`) and `:793` (`ResetMode`):
 
@@ -158,7 +184,11 @@ their mode setup get silently nothing.
 
 Failing: `ModeSpec.ModesSetInOneSequence_AreAllReported`.
 
-### 5. `CSI u` dispatches on the final byte alone
+**Fixed by patch 4 in `vendor/XtermSharp/PATCHES.md`.** Both methods now loop over every parameter
+with the `collect` the parser read; the single-parameter branch was the one-iteration case of that
+loop and is gone. `ModeSpec.ModesSetInOneSequence_AreAllReported` passes.
+
+### 5. `CSI u` dispatches on the final byte alone — FIXED
 
 `InputHandlers/InputHandler.cs:109` — `parser.SetCsiHandler ('u', (pars, collect) => terminal.RestoreCursor ());`.
 The private prefix is ignored, so kitty's `CSI > 1 u` (push flags) and `CSI < u` (pop) both execute
@@ -168,7 +198,12 @@ cursor to the last saved position.
 Failing: `KeyboardProtocolSpec.PushingKeyboardFlags_DoesNotMoveTheCursor`,
 `KeyboardProtocolSpec.PoppingKeyboardFlags_DoesNotMoveTheCursor`.
 
-### 6. `CSI > 4 ; 2 m` (modifyOtherKeys) is parsed as SGR
+**Fixed by patch 5 in `vendor/XtermSharp/PATCHES.md`.** The handler dispatches on `collect`:
+restore cursor for an empty prefix, `terminal.Error` for anything else. Both tests pass, and
+`RestoreCursor_WithoutAPrivatePrefix_StillMeansRestoreCursor` still does. The cursor no longer
+moves, and nothing is tracked — a private `CSI u` is logged and dropped, which is gap 12 below.
+
+### 6. `CSI > 4 ; 2 m` (modifyOtherKeys) is parsed as SGR — FIXED
 
 `InputHandlers/InputHandler.cs:79` — `parser.SetCsiHandler ('m', (pars, collect) => CharAttributes (pars));`
 discards `collect`, so parameters 4 and 2 are applied as *underline* and *dim* to everything printed
@@ -177,7 +212,12 @@ afterwards.
 Failing: `KeyboardProtocolSpec.ModifyOtherKeys_DoesNotChangeCellAttributes`,
 `KeyboardProtocolSpec.ModifyOtherKeys_RecordsTheRequestedLevel`.
 
-### 7. The alternate buffer is not cleared on entry
+**Fixed by patch 6 in `vendor/XtermSharp/PATCHES.md`.** `CharAttributes` runs only for an empty
+`collect`; a prefixed `m` goes to `terminal.Error`. The screen is no longer corrupted and
+`ModifyOtherKeys_DoesNotChangeCellAttributes` passes. `ModifyOtherKeys_RecordsTheRequestedLevel`
+stays red: recording the level is gap 12.
+
+### 7. The alternate buffer is not cleared on entry — FIXED
 
 `Buffer.cs:190`, `FillViewportRows` returns early when the buffer already holds lines
 (`if (lines.Length != 0) return;`, with a `// TODO: limitation in original` above it), and
@@ -186,7 +226,14 @@ previous visit's painting.
 
 Failing: `AltScreenSpec.ReEnteringAltScreen_DoesNotShowThePreviousVisitsContent`.
 
-### 8. Every character is one column wide
+**Fixed by patch 7.** `FillViewportRows` replaces every viewport row instead of returning early when
+the buffer holds lines. `AltScreenSpec.ReEnteringAltScreen_DoesNotShowThePreviousVisitsContent`
+passes. The fix is wider than the gap: `?47h` and `?1047h` now clear on entry too, where xterm clears
+only for `?1049h`. All three reach the buffer through one `BufferSet.ActivateAltBuffer` call, so
+telling them apart needs a change in `BufferSet.cs`. No corpus and no test uses either mode.
+
+
+### 8. Every character is one column wide — FIXED, except the combining half
 
 `InputHandlers/InputHandler.cs:1244` — `var chWidth = 1;`, with the real call commented out on the
 line above (`// var chWidth = Rune.ColumnWidth ((Rune)code);` and a `1 until we get a fixed NStack`
@@ -203,11 +250,35 @@ Failing: `UnicodeSpec.WideCharacter_OccupiesTwoColumns`,
 `TerminalCell.Combining` has no producer for the same reason: a combining mark takes its own cell
 rather than joining the one before it.
 
+**Fixed by patch 8 in `vendor/XtermSharp/PATCHES.md`, apart from where a combining mark lives.**
+`RuneHelper.ConsoleWidth` is the width now. It could not be called at all until two defects in
+`CharWidth.cs` were fixed — `bisearch` was passed a count where it indexes with the argument, so
+the first non-ASCII rune threw, and U+00A0 was classified as a C1 control and would have been
+dropped from the grid. The trailer cell beside a wide character is now width 0, which is what the
+adapter reads as `CellWidth.WideTrailer`. Four of the five tests pass, along with a new
+`CharacterWidthSpec` covering the wrap at the right margin, the insert that shifts a leader off the
+row, the attribute the trailer carries, and the one-column screen that used to throw.
+
+**What is still open, and why it is not a width problem.**
+`UnicodeSpec.CombiningMark_JoinsTheCellItFollowsRatherThanTakingItsOwn` passes its first assertion —
+the mark costs no column — and fails its second. The mark is dropped, because there is nowhere in
+`CharData` to put it: the struct is a `Rune`, a `Code`, a width and an attribute, and
+`XtermSharpEngine.Translate` builds `TerminalCell` from `Code` alone, so `TerminalCell.Combining` is
+always null. Upstream's merge-into-the-previous-cell block did `chMinusOne.Code += ch`, arithmetic
+on two codepoints where the xterm.js line it came from concatenates strings — `e` + U+0301 would
+have become U+0366. It was unreachable while every width was 1 and it is gone. Finishing this half
+means `CharData` carrying a cluster and the adapter projecting it, which is two files outside the
+patch.
+
+**Emoji are still one column.** `CharWidth.cs` holds the 2007 wcwidth table, which predates them.
+No corpus contains one and no test pins one, and terminals disagree about the exact boundaries, so
+the table was left as it is rather than guessed at.
+
 ---
 
 ## Ignored — the feature is absent but nothing breaks
 
-### 9. Synchronized output (`?2026`) is unhandled
+### 9. Synchronized output (`?2026`) is unhandled — FIXED
 
 No `case 2026` anywhere in `InputHandlers/TerminalModeSetExtensions.cs`; the parameter falls off the
 end of the DECSET switch unrecorded. The grid stays correct — the renderer simply cannot know it is
@@ -218,13 +289,23 @@ Failing: `ModeSpec.SynchronizedOutput_TracksBeginAndEndOfFrame`,
 `ModeSpec.SynchronizedOutput_CountsAFrameOnTheFeedThatClosesIt`,
 `CorpusReplayTests.Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock`.
 
-### 10. Cursor shape is unobservable
+**Fixed by patch 9.** The mode is recorded and reported through `TerminalModes.SynchronizedOutput`
+and `FeedResult.FramePending`/`FramesCompleted`, and is never honoured — the engine keeps applying
+bytes and the renderer decides whether to hold the previous image. Two `ModeSpec` cases and
+`Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock` pass.
+
+
+### 10. Cursor shape is unobservable — FIXED
 
 `Terminal.cs:697` — `public void SetCursorStyle (CursorStyle style) { }` has an empty body, is not
 virtual, and stores nothing. `InputHandler.cs:570` parses DECSCUSR correctly and hands the style to
 that method, where it is discarded. No adapter can recover it without a patch.
 
-### 11. Cursor blink is a dead field
+**Fixed by patch 10.** `SetCursorStyle` stores the style and the adapter splits it into the seam"'s
+shape and blink axes. Five `SetCursorStyle_SelectsShapeAndBlinkIndependently` cases pass.
+
+
+### 11. Cursor blink is a dead field — FIXED
 
 DEC mode 12 is parsed and dropped: `TerminalModeSetExtensions.cs:139` (`// this.cursorBlink = true;`)
 and `:337` (`// this.cursorBlink = false;`). Nothing ever writes `TerminalOptions.CursorBlink`
@@ -242,16 +323,27 @@ Failing: `CursorShapeSpec.CursorShape_StartsAsABlinkingBlock`,
 `CursorShapeSpec.CursorBlink_TracksTheDecPrivateMode`,
 five of the six `CursorShapeSpec.SetCursorStyle_SelectsShapeAndBlinkIndependently` cases (gap 10).
 
+**Fixed by patch 10.** DEC mode 12 maps the current style onto its blinking or steady counterpart.
+The default is a blinking block, per DECSCUSR Ps=1, so the goldens"' cursor lines were re-derived from
+the corpus bytes: no corpus contains a DECSCUSR, and only `vim.bin` touches mode 12 (bytes 282 and
+288), so vim frame 1 blinks and frames 2-9 do not. `CursorShape_StartsAsABlinkingBlock` and
+`CursorBlink_TracksTheDecPrivateMode` pass.
+
+
 ### 12. Kitty keyboard flags are not tracked and `CSI ? u` is not answered
 
-There is no handler at all. A terminal that does not reply to the query cannot negotiate progressive
-enhancement, which is the whole reason the plan owns the input encoder.
+**Still open.** Gaps 5 and 6 stopped the corruption these sequences caused without adding any state:
+a private `CSI u` and a prefixed `CSI m` are now recognised as not-ours and reported through
+`terminal.Error` instead of moving the cursor and repainting the screen. Nothing records what they
+asked for. A terminal that does not reply to the query cannot negotiate progressive enhancement,
+which is the whole reason the plan owns the input encoder.
 
 Failing: `KeyboardProtocolSpec.PushingKeyboardFlags_MakesThemCurrent`,
 `KeyboardProtocolSpec.QueryingKeyboardFlags_AnswersWithTheCurrentFlags`,
-`KeyboardProtocolSpec.QueryingKeyboardFlags_AfterAPush_ReportsThePushedFlags`.
+`KeyboardProtocolSpec.QueryingKeyboardFlags_AfterAPush_ReportsThePushedFlags`,
+`KeyboardProtocolSpec.ModifyOtherKeys_RecordsTheRequestedLevel` (from gap 6).
 
-### 13. SGR 9 / 29 (crossed out) is unhandled
+### 13. SGR 9 / 29 (crossed out) is unhandled — FIXED
 
 `InputHandlers/InputHandler.cs:664`, `CharAttributes`, has no branch for parameter 9 or 29 even
 though `FLAGS.CrossedOut` exists at `CharacterAttribute.cs:13` and the packing has room for it.
@@ -260,6 +352,10 @@ Failing: `AttributeSpec.Attribute_ReachesTheCellsPrintedAfterIt(9)`,
 `AttributeSpec.CancellingParameter_ClearsTheAttributeItPairsWith(9, 29)`,
 `AttributeSpec.Attributes_InOneSequence_AreAllCarriedAsBits`.
 
+**Fixed by patch 13 in `vendor/XtermSharp/PATCHES.md`.** Two branches in `CharAttributes`; all
+three tests pass. `CharacterAttribute.ToSGR` still omits `;9`, so a DECRQSS reply under-reports a
+crossed-out cell — no test pins that, and it is one file further out.
+
 ### 14. OSC 8 hyperlinks are discarded
 
 `InputHandlers/InputHandler.cs:192-196` registers handlers for 0, 1 and 2 only, and everything else
@@ -267,7 +363,7 @@ goes to the fallback at `:41`. Correct as far as the grid goes — the link text
 does not leak — so no test fails. Recorded because the URL is gone by the time the renderer sees the
 cell, so clickable links need a patch. The acceptance corpus emits four of them.
 
-### 15. Scrollback depth cannot be set
+### 15. Scrollback depth cannot be set — FIXED
 
 `TerminalOptions.cs:11` — `public int? Scrollback { get; }` is get-only and the constructor fixes it
 at 1000. `TerminalSetup.ScrollbackLines` is part of the seam's contract precisely so that two
@@ -276,6 +372,11 @@ pins it because the whole suite runs at 1000 and every corpus is far shorter tha
 caller asking for a different depth gets 1000 without being told.
 
 ---
+
+**Fixed by patch 15.** `TerminalOptions.Scrollback` is settable and the adapter passes
+`TerminalSetup.ScrollbackLines` through; a negative value is rejected at the adapter"'s constructor,
+and zero is honoured rather than silently promoted. The new `ScrollbackDepthSpec` (5 cases) passes.
+
 
 ## Configuration, not a defect
 

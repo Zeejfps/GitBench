@@ -13,10 +13,16 @@
 ; audited wrap points are unchanged; the key was renamed so that a file written under the
 ; earlier 'wrapped' key cannot be mistaken for one written under this one.
 ;
+; Corrected 2026-08-28: every cursor line here read 'steady', which was the engine reporting a
+; TerminalOptions field nothing ever wrote (gap 11) and not audited terminal behaviour. The
+; power-on cursor style is a blinking block - DECSCUSR Ps=0 and Ps=1 both name it as the default -
+; and corpus/git-log.bin contains no DECSCUSR and no DEC mode 12, so the cursor blinks for the
+; whole of this recording. All seven frames now read 'blink'.
+;
 # git-log  frame 1/7  after 960/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=31 row=9 visible shape=block steady
+cursor col=31 row=9 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -57,7 +63,7 @@ legend
 # git-log  frame 2/7  after 1920/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=26 row=21 visible shape=block steady
+cursor col=26 row=21 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -122,7 +128,7 @@ legend
 # git-log  frame 3/7  after 2880/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=2 row=29 visible shape=block steady
+cursor col=2 row=29 visible shape=block blink
 scrollback 4
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -209,7 +215,7 @@ legend
 # git-log  frame 4/7  after 3841/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=18 row=29 visible shape=block steady
+cursor col=18 row=29 visible shape=block blink
 scrollback 15
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -319,7 +325,7 @@ legend
 # git-log  frame 5/7  after 4801/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=19 row=29 visible shape=block steady
+cursor col=19 row=29 visible shape=block blink
 scrollback 29
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -457,7 +463,7 @@ legend
 # git-log  frame 6/7  after 5761/6722 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=1 row=29 visible shape=block steady
+cursor col=1 row=29 visible shape=block blink
 scrollback 42
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
@@ -621,7 +627,7 @@ legend
 # git-log  frame 7/7  after 6722/6722 bytes  (end of stream)
 size 120x30
 alt off
-cursor col=0 row=29 visible shape=block steady
+cursor col=0 row=29 visible shape=block blink
 scrollback 55
 title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
 icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"

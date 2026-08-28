@@ -13,10 +13,16 @@
 ; audited wrap points are unchanged; the key was renamed so that a file written under the
 ; earlier 'wrapped' key cannot be mistaken for one written under this one.
 ;
+; Corrected 2026-08-28: every cursor line here read 'steady', which was the engine reporting a
+; TerminalOptions field nothing ever wrote (gap 11) and not audited terminal behaviour. The
+; power-on cursor style is a blinking block - DECSCUSR Ps=0 and Ps=1 both name it as the default -
+; and corpus/less.bin contains no DECSCUSR and no DEC mode 12, so the cursor blinks for the whole
+; of this recording. All nine frames now read 'blink'.
+;
 # less  frame 1/9  after 88/1517 bytes  (alt screen enter)
 size 120x30
 alt on
-cursor col=0 row=0 visible shape=block steady
+cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -32,7 +38,7 @@ legend
 # less  frame 2/9  after 216/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=0 row=24 hidden shape=block steady
+cursor col=0 row=24 hidden shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -48,7 +54,7 @@ legend
 # less  frame 3/9  after 433/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=4 row=29 visible shape=block steady
+cursor col=4 row=29 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -84,7 +90,7 @@ legend
 # less  frame 4/9  after 650/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=0 row=29 visible shape=block steady
+cursor col=0 row=29 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -129,7 +135,7 @@ legend
 # less  frame 5/9  after 866/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=2 row=29 visible shape=block steady
+cursor col=2 row=29 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -174,7 +180,7 @@ legend
 # less  frame 6/9  after 1083/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=0 row=29 visible shape=block steady
+cursor col=0 row=29 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -219,7 +225,7 @@ legend
 # less  frame 7/9  after 1300/1517 bytes  (interval sample)
 size 120x30
 alt on
-cursor col=5 row=29 visible shape=block steady
+cursor col=5 row=29 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -266,7 +272,7 @@ legend
 # less  frame 8/9  after 1326/1517 bytes  (alt screen leave)
 size 120x30
 alt off
-cursor col=0 row=0 visible shape=block steady
+cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
@@ -282,7 +288,7 @@ legend
 # less  frame 9/9  after 1517/1517 bytes  (end of stream)
 size 120x30
 alt off
-cursor col=0 row=0 visible shape=block steady
+cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"

@@ -22,6 +22,8 @@ public sealed class XtermSharpEngine : ITerminalEngine
 
     public XtermSharpEngine(TerminalSetup setup)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(setup.ScrollbackLines);
+
         responses = new ResponseSink();
         terminal = new XtermTerminal(responses, new TerminalOptions
         {
@@ -29,6 +31,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
             Rows = setup.Size.Rows,
             TermName = "xterm-256color",
             ConvertEol = false,
+            Scrollback = setup.ScrollbackLines,
         });
         grid = new XtermGrid(terminal);
         terminal.ClearUpdateRange();
@@ -52,6 +55,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
         bytes.CopyTo(feedBuffer);
 
         var historyBefore = terminal.Buffer.YBase;
+        var framesBefore = terminal.SynchronizedFrames;
         terminal.ClearUpdateRange();
         terminal.Feed(feedBuffer, bytes.Length);
         terminal.GetUpdateRange(out var first, out var last);
@@ -61,8 +65,8 @@ public sealed class XtermSharpEngine : ITerminalEngine
                 ? RowSpan.None
                 : new RowSpan(Math.Max(first, 0), Math.Min(last, terminal.Rows - 1)),
             Response: responses.Drain(),
-            FramesCompleted: 0,
-            FramePending: false,
+            FramesCompleted: terminal.SynchronizedFrames - framesBefore,
+            FramePending: terminal.SynchronizedUpdate,
             LinesScrolled: Math.Max(terminal.Buffer.YBase - historyBefore, 0));
     }
 
@@ -72,12 +76,27 @@ public sealed class XtermSharpEngine : ITerminalEngine
     {
     }
 
-    TerminalCursor ReadCursor() => new(
-        terminal.Buffer.X,
-        terminal.Buffer.Y,
-        Visible: !terminal.CursorHidden,
-        Shape: CursorShape.Block,
-        Blinking: terminal.Options.CursorBlink);
+    TerminalCursor ReadCursor()
+    {
+        var (shape, blinking) = ToShapeAndBlink(terminal.CursorStyle);
+        return new TerminalCursor(
+            terminal.Buffer.X,
+            terminal.Buffer.Y,
+            Visible: !terminal.CursorHidden,
+            Shape: shape,
+            Blinking: blinking);
+    }
+
+    static (CursorShape Shape, bool Blinking) ToShapeAndBlink(CursorStyle style) => style switch
+    {
+        CursorStyle.BlinkBlock => (CursorShape.Block, true),
+        CursorStyle.SteadyBlock => (CursorShape.Block, false),
+        CursorStyle.BlinkUnderline => (CursorShape.Underline, true),
+        CursorStyle.SteadyUnderline => (CursorShape.Underline, false),
+        CursorStyle.BlinkingBar => (CursorShape.Bar, true),
+        CursorStyle.SteadyBar => (CursorShape.Bar, false),
+        _ => throw new ArgumentOutOfRangeException(nameof(style), style, "Unknown cursor style."),
+    };
 
     TerminalModes ReadModes() => new(
         ApplicationCursorKeys: terminal.ApplicationCursor,
@@ -86,7 +105,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
         AlternateScreen: terminal.Buffers.IsAlternateBuffer,
         BracketedPaste: terminal.BracketedPasteMode,
         FocusReporting: terminal.SendFocus,
-        SynchronizedOutput: false,
+        SynchronizedOutput: terminal.SynchronizedUpdate,
         MouseTracking: terminal.MouseMode switch
         {
             MouseMode.Off => MouseTracking.Off,

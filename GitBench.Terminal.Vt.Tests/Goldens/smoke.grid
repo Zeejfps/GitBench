@@ -17,10 +17,16 @@
 ; first byte of the payload run that follows a feed boundary. The bytes say SYSTEM32, so the
 ; golden says SYSTEM32 and the replay of this corpus is red until that parser is fixed.
 ;
+; Corrected 2026-08-28: every cursor line here read 'steady', which was the engine reporting a
+; TerminalOptions field nothing ever wrote (gap 11) and not audited terminal behaviour. The
+; power-on cursor style is a blinking block - DECSCUSR Ps=0 and Ps=1 both name it as the default -
+; and corpus/smoke.bin contains no DECSCUSR and no DEC mode 12, so the cursor blinks for the whole
+; of this recording. All seven frames now read 'blink'.
+;
 # smoke  frame 1/7  after 45/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=13 row=0 hidden shape=block steady
+cursor col=13 row=0 hidden shape=block blink
 scrollback 0
 title ""
 icon ""
@@ -37,7 +43,7 @@ legend
 # smoke  frame 2/7  after 90/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=43 row=0 hidden shape=block steady
+cursor col=43 row=0 hidden shape=block blink
 scrollback 0
 title ""
 icon ""
@@ -54,7 +60,7 @@ legend
 # smoke  frame 3/7  after 135/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=14 row=1 hidden shape=block steady
+cursor col=14 row=1 hidden shape=block blink
 scrollback 0
 title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
 icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
@@ -72,7 +78,7 @@ legend
 # smoke  frame 4/7  after 180/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=6 row=3 hidden shape=block steady
+cursor col=6 row=3 hidden shape=block blink
 scrollback 0
 title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
 icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
@@ -92,7 +98,7 @@ legend
 # smoke  frame 5/7  after 225/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=51 row=3 hidden shape=block steady
+cursor col=51 row=3 hidden shape=block blink
 scrollback 0
 title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
 icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
@@ -112,7 +118,7 @@ legend
 # smoke  frame 6/7  after 270/316 bytes  (interval sample)
 size 120x30
 alt off
-cursor col=96 row=3 hidden shape=block steady
+cursor col=96 row=3 hidden shape=block blink
 scrollback 0
 title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
 icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
@@ -132,7 +138,7 @@ legend
 # smoke  frame 7/7  after 316/316 bytes  (end of stream)
 size 120x30
 alt off
-cursor col=16 row=4 visible shape=block steady
+cursor col=16 row=4 visible shape=block blink
 scrollback 0
 title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
 icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"

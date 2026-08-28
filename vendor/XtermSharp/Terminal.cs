@@ -135,6 +135,21 @@ namespace XtermSharp {
 		public bool CursorHidden { get; internal set; }
 		public bool BracketedPasteMode { get; internal set; }
 
+		/// <summary>
+		/// Gets the cursor style the program last selected
+		/// </summary>
+		public CursorStyle CursorStyle { get; private set; }
+
+		/// <summary>
+		/// Gets whether a synchronized update the program opened has yet to be closed
+		/// </summary>
+		public bool SynchronizedUpdate { get; private set; }
+
+		/// <summary>
+		/// Gets the number of synchronized updates that have closed since the terminal was created
+		/// </summary>
+		public int SynchronizedFrames { get; private set; }
+
 		public TerminalOptions Options { get; private set; }
 		public int Cols { get; private set; }
 		public int Rows { get; private set; }
@@ -686,11 +701,32 @@ namespace XtermSharp {
 		}
 
 		/// <summary>
-		/// Implement to change the cursor style, call the base implementation.
+		/// Selects the shape the cursor is drawn with and whether it blinks
 		/// </summary>
-		/// <param name="style"></param>
+		/// <param name="style">The style requested by DECSCUSR or by DEC mode 12</param>
 		public void SetCursorStyle (CursorStyle style)
 		{
+			CursorStyle = style;
+		}
+
+		/// <summary>
+		/// Opens a synchronized update, leaving the screen to be painted as usual
+		/// </summary>
+		internal void BeginSynchronizedUpdate ()
+		{
+			SynchronizedUpdate = true;
+		}
+
+		/// <summary>
+		/// Closes a synchronized update, counting a frame only when one was open
+		/// </summary>
+		internal void EndSynchronizedUpdate ()
+		{
+			if (!SynchronizedUpdate)
+				return;
+
+			SynchronizedUpdate = false;
+			SynchronizedFrames++;
 		}
 
 		internal void ReverseIndex ()
@@ -1151,6 +1187,9 @@ namespace XtermSharp {
 			MouseProtocol = MouseProtocolEncoding.X10;
 
 			Allow80To132 = false;
+
+			CursorStyle = Options.CursorStyle;
+			SynchronizedUpdate = false;
 			// TODO REST
 		}
 	}

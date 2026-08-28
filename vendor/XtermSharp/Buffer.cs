@@ -186,16 +186,18 @@ namespace XtermSharp {
 		}
 
 		/// <summary>
-		/// Fills the buffer's viewport with blank lines.
+		/// Replaces every row of the buffer's viewport with a blank line.
 		/// </summary>
 		public void FillViewportRows (CellAttribute? attribute = null)
 		{
-			// TODO: limitation in original, this does not cope with partial fills, it is either zero or nothing
-			if (lines.Length != 0)
-				return;
 			var attr = attribute.HasValue ? attribute.Value : CharData.DefaultAttr;
-			for (int i = Terminal.Rows; i > 0; i--)
-				lines.Push (GetBlankLine (attr));
+			for (int i = 0; i < Terminal.Rows; i++) {
+				var blank = GetBlankLine (attr);
+				if (YBase + i < lines.Length)
+					lines [YBase + i] = blank;
+				else
+					lines.Push (blank);
+			}
 		}
 
 		bool IsReflowEnabled => hasScrollback;// && Terminal.Options.WindowsMode;

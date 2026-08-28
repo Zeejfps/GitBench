@@ -203,7 +203,8 @@ namespace XtermSharp {
 			table.Add (0x5d, ParserState.Escape, ParserAction.OscStart, ParserState.OscString);
 			table.Add (PRINTABLES, ParserState.OscString, ParserAction.OscPut, ParserState.OscString);
 			table.Add (0x7f, ParserState.OscString, ParserAction.OscPut, ParserState.OscString);
-			table.Add (new int [] { 0x9c, 0x1b, 0x18, 0x1a, 0x07 }, ParserState.OscString, ParserAction.OscEnd, ParserState.Ground);
+			table.Add (r (0x80, 0xa0), ParserState.OscString, ParserAction.OscPut, ParserState.OscString);
+			table.Add (new int [] { 0x1b, 0x18, 0x1a, 0x07 }, ParserState.OscString, ParserAction.OscEnd, ParserState.Ground);
 			table.Add (r (0x1c, 0x20), ParserState.OscString, ParserAction.Ignore, ParserState.OscString);
 			// sos/pm/apc does nothing
 			table.Add (new int [] { 0x58, 0x5e, 0x5f }, ParserState.Escape, ParserAction.Ignore, ParserState.SosPmApcString);
@@ -294,6 +295,7 @@ namespace XtermSharp {
 
 		static void EmptyExecuteHandler (byte code) { }
 		static ParsingState EmptyErrorHandler (ParsingState state) => state;
+		static string OscText (List<byte> payload) => System.Text.Encoding.UTF8.GetString (payload.ToArray ());
 
 		// Fallback handlers
 		public unsafe PrintHandler PrintHandlerFallback = (data, start, end) => { };
@@ -305,7 +307,7 @@ namespace XtermSharp {
 		public Func<ParsingState, ParsingState> ErrorHandlerFallback = (state) => state;
 
 		// buffers over several parser calls
-		string _osc;
+		List<byte> _osc;
 		List<int> _pars;
 		string _collect;
 		unsafe PrintHandler printHandler = (data, start, end) => { };
@@ -324,7 +326,7 @@ namespace XtermSharp {
 
 			initialState = ParserState.Ground;
 			currentState = initialState;
-			_osc = "";
+			_osc = new List<byte> ();
 			_pars = new List<int> { 0 } ;
 			_collect = "";
 			SetEscHandler ("\\", EscHandlerFallback);
@@ -432,7 +434,7 @@ namespace XtermSharp {
 		public void Reset ()
 		{
 			currentState = initialState;
-			_osc = "";
+			_osc.Clear ();
 			_pars.Clear ();
 			_pars.Add (0);
 			_collect = "";
@@ -542,7 +544,7 @@ namespace XtermSharp {
 							CurrentState = currentState,
 							Print = print,
 							Dcs = dcs,
-							Osc = osc,
+							Osc = OscText (osc),
 							Collect = collect,
 						});
 						if (inject.Abort)
@@ -582,7 +584,7 @@ namespace XtermSharp {
 						printHandler (data, print, i);
 						print = -1;
 					}
-					osc = "";
+					osc.Clear ();
 					pars.Clear ();
 					pars.Add (0);
 					collect = "";
@@ -607,7 +609,7 @@ namespace XtermSharp {
 					}
 					if (code == 0x1b)
 						transition |= (int)ParserState.Escape;
-					osc = "";
+					osc.Clear ();
 					pars.Clear ();
 					pars.Add (0);
 					collect = "";
@@ -619,37 +621,33 @@ namespace XtermSharp {
 						printHandler (data, print, i);
 						print = -1;
 					}
-					osc = "";
+					osc.Clear ();
 					break;
 				case ParserAction.OscPut:
 					for (var j = i; ; j++) {
-						if (j > len || (data [j] < 0x20) || (data [j] > 0x7f && data [j] < 0x9f)) {
-							var block = new byte [j - (i+1)];
-							for (int k = i+1; k < j; k++)
-								block [k-i-1] = data [k];
-							// TODO: Audit, the code below as I would not like the code below to abort on invalid UTF8
-							// So we need a way of producing memory blocks.
-							osc += System.Text.Encoding.UTF8.GetString (block);
-								 
+						if (j >= len || data [j] < 0x20) {
+							for (int k = i; k < j; k++)
+								osc.Add (data [k]);
 							i = j - 1;
 							break;
 						}
 					}
 					break;
 				case ParserAction.OscEnd:
-					if (osc != "" && code != 0x18 && code != 0x1a) {
+					if (osc.Count != 0 && code != 0x18 && code != 0x1a) {
+						var payload = OscText (osc);
 						// NOTE: OSC subparsing is not part of the original parser
 						// we do basic identifier parsing here to offer a jump table for OSC as well
-						int idx = osc.IndexOf (';');
+						int idx = payload.IndexOf (';');
 						if (idx == -1) {
-							OscHandlerFallback (-1, osc); // this is an error mal-formed OSC
+							OscHandlerFallback (-1, payload); // this is an error mal-formed OSC
 						} else {
 							// Note: NaN is not handled here
 							// either catch it with the fallback handler
 							// or with an explicit NaN OSC handler
 							int identifier = 0;
-							Int32.TryParse (osc.Substring (0, idx), out identifier);
-							var content = osc.Substring (idx + 1);
+							Int32.TryParse (payload.Substring (0, idx), out identifier);
+							var content = payload.Substring (idx + 1);
 							// Trigger OSC handler
 							int c = -1;
 							if (OscHandlers.TryGetValue (identifier, out var ohandlers)) {
@@ -665,7 +663,7 @@ namespace XtermSharp {
 					}
 					if (code == 0x1b)
 						transition |= (int)ParserState.Escape;
-					osc = "";
+					osc.Clear ();
 					pars.Clear ();
 					pars.Add (0);
 					collect = "";

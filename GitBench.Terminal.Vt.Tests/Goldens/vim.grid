@@ -12,10 +12,18 @@
 ; audited wrap points are unchanged; the key was renamed so that a file written under the
 ; earlier 'wrapped' key cannot be mistaken for one written under this one.
 ;
+; Corrected 2026-08-28: the cursor lines here read 'steady' throughout, which was the engine
+; reporting a TerminalOptions field nothing ever wrote (gap 11) and not audited terminal
+; behaviour. The power-on cursor style is a blinking block - DECSCUSR Ps=0 and Ps=1 both name it
+; as the default - and this is the one corpus that says otherwise: vim sends ESC [ ? 12 h at byte
+; 282 and ESC [ ? 12 l at byte 288, so blinking is turned back off at byte 294. Frame 1 is taken
+; at byte 87, before either, so it reads 'blink'; frames 2 to 9 are taken at byte 617 or later and
+; stay 'steady'. There is no DECSCUSR anywhere in corpus/vim.bin, so the shape stays block.
+;
 # vim  frame 1/9  after 87/4325 bytes  (alt screen enter)
 size 120x30
 alt on
-cursor col=0 row=0 visible shape=block steady
+cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"

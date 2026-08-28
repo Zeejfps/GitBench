@@ -76,7 +76,12 @@ namespace XtermSharp {
 			parser.SetCsiHandler ('g', (pars, collect) => TabClear (pars));
 			parser.SetCsiHandler ('h', (pars, collect) => SetMode (pars, collect));
 			parser.SetCsiHandler ('l', (pars, collect) => ResetMode (pars, collect));
-			parser.SetCsiHandler ('m', (pars, collect) => CharAttributes (pars));
+			parser.SetCsiHandler ('m', (pars, collect) => {
+				if (collect == "")
+					CharAttributes (pars);
+				else
+					terminal.Error ("Unknown CSI code", collect, pars, "m");
+			});
 			parser.SetCsiHandler ('n', (pars, collect) => terminal.csiDSR (pars, collect));
 			parser.SetCsiHandler ('p', (pars, collect) => {
 				switch (collect) {
@@ -106,7 +111,12 @@ namespace XtermSharp {
 				}
 			});
 			parser.SetCsiHandler ('t', (pars, collect) => terminal.csiDISPATCH (pars));
-			parser.SetCsiHandler ('u', (pars, collect) => terminal.RestoreCursor ());
+			parser.SetCsiHandler ('u', (pars, collect) => {
+				if (collect == "")
+					terminal.RestoreCursor ();
+				else
+					terminal.Error ("Unknown CSI code", collect, pars, "u");
+			});
 			parser.SetCsiHandler ('v', (pars, collect) => terminal.csiDECCRA (pars, collect));
 			parser.SetCsiHandler ('y', (pars, collect) => terminal.csiDECRQCRA (pars));
 			parser.SetCsiHandler ('x', (pars, collect) => {
@@ -716,6 +726,8 @@ namespace XtermSharp {
 				} else if (p == 8) {
 					// invisible
 					flags |= FLAGS.INVISIBLE;
+				} else if (p == 9) {
+					flags |= FLAGS.CrossedOut;
 				} else if (p == 2) {
 					// dimmed text
 					flags |= FLAGS.DIM;
@@ -738,6 +750,8 @@ namespace XtermSharp {
 				} else if (p == 28) {
 					// not invisible
 					flags &= ~FLAGS.INVISIBLE;
+				} else if (p == 29) {
+					flags &= ~FLAGS.CrossedOut;
 				} else if (p == 39) {
 					// reset fg
 					fg = CharData.DefaultAttr.Foreground;
@@ -796,32 +810,14 @@ namespace XtermSharp {
 
 		void ResetMode (int [] pars, string collect)
 		{
-			if (pars.Length == 0)
-				return;
-
-			if (pars.Length > 1) {
-				for (var i = 0; i < pars.Length; i++)
-					terminal.csiDECRESET (pars [i], "");
-
-
-				return;
-			}
-			terminal.csiDECRESET (pars [0], collect);
+			for (var i = 0; i < pars.Length; i++)
+				terminal.csiDECRESET (pars [i], collect);
 		}
 
 		void SetMode (int [] pars, string collect)
 		{
-			if (pars.Length == 0)
-				return;
-
-			if (pars.Length > 1) {
-				for (var i = 0; i < pars.Length; i++)
-					terminal.csiDECSET (pars [i], "");
-
-
-				return;
-			}
-			terminal.csiDECSET (pars [0], collect);
+			for (var i = 0; i < pars.Length; i++)
+				terminal.csiDECSET (pars [i], collect);
 		}
 
 
@@ -1236,17 +1232,6 @@ namespace XtermSharp {
 				// MIGUEL-TODO: I suspect this needs to be a stirng in C# to cope with Grapheme clusters
 				var ch = code;
 
-				// calculate print space
-				// expensive call, therefore we save width in line buffer
-
-				// TODO: This is wrong, we only have one byte at this point, we do not have a full rune.
-				// The correct fix includes the upper parser tracking the "pending" data across invocations
-				// until a valid UTF-8 string comes in, and *then* we can call this method
-				// var chWidth = Rune.ColumnWidth ((Rune)code);
-
-				// 1 until we get a fixed NStack
-				var chWidth = 1;
-
 				// get charset replacement character
 				// charset are only defined for ASCII, therefore we only
 				// search for an replacement char if code < 127
@@ -1261,35 +1246,11 @@ namespace XtermSharp {
 				if (screenReaderMode)
 					terminal.EmitChar (ch);
 
-				// insert combining char at last cursor position
-				// FIXME: needs handling after cursor jumps
-				// buffer.x should never be 0 for a combining char
-				// since they always follow a cell consuming char
-				// therefore we can test for buffer.x to avoid overflow left
-				if (chWidth == 0 && buffer.X > 0) {
-					// MIGUEL TODO: in the original code the getter might return a null value
-					// does this mean that JS returns null for out of bounsd?
-					if (buffer.X >= 1 && buffer.X < bufferRow.Length) {
-						var chMinusOne = bufferRow [buffer.X - 1];
-						if (chMinusOne.Width == 0) {
-							// found empty cell after fullwidth, need to go 2 cells back
-							// it is save to step 2 cells back here
-							// since an empty cell is only set by fullwidth chars
-							if (buffer.X >= 2) {
-								var chMinusTwo = bufferRow [buffer.X - 2];
-
-								chMinusTwo.Code += ch;
-								chMinusTwo.Rune = (uint)code;
-								bufferRow [buffer.X - 2] = chMinusTwo; // must be set explicitly now
-							}
-						} else {
-							chMinusOne.Code += ch;
-							chMinusOne.Rune = (uint)code;
-							bufferRow [buffer.X - 1] = chMinusOne; // must be set explicitly now
-						}
-					}
+				// calculate print space
+				// expensive call, therefore we save width in line buffer
+				var chWidth = RuneHelper.ConsoleWidth ((uint)code);
+				if (chWidth == 0)
 					continue;
-				}
 
 				// goto next line if ch would overflow
 				// TODO: needs a global min terminal width of 2
@@ -1324,6 +1285,9 @@ namespace XtermSharp {
 					}
 				}
 
+				if (buffer.X + chWidth - 1 > right)
+					continue;
+
 				var empty = CharData.Null;
 				empty.Attribute = curAttr;
 				// insert mode: move characters to right
@@ -1346,10 +1310,10 @@ namespace XtermSharp {
 				// fullwidth char - also set next cell to placeholder stub and advance cursor
 				// for graphemes bigger than fullwidth we can simply loop to zero
 				// we already made sure above, that buffer.x + chWidth will not overflow right
-				if (chWidth > 0) {
-					while (--chWidth != 0) {
-						bufferRow [buffer.X++] = empty;
-					}
+				while (--chWidth != 0) {
+					var trailer = empty;
+					trailer.Width = 0;
+					bufferRow [buffer.X++] = trailer;
 				}
 			}
 			terminal.UpdateRange (buffer.Y);
