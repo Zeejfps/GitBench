@@ -553,6 +553,8 @@
   "worktrees.remove_force_label": "Remove even if dirty",
   "worktrees.remove_note": "git refuses if the worktree has uncommitted changes. Check the box to remove anyway.",
   "worktrees.remove_action": "Remove",
+  "worktrees.removed_with_leftovers": "Worktree removed, but some files are still on disk at ‘{path}’: {reason}",
+  "worktrees.leftovers_open_action": "Open folder",
   "worktrees.unlock_action": "Unlock worktree",
   "worktrees.unlocked_status": "Worktree unlocked",
 

@@ -553,6 +553,8 @@
   "worktrees.remove_force_label": "変更があっても削除",
   "worktrees.remove_note": "ワークツリーに未コミットの変更があるとgitは拒否します。それでも削除するにはチェックを入れてください。",
   "worktrees.remove_action": "削除",
+  "worktrees.removed_with_leftovers": "ワークツリーを削除しましたが、「{path}」にファイルが残っています: {reason}",
+  "worktrees.leftovers_open_action": "フォルダーを開く",
   "worktrees.unlock_action": "ワークツリーのロックを解除",
   "worktrees.unlocked_status": "ワークツリーのロックを解除しました",
 

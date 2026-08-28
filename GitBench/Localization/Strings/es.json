@@ -553,6 +553,8 @@
   "worktrees.remove_force_label": "Quitar aunque tenga cambios",
   "worktrees.remove_note": "git rechaza la operación si el árbol de trabajo tiene cambios sin confirmar. Marca la casilla para quitarlo de todos modos.",
   "worktrees.remove_action": "Eliminar",
+  "worktrees.removed_with_leftovers": "Árbol de trabajo eliminado, pero quedan archivos en el disco en «{path}»: {reason}",
+  "worktrees.leftovers_open_action": "Abrir carpeta",
   "worktrees.unlock_action": "Desbloquear árbol de trabajo",
   "worktrees.unlocked_status": "Árbol de trabajo desbloqueado",
 

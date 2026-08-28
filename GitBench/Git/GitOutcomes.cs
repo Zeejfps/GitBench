@@ -17,6 +17,31 @@ public abstract record GitOutcome : IOutcome<GitOutcome>
     public sealed record Failed(string Message) : GitOutcome;
 }
 
+// Removing a worktree is two things at once: deregistering it, and deleting its directory. Git
+// exits 1 for both "refused, nothing happened" and "deregistered it but couldn't finish the
+// delete", so the outcome has to say which — the second one is not a failure, since the worktree
+// the user asked to remove is gone either way.
+public abstract record WorktreeRemoveOutcome : IOutcome<WorktreeRemoveOutcome>
+{
+    private WorktreeRemoveOutcome() { }
+
+    public static readonly WorktreeRemoveOutcome Ok = new Removed();
+
+    public static WorktreeRemoveOutcome Fail(string message) => new Failed(message);
+
+    // RemovedWithLeftovers is not a failure: the worktree is deregistered and its directory is
+    // all that's left. Callers surface it as a warning and still refresh the worktree list.
+    public string? FailureMessage => (this as Failed)?.Message;
+
+    public sealed record Removed : WorktreeRemoveOutcome;
+
+    /// <param name="Path">The worktree directory that still exists on disk.</param>
+    /// <param name="Reason">Why the last entry under it couldn't be deleted.</param>
+    public sealed record RemovedWithLeftovers(string Path, string Reason) : WorktreeRemoveOutcome;
+
+    public sealed record Failed(string Message) : WorktreeRemoveOutcome;
+}
+
 // Operations that can land in a conflicted-but-in-progress state the operation banner
 // takes over from: merge, rebase, cherry-pick, revert, stash apply, submodule update.
 public abstract record MergeLikeOutcome : IOutcome<MergeLikeOutcome>

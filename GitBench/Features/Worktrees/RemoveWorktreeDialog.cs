@@ -4,6 +4,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -32,6 +33,7 @@ internal sealed record RemoveWorktreeDialog : Widget
             ctx.Require<IGitWorktreeOperations>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
+            ctx.Require<IPlatformShell>(),
             ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;

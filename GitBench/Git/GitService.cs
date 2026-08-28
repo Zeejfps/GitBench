@@ -7,6 +7,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
+using GitBench.Infrastructure;
 using LibGit2Sharp;
 using SubmoduleStatus = GitBench.Features.Submodules.SubmoduleStatus;
 
@@ -1711,7 +1712,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 try
                 {
                     if (File.Exists(fullPath)) File.Delete(fullPath);
-                    else if (Directory.Exists(fullPath)) Directory.Delete(fullPath, recursive: true);
+                    else if (DirectoryTree.Delete(fullPath) is { } leftovers)
+                        return new GitOutcome.Failed(leftovers.Reason);
                 }
                 catch (Exception ex)
                 {
@@ -2843,17 +2845,59 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return ToOutcome(_runner.Run(primary.Path, args), "git worktree add");
         });
 
-    public GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force)
-        => RunOperation(primary, () =>
+    // Git owns the policy here (dirty, untracked, locked, submodules, "that's the main working
+    // tree") and the metadata, but not the delete: its recursive removal follows junctions instead
+    // of removing them and abandons the entire walk at the first entry it can't delete — which in a
+    // pnpm node_modules is a junction whose target it emptied a moment earlier. It deregisters the
+    // worktree regardless, so on Windows that lands as "error: failed to delete '<worktree>':
+    // Directory not empty" over a worktree that is, in every sense git tracks, gone.
+    //
+    // Git exits 1 for that and for an outright refusal alike, so ask for the state rather than
+    // reading the exit code: still registered means git refused and nothing changed; no longer
+    // registered means the removal happened and the filesystem side is ours to finish.
+    public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force)
+        => RunLocked<WorktreeRemoveOutcome>(primary, GitResource.LocalState, () =>
         {
             if (string.IsNullOrWhiteSpace(worktreePath))
-                return new GitOutcome.Failed("Worktree path is required.");
+                return new WorktreeRemoveOutcome.Failed("Worktree path is required.");
+
+            var wasRegistered = IsRegisteredWorktree(primary, worktreePath);
 
             var args = new List<string> { "worktree", "remove" };
             if (force) args.Add("--force");
             args.Add(worktreePath);
-            return ToOutcome(_runner.Run(primary.Path, args), "git worktree remove");
-        });
+            var result = _runner.Run(primary.Path, args);
+
+            // Deleting the directory ourselves is only ever right for a worktree git has just
+            // deregistered. A path git never had registered is not ours to remove, whatever the
+            // command failed with.
+            if (!result.Ok && (!wasRegistered || IsRegisteredWorktree(primary, worktreePath)))
+                return new WorktreeRemoveOutcome.Failed(result.BlockError("git worktree remove"));
+
+            var leftovers = DirectoryTree.Delete(worktreePath);
+            return leftovers is null
+                ? WorktreeRemoveOutcome.Ok
+                : new WorktreeRemoveOutcome.RemovedWithLeftovers(leftovers.Path, leftovers.Reason);
+        }, static m => new WorktreeRemoveOutcome.Failed(m));
+
+    private bool IsRegisteredWorktree(Repo primary, string worktreePath)
+    {
+        var wanted = NormalizeWorktreePath(worktreePath);
+        return ListWorktrees(primary).Any(w =>
+            string.Equals(NormalizeWorktreePath(w.Path), wanted, PathComparison));
+
+        // `git worktree list` prints forward slashes on Windows while the caller holds whatever
+        // the registry recorded, so compare resolved paths rather than the strings.
+        static string NormalizeWorktreePath(string p)
+        {
+            try { p = Path.GetFullPath(p); }
+            catch { /* keep the raw path; a malformed one just won't match */ }
+            return p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+    }
+
+    private static readonly StringComparison PathComparison =
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
     public GitOutcome UnlockWorktree(Repo primary, string worktreePath)
         => RunOperation(primary, () =>
@@ -4082,11 +4126,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         catch { /* best-effort */ }
     }
 
-    private static void TryDeleteDir(string path)
-    {
-        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
-        catch { /* best-effort */ }
-    }
+    private static void TryDeleteDir(string path) => DirectoryTree.Delete(path);
 
     private static string DescribeState(RepoOperationState state) => state switch
     {

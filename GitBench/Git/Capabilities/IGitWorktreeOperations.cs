@@ -6,7 +6,7 @@ public interface IGitWorktreeOperations
 {
     IReadOnlyList<WorktreeInfo> ListWorktrees(Repo primary);
     GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request);
-    GitOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
+    WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force);
     GitOutcome UnlockWorktree(Repo primary, string worktreePath);
     GitOutcome PruneWorktrees(Repo primary);
 }

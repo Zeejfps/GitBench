@@ -553,6 +553,8 @@
   "worktrees.remove_force_label": "即使有更改也移除",
   "worktrees.remove_note": "如果工作树有未提交的更改，git 会拒绝。勾选此框以强行移除。",
   "worktrees.remove_action": "移除",
+  "worktrees.removed_with_leftovers": "工作树已移除，但“{path}”中仍有文件留在磁盘上：{reason}",
+  "worktrees.leftovers_open_action": "打开文件夹",
   "worktrees.unlock_action": "解锁工作树",
   "worktrees.unlocked_status": "工作树已解锁",
 
