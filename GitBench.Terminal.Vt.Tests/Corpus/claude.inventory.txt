@@ -1,0 +1,70 @@
+== capability inventory ==
+program:  C:\Users\zeejf\.local\bin\claude.exe
+terminal: 120x34, TERM=xterm-256color COLORTERM=truecolor
+captured: 5558 bytes, 688 tokens
+
+-- sequences used --
+      84  CR
+      84  LF
+      83  CSI K — erase in line (EL)
+      58  CSI H — cursor position (CUP)
+      56  CSI C — cursor forward (CUF)
+      43  CSI m — SGR: TRUECOLOR foreground
+      23  CSI m — SGR: reset
+      20  CSI ?2026h — DEC private mode set: 2026 SYNCHRONIZED OUTPUT
+      20  CSI ?2026l — DEC private mode reset: 2026 SYNCHRONIZED OUTPUT
+      18  CSI ?25h — DEC private mode set: 25 cursor visible
+      18  CSI ?25l — DEC private mode reset: 25 cursor visible
+       8  OSC 0 — set icon name and window title
+       4  CSI < u — kitty keyboard: pop flags
+       4  CSI > m — modifyOtherKeys
+       4  CSI m — SGR: normal intensity
+       4  CSI m — SGR: TRUECOLOR background
+       4  OSC 8 — HYPERLINK
+       3  CSI ?1000h — DEC private mode set: 1000 mouse click tracking
+       3  CSI ?1002h — DEC private mode set: 1002 mouse drag tracking
+       3  CSI ?1003h — DEC private mode set: 1003 mouse any-motion tracking
+       3  CSI ?1006h — DEC private mode set: 1006 SGR mouse
+       3  CSI ?2004l — DEC private mode reset: 2004 BRACKETED PASTE
+       3  CSI ?2031l — DEC private mode reset: 2031
+       3  CSI m — SGR: bold
+       3  CSI m — SGR: default background
+       3  CSI X — erase characters (ECH)
+       2  CSI ?1000l — DEC private mode reset: 1000 mouse click tracking
+       2  CSI ?1002l — DEC private mode reset: 1002 mouse drag tracking
+       2  CSI ?1003l — DEC private mode reset: 1003 mouse any-motion tracking
+       2  CSI ?1004h — DEC private mode set: 1004 focus events
+       2  CSI ?1006l — DEC private mode reset: 1006 SGR mouse
+       2  CSI J — erase in display (ED)
+       1  CSI ?1004l — DEC private mode reset: 1004 focus events
+       1  CSI ?1049h — DEC private mode set: 1049 ALT SCREEN + save cursor
+       1  CSI ?1049l — DEC private mode reset: 1049 ALT SCREEN + save cursor
+       1  CSI ?2004h — DEC private mode set: 2004 BRACKETED PASTE
+       1  CSI ?2031h — DEC private mode set: 2031
+       1  CSI ?9001h — DEC private mode set: 9001 win32 input mode
+       1  CSI ?9001l — DEC private mode reset: 9001 win32 input mode
+       1  CSI m — SGR: dim
+       1  CSI m — SGR: italic
+       1  CSI q — cursor style (DECSCUSR)
+
+-- capabilities that decide the engine --
+  USED  truecolor SGR (38;2/48;2)  (47)
+     .  256-colour SGR (38;5/48;5)
+  USED  alt screen (?1049)  (2)
+  USED  synchronized output (?2026)  (40)
+  USED  bracketed paste (?2004)  (4)
+  USED  SGR mouse (?1006)  (5)
+  USED  mouse tracking (?1000/2/3)  (15)
+  USED  focus events (?1004)  (3)
+     .  application cursor keys (?1)
+  USED  cursor visibility (?25)  (36)
+  USED  kitty keyboard (CSI u)  (4)
+  USED  modifyOtherKeys (CSI > m)  (4)
+     .  scrolling region (DECSTBM)
+  USED  underline (SGR 4)  (4)
+     .  strikethrough (SGR 9)
+  USED  window title (OSC 0/2)  (8)
+  USED  hyperlinks (OSC 8)  (4)
+     .  clipboard (OSC 52)
+     .  shell integration (OSC 133/633)
+     .  device control string (DCS)

@@ -1,0 +1,60 @@
+== capability inventory ==
+program:  C:\Program Files\Git\usr\bin\vim.exe probe-sample.txt
+terminal: 120x30, TERM=xterm-256color COLORTERM=truecolor
+captured: 4325 bytes, 385 tokens
+
+-- sequences used --
+      95  CSI K — erase in line (EL)
+      90  CR
+      90  LF
+      18  CSI H — cursor position (CUP)
+      10  CSI ?25h — DEC private mode set: 25 cursor visible
+      10  CSI ?25l — DEC private mode reset: 25 cursor visible
+       6  CSI t — window manipulation
+       5  CSI C — cursor forward (CUF)
+       5  CSI m — SGR: bold
+       5  CSI m — SGR: normal intensity
+       4  CSI m — SGR: inverse
+       4  CSI m — SGR: no inverse
+       4  CSI m — SGR: reset
+       2  CSI ?1004h — DEC private mode set: 1004 focus events
+       2  CSI ?2004l — DEC private mode reset: 2004 BRACKETED PASTE
+       2  CSI J — erase in display (ED)
+       2  CSI m — SGR: bright foreground
+       1  CSI ?1004l — DEC private mode reset: 1004 focus events
+       1  CSI ?1049h — DEC private mode set: 1049 ALT SCREEN + save cursor
+       1  CSI ?1049l — DEC private mode reset: 1049 ALT SCREEN + save cursor
+       1  CSI ?12h — DEC private mode set: 12 cursor blink
+       1  CSI ?12l — DEC private mode reset: 12 cursor blink
+       1  CSI ?1h — DEC private mode set: 1 application cursor keys
+       1  CSI ?1l — DEC private mode reset: 1 application cursor keys
+       1  CSI ?2004h — DEC private mode set: 2004 BRACKETED PASTE
+       1  CSI ?9001h — DEC private mode set: 9001 win32 input mode
+       1  CSI ?9001l — DEC private mode reset: 9001 win32 input mode
+       1  CSI m — SGR: UNDERLINE
+       1  CSI X — erase characters (ECH)
+       1  ESC = — application keypad (DECKPAM)
+       1  ESC > — normal keypad (DECKPNM)
+       1  OSC 0 — set icon name and window title
+
+-- capabilities that decide the engine --
+     .  truecolor SGR (38;2/48;2)
+     .  256-colour SGR (38;5/48;5)
+  USED  alt screen (?1049)  (2)
+     .  synchronized output (?2026)
+  USED  bracketed paste (?2004)  (3)
+     .  SGR mouse (?1006)
+     .  mouse tracking (?1000/2/3)
+  USED  focus events (?1004)  (3)
+  USED  application cursor keys (?1)  (2)
+  USED  cursor visibility (?25)  (20)
+     .  kitty keyboard (CSI u)
+     .  modifyOtherKeys (CSI > m)
+     .  scrolling region (DECSTBM)
+  USED  underline (SGR 4)  (1)
+     .  strikethrough (SGR 9)
+  USED  window title (OSC 0/2)  (1)
+     .  hyperlinks (OSC 8)
+     .  clipboard (OSC 52)
+     .  shell integration (OSC 133/633)
+     .  device control string (DCS)

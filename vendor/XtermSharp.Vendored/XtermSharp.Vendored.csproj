@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!--
+        Compiles the vendored XtermSharp sources without touching them. Upstream's own csproj does
+        not build under a current SDK: its InternalsVisibleTo AssemblyAttribute item carries
+        Visible="False" metadata, which newer SDKs pass through as a second constructor argument.
+        The project file is therefore ours; every .cs file under ..\XtermSharp\ is byte-identical to
+        the clone and stays that way. Gaps are recorded in docs/xtermsharp-known-gaps.md, never patched here.
+
+        netstandard2.0 is deliberate. Compiled as net10.0 these sources do not build: NStack.Core
+        declares its own System.Rune, unambiguous on netstandard2.0 but colliding with
+        System.Text.Rune from .NET Core 3.0 onwards -
+
+            XtermSharp/SelectionService.cs:175             Rune.IsLetterOrDigit (cd.Rune)
+            XtermSharp/InputHandlers/InputHandler.cs:1224  Rune.DecodeRune (x)
+
+        A netstandard2.0 assembly is referenceable from net10.0, so the seam and the tests are
+        unaffected.
+    -->
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <AssemblyName>XtermSharp</AssemblyName>
+        <RootNamespace>XtermSharp</RootNamespace>
+        <Nullable>disable</Nullable>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+        <IsPackable>false</IsPackable>
+        <NoWarn>$(NoWarn);CS0162;CS0168;CS0169;CS0219;CS0414;CS0618;CS0649;CS8981;SYSLIB0011</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Compile Include="..\XtermSharp\**\*.cs" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+            NStack flows to every consumer of this project, and with it NStack's System.Rune, which
+            is ambiguous with System.Text.Rune wherever the bare name is used. PrivateAssets would
+            hide the type from consumers but also drop the assembly from their deps.json, and the
+            engine then throws FileNotFoundException while building its first buffer. Consumers
+            alias the name instead - see the Using item in GitBench.Terminal.Vt.XtermSharp.csproj.
+        -->
+        <PackageReference Include="NStack.Core" Version="0.12.0" />
+    </ItemGroup>
+
+</Project>

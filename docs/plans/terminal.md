@@ -39,11 +39,13 @@ runs on its own thread and hands batches to the UI thread via the existing `IUiD
 It lives in the app repo rather than `framework/` for now; it is a GitBench concern until something
 else needs it. `TERM` and `COLORTERM` are the caller's to set — no platform sets them for us.
 
-**2. `ZGF.Terminal.Vt` — the engine seam.**
+**2. `GitBench.Terminal.Vt` — the engine seam.**
 `ITerminalEngine`: `Feed(ReadOnlySpan<byte>)` in, and out of it a grid, a damage region, a response
 byte stream (DA/DSR replies go back up the PTY), and observable terminal state — title, cursor
 position/visibility/shape, alt-screen flag, bracketed-paste flag, kitty-keyboard flags, mouse mode.
 The vendored XtermSharp adapter implements this. Everything downstream talks only to the seam.
+Like module 1 it lives in the app solution rather than `framework/`, for the same reason: it is a
+GitBench concern until something else needs a VT engine.
 
 **3. The grid surface.**
 What the renderer is allowed to read: rows of cells (rune, fg, bg, attribute bits), the scrollback

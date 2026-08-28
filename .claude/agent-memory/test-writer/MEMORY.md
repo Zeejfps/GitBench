@@ -1,0 +1,2 @@
+- [Engine-agnostic seam specs](feedback_engine_agnostic_specs.md) — seam suites bind to the interface only, assert correct behaviour, leave divergences red
+- [Terminal engine seam](project_terminal_engine_seam.md) — ITerminalEngine/grid-surface design conclusions and where vendored XtermSharp fails (158/202)

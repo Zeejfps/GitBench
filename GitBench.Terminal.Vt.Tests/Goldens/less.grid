@@ -1,0 +1,296 @@
+; less.grid - less paging a 500-line file inside the alternate screen.
+; Audited against corpus/less.bin. Frames 1, 2 and 9 sit on the alternate-screen transitions and
+; are legitimately blank - the normal screen is cleared at start-up and never written again. The
+; six interval samples are what pin the paging itself; frame 3 deliberately cuts mid-line ("row"
+; rather than "row 20"), which is the state a correct engine holds part-way through a read.
+; The inverse-video status line is style 'a' in the frames that show it.
+; No divergent path is exercised.
+;
+; Ported to the unified seam. The header key that lists wrapped rows is now 'continues', and
+; ITerminalGrid.ContinuesPreviousRow(N) is true for the row that continues the one above it -
+; the direction the engine already stores, and the only direction that is answerable for the
+; bottom viewport row. The rows listed are exactly the ones this file has always listed, so the
+; audited wrap points are unchanged; the key was renamed so that a file written under the
+; earlier 'wrapped' key cannot be mistaken for one written under this one.
+;
+# less  frame 1/9  after 88/1517 bytes  (alt screen enter)
+size 120x30
+alt on
+cursor col=0 row=0 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 2/9  after 216/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=0 row=24 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 3/9  after 433/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=4 row=29 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r09 ~blank~
+  r10 |row 1|
+  r11 |row 2|
+  r12 |row 3|
+  r13 |row 4|
+  r14 |row 5|
+  r15 |row 6|
+  r16 |row 7|
+  r17 |row 8|
+  r18 |row 9|
+  r19 |row 10|
+  r20 |row 11|
+  r21 |row 12|
+  r22 |row 13|
+  r23 |row 14|
+  r24 |row 15|
+  r25 |row 16|
+  r26 |row 17|
+  r27 |row 18|
+  r28 |row 19|
+  r29 |row|
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 4/9  after 650/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=0 row=29 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |row 14|
+  r01 |row 15|
+  r02 |row 16|
+  r03 |row 17|
+  r04 |row 18|
+  r05 |row 19|
+  r06 |row 20|
+  r07 |row 21|
+  r08 |row 22|
+  r09 |row 23|
+  r10 |row 24|
+  r11 |row 25|
+  r12 |row 26|
+  r13 |row 27|
+  r14 |row 28|
+  r15 |row 29|
+  r16 |row 30|
+  r17 |row 31|
+  r18 |row 32|
+  r19 |row 33|
+  r20 |row 34|
+  r21 |row 35|
+  r22 |row 36|
+  r23 |row 37|
+  r24 |row 38|
+  r25 |row 39|
+  r26 |row 40|
+  r27 |row 41|
+  r28 |row 42|
+  r29 |row 43|
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 5/9  after 866/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=2 row=29 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |row 41|
+  r01 |row 42|
+  r02 |row 43|
+  r03 |row 44|
+  r04 |row 45|
+  r05 |row 46|
+  r06 |row 47|
+  r07 |row 48|
+  r08 |row 49|
+  r09 |row 50|
+  r10 |row 51|
+  r11 |row 52|
+  r12 |row 53|
+  r13 |row 54|
+  r14 |row 55|
+  r15 |row 56|
+  r16 |row 57|
+  r17 |row 58|
+  r18 |row 59|
+  r19 |row 60|
+  r20 |row 61|
+  r21 |row 62|
+  r22 |row 63|
+  r23 |row 64|
+  r24 |row 65|
+  r25 |row 66|
+  r26 |row 67|
+  r27 |row 68|
+  r28 |row 69|
+  r29 |ro|
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 6/9  after 1083/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=0 row=29 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |row 66|
+  r01 |row 67|
+  r02 |row 68|
+  r03 |row 69|
+  r04 |row 70|
+  r05 |row 71|
+  r06 |row 72|
+  r07 |row 73|
+  r08 |row 74|
+  r09 |row 75|
+  r10 |row 76|
+  r11 |row 77|
+  r12 |row 78|
+  r13 |row 79|
+  r14 |row 80|
+  r15 |row 81|
+  r16 |row 82|
+  r17 |row 83|
+  r18 |row 84|
+  r19 |row 85|
+  r20 |row 86|
+  r21 |row 87|
+  r22 |...skipping...|
+  r23 |row 472|
+  r24 |row 473|
+  r25 |row 474|
+  r26 |row 475|
+  r27 |row 476|
+  r28 |row 477|
+  r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 7/9  after 1300/1517 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=5 row=29 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes autowrap app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |row 472|
+  r01 |row 473|
+  r02 |row 474|
+  r03 |row 475|
+  r04 |row 476|
+  r05 |row 477|
+  r06 |row 478|
+  r07 |row 479|
+  r08 |row 480|
+  r09 |row 481|
+  r10 |row 482|
+  r11 |row 483|
+  r12 |row 484|
+  r13 |row 485|
+  r14 |row 486|
+  r15 |row 487|
+  r16 |row 488|
+  r17 |row 489|
+  r18 |row 490|
+  r19 |row 491|
+  r20 |row 492|
+  r21 |row 493|
+  r22 |row 494|
+  r23 |row 495|
+  r24 |row 496|
+  r25 |row 497|
+  r26 |row 498|
+  r27 |row 499|
+  r28 |row 500|
+  r29 |(END)|
+style
+  s00-s28 ~default~
+  s29 |aaaaa|
+legend
+    .  default
+  a  default on default inverse
+
+# less  frame 8/9  after 1326/1517 bytes  (alt screen leave)
+size 120x30
+alt off
+cursor col=0 row=0 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# less  frame 9/9  after 1517/1517 bytes  (end of stream)
+size 120x30
+alt off
+cursor col=0 row=0 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
+modes mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default

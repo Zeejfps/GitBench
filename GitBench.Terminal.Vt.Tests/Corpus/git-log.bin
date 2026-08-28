@@ -1,0 +1,83 @@
+[?9001h[?1004h[?25l[2J[m[H]0;C:\Program Files\Git\mingw64\bin\git.exe[?25h* [?1h[33mb23d42a ([36m[1mHEAD[33m[22m -> [32m[1mterminal[33m[22m, [31m[1morigin/terminal[33m[22m) [mImplement Windows ConPTY sessions
+* [33m6eafdd8 ([32m[1mworktree-agent-a8937b6d74c1c5086[33m[22m) [mStrengthen feature implementation guidance
+* [33m4362487 [mPoint the pseudo-terminal contract suite at the settled seam
+* [33m2860c92 [mSettle the pseudo-terminal session seam
+* [33made8b42 [mAdd Windows pseudoterminal spawn helpers and tests
+* [33mc707997 ([32m[1mworktree-agent-a8f649faec4fef275[33m[22m, [32m[1mworktree-agent-a3fc0a2d900a06d07[33m[22m, [32m[1mworktree-agent-a170d0935c22c4fa2[33m[22m) [mDocument coding rules and ConPTY findings
+* [33m9ff911e [mAdd cross-platform pseudo-terminal session abstractions
+* [33m4009869 [mAdd a terminal mode placeholder
+* [33m03499cd ([1mtag: v0.234.0[22m, [31m[1morigin/main[33m[22m, [31m[1morigin/HEAD[33m[22m, [32m[1mworktree-agent-a18bf2373061eba18[33m[22m, [32m[1mmain[33m[22m) [mMake worktree removal survive leftover directories
+* [33m52b75ad [mRemove obsolete implementation plans
+* [33m2a9ea45 [mPlan a real terminal mode for DiffDino
+* [33mf854238 [mRemove obsolete plans from the project
+* [33mb1eea18 ([1mtag: v0.233.0[22m) [mMove toasts into the status bar
+* [33mb3792e7 ([1mtag: v0.232.0[22m) [mKeep commit drafts per repository
+* [33mdde9d42 ([1mtag: v0.231.0[22m) [mRoute diff operation failures to error dialogs
+* [33m21a2fa0 [mShow assistant failures in the operation error dialog
+* [33ma1d2ae4 ([1mtag: v0.230.0[22m) [mTreat usable clones with hook errors as warnings
+* [33m4f6b45a ([1mtag: v0.229.0[22m) [mApply identity profiles when cloning repositories
+* [33mc0f14e2 [madded databricks mcp logs to gitignore
+* [33m6302f26 ([1mtag: v0.228.0[22m) [mSkip the .gitmodules watch root when the file is absent
+* [33mc061565 [mResolve the real gitdir, and narrow the watch roots on Linux
+* [33m2d2a5e0 [mplan updated
+* [33m1b4c015 [mfixed some reconciliation issues
+* [33m85b4f31 ([1mtag: v0.227.0[22m) [mDeleted redundant tree watchers
+* [33m9c14fed ([1mtag: v0.226.0[22m) [mpriority dynamically updates based on which repo is selected and opened
+* [33mb981a76 ([1mtag: v0.225.0[22m, [32m[1mrepo_load_indicators[33m[22m) [mrepo load indicators
+* [33m5360985 ([1mtag: v0.224.0[22m) [mImproved fetch functionality on slow hdds
+:[K* [33m14a5737 [mrefactored IGitService into a bunch of smaller interfaces[K
+* [33m9d22721 ([1mtag: v0.223.0[22m) [mAdded more detail about tool use[K
+* [33ma9cdc6e ([1mtag: v0.222.0[22m) [mimproved file search tool for the assistant[K
+* [33mea6778f ([1mtag: v0.221.0[22m) [mfixed issue with code blocks blocking scrolling[K
+* [33m045a14c [mupdated framework to address some more copy paste issues[K
+* [33mf6250c3 ([1mtag: v0.220.0[22m) [mupdated framework[K
+* [33m3221ee5 ([1mtag: v0.219.0[22m) [mbranch switching improvements[K
+* [33mf9b77d5 ([1mtag: v0.218.0[22m) [mfixed branch switching[K
+* [33mf95c2eb ([1mtag: v0.217.0[22m) [mUpdate framework: measure BorderLayout at its layout widths[K
+* [33m7612b95 [mStop markdown list items overlapping the block below them[K
+* [33m7d471b5 ([1mtag: v0.216.0[22m) [mmade it so reviewing changed files works too[K
+* [33me5053bb ([1mtag: v0.215.0[22m) [mRead the current branch from git for assistant reviews[K
+*   [33mceb43cd ([1mtag: v0.214.0[22m) [mMerge branch 'worktree-agent-a14dff917b219172a'[K
+[32m|[33m\[K[2C[m
+[32m| [m* [33mef8def3 ([32m[1mworktree-agent-a14dff917b219172a[33m[22m) [mAdd fetch, pull, and merge-conflict tools to the assistant[K
+* [33m| 4895547 [mupdated agents[K
+[33m|/[2C[m
+* [33mb347cae ([1mtag: v0.213.0[22m) [mMove per-model capabilities from AssistantProvider onto AssistantModel[K
+* [33md1bc767 ([1mtag: v0.212.0[22m, [32m[1mworktree-agent-a325c14ac712a6827[33m[22m) [mAdd a push_tag tool for publishing existing tags[K
+* [33m84ab866 [mAdd a create_tag tool to the assistant[K
+* [33m2e58e25 [mAdded an LLM based assistant with BYOK[K
+* [33m6014982 [mAdd agent definitions for specialized GitBench workflows[K
+* [33m1ebc6fc [mMarkdown renderer for LLM chat output (#13)[K
+* [33m92b733d ([1mtag: v0.211.0[22m) [mUpdated framework to fix glypth layout[K
+* [33m0c1926e ([1mtag: v0.210.0[22m) [mUpdated framework[K
+* [33mf2b2184 [mAdded a plan to implement assistants[K
+* [33m1b3599c ([1mtag: v0.209.0[22m) [mFixed windows icon[K
+* [33m2d3bfbe [mmoved some plans to done[K
+* [33m698925e [mrename proven in prod[K
+:* [33me585b18 ([1mtag: v0.208.0[22m) [mRenamed EXE[K
+* [33m9196734 ([1mtag: v0.207.0[22m) [mUpdated rename-doc as a proof of concept run[K
+* [33m6a77fd5 ([1mtag: v0.206.0[22m) [mupdates are now fetched from a new source[K
+* [33m71d4d29 ([1mtag: v0.205.0[22m) [mPhase 1 implemented for renaming[K
+* [33m2ba6b55 [madded phase implementation[K
+* [33md9a4308 [mupdated rename doc[K
+* [33m46592c9 ([1mtag: v0.204.0[22m) [mAdded support for .ico file format[K
+* [33m9d3b29d ([1mtag: v0.203.0[22m) [mAdded support for .ico file preview[K
+* [33md5df164 ([1mtag: v0.202.0[22m) [mFixed image preview in Diff file view[K
+* [33ma6e6edd ([1mtag: v0.201.0[22m) [mImproved windows icon[K
+* [33m79a6972 ([1mtag: v0.200.0[22m) [mAdded support for Png and Jpeg image decoding in the diff preview[K
+* [33m0582236 ([1mtag: v0.199.0[22m) [mfixed pList to show the new name[K
+* [33m8b02fb2 ([1mtag: v0.198.0[22m) [mImproved Mac icon[K
+* [33m0ac9e4e ([1mtag: v0.197.0[22m) [mParameterized App name[K
+* [33m6dbc059 ([1mtag: v0.196.0[22m) [mChanged name to DiffDino in many places[K
+* [33mc3c59f8 ([1mtag: v0.195.0[22m) [mStarted switching out the icon in the process of renaming the app[K
+* [33m8867f8f [mresearch diff dino[K
+* [33mc7bcc20 [mUpdated name research[K
+* [33m4d45caf ([1mtag: v0.194.0[22m) [mAdded some tests[K
+* [33m0cad669 [mcommit optimistic message[K
+* [33m27cfa8a ([1mtag: v0.193.0[22m) [mAdded a cool little transition[K
+* [33mdb236a0 ([1mtag: v0.192.0[22m) [mAdded improved UX around branch loading[K
+* [33m41b71a2 ([1mtag: v0.191.0[22m) [mAdded skeleton views to Diff panel[K
+* [33mf2edc95 ([1mtag: v0.190.0[22m) [mmore stability improvements[K
+* [33mcc4c2f8 [mUpdated framework[K
+* [33m22cefd1 ([1mtag: v0.189.0[22m) [mA TON of stability improvements in theory[K
+[7m(END)[27m[K[?1l>[K[?9001l[?1004l

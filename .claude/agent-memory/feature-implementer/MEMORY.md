@@ -1,0 +1,3 @@
+- [Terminal VT seam](terminal-vt-seam.md) — the settled ITerminalEngine/ITerminalGrid shape, plus the two places it didn't survive contact with XtermSharp
+- [XtermSharp vendoring](xtermsharp-vendoring.md) — netstandard2.0 + our own csproj + a Rune alias in every consumer; always ConvertEol=false
+- [Goldens are never regenerated](golden-files-no-update-switch.md) — no --update switch; engine output has already been blessed into a golden once

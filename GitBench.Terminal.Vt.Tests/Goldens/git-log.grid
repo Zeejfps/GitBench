@@ -1,0 +1,809 @@
+; git-log.grid - git log --graph --oneline through less, 85 lines of coloured output.
+; Audited against corpus/git-log.bin. Checked in detail: the SGR runs on the newest commit line
+; (r-55) against the raw escape sequences byte for byte - yellow hash, cyan-bold HEAD, green-bold
+; local branch, red-bold remote branch, yellow parentheses, default subject - and the two wrapped
+; rows, and the erasure of the trailing '(END)' by the CSI K that follows the carriage return.
+; No divergent path is exercised: no truecolor, no SGR 9, no wide character, no private-parameter
+; CSI u, no multi-parameter DEC private mode, no mode 2026.
+;
+; Ported to the unified seam. The header key that lists wrapped rows is now 'continues', and
+; ITerminalGrid.ContinuesPreviousRow(N) is true for the row that continues the one above it -
+; the direction the engine already stores, and the only direction that is answerable for the
+; bottom viewport row. The rows listed are exactly the ones this file has always listed, so the
+; audited wrap points are unchanged; the key was renamed so that a file written under the
+; earlier 'wrapped' key cannot be mistaken for one written under this one.
+;
+# git-log  frame 1/7  after 960/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=31 row=9 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r06
+text
+  r00 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r01 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r02 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r03 |* 2860c92 Settle the pseudo-terminal session seam|
+  r04 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r05 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r06 |t coding rules and ConPTY findings|
+  r07 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r08 |* 4009869 Add a terminal mode placeholder|
+  r09 |* 03499cd (tag: v0.234.0, origi|
+  r10-r29 ~blank~
+style
+  s00 |..ccccccccceeeeccccbbbbbbbbccaaaaaaaaaaaaaaacc.................................|
+  s01 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc..........................................|
+  s02 |..cccccccc............................................................|
+  s03 |..cccccccc.......................................|
+  s04 |..cccccccc..................................................|
+  s05 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc.......|
+  s06 ~default~
+  s07 |..cccccccc.......................................................|
+  s08 |..cccccccc...............................|
+  s09 |..cccccccccdddddddddddddccaaaaa|
+  s10-s29 ~default~
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default bold
+  c  @3 on default
+  d  @3 on default bold
+  e  @6 on default bold
+
+# git-log  frame 2/7  after 1920/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=26 row=21 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r06 r10
+text
+  r00 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r01 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r02 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r03 |* 2860c92 Settle the pseudo-terminal session seam|
+  r04 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r05 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r06 |t coding rules and ConPTY findings|
+  r07 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r08 |* 4009869 Add a terminal mode placeholder|
+  r09 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r10 |e leftover directories|
+  r11 |* 52b75ad Remove obsolete implementation plans|
+  r12 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r13 |* f854238 Remove obsolete plans from the project|
+  r14 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r15 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r16 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r17 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r18 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r19 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r20 |* c0f14e2 added databricks mcp logs to gitignore|
+  r21 |* 6302f26 (tag: v0.228.0) |
+  r22-r29 ~blank~
+style
+  s00 |..ccccccccceeeeccccbbbbbbbbccaaaaaaaaaaaaaaacc.................................|
+  s01 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc..........................................|
+  s02 |..cccccccc............................................................|
+  s03 |..cccccccc.......................................|
+  s04 |..cccccccc..................................................|
+  s05 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc.......|
+  s06 ~default~
+  s07 |..cccccccc.......................................................|
+  s08 |..cccccccc...............................|
+  s09 |..cccccccccdddddddddddddccaaaaaaaaaaaccaaaaaaaaaaaccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbcc............................|
+  s10 ~default~
+  s11 |..cccccccc....................................|
+  s12 |..cccccccc......................................|
+  s13 |..cccccccc......................................|
+  s14 |..cccccccccdddddddddddddcc...............................|
+  s15 |..cccccccccdddddddddddddcc.................................|
+  s16 |..cccccccccdddddddddddddcc..............................................|
+  s17 |..cccccccc.....................................................|
+  s18 |..cccccccccdddddddddddddcc................................................|
+  s19 |..cccccccccdddddddddddddcc.................................................|
+  s20 |..cccccccc......................................|
+  s21 |..cccccccccdddddddddddddcc|
+  s22-s29 ~default~
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default bold
+  c  @3 on default
+  d  @3 on default bold
+  e  @6 on default bold
+
+# git-log  frame 3/7  after 2880/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=2 row=29 visible shape=block steady
+scrollback 4
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r02 r06
+text
+  r-04 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r-03 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r-02 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r-01 |* 2860c92 Settle the pseudo-terminal session seam|
+  r00 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r01 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r02 |t coding rules and ConPTY findings|
+  r03 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r04 |* 4009869 Add a terminal mode placeholder|
+  r05 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r06 |e leftover directories|
+  r07 |* 52b75ad Remove obsolete implementation plans|
+  r08 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r09 |* f854238 Remove obsolete plans from the project|
+  r10 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r11 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r12 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r13 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r14 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r15 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r16 |* c0f14e2 added databricks mcp logs to gitignore|
+  r17 |* 6302f26 (tag: v0.228.0) Skip the .gitmodules watch root when the file is absent|
+  r18 |* c061565 Resolve the real gitdir, and narrow the watch roots on Linux|
+  r19 |* 2d2a5e0 plan updated|
+  r20 |* 1b4c015 fixed some reconciliation issues|
+  r21 |* 85b4f31 (tag: v0.227.0) Deleted redundant tree watchers|
+  r22 |* 9c14fed (tag: v0.226.0) priority dynamically updates based on which repo is selected and opened|
+  r23 |* b981a76 (tag: v0.225.0, repo_load_indicators) repo load indicators|
+  r24 |* 5360985 (tag: v0.224.0) Improved fetch functionality on slow hdds|
+  r25 |* 14a5737 refactored IGitService into a bunch of smaller interfaces|
+  r26 |* 9d22721 (tag: v0.223.0) Added more detail about tool use|
+  r27 |* a9cdc6e (tag: v0.222.0) improved file search tool for the assistant|
+  r28 |* ea6778f (tag: v0.221.0) fixed issue with code blocks blocking scrolling|
+  r29 |*|
+style
+  s-04 |..ccccccccceeeeccccbbbbbbbbccaaaaaaaaaaaaaaacc.................................|
+  s-03 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc..........................................|
+  s-02 |..cccccccc............................................................|
+  s-01 |..cccccccc.......................................|
+  s00 |..cccccccc..................................................|
+  s01 |..cccccccccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbcc.......|
+  s02 ~default~
+  s03 |..cccccccc.......................................................|
+  s04 |..cccccccc...............................|
+  s05 |..cccccccccdddddddddddddccaaaaaaaaaaaccaaaaaaaaaaaccbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccbbbbcc............................|
+  s06 ~default~
+  s07 |..cccccccc....................................|
+  s08 |..cccccccc......................................|
+  s09 |..cccccccc......................................|
+  s10 |..cccccccccdddddddddddddcc...............................|
+  s11 |..cccccccccdddddddddddddcc.................................|
+  s12 |..cccccccccdddddddddddddcc..............................................|
+  s13 |..cccccccc.....................................................|
+  s14 |..cccccccccdddddddddddddcc................................................|
+  s15 |..cccccccccdddddddddddddcc.................................................|
+  s16 |..cccccccc......................................|
+  s17 |..cccccccccdddddddddddddcc.......................................................|
+  s18 |..cccccccc............................................................|
+  s19 |..cccccccc............|
+  s20 |..cccccccc................................|
+  s21 |..cccccccccdddddddddddddcc...............................|
+  s22 |..cccccccccdddddddddddddcc.......................................................................|
+  s23 |..cccccccccdddddddddddddccbbbbbbbbbbbbbbbbbbbbcc....................|
+  s24 |..cccccccccdddddddddddddcc.........................................|
+  s25 |..cccccccc.........................................................|
+  s26 |..cccccccccdddddddddddddcc................................|
+  s27 |..cccccccccdddddddddddddcc...........................................|
+  s28 |..cccccccccdddddddddddddcc...............................................|
+  s29 ~default~
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default bold
+  c  @3 on default
+  d  @3 on default bold
+  e  @6 on default bold
+
+# git-log  frame 4/7  after 3841/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=18 row=29 visible shape=block steady
+scrollback 15
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r-09 r-05
+text
+  r-15 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r-14 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r-13 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r-12 |* 2860c92 Settle the pseudo-terminal session seam|
+  r-11 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r-10 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r-09 |t coding rules and ConPTY findings|
+  r-08 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r-07 |* 4009869 Add a terminal mode placeholder|
+  r-06 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r-05 |e leftover directories|
+  r-04 |* 52b75ad Remove obsolete implementation plans|
+  r-03 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r-02 |* f854238 Remove obsolete plans from the project|
+  r-01 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r00 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r01 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r02 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r03 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r04 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r05 |* c0f14e2 added databricks mcp logs to gitignore|
+  r06 |* 6302f26 (tag: v0.228.0) Skip the .gitmodules watch root when the file is absent|
+  r07 |* c061565 Resolve the real gitdir, and narrow the watch roots on Linux|
+  r08 |* 2d2a5e0 plan updated|
+  r09 |* 1b4c015 fixed some reconciliation issues|
+  r10 |* 85b4f31 (tag: v0.227.0) Deleted redundant tree watchers|
+  r11 |* 9c14fed (tag: v0.226.0) priority dynamically updates based on which repo is selected and opened|
+  r12 |* b981a76 (tag: v0.225.0, repo_load_indicators) repo load indicators|
+  r13 |* 5360985 (tag: v0.224.0) Improved fetch functionality on slow hdds|
+  r14 |* 14a5737 refactored IGitService into a bunch of smaller interfaces|
+  r15 |* 9d22721 (tag: v0.223.0) Added more detail about tool use|
+  r16 |* a9cdc6e (tag: v0.222.0) improved file search tool for the assistant|
+  r17 |* ea6778f (tag: v0.221.0) fixed issue with code blocks blocking scrolling|
+  r18 |* 045a14c updated framework to address some more copy paste issues|
+  r19 |* f6250c3 (tag: v0.220.0) updated framework|
+  r20 |* 3221ee5 (tag: v0.219.0) branch switching improvements|
+  r21 |* f9b77d5 (tag: v0.218.0) fixed branch switching|
+  r22 |* f95c2eb (tag: v0.217.0) Update framework: measure BorderLayout at its layout widths|
+  r23 |* 7612b95 Stop markdown list items overlapping the block below them|
+  r24 |* 7d471b5 (tag: v0.216.0) made it so reviewing changed files works too|
+  r25 |* e5053bb (tag: v0.215.0) Read the current branch from git for assistant reviews|
+  r26 |*   ceb43cd (tag: v0.214.0) Merge branch 'worktree-agent-a14dff917b219172a'|
+  r27 ||\|
+  r28 || * ef8def3 (worktree-agent-a14dff917b219172a) Add fetch, pull, and merge-conflict tools to the assistant|
+  r29 |* | 4895547 update|
+style
+  s-15 |..dddddddddffffddddccccccccddaaaaaaaaaaaaaaadd.................................|
+  s-14 |..dddddddddccccccccccccccccccccccccccccccccdd..........................................|
+  s-13 |..dddddddd............................................................|
+  s-12 |..dddddddd.......................................|
+  s-11 |..dddddddd..................................................|
+  s-10 |..dddddddddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccdd.......|
+  s-09 ~default~
+  s-08 |..dddddddd.......................................................|
+  s-07 |..dddddddd...............................|
+  s-06 |..dddddddddeeeeeeeeeeeeeddaaaaaaaaaaaddaaaaaaaaaaaddccccccccccccccccccccccccccccccccddccccdd............................|
+  s-05 ~default~
+  s-04 |..dddddddd....................................|
+  s-03 |..dddddddd......................................|
+  s-02 |..dddddddd......................................|
+  s-01 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s00 |..dddddddddeeeeeeeeeeeeedd.................................|
+  s01 |..dddddddddeeeeeeeeeeeeedd..............................................|
+  s02 |..dddddddd.....................................................|
+  s03 |..dddddddddeeeeeeeeeeeeedd................................................|
+  s04 |..dddddddddeeeeeeeeeeeeedd.................................................|
+  s05 |..dddddddd......................................|
+  s06 |..dddddddddeeeeeeeeeeeeedd.......................................................|
+  s07 |..dddddddd............................................................|
+  s08 |..dddddddd............|
+  s09 |..dddddddd................................|
+  s10 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s11 |..dddddddddeeeeeeeeeeeeedd.......................................................................|
+  s12 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccdd....................|
+  s13 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s14 |..dddddddd.........................................................|
+  s15 |..dddddddddeeeeeeeeeeeeedd................................|
+  s16 |..dddddddddeeeeeeeeeeeeedd...........................................|
+  s17 |..dddddddddeeeeeeeeeeeeedd...............................................|
+  s18 |..dddddddd........................................................|
+  s19 |..dddddddddeeeeeeeeeeeeedd.................|
+  s20 |..dddddddddeeeeeeeeeeeeedd.............................|
+  s21 |..dddddddddeeeeeeeeeeeeedd......................|
+  s22 |..dddddddddeeeeeeeeeeeeedd...........................................................|
+  s23 |..dddddddd.........................................................|
+  s24 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s25 |..dddddddddeeeeeeeeeeeeedd......................................................|
+  s26 |....dddddddddeeeeeeeeeeeeedd...............................................|
+  s27 |bd|
+  s28 |bb..dddddddddccccccccccccccccccccccccccccccccdd..........................................................|
+  s29 |..dddddddddd......|
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default
+  c  @2 on default bold
+  d  @3 on default
+  e  @3 on default bold
+  f  @6 on default bold
+
+# git-log  frame 5/7  after 4801/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=19 row=29 visible shape=block steady
+scrollback 29
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r-23 r-19
+text
+  r-29 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r-28 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r-27 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r-26 |* 2860c92 Settle the pseudo-terminal session seam|
+  r-25 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r-24 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r-23 |t coding rules and ConPTY findings|
+  r-22 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r-21 |* 4009869 Add a terminal mode placeholder|
+  r-20 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r-19 |e leftover directories|
+  r-18 |* 52b75ad Remove obsolete implementation plans|
+  r-17 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r-16 |* f854238 Remove obsolete plans from the project|
+  r-15 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r-14 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r-13 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r-12 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r-11 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r-10 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r-09 |* c0f14e2 added databricks mcp logs to gitignore|
+  r-08 |* 6302f26 (tag: v0.228.0) Skip the .gitmodules watch root when the file is absent|
+  r-07 |* c061565 Resolve the real gitdir, and narrow the watch roots on Linux|
+  r-06 |* 2d2a5e0 plan updated|
+  r-05 |* 1b4c015 fixed some reconciliation issues|
+  r-04 |* 85b4f31 (tag: v0.227.0) Deleted redundant tree watchers|
+  r-03 |* 9c14fed (tag: v0.226.0) priority dynamically updates based on which repo is selected and opened|
+  r-02 |* b981a76 (tag: v0.225.0, repo_load_indicators) repo load indicators|
+  r-01 |* 5360985 (tag: v0.224.0) Improved fetch functionality on slow hdds|
+  r00 |* 14a5737 refactored IGitService into a bunch of smaller interfaces|
+  r01 |* 9d22721 (tag: v0.223.0) Added more detail about tool use|
+  r02 |* a9cdc6e (tag: v0.222.0) improved file search tool for the assistant|
+  r03 |* ea6778f (tag: v0.221.0) fixed issue with code blocks blocking scrolling|
+  r04 |* 045a14c updated framework to address some more copy paste issues|
+  r05 |* f6250c3 (tag: v0.220.0) updated framework|
+  r06 |* 3221ee5 (tag: v0.219.0) branch switching improvements|
+  r07 |* f9b77d5 (tag: v0.218.0) fixed branch switching|
+  r08 |* f95c2eb (tag: v0.217.0) Update framework: measure BorderLayout at its layout widths|
+  r09 |* 7612b95 Stop markdown list items overlapping the block below them|
+  r10 |* 7d471b5 (tag: v0.216.0) made it so reviewing changed files works too|
+  r11 |* e5053bb (tag: v0.215.0) Read the current branch from git for assistant reviews|
+  r12 |*   ceb43cd (tag: v0.214.0) Merge branch 'worktree-agent-a14dff917b219172a'|
+  r13 ||\|
+  r14 || * ef8def3 (worktree-agent-a14dff917b219172a) Add fetch, pull, and merge-conflict tools to the assistant|
+  r15 |* | 4895547 updated agents|
+  r16 ||/|
+  r17 |* b347cae (tag: v0.213.0) Move per-model capabilities from AssistantProvider onto AssistantModel|
+  r18 |* d1bc767 (tag: v0.212.0, worktree-agent-a325c14ac712a6827) Add a push_tag tool for publishing existing tags|
+  r19 |* 84ab866 Add a create_tag tool to the assistant|
+  r20 |* 2e58e25 Added an LLM based assistant with BYOK|
+  r21 |* 6014982 Add agent definitions for specialized GitBench workflows|
+  r22 |* 1ebc6fc Markdown renderer for LLM chat output (#13)|
+  r23 |* 92b733d (tag: v0.211.0) Updated framework to fix glypth layout|
+  r24 |* 0c1926e (tag: v0.210.0) Updated framework|
+  r25 |* f2b2184 Added a plan to implement assistants|
+  r26 |* 1b3599c (tag: v0.209.0) Fixed windows icon|
+  r27 |* 2d3bfbe moved some plans to done|
+  r28 |* 698925e rename proven in prod|
+  r29 |* e585b18 (tag: v0.|
+style
+  s-29 |..dddddddddffffddddccccccccddaaaaaaaaaaaaaaadd.................................|
+  s-28 |..dddddddddccccccccccccccccccccccccccccccccdd..........................................|
+  s-27 |..dddddddd............................................................|
+  s-26 |..dddddddd.......................................|
+  s-25 |..dddddddd..................................................|
+  s-24 |..dddddddddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccdd.......|
+  s-23 ~default~
+  s-22 |..dddddddd.......................................................|
+  s-21 |..dddddddd...............................|
+  s-20 |..dddddddddeeeeeeeeeeeeeddaaaaaaaaaaaddaaaaaaaaaaaddccccccccccccccccccccccccccccccccddccccdd............................|
+  s-19 ~default~
+  s-18 |..dddddddd....................................|
+  s-17 |..dddddddd......................................|
+  s-16 |..dddddddd......................................|
+  s-15 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-14 |..dddddddddeeeeeeeeeeeeedd.................................|
+  s-13 |..dddddddddeeeeeeeeeeeeedd..............................................|
+  s-12 |..dddddddd.....................................................|
+  s-11 |..dddddddddeeeeeeeeeeeeedd................................................|
+  s-10 |..dddddddddeeeeeeeeeeeeedd.................................................|
+  s-09 |..dddddddd......................................|
+  s-08 |..dddddddddeeeeeeeeeeeeedd.......................................................|
+  s-07 |..dddddddd............................................................|
+  s-06 |..dddddddd............|
+  s-05 |..dddddddd................................|
+  s-04 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-03 |..dddddddddeeeeeeeeeeeeedd.......................................................................|
+  s-02 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccdd....................|
+  s-01 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s00 |..dddddddd.........................................................|
+  s01 |..dddddddddeeeeeeeeeeeeedd................................|
+  s02 |..dddddddddeeeeeeeeeeeeedd...........................................|
+  s03 |..dddddddddeeeeeeeeeeeeedd...............................................|
+  s04 |..dddddddd........................................................|
+  s05 |..dddddddddeeeeeeeeeeeeedd.................|
+  s06 |..dddddddddeeeeeeeeeeeeedd.............................|
+  s07 |..dddddddddeeeeeeeeeeeeedd......................|
+  s08 |..dddddddddeeeeeeeeeeeeedd...........................................................|
+  s09 |..dddddddd.........................................................|
+  s10 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s11 |..dddddddddeeeeeeeeeeeeedd......................................................|
+  s12 |....dddddddddeeeeeeeeeeeeedd...............................................|
+  s13 |bd|
+  s14 |bb..dddddddddccccccccccccccccccccccccccccccccdd..........................................................|
+  s15 |..dddddddddd..............|
+  s16 |dd|
+  s17 |..dddddddddeeeeeeeeeeeeedd......................................................................|
+  s18 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccccccccccccccdd................................................|
+  s19 |..dddddddd......................................|
+  s20 |..dddddddd......................................|
+  s21 |..dddddddd........................................................|
+  s22 |..dddddddd...........................................|
+  s23 |..dddddddddeeeeeeeeeeeeedd......................................|
+  s24 |..dddddddddeeeeeeeeeeeeedd.................|
+  s25 |..dddddddd....................................|
+  s26 |..dddddddddeeeeeeeeeeeeedd..................|
+  s27 |..dddddddd........................|
+  s28 |..dddddddd.....................|
+  s29 |..dddddddddeeeeeeee|
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default
+  c  @2 on default bold
+  d  @3 on default
+  e  @3 on default bold
+  f  @6 on default bold
+
+# git-log  frame 6/7  after 5761/6722 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=1 row=29 visible shape=block steady
+scrollback 42
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap app-cursor focus mouse=off/x10 kitty=none
+continues r-36 r-32
+text
+  r-42 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r-41 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r-40 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r-39 |* 2860c92 Settle the pseudo-terminal session seam|
+  r-38 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r-37 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r-36 |t coding rules and ConPTY findings|
+  r-35 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r-34 |* 4009869 Add a terminal mode placeholder|
+  r-33 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r-32 |e leftover directories|
+  r-31 |* 52b75ad Remove obsolete implementation plans|
+  r-30 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r-29 |* f854238 Remove obsolete plans from the project|
+  r-28 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r-27 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r-26 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r-25 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r-24 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r-23 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r-22 |* c0f14e2 added databricks mcp logs to gitignore|
+  r-21 |* 6302f26 (tag: v0.228.0) Skip the .gitmodules watch root when the file is absent|
+  r-20 |* c061565 Resolve the real gitdir, and narrow the watch roots on Linux|
+  r-19 |* 2d2a5e0 plan updated|
+  r-18 |* 1b4c015 fixed some reconciliation issues|
+  r-17 |* 85b4f31 (tag: v0.227.0) Deleted redundant tree watchers|
+  r-16 |* 9c14fed (tag: v0.226.0) priority dynamically updates based on which repo is selected and opened|
+  r-15 |* b981a76 (tag: v0.225.0, repo_load_indicators) repo load indicators|
+  r-14 |* 5360985 (tag: v0.224.0) Improved fetch functionality on slow hdds|
+  r-13 |* 14a5737 refactored IGitService into a bunch of smaller interfaces|
+  r-12 |* 9d22721 (tag: v0.223.0) Added more detail about tool use|
+  r-11 |* a9cdc6e (tag: v0.222.0) improved file search tool for the assistant|
+  r-10 |* ea6778f (tag: v0.221.0) fixed issue with code blocks blocking scrolling|
+  r-09 |* 045a14c updated framework to address some more copy paste issues|
+  r-08 |* f6250c3 (tag: v0.220.0) updated framework|
+  r-07 |* 3221ee5 (tag: v0.219.0) branch switching improvements|
+  r-06 |* f9b77d5 (tag: v0.218.0) fixed branch switching|
+  r-05 |* f95c2eb (tag: v0.217.0) Update framework: measure BorderLayout at its layout widths|
+  r-04 |* 7612b95 Stop markdown list items overlapping the block below them|
+  r-03 |* 7d471b5 (tag: v0.216.0) made it so reviewing changed files works too|
+  r-02 |* e5053bb (tag: v0.215.0) Read the current branch from git for assistant reviews|
+  r-01 |*   ceb43cd (tag: v0.214.0) Merge branch 'worktree-agent-a14dff917b219172a'|
+  r00 ||\|
+  r01 || * ef8def3 (worktree-agent-a14dff917b219172a) Add fetch, pull, and merge-conflict tools to the assistant|
+  r02 |* | 4895547 updated agents|
+  r03 ||/|
+  r04 |* b347cae (tag: v0.213.0) Move per-model capabilities from AssistantProvider onto AssistantModel|
+  r05 |* d1bc767 (tag: v0.212.0, worktree-agent-a325c14ac712a6827) Add a push_tag tool for publishing existing tags|
+  r06 |* 84ab866 Add a create_tag tool to the assistant|
+  r07 |* 2e58e25 Added an LLM based assistant with BYOK|
+  r08 |* 6014982 Add agent definitions for specialized GitBench workflows|
+  r09 |* 1ebc6fc Markdown renderer for LLM chat output (#13)|
+  r10 |* 92b733d (tag: v0.211.0) Updated framework to fix glypth layout|
+  r11 |* 0c1926e (tag: v0.210.0) Updated framework|
+  r12 |* f2b2184 Added a plan to implement assistants|
+  r13 |* 1b3599c (tag: v0.209.0) Fixed windows icon|
+  r14 |* 2d3bfbe moved some plans to done|
+  r15 |* 698925e rename proven in prod|
+  r16 |* e585b18 (tag: v0.208.0) Renamed EXE|
+  r17 |* 9196734 (tag: v0.207.0) Updated rename-doc as a proof of concept run|
+  r18 |* 6a77fd5 (tag: v0.206.0) updates are now fetched from a new source|
+  r19 |* 71d4d29 (tag: v0.205.0) Phase 1 implemented for renaming|
+  r20 |* 2ba6b55 added phase implementation|
+  r21 |* d9a4308 updated rename doc|
+  r22 |* 46592c9 (tag: v0.204.0) Added support for .ico file format|
+  r23 |* 9d3b29d (tag: v0.203.0) Added support for .ico file preview|
+  r24 |* d5df164 (tag: v0.202.0) Fixed image preview in Diff file view|
+  r25 |* a6e6edd (tag: v0.201.0) Improved windows icon|
+  r26 |* 79a6972 (tag: v0.200.0) Added support for Png and Jpeg image decoding in the diff preview|
+  r27 |* 0582236 (tag: v0.199.0) fixed pList to show the new name|
+  r28 |* 8b02fb2 (tag: v0.198.0) Improved Mac icon|
+  r29 |*|
+style
+  s-42 |..dddddddddffffddddccccccccddaaaaaaaaaaaaaaadd.................................|
+  s-41 |..dddddddddccccccccccccccccccccccccccccccccdd..........................................|
+  s-40 |..dddddddd............................................................|
+  s-39 |..dddddddd.......................................|
+  s-38 |..dddddddd..................................................|
+  s-37 |..dddddddddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccdd.......|
+  s-36 ~default~
+  s-35 |..dddddddd.......................................................|
+  s-34 |..dddddddd...............................|
+  s-33 |..dddddddddeeeeeeeeeeeeeddaaaaaaaaaaaddaaaaaaaaaaaddccccccccccccccccccccccccccccccccddccccdd............................|
+  s-32 ~default~
+  s-31 |..dddddddd....................................|
+  s-30 |..dddddddd......................................|
+  s-29 |..dddddddd......................................|
+  s-28 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-27 |..dddddddddeeeeeeeeeeeeedd.................................|
+  s-26 |..dddddddddeeeeeeeeeeeeedd..............................................|
+  s-25 |..dddddddd.....................................................|
+  s-24 |..dddddddddeeeeeeeeeeeeedd................................................|
+  s-23 |..dddddddddeeeeeeeeeeeeedd.................................................|
+  s-22 |..dddddddd......................................|
+  s-21 |..dddddddddeeeeeeeeeeeeedd.......................................................|
+  s-20 |..dddddddd............................................................|
+  s-19 |..dddddddd............|
+  s-18 |..dddddddd................................|
+  s-17 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-16 |..dddddddddeeeeeeeeeeeeedd.......................................................................|
+  s-15 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccdd....................|
+  s-14 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s-13 |..dddddddd.........................................................|
+  s-12 |..dddddddddeeeeeeeeeeeeedd................................|
+  s-11 |..dddddddddeeeeeeeeeeeeedd...........................................|
+  s-10 |..dddddddddeeeeeeeeeeeeedd...............................................|
+  s-09 |..dddddddd........................................................|
+  s-08 |..dddddddddeeeeeeeeeeeeedd.................|
+  s-07 |..dddddddddeeeeeeeeeeeeedd.............................|
+  s-06 |..dddddddddeeeeeeeeeeeeedd......................|
+  s-05 |..dddddddddeeeeeeeeeeeeedd...........................................................|
+  s-04 |..dddddddd.........................................................|
+  s-03 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s-02 |..dddddddddeeeeeeeeeeeeedd......................................................|
+  s-01 |....dddddddddeeeeeeeeeeeeedd...............................................|
+  s00 |bd|
+  s01 |bb..dddddddddccccccccccccccccccccccccccccccccdd..........................................................|
+  s02 |..dddddddddd..............|
+  s03 |dd|
+  s04 |..dddddddddeeeeeeeeeeeeedd......................................................................|
+  s05 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccccccccccccccdd................................................|
+  s06 |..dddddddd......................................|
+  s07 |..dddddddd......................................|
+  s08 |..dddddddd........................................................|
+  s09 |..dddddddd...........................................|
+  s10 |..dddddddddeeeeeeeeeeeeedd......................................|
+  s11 |..dddddddddeeeeeeeeeeeeedd.................|
+  s12 |..dddddddd....................................|
+  s13 |..dddddddddeeeeeeeeeeeeedd..................|
+  s14 |..dddddddd........................|
+  s15 |..dddddddd.....................|
+  s16 |..dddddddddeeeeeeeeeeeeedd...........|
+  s17 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s18 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s19 |..dddddddddeeeeeeeeeeeeedd................................|
+  s20 |..dddddddd..........................|
+  s21 |..dddddddd..................|
+  s22 |..dddddddddeeeeeeeeeeeeedd..................................|
+  s23 |..dddddddddeeeeeeeeeeeeedd...................................|
+  s24 |..dddddddddeeeeeeeeeeeeedd.....................................|
+  s25 |..dddddddddeeeeeeeeeeeeedd.....................|
+  s26 |..dddddddddeeeeeeeeeeeeedd.................................................................|
+  s27 |..dddddddddeeeeeeeeeeeeedd................................|
+  s28 |..dddddddddeeeeeeeeeeeeedd.................|
+  s29 ~default~
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default
+  c  @2 on default bold
+  d  @3 on default
+  e  @3 on default bold
+  f  @6 on default bold
+
+# git-log  frame 7/7  after 6722/6722 bytes  (end of stream)
+size 120x30
+alt off
+cursor col=0 row=29 visible shape=block steady
+scrollback 55
+title "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+icon "C:\\Program Files\\Git\\mingw64\\bin\\git.exe"
+modes autowrap mouse=off/x10 kitty=none
+continues r-49 r-45
+text
+  r-55 |* b23d42a (HEAD -> terminal, origin/terminal) Implement Windows ConPTY sessions|
+  r-54 |* 6eafdd8 (worktree-agent-a8937b6d74c1c5086) Strengthen feature implementation guidance|
+  r-53 |* 4362487 Point the pseudo-terminal contract suite at the settled seam|
+  r-52 |* 2860c92 Settle the pseudo-terminal session seam|
+  r-51 |* ade8b42 Add Windows pseudoterminal spawn helpers and tests|
+  r-50 |* c707997 (worktree-agent-a8f649faec4fef275, worktree-agent-a3fc0a2d900a06d07, worktree-agent-a170d0935c22c4fa2) Documen|
+  r-49 |t coding rules and ConPTY findings|
+  r-48 |* 9ff911e Add cross-platform pseudo-terminal session abstractions|
+  r-47 |* 4009869 Add a terminal mode placeholder|
+  r-46 |* 03499cd (tag: v0.234.0, origin/main, origin/HEAD, worktree-agent-a18bf2373061eba18, main) Make worktree removal surviv|
+  r-45 |e leftover directories|
+  r-44 |* 52b75ad Remove obsolete implementation plans|
+  r-43 |* 2a9ea45 Plan a real terminal mode for DiffDino|
+  r-42 |* f854238 Remove obsolete plans from the project|
+  r-41 |* b1eea18 (tag: v0.233.0) Move toasts into the status bar|
+  r-40 |* b3792e7 (tag: v0.232.0) Keep commit drafts per repository|
+  r-39 |* dde9d42 (tag: v0.231.0) Route diff operation failures to error dialogs|
+  r-38 |* 21a2fa0 Show assistant failures in the operation error dialog|
+  r-37 |* a1d2ae4 (tag: v0.230.0) Treat usable clones with hook errors as warnings|
+  r-36 |* 4f6b45a (tag: v0.229.0) Apply identity profiles when cloning repositories|
+  r-35 |* c0f14e2 added databricks mcp logs to gitignore|
+  r-34 |* 6302f26 (tag: v0.228.0) Skip the .gitmodules watch root when the file is absent|
+  r-33 |* c061565 Resolve the real gitdir, and narrow the watch roots on Linux|
+  r-32 |* 2d2a5e0 plan updated|
+  r-31 |* 1b4c015 fixed some reconciliation issues|
+  r-30 |* 85b4f31 (tag: v0.227.0) Deleted redundant tree watchers|
+  r-29 |* 9c14fed (tag: v0.226.0) priority dynamically updates based on which repo is selected and opened|
+  r-28 |* b981a76 (tag: v0.225.0, repo_load_indicators) repo load indicators|
+  r-27 |* 5360985 (tag: v0.224.0) Improved fetch functionality on slow hdds|
+  r-26 |* 14a5737 refactored IGitService into a bunch of smaller interfaces|
+  r-25 |* 9d22721 (tag: v0.223.0) Added more detail about tool use|
+  r-24 |* a9cdc6e (tag: v0.222.0) improved file search tool for the assistant|
+  r-23 |* ea6778f (tag: v0.221.0) fixed issue with code blocks blocking scrolling|
+  r-22 |* 045a14c updated framework to address some more copy paste issues|
+  r-21 |* f6250c3 (tag: v0.220.0) updated framework|
+  r-20 |* 3221ee5 (tag: v0.219.0) branch switching improvements|
+  r-19 |* f9b77d5 (tag: v0.218.0) fixed branch switching|
+  r-18 |* f95c2eb (tag: v0.217.0) Update framework: measure BorderLayout at its layout widths|
+  r-17 |* 7612b95 Stop markdown list items overlapping the block below them|
+  r-16 |* 7d471b5 (tag: v0.216.0) made it so reviewing changed files works too|
+  r-15 |* e5053bb (tag: v0.215.0) Read the current branch from git for assistant reviews|
+  r-14 |*   ceb43cd (tag: v0.214.0) Merge branch 'worktree-agent-a14dff917b219172a'|
+  r-13 ||\|
+  r-12 || * ef8def3 (worktree-agent-a14dff917b219172a) Add fetch, pull, and merge-conflict tools to the assistant|
+  r-11 |* | 4895547 updated agents|
+  r-10 ||/|
+  r-09 |* b347cae (tag: v0.213.0) Move per-model capabilities from AssistantProvider onto AssistantModel|
+  r-08 |* d1bc767 (tag: v0.212.0, worktree-agent-a325c14ac712a6827) Add a push_tag tool for publishing existing tags|
+  r-07 |* 84ab866 Add a create_tag tool to the assistant|
+  r-06 |* 2e58e25 Added an LLM based assistant with BYOK|
+  r-05 |* 6014982 Add agent definitions for specialized GitBench workflows|
+  r-04 |* 1ebc6fc Markdown renderer for LLM chat output (#13)|
+  r-03 |* 92b733d (tag: v0.211.0) Updated framework to fix glypth layout|
+  r-02 |* 0c1926e (tag: v0.210.0) Updated framework|
+  r-01 |* f2b2184 Added a plan to implement assistants|
+  r00 |* 1b3599c (tag: v0.209.0) Fixed windows icon|
+  r01 |* 2d3bfbe moved some plans to done|
+  r02 |* 698925e rename proven in prod|
+  r03 |* e585b18 (tag: v0.208.0) Renamed EXE|
+  r04 |* 9196734 (tag: v0.207.0) Updated rename-doc as a proof of concept run|
+  r05 |* 6a77fd5 (tag: v0.206.0) updates are now fetched from a new source|
+  r06 |* 71d4d29 (tag: v0.205.0) Phase 1 implemented for renaming|
+  r07 |* 2ba6b55 added phase implementation|
+  r08 |* d9a4308 updated rename doc|
+  r09 |* 46592c9 (tag: v0.204.0) Added support for .ico file format|
+  r10 |* 9d3b29d (tag: v0.203.0) Added support for .ico file preview|
+  r11 |* d5df164 (tag: v0.202.0) Fixed image preview in Diff file view|
+  r12 |* a6e6edd (tag: v0.201.0) Improved windows icon|
+  r13 |* 79a6972 (tag: v0.200.0) Added support for Png and Jpeg image decoding in the diff preview|
+  r14 |* 0582236 (tag: v0.199.0) fixed pList to show the new name|
+  r15 |* 8b02fb2 (tag: v0.198.0) Improved Mac icon|
+  r16 |* 0ac9e4e (tag: v0.197.0) Parameterized App name|
+  r17 |* 6dbc059 (tag: v0.196.0) Changed name to DiffDino in many places|
+  r18 |* c3c59f8 (tag: v0.195.0) Started switching out the icon in the process of renaming the app|
+  r19 |* 8867f8f research diff dino|
+  r20 |* c7bcc20 Updated name research|
+  r21 |* 4d45caf (tag: v0.194.0) Added some tests|
+  r22 |* 0cad669 commit optimistic message|
+  r23 |* 27cfa8a (tag: v0.193.0) Added a cool little transition|
+  r24 |* db236a0 (tag: v0.192.0) Added improved UX around branch loading|
+  r25 |* 41b71a2 (tag: v0.191.0) Added skeleton views to Diff panel|
+  r26 |* f2edc95 (tag: v0.190.0) more stability improvements|
+  r27 |* cc4c2f8 Updated framework|
+  r28 |* 22cefd1 (tag: v0.189.0) A TON of stability improvements in theory|
+  r29 ~blank~
+style
+  s-55 |..dddddddddffffddddccccccccddaaaaaaaaaaaaaaadd.................................|
+  s-54 |..dddddddddccccccccccccccccccccccccccccccccdd..........................................|
+  s-53 |..dddddddd............................................................|
+  s-52 |..dddddddd.......................................|
+  s-51 |..dddddddd..................................................|
+  s-50 |..dddddddddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccddccccccccccccccccccccccccccccccccdd.......|
+  s-49 ~default~
+  s-48 |..dddddddd.......................................................|
+  s-47 |..dddddddd...............................|
+  s-46 |..dddddddddeeeeeeeeeeeeeddaaaaaaaaaaaddaaaaaaaaaaaddccccccccccccccccccccccccccccccccddccccdd............................|
+  s-45 ~default~
+  s-44 |..dddddddd....................................|
+  s-43 |..dddddddd......................................|
+  s-42 |..dddddddd......................................|
+  s-41 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-40 |..dddddddddeeeeeeeeeeeeedd.................................|
+  s-39 |..dddddddddeeeeeeeeeeeeedd..............................................|
+  s-38 |..dddddddd.....................................................|
+  s-37 |..dddddddddeeeeeeeeeeeeedd................................................|
+  s-36 |..dddddddddeeeeeeeeeeeeedd.................................................|
+  s-35 |..dddddddd......................................|
+  s-34 |..dddddddddeeeeeeeeeeeeedd.......................................................|
+  s-33 |..dddddddd............................................................|
+  s-32 |..dddddddd............|
+  s-31 |..dddddddd................................|
+  s-30 |..dddddddddeeeeeeeeeeeeedd...............................|
+  s-29 |..dddddddddeeeeeeeeeeeeedd.......................................................................|
+  s-28 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccdd....................|
+  s-27 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s-26 |..dddddddd.........................................................|
+  s-25 |..dddddddddeeeeeeeeeeeeedd................................|
+  s-24 |..dddddddddeeeeeeeeeeeeedd...........................................|
+  s-23 |..dddddddddeeeeeeeeeeeeedd...............................................|
+  s-22 |..dddddddd........................................................|
+  s-21 |..dddddddddeeeeeeeeeeeeedd.................|
+  s-20 |..dddddddddeeeeeeeeeeeeedd.............................|
+  s-19 |..dddddddddeeeeeeeeeeeeedd......................|
+  s-18 |..dddddddddeeeeeeeeeeeeedd...........................................................|
+  s-17 |..dddddddd.........................................................|
+  s-16 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s-15 |..dddddddddeeeeeeeeeeeeedd......................................................|
+  s-14 |....dddddddddeeeeeeeeeeeeedd...............................................|
+  s-13 |bd|
+  s-12 |bb..dddddddddccccccccccccccccccccccccccccccccdd..........................................................|
+  s-11 |..dddddddddd..............|
+  s-10 |dd|
+  s-09 |..dddddddddeeeeeeeeeeeeedd......................................................................|
+  s-08 |..dddddddddeeeeeeeeeeeeeddccccccccccccccccccccccccccccccccdd................................................|
+  s-07 |..dddddddd......................................|
+  s-06 |..dddddddd......................................|
+  s-05 |..dddddddd........................................................|
+  s-04 |..dddddddd...........................................|
+  s-03 |..dddddddddeeeeeeeeeeeeedd......................................|
+  s-02 |..dddddddddeeeeeeeeeeeeedd.................|
+  s-01 |..dddddddd....................................|
+  s00 |..dddddddddeeeeeeeeeeeeedd..................|
+  s01 |..dddddddd........................|
+  s02 |..dddddddd.....................|
+  s03 |..dddddddddeeeeeeeeeeeeedd...........|
+  s04 |..dddddddddeeeeeeeeeeeeedd............................................|
+  s05 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s06 |..dddddddddeeeeeeeeeeeeedd................................|
+  s07 |..dddddddd..........................|
+  s08 |..dddddddd..................|
+  s09 |..dddddddddeeeeeeeeeeeeedd..................................|
+  s10 |..dddddddddeeeeeeeeeeeeedd...................................|
+  s11 |..dddddddddeeeeeeeeeeeeedd.....................................|
+  s12 |..dddddddddeeeeeeeeeeeeedd.....................|
+  s13 |..dddddddddeeeeeeeeeeeeedd.................................................................|
+  s14 |..dddddddddeeeeeeeeeeeeedd................................|
+  s15 |..dddddddddeeeeeeeeeeeeedd.................|
+  s16 |..dddddddddeeeeeeeeeeeeedd......................|
+  s17 |..dddddddddeeeeeeeeeeeeedd.......................................|
+  s18 |..dddddddddeeeeeeeeeeeeedd.................................................................|
+  s19 |..dddddddd..................|
+  s20 |..dddddddd.....................|
+  s21 |..dddddddddeeeeeeeeeeeeedd................|
+  s22 |..dddddddd.........................|
+  s23 |..dddddddddeeeeeeeeeeeeedd..............................|
+  s24 |..dddddddddeeeeeeeeeeeeedd.......................................|
+  s25 |..dddddddddeeeeeeeeeeeeedd..................................|
+  s26 |..dddddddddeeeeeeeeeeeeedd...........................|
+  s27 |..dddddddd.................|
+  s28 |..dddddddddeeeeeeeeeeeeedd.........................................|
+  s29 ~default~
+legend
+    .  default
+  a  @1 on default bold
+  b  @2 on default
+  c  @2 on default bold
+  d  @3 on default
+  e  @3 on default bold
+  f  @6 on default bold

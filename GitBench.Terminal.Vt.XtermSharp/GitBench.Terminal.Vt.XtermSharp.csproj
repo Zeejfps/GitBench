@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
+        <ProjectReference Include="..\vendor\XtermSharp.Vendored\XtermSharp.Vendored.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!--
+            NStack.Core arrives transitively with the vendored engine and declares its own
+            System.Rune. Without this alias every mention of Rune here is ambiguous.
+        -->
+        <Using Include="System.Text.Rune" Alias="Rune" />
+    </ItemGroup>
+
+</Project>

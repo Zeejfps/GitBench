@@ -1,0 +1,38 @@
+== capability inventory ==
+program:  cmd.exe C:/ echo hello from the probe
+terminal: 120x30, TERM=xterm-256color COLORTERM=truecolor
+captured: 316 bytes, 16 tokens
+
+-- sequences used --
+       2  CSI ?25h — DEC private mode set: 25 cursor visible
+       2  CSI ?25l — DEC private mode reset: 25 cursor visible
+       2  CSI H — cursor position (CUP)
+       1  CR
+       1  CSI ?1004h — DEC private mode set: 1004 focus events
+       1  CSI ?9001h — DEC private mode set: 9001 win32 input mode
+       1  CSI J — erase in display (ED)
+       1  CSI m — SGR: reset
+       1  LF
+       1  OSC 0 — set icon name and window title
+
+-- capabilities that decide the engine --
+     .  truecolor SGR (38;2/48;2)
+     .  256-colour SGR (38;5/48;5)
+     .  alt screen (?1049)
+     .  synchronized output (?2026)
+     .  bracketed paste (?2004)
+     .  SGR mouse (?1006)
+     .  mouse tracking (?1000/2/3)
+  USED  focus events (?1004)  (1)
+     .  application cursor keys (?1)
+  USED  cursor visibility (?25)  (4)
+     .  kitty keyboard (CSI u)
+     .  modifyOtherKeys (CSI > m)
+     .  scrolling region (DECSTBM)
+     .  underline (SGR 4)
+     .  strikethrough (SGR 9)
+  USED  window title (OSC 0/2)  (1)
+     .  hyperlinks (OSC 8)
+     .  clipboard (OSC 52)
+     .  shell integration (OSC 133/633)
+     .  device control string (DCS)

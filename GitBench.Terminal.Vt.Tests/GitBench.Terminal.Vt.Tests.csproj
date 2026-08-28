@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <PublishAot>false</PublishAot>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+        <PackageReference Include="xunit" Version="2.9.2" />
+        <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Using Include="Xunit" />
+        <!--
+            NStack.Core arrives transitively with the vendored engine and declares its own
+            System.Rune. Without this alias every mention of Rune here is ambiguous.
+        -->
+        <Using Include="System.Text.Rune" Alias="Rune" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
+        <!--
+            The only reference to a concrete engine in the suite: TerminalEngines constructs one.
+            No test binds to an XtermSharp type.
+        -->
+        <ProjectReference Include="..\GitBench.Terminal.Vt.XtermSharp\GitBench.Terminal.Vt.XtermSharp.csproj" />
+    </ItemGroup>
+
+</Project>

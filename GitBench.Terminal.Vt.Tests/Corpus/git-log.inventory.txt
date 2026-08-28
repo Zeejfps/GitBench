@@ -1,0 +1,50 @@
+== capability inventory ==
+program:  C:\Program Files\Git\mingw64\bin\git.exe -C G:\Dev\C#\GitBench -c core.pager=less -c color.ui=always log --graph --oneline -80
+terminal: 120x30, TERM=xterm-256color COLORTERM=truecolor
+captured: 6722 bytes, 923 tokens
+
+-- sequences used --
+     112  CSI m — SGR: basic foreground
+      85  CR
+      84  CSI m — SGR: reset
+      82  LF
+      60  CSI m — SGR: bold
+      60  CSI m — SGR: normal intensity
+      57  CSI K — erase in line (EL)
+       2  CSI C — cursor forward (CUF)
+       1  CSI ?1004h — DEC private mode set: 1004 focus events
+       1  CSI ?1004l — DEC private mode reset: 1004 focus events
+       1  CSI ?1h — DEC private mode set: 1 application cursor keys
+       1  CSI ?1l — DEC private mode reset: 1 application cursor keys
+       1  CSI ?25h — DEC private mode set: 25 cursor visible
+       1  CSI ?25l — DEC private mode reset: 25 cursor visible
+       1  CSI ?9001h — DEC private mode set: 9001 win32 input mode
+       1  CSI ?9001l — DEC private mode reset: 9001 win32 input mode
+       1  CSI H — cursor position (CUP)
+       1  CSI J — erase in display (ED)
+       1  CSI m — SGR: inverse
+       1  CSI m — SGR: no inverse
+       1  ESC > — normal keypad (DECKPNM)
+       1  OSC 0 — set icon name and window title
+
+-- capabilities that decide the engine --
+     .  truecolor SGR (38;2/48;2)
+     .  256-colour SGR (38;5/48;5)
+     .  alt screen (?1049)
+     .  synchronized output (?2026)
+     .  bracketed paste (?2004)
+     .  SGR mouse (?1006)
+     .  mouse tracking (?1000/2/3)
+  USED  focus events (?1004)  (2)
+  USED  application cursor keys (?1)  (2)
+  USED  cursor visibility (?25)  (2)
+     .  kitty keyboard (CSI u)
+     .  modifyOtherKeys (CSI > m)
+     .  scrolling region (DECSTBM)
+     .  underline (SGR 4)
+     .  strikethrough (SGR 9)
+  USED  window title (OSC 0/2)  (1)
+     .  hyperlinks (OSC 8)
+     .  clipboard (OSC 52)
+     .  shell integration (OSC 133/633)
+     .  device control string (DCS)

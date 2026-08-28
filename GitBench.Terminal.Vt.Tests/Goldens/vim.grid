@@ -1,0 +1,359 @@
+; vim.grid - vim opening a three-line file in the alternate screen.
+; Audited against corpus/vim.bin. Checked in detail: the bright-blue (SGR 94, palette 12) '~'
+; filler rows, which vim draws as a tilde followed by 119 literal spaces - so each fills the row to
+; column 120 and the next one lands on a wrapped continuation, which is why r04..r24 are marked
+; wrapped; and the bold+inverse ruler and message lines at the bottom.
+; No divergent path is exercised.
+;
+; Ported to the unified seam. The header key that lists wrapped rows is now 'continues', and
+; ITerminalGrid.ContinuesPreviousRow(N) is true for the row that continues the one above it -
+; the direction the engine already stores, and the only direction that is answerable for the
+; bottom viewport row. The rows listed are exactly the ones this file has always listed, so the
+; audited wrap points are unchanged; the key was renamed so that a file written under the
+; earlier 'wrapped' key cannot be mistaken for one written under this one.
+;
+# vim  frame 1/9  after 87/4325 bytes  (alt screen enter)
+size 120x30
+alt on
+cursor col=0 row=0 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# vim  frame 2/9  after 617/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=62 row=3 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                             |
+  r04-r28 ~blank~
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s04-s29 ~default~
+legend
+    .  default
+  a  @12 on default
+
+# vim  frame 3/9  after 1235/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=80 row=8 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues r04 r05 r06 r07 r08
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                                                                                       |
+  r04 |~                                                                                                                       |
+  r05 |~                                                                                                                       |
+  r06 |~                                                                                                                       |
+  r07 |~                                                                                                                       |
+  r08 |~                                                                               |
+  r09-r28 ~blank~
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s04 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s05 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s06 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s07 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s08 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s09-s29 ~default~
+legend
+    .  default
+  a  @12 on default
+
+# vim  frame 4/9  after 1853/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=98 row=13 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues r04 r05 r06 r07 r08 r09 r10 r11 r12 r13
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                                                                                       |
+  r04 |~                                                                                                                       |
+  r05 |~                                                                                                                       |
+  r06 |~                                                                                                                       |
+  r07 |~                                                                                                                       |
+  r08 |~                                                                                                                       |
+  r09 |~                                                                                                                       |
+  r10 |~                                                                                                                       |
+  r11 |~                                                                                                                       |
+  r12 |~                                                                                                                       |
+  r13 |~                                                                                                 |
+  r14-r28 ~blank~
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s04 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s05 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s06 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s07 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s08 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s09 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s10 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s11 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s12 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s13 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s14-s29 ~default~
+legend
+    .  default
+  a  @12 on default
+
+# vim  frame 5/9  after 2471/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=49 row=19 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues r04 r05 r06 r07 r08 r09 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                                                                                       |
+  r04 |~                                                                                                                       |
+  r05 |~                                                                                                                       |
+  r06 |~                                                                                                                       |
+  r07 |~                                                                                                                       |
+  r08 |~                                                                                                                       |
+  r09 |~                                                                                                                       |
+  r10 |~                                                                                                                       |
+  r11 |~                                                                                                                       |
+  r12 |~                                                                                                                       |
+  r13 |~                                                                                                                       |
+  r14 |~                                                                                                                       |
+  r15 |~                                                                                                                       |
+  r16 |~                                                                                                                       |
+  r17 |~                                                                                                                       |
+  r18 |~                                                                                                                       |
+  r19 |~                                                |
+  r20-r28 ~blank~
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s04 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s05 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s06 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s07 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s08 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s09 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s10 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s11 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s12 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s13 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s14 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s15 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s16 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s17 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s18 |a............................................................................aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s19 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s20-s29 ~default~
+legend
+    .  default
+  a  @12 on default
+
+# vim  frame 6/9  after 3089/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=67 row=24 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues r04 r05 r06 r07 r08 r09 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                                                                                       |
+  r04 |~                                                                                                                       |
+  r05 |~                                                                                                                       |
+  r06 |~                                                                                                                       |
+  r07 |~                                                                                                                       |
+  r08 |~                                                                                                                       |
+  r09 |~                                                                                                                       |
+  r10 |~                                                                                                                       |
+  r11 |~                                                                                                                       |
+  r12 |~                                                                                                                       |
+  r13 |~                                                                                                                       |
+  r14 |~                                                                                                                       |
+  r15 |~                                                                                                                       |
+  r16 |~                                                                                                                       |
+  r17 |~                                                                                                                       |
+  r18 |~                                                                                                                       |
+  r19 |~                                                                                                                       |
+  r20 |~                                                                                                                       |
+  r21 |~                                                                                                                       |
+  r22 |~                                                                                                                       |
+  r23 |~                                                                                                                       |
+  r24 |~                                                                  |
+  r25-r28 ~blank~
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s04 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s05 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s06 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s07 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s08 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s09 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s10 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s11 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s12 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s13 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s14 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s15 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s16 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s17 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s18 |a............................................................................aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s19 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s20 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s21 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s22 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s23 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s24 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s25-s29 ~default~
+legend
+    .  default
+  a  @12 on default
+
+# vim  frame 7/9  after 3707/4325 bytes  (interval sample)
+size 120x30
+alt on
+cursor col=117 row=28 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes autowrap bracketed-paste app-cursor app-keypad focus mouse=off/x10 kitty=none
+continues r04 r05 r06 r07 r08 r09 r10 r11 r12 r13 r14 r15 r16 r17 r18 r19 r20 r21 r22 r23 r24 r25 r26 r27 r28
+text
+  r00 |line one|
+  r01 |line two|
+  r02 |line three|
+  r03 |~                                                                                                                       |
+  r04 |~                                                                                                                       |
+  r05 |~                                                                                                                       |
+  r06 |~                                                                                                                       |
+  r07 |~                                                                                                                       |
+  r08 |~                                                                                                                       |
+  r09 |~                                                                                                                       |
+  r10 |~                                                                                                                       |
+  r11 |~                                                                                                                       |
+  r12 |~                                                                                                                       |
+  r13 |~                                                                                                                       |
+  r14 |~                                                                                                                       |
+  r15 |~                                                                                                                       |
+  r16 |~                                                                                                                       |
+  r17 |~                                                                                                                       |
+  r18 |~                                                                                                                       |
+  r19 |~                                                                                                                       |
+  r20 |~                                                                                                                       |
+  r21 |~                                                                                                                       |
+  r22 |~                                                                                                                       |
+  r23 |~                                                                                                                       |
+  r24 |~                                                                                                                       |
+  r25 |~                                                                                                                       |
+  r26 |~                                                                                                                       |
+  r27 |~                                                                                                                       |
+  r28 |probe-sample.txt [unix] (12:33 28/08/2026)                                                                       2,2 All|
+  r29 |"probe-sample.txt" [unix] 3L, 29B|
+style
+  s00-s02 ~default~
+  s03 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s04 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s05 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s06 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s07 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s08 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s09 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s10 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s11 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s12 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s13 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s14 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s15 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s16 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s17 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s18 |b............................................................................bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s19 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s20 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s21 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s22 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s23 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s24 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s25 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s26 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s27 |bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s28 |aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa|
+  s29 ~default~
+legend
+    .  default
+  a  default on default bold+inverse
+  b  @12 on default
+
+# vim  frame 8/9  after 4140/4325 bytes  (alt screen leave)
+size 120x30
+alt off
+cursor col=0 row=0 hidden shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# vim  frame 9/9  after 4325/4325 bytes  (end of stream)
+size 120x30
+alt off
+cursor col=0 row=0 visible shape=block steady
+scrollback 0
+title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
+modes mouse=off/x10 kitty=none
+continues none
+text
+  r00-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default

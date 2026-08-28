@@ -1,0 +1,151 @@
+; smoke.grid - cmd.exe printing its banner and a prompt.
+; Audited by hand against corpus/smoke.bin, every one of its 316 bytes: the banner text, the OSC 0
+; title, the CUP to row 4, the 136-character prompt wrapping at column 120, and the final ?25h.
+; No divergent path is exercised - the corpus contains no truecolor, no SGR 9, no wide character,
+; no private-parameter CSI u, no multi-parameter DEC private mode and no mode 2026.
+;
+; Ported to the unified seam. The header key that lists wrapped rows is now 'continues', and
+; ITerminalGrid.ContinuesPreviousRow(N) is true for the row that continues the one above it -
+; the direction the engine already stores, and the only direction that is answerable for the
+; bottom viewport row. The rows listed are exactly the ones this file has always listed, so the
+; audited wrap points are unchanged; the key was renamed so that a file written under the
+; earlier 'wrapped' key cannot be mistaken for one written under this one.
+;
+; Corrected 2026-08-28: the title and icon read WINDOWS\\YSTEM32 here, which was the
+; engine's output and not the corpus. The recording sends OSC 0 over bytes 75..106 and the
+; third frame boundary falls at byte 90, on the 'S' of SYSTEM32; XtermSharp's OscPut drops the
+; first byte of the payload run that follows a feed boundary. The bytes say SYSTEM32, so the
+; golden says SYSTEM32 and the replay of this corpus is red until that parser is fixed.
+;
+# smoke  frame 1/7  after 45/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=13 row=0 hidden shape=block steady
+scrollback 0
+title ""
+icon ""
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Win|
+  r01-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 2/7  after 90/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=43 row=0 hidden shape=block steady
+scrollback 0
+title ""
+icon ""
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 3/7  after 135/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=14 row=1 hidden shape=block steady
+scrollback 0
+title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01 |(c) Microsoft|
+  r02-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 4/7  after 180/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=6 row=3 hidden shape=block steady
+scrollback 0
+title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01 |(c) Microsoft Corporation. All rights reserved.|
+  r02 ~blank~
+  r03 |C:\Use|
+  r04-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 5/7  after 225/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=51 row=3 hidden shape=block steady
+scrollback 0
+title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01 |(c) Microsoft Corporation. All rights reserved.|
+  r02 ~blank~
+  r03 |C:\Users\zeejf\AppData\Local\Temp\claude\G--Dev-C--|
+  r04-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 6/7  after 270/316 bytes  (interval sample)
+size 120x30
+alt off
+cursor col=96 row=3 hidden shape=block steady
+scrollback 0
+title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01 |(c) Microsoft Corporation. All rights reserved.|
+  r02 ~blank~
+  r03 |C:\Users\zeejf\AppData\Local\Temp\claude\G--Dev-C--GitBench\447e637a-9466-46c0-9b55-500758cef393|
+  r04-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
+
+# smoke  frame 7/7  after 316/316 bytes  (end of stream)
+size 120x30
+alt off
+cursor col=16 row=4 visible shape=block steady
+scrollback 0
+title "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+icon "C:\\WINDOWS\\SYSTEM32\\cmd.exe"
+modes autowrap focus mouse=off/x10 kitty=none
+continues r04
+text
+  r00 |Microsoft Windows [Version 10.0.26200.9168]|
+  r01 |(c) Microsoft Corporation. All rights reserved.|
+  r02 ~blank~
+  r03 |C:\Users\zeejf\AppData\Local\Temp\claude\G--Dev-C--GitBench\447e637a-9466-46c0-9b55-500758cef393\scratchpad\probeart\bin|
+  r04 |\PtyProbe\debug>|
+  r05-r29 ~blank~
+style
+  s00-s29 ~default~
+legend
+    .  default
