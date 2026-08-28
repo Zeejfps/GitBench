@@ -3,9 +3,9 @@ using System.Text;
 namespace GitBench.Pty.Tests;
 
 /// <summary>
-/// Bytes in both directions while the child is alive: what it prints reaches <see cref="IPtySession.Output"/>,
-/// what we <see cref="IPtySession.Write"/> reaches it as terminal input, and a resize moves the
-/// terminal underneath it.
+/// Bytes in both directions while the child is alive: what it prints reaches
+/// <see cref="IPtySession.ReadOutput"/>, what we <see cref="IPtySession.WriteInput"/> reaches it as
+/// terminal input, and a resize moves the terminal underneath it.
 /// </summary>
 [Collection(PtyTestCollection.Name)]
 public class PtySessionIoTests
@@ -16,7 +16,7 @@ public class PtySessionIoTests
         using var work = new TempDirectory();
 
         using var session = PtyChild.Start(PtyChild.Cmd(work.Path, "/c", "echo", "GITBENCH-PTY-PRINTED"));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("GITBENCH-PTY-PRINTED", PtyChild.Patience),
@@ -34,10 +34,10 @@ public class PtySessionIoTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
         WaitForPrompt(output, work);
 
-        session.Write(Encoding.UTF8.GetBytes("echo %GITBENCH_PTY_TYPED%\r\n"));
+        session.WriteInput(Encoding.UTF8.GetBytes("echo %GITBENCH_PTY_TYPED%\r\n"));
 
         Assert.True(
             output.WaitFor("GITBENCH-PTY-EXPANDED", PtyChild.Patience),
@@ -51,13 +51,13 @@ public class PtySessionIoTests
         using var work = new TempDirectory();
 
         using var session = PtyChild.Start(PtyChild.Cmd(work.Path));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
         WaitForPrompt(output, work);
 
-        session.Write(Encoding.UTF8.GetBytes("exit 7\r\n"));
+        session.WriteInput(Encoding.UTF8.GetBytes("exit 7\r\n"));
 
         Assert.True(session.Exited.Wait(PtyChild.Patience), $"The shell did not exit. Terminal showed:\n{output.Describe()}");
-        Assert.Equal(7, session.Exited.Result);
+        Assert.Equal(new PtyExit.Completed(7), session.Exited.Result);
     }
 
     [PtyFact]
@@ -73,7 +73,7 @@ public class PtySessionIoTests
             + "Write-Host ('[resized=' + [Console]::WindowWidth + 'x' + [Console]::WindowHeight + ']')",
             new PtySize(80, 24)));
 
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
         Assert.True(output.WaitFor("[ready]", PtyChild.Patience), $"The child never started. Terminal showed:\n{output.Describe()}");
 
         session.Resize(new PtySize(120, 40));
@@ -94,22 +94,22 @@ public class PtySessionIoTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
         WaitForPrompt(output, work);
 
         Bounded.Run("Fifty writes against a live reader", PtyChild.Patience, () =>
         {
             for (var i = 0; i < 50; i++)
-                session.Write(Encoding.UTF8.GetBytes("echo %GITBENCH_PTY_TYPED%\r\n"));
+                session.WriteInput(Encoding.UTF8.GetBytes("echo %GITBENCH_PTY_TYPED%\r\n"));
 
-            session.Write(Encoding.UTF8.GetBytes("exit 5\r\n"));
+            session.WriteInput(Encoding.UTF8.GetBytes("exit 5\r\n"));
         });
 
         Assert.True(
             output.WaitFor("GITBENCH-PTY-EXPANDED", PtyChild.Patience),
             $"Nothing written during the burst reached the child. Terminal showed:\n{output.Describe()}");
         Assert.True(session.Exited.Wait(PtyChild.Patience), $"The shell did not exit. Terminal showed:\n{output.Describe()}");
-        Assert.Equal(5, session.Exited.Result);
+        Assert.Equal(new PtyExit.Completed(5), session.Exited.Result);
     }
 
     static void WaitForPrompt(PtyOutputReader output, TempDirectory work) =>

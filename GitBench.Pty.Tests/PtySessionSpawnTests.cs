@@ -1,5 +1,3 @@
-using System.ComponentModel;
-
 namespace GitBench.Pty.Tests;
 
 /// <summary>
@@ -24,7 +22,7 @@ public class PtySessionSpawnTests
             "Write-Host ('[tty=' + (-not [Console]::IsOutputRedirected) + ';cols=' + [Console]::WindowWidth + ';rows=' + [Console]::WindowHeight + ']')",
             new PtySize(100, 30)));
 
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[tty=True;cols=100;rows=30]", PtyChild.Patience),
@@ -38,7 +36,7 @@ public class PtySessionSpawnTests
         using var work = new TempDirectory();
 
         using var session = PtyChild.Start(PtyChild.Cmd(work.Path, "/c", "cd"));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor(work.Token, PtyChild.Patience),
@@ -56,7 +54,7 @@ public class PtySessionSpawnTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[overlaid-value]", PtyChild.Patience),
@@ -70,7 +68,7 @@ public class PtySessionSpawnTests
         using var inherited = new EnvironmentVariable("GITBENCH_PTY_INHERITED", "inherited-value");
 
         using var session = PtyChild.Start(PtyChild.Cmd(work.Path, "/c", "echo", "[%GITBENCH_PTY_INHERITED%]"));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[inherited-value]", PtyChild.Patience),
@@ -89,7 +87,7 @@ public class PtySessionSpawnTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[%GITBENCH_PTY_REMOVED%]", PtyChild.Patience),
@@ -108,7 +106,7 @@ public class PtySessionSpawnTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[overlaid-value]", PtyChild.Patience),
@@ -130,7 +128,7 @@ public class PtySessionSpawnTests
         };
 
         using var session = PtyChild.Start(options);
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[xterm-256color;truecolor]", PtyChild.Patience),
@@ -145,7 +143,7 @@ public class PtySessionSpawnTests
         using var colorTerm = new EnvironmentVariable("COLORTERM", null);
 
         using var session = PtyChild.Start(PtyChild.Cmd(work.Path, "/c", "echo", "[%TERM%;%COLORTERM%]"));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[%TERM%;%COLORTERM%]", PtyChild.Patience),
@@ -159,7 +157,7 @@ public class PtySessionSpawnTests
         var script = work.File("argv.ps1", "Write-Host ('[argv=' + ($args -join '|') + ']')\n");
 
         using var session = PtyChild.Start(PtyChild.PowerShellScript(work.Path, script, "plain", "two words"));
-        var output = new PtyOutputReader(session.Output);
+        var output = new PtyOutputReader(session);
 
         Assert.True(
             output.WaitFor("[argv=plain|two words]", PtyChild.Patience),
@@ -173,6 +171,9 @@ public class PtySessionSpawnTests
 
         var options = PtyChild.Cmd(work.Path) with { Executable = "gitbench-no-such-program.exe" };
 
-        Assert.Throws<Win32Exception>(() => PtyChild.Start(options));
+        var thrown = Assert.Throws<PtySpawnException>(() => PtyChild.Start(options));
+
+        Assert.Equal(PtySpawnFailure.ExecutableNotFound, thrown.Failure);
+        Assert.Equal("gitbench-no-such-program.exe", thrown.Executable);
     }
 }

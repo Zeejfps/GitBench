@@ -3,8 +3,8 @@ using System.Diagnostics;
 namespace GitBench.Pty.Tests;
 
 /// <summary>
-/// Drains <see cref="IPtySession.Output"/> on a dedicated thread — the way the real terminal will —
-/// and lets a test wait, with a hard deadline, for text to appear or for the stream to end.
+/// Drains <see cref="IPtySession.ReadOutput"/> on a dedicated thread — the way the real terminal
+/// will — and lets a test wait, with a hard deadline, for text to appear or for the stream to end.
 /// </summary>
 sealed class PtyOutputReader
 {
@@ -13,9 +13,9 @@ sealed class PtyOutputReader
     bool _ended;
     Exception? _failure;
 
-    public PtyOutputReader(Stream output)
+    public PtyOutputReader(IPtySession session)
     {
-        var thread = new Thread(() => Pump(output))
+        var thread = new Thread(() => Pump(session))
         {
             IsBackground = true,
             Name = "pty-test-reader",
@@ -79,7 +79,7 @@ sealed class PtyOutputReader
         }
     }
 
-    void Pump(Stream output)
+    void Pump(IPtySession session)
     {
         var buffer = new byte[4096];
 
@@ -87,7 +87,7 @@ sealed class PtyOutputReader
         {
             while (true)
             {
-                var read = output.Read(buffer, 0, buffer.Length);
+                var read = session.ReadOutput(buffer);
                 if (read <= 0)
                     break;
 
