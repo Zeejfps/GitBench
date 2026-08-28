@@ -9,7 +9,8 @@ public partial record ThemeStyles
         TooltipPalette tooltip,
         DiffHunkButtonPalette hunkButton,
         DiffSyntaxPalette diffSyntax,
-        CommitBadgePalette commitBadge) =>
+        CommitBadgePalette commitBadge,
+        AnsiColors ansi) =>
         new()
         {
             Palette = p,
@@ -51,5 +52,6 @@ public partial record ThemeStyles
             CommitsView = BuildCommitsView(p, commitBadge),
             RowSelection = BuildRowSelection(p),
             Markdown = BuildMarkdown(p),
+            Terminal = BuildTerminal(p, ansi),
         };
 }

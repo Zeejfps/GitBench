@@ -110,6 +110,28 @@ public partial record ThemeStyles
             BranchDivergedIcon: status.Warning,
             BranchUntrackedIcon: p.TextDisabled);
 
-        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge);
+        // GitHub-Light lineage, and two things that look like mistakes: the bright variants are
+        // darker and more saturated than their bases, because brightening a slot against a white
+        // surface destroys the contrast the slot exists for; and White is a mid grey, because the
+        // literal one would be invisible.
+        var ansi = new AnsiColors(
+            Black: 0xFF24292Fu,
+            Red: 0xFFCF222Eu,
+            Green: 0xFF116329u,
+            Yellow: 0xFF7D4E00u,
+            Blue: 0xFF0550AEu,
+            Magenta: 0xFF8250DFu,
+            Cyan: 0xFF1B7C83u,
+            White: 0xFF6E7781u,
+            BrightBlack: 0xFF57606Au,
+            BrightRed: 0xFFA40E26u,
+            BrightGreen: 0xFF0A5027u,
+            BrightYellow: 0xFF633C01u,
+            BrightBlue: 0xFF033D8Bu,
+            BrightMagenta: 0xFF6639BAu,
+            BrightCyan: 0xFF136061u,
+            BrightWhite: 0xFF8C959Fu);
+
+        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, ansi);
     }
 }

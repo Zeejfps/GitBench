@@ -2,3 +2,6 @@
 - [XtermSharp vendoring](xtermsharp-vendoring.md) — netstandard2.0 + our own csproj + a Rune alias in every consumer; always ConvertEol=false
 - [Goldens are never regenerated](golden-files-no-update-switch.md) — no --update switch; engine output has already been blessed into a golden once
 - [Gap-list test counts are estimates](xtermsharp-gap-estimates-overcount.md) — three claude CorpusPropertiesSpec assertions contradict the corpus bytes; check bytes before chasing a projected count
+- [Theme sub-palettes are a five-file edit](terminal-theming-flows-through-buildstyles.md) — BuildStyles' required-member initialiser forces both builders and the param list in one batch
+- [ThemeStyles.Mix is banker's rounding](theme-styles-mix-is-bankers-rounding.md) — Math.Round(8.5)==8; never a drop-in for a blend whose tests pin half-up
+- [Full-suite timeout flakes](full-suite-timeout-flakes.md) — a failure at a flat `10 s` is machine load; re-run it filtered before calling it a regression

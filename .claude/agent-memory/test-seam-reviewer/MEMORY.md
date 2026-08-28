@@ -1,0 +1,2 @@
+- [Seam conventions](seam-conventions-gitbench.md) — internal-by-default in Features/** + InternalsVisibleTo is the house seam; Outcome is not for programmer-error paths; remarks argue the rejected alternative
+- [Recurring seam mistakes](recurring-seam-mistakes-gitbench.md) — check first: safe accessor shipped beside its escape hatch, ACs pinned on the exotic case not the common one, alloc-delta tests are NOT the flaky kind

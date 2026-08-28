@@ -108,6 +108,24 @@ public partial record ThemeStyles
             BranchDivergedIcon: status.Warning,
             BranchUntrackedIcon: p.TextDisabled);
 
-        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge);
+        var ansi = new AnsiColors(
+            Black: 0xFF2A2C30u,
+            Red: 0xFFE06C75u,
+            Green: 0xFF98C379u,
+            Yellow: 0xFFE5C07Bu,
+            Blue: 0xFF61AFEFu,
+            Magenta: 0xFFC678DDu,
+            Cyan: 0xFF56B6C2u,
+            White: 0xFFABB2BFu,
+            BrightBlack: 0xFF6B717Du,
+            BrightRed: 0xFFFF7B86u,
+            BrightGreen: 0xFFB5E890u,
+            BrightYellow: 0xFFF2D48Au,
+            BrightBlue: 0xFF7FC4FFu,
+            BrightMagenta: 0xFFDD97EEu,
+            BrightCyan: 0xFF6FD3DFu,
+            BrightWhite: 0xFFFFFFFFu);
+
+        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, ansi);
     }
 }

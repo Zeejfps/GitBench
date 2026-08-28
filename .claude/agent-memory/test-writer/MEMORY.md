@@ -1,2 +1,6 @@
 - [Engine-agnostic seam specs](feedback_engine_agnostic_specs.md) — seam suites bind to the interface only, assert correct behaviour, leave divergences red
 - [Terminal engine seam](project_terminal_engine_seam.md) — ITerminalEngine/grid-surface design conclusions and where vendored XtermSharp fails (158/202)
+- [Terminal renderer modules](project_terminal_renderer_modules.md) — RunStyle/ICellStyler is frozen; colour resolution and run coalescing are parallel modules, don't cross files
+- [Verifying red suites](feedback_verifying_red_suites.md) — prove a RED suite green against a scratchpad reference impl; isolated project when another agent breaks GitBench.Tests; zero-alloc pattern that holds
+- [No lookup escape hatches](feedback_no_lookup_escape_hatches.md) — no indexers on shared records (total switch at the consumer); record `with` bypasses primary-ctor validation
+- [Suite review lessons](feedback_suite_review_lessons.md) — surviving-variant tests, invariants supplement examples, no naked buffer beside a safe accessor, ParamName is content

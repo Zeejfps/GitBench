@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
@@ -82,6 +82,9 @@
 
     <ItemGroup>
         <ProjectReference Include="..\framework\ZGF.AppUtils\ZGF.AppUtils.csproj" />
+        <!-- The terminal engine seam only. The XtermSharp adapter behind it is composed at
+             startup, so the app never binds to a concrete engine. -->
+        <ProjectReference Include="..\GitBench.Terminal.Vt\GitBench.Terminal.Vt.csproj" />
         <!-- Image codecs behind the diff view's image preview. PngSharp also arrives
              transitively through ZGF.Gui; referenced explicitly because the app decodes with it
              directly. -->

@@ -41,6 +41,7 @@ public sealed partial record ThemeStyles
     public required CommitsViewStyles CommitsView { get; init; }
     public required RowSelectionStyles RowSelection { get; init; }
     public required MarkdownStyles Markdown { get; init; }
+    public required TerminalStyles Terminal { get; init; }
 
     public static readonly ThemeStyles Dark = BuildDark();
     public static readonly ThemeStyles Light = BuildLight();
