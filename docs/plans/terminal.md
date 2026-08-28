@@ -17,7 +17,7 @@
 | Scope | A general terminal that hosts arbitrary TUIs. `claude` is the acceptance target; `vim`, `less`, `lazygit` are the stress tests. |
 | Engine | Vendor **XtermSharp** (MIT, a C# port of the xterm.js core: parser + grid + modes, no renderer) into `framework/`, behind an `ITerminalEngine` seam. It is unmaintained — that is acceptable, because a VT engine is a spec-frozen artifact and we own the vendored source. Consistent with how this repo already carries Glfw.NET, OpenGL.NET, PngSharp, JpegSharp, ZGF.Svg. |
 | Own engine later | The seam exists from day one and the conformance corpus is engine-independent, so a hand-rolled backend is a swap, not a rewrite. Not scheduled. |
-| PTY | Ours, thin. `IPtySession` with two implementations: ConPTY (Win10 1809+) and `openpty` + `posix_spawn(POSIX_SPAWN_SETSID)` on macOS/Linux. Vendor Pty.Net's native-helper approach only if the controlling-terminal dance fights back. |
+| PTY | Ours, thin. `IPtySession` with two implementations: ConPTY (Win10 1809+) and `openpty` + `posix_spawn(POSIX_SPAWN_SETSID)` on macOS/Linux. Vendor Pty.Net's native-helper approach only if the controlling-terminal dance fights back. ConPTY is measured and sufficient — see Findings. |
 | Renderer | Ours, a ZGF.Gui widget painting a cell grid. Requires a new cell-grid text path on `ICanvas` (see Modules). |
 | Input | Ours. We own the key encoder, so the **kitty keyboard protocol** is implemented natively and Shift+Enter works with no `/terminal-setup` step. |
 | Testing | **Recorded byte corpora replayed against golden grid snapshots.** We cannot drive a subscription-authenticated `claude` from CI, so we capture real sessions by hand once, commit the bytes, and replay them forever. Engine tests are pure `bytes → grid`. |
@@ -30,11 +30,14 @@
 
 Seven pieces plus one throwaway. Each has a real boundary; the middle three are where the weeks go.
 
-**1. `ZGF.Terminal.Pty` — the process side.**
+**1. `GitBench.Pty` — the process side.**
 `IPtySession`: spawn (argv, cwd, env), a byte read stream, a byte write path, `Resize(cols, rows)`,
 exit notification, dispose. Two implementations behind it. Signals come free — the kernel line
 discipline turns Ctrl-C into SIGINT for the foreground process group, we just pass the byte. Reader
 runs on its own thread and hands batches to the UI thread via the existing `IUiDispatcher`.
+
+It lives in the app repo rather than `framework/` for now; it is a GitBench concern until something
+else needs it. `TERM` and `COLORTERM` are the caller's to set — no platform sets them for us.
 
 **2. `ZGF.Terminal.Vt` — the engine seam.**
 `ITerminalEngine`: `Feed(ReadOnlySpan<byte>)` in, and out of it a grid, a damage region, a response
@@ -80,12 +83,13 @@ that gates the engine choice *and* the recorded corpus the test suite runs on fo
 **Phase 0 — the mode slot.** `MainViewMode.Terminal`, a third `SegmentViewModel` in
 `ModeSwitcherViewModel`, a case in `MainContent`, an `AppModeTerminal` string in the catalogs, and a
 placeholder widget behind it. Touches four small files, ships on its own, and gives everything after
-it a place to land.
+it a place to land. Done.
 
 **Phase 1 — PTY and probe.** Get a shell spawned on all three platforms and log what comes back.
 Record `claude`, `vim`, `less`, `git rebase -i` into committed corpora. **Deliverable: the sequence
 inventory.** It answers "how far off is XtermSharp?" with a diff instead of a guess, and it is the
-gate on the next phase.
+gate on the next phase. The Windows transport half of this is done — see Findings; what remains on
+Windows is the real `ConPtySession` and the recordings. The Unix half is untouched.
 
 **Phase 2 — engine in.** `ITerminalEngine`, the vendored adapter, and the replay tests green against
 the Phase 1 corpora. No UI yet — this phase is headless and fully testable.
@@ -104,13 +108,56 @@ window title, OSC 8 links, per-repo lifecycle, settings.
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
 
+## Findings — ConPTY, measured
+
+Run as a spike ahead of Phase 1, because the Windows engine choice hangs off it. A throwaway C#
+ConPTY host (`CreatePseudoConsole` + `PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE` + `CreateProcess`)
+driving `cmd`, `node` and `powershell` on Windows 10.0.26200, SDK 10.0.26100. These are
+measurements, not readings of the documentation. The Unix side remains unmeasured.
+
+**The transport does what a TUI needs.**
+
+| Check | Result |
+|---|---|
+| `CreatePseudoConsole` | `S_OK` |
+| Child sees a terminal | `node`: `process.stdout.isTTY === true` |
+| Size propagation | requested 137×41, child reported `cols=137 rows=41` |
+| Input round-trip | keystrokes written to the master reached and ran in `cmd` |
+| `ResizePseudoConsole` | `S_OK`; child's live console moved 80×24 → 120×40 |
+
+**Reaches us intact, so our engine owns it.** Truecolor SGR (`CSI 38;2;…m`), synchronized output
+(`?2026h/l`), alt screen (`?1049`), SGR mouse (`?1006`), modifyOtherKeys (`CSI >4;2m`), and —
+the one that mattered — **the kitty keyboard protocol**: both `CSI ? u` (query) and `CSI > 1 u`
+(push) arrive at the master unanswered. conhost does not intercept them, so kitty negotiation is
+ours to implement and the no-`/terminal-setup` decision in the Input row holds on Windows.
+
+**conhost answers before we see it.** `CSI 6n` (DSR) and `CSI c` (DA1) never reach the master;
+conhost replies to the application itself, advertising its own attributes
+(`CSI ?61;6;7;21;22;23;24;28;32;42c`). Our engine therefore cannot describe itself to a program on
+Windows. Little consequence for `claude`, which feature-detects through `TERM`/`COLORTERM`, but
+anything gating on DA1 is negotiating with conhost, not with us.
+
+**Two things worth knowing before writing `ConPtySession`.**
+
+The spawn must set `STARTF_USESTDHANDLES` with all three std handles null. Without it the child
+uses whatever std handles it inherited and bypasses the pseudoconsole entirely — while
+`CreatePseudoConsole` still returns `S_OK`, the child still runs, and the captured stream still
+contains conhost's startup and teardown frames with none of the content in between. It reads as a
+ConPTY failure and is a spawn failure.
+
+There is no passthrough mode. `consoleapi.h` in SDK 10.0.26100 declares exactly one flag,
+`PSEUDOCONSOLE_INHERIT_CURSOR`. The reflow is not opt-out-able. (Win11 adds
+`ReleasePseudoConsole`, for detaching without killing the child — possibly useful in Phase 5.)
+
 ## Risks
 
 | Risk | Note |
 |---|---|
-| XtermSharp coverage gaps | Most likely kitty keyboard, synchronized output (`?2026`), maybe truecolor edges. Phase 1 quantifies it; we own the source, so gaps are patches, not blockers. |
+| XtermSharp coverage gaps | Most likely kitty keyboard, synchronized output (`?2026`), maybe truecolor edges. Phase 1 quantifies it; we own the source, so gaps are patches, not blockers. Narrowed on Windows: all three reach the engine intact, so the only question left is whether XtermSharp implements them, not whether the transport delivers them. |
 | Unix spawn / controlling terminal | The genuinely fiddly native bit. `forkpty` in a managed runtime is what everyone does and nobody likes; `posix_spawn` with `SETSID` plus a non-`O_NOCTTY` slave open is the clean version. Budget real time here, isolated in Phase 1. |
 | Glyph atlas is single-channel | `GlyphAtlas` is alpha-only, so color emoji are impossible without an RGBA path. Claude Code's UI is box-drawing and symbols, which JetBrains Mono covers — but emoji in *tool output* will tofu. Accepted for v1. |
 | Keyboard ownership | Not a late bug-fix; a modality design decision in Phase 4, subject to the parent-owns-modality rule. |
 | Streaming repaint cost | Rendering is instanced glyph quads with growable VBOs and damage-driven frames, so the GPU is not the worry — shaping and per-frame allocation are. Module 6 is the mitigation. |
-| ConPTY quirks | It reflows and re-renders on its own terms; Windows will need its own round of corpus work. |
+| ConPTY quirks | Confirmed and bounded (see Findings). On resize it re-emits its buffer and sends us `CSI 8;rows;cols t`; there is no passthrough flag to turn that off. Costs redundant repaints, not correctness. Windows still needs its own corpus — treat the two platforms as separate recordings asserting the same grid, rather than pretending one stream. |
+| conhost owns DA1/DSR | Capability replies on Windows are conhost's, not ours, and we cannot override them. Fine for `claude`; a constraint on anything that negotiates through DA1. |
+| Own-engine cost on Windows | Escaping conhost entirely means reimplementing a console host over the undocumented ConDrv protocol — months, plus a permanent break-on-update liability. Ruled out; the divergence above does not come close to justifying it. |
