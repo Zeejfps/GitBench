@@ -62,20 +62,20 @@ internal sealed class DiffRowPainter
     // bidi-reorder when the locale is RTL — only the surrounding chrome mirrors.
     public static readonly TextStyle MonoMetricsStyle = new()
     {
-        FontFamily = DiffOptions.MonoFontFamily,
+        FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle MonoStartStyle = new()
     {
-        FontFamily = DiffOptions.MonoFontFamily,
+        FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         VerticalAlignment = TextAlignment.Center,
         BaseDirection = BidiDirection.Ltr,
     };
     private static readonly TextStyle MonoEndStyle = new()
     {
-        FontFamily = DiffOptions.MonoFontFamily,
+        FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         HorizontalAlignment = TextAlignment.End,
         VerticalAlignment = TextAlignment.Center,
@@ -83,7 +83,7 @@ internal sealed class DiffRowPainter
     };
     private static readonly TextStyle MonoCenterStyle = new()
     {
-        FontFamily = DiffOptions.MonoFontFamily,
+        FontFamily = MonoFonts.Regular,
         FontSize = FontSize.Body,
         HorizontalAlignment = TextAlignment.Center,
         VerticalAlignment = TextAlignment.Center,

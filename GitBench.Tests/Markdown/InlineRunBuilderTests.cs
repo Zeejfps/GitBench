@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -11,7 +12,7 @@ namespace GitBench.Tests.Markdown;
 // The builder is strictly 1:1 (the inline parser already merged same-style neighbors), so these
 // pin flag mapping, not segmentation: bold → FontWeight.Bold; italic → the true italic family
 // (MarkdownFonts.ItalicFamily); bold-italic → italic family + Bold; code → IsCode + mono family
-// (DiffOptions.MonoFontFamily) + the theme's chip text color; link → LinkUrl + Underline + the
+// (MonoFonts.Regular) + the theme's chip text color; link → LinkUrl + Underline + the
 // theme's link color; strikethrough → Strikethrough, which composes with every other flag;
 // hard-break "\n" runs pass through as "\n" RichTextRuns with no decoration (Step 4's layout
 // interprets them).
@@ -76,7 +77,7 @@ public class InlineRunBuilderTests
         Assert.Equal(BodySize, run.Style.FontSize.Value);
         Assert.NotEqual(FontWeight.Bold, run.Style.FontWeight.Value);
         Assert.NotEqual(MarkdownFonts.ItalicFamily, run.Style.FontFamily.Value);
-        Assert.NotEqual(DiffOptions.MonoFontFamily, run.Style.FontFamily.Value);
+        Assert.NotEqual(MonoFonts.Regular, run.Style.FontFamily.Value);
         Assert.False(run.IsCode);
         Assert.False(run.Underline);
         Assert.False(run.Strikethrough);
@@ -135,7 +136,7 @@ public class InlineRunBuilderTests
         var run = Single(new InlineRun("x = 1", Code: true));
 
         Assert.True(run.IsCode);
-        Assert.Equal(DiffOptions.MonoFontFamily, run.Style.FontFamily.Value);
+        Assert.Equal(MonoFonts.Regular, run.Style.FontFamily.Value);
         Assert.Equal(Styles.CodeChipText, run.Style.TextColor.Value);
         Assert.False(run.Underline);
         Assert.Null(run.LinkUrl);
@@ -208,7 +209,7 @@ public class InlineRunBuilderTests
 
         Assert.True(run.Strikethrough);
         Assert.True(run.IsCode);
-        Assert.Equal(DiffOptions.MonoFontFamily, run.Style.FontFamily.Value);
+        Assert.Equal(MonoFonts.Regular, run.Style.FontFamily.Value);
         Assert.Equal(Styles.CodeChipText, run.Style.TextColor.Value);
     }
 

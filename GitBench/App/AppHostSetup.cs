@@ -57,7 +57,10 @@ internal static class AppHostSetup
         {
             var fontAssembly = typeof(LucideIcons).Assembly;
             appHost.RegisterFont(LucideIcons.FontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Lucide.ttf"), 16);
-            appHost.RegisterFont(DiffOptions.MonoFontFamily, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
+            appHost.RegisterFont(MonoFonts.Regular, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Regular.ttf"), 13);
+            appHost.RegisterFont(MonoFonts.Bold, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Bold.ttf"), 13);
+            appHost.RegisterFont(MonoFonts.Italic, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-Italic.ttf"), 13);
+            appHost.RegisterFont(MonoFonts.BoldItalic, EmbeddedAssets.LoadBytes(fontAssembly, "JetBrainsMono-BoldItalic.ttf"), 13);
             appHost.RegisterFont(MarkdownFonts.ItalicFamily, EmbeddedAssets.LoadBytes(fontAssembly, "Inter-Italic.ttf"), 16);
 
             // Glyph fallbacks come from system fonts so we don't bundle any. CJK registers one font

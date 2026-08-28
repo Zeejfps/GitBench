@@ -165,7 +165,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
         var messageView = new Text
         {
             Value = Message,
-            FontFamily = DiffOptions.MonoFontFamily,
+            FontFamily = MonoFonts.Regular,
             Wrap = TextWrap.Wrap,
             Color = Theme.Color(s => s.DialogBody.BodyText),
         }.BuildView(ctx);

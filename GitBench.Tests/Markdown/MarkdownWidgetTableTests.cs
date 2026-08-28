@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -105,7 +106,7 @@ public class MarkdownWidgetTableTests
         var canvas = h.Render();
 
         var code = Draw(canvas, "x");
-        Assert.Equal(DiffOptions.MonoFontFamily, code.Inputs.Style.FontFamily.Value);
+        Assert.Equal(MonoFonts.Regular, code.Inputs.Style.FontFamily.Value);
         Assert.Equal(Dark.Markdown.CodeChipText, code.Inputs.Style.TextColor.Value);
         Assert.Contains(canvas.Rects,
             r => r.Inputs.Style.BackgroundColor == Dark.Markdown.CodeChipBackground);

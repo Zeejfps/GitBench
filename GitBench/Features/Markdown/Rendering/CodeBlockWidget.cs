@@ -13,7 +13,7 @@ namespace GitBench.Features.Markdown.Rendering;
 /// <summary>
 /// Renders one fenced <see cref="CodeBlock"/>: a themed box
 /// (<c>MarkdownStyles.CodeBlockBackground</c>/<c>CodeBlockBorder</c>) holding the block's
-/// verbatim text in the mono family (<c>DiffOptions.MonoFontFamily</c>), plus a copy button.
+/// verbatim text in the mono family (<c>MonoFonts.Regular</c>), plus a copy button.
 /// <para>
 /// Pinned behavior (see <c>MarkdownWidgetTests</c>):
 /// when <see cref="CodeBlock.IsClosed"/> is true and <see cref="CodeBlock.Language"/> resolves a
@@ -116,7 +116,7 @@ internal sealed record CodeBlockWidget : Widget<CodeBlockViewModel>
                 // and must not reorder or right-align under an RTL locale.
                 style = new TextStyle
                 {
-                    FontFamily = DiffOptions.MonoFontFamily,
+                    FontFamily = MonoFonts.Regular,
                     FontSize = FontSize.Body,
                     TextColor = color,
                     BaseDirection = BidiDirection.Ltr,

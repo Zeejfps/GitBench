@@ -1,5 +1,5 @@
+using GitBench.Controls;
 using GitBench.Controls.Dialogs;
-using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -64,7 +64,7 @@ internal sealed record RemoveWorktreeDialog : Widget
                                     Child = new Text
                                     {
                                         Value = Worktree.Path,
-                                        FontFamily = DiffOptions.MonoFontFamily,
+                                        FontFamily = MonoFonts.Regular,
                                         FontSize = FontSize.Body,
                                         Wrap = TextWrap.Wrap,
                                         Color = Theme.Color(t => t.DialogBody.BodyText),

@@ -1,4 +1,4 @@
-using GitBench.Features.Diff;
+using GitBench.Controls;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Theming;
 using ZGF.Gui;
@@ -16,7 +16,7 @@ namespace GitBench.Features.Markdown.Rendering;
 /// plain → default family, <paramref name="fontSize"/>, <paramref name="textColor"/>;
 /// bold (or a true <paramref name="bold"/> base, e.g. headings) → <c>FontWeight.Bold</c>;
 /// italic → <see cref="MarkdownFonts.ItalicFamily"/>; bold-italic → italic family + Bold;
-/// code → <c>IsCode</c> + mono family (<c>DiffOptions.MonoFontFamily</c>) +
+/// code → <c>IsCode</c> + mono family (<c>MonoFonts.Regular</c>) +
 /// <see cref="MarkdownStyles.CodeChipText"/>; link → <c>LinkUrl</c> + <c>Underline</c> +
 /// <see cref="MarkdownStyles.Link"/>; strikethrough → <c>Strikethrough</c>, which composes with
 /// every other flag (a struck link keeps its underline and link color).
@@ -56,7 +56,7 @@ internal static class InlineRunBuilder
             if (bold || run.Bold)
                 style.FontWeight = FontWeight.Bold;
             if (run.Code)
-                style.FontFamily = DiffOptions.MonoFontFamily;
+                style.FontFamily = MonoFonts.Regular;
             else if (run.Italic)
                 style.FontFamily = MarkdownFonts.ItalicFamily;
 

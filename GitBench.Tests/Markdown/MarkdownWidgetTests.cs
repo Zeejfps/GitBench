@@ -223,7 +223,7 @@ public class MarkdownWidgetTests
             var canvas = h.Render();
 
             var code = Draw(canvas, "x = 1");
-            Assert.Equal(DiffOptions.MonoFontFamily, code.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, code.Inputs.Style.FontFamily.Value);
             Assert.Equal(Dark.Markdown.CodeChipText, code.Inputs.Style.TextColor.Value);
             Assert.Contains(canvas.Rects,
                 r => r.Inputs.Style.BackgroundColor == Dark.Markdown.CodeChipBackground);
@@ -541,8 +541,8 @@ public class MarkdownWidgetTests
 
             var first = Draw(canvas, "alpha beta");
             var second = Draw(canvas, "gamma");
-            Assert.Equal(DiffOptions.MonoFontFamily, first.Inputs.Style.FontFamily.Value);
-            Assert.Equal(DiffOptions.MonoFontFamily, second.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, first.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, second.Inputs.Style.FontFamily.Value);
             Assert.Equal(Dark.Markdown.CodeBlockText, first.Inputs.Style.TextColor.Value);
             Assert.True(second.Inputs.Position.Bottom < first.Inputs.Position.Bottom,
                 "code lines render in source order, top-down");
@@ -559,7 +559,7 @@ public class MarkdownWidgetTests
 
             var number = DrawContaining(canvas, "42");
             Assert.Equal(Dark.DiffContent.Syntax.Number, number.Inputs.Style.TextColor.Value);
-            Assert.Equal(DiffOptions.MonoFontFamily, number.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, number.Inputs.Style.FontFamily.Value);
 
             var comment = DrawContaining(canvas, "note");
             Assert.Equal(Dark.DiffContent.Syntax.Comment, comment.Inputs.Style.TextColor.Value);
@@ -576,7 +576,7 @@ public class MarkdownWidgetTests
             var canvas = h.Render();
 
             var line = Draw(canvas, "int count = 42; // note");
-            Assert.Equal(DiffOptions.MonoFontFamily, line.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, line.Inputs.Style.FontFamily.Value);
             Assert.Equal(Dark.Markdown.CodeBlockText, line.Inputs.Style.TextColor.Value);
             Assert.DoesNotContain(canvas.Texts,
                 t => t.Inputs.Style.TextColor.Value == Dark.DiffContent.Syntax.Number);
@@ -592,7 +592,7 @@ public class MarkdownWidgetTests
             var canvas = h.Render();
 
             var line = Draw(canvas, "int count = 42; // note");
-            Assert.Equal(DiffOptions.MonoFontFamily, line.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, line.Inputs.Style.FontFamily.Value);
             Assert.Equal(Dark.Markdown.CodeBlockText, line.Inputs.Style.TextColor.Value);
         }
     }

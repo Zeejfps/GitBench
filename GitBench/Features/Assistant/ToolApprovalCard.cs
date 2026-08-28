@@ -72,7 +72,7 @@ internal sealed record ToolApprovalCard : Widget
                                         ? loc.Strings.Value.AssistantApprovalNoArguments
                                         : pending.Arguments),
                                     Wrap = TextWrap.Wrap,
-                                    FontFamily = DiffOptions.MonoFontFamily,
+                                    FontFamily = MonoFonts.Regular,
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextSecondary),
                                 },

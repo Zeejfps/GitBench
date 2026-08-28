@@ -1,3 +1,4 @@
+using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
@@ -240,7 +241,7 @@ public class MarkdownStreamTests
             var canvas = h.Render();
 
             var line = canvas.Texts.Single(t => t.Inputs.Text == "int x = 1;");
-            Assert.Equal(DiffOptions.MonoFontFamily, line.Inputs.Style.FontFamily.Value);
+            Assert.Equal(MonoFonts.Regular, line.Inputs.Style.FontFamily.Value);
             Assert.Contains(canvas.Rects,
                 r => r.Inputs.Style.BackgroundColor == Dark.Markdown.CodeBlockBackground);
         }
