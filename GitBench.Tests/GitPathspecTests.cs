@@ -81,7 +81,8 @@ public sealed class GitPathspecTests : IDisposable
         Git("init", "--initial-branch=main");
         Git("config", "user.email", "test@test");
         Git("config", "user.name", "test");
-        // `git restore --staged` resolves HEAD; seed a commit so it exists.
+        // Seed a commit so this covers the ordinary HEAD-resolvable case; the no-commit case
+        // is GitUnbornHeadTests.
         File.WriteAllText(Path.Combine(_root, "seed.txt"), "seed\n");
         Git("add", "seed.txt");
         Git("-c", "commit.gpgsign=false", "commit", "-m", "seed");

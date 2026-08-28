@@ -1258,11 +1258,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git add"));
         });
 
+    // `git reset` rather than `git restore --staged`: restore insists on resolving HEAD, so it
+    // fails outright in a repo with no commits — where staging a file by accident and needing to
+    // take it back is exactly what happens. reset treats an unborn HEAD as the empty tree.
     public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths)
         => paths.Count == 0 ? GitOutcome.Ok : RunOperation(repo, () =>
         {
-            var result = RunPathspecOp(repo.Path, new[] { "restore", "--staged" }, paths);
-            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git restore --staged"));
+            var result = RunPathspecOp(repo.Path, new[] { "reset", "-q" }, paths);
+            return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git reset"));
         });
 
     public GitOutcome TakeOurs(Repo repo, string path) => TakeSide(repo, path, ours: true);
