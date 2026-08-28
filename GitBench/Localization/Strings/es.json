@@ -83,11 +83,15 @@
 
   "app.mode.changes": "Cambios",
   "app.mode.history": "Historial",
+  "app.mode.terminal": "Terminal",
   "app.update.restart": "Reiniciar",
   "app.update.restart_tooltip": "Reiniciar para finalizar la actualización",
   "app.update.up_to_date": "Tienes la última versión",
   "app.update.check_failed": "Error al buscar actualizaciones",
   "app.update.ready_message": "La versión {version} está lista — haz clic en Reiniciar para actualizar.",
+
+  "terminal.placeholder_title": "Terminal próximamente",
+  "terminal.placeholder_hint": "Aquí se ejecutará una shell para el repositorio actual.",
 
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",

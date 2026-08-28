@@ -125,11 +125,15 @@
 
   "app.mode.changes": "التغييرات",
   "app.mode.history": "السجل",
+  "app.mode.terminal": "الطرفية",
   "app.update.restart": "إعادة التشغيل",
   "app.update.restart_tooltip": "أعد التشغيل لإكمال التحديث",
   "app.update.up_to_date": "أنت تستخدم أحدث إصدار",
   "app.update.check_failed": "فشل التحقق من التحديثات",
   "app.update.ready_message": "الإصدار {version} جاهز — انقر على إعادة التشغيل للتحديث.",
+
+  "terminal.placeholder_title": "الطرفية قريبًا",
+  "terminal.placeholder_hint": "هنا ستعمل صدفة للمستودع الحالي.",
 
   "toolbar.fetch": "جلب",
   "toolbar.fetching": "جارٍ الجلب",

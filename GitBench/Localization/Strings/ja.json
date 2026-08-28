@@ -83,11 +83,15 @@
 
   "app.mode.changes": "変更",
   "app.mode.history": "履歴",
+  "app.mode.terminal": "ターミナル",
   "app.update.restart": "再起動",
   "app.update.restart_tooltip": "再起動してアップデートを完了",
   "app.update.up_to_date": "最新バージョンを使用中です",
   "app.update.check_failed": "アップデートの確認に失敗しました",
   "app.update.ready_message": "バージョン{version}の準備ができました — 再起動で更新します。",
+
+  "terminal.placeholder_title": "ターミナルは近日公開",
+  "terminal.placeholder_hint": "ここで現在のリポジトリのシェルが実行されます。",
 
   "toolbar.fetch": "フェッチ",
   "toolbar.fetching": "フェッチ中",

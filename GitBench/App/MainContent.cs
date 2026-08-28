@@ -1,5 +1,6 @@
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Terminal;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -8,7 +9,7 @@ namespace GitBench.App;
 
 /// <summary>
 /// Shell for the main content area: shows the view for the active <see cref="MainViewMode"/> —
-/// commit history or working changes.
+/// commit history, working changes, or the terminal.
 /// </summary>
 internal sealed record MainContent : Widget
 {
@@ -23,6 +24,7 @@ internal sealed record MainContent : Widget
             {
                 MainViewMode.History => new CommitHistory(),
                 MainViewMode.LocalChanges => new WorkingChanges(),
+                MainViewMode.Terminal => new TerminalPane(),
                 _ => Empty.Widget,
             },
         };

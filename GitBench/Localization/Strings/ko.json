@@ -83,11 +83,15 @@
 
   "app.mode.changes": "변경 사항",
   "app.mode.history": "히스토리",
+  "app.mode.terminal": "터미널",
   "app.update.restart": "재시작",
   "app.update.restart_tooltip": "재시작하여 업데이트 완료",
   "app.update.up_to_date": "최신 버전을 사용 중입니다",
   "app.update.check_failed": "업데이트 확인에 실패했습니다",
   "app.update.ready_message": "버전 {version} 준비 완료 — 재시작을 클릭하여 업데이트하세요.",
+
+  "terminal.placeholder_title": "터미널 공개 예정",
+  "terminal.placeholder_hint": "여기에서 현재 저장소의 셸이 실행됩니다.",
 
   "toolbar.fetch": "가져오기",
   "toolbar.fetching": "가져오는 중",

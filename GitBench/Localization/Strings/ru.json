@@ -118,11 +118,15 @@
 
   "app.mode.changes": "Изменения",
   "app.mode.history": "История",
+  "app.mode.terminal": "Терминал",
   "app.update.restart": "Перезапустить",
   "app.update.restart_tooltip": "Перезапустите, чтобы завершить обновление",
   "app.update.up_to_date": "У вас последняя версия",
   "app.update.check_failed": "Не удалось проверить обновления",
   "app.update.ready_message": "Версия {version} готова — нажмите «Перезапустить», чтобы обновиться.",
+
+  "terminal.placeholder_title": "Терминал скоро появится",
+  "terminal.placeholder_hint": "Здесь будет работать оболочка для текущего репозитория.",
 
   "toolbar.fetch": "Извлечь",
   "toolbar.fetching": "Извлечение",
