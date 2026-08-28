@@ -139,7 +139,7 @@ namespace XtermSharp {
 		public int Cols { get; private set; }
 		public int Rows { get; private set; }
 		public bool InsertMode;
-		public int CurAttr;
+		public CellAttribute CurAttr;
 
 		/// <summary>
 		/// Provides a baseline set of environment variables that would be useful to run the terminal,
@@ -509,9 +509,9 @@ namespace XtermSharp {
 				Charset = null;
 		}
 
-		internal int EraseAttr ()
+		internal CellAttribute EraseAttr ()
 		{
-			return (CharData.DefaultAttr & ~0x1ff) | CurAttr & 0x1ff;
+			return CharData.DefaultAttr.WithBackground (CurAttr.Background);
 		}
 
 		internal void EmitScroll (int v)
@@ -678,11 +678,6 @@ namespace XtermSharp {
 		{
 			SendEvent (buttonFlags + 32, x, y);
 
-		}
-
-		public int MatchColor (int r1, int g1, int b1)
-		{
-			throw new NotImplementedException ();
 		}
 
 		internal void EmitData (string txt)

@@ -1,20 +1,26 @@
 # XtermSharp against the unified seam
 
-`dotnet test` on 2026-08-28: **254 tests, 196 pass, 58 fail.**
+`dotnet test` on 2026-08-28, before gap 1 was fixed: **254 tests, 196 pass, 58 fail.**
+After gap 1: **210 of those 254 pass, 44 fail**, plus a new `ReflowSpec` of 10.
 
 Every failure below is XtermSharp's. The suite is engine-agnostic — `TerminalEngines.cs` is the
 only file that names an implementation — and every expectation states what a correct xterm-class
 terminal does, worked out from the specifications and from the recorded corpora. Nothing here may
 be relaxed to make the suite green, and no golden may be regenerated from engine output.
 
-Line numbers refer to the verbatim copy under `XtermSharp/`, which is byte-identical to the clone
-(upstream `XtermSharp/master`, last touched December 2020). `diff -r` against the clone is clean.
+Line numbers refer to the sources under `vendor/XtermSharp/`, which began as a clone of upstream
+`XtermSharp/master` (last touched December 2020). They are **no longer byte-identical to it**: the
+tree is a fork now, and every divergence is listed in `vendor/XtermSharp/PATCHES.md`. Line numbers
+for gaps 2 onwards are from before that patch and may have shifted.
 
 ---
 
-## Fatal — throws and kills the session
+## Fixed
 
-### 1. Truecolor SGR throws
+### 1. Truecolor SGR throws — FIXED
+
+**Fixed by patch 1 in `vendor/XtermSharp/PATCHES.md`.** The section below is the diagnosis as it
+stood; the outcome is recorded at the end of it.
 
 `Terminal.cs:683` — `public int MatchColor (int r1, int g1, int b1) { throw new NotImplementedException (); }`,
 reached from `InputHandlers/InputHandler.cs:754` (foreground) and `:770` (background) whenever SGR
@@ -29,10 +35,10 @@ all six `CorpusPropertiesSpec` claude cases, all three `ChunkInvarianceTests` cl
 `CorpusReplayTests.Replay_ProducesTheGoldenScreens(claude)`,
 `CorpusReplayTests.Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock`.
 
-**Why `claude.grid` has no golden, and must not get one.** The engine cannot produce a single frame
-of that corpus, so there is nothing to audit against the bytes. The replay test fails on the throw,
-with `XtermSharp.Terminal.MatchColor` at the top of the stack. When truecolor works, a person reads
-the frames against `Corpus/claude.bin` and commits the result — not before.
+**Why `claude.grid` has no golden, and must not get one.** The engine could not produce a single
+frame of that corpus, so there was nothing to audit against the bytes. It can now, and the rule is
+unchanged: a person reads the frames against `Corpus/claude.bin` and commits the result — never a
+copy of `claude.grid.actual`.
 
 **Cost of making truecolor real.** `CharData.cs:16` packs a cell's whole appearance into one int as
 `(flags << 18) | (fg << 9) | bg`: nine bits per colour, which holds a 256-entry palette index plus
@@ -55,6 +61,38 @@ therefore to the cell representation, which is the widest change available in th
 Estimate: one focused day, most of it mechanical, with the risk concentrated in the reflow and
 renderer paths that assume attribute equality is int equality. Worth doing before anything else on
 this list — it is the only gap that is fatal rather than merely wrong.
+
+**What it cost, and what it moved.** `CharData.Attribute` is now a `CellAttribute` value — flags
+plus a foreground and a background that each carry kind and 24 bits — across ten files;
+`MatchColor` is gone. `Renderer` and `SelectionService`/`SearchService` turned out never to compare
+attributes at all, so the run-splitting risk named above did not exist; the only int-equality sites
+were `BufferLine.HasContent` and `Terminal.Scroll`'s blank-line cache, both of which reflow reaches
+through `GetWrappedLineTrimmedLength`. `ReflowSpec` was written first to cover that path and did
+not move.
+Seventeen of the tests listed above are now green: fourteen from the fix itself, and three more
+once their assertions were corrected.
+
+Three of the projected tests were asserting against the recording rather than against correct
+terminal behaviour, and have been corrected (verified byte by byte against `Corpus/claude.bin`):
+
+- `Corpus_SetsTheWindowTitle` no longer runs over claude. The recording's last OSC is `ESC ] 0 ; BEL`
+  at byte 5531 — an empty payload — so a correct terminal ends that session untitled. The real
+  behaviour is now pinned by `Claude_SetsATitleAndThenClearsIt`, which asserts a title before byte
+  5531 and none after.
+- `Claude_PaintsColouredTextOntoTheGrid` now feeds only to byte 5231. From there the program leaves
+  the alternate screen and erases all 34 rows, so the grid is legitimately blank at end of stream;
+  the RGB cells are real and present in every mid-stream frame.
+- `Claude_EndsWithSgrMouseEncodingTurnedBackOff` (renamed) now expects X10. The `?1006` requests run
+  h, h, h, l, l — the last is a reset, so a correct terminal ends with the default encoding.
+
+All three pass.
+
+The remaining three — `Replay_ProducesTheGoldenScreens(claude)` (no golden yet, and it must be
+hand-audited against the bytes rather than blessed from engine output),
+`Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock` (gap 9) and
+`WholeSessionFedOneByteAtATime_ProducesTheSameGrid` (gap 2) — are blocked on other gaps as
+predicted. `AttributeSpec.Attributes_InOneSequence_AreAllCarriedAsBits` is listed here and under
+gap 13, and stays red on gap 13.
 
 ---
 

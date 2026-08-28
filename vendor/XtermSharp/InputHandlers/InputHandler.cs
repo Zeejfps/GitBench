@@ -670,36 +670,33 @@ namespace XtermSharp {
 			}
 
 			var l = pars.Length;
-			var flags = (FLAGS)(terminal.CurAttr >> 18);
-			var fg = (terminal.CurAttr >> 9) & 0x1ff;
-			var bg = terminal.CurAttr & 0x1ff;
+			var flags = terminal.CurAttr.Flags;
+			var fg = terminal.CurAttr.Foreground;
+			var bg = terminal.CurAttr.Background;
 			var def = CharData.DefaultAttr;
 
 			for (var i = 0; i < l; i++) {
 				int p = pars [i];
 				if (p >= 30 && p <= 37) {
 					// fg color 8
-					fg = p - 30;
+					fg = CellColor.Indexed ((byte)(p - 30));
 				} else if (p >= 40 && p <= 47) {
 					// bg color 8
-					bg = p - 40;
+					bg = CellColor.Indexed ((byte)(p - 40));
 				} else if (p >= 90 && p <= 97) {
 					// fg color 16
 					p += 8;
-					fg = p - 90;
+					fg = CellColor.Indexed ((byte)(p - 90));
 				} else if (p >= 100 && p <= 107) {
 					// bg color 16
 					p += 8;
-					bg = p - 100;
+					bg = CellColor.Indexed ((byte)(p - 100));
 				} else if (p == 0) {
 					// default
 
-					flags = (FLAGS)(def >> 18);
-					fg = (def >> 9) & 0x1ff;
-					bg = def & 0x1ff;
-					// flags = 0;
-					// fg = 0x1ff;
-					// bg = 0x1ff;
+					flags = def.Flags;
+					fg = def.Foreground;
+					bg = def.Background;
 				} else if (p == 1) {
 					// bold text
 					flags |= FLAGS.BOLD;
@@ -743,51 +740,58 @@ namespace XtermSharp {
 					flags &= ~FLAGS.INVISIBLE;
 				} else if (p == 39) {
 					// reset fg
-					fg = (CharData.DefaultAttr >> 9) & 0x1ff;
+					fg = CharData.DefaultAttr.Foreground;
 				} else if (p == 49) {
 					// reset bg
-					bg = CharData.DefaultAttr & 0x1ff;
+					bg = CharData.DefaultAttr.Background;
 				} else if (p == 38) {
 					// fg color 256
-					if (pars [i + 1] == 2) {
-						i += 2;
-						fg = terminal.MatchColor (
-							pars [i] & 0xff,
-							pars [i + 1] & 0xff,
-							pars [i + 2] & 0xff);
-						if (fg == -1)
-							fg = 0x1ff;
-						i += 2;
-					} else if (pars [i + 1] == 5) {
-						i += 2;
-						p = pars [i] & 0xff;
-						fg = p;
-					}
+					fg = ExtendedColor (pars, ref i, fg);
 				} else if (p == 48) {
 					// bg color 256
-					if (pars [i + 1] == 2) {
-						i += 2;
-						bg = terminal.MatchColor (
-							pars [i] & 0xff,
-							pars [i + 1] & 0xff,
-							pars [i + 2] & 0xff);
-						if (bg == -1)
-							bg = 0x1ff;
-						i += 2;
-					} else if (pars [i + 1] == 5) {
-						i += 2;
-						p = pars [i] & 0xff;
-						bg = p;
-					}
+					bg = ExtendedColor (pars, ref i, bg);
 				} else if (p == 100) {
 					// reset fg/bg
-					fg = (def >> 9) & 0x1ff;
-					bg = def & 0x1ff;
+					fg = def.Foreground;
+					bg = def.Background;
 				} else {
 					terminal.Error ("Unknown SGR attribute: %d.", p);
 				}
 			}
-			terminal.CurAttr = ((int)flags << 18) | (fg << 9) | bg;
+			terminal.CurAttr = new CellAttribute (flags, fg, bg);
+		}
+
+		static CellColor ExtendedColor (int [] pars, ref int i, CellColor current)
+		{
+			if (i + 1 >= pars.Length)
+				return current;
+
+			if (pars [i + 1] == 2) {
+				if (i + 4 >= pars.Length) {
+					i = pars.Length - 1;
+					return current;
+				}
+
+				var color = CellColor.Rgb (
+					(byte)(pars [i + 2] & 0xff),
+					(byte)(pars [i + 3] & 0xff),
+					(byte)(pars [i + 4] & 0xff));
+				i += 4;
+				return color;
+			}
+
+			if (pars [i + 1] == 5) {
+				if (i + 2 >= pars.Length) {
+					i = pars.Length - 1;
+					return current;
+				}
+
+				var color = CellColor.Indexed ((byte)(pars [i + 2] & 0xff));
+				i += 2;
+				return color;
+			}
+
+			return current;
 		}
 
 		void ResetMode (int [] pars, string collect)

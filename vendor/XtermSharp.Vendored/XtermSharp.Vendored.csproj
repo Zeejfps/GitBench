@@ -1,11 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <!--
-        Compiles the vendored XtermSharp sources without touching them. Upstream's own csproj does
-        not build under a current SDK: its InternalsVisibleTo AssemblyAttribute item carries
-        Visible="False" metadata, which newer SDKs pass through as a second constructor argument.
-        The project file is therefore ours; every .cs file under ..\XtermSharp\ is byte-identical to
-        the clone and stays that way. Gaps are recorded in docs/xtermsharp-known-gaps.md, never patched here.
+        Compiles the vendored XtermSharp sources. Upstream's own csproj does not build under a
+        current SDK: its InternalsVisibleTo AssemblyAttribute item carries Visible="False"
+        metadata, which newer SDKs pass through as a second constructor argument. The project file
+        is therefore ours.
+
+        ..\XtermSharp\ is a fork, not a verbatim copy. It started as a clone of upstream
+        XtermSharp/master (December 2020) and is patched in place; every divergence from that clone
+        is listed in ..\XtermSharp\PATCHES.md, so a diff against a fresh clone stays legible.
+        Gaps not yet patched are recorded in docs/xtermsharp-known-gaps.md.
 
         netstandard2.0 is deliberate. Compiled as net10.0 these sources do not build: NStack.Core
         declares its own System.Rune, unambiguous on netstandard2.0 but colliding with

@@ -88,7 +88,8 @@ namespace XtermSharp {
 			}
 		}
 		BitArray tabStops;
-		public int SavedX, SavedY, SavedAttr = CharData.DefaultAttr;
+		public int SavedX, SavedY;
+		public CellAttribute SavedAttr = CharData.DefaultAttr;
 		public Terminal Terminal { get; private set; }
 		bool hasScrollback;
 		int cols, rows;
@@ -124,7 +125,7 @@ namespace XtermSharp {
 			return bufferRow [col];
 		}
 
-		public BufferLine GetBlankLine (int attribute, bool isWrapped = false)
+		public BufferLine GetBlankLine (CellAttribute attribute, bool isWrapped = false)
 		{
 			var cd = new CharData (attribute);
 
@@ -167,7 +168,7 @@ namespace XtermSharp {
 		/// <summary>
 		/// Saves the cursor position
 		/// </summary>
-		public void SaveCursor (int curAttr)
+		public void SaveCursor (CellAttribute curAttr)
 		{
 			SavedX = X;
 			SavedY = Y;
@@ -177,7 +178,7 @@ namespace XtermSharp {
 		/// <summary>
 		/// Restores the cursor
 		/// </summary>
-		public int RestoreCursor ()
+		public CellAttribute RestoreCursor ()
 		{
 			X = SavedX;
 			Y = SavedY;
@@ -187,7 +188,7 @@ namespace XtermSharp {
 		/// <summary>
 		/// Fills the buffer's viewport with blank lines.
 		/// </summary>
-		public void FillViewportRows (int? attribute = null)
+		public void FillViewportRows (CellAttribute? attribute = null)
 		{
 			// TODO: limitation in original, this does not cope with partial fills, it is either zero or nothing
 			if (lines.Length != 0)

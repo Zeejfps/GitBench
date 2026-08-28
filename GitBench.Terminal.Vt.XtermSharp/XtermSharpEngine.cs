@@ -136,9 +136,9 @@ public sealed class XtermSharpEngine : ITerminalEngine
 
         static TerminalCell Translate(CharData cell) => new(
             cell.IsNullChar() ? new Rune(' ') : ToRune(cell.Code),
-            ToColor((cell.Attribute >> 9) & 0x1ff),
-            ToColor(cell.Attribute & 0x1ff),
-            ToAttributes((FLAGS)(cell.Attribute >> 18)),
+            ToColor(cell.Attribute.Foreground),
+            ToColor(cell.Attribute.Background),
+            ToAttributes(cell.Attribute.Flags),
             cell.Width switch
             {
                 0 => CellWidth.WideTrailer,
@@ -148,10 +148,13 @@ public sealed class XtermSharpEngine : ITerminalEngine
 
         static Rune ToRune(int code) => Rune.IsValid(code) ? new Rune(code) : Rune.ReplacementChar;
 
-        static TerminalColor ToColor(int slot) => slot switch
+        static TerminalColor ToColor(CellColor colour) => colour.Kind switch
         {
-            >= 256 => TerminalColor.Default,
-            _ => TerminalColor.Indexed((byte)slot),
+            CellColorKind.Default => TerminalColor.Default,
+            CellColorKind.InvertedDefault => TerminalColor.Default,
+            CellColorKind.Indexed => TerminalColor.Indexed(colour.Index),
+            CellColorKind.Rgb => TerminalColor.Rgb(colour.Red, colour.Green, colour.Blue),
+            _ => throw new ArgumentOutOfRangeException(nameof(colour), colour.Kind, "Unknown cell colour kind."),
         };
 
         static CellAttributes ToAttributes(FLAGS flags)

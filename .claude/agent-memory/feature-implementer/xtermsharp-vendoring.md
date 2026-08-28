@@ -5,8 +5,8 @@ metadata:
   type: project
 ---
 
-Vendored XtermSharp compiles only as `netstandard2.0`, from a project file we write, with the `.cs`
-files byte-identical to the clone.
+Vendored XtermSharp compiles only as `netstandard2.0`, from a project file we write. It lives in
+`vendor/XtermSharp/`, and as of 2026-08-28 it is a **fork**, not a verbatim copy.
 
 **Why:** two independent attempts hit the same two walls. `NStack.Core` declares its own
 `System.Rune`, which is unambiguous on netstandard2.0 but collides with `System.Text.Rune` from .NET
@@ -16,8 +16,8 @@ And upstream's own `XtermSharp.csproj` does not build under a current SDK: its `
 second constructor argument.
 
 **How to apply:**
-- Put the sources in `XtermSharp/` (verbatim, `diff -r` against the clone stays clean) and a
-  separate `XtermSharp.Vendored/XtermSharp.Vendored.csproj` that does
+- Put the sources in `vendor/XtermSharp/` and a
+  separate `vendor/XtermSharp.Vendored/XtermSharp.Vendored.csproj` that does
   `<Compile Include="..\XtermSharp\**\*.cs" />` with `EnableDefaultCompileItems=false`.
   `NoWarn`: CS0162;CS0168;CS0169;CS0219;CS0414;CS0618;CS0649;CS8981;SYSLIB0011.
 - NStack flows transitively, so **every** downstream project needs
@@ -30,5 +30,13 @@ second constructor argument.
 - Moving these files into `framework/` as net10.0 later means qualifying the two `Rune` call sites
   above to `NStack.Rune`, or putting an extern alias on the reference.
 
-Gaps go in `KnownGaps.md` with file and line, never into a patch of the vendored source. See
-[[terminal-vt-seam]].
+Patching the sources was forbidden until 2026-08-28, when the user decided to maintain the tree as
+a fork. Every divergence from the December 2020 clone now goes in `vendor/XtermSharp/PATCHES.md`
+with file, change and reason; unpatched gaps stay in `docs/xtermsharp-known-gaps.md` with file and
+line. See [[terminal-vt-seam]] and [[xtermsharp-gap-estimates-overcount]].
+
+Build and test only the VT projects — never `GitBench.sln`, which is 30 projects:
+`dotnet test GitBench.Terminal.Vt.Tests\GitBench.Terminal.Vt.Tests.csproj --artifacts-path <temp>`.
+Add `--logger "trx;LogFileName=x.trx" --results-directory <temp>` and diff the trx per-test
+outcomes against a baseline run: the console output truncates the failure list well short of the
+~44 that are red, so "nothing else moved" cannot be checked from it.

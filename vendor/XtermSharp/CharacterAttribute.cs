@@ -15,12 +15,11 @@ namespace XtermSharp {
 	}
 
 	public static class CharacterAttribute {
-		// Temporary, longer term in Attribute we will add a proper encoding
-		public static string ToSGR (int attribute)
+		public static string ToSGR (CellAttribute attribute)
 		{
 			var result = "0";
 
-			var ca = (FLAGS)(attribute >> 18);
+			var ca = attribute.Flags;
 			if (ca.HasFlag (FLAGS.BOLD)) {
 				result += ";1";
 			}
@@ -37,36 +36,30 @@ namespace XtermSharp {
 				result += ";8";
 			}
 
-			int fg = (attribute >> 9) & 0x1ff;
-
-			if (fg != Renderer.DefaultColor) {
-				if (fg > 16) {
-					result += $";38;5;{fg}";
-				} else {
-					if (fg >= 8) {
-						result += $";{9}{fg - 8};";
-					} else {
-						result += $";{3}{fg};";
-					}
-				}
-			}
-
-			int bg = attribute & 0x1ff;
-			if (bg != Renderer.DefaultColor) {
-				if (bg > 16) {
-					result += $";48;5;{bg}";
-				} else {
-					if (bg >= 8) {
-						result += $";{10}{bg - 8};";
-					} else {
-						result += $";{4}{bg};";
-					}
-				}
-			}
+			result += ColorToSGR (attribute.Foreground, extended: 38, basic: 3, bright: 9);
+			result += ColorToSGR (attribute.Background, extended: 48, basic: 4, bright: 10);
 
 			result += "m";
 			return result;
 		}
 
+		static string ColorToSGR (CellColor color, int extended, int basic, int bright)
+		{
+			switch (color.Kind) {
+			case CellColorKind.Indexed:
+				if (color.Index > 16)
+					return $";{extended};5;{color.Index}";
+				if (color.Index >= 8)
+					return $";{bright}{color.Index - 8};";
+				return $";{basic}{color.Index};";
+			case CellColorKind.Rgb:
+				return $";{extended};2;{color.Red};{color.Green};{color.Blue}";
+			case CellColorKind.Default:
+			case CellColorKind.InvertedDefault:
+				return string.Empty;
+			}
+
+			throw new ArgumentOutOfRangeException (nameof (color), color.Kind, "Unknown cell colour kind.");
+		}
 	}
 }

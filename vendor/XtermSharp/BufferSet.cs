@@ -63,7 +63,7 @@ namespace XtermSharp {
 		/// Sets the alt Buffer of the BufferSet as its currently active Buffer
 		/// </summary>
 		/// <param name="fillAttr">Attribute to fill the screen with</param>
-		public void ActivateAltBuffer (int? fillAttr)
+		public void ActivateAltBuffer (CellAttribute? fillAttr)
 		{
 			if (Active == Alt)
 				return;

@@ -7,15 +7,13 @@ namespace XtermSharp {
 	// zero-width thing for code 0.
 	[DebuggerDisplay("[CharData (Attr={Attribute},Rune={Rune},W={Width},Code={Code})]")]
 	public struct CharData {
-		public int Attribute;
+		public CellAttribute Attribute;
 		public Rune Rune;
 		public int Width;
 		public int Code;
 
-		// ((int)flags << 18) | (fg << 9) | bg;
-
-		public const int DefaultAttr = Renderer.DefaultColor << 9 | (256 << 0);
-		public const int InvertedAttr = Renderer.InvertedDefaultColor << 9 | (256 << 0) | Renderer.InvertedDefaultColor;
+		public static readonly CellAttribute DefaultAttr = CellAttribute.Default;
+		public static readonly CellAttribute InvertedAttr = CellAttribute.InvertedDefault;
 
 		public static CharData Null = new CharData (DefaultAttr, '\u0200', 1, 0);
 		public static CharData WhiteSpace = new CharData (DefaultAttr, ' ', 1, 32);
@@ -27,7 +25,7 @@ namespace XtermSharp {
 		public static CharData RightParenthesis = new CharData (DefaultAttr, ')', 1, 41);
 		public static CharData Period = new CharData (DefaultAttr, '.', 1, 46);
 
-		public CharData (int attribute, Rune rune, int width, int code)
+		public CharData (CellAttribute attribute, Rune rune, int width, int code)
 		{
 			Attribute = attribute;
 			Rune = rune;
@@ -36,7 +34,7 @@ namespace XtermSharp {
 		}
 
 		// Returns an empty CharData with the specified attribute
-		public CharData (int attribute)
+		public CharData (CellAttribute attribute)
 		{
 			Attribute = attribute;
 			Rune = '\u0200';

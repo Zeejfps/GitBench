@@ -15,6 +15,14 @@ namespace GitBench.Terminal.Vt.Tests;
 /// </remarks>
 public class CorpusPropertiesSpec
 {
+    /// <summary>
+    /// Byte offsets into the claude recording, read from the raw stream and not from any engine:
+    /// the ESC introducing the alt-screen exit, after which the program erases all 34 rows, and the
+    /// ESC introducing a final OSC 0 whose payload is empty.
+    /// </summary>
+    const int AltScreenExit = 5231;
+    const int TitleCleared = 5531;
+
     public static IEnumerable<object[]> Corpora() => Corpus.All();
 
     [Theory]
@@ -55,8 +63,15 @@ public class CorpusPropertiesSpec
         Assert.InRange(cursor.Row, 0, engine.Grid.Size.Rows - 1);
     }
 
+    /// <remarks>
+    /// Not every corpus. The claude recording clears its title on the way out, so it is pinned by
+    /// <see cref="Claude_SetsATitleAndThenClearsIt"/> instead.
+    /// </remarks>
     [Theory]
-    [MemberData(nameof(Corpora))]
+    [InlineData("smoke")]
+    [InlineData("vim")]
+    [InlineData("less")]
+    [InlineData("git-log")]
     public void Corpus_SetsTheWindowTitle(string name)
     {
         var corpus = Corpus.Load(name);
@@ -107,13 +122,31 @@ public class CorpusPropertiesSpec
             "Eighty log lines through a thirty-row viewport must leave lines in scrollback.");
     }
 
+    /// <remarks>
+    /// The session sets a title at byte 4749 and clears it at 5531 with an empty OSC 0 payload, so a
+    /// correct terminal ends it untitled. Asserting a non-empty title at end of stream would be
+    /// asserting against what the recording actually says.
+    /// </remarks>
+    [Fact]
+    public void Claude_SetsATitleAndThenClearsIt()
+    {
+        var corpus = Corpus.Load("claude");
+        using var engine = EngineUnderTest.Create(corpus.Size);
+
+        engine.Feed(corpus.Bytes.AsSpan(0, TitleCleared));
+        Assert.NotEqual(string.Empty, engine.State.Title);
+
+        engine.Feed(corpus.Bytes.AsSpan(TitleCleared));
+        Assert.Equal(string.Empty, engine.State.Title);
+    }
+
     [Fact]
     public void Claude_PaintsColouredTextOntoTheGrid()
     {
         var corpus = Corpus.Load("claude");
         using var engine = EngineUnderTest.Create(corpus.Size);
 
-        engine.Feed(corpus.Bytes);
+        engine.Feed(corpus.Bytes.AsSpan(0, AltScreenExit));
 
         Assert.True(
             AnyCell(engine.Grid, cell => cell.Foreground.Kind == TerminalColorKind.Rgb),
@@ -121,14 +154,14 @@ public class CorpusPropertiesSpec
     }
 
     [Fact]
-    public void Claude_EndsWithMouseTrackingReportedFromTheLastRequest()
+    public void Claude_EndsWithSgrMouseEncodingTurnedBackOff()
     {
         var corpus = Corpus.Load("claude");
         using var engine = EngineUnderTest.Create(corpus.Size);
 
         engine.Feed(corpus.Bytes);
 
-        Assert.Equal(MouseEncoding.Sgr, engine.State.Modes.MouseEncoding);
+        Assert.Equal(MouseEncoding.X10, engine.State.Modes.MouseEncoding);
     }
 
     static string VisibleText(ITerminalGrid grid)
