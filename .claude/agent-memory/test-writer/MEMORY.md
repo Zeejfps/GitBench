@@ -6,3 +6,6 @@
 - [Suite review lessons](feedback_suite_review_lessons.md) — surviving-variant tests, invariants supplement examples, no naked buffer beside a safe accessor, ParamName is content
 - [GUI harness keyboard tests](project_gui_harness_keyboard.md) — reading KeyClaim, building the focus queue by hover, spy controller for fall-through
 - [Escape literals in sources](feedback_escape_literals_in_sources.md) — always \u escapes, never literal control bytes; Write emits the real byte, scan and post-fix with perl
+- [PTY child snippets](project_pty_child_snippets.md) — validating sh test children under a real sized pty; /bin/sh sets TERM=dumb as a shell variable
+- [PTY edge facts](project_pty_edge_facts.md) — measured errno/MAX_CANON/EIO/winsize boundaries, and the Linux divergences no macOS test can cover
+- [PTY lifecycle seams](project_pty_lifecycle_seams.md) — nohup grandchild makes teardown testable on macOS; GatedHandle leaks under a blocked reader; fd-number leak probe; platform-gate lint

@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 
-namespace GitBench.Pty.Platforms.Windows;
+namespace GitBench.Pty;
 
 /// <summary>
 /// A handle shared by a blocking native call and the thread that tears the session down:
@@ -9,6 +9,14 @@ namespace GitBench.Pty.Platforms.Windows;
 /// call still inside it, so a handle is never closed underneath a thread using it and a caller that
 /// arrives after teardown is turned away rather than faulted.
 /// </summary>
+/// <remarks>
+/// It closes a handle safely; it does not wake anyone. <see cref="Close"/> hands the real close to
+/// the last caller to leave, so a thread parked in a blocking call never leaves and the handle is
+/// never released — the gate turns "closed underneath a blocked reader" into "leaked descriptor and
+/// leaked thread", which is quieter and no better. Whatever ends the blocking call is the platform
+/// session's to arrange: ConPTY ends the child and the pipe breaks, and a Unix session has to reach
+/// every holder of the slave or wake its reader some other way.
+/// </remarks>
 internal sealed class GatedHandle<THandle>(THandle handle)
     where THandle : SafeHandle
 {
