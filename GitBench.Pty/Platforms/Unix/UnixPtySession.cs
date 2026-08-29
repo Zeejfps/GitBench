@@ -60,7 +60,7 @@ internal sealed class UnixPtySession : IPtySession
     readonly GatedHandle<SafeFileDescriptor> _wakeup;
     readonly SafeFileDescriptor _wakeupSignal;
     readonly int _child;
-    readonly int _signalTarget;
+    readonly SignalTarget _signalTarget;
     readonly TaskCompletionSource<PtyExit> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly TerminalOutput _received = new();
     readonly Thread _drain;
@@ -80,7 +80,7 @@ internal sealed class UnixPtySession : IPtySession
         _wakeup = new GatedHandle<SafeFileDescriptor>(terminal.Wakeup);
         _wakeupSignal = terminal.WakeupSignal;
         _child = terminal.Child;
-        _signalTarget = terminal.SignalTarget;
+        _signalTarget = terminal.Signal;
 
         _drain = new Thread(DrainOutput)
         {
@@ -201,7 +201,7 @@ internal sealed class UnixPtySession : IPtySession
             if (!_reaped)
             {
                 _exit.TrySetResult(new PtyExit.TornDown());
-                UnixNative.Kill(_signalTarget, UnixNative.Terminate);
+                Terminate(_signalTarget);
             }
         }
 
@@ -374,12 +374,48 @@ internal sealed class UnixPtySession : IPtySession
         Columns = (ushort)size.Columns,
     };
 
+    /// <summary>
+    /// What a teardown signal is aimed at.
+    /// </summary>
+    /// <remarks>
+    /// A pid and a process group are both an <c>int</c> and mean different things to <c>kill</c>,
+    /// which reads a negative number as a group — and 0 as the caller's own group, which is this
+    /// process. Naming the two cases keeps the negation in the one place that has checked the spawn
+    /// really did make the child a leader, instead of at a call site that has to remember to. The
+    /// hierarchy is closed, but C# checks no switch for exhaustiveness, so the one switch over it
+    /// carries a default that throws.
+    /// </remarks>
+    abstract record SignalTarget
+    {
+        SignalTarget()
+        {
+        }
+
+        /// <summary>The child alone, for a spawn that did not make it lead a group.</summary>
+        public sealed record Child(int Pid) : SignalTarget;
+
+        /// <summary>The whole group the child leads, so a shell's background jobs go with it.</summary>
+        public sealed record Group(int Leader) : SignalTarget;
+    }
+
+    static void Terminate(SignalTarget target)
+    {
+        var addressed = target switch
+        {
+            SignalTarget.Group group => -group.Leader,
+            SignalTarget.Child child => child.Pid,
+            _ => throw new NotSupportedException($"No rule for signalling a {target}."),
+        };
+
+        UnixNative.Kill(addressed, UnixNative.Terminate);
+    }
+
     readonly record struct Terminal(
         SafeFileDescriptor Master,
         SafeFileDescriptor Wakeup,
         SafeFileDescriptor WakeupSignal,
         int Child,
-        int SignalTarget);
+        SignalTarget Signal);
 
     static unsafe Terminal Spawn(PtySessionOptions options)
     {
@@ -424,7 +460,11 @@ internal sealed class UnixPtySession : IPtySession
             var group = UnixNative.GetProcessGroup(child);
 
             var terminal = new Terminal(
-                master, wakeup, wakeupSignal, child, group == child ? -child : child);
+                master,
+                wakeup,
+                wakeupSignal,
+                child,
+                group == child ? new SignalTarget.Group(child) : new SignalTarget.Child(child));
 
             master = null;
             wakeup = null;

@@ -132,6 +132,7 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>, ITer
         _session = session;
         _starting = false;
         session.Updated += OnSessionUpdated;
+        session.Faulted += Fail;
 
         // The pane may have been resized while the shell was starting, in which case the size it
         // was spawned at is already wrong.
@@ -172,6 +173,7 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>, ITer
         if (_session is { } session)
         {
             session.Updated -= OnSessionUpdated;
+            session.Faulted -= Fail;
             session.Dispose();
             _session = null;
         }

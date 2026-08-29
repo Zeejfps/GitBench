@@ -75,10 +75,15 @@ internal sealed class TerminalOutput
                 return taken;
             }
 
+            // Named arms rather than a catch-all, because the catch-all answer here is 0 and 0 is
+            // "the stream is finished". A state added later would take that answer by default, on a
+            // reader thread, with nothing raised anywhere to say so.
             return _state switch
             {
                 State.Faulted faulted => throw faulted.Failure,
-                _ => 0,
+                State.Ended or State.Abandoned => 0,
+                State.Open => 0,
+                _ => throw new NotSupportedException($"No rule for reading a {_state} terminal."),
             };
         }
     }

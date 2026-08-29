@@ -109,6 +109,18 @@ internal sealed class TerminalSession : IDisposable
     /// </summary>
     public event Action? Updated;
 
+    /// <summary>
+    /// Raised on the UI thread when reading the terminal failed and the screen has therefore stopped
+    /// following the shell. At most once, and never for an ordinary end of stream.
+    /// </summary>
+    /// <remarks>
+    /// The reader runs on a thread of its own, where an escaping exception ends the process rather
+    /// than the pane — so the failure has to be caught here whether or not anyone is listening. It is
+    /// reported rather than swallowed because the alternative is a pane that silently stops updating
+    /// and still takes keystrokes, which reads as the shell having hung.
+    /// </remarks>
+    public event Action<string>? Faulted;
+
     /// <summary>Sends bytes to the shell as terminal input.</summary>
     public void Write(ReadOnlySpan<byte> bytes)
     {
@@ -171,6 +183,16 @@ internal sealed class TerminalSession : IDisposable
             {
                 return;
             }
+            catch (Exception failure)
+            {
+                // Deliberately every exception, which is not the usual licence: this is the top of a
+                // thread, so anything that escapes takes the process down instead of the pane. The
+                // platforms do not agree on the type either — a Win32Exception from ConPTY, an
+                // IOException from an unexpected errno — and a terminal that stops updating is worth
+                // strictly less than one that says why.
+                Report(failure.Message);
+                return;
+            }
 
             // Zero is the end of the session's output, which arrives after the child has exited and
             // after the flush that follows it — not when the child exits.
@@ -190,6 +212,17 @@ internal sealed class TerminalSession : IDisposable
             if (queue) _dispatcher.Post(Drain);
         }
     }
+
+    /// <remarks>
+    /// Posted rather than raised where it was caught, for the reason every other notification here is
+    /// posted: the pane's state is the UI thread's. A session already disposed says nothing, since a
+    /// read that fails because the session is going away is the teardown working.
+    /// </remarks>
+    void Report(string failure) =>
+        _dispatcher.Post(() =>
+        {
+            if (!_disposed) Faulted?.Invoke(failure);
+        });
 
     void Drain()
     {
