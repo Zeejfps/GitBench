@@ -105,9 +105,9 @@ with `AppKeybindController` and every dialog's Esc handling. Also the Cmd/Ctrl+C
 copy-selection versus SIGINT.
 
 **Phase 5 — session and polish.** Resize and SIGWINCH, scrollback and wheel, selection and copy,
-window title, OSC 8 links, per-repo lifecycle, settings. Resize and scrollback are done — see
-Findings. What remains here is selection and copy, paste, the title, OSC 8, the per-repo lifecycle
-and the settings.
+window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback and the wheel — mouse
+reports and alternate scroll included — are done; see Findings. What remains here is selection and
+copy, paste, the title, OSC 8, the per-repo lifecycle and the settings.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
@@ -202,11 +202,43 @@ so that every path to the shell lands somewhere the sender can see. The engine's
 program's questions go straight to the session and deliberately do not: a program asking the terminal
 its size must not yank the screen out from under whoever is reading it.
 
-**The wheel is not the whole of the wheel.** Scrolling the history is what the wheel does on the
-normal screen with no mouse tracking on. The other two cases both belong with mouse reporting: a
-program that has asked for mouse events wants the wheel as an SGR report, and one on the alternate
-screen that has not wants the alternate-scroll convention (`?1007`, wheel as arrow keys) or nothing.
-Until that lands the wheel does nothing over a full-screen program, which is the visible gap.
+**The wheel is three wheels, decided in one place.** Scrolling the history is what the wheel does on
+the normal screen with no mouse tracking on, and it is the last of three cases rather than the only
+one. A program that has asked for mouse events gets the wheel as a report in the encoding it asked
+for; a full-screen program that has not gets the alternate-scroll convention (`?1007`, the wheel as
+cursor keys), which is the only scrolling a buffer with no scrollback can offer; anything else moves
+the pane's own viewport. The pane picks between them on the modes the engine reports, so a program
+that switches modes mid-session switches what the wheel means without the pane holding any state
+about it.
+
+## Findings — the mouse, as built
+
+**The reports are ours, like the keys.** `TerminalMouseEncoder` is the mouse's `TerminalKeyEncoder`:
+pure, static, and a table — button and action and cell in, bytes out, and false when the program has
+not asked for that event at all. The vendored engine has an encoder of its own (`Terminal.SendEvent`)
+and it is deliberately unused, for the reason module 4 exists: input encoding is the part we own, and
+routing it through the engine would put the seam in the middle of it. Gating lives with the encoding
+because they are the same table — X10 tracking reports presses and no modifiers, normal tracking adds
+releases, button-event adds motion while a button is down, any-event adds motion with none — and a
+caller that had to know which events to offer would be reimplementing that table at every call site.
+
+**Where the pointer is, is the renderer's answer.** A cell has no size until there is a canvas to
+measure it against, and how far back the reader has scrolled is part of the same picture, so
+`ITerminalCellGeometry` is implemented by the view and answers in the live screen's coordinates. A
+point over the history is not a cell of the live screen and is not reported at all, which is what
+keeps a program from being told about a click on text that scrolled past it minutes ago.
+
+**A report is not a keystroke.** Mouse reports go to the session through `SendMouse`, which does not
+return the viewport to the live screen the way typing does. A program tracking the pointer would
+otherwise drag the screen back to the shell every time the mouse crossed a cell, which would make
+scrolling back impossible while it is up. Motion is also reported once per cell rather than once per
+event: a move is dispatched to the focused controller and again through the hover path, and the
+pointer crosses a cell far less often than it moves.
+
+**Modifiers on the wheel are missing, and that is the framework's.** `MouseWheelScrolledEvent`
+carries no modifiers — GLFW's scroll callback has none to give and nothing tracks them alongside —
+so xterm's Shift-takes-the-wheel-back convention is not implemented. Shift with the page keys is the
+history's chord in the meantime.
 
 ## Risks
 

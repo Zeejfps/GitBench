@@ -10,6 +10,23 @@ using ZGF.Gui.Bindings;
 namespace GitBench.Features.Terminal;
 
 /// <summary>
+/// Where a point on the pane falls in the shell's grid.
+/// </summary>
+/// <remarks>
+/// The mapping belongs to whatever drew the screen: the cell size is measured against the canvas on
+/// every draw, and how far back the reader has scrolled is part of the same picture. A point over
+/// the history has no cell on the live screen and is not reported at all.
+/// </remarks>
+internal interface ITerminalCellGeometry
+{
+    /// <summary>
+    /// The cell under <paramref name="point"/> in the live screen's coordinates, or false when the
+    /// pane has not been drawn, the point is outside it, or it is over the history.
+    /// </summary>
+    bool TryLocate(PointF point, out int column, out int row);
+}
+
+/// <summary>
 /// Draws a terminal's screen: one background rectangle and one glyph run per style run, a row at a
 /// time, plus the cursor.
 /// </summary>
@@ -27,7 +44,7 @@ namespace GitBench.Features.Terminal;
 /// repaint free of a screen-sized copy.
 /// </para>
 /// </remarks>
-internal sealed class TerminalGridView : View
+internal sealed class TerminalGridView : View, ITerminalCellGeometry
 {
     const float CaretThickness = 2f;
 
@@ -57,6 +74,8 @@ internal sealed class TerminalGridView : View
 
     TerminalRenderState _render = new TerminalRenderState.Starting();
     string _startingMessage = string.Empty;
+
+    CellGeometry? _geometry;
 
     TerminalCell[] _cells = [];
     int[] _codePoints = [];
@@ -96,6 +115,26 @@ internal sealed class TerminalGridView : View
 
     public void Repaint() => SetDirty();
 
+    public bool TryLocate(PointF point, out int column, out int row)
+    {
+        column = 0;
+        row = 0;
+
+        if (_geometry is not { } cells) return false;
+        if (!cells.Bounds.ContainsPoint(point)) return false;
+
+        column = Math.Clamp(
+            (int)((point.X - cells.Bounds.Left) / cells.Advance),
+            0,
+            cells.Columns - 1);
+
+        var live = (int)((cells.Bounds.Top - point.Y) / cells.Height) - cells.Offset;
+        if (live < 0) return false;
+
+        row = Math.Min(live, cells.Rows - 1);
+        return true;
+    }
+
     protected override void OnDrawSelf(ICanvas c)
     {
         var bounds = Position;
@@ -114,6 +153,8 @@ internal sealed class TerminalGridView : View
         if (metrics.Advance <= 0f || metrics.Height <= 0f) return;
 
         ReportViewport(bounds, metrics);
+
+        if (_render is not TerminalRenderState.Running) _geometry = null;
 
         switch (_render)
         {
@@ -158,6 +199,14 @@ internal sealed class TerminalGridView : View
         // there. The session clamps this to the history that exists, which is what keeps a row
         // reference on the grid rather than off the top of it.
         var offset = session.ScrollOffset;
+
+        _geometry = new CellGeometry(
+            bounds,
+            metrics.Advance,
+            metrics.Height,
+            offset,
+            size.Columns,
+            size.Rows);
 
         for (var row = 0; row < visibleRows; row++)
         {
@@ -278,4 +327,12 @@ internal sealed class TerminalGridView : View
         (false, true) => MonoFonts.Italic,
         _ => MonoFonts.Regular,
     };
+
+    readonly record struct CellGeometry(
+        RectF Bounds,
+        float Advance,
+        float Height,
+        int Offset,
+        int Columns,
+        int Rows);
 }

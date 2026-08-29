@@ -114,6 +114,8 @@ namespace XtermSharp {
 		/// </summary>
 		public MouseProtocolEncoding MouseProtocol { get; internal set; }
 
+		public bool AlternateScroll { get; internal set; } = true;
+
 		/// <summary>
 		/// Gets a value indicating whether the terminal can be resized to 132
 		/// </summary>
@@ -1284,6 +1286,7 @@ namespace XtermSharp {
 
 			MouseMode = MouseMode.Off;
 			MouseProtocol = MouseProtocolEncoding.X10;
+			AlternateScroll = true;
 
 			Allow80To132 = false;
 

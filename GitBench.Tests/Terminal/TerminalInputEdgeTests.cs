@@ -427,6 +427,7 @@ public class TerminalKeyEncoderEdgeTests
         ApplicationKeypad: false,
         AutoWrap: true,
         AlternateScreen: false,
+        AlternateScroll: true,
         BracketedPaste: false,
         FocusReporting: false,
         SynchronizedOutput: false,
@@ -443,6 +444,7 @@ public class TerminalKeyEncoderEdgeTests
         ApplicationKeypad: true,
         AutoWrap: false,
         AlternateScreen: true,
+        AlternateScroll: false,
         BracketedPaste: true,
         FocusReporting: true,
         SynchronizedOutput: true,
@@ -972,7 +974,7 @@ public class TerminalInputControllerEdgeTests
                 {
                     var input = ctx.Require<InputSystem>();
                     view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                    controller = new TerminalInputController(view, input, terminal);
+                    controller = new TerminalInputController(view, input, terminal, view);
                     input.RegisterController(view, app);
                     input.RegisterController(view, controller);
                     return view;
@@ -1074,6 +1076,7 @@ public class TerminalInputControllerEdgeTests
             ApplicationKeypad: false,
             AutoWrap: true,
             AlternateScreen: false,
+            AlternateScroll: true,
             BracketedPaste: false,
             FocusReporting: false,
             SynchronizedOutput: false,
@@ -1089,6 +1092,8 @@ public class TerminalInputControllerEdgeTests
         public byte[] Written => _written.ToArray();
 
         public string Text => Encoding.Latin1.GetString(_written.ToArray());
+
+        public void SendMouse(ReadOnlySpan<byte> bytes) => SendInput(bytes);
 
         public void SendInput(ReadOnlySpan<byte> bytes)
         {

@@ -11,6 +11,7 @@ public static class Reset
         ApplicationKeypad: false,
         AutoWrap: true,
         AlternateScreen: false,
+        AlternateScroll: true,
         BracketedPaste: false,
         FocusReporting: false,
         SynchronizedOutput: false,

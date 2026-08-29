@@ -57,7 +57,7 @@ internal sealed record TerminalPane : Widget
                 view.OnViewportChanged = vm.ReportViewport;
                 vm.Updated += view.Repaint;
                 view.Bind(vm.RenderState, view.SetRenderState);
-                view.UseController(input, () => new TerminalInputController(view, input, vm));
+                view.UseController(input, () => new TerminalInputController(view, input, vm, view));
             });
 
         return view;

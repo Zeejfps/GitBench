@@ -90,6 +90,8 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>, ITer
         if (session.ScrollToBottom()) Updated?.Invoke();
     }
 
+    public void SendMouse(ReadOnlySpan<byte> bytes) => LiveSession?.Write(bytes);
+
     /// <summary>
     /// Moves the viewport through the history. Still works once the shell has exited, because the
     /// screen it left behind is exactly what a reader wants to scroll back through.

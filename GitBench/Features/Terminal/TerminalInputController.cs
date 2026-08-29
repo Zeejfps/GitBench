@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Terminal.Vt;
 using GitBench.Widgets;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -47,6 +48,8 @@ internal interface ITerminalInput
 
     /// <summary>Moves the viewport by whole screens. Returns whether it moved.</summary>
     bool ScrollPages(int pages);
+
+    void SendMouse(ReadOnlySpan<byte> bytes);
 }
 
 /// <summary>
@@ -68,10 +71,10 @@ internal interface ITerminalInput
 /// dead keys and composition are the operating system's job rather than a table here.
 /// </para>
 /// <para>
-/// The wheel and Shift with the page keys move the pane's own view of the history and never reach
-/// the shell. They are the two chords taken back from it, on xterm's precedent, and they are taken
-/// whether or not there is a shell left to take them from: the history outlives the process that
-/// printed it.
+/// Shift with the page keys moves the pane's own view of the history and never reaches the shell.
+/// It is the chord taken back from it, on xterm's precedent, and it is taken whether or not there is
+/// a shell left to take it from: the history outlives the process that printed it. The wheel is the
+/// pane's only while no program is reading the mouse and no full-screen one is up.
 /// </para>
 /// </remarks>
 internal sealed class TerminalInputController : KeyboardMouseController
@@ -84,14 +87,21 @@ internal sealed class TerminalInputController : KeyboardMouseController
     readonly View _view;
     readonly InputSystem _input;
     readonly ITerminalInput _terminal;
+    readonly ITerminalCellGeometry _cells;
 
     float _wheelRemainder;
+    (int Column, int Row)? _reportedCell;
 
-    public TerminalInputController(View view, InputSystem input, ITerminalInput terminal)
+    public TerminalInputController(
+        View view,
+        InputSystem input,
+        ITerminalInput terminal,
+        ITerminalCellGeometry cells)
     {
         _view = view;
         _input = input;
         _terminal = terminal;
+        _cells = cells;
     }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
@@ -155,7 +165,6 @@ internal sealed class TerminalInputController : KeyboardMouseController
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Capturing) return;
-        if (e.State != InputState.Pressed) return;
 
         if (!IsOnScreen())
         {
@@ -165,7 +174,22 @@ internal sealed class TerminalInputController : KeyboardMouseController
 
         if (!_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
-        _input.StealFocus(this);
+        if (e.State == InputState.Pressed) _input.StealFocus(this);
+
+        var action = e.State == InputState.Pressed
+            ? TerminalMouseAction.Press
+            : TerminalMouseAction.Release;
+
+        if (Report(ButtonOf(e.Button), action, TerminalKeyMap.From(e.Modifiers), e.Mouse.Point))
+            e.Consume();
+    }
+
+    public override void OnMouseMoved(ref MouseMoveEvent e)
+    {
+        if (e.Phase != EventPhase.Bubbling) return;
+        if (!IsOnScreen() || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
+
+        Report(HeldButton(e.Mouse), TerminalMouseAction.Move, TerminalKeyModifiers.None, e.Mouse.Point);
     }
 
     /// <remarks>
@@ -175,8 +199,8 @@ internal sealed class TerminalInputController : KeyboardMouseController
     /// wheel from the panel someone is pointing at.
     /// </para>
     /// <para>
-    /// Consumed only when the view actually moved, so a wheel over a screen with no history behind
-    /// it bubbles out to whatever scrolls around the pane instead of dead-ending on it.
+    /// Consumed only when something happened, so a wheel over a screen with no history behind it
+    /// bubbles out to whatever scrolls around the pane instead of dead-ending on it.
     /// </para>
     /// </remarks>
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
@@ -185,7 +209,99 @@ internal sealed class TerminalInputController : KeyboardMouseController
         if (!IsOnScreen() || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
         var lines = LinesOf(e.DeltaY);
-        if (lines != 0 && _terminal.Scroll(lines)) e.Consume();
+        if (lines == 0) return;
+
+        var button = lines > 0 ? TerminalMouseButton.WheelUp : TerminalMouseButton.WheelDown;
+        var notches = Math.Abs(lines);
+
+        if (ReportsTheWheel(notches, button, e.Mouse.Point) || ScrollsWithCursorKeys(notches, lines))
+        {
+            e.Consume();
+            return;
+        }
+
+        if (_terminal.Scroll(lines)) e.Consume();
+    }
+
+    bool ReportsTheWheel(int notches, TerminalMouseButton button, PointF point)
+    {
+        if (!_terminal.IsAcceptingInput) return false;
+
+        var sent = false;
+        for (var notch = 0; notch < notches; notch++)
+            sent |= Report(button, TerminalMouseAction.Press, TerminalKeyModifiers.None, point);
+
+        return sent;
+    }
+
+    bool ScrollsWithCursorKeys(int notches, int lines)
+    {
+        var modes = _terminal.Modes;
+        if (!_terminal.IsAcceptingInput) return false;
+        if (!modes.AlternateScreen || !modes.AlternateScroll) return false;
+
+        Span<byte> sequence = stackalloc byte[TerminalKeyEncoder.MaxEncodedBytes];
+        var key = lines > 0 ? TerminalKey.Up : TerminalKey.Down;
+        var delivery = TerminalKeyEncoder.Encode(
+            key,
+            TerminalKeyModifiers.None,
+            modes,
+            sequence,
+            out var written);
+
+        if (delivery != TerminalKeyDelivery.Sequence) return false;
+
+        for (var notch = 0; notch < notches; notch++)
+            _terminal.SendInput(sequence[..written]);
+
+        return true;
+    }
+
+    bool Report(
+        TerminalMouseButton button,
+        TerminalMouseAction action,
+        TerminalKeyModifiers modifiers,
+        PointF point)
+    {
+        if (!_terminal.IsAcceptingInput) return false;
+        if (!_cells.TryLocate(point, out var column, out var row)) return false;
+
+        if (action == TerminalMouseAction.Move)
+        {
+            if (_reportedCell == (column, row)) return false;
+            _reportedCell = (column, row);
+        }
+
+        Span<byte> report = stackalloc byte[TerminalMouseEncoder.MaxEncodedBytes];
+        if (!TerminalMouseEncoder.Encode(
+                button,
+                action,
+                column,
+                row,
+                modifiers,
+                _terminal.Modes,
+                report,
+                out var written))
+            return false;
+
+        _terminal.SendMouse(report[..written]);
+        return true;
+    }
+
+    static TerminalMouseButton ButtonOf(MouseButton button)
+    {
+        if (button == MouseButton.Left) return TerminalMouseButton.Left;
+        if (button == MouseButton.Middle) return TerminalMouseButton.Middle;
+        if (button == MouseButton.Right) return TerminalMouseButton.Right;
+        return TerminalMouseButton.None;
+    }
+
+    static TerminalMouseButton HeldButton(IMouse mouse)
+    {
+        if (mouse.IsButtonPressed(MouseButton.Left)) return TerminalMouseButton.Left;
+        if (mouse.IsButtonPressed(MouseButton.Middle)) return TerminalMouseButton.Middle;
+        if (mouse.IsButtonPressed(MouseButton.Right)) return TerminalMouseButton.Right;
+        return TerminalMouseButton.None;
     }
 
     /// <summary>

@@ -385,6 +385,17 @@ nothing scrolling for the rest of a long session.
 **Fixed by patch 16.** `Terminal.ScrolledIntoHistory` counts lines leaving the top of the screen on
 both paths and the adapter diffs that instead. `DamageSpec` pins it at a scrollback depth of two.
 
+### 17. Alternate scroll (`?1007`) is unhandled — FIXED
+
+`InputHandlers/TerminalModeSetExtensions.cs` has no case for 1007 on either the set or the reset
+path, so the mode fell through to the unknown-mode log and the terminal kept no record of it. It is
+the mode that decides what the wheel does over the alternate screen — cursor keys to the program, or
+nothing — and a terminal that cannot read it has to guess for every full-screen program it hosts.
+
+**Fixed by patch 17.** `Terminal.AlternateScroll` tracks it, defaulting to on as the terminals a
+full-screen program is written against do, and the adapter reports it as
+`TerminalModes.AlternateScroll`. `ModeSpec` pins the default and both transitions.
+
 
 ## Configuration, not a defect
 

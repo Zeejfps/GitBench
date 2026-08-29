@@ -32,6 +32,7 @@ public readonly record struct TerminalModes(
     bool ApplicationKeypad,
     bool AutoWrap,
     bool AlternateScreen,
+    bool AlternateScroll,
     bool BracketedPaste,
     bool FocusReporting,
     bool SynchronizedOutput,

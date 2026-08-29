@@ -70,6 +70,26 @@ public class ModeSpec
     }
 
     [Fact]
+    public void AlternateScroll_StartsOn()
+    {
+        using var engine = EngineUnderTest.Create();
+
+        Assert.True(engine.State.Modes.AlternateScroll);
+    }
+
+    [Fact]
+    public void AlternateScroll_TracksSetAndReset()
+    {
+        using var engine = EngineUnderTest.Create();
+
+        engine.Feed($"{Csi}?1007l");
+        Assert.False(engine.State.Modes.AlternateScroll);
+
+        engine.Feed($"{Csi}?1007h");
+        Assert.True(engine.State.Modes.AlternateScroll);
+    }
+
+    [Fact]
     public void ApplicationCursorKeys_TracksSetAndReset()
     {
         using var engine = EngineUnderTest.Create();

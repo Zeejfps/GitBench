@@ -4,6 +4,7 @@ using GitBench.Features.Terminal;
 using GitBench.Localization;
 using GitBench.Terminal.Vt;
 using GitBench.Theming;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Testing;
 using ZGF.Observable;
@@ -145,6 +146,50 @@ public class TerminalGridViewTests
         Assert.Empty(canvas.GlyphRuns);
     }
 
+    [Fact]
+    public void ADrawnPane_NamesTheCellUnderAPoint()
+    {
+        var (_, view) = Located(Vt("x"));
+
+        Assert.True(view.TryLocate(new PointF(3 * Advance + 4f, Height - 2 * CellHeight - 8f), out var column, out var row));
+        Assert.Equal(3, column);
+        Assert.Equal(2, row);
+    }
+
+    [Fact]
+    public void APaneThatHasNotBeenDrawn_HasNoCells()
+    {
+        using var harness = Harness(view => view.StartingMessage = "Starting shell…");
+        var view = (TerminalGridView)harness.Root;
+
+        Assert.False(view.TryLocate(new PointF(10f, 10f), out _, out _));
+    }
+
+    [Fact]
+    public void ScrolledBack_APointOverTheHistoryIsNotACellOfTheLiveScreen()
+    {
+        var (_, view) = Located(Lines(50), session => session.Scroll(1));
+
+        Assert.False(view.TryLocate(new PointF(0f, Height - 4f), out _, out _));
+    }
+
+    [Fact]
+    public void ScrolledBack_TheCellsBelowTheHistoryAreTheLiveScreensOwn()
+    {
+        var (_, view) = Located(Lines(50), session => session.Scroll(1));
+
+        Assert.True(view.TryLocate(new PointF(0f, Height - CellHeight - 4f), out _, out var row));
+        Assert.Equal(0, row);
+    }
+
+    [Fact]
+    public void APointOutsideThePane_HasNoCell()
+    {
+        var (_, view) = Located(Vt("x"));
+
+        Assert.False(view.TryLocate(new PointF(-1f, Height / 2f), out _, out _));
+    }
+
     private static RecordedGlyphRun Row(GuiTestHarness harness, string text) =>
         harness.Canvas.GlyphRuns.First(r => r.Text.StartsWith(text));
 
@@ -197,6 +242,27 @@ public class TerminalGridViewTests
 
         harness.Render();
         return (harness, reported);
+    }
+
+    private static (GuiTestHarness Harness, TerminalGridView View) Located(
+        byte[] output,
+        Action<TerminalSession>? scrolled = null)
+    {
+        var dispatcher = new QueueDispatcher();
+        var session = TerminalSession.Start(
+            () => new RecordedPtySession(output),
+            new XtermSharpEngineFactory(),
+            new TerminalSize(ExpectedColumns, ExpectedRows),
+            dispatcher);
+
+        Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
+        dispatcher.Pump();
+
+        scrolled?.Invoke(session);
+
+        var harness = Harness(view => view.SetRenderState(new TerminalRenderState.Running(session)));
+        harness.Render();
+        return (harness, (TerminalGridView)harness.Root);
     }
 
     private static GuiTestHarness Harness(Action<TerminalGridView> configure) =>

@@ -5,6 +5,7 @@ using GitBench.Localization;
 using GitBench.Pty;
 using GitBench.Terminal.Vt;
 using GitBench.Theming;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -111,6 +112,129 @@ public class TerminalInputControllerTests
         pane.Harness.Scroll(0f, 1f);
 
         Assert.Equal(0, pane.Terminal.ScrollOffset);
+    }
+
+    // ---- the wheel over a program that reads the mouse itself ----
+
+    [Fact]
+    public void TheWheel_OverAProgramReadingTheMouse_IsAReportAndNotTheHistory()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Then(Lines(50), Tracking)), Cells(4, 2));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Equal(
+            Csi + "<64;5;3M" + Csi + "<64;5;3M" + Csi + "<64;5;3M",
+            pane.Terminal.Text);
+        Assert.Equal(0, pane.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void TheWheelTheOtherWay_OverAProgramReadingTheMouse_IsButtonSixtyFive()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Tracking), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, -1f / 3f);
+
+        Assert.Equal(Csi + "<65;1;1M", pane.Terminal.Text);
+    }
+
+    [Fact]
+    public void TheWheel_OverAFullScreenProgram_BecomesTheCursorKeysItAlreadyReads()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Then(Lines(50), AltScreen)), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Equal(Csi + "A" + Csi + "A" + Csi + "A", pane.Terminal.Text);
+    }
+
+    [Fact]
+    public void TheWheelTheOtherWay_OverAFullScreenProgram_IsTheDownArrow()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(AltScreen), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, -1f / 3f);
+
+        Assert.Equal(Csi + "B", pane.Terminal.Text);
+    }
+
+    [Fact]
+    public void AProgramThatTurnsAlternateScrollOff_GetsNoWheelAtAll()
+    {
+        using var pane = Pane.Create(
+            TestTerminal.Live(Then(AltScreen, Output(Csi + "?1007l"))),
+            Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Empty(pane.Terminal.Written);
+        Assert.True(pane.App.SawWheel, "The pane swallowed a wheel event it did nothing with.");
+    }
+
+    [Fact]
+    public void TheWheelOverTheNormalScreen_IsStillThePanesOwnHistory()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+        Assert.Empty(pane.Terminal.Written);
+    }
+
+    // ---- clicks and the pointer ----
+
+    [Fact]
+    public void AClick_OverAProgramReadingTheMouse_IsReportedAndKeptFromTheApplication()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Tracking), Cells(7, 1));
+
+        pane.Harness.Click(400f, 300f);
+
+        Assert.Equal(Csi + "<0;8;2M" + Csi + "<0;8;2m", pane.Terminal.Text);
+        Assert.False(pane.App.SawMousePress, "The program's click also reached the rest of the pane.");
+    }
+
+    [Fact]
+    public void AClickOverAProgramReadingTheMouse_StillTakesTheKeyboard()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Tracking), Cells(0, 0));
+
+        pane.Harness.Click(400f, 300f);
+
+        Assert.Same(pane.Controller, pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void ThePointerMoving_IsReportedOncePerCell()
+    {
+        var cells = Cells(3, 3);
+        using var pane = Pane.Create(TestTerminal.Live(AnyEventTracking), cells);
+
+        pane.Harness.MoveTo(400f, 300f);
+        pane.Harness.MoveTo(401f, 300f);
+        cells.At(4, 3);
+        pane.Harness.MoveTo(410f, 300f);
+
+        Assert.Equal(Csi + "<35;4;4M" + Csi + "<35;5;4M", pane.Terminal.Text);
+    }
+
+    [Fact]
+    public void ThePointerMoving_OverAProgramThatNeverAskedForIt_IsNotReported()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Tracking), Cells(3, 3));
+
+        pane.Harness.MoveTo(400f, 300f);
+        pane.Harness.MoveTo(500f, 200f);
+
+        Assert.Empty(pane.Terminal.Written);
     }
 
     [Theory]
@@ -397,6 +521,17 @@ public class TerminalInputControllerTests
 
     static byte[] Output(string sequence) => Encoding.ASCII.GetBytes(sequence);
 
+    /// <summary>Button-event tracking with SGR reports: what a full-screen program turns on.</summary>
+    static byte[] Tracking => Output(Csi + "?1002h" + Csi + "?1006h");
+
+    static byte[] AnyEventTracking => Output(Csi + "?1003h" + Csi + "?1006h");
+
+    static byte[] AltScreen => Output(Csi + "?1049h");
+
+    static byte[] Then(byte[] first, byte[] second) => [.. first, .. second];
+
+    static FixedCells Cells(int column, int row) => new(column, row);
+
     /// <summary>Numbered lines, enough of them to leave a history behind a twenty-four-row screen.</summary>
     static byte[] Lines(int count) =>
         Encoding.ASCII.GetBytes(string.Join("\r\n", Enumerable.Range(0, count).Select(line => $"l{line}")));
@@ -427,7 +562,9 @@ public class TerminalInputControllerTests
         public AppKeybinds App { get; }
         public TestTerminal Terminal { get; }
 
-        public static Pane Create(TestTerminal? terminal = null)
+        public static Pane Create(
+            TestTerminal? terminal = null,
+            ITerminalCellGeometry? cells = null)
         {
             var shell = terminal ?? TestTerminal.Live();
             var app = new AppKeybinds();
@@ -439,7 +576,7 @@ public class TerminalInputControllerTests
                 {
                     var input = ctx.Require<InputSystem>();
                     view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                    controller = new TerminalInputController(view, input, shell);
+                    controller = new TerminalInputController(view, input, shell, cells ?? view);
 
                     // The app's keybindings live on the window root, an ancestor of the pane, so
                     // they sit earlier in the capture path than the terminal's own controller and
@@ -524,7 +661,7 @@ public class TerminalInputControllerTests
 
         public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
         {
-            if (e.State == InputState.Pressed) SawMousePress = true;
+            if (e.Phase == EventPhase.Bubbling && e.State == InputState.Pressed) SawMousePress = true;
         }
 
         public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
@@ -714,6 +851,8 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
 
     public TerminalModes Modes => _session?.State.Modes ?? default;
 
+    public void SendMouse(ReadOnlySpan<byte> bytes) => _session?.Write(bytes);
+
     public void SendInput(ReadOnlySpan<byte> bytes) => _session?.Write(bytes);
 
     public bool Scroll(int lines) => _session?.Scroll(lines) ?? false;
@@ -729,6 +868,29 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
     public string Text => Encoding.Latin1.GetString(Written);
 
     public void Dispose() => _session?.Dispose();
+}
+
+/// <summary>
+/// A pane whose cells are wherever the test says they are, so a mouse report can be asserted
+/// without rendering one.
+/// </summary>
+internal sealed class FixedCells(int column, int row) : ITerminalCellGeometry
+{
+    int _column = column;
+    int _row = row;
+
+    public void At(int column, int row)
+    {
+        _column = column;
+        _row = row;
+    }
+
+    public bool TryLocate(PointF point, out int column, out int row)
+    {
+        column = _column;
+        row = _row;
+        return true;
+    }
 }
 
 /// <summary>

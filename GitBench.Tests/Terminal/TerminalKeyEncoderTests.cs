@@ -366,6 +366,7 @@ public class TerminalKeyEncoderTests
         ApplicationKeypad: false,
         AutoWrap: true,
         AlternateScreen: false,
+        AlternateScroll: true,
         BracketedPaste: false,
         FocusReporting: false,
         SynchronizedOutput: false,

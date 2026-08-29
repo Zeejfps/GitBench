@@ -103,6 +103,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
         ApplicationKeypad: terminal.ApplicationKeypad,
         AutoWrap: terminal.Wraparound,
         AlternateScreen: terminal.Buffers.IsAlternateBuffer,
+        AlternateScroll: terminal.AlternateScroll,
         BracketedPaste: terminal.BracketedPasteMode,
         FocusReporting: terminal.SendFocus,
         SynchronizedOutput: terminal.SynchronizedUpdate,

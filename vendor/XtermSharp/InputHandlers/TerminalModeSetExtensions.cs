@@ -180,6 +180,9 @@
 					   // simply encodes large values as utf8 characters
 					terminal.MouseProtocol = MouseProtocolEncoding.UTF8;
 					break;
+				case 1007:
+					terminal.AlternateScroll = true;
+					break;
 				case 1006: // sgr ext mode mouse
 					terminal.MouseProtocol = MouseProtocolEncoding.SGR;
 					// for wide terminals
@@ -362,6 +365,9 @@
 					break;
 				case 1004: // send focusin/focusout events
 					terminal.SendFocus = false;
+					break;
+				case 1007:
+					terminal.AlternateScroll = false;
 					break;
 				case 1005: // utf8 ext mode mouse
 					if (terminal.MouseProtocol == MouseProtocolEncoding.UTF8) {

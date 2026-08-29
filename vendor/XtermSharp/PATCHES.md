@@ -387,3 +387,24 @@ across a feed must never see a negative.
 `Buffer.YBase`. What reads it is the pane's scroll position, which follows the count to keep a
 reader on the line they were reading while the shell writes underneath them; following the depth
 instead had the text crawling under them once the history was full.
+
+---
+
+## Patch 17 — alternate scroll (`?1007`) is tracked (gap 17)
+
+`TerminalModeSetExtensions` had no branch for DEC private mode 1007, so a program turning
+alternate scroll off was answered with silence and the terminal had no record of the request. The
+mode decides what the wheel does over a full-screen program: with it on the wheel is offered to the
+program as cursor keys, which is the only scrolling a buffer with no scrollback can give, and with
+it off the wheel is left alone.
+
+`Terminal` gained `AlternateScroll`, `{ get; internal set; }` beside `MouseProtocol`, defaulting to
+`true` — which is where the terminals a full-screen program is written against leave it, and what
+makes the wheel work in `less` and `vim` without either of them asking. `Setup ()` returns it to
+`true` on RIS, beside `MouseMode` and `MouseProtocol`, because a program that resets the terminal is
+asking for the defaults it started with. Set at `:183` of the set path and cleared at `:369` of the
+reset path, the two places every other private mode is handled.
+
+The adapter reports it as `TerminalModes.AlternateScroll`. What reads it is the pane's wheel, which
+picks between a mouse report, the cursor keys and the pane's own history. `ModeSpec` pins the
+default and both transitions.

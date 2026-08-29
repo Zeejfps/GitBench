@@ -9,6 +9,7 @@ using GitBench.Messages;
 using GitBench.Pty;
 using GitBench.Terminal.Vt;
 using GitBench.Theming;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -332,7 +333,7 @@ public class TerminalKeybindCollisionTests : IDisposable
                         Width = PaneWidth,
                         Height = PaneHeight,
                     };
-                    Controller = new TerminalInputController(Grid, input, Terminal);
+                    Controller = new TerminalInputController(Grid, input, Terminal, Grid);
 
                     // The spy is registered before the keybind, so it sees - without consuming -
                     // everything that reaches the application layer at all.
@@ -583,7 +584,7 @@ public class TerminalModeSwitchSeamTests
                         Width = PaneWidth,
                         Height = PaneHeight,
                     };
-                    Controller = new TerminalInputController(Grid, input, Terminal);
+                    Controller = new TerminalInputController(Grid, input, Terminal, Grid);
 
                     IWidget terminalBranch =
                         new Raw { View = Grid }.WithController(input, () => Controller);
@@ -688,7 +689,7 @@ public class TerminalFocusArbitrationTests : IDisposable
                     Width = WindowWidth,
                     Height = WindowHeight / 2f,
                 };
-                _controller = new TerminalInputController(_grid, input, _terminal);
+                _controller = new TerminalInputController(_grid, input, _terminal, _grid);
                 _thief.Input = input;
 
                 return new Column
@@ -976,7 +977,7 @@ public class TerminalLiveModeSeamTests
         using var run = TerminalRun.NotYetStarted();
         var input = new InputSystem();
         var view = new View { Width = 100f, Height = 100f };
-        var controller = new TerminalInputController(view, input, run.Vm);
+        var controller = new TerminalInputController(view, input, run.Vm, new NoCells());
         input.RegisterController(view, controller);
         input.StealFocus(controller);
 
@@ -1086,7 +1087,7 @@ public class TerminalInputRegressionTests
                     Height = PaneHeight,
                 };
                 built.SetRenderState(new TerminalRenderState.Running(run.Session!));
-                var controller = new TerminalInputController(built, input, run.Vm);
+                var controller = new TerminalInputController(built, input, run.Vm, built);
                 return new Raw { View = built }
                     .WithController(input, () => controller)
                     .BuildView(ctx);
@@ -1142,7 +1143,7 @@ public class TerminalLiveShellRoundTripTests
                     Height = PaneHeight,
                 };
                 grid.SetRenderState(new TerminalRenderState.Running(session));
-                var controller = new TerminalInputController(grid, input, terminal);
+                var controller = new TerminalInputController(grid, input, terminal, grid);
                 return new Raw { View = grid }
                     .WithController(input, () => controller)
                     .BuildView(ctx);
@@ -1373,6 +1374,17 @@ internal sealed class SeamPty : IPtySession
     }
 }
 
+/// <summary>A pane that has never been drawn, so no point of it is over a cell.</summary>
+internal sealed class NoCells : ITerminalCellGeometry
+{
+    public bool TryLocate(PointF point, out int column, out int row)
+    {
+        column = 0;
+        row = 0;
+        return false;
+    }
+}
+
 /// <summary>The shell a controller writes to, reduced to what a test needs to read back.</summary>
 internal sealed class SeamTerminal : ITerminalInput
 {
@@ -1387,6 +1399,8 @@ internal sealed class SeamTerminal : ITerminalInput
     public string SentText => Encoding.UTF8.GetString(_sent.ToArray());
 
     public void Clear() => _sent.Clear();
+
+    public void SendMouse(ReadOnlySpan<byte> bytes) => _sent.AddRange(bytes);
 
     public void SendInput(ReadOnlySpan<byte> bytes) => _sent.AddRange(bytes);
 
@@ -1405,6 +1419,8 @@ internal sealed class LiveTerminal : ITerminalInput
     public bool IsAcceptingInput => true;
 
     public TerminalModes Modes => _session.State.Modes;
+
+    public void SendMouse(ReadOnlySpan<byte> bytes) => _session.Write(bytes);
 
     public void SendInput(ReadOnlySpan<byte> bytes) => _session.Write(bytes);
 
