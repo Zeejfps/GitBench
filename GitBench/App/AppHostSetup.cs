@@ -69,8 +69,16 @@ internal static class AppHostSetup
             // path: these are large system TTCs (100+ MB combined), none needed until non-Latin text
             // appears, so reading them must not block first paint. Text drawn before its fallback
             // lands shows tofu for a frame, then re-shapes when RegisterFallbackFont drops the cache.
-            DeferFallbacks(appHost, "CJK", SystemFonts.CjkFallbacks());
-            DeferFallbacks(appHost, "Arabic", SystemFonts.ArabicFallbacks());
+            //
+            // Symbols go first because the chain is first-cover-wins and the CJK faces overlap it:
+            // AppleSDGothicNeo carries U+2610 and U+273D, so registering it earlier would draw a
+            // terminal's checkbox from a proportional Korean face in a monospaced grid.
+            DeferFallbacks(appHost,
+            [
+                ("Symbols", SystemFonts.SymbolFallbacks()),
+                ("CJK", SystemFonts.CjkFallbacks()),
+                ("Arabic", SystemFonts.ArabicFallbacks()),
+            ]);
         }
 
         public void UsePlatformIcons()
@@ -103,30 +111,36 @@ internal static class AppHostSetup
         }
     }
 
-    // Reads each fallback font off the UI thread, then posts its registration back onto the UI
-    // dispatcher (the font backend isn't thread-safe). Registration order is preserved per script.
-    private static void DeferFallbacks(GuiApp appHost, string script, IReadOnlyList<SystemFontSpec> fonts)
+    // Reads the fallback fonts off the UI thread, then posts each registration back onto the UI
+    // dispatcher (the font backend isn't thread-safe). One task walking every script in the order
+    // given, rather than a task per script, because the chain is first-cover-wins and the scripts
+    // overlap on code points: racing the readers would let the disk decide which face draws a
+    // shared glyph, differently between runs.
+    private static void DeferFallbacks(
+        GuiApp appHost, IReadOnlyList<(string Script, IReadOnlyList<SystemFontSpec> Fonts)> scripts)
     {
-        if (fonts.Count == 0) return;
         var dispatcher = appHost.Context.Require<IUiDispatcher>();
         Task.Run(() =>
         {
-            foreach (var font in fonts)
+            foreach (var (script, fonts) in scripts)
             {
-                byte[] bytes;
-                try { bytes = File.ReadAllBytes(font.Path); }
-                catch (Exception ex)
+                foreach (var font in fonts)
                 {
-                    Console.WriteLine($"[Fonts] {script} fallback read failed ({font.Path}): {ex.Message}");
-                    continue;
+                    byte[] bytes;
+                    try { bytes = File.ReadAllBytes(font.Path); }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Fonts] {script} fallback read failed ({font.Path}): {ex.Message}");
+                        continue;
+                    }
+                    var faceIndex = font.FaceIndex;
+                    var path = font.Path;
+                    dispatcher.Post(() =>
+                    {
+                        try { appHost.RegisterFallbackFontFromMemory(bytes, 16, faceIndex); }
+                        catch (Exception ex) { Console.WriteLine($"[Fonts] {script} fallback load failed ({path}): {ex.Message}"); }
+                    });
                 }
-                var faceIndex = font.FaceIndex;
-                var path = font.Path;
-                dispatcher.Post(() =>
-                {
-                    try { appHost.RegisterFallbackFontFromMemory(bytes, 16, faceIndex); }
-                    catch (Exception ex) { Console.WriteLine($"[Fonts] {script} fallback load failed ({path}): {ex.Message}"); }
-                });
             }
         });
     }

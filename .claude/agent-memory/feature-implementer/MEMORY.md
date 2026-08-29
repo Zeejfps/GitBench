@@ -7,3 +7,6 @@
 - [Full-suite timeout flakes](full-suite-timeout-flakes.md) — a failure at a flat `10 s` is machine load; re-run it filtered before calling it a regression
 - [Terminal exit signal is racy](terminal-keyboard-exit-signal.md) — pty doubles complete `Exited` on their first read; suspect the double, not the view model — the watch in Adopt is unconditional
 - [Harness has no IUiDispatcher](gui-harness-needs-iuidispatcher.md) — GuiTestHarness seeds four services and not that one; `Require<IUiDispatcher>` dies unless the test's own configure adds it
+- [Unix PTY platform facts](unix-pty-platform-facts.md) — variadic ioctl needs stack padding on Apple arm64; macOS flushes pty output on last slave close
+- [PTY tests that cannot pass on macOS](pty-suite-tests-that-cannot-pass-on-macos.md) — three reds owned by the test's child program, not by UnixPtySession
+- [Pre-existing GitBench.Tests reds](gitbench-tests-preexisting-reds.md) — five failures on `terminal` that predate the PTY work; check the baseline before owning them
