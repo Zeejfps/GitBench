@@ -77,10 +77,20 @@ namespace XtermSharp {
 			parser.SetCsiHandler ('h', (pars, collect) => SetMode (pars, collect));
 			parser.SetCsiHandler ('l', (pars, collect) => ResetMode (pars, collect));
 			parser.SetCsiHandler ('m', (pars, collect) => {
-				if (collect == "")
+				switch (collect) {
+				case "":
 					CharAttributes (pars);
-				else
+					break;
+				case ">":
+					// xterm's key-modifier resources, of which modifyOtherKeys is the one that
+					// changes what we must encode. Never SGR: applying it as one underlines and
+					// dims everything printed afterwards.
+					terminal.SetKeyModifierOptions (pars);
+					break;
+				default:
 					terminal.Error ("Unknown CSI code", collect, pars, "m");
+					break;
+				}
 			});
 			parser.SetCsiHandler ('n', (pars, collect) => terminal.csiDSR (pars, collect));
 			parser.SetCsiHandler ('p', (pars, collect) => {
@@ -112,10 +122,31 @@ namespace XtermSharp {
 			});
 			parser.SetCsiHandler ('t', (pars, collect) => terminal.csiDISPATCH (pars));
 			parser.SetCsiHandler ('u', (pars, collect) => {
-				if (collect == "")
+				// A private prefix makes this kitty keyboard, not the ancient SCO restore cursor.
+				switch (collect) {
+				case "":
 					terminal.RestoreCursor ();
-				else
+					break;
+				case ">":
+					terminal.PushKeyboardProtocolFlags (pars.Length > 0 ? pars [0] : 0);
+					break;
+				case "<":
+					// A pop of zero is a pop of one: the parser defaults an omitted parameter to 0,
+					// and "CSI < u" is the spelling claude actually sends.
+					terminal.PopKeyboardProtocolFlags (pars.Length > 0 && pars [0] > 0 ? pars [0] : 1);
+					break;
+				case "=":
+					terminal.SetKeyboardProtocolFlags (
+						pars.Length > 0 ? pars [0] : 0,
+						pars.Length > 1 ? pars [1] : 1);
+					break;
+				case "?":
+					terminal.ReportKeyboardProtocolFlags ();
+					break;
+				default:
 					terminal.Error ("Unknown CSI code", collect, pars, "u");
+					break;
+				}
 			});
 			parser.SetCsiHandler ('v', (pars, collect) => terminal.csiDECCRA (pars, collect));
 			parser.SetCsiHandler ('y', (pars, collect) => terminal.csiDECRQCRA (pars));
@@ -1182,6 +1213,52 @@ namespace XtermSharp {
 			terminal.UpdateRange (buffer.Y);
 		}
 
+		/// <summary>
+		/// Adds a combining mark to the cell it follows. <paramref name="x"/> is the cursor, so the
+		/// cell that was just written is the one before it — two before it when that character was
+		/// wide, since its trailer carries no rune of its own to combine with.
+		/// </summary>
+		static void AttachCombiningMark (BufferLine row, int x, int code)
+		{
+			if (!IsCombiningMark (code))
+				return;
+
+			var index = x - 1;
+			if (index > 0 && row [index].Width == 0)
+				index--;
+
+			// Nothing has been written on this row yet, so there is no cluster to join. xterm drops
+			// the mark here too rather than carrying it to the previous row.
+			if (index < 0 || index >= row.Length)
+				return;
+
+			var cell = row [index];
+			if (cell.IsNullChar ())
+				return;
+
+			cell.Combining += char.ConvertFromUtf32 (code);
+			row [index] = cell;
+		}
+
+		static bool IsCombiningMark (int code)
+		{
+			if (code < 0 || code > 0x10FFFF)
+				return false;
+
+			// A surrogate on its own is not a codepoint and ConvertFromUtf32 would throw on it.
+			if (code >= 0xD800 && code <= 0xDFFF)
+				return false;
+
+			switch (System.Globalization.CharUnicodeInfo.GetUnicodeCategory (char.ConvertFromUtf32 (code), 0)) {
+			case System.Globalization.UnicodeCategory.NonSpacingMark:
+			case System.Globalization.UnicodeCategory.SpacingCombiningMark:
+			case System.Globalization.UnicodeCategory.EnclosingMark:
+				return true;
+			default:
+				return false;
+			}
+		}
+
 		void PrintStateReset()
 		{
 			readingBuffer.Reset ();
@@ -1249,8 +1326,13 @@ namespace XtermSharp {
 				// calculate print space
 				// expensive call, therefore we save width in line buffer
 				var chWidth = RuneHelper.ConsoleWidth ((uint)code);
-				if (chWidth == 0)
+				if (chWidth == 0) {
+					// A cell is a grapheme cluster, so a mark joins the cell it follows rather than
+					// being dropped. Everything else zero-width (a zero-width space, a joiner) is
+					// not part of the cluster and still costs nothing, so it goes nowhere.
+					AttachCombiningMark (bufferRow, buffer.X, code);
 					continue;
+				}
 
 				// goto next line if ch would overflow
 				// TODO: needs a global min terminal width of 2

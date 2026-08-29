@@ -150,6 +150,16 @@ namespace XtermSharp {
 		/// </summary>
 		public int SynchronizedFrames { get; private set; }
 
+		/// <summary>
+		/// Gets the kitty keyboard protocol flags in effect, or 0 for the legacy encoding
+		/// </summary>
+		public int KeyboardProtocolFlags { get; private set; }
+
+		/// <summary>
+		/// Gets the xterm modifyOtherKeys level the program asked for, or 0 when it is off
+		/// </summary>
+		public int ModifyOtherKeys { get; private set; }
+
 		public TerminalOptions Options { get; private set; }
 		public int Cols { get; private set; }
 		public int Rows { get; private set; }
@@ -729,6 +739,85 @@ namespace XtermSharp {
 			SynchronizedFrames++;
 		}
 
+		// The five bits the kitty keyboard protocol defines. A program is free to ask for anything;
+		// what is recorded is what the protocol can mean, so the reply to a query never claims an
+		// enhancement that does not exist.
+		const int KeyboardProtocolFlagMask = 0b11111;
+
+		// Kitty's own bound. A program that pushes without ever popping is misbehaving rather than
+		// entitled to unbounded memory, and the oldest entry is the one it has least claim to.
+		const int KeyboardProtocolStackLimit = 16;
+
+		readonly Stack<int> keyboardProtocolStack = new Stack<int> ();
+
+		/// <summary>
+		/// Pushes the current kitty keyboard flags and makes <paramref name="flags"/> current (CSI &gt; flags u)
+		/// </summary>
+		internal void PushKeyboardProtocolFlags (int flags)
+		{
+			if (keyboardProtocolStack.Count >= KeyboardProtocolStackLimit) {
+				var kept = new int [KeyboardProtocolStackLimit - 1];
+				for (int i = kept.Length - 1; i >= 0; i--)
+					kept [i] = keyboardProtocolStack.Pop ();
+				keyboardProtocolStack.Clear ();
+				foreach (var entry in kept)
+					keyboardProtocolStack.Push (entry);
+			}
+
+			keyboardProtocolStack.Push (KeyboardProtocolFlags);
+			KeyboardProtocolFlags = flags & KeyboardProtocolFlagMask;
+		}
+
+		/// <summary>
+		/// Pops <paramref name="count"/> entries off the kitty keyboard flag stack (CSI &lt; count u)
+		/// </summary>
+		internal void PopKeyboardProtocolFlags (int count)
+		{
+			for (int i = 0; i < count; i++)
+				KeyboardProtocolFlags = keyboardProtocolStack.Count > 0 ? keyboardProtocolStack.Pop () : 0;
+		}
+
+		/// <summary>
+		/// Sets the current kitty keyboard flags in place (CSI = flags ; mode u): mode 2 adds the
+		/// given bits, 3 removes them, and anything else replaces the lot
+		/// </summary>
+		internal void SetKeyboardProtocolFlags (int flags, int mode)
+		{
+			flags &= KeyboardProtocolFlagMask;
+
+			switch (mode) {
+			case 2:
+				KeyboardProtocolFlags |= flags;
+				break;
+			case 3:
+				KeyboardProtocolFlags &= ~flags;
+				break;
+			default:
+				KeyboardProtocolFlags = flags;
+				break;
+			}
+		}
+
+		/// <summary>
+		/// Answers a kitty keyboard flag query (CSI ? u) with the flags in effect
+		/// </summary>
+		internal void ReportKeyboardProtocolFlags ()
+		{
+			SendResponse (ControlCodes.CSI, $"?{KeyboardProtocolFlags}u");
+		}
+
+		/// <summary>
+		/// Records an xterm key-modifier request (CSI &gt; resource ; value m). Only modifyOtherKeys
+		/// (resource 4) is observable; a request with no value resets the resource, as xterm does.
+		/// </summary>
+		internal void SetKeyModifierOptions (int [] pars)
+		{
+			if (pars.Length == 0 || pars [0] != 4)
+				return;
+
+			ModifyOtherKeys = pars.Length > 1 ? pars [1] : 0;
+		}
+
 		internal void ReverseIndex ()
 		{
 			var buffer = Buffer;
@@ -1190,6 +1279,13 @@ namespace XtermSharp {
 
 			CursorStyle = Options.CursorStyle;
 			SynchronizedUpdate = false;
+
+			// Both are keyboard negotiation state, and a program that soft-resets the terminal is
+			// asking for the encoding it started with — leaving them set would keep sending it an
+			// enhanced encoding it has just said it no longer expects.
+			KeyboardProtocolFlags = 0;
+			ModifyOtherKeys = 0;
+			keyboardProtocolStack.Clear ();
 			// TODO REST
 		}
 	}

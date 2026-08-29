@@ -2,15 +2,11 @@
 
 `dotnet test` on 2026-08-28, before any gap was fixed: **254 tests, 196 pass, 58 fail.**
 
-Thirteen of the fifteen gaps are now fixed, across eleven patches applied in four passes. The suite
-stands at **276 tests, 270 pass, 6 fail**, and every remaining failure is one of the two open gaps or
-the golden that has not been authored yet:
+Fourteen of the fifteen gaps are now fixed, across thirteen patches applied in five passes. The
+suite stands at **276 tests, 275 pass, 1 fail**, and the one failure is not a gap:
 
-- four `KeyboardProtocolSpec` cases — gap 12, kitty keyboard flags, deliberately deferred
-- `UnicodeSpec.CombiningMark_JoinsTheCellItFollowsRatherThanTakingItsOwn` — the half of gap 8 that
-  needs `CharData` to carry a grapheme cluster and the adapter to project it
-- `Replay_ProducesTheGoldenScreens(claude)` — no golden, and it must be hand-audited against the
-  bytes rather than blessed from engine output
+- `Replay_ProducesTheGoldenScreens(claude)` — no golden. It must be hand-audited against the bytes
+  rather than blessed from engine output, which is a person's call, not a run of the suite.
 
 Gap 14 (OSC 8 hyperlinks) is open but has no failing test: the URL is discarded rather than leaked
 onto the screen, so nothing can observe it through the seam until the seam carries a hyperlink.
@@ -233,7 +229,7 @@ only for `?1049h`. All three reach the buffer through one `BufferSet.ActivateAlt
 telling them apart needs a change in `BufferSet.cs`. No corpus and no test uses either mode.
 
 
-### 8. Every character is one column wide — FIXED, except the combining half
+### 8. Every character is one column wide — FIXED
 
 `InputHandlers/InputHandler.cs:1244` — `var chWidth = 1;`, with the real call commented out on the
 line above (`// var chWidth = Rune.ColumnWidth ((Rune)code);` and a `1 until we get a fixed NStack`
@@ -259,16 +255,11 @@ adapter reads as `CellWidth.WideTrailer`. Four of the five tests pass, along wit
 `CharacterWidthSpec` covering the wrap at the right margin, the insert that shifts a leader off the
 row, the attribute the trailer carries, and the one-column screen that used to throw.
 
-**What is still open, and why it is not a width problem.**
-`UnicodeSpec.CombiningMark_JoinsTheCellItFollowsRatherThanTakingItsOwn` passes its first assertion —
-the mark costs no column — and fails its second. The mark is dropped, because there is nowhere in
-`CharData` to put it: the struct is a `Rune`, a `Code`, a width and an attribute, and
-`XtermSharpEngine.Translate` builds `TerminalCell` from `Code` alone, so `TerminalCell.Combining` is
-always null. Upstream's merge-into-the-previous-cell block did `chMinusOne.Code += ch`, arithmetic
-on two codepoints where the xterm.js line it came from concatenates strings — `e` + U+0301 would
-have become U+0366. It was unreachable while every width was 1 and it is gone. Finishing this half
-means `CharData` carrying a cluster and the adapter projecting it, which is two files outside the
-patch.
+**The combining half is now fixed too**, by patch 8b. `CharData` carries a `Combining` string,
+`InputHandler.AttachCombiningMark` appends to the cell before the cursor where the rune used to be
+dropped, and `XtermSharpEngine.Translate` projects it onto `TerminalCell.Combining`. Only runes in a
+mark category join the cluster — a zero-width space is also width 0 and is still dropped, which is
+what `ZeroWidthSpace_DoesNotConsumeAColumn` pins. All five of the tests listed above now pass.
 
 **Emoji are still one column.** `CharWidth.cs` holds the 2007 wcwidth table, which predates them.
 No corpus contains one and no test pins one, and terminals disagree about the exact boundaries, so
@@ -330,18 +321,24 @@ the corpus bytes: no corpus contains a DECSCUSR, and only `vim.bin` touches mode
 `CursorBlink_TracksTheDecPrivateMode` pass.
 
 
-### 12. Kitty keyboard flags are not tracked and `CSI ? u` is not answered
+### 12. Kitty keyboard flags are not tracked and `CSI ? u` is not answered — FIXED
 
-**Still open.** Gaps 5 and 6 stopped the corruption these sequences caused without adding any state:
-a private `CSI u` and a prefixed `CSI m` are now recognised as not-ours and reported through
-`terminal.Error` instead of moving the cursor and repainting the screen. Nothing records what they
-asked for. A terminal that does not reply to the query cannot negotiate progressive enhancement,
-which is the whole reason the plan owns the input encoder.
+Gaps 5 and 6 stopped the corruption these sequences caused without adding any state: a private
+`CSI u` and a prefixed `CSI m` were recognised as not-ours and reported through `terminal.Error`
+instead of moving the cursor and repainting the screen, but nothing recorded what they asked for. A
+terminal that does not reply to the query cannot negotiate progressive enhancement, which is the
+whole reason the plan owns the input encoder.
 
-Failing: `KeyboardProtocolSpec.PushingKeyboardFlags_MakesThemCurrent`,
-`KeyboardProtocolSpec.QueryingKeyboardFlags_AnswersWithTheCurrentFlags`,
-`KeyboardProtocolSpec.QueryingKeyboardFlags_AfterAPush_ReportsThePushedFlags`,
-`KeyboardProtocolSpec.ModifyOtherKeys_RecordsTheRequestedLevel` (from gap 6).
+**Fixed by patch 12 in `vendor/XtermSharp/PATCHES.md`.** `Terminal` keeps the flag stack and the
+modifyOtherKeys level, the `u` handler dispatches push / pop / set / query on the private prefix,
+and the `m` handler routes `CSI > 4 ; n m` to the level rather than to SGR. Flags are masked to the
+five bits the protocol defines and the stack is bounded at kitty's own limit of 16. All four tests
+listed above now pass.
+
+Note for the encoder: the acceptance corpus only ever *pops* — it contains four `CSI < u` and no
+pushes — so `claude` negotiates through `TERM`/`COLORTERM` and modifyOtherKeys rather than through
+kitty flags. The flags being tracked is what lets an encoder answer honestly, not evidence that
+this program will raise them.
 
 ### 13. SGR 9 / 29 (crossed out) is unhandled — FIXED
 

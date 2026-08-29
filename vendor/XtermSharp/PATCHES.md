@@ -248,6 +248,29 @@ arrows, the dingbats claude prints — is one column in this table and in xterm.
   which now returns `Width * (i + 1)` for a line whose last cell is a wide leader. Reflow reads it.
   Left alone: it is not in these two files, and the reflow suite does not move.
 
+### Patch 8b — where a combining mark lives
+
+The half patch 8 left open. A zero-width rune was dropped at `if (chWidth == 0) continue;`, so
+`TerminalCell.Combining` had no producer and an "e" followed by U+0301 lost its accent.
+
+`CharData` gains a `string Combining`, set to null by both constructors — the struct had nowhere to
+hold a cluster, which is the reason the mark was dropped rather than an oversight. `InputHandler`
+gains `AttachCombiningMark`, called where the rune used to be discarded: it appends to the cell
+before the cursor, stepping back one further when that cell is a wide character's trailer, since a
+trailer carries no rune of its own to combine with. `XtermSharpEngine.Translate` projects the field.
+
+Upstream's own merge block is not restored. It did `chMinusOne.Code += ch` — arithmetic on two
+codepoints, where the xterm.js line it was ported from concatenates strings, so "e" + U+0301 became
+U+0366. This appends to a string instead.
+
+**Only marks join the cluster.** The zero-width test is `UnicodeCategory`, not width: a zero-width
+space and a zero-width joiner are also width 0 but are not part of the preceding grapheme, and
+appending them would put them into `RowText` and into anything that copies a selection. They are
+still dropped, which is what `ZeroWidthSpace_DoesNotConsumeAColumn` pins.
+
+**A mark with nothing before it is dropped.** At column 0 there is no cluster on this row to join,
+and xterm does not carry the mark back to the previous row either.
+
 ## Patch 9 — synchronized output, DEC mode 2026 (gap 9)
 
 `case 2026` did not exist in either direction, so the parameter fell off the end of the DECSET
@@ -291,6 +314,43 @@ the seam asks for that shape.
 - `SoftReset` (DECSTR) leaves the cursor style alone, as xterm does. Only RIS resets it.
 
 ---
+
+## Patch 12 — kitty keyboard flags and modifyOtherKeys are recorded (gap 12)
+
+Patches 5 and 6 stopped a private `CSI u` moving the cursor and a prefixed `CSI m` being applied as
+SGR, but neither recorded what the sequence asked for: both were logged through `terminal.Error` and
+dropped. A terminal that cannot answer `CSI ? u` cannot negotiate progressive enhancement, which is
+the negotiation the input encoder is built on.
+
+### `Terminal.cs`
+
+`KeyboardProtocolFlags` and `ModifyOtherKeys` join `SynchronizedUpdate` as observable mode state,
+both `{ get; private set; }`. Behind the first is a `Stack<int>` and four methods —
+`PushKeyboardProtocolFlags`, `PopKeyboardProtocolFlags`, `SetKeyboardProtocolFlags` and
+`ReportKeyboardProtocolFlags` — plus `SetKeyModifierOptions` for the xterm resource request.
+
+Flags are masked to the five bits the kitty protocol defines, so a reply never claims an
+enhancement the protocol has no way to mean. The stack is bounded at 16, kitty's own limit, and
+drops its oldest entry rather than growing without end for a program that pushes and never pops.
+
+`SoftReset` clears all three. A program that soft-resets is asking for the encoding it started with,
+and leaving the flags set would keep sending it an encoding it has just said it no longer expects.
+
+### `InputHandlers/InputHandler.cs`
+
+The `u` handler's two-way `if` becomes a switch over `collect`: `""` restores the cursor as before,
+`>` pushes, `<` pops, `=` sets in place, `?` answers, and anything else still goes to
+`terminal.Error`. A `<` with no parameter pops one — the parser defaults an omitted parameter to 0,
+and `CSI < u` is the spelling the acceptance corpus actually contains.
+
+The `m` handler gains a `>` arm routing to `SetKeyModifierOptions`. Only resource 4
+(modifyOtherKeys) is observable; a request naming any other resource is accepted and ignored rather
+than reported as an error, because it is a legal thing for a program to send.
+
+### Behaviour that changed beyond the fix
+
+- **A private `CSI u` or a prefixed `CSI m` no longer reaches `terminal.Error`** for the prefixes
+  above. Anything still unrecognised does.
 
 ## Patch 13 — SGR 9 and 29, crossed out (gap 13)
 

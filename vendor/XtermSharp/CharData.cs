@@ -12,6 +12,13 @@ namespace XtermSharp {
 		public int Width;
 		public int Code;
 
+		/// <summary>
+		/// The combining marks that follow <see cref="Code"/> in this cell, or null when the cell
+		/// holds a single codepoint. A cell is a grapheme cluster, and a mark has no column of its
+		/// own, so it has nowhere else to live.
+		/// </summary>
+		public string Combining;
+
 		public static readonly CellAttribute DefaultAttr = CellAttribute.Default;
 		public static readonly CellAttribute InvertedAttr = CellAttribute.InvertedDefault;
 
@@ -31,6 +38,7 @@ namespace XtermSharp {
 			Rune = rune;
 			Width = width;
 			Code = code;
+			Combining = null;
 		}
 
 		// Returns an empty CharData with the specified attribute
@@ -40,6 +48,7 @@ namespace XtermSharp {
 			Rune = '\u0200';
 			Width = 1;
 			Code = 0;
+			Combining = null;
 		}
 
 		/// <summary>

@@ -123,8 +123,8 @@ public sealed class XtermSharpEngine : ITerminalEngine
             MouseProtocolEncoding.URXVT => MouseEncoding.Urxvt,
             _ => MouseEncoding.X10,
         },
-        KeyboardProtocolFlags: 0,
-        ModifyOtherKeys: 0);
+        KeyboardProtocolFlags: terminal.KeyboardProtocolFlags,
+        ModifyOtherKeys: terminal.ModifyOtherKeys);
 
     /// <summary>Reads XtermSharp's active buffer in the grid surface's coordinate system.</summary>
     sealed class XtermGrid(XtermTerminal terminal) : ITerminalGrid
@@ -163,7 +163,10 @@ public sealed class XtermSharpEngine : ITerminalEngine
                 0 => CellWidth.WideTrailer,
                 2 => CellWidth.WideLeader,
                 _ => CellWidth.Single,
-            });
+            })
+        {
+            Combining = cell.Combining,
+        };
 
         static Rune ToRune(int code) => Rune.IsValid(code) ? new Rune(code) : Rune.ReplacementChar;
 
