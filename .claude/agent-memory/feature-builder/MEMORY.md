@@ -2,3 +2,5 @@
 - [Seam review adjudication](feedback_seam_review_adjudication.md) — verify the reviewer's precedent claims by grep; reject renames/deletions the user specified, carry them as follow-ups
 - [Briefs that produced good output](feedback_brief_quality.md) — quote criteria verbatim, hand over known traps, pre-decide the questions the writer will otherwise ask
 - [Red-phase mechanics](feedback_red_phase_mechanics.md) — ship a compiling NotImplementedException stub in a shared tree; make the reviewer name an implementation that passes every test and is still wrong
+- [Three-lens merge value](feedback_three_lens_merge.md) — the contract lane cannot find defects in the spec; both real bugs came from edges + seams. Ask for mutation evidence and silent-decision lists
+- [Terminal keyboard seam](project_terminal_keyboard_seam.md) — reserved set is Super + repo hotkeys only; focused controller already beats AppKeybindController; InputModifiers carries lock bits

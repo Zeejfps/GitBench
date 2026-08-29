@@ -11,6 +11,7 @@ The known-flaky set is not limited to `RepoWatcher{Classifier,Debounce}Tests` an
   `AssistantSelectionActionTests`, `AssistantOverlayViewTests`
 - `Markdown.CodeBlockHighlightTests`
 - `RepoOperationsStoreTests`
+- `StatusIngestIntegrationTests` (real filesystem watcher; passes alone in ~0.6 s)
 
 **Why:** they wait on a harness/store settle with a 10-second budget, and a saturated machine (a parallel agent building, or the app running) blows it. The tell is a duration of exactly `10 s` in the failure line — a real assertion failure is milliseconds.
 

@@ -34,13 +34,14 @@ internal sealed record TerminalPaneState(TerminalRenderState Render);
 /// measured against the canvas that will draw it.
 /// </para>
 /// </remarks>
-internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
+internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>, ITerminalInput
 {
     readonly ITerminalLaunch _launch;
 
     TerminalSession? _session;
     TerminalSize? _size;
     bool _starting;
+    bool _shellExited;
     bool _closed;
 
     public TerminalViewModel(ITerminalLaunch launch, IUiDispatcher dispatcher)
@@ -55,6 +56,25 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
 
     /// <summary>Raised on the UI thread when the screen has changed and wants drawing again.</summary>
     public event Action? Updated;
+
+    /// <summary>True while there is a live shell to take input.</summary>
+    /// <remarks>
+    /// False again once the shell exits on its own, not only once the pane is disposed. A pane still
+    /// claiming keys for a shell that has gone eats every keystroke in the window until the user
+    /// thinks to click elsewhere, with nothing on screen saying why.
+    /// </remarks>
+    public bool IsAcceptingInput => LiveSession is not null;
+
+    /// <summary>
+    /// The shell's current modes, which decide how a key is encoded. The default modes when there is
+    /// no shell, which encode nothing anyone can read.
+    /// </summary>
+    public TerminalModes Modes => LiveSession?.State.Modes ?? default;
+
+    /// <summary>Sends bytes to the shell as terminal input. Does nothing when there is no shell.</summary>
+    public void SendInput(ReadOnlySpan<byte> bytes) => LiveSession?.Write(bytes);
+
+    TerminalSession? LiveSession => _shellExited ? null : _session;
 
     /// <summary>
     /// Tells the view model how many cells the pane can show. The first call starts the shell; later
@@ -118,6 +138,21 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>
         if (_size is { } size) session.Resize(size);
 
         Update(s => s with { Render = new TerminalRenderState.Running(session) });
+
+        WatchForExit(session);
+    }
+
+    // Unconditional, including for a session that has already finished: a shell can exit between the
+    // spawn and here, and skipping the watch for it leaves the pane claiming keys forever.
+    void WatchForExit(TerminalSession session)
+    {
+        var dispatcher = Dispatcher;
+
+        session.Exited.ContinueWith(
+            _ => dispatcher.Post(() => _shellExited = true),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
     }
 
     void Fail(string message)

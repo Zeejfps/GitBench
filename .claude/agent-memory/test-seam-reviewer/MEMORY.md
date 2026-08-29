@@ -1,2 +1,4 @@
 - [Seam conventions](seam-conventions-gitbench.md) — internal-by-default in Features/** + InternalsVisibleTo is the house seam; Outcome is not for programmer-error paths; remarks argue the rejected alternative
-- [Recurring seam mistakes](recurring-seam-mistakes-gitbench.md) — check first: safe accessor shipped beside its escape hatch, ACs pinned on the exotic case not the common one, alloc-delta tests are NOT the flaky kind
+- [Recurring seam mistakes](recurring-seam-mistakes-gitbench.md) — check first: safe accessor beside its escape hatch, ACs on the exotic case, untested translation tables, mode-blind predicates, churn counted in rows not call sites
+- [Input seam facts](input-seam-facts-gitbench.md) — InputSystem dispatch order, KeyClaim tri-state, hover-built focus queue; declining is not routing, and nothing blurs a hidden focus holder
+- [Review style](feedback-review-style.md) — report only, never edit; say "closed" rather than manufacture findings; flag decisive facts wearing a taste label

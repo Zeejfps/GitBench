@@ -4,6 +4,8 @@ using GitBench.Pty;
 using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -33,6 +35,7 @@ internal sealed record TerminalPane : Widget
         var theme = ctx.Require<IThemeService<ThemeStyles>>();
         var loc = ctx.Require<ILocalizationService>();
         var dispatcher = ctx.Require<IUiDispatcher>();
+        var input = ctx.Require<InputSystem>();
 
         var view = new TerminalGridView(theme)
         {
@@ -54,6 +57,7 @@ internal sealed record TerminalPane : Widget
                 view.OnViewportChanged = vm.ReportViewport;
                 vm.Updated += view.Repaint;
                 view.Bind(vm.RenderState, view.SetRenderState);
+                view.UseController(input, () => new TerminalInputController(view, input, vm));
             });
 
         return view;

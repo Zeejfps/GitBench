@@ -76,7 +76,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
             return;
         }
 
-        if (DigitFromKey(e.Key) is { } slot && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        if (IsRepoHotkeyChord(e.Key, e.Modifiers) && DigitFromKey(e.Key) is { } slot)
             HandleHotkey(slot, ref e);
     }
 
@@ -118,6 +118,14 @@ internal sealed class AppKeybindController : KeyboardMouseController
             e.Consume();
         }
     }
+
+    /// <summary>Whether this chord is one of the repo hotkeys, which the terminal pane hands back.</summary>
+    /// <remarks>
+    /// Here rather than restated in the pane so the two cannot drift: the modifier differs by platform
+    /// (Cmd on macOS) and the lock keys have to be masked out of the comparison either way.
+    /// </remarks>
+    internal static bool IsRepoHotkeyChord(KeyboardKey key, InputModifiers modifiers) =>
+        DigitFromKey(key) is not null && (modifiers & RelevantMask) == PrimaryModifier;
 
     private static int? DigitFromKey(KeyboardKey key) => key switch
     {

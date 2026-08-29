@@ -4,3 +4,5 @@
 - [Verifying red suites](feedback_verifying_red_suites.md) — prove a RED suite green against a scratchpad reference impl; isolated project when another agent breaks GitBench.Tests; zero-alloc pattern that holds
 - [No lookup escape hatches](feedback_no_lookup_escape_hatches.md) — no indexers on shared records (total switch at the consumer); record `with` bypasses primary-ctor validation
 - [Suite review lessons](feedback_suite_review_lessons.md) — surviving-variant tests, invariants supplement examples, no naked buffer beside a safe accessor, ParamName is content
+- [GUI harness keyboard tests](project_gui_harness_keyboard.md) — reading KeyClaim, building the focus queue by hover, spy controller for fall-through
+- [Escape literals in sources](feedback_escape_literals_in_sources.md) — always \u escapes, never literal control bytes; Write emits the real byte, scan and post-fix with perl

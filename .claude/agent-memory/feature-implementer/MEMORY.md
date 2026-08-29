@@ -5,3 +5,5 @@
 - [Theme sub-palettes are a five-file edit](terminal-theming-flows-through-buildstyles.md) — BuildStyles' required-member initialiser forces both builders and the param list in one batch
 - [ThemeStyles.Mix is banker's rounding](theme-styles-mix-is-bankers-rounding.md) — Math.Round(8.5)==8; never a drop-in for a blend whose tests pin half-up
 - [Full-suite timeout flakes](full-suite-timeout-flakes.md) — a failure at a flat `10 s` is machine load; re-run it filtered before calling it a regression
+- [Terminal exit signal is racy](terminal-keyboard-exit-signal.md) — pty doubles complete `Exited` on their first read; suspect the double, not the view model — the watch in Adopt is unconditional
+- [Harness has no IUiDispatcher](gui-harness-needs-iuidispatcher.md) — GuiTestHarness seeds four services and not that one; `Require<IUiDispatcher>` dies unless the test's own configure adds it
