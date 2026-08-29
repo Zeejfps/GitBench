@@ -51,10 +51,10 @@ namespace GitBench.Pty.Platforms.Unix;
 [SupportedOSPlatform("linux")]
 internal sealed class UnixPtySession : IPtySession
 {
+    const int DrainSize = 4096;
+
     static readonly TimeSpan ThreadPatience = TimeSpan.FromSeconds(2);
     static readonly object TerminalNaming = new();
-
-    const int DrainSize = 4096;
 
     readonly GatedHandle<SafeFileDescriptor> _master;
     readonly GatedHandle<SafeFileDescriptor> _wakeup;
@@ -186,7 +186,9 @@ internal sealed class UnixPtySession : IPtySession
     /// The whole process group is ended rather than the child alone. <c>POSIX_SPAWN_SETSID</c> makes
     /// the child a group leader, so a shell's background jobs are inside it; on Linux anything still
     /// holding the slave keeps the terminal open, and macOS only cleans up after them because the
-    /// session leader died.
+    /// session leader died. The group is named by the child's own pid, and the spawn is checked to
+    /// have made the child lead one rather than assumed to have: a negative number naming a group the
+    /// child does not lead would name this process's own.
     /// </para>
     /// </remarks>
     public void Dispose()
@@ -213,7 +215,7 @@ internal sealed class UnixPtySession : IPtySession
         _watcher.Join(ThreadPatience);
     }
 
-    unsafe void DrainOutput()
+    void DrainOutput()
     {
         try
         {
