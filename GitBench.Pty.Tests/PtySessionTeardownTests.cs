@@ -312,17 +312,26 @@ public class PtySessionTeardownTests
     }
 
     /// <remarks>
+    /// <para>
     /// The seam says nothing about concurrent writers and the app only ever writes from one thread, so
     /// this asserts the weakest defensible thing: two at once neither deadlock nor throw. It
     /// deliberately does not assert that the two writes stay unbroken, because nothing promises that
     /// and asserting it would invent a contract.
+    /// </para>
+    /// <para>
+    /// The child has to be one that reads. A terminal's input queue is about a kilobyte, so twenty
+    /// kilobytes aimed at a child that never reads its input parks the writer in <c>write(2)</c> until
+    /// something drains it — measured with no session involved at all, so it is the line discipline
+    /// applying backpressure rather than anything here deadlocking. Two writers blocked on a full
+    /// queue would look exactly like the bug this test is for and be neither.
+    /// </para>
     /// </remarks>
     [PtyFact]
     public void WriteInput_FromTwoThreadsAtOnce_NeitherDeadlocksNorThrows()
     {
         using var work = new TempDirectory();
 
-        using var session = PtyChild.Start(PtyChild.SitsSilently(work));
+        using var session = PtyChild.Start(PtyChild.ReadsContinuously(work));
         var output = new PtyOutputReader(session);
 
         Assert.True(

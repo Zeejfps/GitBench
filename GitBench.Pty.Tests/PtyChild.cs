@@ -141,6 +141,23 @@ static class PtyChild
             : Sh(work, UnixVariableReport, names);
 
     /// <summary>
+    /// A child that prints the PATH it was given, as <c>[PATH=...]</c>, using only what its shell
+    /// carries built in.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="PrintsVariables"/> cannot answer this one. It reports through <c>env</c> and
+    /// <c>awk</c>, and the only test that asks about PATH is the test that overlays PATH with a
+    /// directory holding neither — so the reporter would be the thing that broke, and the failure
+    /// would look like the session losing the variable it had in fact delivered. Parameter expansion
+    /// is not the general reporter for the reason that class documents, but it needs nothing on PATH
+    /// to find, which is the whole of what this asks for.
+    /// </remarks>
+    public static PtySessionOptions PrintsThePath(TempDirectory work) =>
+        OperatingSystem.IsWindows()
+            ? Cmd(work, "/c", "echo [PATH=%PATH%]")
+            : Sh(work, UnixPrintThePath);
+
+    /// <summary>
     /// A child that prints its arguments one bracketed entry each, as <c>[argv=&lt;a&gt;|&lt;b&gt;|]</c>,
     /// so an entry that arrived empty is still visible.
     /// </summary>
@@ -250,6 +267,23 @@ static class PtyChild
         OperatingSystem.IsWindows()
             ? PowerShell(work, "Write-Host '[ready]'; Start-Sleep -Seconds 600")
             : Sh(work, UnixSitSilently);
+
+    /// <summary>
+    /// A child that prints <see cref="Ready"/> and then goes on reading its input for as long as it
+    /// is given any, discarding what it reads.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart to <see cref="SitsSilently"/>, and the only child a test of writing may use.
+    /// A terminal's input queue is about a kilobyte — measured here, and the same with no session
+    /// involved at all — so a write that outruns it blocks until somebody reads, which is the line
+    /// discipline applying backpressure and not the session doing anything wrong. Against a child
+    /// that never reads, any test that writes more than that much is asserting that the kernel does
+    /// not do its job.
+    /// </remarks>
+    public static PtySessionOptions ReadsContinuously(TempDirectory work) =>
+        OperatingSystem.IsWindows()
+            ? PowerShell(work, "Write-Host '[ready]'; while ($null -ne [Console]::In.ReadLine()) { }")
+            : Sh(work, UnixReadContinuously);
 
     /// <summary>A child that prints <see cref="Ready"/>, reads one line, then prints <c>[typed=that line]</c>.</summary>
     public static PtySessionOptions ReadsOneLine(TempDirectory work) =>
@@ -414,6 +448,11 @@ static class PtyChild
         printf '[ctty=%s;foreground=%s;device=%s]\n' "$c" "$f" "$(tty)"
         """;
 
+    const string UnixPrintThePath =
+        """
+        echo "[PATH=$PATH]"
+        """;
+
     const string UnixPrintWorkingDirectory =
         """
         printf '[cwd=%s]\n' "$(pwd)"
@@ -459,6 +498,13 @@ static class PtyChild
         printf '[ready]\n'
         read line
         printf '[typed=%s]\n' "$line"
+        """;
+
+    const string UnixReadContinuously =
+        """
+        stty raw -echo
+        printf '[ready]\n'
+        cat > /dev/null
         """;
 
     const string UnixEchoRaw =

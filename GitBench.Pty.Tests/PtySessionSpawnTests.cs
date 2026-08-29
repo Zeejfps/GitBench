@@ -483,7 +483,7 @@ public class PtySessionSpawnTests
         using var work = new TempDirectory();
 
         var options = PtyChild
-            .PrintsVariables(work, "PATH")
+            .PrintsThePath(work)
             .WithVariable("PATH", work.Path);
 
         using var session = PtyChild.Start(options);

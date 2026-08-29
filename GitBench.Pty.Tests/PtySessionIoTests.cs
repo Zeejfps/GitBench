@@ -124,8 +124,24 @@ public class PtySessionIoTests
             + $"Terminal showed:\n{output.Describe()}");
     }
 
+    /// <remarks>
+    /// <para>
+    /// What this is for is the overlap: a session whose read and write paths shared a lock, or whose
+    /// write parked the reader, would hang here. A burst is what exercises that, and any burst does —
+    /// the size is not the subject.
+    /// </para>
+    /// <para>
+    /// So the burst is kept inside what a terminal can hold. The input queue is about a kilobyte and
+    /// an interactive shell in canonical mode takes it a line at a time, so a burst past that overruns
+    /// it and the tail is discarded — the line discipline's doing, not the session's, which delivered
+    /// bytes the terminal had nowhere to put. This was fifty lines, which overran it, and the line
+    /// most often lost was the last one: the exit. The test then failed as "the shell did not exit",
+    /// which is a report about queue capacity dressed up as a report about the session. Fifteen lines
+    /// of roughly fifty bytes leave room to spare and assert exactly as much.
+    /// </para>
+    /// </remarks>
     [PtyFact]
-    public void ReadingAndWritingConcurrently_LosesNothingAndDoesNotDeadlock()
+    public void ReadingAndWritingConcurrently_ReachesTheChildAndDoesNotDeadlock()
     {
         using var work = new TempDirectory();
 
@@ -135,9 +151,9 @@ public class PtySessionIoTests
         var output = new PtyOutputReader(session);
         PtyChild.WaitForPrompt(output, work);
 
-        Bounded.Run("Fifty writes against a live reader", PtyChild.Patience, () =>
+        Bounded.Run("Fifteen writes against a live reader", PtyChild.Patience, () =>
         {
-            for (var i = 0; i < 50; i++)
+            for (var i = 0; i < 15; i++)
                 PtyChild.Type(session, PtyChild.EchoVariable("GITBENCH_PTY_TYPED"));
 
             PtyChild.Type(session, PtyChild.Exit(5));
