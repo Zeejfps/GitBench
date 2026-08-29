@@ -171,7 +171,7 @@ namespace XtermSharp {
 		public void SaveCursor (CellAttribute curAttr)
 		{
 			SavedX = X;
-			SavedY = Y;
+			SavedY = YBase + Y;
 			SavedAttr = curAttr;
 		}
 
@@ -180,8 +180,8 @@ namespace XtermSharp {
 		/// </summary>
 		public CellAttribute RestoreCursor ()
 		{
-			X = SavedX;
-			Y = SavedY;
+			X = Math.Min (SavedX, cols - 1);
+			Y = Math.Min (Math.Max (SavedY - YBase, 0), rows - 1);
 			return SavedAttr;
 		}
 
@@ -289,6 +289,7 @@ namespace XtermSharp {
 				}
 
 				SavedX = Math.Min (SavedX, newCols - 1);
+				SavedY = Math.Min (SavedY, YBase + newRows - 1);
 
 				ScrollTop = 0;
 			}

@@ -396,6 +396,21 @@ nothing — and a terminal that cannot read it has to guess for every full-scree
 full-screen program is written against do, and the adapter reports it as
 `TerminalModes.AlternateScroll`. `ModeSpec` pins the default and both transitions.
 
+### 18. The saved cursor is restored to a row the screen may not have — FIXED
+
+`Buffer.cs:173` saves `SavedY = Y` (a screen row) but `Buffer.cs:278`, `ReflowNarrower.cs:130` and
+`ReflowWider.cs:192` all adjust it as a buffer row, the way upstream xterm.js does — upstream saves
+`ybase + y`. Nothing clamps it on the way back out, so `RestoreCursor` can put `Buffer.Y` past the
+last row of the screen. `InputHandler.Print` then indexes `Buffer.Lines` past its end and throws
+`NullReferenceException` on the next printed character.
+
+Reached by the ordinary path: `?1049h` saves the cursor, the window is resized while the full-screen
+program is up, `?1049l` restores it. Every full-screen program in the corpora brackets its session
+that way.
+
+**Fixed by patch 18.** The field is a buffer row again on both sides, and the restore is clamped to
+the screen the buffer actually has. `SavedCursorSpec` pins it.
+
 
 ## Configuration, not a defect
 

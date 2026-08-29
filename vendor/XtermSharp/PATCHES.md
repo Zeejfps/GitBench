@@ -408,3 +408,27 @@ reset path, the two places every other private mode is handled.
 The adapter reports it as `TerminalModes.AlternateScroll`. What reads it is the pane's wheel, which
 picks between a mouse report, the cursor keys and the pane's own history. `ModeSpec` pins the
 default and both transitions.
+
+---
+
+## Patch 18 — the saved cursor is an absolute row again (gap 18)
+
+`Buffer.SaveCursor` stored `SavedY = Y` — the row *on screen* — while every other line that touches
+the field treats it as a row *in the buffer*: the trim path adjusts it by `amountToTrim`, and both
+reflow strategies clamp it against `YBase + newRows - 1`. Upstream xterm.js saves `ybase + y` and
+restores `savedY - ybase`; the port dropped both `ybase` terms and left the adjustments that assume
+them.
+
+The consequence is a restore that lands off the screen. `?1049h` saves the shell's cursor on the way
+into the alternate screen, and a resize while the full-screen program is up moves the normal buffer's
+content between the screen and the history — so `?1049l` restored a row the screen no longer has.
+`Buffer.Y` was then out of range and the next printed character indexed past the buffer's lines:
+`InputHandler.Print` threw `NullReferenceException`, on the thread that owns the window. Claude Code
+brackets a dialog in `?1049`, which is how a window resize took the pane down.
+
+`SaveCursor` stores `YBase + Y` and `RestoreCursor` returns `SavedY - YBase`, both as upstream has
+them. Two clamps go beyond upstream, because a saved position can outlive the screen it named:
+`RestoreCursor` pins the result to the buffer's own `rows` and `cols`, and `Resize` clamps `SavedY`
+to `YBase + newRows - 1` beside the `SavedX` clamp that was already there. `SavedCursorSpec` covers
+the shrink, the grow, the narrowing, and a save and restore with no resize between them; three of its
+five cases fail without this patch.

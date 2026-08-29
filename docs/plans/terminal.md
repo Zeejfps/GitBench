@@ -211,6 +211,35 @@ the pane's own viewport. The pane picks between them on the modes the engine rep
 that switches modes mid-session switches what the wheel means without the pane holding any state
 about it.
 
+## Findings — the controlling terminal, measured
+
+**The child was never getting one, and it cost every full-screen program its resizes.** The pane
+resized, the engine resized, `TIOCSWINSZ` reached the terminal and the size the child read back was
+correct — and no `SIGWINCH` was ever delivered, so a TUI kept drawing at the size it started at.
+Ctrl-C reached nothing for the same reason. The kernel signals a terminal's *foreground process
+group*, and the terminal had none.
+
+**`POSIX_SPAWN_SETSID` plus opening the slave without `O_NOCTTY` does not acquire the terminal on
+macOS.** That is what `UnixPtySession` assumed, in a comment that read like a citation, and it is
+wrong: no file action can issue the `TIOCSCTTY` that would, and measurement says the open alone does
+nothing. Timed from the parent, `tcgetpgrp(master)` is 0 the instant the child starts under every
+shell; under bash it becomes the child's group about 25ms later, because **bash takes a controlling
+terminal for itself at startup and zsh never does**. macOS's default shell is zsh. That is the whole
+reason this looked like "TUIs are broken" rather than "the terminal is broken", and why the existing
+`/dev/tty` spawn test passed throughout: its child is a shell, and the shell repaired what the spawn
+had failed to give it.
+
+**So the pane starts the shell through one.** `ShellCommand` spawns `/bin/sh -c 'exec "$0" "$@"'`
+with the user's shell as `$0`: `sh` takes the terminal, `exec` hands it — with the process, the
+descriptors and the session — to the shell that was asked for. It is deliberately *not* in
+`GitBench.Pty`, where it was tried first: routing every spawn through a shell breaks that layer's own
+contracts — a missing executable stops being a spawn failure and becomes exit 127, `PATH` starts
+resolving against the child's environment rather than this process's, and bash quietly drops `PS1`
+from the environment it passes on. Twelve of its tests said so. The layer's honest fix is `fork` +
+`login_tty` or a native helper, which is the fallback this plan already names; until then the app
+arranges what it needs and `ShellCommandTests` pins both halves — a child started through the
+acquirer owns its terminal, and one started without it, on macOS, does not.
+
 ## Findings — the mouse, as built
 
 **The reports are ours, like the keys.** `TerminalMouseEncoder` is the mouse's `TerminalKeyEncoder`:
@@ -235,6 +264,15 @@ scrolling back impossible while it is up. Motion is also reported once per cell 
 event: a move is dispatched to the focused controller and again through the hover path, and the
 pointer crosses a cell far less often than it moves.
 
+**A resize is the pane's worst case, and it broke on the saved cursor.** A full-screen program
+brackets its session in `?1049`, which saves the shell's cursor going in and restores it coming out,
+and the window can be resized in between. The vendored buffer saved that cursor as a screen row while
+adjusting it as a buffer row, so the restore landed on a row the resized screen no longer had and the
+next printed character indexed past the buffer — a `NullReferenceException` on the thread that owns
+the window, which is why resizing while Claude Code was up took the pane with it. Patch 18 fixes the
+cause; the session now also catches a feed that throws and faults the pane rather than the
+application, on the same reasoning as the reader thread's catch.
+
 **Modifiers on the wheel are missing, and that is the framework's.** `MouseWheelScrolledEvent`
 carries no modifiers — GLFW's scroll callback has none to give and nothing tracks them alongside —
 so xterm's Shift-takes-the-wheel-back convention is not implemented. Shift with the page keys is the
@@ -245,7 +283,7 @@ history's chord in the meantime.
 | Risk | Note |
 |---|---|
 | XtermSharp coverage gaps | Most likely kitty keyboard, synchronized output (`?2026`), maybe truecolor edges. Phase 1 quantifies it; we own the source, so gaps are patches, not blockers. Narrowed on Windows: all three reach the engine intact, so the only question left is whether XtermSharp implements them, not whether the transport delivers them. |
-| Unix spawn / controlling terminal | The genuinely fiddly native bit. `forkpty` in a managed runtime is what everyone does and nobody likes; `posix_spawn` with `SETSID` plus a non-`O_NOCTTY` slave open is the clean version. Budget real time here, isolated in Phase 1. |
+| Unix spawn / controlling terminal | The genuinely fiddly native bit, and it bit. `posix_spawn` with `SETSID` plus a non-`O_NOCTTY` slave open is *not* the clean version — on macOS it acquires nothing, and the child lands with no controlling terminal, no `SIGWINCH` and no Ctrl-C. The pane works around it by starting the shell through `/bin/sh -c 'exec "$0" "$@"'`; `GitBench.Pty` itself still hands a bare child no terminal, and its own fix is `fork` + `login_tty` or Pty.Net's native helper. See Findings. |
 | Glyph atlas is single-channel | `GlyphAtlas` is alpha-only, so color emoji are impossible without an RGBA path. Claude Code's UI is box-drawing and symbols, which JetBrains Mono covers — but emoji in *tool output* will tofu. Accepted for v1. |
 | Keyboard ownership | Not a late bug-fix; a modality design decision in Phase 4, subject to the parent-owns-modality rule. |
 | Streaming repaint cost | Rendering is instanced glyph quads with growable VBOs and damage-driven frames, so the GPU is not the worry — shaping and per-frame allocation are. Module 6 is the mitigation. |

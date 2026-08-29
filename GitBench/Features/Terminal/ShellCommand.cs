@@ -14,14 +14,20 @@ namespace GitBench.Features.Terminal;
 /// </remarks>
 internal static class ShellCommand
 {
+    const string Acquirer = "/bin/sh";
+
+    const string AcquireAndExec = "exec \"$0\" \"$@\"";
+
     public static PtySessionOptions For(string workingDirectory, PtySize size)
     {
         var (executable, arguments) = Shell();
 
         return new PtySessionOptions
         {
-            Executable = executable,
-            Arguments = arguments,
+            Executable = OperatingSystem.IsWindows() ? executable : Acquirer,
+            Arguments = OperatingSystem.IsWindows()
+                ? arguments
+                : ["-c", AcquireAndExec, executable, .. arguments],
             WorkingDirectory = workingDirectory,
             Size = size,
             Environment = new Dictionary<string, string?>

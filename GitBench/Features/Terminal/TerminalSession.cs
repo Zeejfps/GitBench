@@ -34,6 +34,7 @@ internal sealed class TerminalSession : IDisposable
 
     bool _drainQueued;
     bool _disposed;
+    bool _faulted;
     int _scrollOffset;
 
     TerminalSession(IPtySession pty, ITerminalEngine engine, IUiDispatcher dispatcher)
@@ -152,14 +153,15 @@ internal sealed class TerminalSession : IDisposable
     public event Action? Updated;
 
     /// <summary>
-    /// Raised on the UI thread when reading the terminal failed and the screen has therefore stopped
-    /// following the shell. At most once, and never for an ordinary end of stream.
+    /// Raised on the UI thread when reading the terminal or applying what it read failed, and the
+    /// screen has therefore stopped following the shell. Never for an ordinary end of stream.
     /// </summary>
     /// <remarks>
     /// The reader runs on a thread of its own, where an escaping exception ends the process rather
-    /// than the pane — so the failure has to be caught here whether or not anyone is listening. It is
-    /// reported rather than swallowed because the alternative is a pane that silently stops updating
-    /// and still takes keystrokes, which reads as the shell having hung.
+    /// than the pane — and a drain runs on the thread that owns the window, where one takes the whole
+    /// application down. Either failure has to be caught here whether or not anyone is listening. It
+    /// is reported rather than swallowed because the alternative is a pane that silently stops
+    /// updating and still takes keystrokes, which reads as the shell having hung.
     /// </remarks>
     public event Action<string>? Faulted;
 
@@ -269,7 +271,7 @@ internal sealed class TerminalSession : IDisposable
 
     void Drain()
     {
-        if (_disposed) return;
+        if (_disposed || _faulted) return;
 
         byte[] batch;
         lock (_gate)
@@ -281,7 +283,17 @@ internal sealed class TerminalSession : IDisposable
             _pending.Clear();
         }
 
-        var result = _engine.Feed(batch);
+        FeedResult result;
+        try
+        {
+            result = _engine.Feed(batch);
+        }
+        catch (Exception failure)
+        {
+            _faulted = true;
+            Faulted?.Invoke(failure.Message);
+            return;
+        }
 
         // Device-status and capability replies are the program's question answered; they go back up
         // the terminal as input, which is where the program is waiting for them.
