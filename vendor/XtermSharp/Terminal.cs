@@ -151,6 +151,12 @@ namespace XtermSharp {
 		public int SynchronizedFrames { get; private set; }
 
 		/// <summary>
+		/// Gets the number of lines that have left the top of the screen for the scrollback since
+		/// the terminal was created, counted whether or not the scrollback had room to keep them
+		/// </summary>
+		public int ScrolledIntoHistory { get; private set; }
+
+		/// <summary>
 		/// Gets the kitty keyboard protocol flags in effect, or 0 for the legacy encoding
 		/// </summary>
 		public int KeyboardProtocolFlags { get; private set; }
@@ -439,6 +445,10 @@ namespace XtermSharp {
 						buffer.YDisp = Math.Max (buffer.YDisp - 1, 0);
 					}
 				}
+
+				// A line left the screen either way. YBase stops growing once the scrollback is
+				// full, so it cannot be the count of them.
+				ScrolledIntoHistory++;
 			} else {
 				// scrollTop is non-zero which means no line will be going to the
 				// scrollback, instead we can just shift them in-place.

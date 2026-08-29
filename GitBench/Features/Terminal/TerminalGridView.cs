@@ -153,14 +153,20 @@ internal sealed class TerminalGridView : View
         // bottom edge for the one frame it takes to catch up.
         var visibleRows = Math.Min(size.Rows, (int)(bounds.Height / metrics.Height) + 1);
 
+        // How far back the reader has scrolled, in the grid's own coordinates: history sits at
+        // negative rows, so the top of the pane is row -offset and the screen slides down from
+        // there. The session clamps this to the history that exists, which is what keeps a row
+        // reference on the grid rather than off the top of it.
+        var offset = session.ScrollOffset;
+
         for (var row = 0; row < visibleRows; row++)
         {
             var top = bounds.Top - row * metrics.Height;
-            grid.CopyRow(row, _cells.AsSpan(0, size.Columns));
+            grid.CopyRow(row - offset, _cells.AsSpan(0, size.Columns));
             DrawRow(c, _cells.AsSpan(0, size.Columns), bounds.Left, top, metrics, z);
         }
 
-        DrawCursor(c, session.State.Cursor, bounds, metrics, z + 2);
+        DrawCursor(c, session.State.Cursor, offset, visibleRows, bounds, metrics, z + 2);
     }
 
     void DrawRow(ICanvas c, ReadOnlySpan<TerminalCell> cells, float left, float top, CellMetrics metrics, int z)
@@ -200,12 +206,27 @@ internal sealed class TerminalGridView : View
         }
     }
 
-    void DrawCursor(ICanvas c, TerminalCursor cursor, RectF bounds, CellMetrics metrics, int z)
+    /// <remarks>
+    /// The cursor is on the live screen, so scrolling back pushes it down the pane and eventually
+    /// off the bottom of it — where it is not drawn at all, rather than clamped to the last row and
+    /// left claiming a position the shell is not at.
+    /// </remarks>
+    void DrawCursor(
+        ICanvas c,
+        TerminalCursor cursor,
+        int offset,
+        int visibleRows,
+        RectF bounds,
+        CellMetrics metrics,
+        int z)
     {
         if (!cursor.Visible) return;
 
+        var screenRow = cursor.Row + offset;
+        if (screenRow >= visibleRows) return;
+
         var left = bounds.Left + cursor.Column * metrics.Advance;
-        var top = bounds.Top - cursor.Row * metrics.Height;
+        var top = bounds.Top - screenRow * metrics.Height;
 
         var rect = cursor.Shape switch
         {

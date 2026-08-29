@@ -26,6 +26,10 @@ public static class Scrolling
 {
     /// <summary>Pixels travelled per mouse-wheel notch.</summary>
     public const float WheelStep = 60f;
+
+    /// <summary>Lines travelled per mouse-wheel notch, where the content is counted in lines rather
+    /// than pixels — a terminal's grid, where a fraction of a row is not a place to stop.</summary>
+    public const float WheelLines = 3f;
 }
 
 /// <summary>Corner-radius scale in pixels for chips, badges, and cards.</summary>

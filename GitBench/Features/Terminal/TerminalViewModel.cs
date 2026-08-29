@@ -71,8 +71,41 @@ internal sealed class TerminalViewModel : ViewModelBase<TerminalPaneState>, ITer
     /// </summary>
     public TerminalModes Modes => LiveSession?.State.Modes ?? default;
 
-    /// <summary>Sends bytes to the shell as terminal input. Does nothing when there is no shell.</summary>
-    public void SendInput(ReadOnlySpan<byte> bytes) => LiveSession?.Write(bytes);
+    /// <summary>
+    /// Sends bytes to the shell as terminal input, and returns the viewport to the live screen.
+    /// Does nothing when there is no shell.
+    /// </summary>
+    /// <remarks>
+    /// Typing brings the screen back rather than the controller remembering to ask for it, so that
+    /// every path that reaches the shell — a key, a character, whatever pastes later — lands
+    /// somewhere the sender can see. Only what the user sends: the engine's own replies to a
+    /// program's questions go straight to the session, and a program asking the terminal its size
+    /// must not yank the reader's place in the history.
+    /// </remarks>
+    public void SendInput(ReadOnlySpan<byte> bytes)
+    {
+        if (LiveSession is not { } session) return;
+
+        session.Write(bytes);
+        if (session.ScrollToBottom()) Updated?.Invoke();
+    }
+
+    /// <summary>
+    /// Moves the viewport through the history. Still works once the shell has exited, because the
+    /// screen it left behind is exactly what a reader wants to scroll back through.
+    /// </summary>
+    public bool Scroll(int lines) => Moved(_session?.Scroll(lines));
+
+    /// <summary>Moves the viewport by whole screens.</summary>
+    public bool ScrollPages(int pages) => Moved(_session?.ScrollPages(pages));
+
+    bool Moved(bool? moved)
+    {
+        if (moved is not true) return false;
+
+        Updated?.Invoke();
+        return true;
+    }
 
     TerminalSession? LiveSession => _shellExited ? null : _session;
 

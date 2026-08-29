@@ -105,7 +105,9 @@ with `AppKeybindController` and every dialog's Esc handling. Also the Cmd/Ctrl+C
 copy-selection versus SIGINT.
 
 **Phase 5 — session and polish.** Resize and SIGWINCH, scrollback and wheel, selection and copy,
-window title, OSC 8 links, per-repo lifecycle, settings.
+window title, OSC 8 links, per-repo lifecycle, settings. Resize and scrollback are done — see
+Findings. What remains here is selection and copy, paste, the title, OSC 8, the per-repo lifecycle
+and the settings.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
@@ -176,6 +178,35 @@ than forced.
 **`Dispose` needs no cancellable I/O.** Killing the child runs the ordinary teardown, which ends the
 stream, which releases a reader blocked in a synchronous read. No overlapped reads, no `CancelIoEx`,
 and none of the handle-reuse races that come with cancelling a read from another thread.
+
+## Findings — the scrollback, as built
+
+The viewport's position lives on `TerminalSession`, not in the engine and not in the view. The engine
+has no scroll position on purpose — the same grid must not read differently depending on the UI — and
+the view cannot hold one either, because following the shell is a rule about *output arriving* and
+the session is the only thing that sees output arrive.
+
+**A reader who has scrolled back has to be carried by the output.** Each feed says how many lines
+left the top of the screen, and a viewport that is not at the bottom moves with them; leaving it
+alone would have the text crawling under someone who has not touched the wheel. This is what made
+`FeedResult.LinesScrolled` load-bearing, and measuring it exposed that the number was wrong: it was
+the growth of the history's depth, which stops the moment the history is full while lines keep
+leaving the screen. It is now its own counter in the vendored engine (patch 16).
+
+**The alternate screen needs no special case.** Its buffer has no scrollback at all, so the history
+is zero rows deep while a full-screen program is up and the ordinary clamp pins the viewport to the
+live screen. Leaving the alternate screen therefore lands at the bottom, which is where it belongs.
+
+**Typing comes back to the prompt**, and it is the view model that does it rather than the keyboard,
+so that every path to the shell lands somewhere the sender can see. The engine's own replies to a
+program's questions go straight to the session and deliberately do not: a program asking the terminal
+its size must not yank the screen out from under whoever is reading it.
+
+**The wheel is not the whole of the wheel.** Scrolling the history is what the wheel does on the
+normal screen with no mouse tracking on. The other two cases both belong with mouse reporting: a
+program that has asked for mouse events wants the wheel as an SGR report, and one on the alternate
+screen that has not wants the alternate-scroll convention (`?1007`, wheel as arrow keys) or nothing.
+Until that lands the wheel does nothing over a full-screen program, which is the visible gap.
 
 ## Risks
 

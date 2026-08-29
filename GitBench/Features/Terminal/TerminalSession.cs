@@ -34,6 +34,7 @@ internal sealed class TerminalSession : IDisposable
 
     bool _drainQueued;
     bool _disposed;
+    int _scrollOffset;
 
     TerminalSession(IPtySession pty, ITerminalEngine engine, IUiDispatcher dispatcher)
     {
@@ -97,6 +98,47 @@ internal sealed class TerminalSession : IDisposable
     public TerminalState State => _engine.State;
 
     /// <summary>
+    /// How many lines above the live screen the viewport is showing. Zero means it is following the
+    /// shell, which is where it sits unless the user has scrolled back.
+    /// </summary>
+    /// <remarks>
+    /// The scroll position lives here rather than in the engine, which deliberately has none: where
+    /// the user has scrolled to is a property of this screen, not of the bytes, and an engine that
+    /// held it would make the same grid read differently depending on the UI. It lives here rather
+    /// than in the view because following the shell is a rule about output arriving, and this is the
+    /// only place that sees output arrive.
+    /// </remarks>
+    public int ScrollOffset => _scrollOffset;
+
+    /// <summary>
+    /// Moves the viewport through the history. Positive goes back towards the oldest line, negative
+    /// forwards towards the shell. Returns whether it actually moved, so a caller can leave a wheel
+    /// event to whatever scrolls behind it rather than swallowing one that did nothing.
+    /// </summary>
+    public bool Scroll(int lines)
+    {
+        if (_disposed) return false;
+
+        var target = Math.Clamp((long)_scrollOffset + lines, 0, Grid.ScrollbackRows);
+        if (target == _scrollOffset) return false;
+
+        _scrollOffset = (int)target;
+        return true;
+    }
+
+    /// <summary>Moves the viewport by whole screens, one line short so the reader keeps a landmark.</summary>
+    public bool ScrollPages(int pages) => Scroll(pages * Math.Max(1, Grid.Size.Rows - 1));
+
+    /// <summary>Returns the viewport to the live screen, as typing does.</summary>
+    public bool ScrollToBottom()
+    {
+        if (_scrollOffset == 0) return false;
+
+        _scrollOffset = 0;
+        return true;
+    }
+
+    /// <summary>
     /// Completes when the shell is gone, saying whether it finished on its own or the session ended
     /// it. Not the end of the screen: output arrives after this, and the reader keeps draining until
     /// the stream itself ends.
@@ -146,6 +188,7 @@ internal sealed class TerminalSession : IDisposable
         if (_disposed || size == Grid.Size) return;
 
         _engine.Resize(size);
+        ClampScroll();
 
         try
         {
@@ -244,6 +287,32 @@ internal sealed class TerminalSession : IDisposable
         // the terminal as input, which is where the program is waiting for them.
         if (result.HasResponse) Write(result.Response.Span);
 
+        FollowOutput(result.LinesScrolled);
+
         Updated?.Invoke();
     }
+
+    /// <summary>
+    /// Keeps whatever the reader is looking at still while the shell writes underneath it. Output
+    /// pushes the screen's contents up past the viewport, so a scroll position left alone would have
+    /// the text crawling under a reader who has not touched the wheel.
+    /// </summary>
+    /// <remarks>
+    /// Only while scrolled back. At the bottom the viewport follows the shell, which is the whole
+    /// point of being at the bottom.
+    /// </remarks>
+    void FollowOutput(int linesScrolled)
+    {
+        if (_scrollOffset > 0 && linesScrolled > 0)
+            _scrollOffset = (int)Math.Min((long)_scrollOffset + linesScrolled, int.MaxValue);
+
+        ClampScroll();
+    }
+
+    /// <summary>
+    /// Pulls the scroll position back into the history that exists. The history shrinks under it in
+    /// more than one way — the alternate screen has none at all, a resize reflows it — and every one
+    /// of them ends in a feed or a resize.
+    /// </summary>
+    void ClampScroll() => _scrollOffset = Math.Clamp(_scrollOffset, 0, Grid.ScrollbackRows);
 }

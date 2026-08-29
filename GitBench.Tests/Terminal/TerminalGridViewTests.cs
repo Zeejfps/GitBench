@@ -81,6 +81,40 @@ public class TerminalGridViewTests
     }
 
     [Fact]
+    public void ScrolledBack_TheHistoryIsDrawnAboveTheLiveScreen()
+    {
+        // Fifty lines into a thirty-seven-row pane: rows 0 to 36 hold l13 to l49 and the thirteen
+        // before them are history. One line back puts l12 at the top and pushes l49 off the bottom.
+        var (harness, _) = Draw(Lines(50), session => session.Scroll(1));
+
+        Assert.Equal(Height, Row(harness, "l12").Origin.Y);
+        Assert.Equal(Height - 36 * CellHeight, Row(harness, "l48").Origin.Y);
+        Assert.DoesNotContain(harness.Canvas.GlyphRuns, run => run.Text.StartsWith("l49"));
+    }
+
+    [Fact]
+    public void FollowingTheShell_TheLiveScreenStartsAtTheTop()
+    {
+        var (harness, _) = Draw(Lines(50));
+
+        Assert.Equal(Height, Row(harness, "l13").Origin.Y);
+        Assert.Contains(harness.Canvas.GlyphRuns, run => run.Text.StartsWith("l49"));
+    }
+
+    [Fact]
+    public void ScrolledPastTheCursor_TheCursorIsNotDrawn()
+    {
+        // The cursor is on the live screen, which one line of scrollback pushes off the bottom of
+        // the pane. Drawing it clamped to the last row would have it claiming a position the shell
+        // is not at, on a line the shell did not write.
+        var (scrolled, _) = Draw(Lines(50), session => session.Scroll(1));
+        var (following, _) = Draw(Lines(50));
+
+        Assert.DoesNotContain(scrolled.Canvas.Rects, IsTheCursor);
+        Assert.Contains(following.Canvas.Rects, IsTheCursor);
+    }
+
+    [Fact]
     public void TheViewportIsReportedInCells_NotPixels()
     {
         var (_, reported) = Draw(Vt("x"));
@@ -114,6 +148,17 @@ public class TerminalGridViewTests
     private static RecordedGlyphRun Row(GuiTestHarness harness, string text) =>
         harness.Canvas.GlyphRuns.First(r => r.Text.StartsWith(text));
 
+    /// <summary>Numbered lines, so a row's identity is readable in a failure message.</summary>
+    private static byte[] Lines(int count) =>
+        Vt(string.Join("\r\n", Enumerable.Range(0, count).Select(line => $"l{line}")));
+
+    /// <summary>
+    /// The cursor is the one rectangle painted in the cursor colour: a cell's background rectangle
+    /// is only drawn when it differs from the pane's, and no cell here carries one at all.
+    /// </summary>
+    private static bool IsTheCursor(RecordedRect rect) =>
+        rect.Inputs.Style.BackgroundColor == ThemeStyles.Dark.Terminal.Cursor;
+
     private static byte[] Vt(string text) => Encoding.UTF8.GetBytes(text);
 
     /// <summary>A CSI sequence and the text after it, spelled out rather than embedded: an
@@ -125,7 +170,9 @@ public class TerminalGridViewTests
     /// Feeds <paramref name="output"/> through a session and draws the screen it produces, handing
     /// back the canvas that captured it and the viewport the view reported.
     /// </summary>
-    private static (GuiTestHarness Harness, TerminalSize? Reported) Draw(byte[] output)
+    private static (GuiTestHarness Harness, TerminalSize? Reported) Draw(
+        byte[] output,
+        Action<TerminalSession>? scrolled = null)
     {
         var dispatcher = new QueueDispatcher();
         using var session = TerminalSession.Start(
@@ -138,6 +185,8 @@ public class TerminalGridViewTests
         // every batch has been posted — and pumping now feeds all of them.
         Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
         dispatcher.Pump();
+
+        scrolled?.Invoke(session);
 
         TerminalSize? reported = null;
         var harness = Harness(view =>

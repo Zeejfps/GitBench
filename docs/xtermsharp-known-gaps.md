@@ -2,7 +2,7 @@
 
 `dotnet test` on 2026-08-28, before any gap was fixed: **254 tests, 196 pass, 58 fail.**
 
-Fourteen of the fifteen gaps are now fixed, across thirteen patches applied in five passes. The
+Fifteen of the sixteen gaps are now fixed, across fourteen patches applied in six passes. The
 suite stands at **276 tests, 275 pass, 1 fail**, and the one failure is not a gap:
 
 - `Replay_ProducesTheGoldenScreens(claude)` — no golden. It must be hand-audited against the bytes
@@ -373,6 +373,17 @@ caller asking for a different depth gets 1000 without being told.
 **Fixed by patch 15.** `TerminalOptions.Scrollback` is settable and the adapter passes
 `TerminalSetup.ScrollbackLines` through; a negative value is rejected at the adapter"'s constructor,
 and zero is honoured rather than silently promoted. The new `ScrollbackDepthSpec` (5 cases) passes.
+
+### 16. Lines stop being counted once the scrollback is full — FIXED
+
+`Terminal.cs:429` increments `Buffer.YBase` only when `Lines.IsFull` is false; a full buffer recycles
+its oldest line in place instead. `YBase` is therefore the *depth* of the history, and there was no
+record of how many lines had entered it — the two agree only until the history fills, and diverge by
+one per line after that. `FeedResult.LinesScrolled` was a diff of `YBase`, so it silently reported
+nothing scrolling for the rest of a long session.
+
+**Fixed by patch 16.** `Terminal.ScrolledIntoHistory` counts lines leaving the top of the screen on
+both paths and the adapter diffs that instead. `DamageSpec` pins it at a scrollback depth of two.
 
 
 ## Configuration, not a defect

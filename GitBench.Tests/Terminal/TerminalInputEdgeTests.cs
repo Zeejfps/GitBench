@@ -1095,6 +1095,25 @@ public class TerminalInputControllerEdgeTests
             Writes++;
             foreach (var b in bytes) _written.Add(b);
         }
+
+        /// <summary>Lines asked for, and whether the pane had anywhere to go with them.</summary>
+        public List<int> Scrolls { get; } = [];
+
+        public List<int> PageScrolls { get; } = [];
+
+        public bool CanScroll { get; set; }
+
+        public bool Scroll(int lines)
+        {
+            Scrolls.Add(lines);
+            return CanScroll;
+        }
+
+        public bool ScrollPages(int pages)
+        {
+            PageScrolls.Add(pages);
+            return CanScroll;
+        }
     }
 
     /// <summary>Stands in for the application's keybinding controller, recording what reached it.</summary>

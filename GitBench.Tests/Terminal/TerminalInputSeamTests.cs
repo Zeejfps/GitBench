@@ -1389,6 +1389,10 @@ internal sealed class SeamTerminal : ITerminalInput
     public void Clear() => _sent.Clear();
 
     public void SendInput(ReadOnlySpan<byte> bytes) => _sent.AddRange(bytes);
+
+    public bool Scroll(int lines) => false;
+
+    public bool ScrollPages(int pages) => false;
 }
 
 /// <summary>A live session behind the narrow input interface, for the round-trip test.</summary>
@@ -1403,6 +1407,10 @@ internal sealed class LiveTerminal : ITerminalInput
     public TerminalModes Modes => _session.State.Modes;
 
     public void SendInput(ReadOnlySpan<byte> bytes) => _session.Write(bytes);
+
+    public bool Scroll(int lines) => _session.Scroll(lines);
+
+    public bool ScrollPages(int pages) => _session.ScrollPages(pages);
 }
 
 /// <summary>

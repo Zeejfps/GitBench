@@ -49,6 +49,128 @@ public class TerminalInputControllerTests
         Assert.True(pane.App.SawMousePress, "The click never reached the rest of the pane.");
     }
 
+    // ---- the wheel and the page keys, which move the pane and not the shell ----
+
+    [Fact]
+    public void TheWheel_ScrollsTheHistoryWithoutTheKeyboard()
+    {
+        // Hover, not focus: the wheel belongs to whatever is under the pointer, which is how the
+        // rest of the window behaves.
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+        Assert.Empty(pane.Terminal.Written);
+    }
+
+    [Fact]
+    public void TheWheelTheOtherWay_ComesBackTowardsTheShell()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)));
+        pane.Hover();
+        pane.Harness.Scroll(0f, 2f);
+
+        pane.Harness.Scroll(0f, -1f);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void AGestureOfFractionsOfALine_IsNotRoundedAway()
+    {
+        // A trackpad reports one swipe as a stream of small deltas. Truncating each on its own would
+        // throw the whole gesture away and the pane would sit still under a moving finger.
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)));
+        pane.Hover();
+
+        for (var event_ = 0; event_ < 5; event_++)
+            pane.Harness.Scroll(0f, 0.2f);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void AWheelOverAScreenWithNoHistory_IsLeftToWhateverScrollsBehindIt()
+    {
+        using var pane = Pane.Create();
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.True(pane.App.SawWheel, "The pane swallowed a wheel event it did nothing with.");
+    }
+
+    [Fact]
+    public void TheWheelOverSomewhereElse_IsNotThePanesToTake()
+    {
+        using var pane = Pane.Focused(TestTerminal.Live(Lines(50)));
+        pane.Harness.MoveTo(-50f, -50f);
+
+        pane.Harness.Scroll(0f, 1f);
+
+        Assert.Equal(0, pane.Terminal.ScrollOffset);
+    }
+
+    [Theory]
+    [InlineData(KeyboardKey.PageUp, 23)]
+    [InlineData(KeyboardKey.PageDown, 0)]
+    public void ShiftWithAPageKey_MovesTheHistoryByAScreenInsteadOfReachingTheShell(
+        KeyboardKey key,
+        int expected)
+    {
+        // Twenty-four rows, so a page is twenty-three and the reader keeps one line of overlap.
+        using var pane = Pane.Focused(TestTerminal.Live(Lines(50)));
+
+        var claim = pane.Press(key, InputModifiers.Shift);
+
+        Assert.Equal(expected, pane.Terminal.ScrollOffset);
+        Assert.Empty(pane.Terminal.Written);
+        Assert.Equal(KeyClaim.Command, claim);
+    }
+
+    [Fact]
+    public void ShiftPageUpAtTheTopOfTheHistory_IsStillNotTheShells()
+    {
+        // Consumed whether or not it moved. Falling through at the top would send the shell a
+        // sequence the user has spent the last four presses not sending it.
+        using var pane = Pane.Focused(TestTerminal.Live(Lines(50)));
+        pane.Press(KeyboardKey.PageUp, InputModifiers.Shift);
+        pane.Press(KeyboardKey.PageUp, InputModifiers.Shift);
+
+        var claim = pane.Press(KeyboardKey.PageUp, InputModifiers.Shift);
+
+        Assert.Empty(pane.Terminal.Written);
+        Assert.Equal(KeyClaim.Command, claim);
+    }
+
+    [Fact]
+    public void APageKeyWithoutShift_IsStillTheShells()
+    {
+        using var pane = Pane.Focused(TestTerminal.Live(Lines(50)));
+
+        pane.Press(KeyboardKey.PageUp);
+
+        Assert.Equal(Csi + "5~", pane.Terminal.Text);
+        Assert.Equal(0, pane.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void ScrollingBackWithNoShellLeft_StillWorks()
+    {
+        // The history outlives the process that printed it, and reading back through what a command
+        // printed is most wanted once it has finished printing it.
+        using var pane = Pane.Create(TestTerminal.Exited(Lines(50)));
+        pane.Hover();
+        pane.Harness.Input.StealFocus(pane.Controller);
+
+        pane.Harness.Scroll(0f, 1f);
+        pane.Press(KeyboardKey.PageUp, InputModifiers.Shift);
+
+        Assert.Equal(3 + 23, pane.Terminal.ScrollOffset);
+    }
+
     // ---- keys that become bytes ----
 
     [Theory]
@@ -275,6 +397,10 @@ public class TerminalInputControllerTests
 
     static byte[] Output(string sequence) => Encoding.ASCII.GetBytes(sequence);
 
+    /// <summary>Numbered lines, enough of them to leave a history behind a twenty-four-row screen.</summary>
+    static byte[] Lines(int count) =>
+        Encoding.ASCII.GetBytes(string.Join("\r\n", Enumerable.Range(0, count).Select(line => $"l{line}")));
+
     /// <summary>
     /// A mounted terminal pane: the grid view, its input controller, a recording shell behind it,
     /// and a stand-in for the application's keybindings.
@@ -385,6 +511,12 @@ public class TerminalInputControllerTests
 
         public bool SawMousePress { get; private set; }
 
+        /// <summary>
+        /// Only what bubbled. Every event passes this controller on the way down as well, so
+        /// recording the capture pass would say "the pane declined it" about every event there is.
+        /// </summary>
+        public bool SawWheel { get; private set; }
+
         public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
         {
             if (e.State == InputState.Pressed) Keys.Add((e.Key, e.Modifiers));
@@ -393,6 +525,11 @@ public class TerminalInputControllerTests
         public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
         {
             if (e.State == InputState.Pressed) SawMousePress = true;
+        }
+
+        public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
+        {
+            if (e.Phase == EventPhase.Bubbling) SawWheel = true;
         }
     }
 }
@@ -434,6 +571,39 @@ public class TerminalViewModelInputTests
     }
 
     [Fact]
+    public void TypingWhileScrolledBack_ReturnsToTheLiveScreen()
+    {
+        // A keystroke the sender cannot see land is worse than losing their place in the history,
+        // so the pane comes back to the prompt on its own rather than the controller remembering to
+        // ask it to.
+        var launch = new RecordingLaunch();
+        using var vm = Started(launch, out var dispatcher);
+        Print(launch, dispatcher, 50);
+        Assert.True(vm.Scroll(5), "There was no history to scroll back through.");
+
+        vm.SendInput("q"u8);
+
+        Assert.False(vm.Scroll(-1), "The pane was still somewhere back in the history.");
+    }
+
+    [Fact]
+    public void AProgramsOwnReplies_DoNotMoveTheReadersPlaceInTheHistory()
+    {
+        // The engine answers a program's questions up the same terminal, and a program asking what
+        // size its terminal is must not yank the screen out from under whoever is reading it.
+        var launch = new RecordingLaunch();
+        using var vm = Started(launch, out var dispatcher);
+        Print(launch, dispatcher, 50);
+        vm.Scroll(5);
+
+        // DSR: the engine replies with the cursor position, through the session and not through
+        // the seam the keyboard uses.
+        Emit(launch, dispatcher, "\u001b[6n");
+
+        Assert.True(vm.Scroll(-1), "The reply moved the pane back to the live screen.");
+    }
+
+    [Fact]
     public void AfterDisposal_TheViewModelStopsAcceptingInput()
     {
         var launch = new RecordingLaunch();
@@ -459,6 +629,20 @@ public class TerminalViewModelInputTests
         return vm;
     }
 
+    /// <summary>Prints numbered lines into the shell's terminal and lets the engine take them.</summary>
+    static void Print(RecordingLaunch launch, QueueDispatcher dispatcher, int lines) =>
+        Emit(
+            launch,
+            dispatcher,
+            string.Join("\r\n", Enumerable.Range(0, lines).Select(line => $"l{line}")));
+
+    static void Emit(RecordingLaunch launch, QueueDispatcher dispatcher, string output)
+    {
+        launch.Pty.Emit(output);
+        Assert.True(dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The output never arrived.");
+        dispatcher.Pump();
+    }
+
     /// <summary>A launch over a pseudo-terminal that stays open, which is what "a shell is running"
     /// means. A RecordingPty with no output ends its stream on the first read, so the session would
     /// report its shell gone before the test had typed anything.</summary>
@@ -482,6 +666,8 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
     readonly RecordingPty _pty;
     readonly TerminalSession? _session;
     readonly int _baseline;
+
+    bool _exited;
 
     TestTerminal(RecordingPty pty, TerminalSession? session)
     {
@@ -515,11 +701,27 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
     /// <summary>A pane with no shell: either still starting, or failed to start.</summary>
     public static TestTerminal NotStarted() => new(new RecordingPty([]), null);
 
-    public bool IsAcceptingInput => _session != null;
+    /// <summary>A shell that has printed <paramref name="output"/> and then gone, leaving its screen
+    /// and its history behind — which is still somewhere a reader wants to scroll.</summary>
+    public static TestTerminal Exited(byte[] output)
+    {
+        var terminal = Live(output);
+        terminal._exited = true;
+        return terminal;
+    }
+
+    public bool IsAcceptingInput => _session != null && !_exited;
 
     public TerminalModes Modes => _session?.State.Modes ?? default;
 
     public void SendInput(ReadOnlySpan<byte> bytes) => _session?.Write(bytes);
+
+    public bool Scroll(int lines) => _session?.Scroll(lines) ?? false;
+
+    public bool ScrollPages(int pages) => _session?.ScrollPages(pages) ?? false;
+
+    /// <summary>Where the viewport is, so a wheel test can assert on the pane and not on the wheel.</summary>
+    public int ScrollOffset => _session?.ScrollOffset ?? 0;
 
     /// <summary>What the keyboard has sent to the shell.</summary>
     public byte[] Written => _pty.Written[_baseline..];

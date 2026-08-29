@@ -42,4 +42,9 @@ public static class EngineUnderTest
 
     public static ITerminalEngine Create(TerminalSize size) =>
         TerminalEngines.Create(TerminalEngines.XtermSharp, size);
+
+    /// <summary>At a scrollback depth of the case's own choosing, for the cases that are about the
+    /// depth — filling a shallow history is how a test reaches the behaviour of a full one.</summary>
+    public static ITerminalEngine Create(TerminalSetup setup) =>
+        TerminalEngines.Create(TerminalEngines.XtermSharp, setup);
 }

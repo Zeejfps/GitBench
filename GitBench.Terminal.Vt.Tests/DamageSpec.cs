@@ -114,4 +114,23 @@ public class DamageSpec
 
         Assert.Equal(0, result.LinesScrolled);
     }
+
+    [Fact]
+    public void OnceTheHistoryIsFull_LinesStillCountAsScrolled()
+    {
+        // The count is what a reader scrolled back through the history follows to stay on the line
+        // they were reading. A full history stops growing and drops its oldest line instead, so the
+        // depth it reports is not the count and a reader following that would drift a line per line
+        // of output for the rest of the session.
+        using var engine = EngineUnderTest.Create(new TerminalSetup(new TerminalSize(20, 3), 2));
+
+        var scrolled = 0;
+        for (var line = 0; line < 10; line++)
+            scrolled += engine.Feed(line == 0 ? "l0" : $"\r\nl{line}").LinesScrolled;
+
+        // Ten lines into a three-row screen: the first three fill it and the other seven push a
+        // line off the top each, of which the two-line history can only still be holding two.
+        Assert.Equal(7, scrolled);
+        Assert.Equal(2, engine.Grid.ScrollbackRows);
+    }
 }

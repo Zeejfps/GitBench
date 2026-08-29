@@ -367,3 +367,23 @@ cell. That file is outside this patch.
 and `Rows` beside it already work. `Buffer.getCorrectBufferLength` reads it on `Clear` and on
 `Resize` as well as at construction, so a later change takes effect at the next one rather than
 being silently ignored.
+
+---
+
+## Patch 16 — lines that leave the screen are counted (gap 16)
+
+`Buffer.YBase` was the only record of a line leaving the top of the screen, and it stops moving once
+the scrollback is full: `Terminal.Scroll` checks `Lines.IsFull` and, when it is, recycles the oldest
+line in place rather than incrementing `YBase`. The count and the depth are the same number only
+until the history fills up, and after that they diverge by one per line for the rest of the session.
+
+`Terminal` gained `ScrolledIntoHistory`, `{ get; private set; }` beside `SynchronizedFrames`,
+incremented once at the end of the `ScrollTop == 0` branch of `Scroll` — the branch that is exactly
+"a line goes to the scrollback", reached on both the trimmed and the untrimmed path. `Setup ()`
+leaves it alone on RIS for the same reason `SynchronizedFrames` is left alone: a caller diffing it
+across a feed must never see a negative.
+
+`FeedResult.LinesScrolled` is the adapter's diff of this counter, where it was a diff of
+`Buffer.YBase`. What reads it is the pane's scroll position, which follows the count to keep a
+reader on the line they were reading while the shell writes underneath them; following the depth
+instead had the text crawling under them once the history was full.

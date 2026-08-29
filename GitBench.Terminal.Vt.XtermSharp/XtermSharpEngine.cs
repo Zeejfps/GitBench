@@ -54,7 +54,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
             feedBuffer = new byte[bytes.Length];
         bytes.CopyTo(feedBuffer);
 
-        var historyBefore = terminal.Buffer.YBase;
+        var historyBefore = terminal.ScrolledIntoHistory;
         var framesBefore = terminal.SynchronizedFrames;
         terminal.ClearUpdateRange();
         terminal.Feed(feedBuffer, bytes.Length);
@@ -67,7 +67,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
             Response: responses.Drain(),
             FramesCompleted: terminal.SynchronizedFrames - framesBefore,
             FramePending: terminal.SynchronizedUpdate,
-            LinesScrolled: Math.Max(terminal.Buffer.YBase - historyBefore, 0));
+            LinesScrolled: terminal.ScrolledIntoHistory - historyBefore);
     }
 
     public void Resize(TerminalSize size) => terminal.Resize(size.Columns, size.Rows);

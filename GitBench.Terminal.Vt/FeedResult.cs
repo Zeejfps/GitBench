@@ -19,9 +19,17 @@ public readonly record struct RowSpan(int First, int Last)
 /// What one <see cref="ITerminalEngine.Feed"/> produced besides the mutated grid.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Returned rather than raised as events. A read pump needs to know whether to repaint and whether
 /// to write back, and both answers belong to the call that produced them; it also means a test can
 /// observe a device-status reply without standing up a fake delegate to catch it.
+/// </para>
+/// <para>
+/// <see cref="LinesScrolled"/> counts the lines that left the top of the screen for the scrollback,
+/// which is not the same as the growth of <see cref="ITerminalGrid.ScrollbackRows"/>: once the
+/// history is at its configured depth it stops growing and the oldest line is dropped instead, and
+/// a reader scrolled up needs to know the content moved under it either way.
+/// </para>
 /// </remarks>
 public readonly record struct FeedResult(
     RowSpan Damage,
