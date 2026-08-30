@@ -11,7 +11,7 @@ namespace GitBench.Features.Diff;
 
 // Which body the diff pane shows. Most render states draw as a patch; a conflicted file and an
 // image blob each take over the pane with their own view.
-internal enum DiffBodyKind { Diff, Conflict, Image }
+internal enum DiffBodyKind { Diff, Conflict, Image, Markdown }
 
 /// <summary>
 /// The diff body itself: a virtualized, scrollable view of a <see cref="DiffResult"/> with
@@ -53,7 +53,7 @@ internal sealed record DiffView : Widget
         // they're skipped here. Anchored on the content view so the subscription releases on unmount.
         content.Bind(vm.RenderState, state =>
         {
-            if (state is not (DiffRenderState.Conflict or DiffRenderState.Image))
+            if (state is not (DiffRenderState.Conflict or DiffRenderState.Image or DiffRenderState.Markdown))
                 content.SetRenderState(state);
         });
         content.Bind(vm.WorkingTreeHunkStates, content.SetWorkingTreeHunkStates);
@@ -78,6 +78,7 @@ internal sealed record DiffView : Widget
                     {
                         DiffRenderState.Conflict => DiffBodyKind.Conflict,
                         DiffRenderState.Image => DiffBodyKind.Image,
+                        DiffRenderState.Markdown => DiffBodyKind.Markdown,
                         _ => DiffBodyKind.Diff,
                     }),
                     KeepAlive = true,
@@ -85,6 +86,7 @@ internal sealed record DiffView : Widget
                     {
                         DiffBodyKind.Conflict => new ConflictResolveView(),
                         DiffBodyKind.Image => new ImagePreviewView(),
+                        DiffBodyKind.Markdown => new MarkdownPreviewView(),
                         _ => diffBody,
                     },
                 },

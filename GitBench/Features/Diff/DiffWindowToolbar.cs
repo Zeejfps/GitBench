@@ -25,6 +25,8 @@ internal sealed class DiffWindowToolbar : ContainerView
 
     private readonly State<DiffSide?> _side = new(null);
     private readonly State<bool> _fullFileActive = new(false);
+    private readonly State<bool> _previewActive = new(false);
+    private readonly State<bool> _canPreview = new(false);
     private readonly State<LfsBadge> _lfsStatus = new(LfsBadge.None);
     private readonly TextView _title;
     private readonly ILocalizationService _loc;
@@ -33,6 +35,7 @@ internal sealed class DiffWindowToolbar : ContainerView
     private Action? _onStageFile;
     private Action? _onUnstageFile;
     private Action? _onToggleFullFile;
+    private Action? _onTogglePreview;
 
     public DiffWindowToolbar(Context ctx)
     {
@@ -66,6 +69,7 @@ internal sealed class DiffWindowToolbar : ContainerView
                             {
                                 new FlexItem { Grow = 1, Child = _title },
                                 new LfsBadgeWidget { Status = _lfsStatus }.BuildView(ctx),
+                                BuildPreviewToggleButton(ctx, input, theme),
                                 BuildFullFileToggleButton(ctx, input, theme),
                                 BuildStageButton(ctx, input, theme),
                             },
@@ -90,11 +94,14 @@ internal sealed class DiffWindowToolbar : ContainerView
         _onStageFile = vm.StageFile;
         _onUnstageFile = vm.UnstageFile;
         _onToggleFullFile = vm.ToggleFullFile;
+        _onTogglePreview = vm.TogglePreview;
         if (ReferenceEquals(_vm, vm)) return;
         _vm = vm;
         this.Bind(vm.LfsStatus, _lfsStatus.Set);
         this.Bind(vm.CurrentSide, s => _side.Value = s);
         this.Bind(vm.Mode, m => _fullFileActive.Value = m == DiffViewMode.FullFile);
+        this.Bind(vm.Preview, p => _previewActive.Value = p);
+        this.Bind(vm.CanPreview, c => _canPreview.Value = c);
     }
 
     // Mirrors the embedded header's full-file toggle. The pop-out window opens in Diff mode
@@ -119,6 +126,31 @@ internal sealed class DiffWindowToolbar : ContainerView
                 : theme.Styles.Value.DiffView.HeaderTitleIdle);
 
         var btn = new RectView { Children = { icon } };
+        btn.UseController(input, () => new KbmController(state));
+        return btn;
+    }
+
+    private View BuildPreviewToggleButton(Context ctx, InputSystem input, IThemeService<ThemeStyles> theme)
+    {
+        var state = new ButtonState(new Command(() => _onTogglePreview?.Invoke()));
+
+        var icon = new TextView(ctx.Canvas)
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = FontSize.Body,
+            Text = LucideIcons.BookOpen,
+            VerticalTextAlignment = TextAlignment.Center,
+            HorizontalTextAlignment = TextAlignment.Center,
+            Width = 16f,
+        };
+        icon.BindTextColor(() => _previewActive.Value
+            ? theme.Styles.Value.DiffView.HeaderToggleActive
+            : state.Hovered.Value
+                ? theme.Styles.Value.DiffView.HeaderTitleHover
+                : theme.Styles.Value.DiffView.HeaderTitleIdle);
+
+        var btn = new RectView { Children = { icon } };
+        btn.BindIsVisible(() => _canPreview.Value);
         btn.UseController(input, () => new KbmController(state));
         return btn;
     }

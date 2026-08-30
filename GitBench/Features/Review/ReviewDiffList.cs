@@ -82,6 +82,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private const float ViewedZoneWidth = 96f;
     // The full-file toggle beside it (a lone glyph), shown once the card's diff is loaded.
     private const float FullFileZoneWidth = 24f;
+    private const float PreviewZoneWidth = 24f;
     // Sections within this margin of the viewport get their diffs loaded ahead of arrival.
     private const float LoadMarginPx = 1600f;
     // Ceiling on an image body so a tall asset can't push every other file off the surface; the
@@ -110,7 +111,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     };
 
     // Render states that take over a card's body with their own view instead of diff rows.
-    private enum BodyViewKind { None, Conflict, Image }
+    private enum BodyViewKind { None, Conflict, Image, Markdown }
 
     // One file's slice of the flattened surface: the header row (gap band + header) plus its body
     // rows — the built diff rows once loaded, a single message row (loading / binary / error /
@@ -440,10 +441,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // A conflict panel measures itself; an image is sized from the blob and the card width, since
     // the preview fills whatever slot it is given rather than asking for one.
-    private float BodyViewHeight(Section s)
-        => s.Render is DiffRenderState.Image image
-            ? ImagePreviewView.MeasureHeight(image.Preview, CardViewportWidth(), MaxImageHeight)
-            : s.BodyView!.MeasureHeight(ConflictPanelWidth(s.BodyView));
+    private float BodyViewHeight(Section s) => s.Render switch
+    {
+        DiffRenderState.Image image =>
+            ImagePreviewView.MeasureHeight(image.Preview, CardViewportWidth(), MaxImageHeight),
+        DiffRenderState.Markdown => s.BodyView!.MeasureHeight(CardViewportWidth()),
+        _ => s.BodyView!.MeasureHeight(ConflictPanelWidth(s.BodyView)),
+    };
 
     private float ConflictPanelWidth(View view)
         => Math.Max(CardViewportWidth(), view.MeasureWidth());
@@ -566,6 +570,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         {
             DiffRenderState.Conflict => BodyViewKind.Conflict,
             DiffRenderState.Image => BodyViewKind.Image,
+            DiffRenderState.Markdown => BodyViewKind.Markdown,
             _ => BodyViewKind.None,
         };
         if (kind != s.BodyKind) RemoveBodyView(s);
@@ -573,9 +578,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
         var scope = new Context(_ctx);
         scope.AddService(s.Diff.Diff);
-        var view = kind == BodyViewKind.Conflict
-            ? new ConflictResolveView().BuildView(scope)
-            : new ImagePreviewView().BuildView(scope);
+        var view = kind switch
+        {
+            BodyViewKind.Conflict => new ConflictResolveView().BuildView(scope),
+            BodyViewKind.Markdown => new MarkdownPreviewBody().BuildView(scope),
+            _ => new ImagePreviewView().BuildView(scope),
+        };
         view.ZIndex = 50;
         s.BodyView = view;
         s.BodyKind = kind;
@@ -607,7 +615,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             child.IsVisible = !s.Folded;
             if (s.Folded) return;
             var viewport = CardViewportWidth();
-            var width = s.BodyKind == BodyViewKind.Image ? viewport : ConflictPanelWidth(child);
+            var width = s.BodyKind is BodyViewKind.Image or BodyViewKind.Markdown
+                ? viewport
+                : ConflictPanelWidth(child);
             var height = BodyViewHeight(s);
             if (width > _naturalWidth) _naturalWidth = width;
             child.LeftConstraint = CardLeft() - (width > viewport ? _scrollX : 0f);
@@ -728,6 +738,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             _vm.ToggleFileViewed(s.File.Path);
         else if (IsInFullFileZone(point) && HasFullFileToggle(s))
             ToggleFullFile(s);
+        else if (IsInPreviewZone(point) && HasPreviewToggle(s))
+            TogglePreview(s);
         else
             SetFolded(s, true);
         _vm.ReportActiveFile(s.File.Path);
@@ -745,11 +757,22 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         : point.X < CardRight() - ViewedZoneWidth
             && point.X >= CardRight() - ViewedZoneWidth - FullFileZoneWidth;
 
+    private bool IsInPreviewZone(PointF point) => IsRtl
+        ? point.X > CardLeft() + ViewedZoneWidth + FullFileZoneWidth
+            && point.X <= CardLeft() + ViewedZoneWidth + FullFileZoneWidth + PreviewZoneWidth
+        : point.X < CardRight() - ViewedZoneWidth - FullFileZoneWidth
+            && point.X >= CardRight() - ViewedZoneWidth - FullFileZoneWidth - PreviewZoneWidth;
+
     // The header toggle needs a loaded, unfolded card: an unloaded section has no DiffViewModel to
     // flip, and a folded one has no visible body for the mode to mean anything.
     private static bool HasFullFileToggle(Section s) => s.Diff != null && !s.Folded;
 
+    private static bool HasPreviewToggle(Section s) =>
+        s.Diff != null && !s.Folded && MarkdownDiffPreview.IsPreviewablePath(s.File.Path);
+
     private static void ToggleFullFile(Section s) => s.Diff?.Diff.ToggleFullFile();
+
+    private static void TogglePreview(Section s) => s.Diff?.Diff.TogglePreview();
 
     // ---- hunk actions ----
 
@@ -868,6 +891,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 _vm.ToggleFileViewed(s.File.Path);
             else if (IsInFullFileZone(point) && HasFullFileToggle(s))
                 ToggleFullFile(s);
+            else if (IsInPreviewZone(point) && HasPreviewToggle(s))
+                TogglePreview(s);
             else
                 SetFolded(s, !s.Folded);
             _vm.ReportActiveFile(s.File.Path);
@@ -1273,7 +1298,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
         var zoneLeft = cardLeft + cardWidth - ViewedZoneWidth;
         var showFullFileToggle = HasFullFileToggle(s);
-        var pathRight = showFullFileToggle ? zoneLeft - FullFileZoneWidth : zoneLeft;
+        var showPreviewToggle = HasPreviewToggle(s);
+        var previewLeft = zoneLeft - FullFileZoneWidth - PreviewZoneWidth;
+        var pathRight = showPreviewToggle
+            ? previewLeft
+            : showFullFileToggle ? zoneLeft - FullFileZoneWidth : zoneLeft;
         var textWidth = Math.Max(0f, pathRight - x - HeaderPaddingX);
         if (textWidth > 0)
         {
@@ -1300,6 +1329,20 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             {
                 Position = Place(band, zoneLeft - FullFileZoneWidth, FullFileZoneWidth),
                 Text = LucideIcons.FileText,
+                Style = HeaderGlyphStyle,
+                ZIndex = z + 2,
+            });
+        }
+
+        if (showPreviewToggle)
+        {
+            HeaderGlyphStyle.TextColor = s.Diff!.Diff.Preview.Value
+                ? _theme.DiffView.HeaderToggleActive
+                : _theme.Palette.TextSecondary;
+            c.DrawText(new DrawTextInputs
+            {
+                Position = Place(band, previewLeft, PreviewZoneWidth),
+                Text = LucideIcons.BookOpen,
                 Style = HeaderGlyphStyle,
                 ZIndex = z + 2,
             });
@@ -1368,7 +1411,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             null => (str.CommonLoading, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Placeholder p => (p.Text, _theme.DiffContent.PlaceholderText),
             // Both draw their own body view over this surface — no message belongs under it.
-            DiffRenderState.Conflict or DiffRenderState.Image => (string.Empty, _theme.DiffContent.PlaceholderText),
+            DiffRenderState.Conflict or DiffRenderState.Image or DiffRenderState.Markdown =>
+                (string.Empty, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded l when l.Result.ErrorMessage != null => (l.Result.ErrorMessage, _theme.DiffContent.ErrorText),
             DiffRenderState.Loaded l when l.Result.IsBinary => (str.DiffBinaryNotShown, _theme.DiffContent.PlaceholderText),
             DiffRenderState.Loaded => (str.DiffNoChanges, _theme.DiffContent.PlaceholderText),

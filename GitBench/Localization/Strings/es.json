@@ -299,6 +299,7 @@
 
   "diff.header_title": "Vista de diferencias",
   "diff.fullfile_toggle_tooltip": "Alternar archivo completo",
+  "diff.preview_toggle_tooltip": "Alternar vista previa",
   "diff.open_window_tooltip": "Abrir en una ventana nueva",
   "diff.no_selection": "Selecciona un archivo para ver las diferencias.",
   "diff.binary_not_shown": "Archivo binario no mostrado",

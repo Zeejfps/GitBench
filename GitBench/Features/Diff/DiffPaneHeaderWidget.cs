@@ -98,6 +98,7 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             });
         }
         trailing.Add(new LfsBadgeWidget { Status = Prop.Bind(vm.LfsStatus) });
+        trailing.Add(PreviewToggleButton(vm));
         trailing.Add(FullFileToggleButton(vm));
         trailing.Add(OpenInWindowButton(vm));
 
@@ -128,6 +129,18 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
             Command = new Command(vm.ToggleFullFile),
             Children = [new ButtonIcon { Value = LucideIcons.FileText, FontSize = FontSize.Body }],
         }.WithTooltip(L.T(s => s.DiffFullfileToggleTooltip))
+            .WithController<KbmController>();
+
+    private static IWidget PreviewToggleButton(DiffViewModel vm) =>
+        new ButtonWidget
+        {
+            Visible = Prop.Bind(vm.CanPreview),
+            Style = ButtonStyle.Bare(s => Theme.Color(t => vm.Preview.Value
+                ? t.DiffView.HeaderToggleActive
+                : t.DiffView.HeaderButtonColor(s))),
+            Command = new Command(vm.TogglePreview),
+            Children = [new ButtonIcon { Value = LucideIcons.BookOpen, FontSize = FontSize.Body }],
+        }.WithTooltip(L.T(s => s.DiffPreviewToggleTooltip))
             .WithController<KbmController>();
 
     private static IWidget OpenInWindowButton(DiffViewModel vm) =>

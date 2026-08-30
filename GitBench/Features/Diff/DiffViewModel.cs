@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -74,6 +75,12 @@ internal abstract record DiffRenderState
         DiffSide Side,
         bool IsOldSide,
         bool IsLfs) : DiffRenderState;
+    public sealed record Markdown(
+        string Path,
+        MarkdownDocument Document,
+        DiffSide Side,
+        bool IsOldSide,
+        bool Truncated) : DiffRenderState;
 }
 
 // Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is
@@ -88,7 +95,8 @@ internal readonly record struct WorkingTreeHunkState(bool HasStaged, bool HasUns
 internal sealed record DiffState(
     DiffRenderState Render,
     DiffViewMode Mode,
-    IReadOnlyList<WorkingTreeHunkState>? HunkStates = null);
+    IReadOnlyList<WorkingTreeHunkState>? HunkStates = null,
+    bool Preview = false);
 
 internal sealed class DiffViewModel : ViewModelBase<DiffState>
 {
@@ -141,6 +149,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // StartLoad to decide whether to assemble a diff or a full-file render.
     public IReadable<DiffViewMode> Mode { get; }
 
+    public IReadable<bool> Preview { get; }
+
+    public IReadable<bool> CanPreview { get; }
+
     // Whether the embedded pane is collapsed to its header strip. The header chevron toggles it;
     // the host nulls the diff body and pins the pane to header height when set. Sticky per-pane
     // like Mode, and unused in the pop-out window (which has no collapse affordance).
@@ -191,9 +203,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             DiffRenderState.Loaded l => l.Result.Side,
             DiffRenderState.FullFile ff => ff.Side,
             DiffRenderState.Image img => img.Side,
+            DiffRenderState.Markdown md => md.Side,
             _ => (DiffSide?)null,
         });
         Mode = Slice(s => s.Mode);
+        Preview = Slice(s => s.Preview);
+        CanPreview = new Derived<bool>(() =>
+            _target.Value is { } t && MarkdownDiffPreview.IsPreviewablePath(t.Path));
         WorkingTreeHunkStates = Slice(s => s.HunkStates);
 
         Subscriptions.Add(_target.Subscribe(_ => StartLoad()));
@@ -343,6 +359,12 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public void ToggleFullFile()
     {
         Update(s => s with { Mode = s.Mode == DiffViewMode.Diff ? DiffViewMode.FullFile : DiffViewMode.Diff });
+        StartLoad();
+    }
+
+    public void TogglePreview()
+    {
+        Update(s => s with { Preview = !s.Preview });
         StartLoad();
     }
 
@@ -713,6 +735,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var commitSha = target.CommitSha;
         var baseSha = target.BaseSha;
         var mode = State.Value.Mode;
+        var preview = State.Value.Preview;
         var git = _gitDiff;
         var conflicts = _gitConflicts;
         // Capture localized placeholder text up front so the background worker doesn't touch the
@@ -723,7 +746,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
         // file off the same worker thread.
         RunBackground<LoadResult>(
-            work: () => LoadDiffAndRender(git, conflicts, repo, path, side, commitSha, baseSha, mode, binaryText, noVersionText),
+            work: () => LoadDiffAndRender(
+                git, conflicts, repo, path, side, commitSha, baseSha, mode, preview, binaryText, noVersionText),
             onResult: (result, error) => OnDiffLoaded(result, error, repo, commitSha, baseSha));
     }
 
@@ -731,8 +755,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     // in FullFile mode, the whole new-side file) and packages the render to show.
     private static (LoadResult? Result, string? Error) LoadDiffAndRender(
         IGitDiffReader git, IGitConflictOperations conflicts, Repo repo, string path, DiffSide side,
-        string? commitSha, string? baseSha, DiffViewMode mode, string binaryText, string noVersionText)
+        string? commitSha, string? baseSha, DiffViewMode mode, bool preview, string binaryText,
+        string noVersionText)
     {
+        if (preview && MarkdownDiffPreview.IsPreviewablePath(path)
+            && MarkdownDiffPreview.Build(git, repo, path, side, commitSha, baseSha) is { } markdown)
+            return (new LoadResult(markdown, null), null);
+
         // A conflicted working-tree file gets the resolution header, not a normal diff — but only
         // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
         // (conflict markers and all). GetConflictContext is cheap (one `ls-files -u`) and returns

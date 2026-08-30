@@ -353,6 +353,7 @@
 
   "diff.header_title": "عرض الفروق",
   "diff.fullfile_toggle_tooltip": "تبديل عرض الملف الكامل",
+  "diff.preview_toggle_tooltip": "تبديل المعاينة",
   "diff.open_window_tooltip": "فتح في نافذة جديدة",
   "diff.no_selection": "اختر ملفًا لعرض الفروق.",
   "diff.binary_not_shown": "لا يتم عرض الملف الثنائي",

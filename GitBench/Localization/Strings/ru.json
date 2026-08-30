@@ -344,6 +344,7 @@
 
   "diff.header_title": "Просмотр различий",
   "diff.fullfile_toggle_tooltip": "Показать файл целиком",
+  "diff.preview_toggle_tooltip": "Показать предпросмотр",
   "diff.open_window_tooltip": "Открыть в новом окне",
   "diff.no_selection": "Выберите файл, чтобы посмотреть различия.",
   "diff.binary_not_shown": "Двоичный файл не показан",

@@ -6,6 +6,8 @@ internal static class LucideIcons
 
     public const string FileText = ""; // file-text (full-file diff view toggle)
 
+    public const string BookOpen = ""; // book-open (markdown preview toggle)
+
     public const string ExternalLink = ""; // external-link
 
     public const string Fetch = "";        // cloud-download

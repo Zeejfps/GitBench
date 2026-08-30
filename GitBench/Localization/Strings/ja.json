@@ -299,6 +299,7 @@
 
   "diff.header_title": "差分ビュー",
   "diff.fullfile_toggle_tooltip": "ファイル全体の表示を切り替え",
+  "diff.preview_toggle_tooltip": "プレビューの表示を切り替え",
   "diff.open_window_tooltip": "新しいウインドウで開く",
   "diff.no_selection": "差分を表示するファイルを選択してください。",
   "diff.binary_not_shown": "バイナリファイルは表示されません",
