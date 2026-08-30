@@ -21,14 +21,16 @@
 | Renderer | Ours, a ZGF.Gui widget painting a cell grid. Requires a new cell-grid text path on `ICanvas` (see Modules). |
 | Input | Ours. We own the key encoder, so the **kitty keyboard protocol** is implemented natively and Shift+Enter works with no `/terminal-setup` step. |
 | Testing | **Recorded byte corpora replayed against golden grid snapshots.** We cannot drive a subscription-authenticated `claude` from CI, so we capture real sessions by hand once, commit the bytes, and replay them forever. Engine tests are pure `bytes → grid`. |
-| Placement | A third mode in the switcher: **Changes │ History │ Terminal**. One session per repo, cwd at the repo root. |
+| Placement | A third mode in the switcher: **Changes │ History │ Terminal**. Inside it, a title bar of tabs over one grid: several terminals per repository, one of them on screen. A terminal is still a repository's and its cwd is the repo root. |
+| Title bar | A strip above the grid: one tab per terminal, a `+` on the trailing edge, and the active shell's title. The tabs are the commit-details tabs — `CommitTabChrome` and `TabClickController` move out of `Features/Commits` into a shared `Controls/TabStrip.cs` and both surfaces build on it — so the X, the middle-click close, the ellipsis at the width cap, the active and hover fills and the overflow scroller stay one implementation rather than two that drift. |
+| Closing a tab | Confirmed when the tab holds a live shell, immediate otherwise. Same reasoning as `ConfirmQuitDialog` — a shell mid-build is not something to lose to a stray middle click — and the same modal machinery, with the tab rather than the application as the subject. An idle, exited or failed tab has nothing to lose and closes on the click. |
 | Shell | The user's interactive login shell, so PATH/nvm/rc files are live — same reasoning as `GitProcessRunner.GitLaunch.Shell`. `TERM=xterm-256color`, `COLORTERM=truecolor`. |
 | Relationship to the assistant | **Unrelated.** `docs/plans/assistant.md` builds an in-process agent over domain tools; this hosts a shell. They share no code and neither blocks the other. Running `claude` in the terminal is not the assistant backend. |
-| Out of scope for v1 | Tabs and splits, ligatures, color emoji, inline image protocols (kitty/iTerm2), scrollback reflow on resize, in-terminal search, shell integration marks. |
+| Out of scope for v1 | Splits, reordering tabs by drag, renaming a tab, detaching one into its own window, ligatures, color emoji, inline image protocols (kitty/iTerm2), scrollback reflow on resize, in-terminal search, shell integration marks. |
 
 ## Modules
 
-Seven pieces plus one throwaway. Each has a real boundary; the middle three are where the weeks go.
+Eight pieces plus one throwaway (module 8). Each has a real boundary; the middle three are where the weeks go.
 
 **1. `GitBench.Pty` — the process side.**
 `IPtySession`: spawn (argv, cwd, env), a byte read stream, a byte write path, `Resize(cols, rows)`,
@@ -80,6 +82,18 @@ A PTY logger with an escape-sequence decoder: spawn a program, dump every byte i
 sequences named and tallied, replay our keystrokes at it. Its output is the capability inventory
 that gates the engine choice *and* the recorded corpus the test suite runs on forever.
 
+**9. The title bar — `GitBench/Features/Terminal`, over one control lifted out of `Features/Commits`.**
+A strip above the grid: tabs on the left, a `+` on the trailing edge, the active terminal's title, and
+below it the grid showing whichever tab is active. The pill is not new work. `CommitTabChrome`,
+`TabClickController` and the `HorizontalScrollArea` the commit strip pans its overflow with are already
+the general article — a label ellipsizing at a width cap, an optional close button, the row-selection
+fill when active and the hover fill otherwise, left-click to activate on release and middle-click to
+close, both armed on press so a drag off the tab cancels — so they move to `GitBench/Controls/TabStrip.cs`
+and the commit surface keeps using them from there. What is terminal-specific is only what the strip is
+bound to and what closing means. `CommitTabChrome`'s `Viewed` predicate is the one part that does not
+generalise: it becomes an optional leading-slot widget the caller supplies, rather than a mark the shared
+control knows the meaning of.
+
 ## Phases
 
 **Phase 0 — the mode slot.** `MainViewMode.Terminal`, a third `SegmentViewModel` in
@@ -111,11 +125,32 @@ window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback, the
 reports and alternate scroll included — the per-repo lifecycle, and selection, copy, paste and
 OSC 52 are done, and so are OSC 8 links; see Findings. What remains here is the window title —
 the engine parses OSC 0/2 and `TerminalState.Title` carries it, but nothing above the seam reads it
-yet — and the settings, all three of which are still constants: `DefaultScrollbackLines`, the
-renderer's `FontSize.Body`, and a shell that cannot be overridden.
+yet, and the thing that wants to read it is the tab, so it lands with Phase 7 — and the settings, all
+three of which are still constants: `DefaultScrollbackLines`, the renderer's `FontSize.Body`, and a
+shell that cannot be overridden.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
+
+**Phase 7 — the title bar and tabs.** Four steps, each of which ships on its own.
+
+1. **Extract the tab strip.** `CommitTabChrome`, `TabClickController` and the overflow scroller move to
+   `GitBench/Controls/TabStrip.cs`, and the commit-details strip is rebuilt on them with no visual
+   change. A pure refactor, and the commit surface is its own regression test.
+2. **One terminal per repository becomes several.** `TerminalSessionStore` keys a *list* per repo id
+   with an active index instead of a single instance. `Active` still projects the one terminal the pane
+   draws; `HasLiveShell` and `ReposWithLiveShells` count over the whole list, so the quit confirmation
+   keeps naming repositories and starts being right about a repository whose live shell is in a tab that
+   is not on screen.
+3. **The strip.** Tabs bound to the active repository's list, `+` opens another terminal — idle, since
+   making one still starts nothing — click activates, X and middle-click close, overflow pans.
+4. **Confirmation and title.** `ConfirmCloseTerminalDialog` beside `ConfirmQuitDialog`, gated on the tab
+   holding a live shell, and `TerminalState.Title` finally read above the seam as the tab's label. That
+   closes the window-title item Phase 5 left open.
+
+Splits are the obvious next thing and are deliberately not here: a split is two grids on screen at once,
+which is a different question from which of several sessions is on screen, and answering it early would
+put a layout tree under the pane before there is anything to put in it.
 
 ## Findings — ConPTY, measured
 
@@ -509,6 +544,61 @@ a new probe has to reproduce that header exactly.
 **Until then, treat green as "green on Windows bytes".** Nothing in the suite is wrong; it is
 narrower than it reads.
 
+## Design — the title bar and tabs, before building
+
+Written ahead of Phase 7 rather than after it, because three of these are decisions that are cheap now
+and expensive once there are tabs on screen.
+
+**A tab is a terminal, and a terminal is still a repository's.** The store already holds the shape this
+needs — keyed by repo id, an `Active` projection that swaps on repo switch, instances made lazily and
+ended when their repository closes — and the change is that the value behind a key becomes a list with
+an active index rather than one instance. Switching repositories therefore swaps the whole strip, and a
+repository comes back to the tabs it had, with the one that was in front still in front. The alternative,
+a flat list of terminals with the repository as a column, was not taken: a shell's cwd is the repo root,
+so a tab that outlived its repository would be sitting in a directory that may have been pruned — which
+is the case `DropClosedRepos` already handles, and it only stays simple while a terminal belongs to
+exactly one repository.
+
+**The tab strip is the commit surface's, moved rather than copied.** Everything the terminal tabs need
+is already built and already argued about there: the width cap with the label in a `Grow` so a long name
+ellipsizes into the pill rather than stretching it, the trailing 1px divider, the close button consuming
+its own press so it does not also arm activation, middle-click close on release with the arm cancelled on
+exit, and the `HorizontalScrollArea` that pans the strip — vertical wheel included — once the tabs
+overflow. Copying it would mean two of each of those decisions, and the second copy is the one that
+silently stops matching. The move is the first step of the phase precisely so that it lands as a refactor
+with a working surface behind it, not as a rewrite hidden inside a feature.
+
+**Closing asks only when there is something to lose, and asking is asynchronous.** A tab holding no
+process closes on the click; a tab holding a live shell puts up the same modal `ConfirmQuitDialog` uses,
+broadcast as a `ShowDialogMessage` and answered later through the presenter's callback. That has a
+consequence the pill's `OnClose` signature hides: **a close request is not a close.** The strip must be
+correct in the window between them — the tab stays exactly where it was, still active if it was active,
+still taking output, because the shell is still running and its output is still arriving. And the removal
+that eventually runs must find the terminal **by identity, not by index**: the dialog is modal to the
+window but the list underneath is not frozen, since a repository can be closed and a shell can exit while
+it is up. Confirming a close on a terminal that has since gone is a no-op, not an off-by-one that ends
+the wrong shell.
+
+**The confirmation is the tab's, not the application's.** `ConfirmQuitDialog` names repositories because
+that is what a reader recognises when the whole application is closing. A tab close is one shell and the
+reader is looking straight at it, so the dialog names that one terminal — its title, or its shell — and
+says what it is about to end. Two dialogs rather than one parameterised over "how many things and of what
+kind", because the sentences are different sentences and the plural machinery would be carrying a case
+that never has more than one item.
+
+**The title is the engine's; the fallback is the tab's.** `TerminalState.Title` already carries what OSC
+0/2 sets, which is what a shell writes and what a program running under it overwrites — so a tab's label
+follows the running command, which is the whole reason a tab strip is legible with four shells open. An
+idle tab has no shell and therefore no title, and an exited one keeps whatever it last said, so the label
+is the title when there is one and the shell's file name otherwise. Two terminals on the same repository
+with the same title are told apart by a trailing index; the index is positional and belongs to the strip,
+not to the terminal, since it means "the second one you can see" and nothing else.
+
+**The strip is drawn even with one tab.** It carries the title and the `+`, so hiding it until a second
+terminal exists would mean the grid jumping down by the strip's height under whoever just opened one, and
+no visible way to open the first extra tab. Same reasoning as the underline strip in the working-changes
+pane, which is always laid out and only ever changes what it paints.
+
 ## Risks
 
 | Risk | Note |
@@ -520,5 +610,7 @@ narrower than it reads.
 | Streaming repaint cost | Rendering is instanced glyph quads with growable VBOs and damage-driven frames, so the GPU is not the worry — shaping and per-frame allocation are. Module 6 is the mitigation. |
 | ConPTY quirks | Confirmed and bounded (see Findings). On resize it re-emits its buffer and sends us `CSI 8;rows;cols t`; there is no passthrough flag to turn that off. Costs redundant repaints, not correctness. |
 | **No Unix corpus** | Every committed recording is a Windows capture, so the engine is pinned against ConPTY's output only and nothing asserts what a macOS or Linux pseudo-terminal produces. The two platforms are separate recordings asserting the same grid, not one stream — and only one of them exists. See Findings. |
+| Terminal identity is repo-scoped in three places | `TerminalSessionStore` keys by repo id, `HasLiveShell(repoId)` answers per repository, and `ConfirmQuitDialog` names repositories. Tabs make the terminal the unit while the quit path still wants repository names, so the store has to answer both questions over the same list. Getting it wrong shows up as the quit confirmation naming a repository whose live shell was in a tab that is already closed — or worse, not naming one whose live shell is in a tab that is merely not on screen. |
+| A close request is not a close | The confirmation is a modal answered through a callback, so the tab lives on between the middle click and the answer, still taking output. Anything that removes by index rather than by identity ends the wrong shell when the list moves under the dialog. |
 | conhost owns DA1/DSR | Capability replies on Windows are conhost's, not ours, and we cannot override them. Fine for `claude`; a constraint on anything that negotiates through DA1. |
 | Own-engine cost on Windows | Escaping conhost entirely means reimplementing a console host over the undocumented ConDrv protocol — months, plus a permanent break-on-update liability. Ruled out; the divergence above does not come close to justifying it. |
