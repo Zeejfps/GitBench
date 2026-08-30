@@ -90,8 +90,10 @@ it a place to land. Done.
 **Phase 1 — PTY and probe.** Get a shell spawned on all three platforms and log what comes back.
 Record `claude`, `vim`, `less`, `git rebase -i` into committed corpora. **Deliverable: the sequence
 inventory.** It answers "how far off is XtermSharp?" with a diff instead of a guess, and it is the
-gate on the next phase. The Windows transport half of this is done — see Findings; what remains on
-Windows is the real `ConPtySession` and the recordings. The Unix half is untouched.
+gate on the next phase. Both transports are built — `ConPtySession` on Windows, `UnixPtySession`
+plus the `ShellCommand` controlling-terminal acquirer on macOS and Linux, all three with tests. What
+remains is **the Unix corpus**: every committed recording is a Windows capture. See the Findings
+note below, which is the honest state of the test suite's coverage.
 
 **Phase 2 — engine in.** `ITerminalEngine`, the vendored adapter, and the replay tests green against
 the Phase 1 corpora. No UI yet — this phase is headless and fully testable.
@@ -405,6 +407,35 @@ there on the user's behalf.
 history, and the pane repaints on output rather than per frame, so it would have needed a tick of its
 own.
 
+## Findings — the corpus is Windows-only
+
+**Every committed recording is a Windows capture, and the plan said the opposite.** All five
+inventories name a Windows binary: `claude.exe`, `cmd.exe` for `smoke`, and — for `vim`, `less` and
+`git-log` — the Git-for-Windows MSYS builds under `C:\Program Files\Git`. `claude` and `smoke` also
+carry `CSI ?9001h` (win32 input mode), which no Unix terminal emits. The risk table used to say
+"Windows still needs its own corpus"; Windows is in fact the only platform that has one.
+
+The MSYS detail matters as much as the ConPTY one: `vim.exe` and `less.exe` from Git for Windows are
+not the binaries a macOS user runs, so even the two full-screen stress cases are pinned against a
+different program, not merely a different transport.
+
+**What that costs.** `CorpusReplayTests`, `CorpusPropertiesSpec` and every golden in `Goldens/` are
+the engine's regression gate, and all of them assert against bytes ConPTY produced. A divergence that
+only appears on a Unix pseudo-terminal — a sequence conhost normalises away, an encoding the Unix
+line discipline delivers differently, anything downstream of the `?9001` input mode — passes the
+whole suite in silence. That is the platform this is being developed on, so the gate is weakest
+exactly where the work happens.
+
+**Capturing it means rebuilding the probe first.** Module 8 was deliberately throwaway and was never
+committed; only its output was. So a Unix corpus is not a recording session, it is: rebuild the PTY
+logger with its escape-sequence decoder, capture `vim`, `less` and `git log` on macOS, and capture
+`claude` by hand on an authenticated machine — the inventory format is already pinned by
+`Corpus.Load`, which parses the terminal geometry out of the inventory header rather than a table, so
+a new probe has to reproduce that header exactly.
+
+**Until then, treat green as "green on Windows bytes".** Nothing in the suite is wrong; it is
+narrower than it reads.
+
 ## Risks
 
 | Risk | Note |
@@ -414,6 +445,7 @@ own.
 | Glyph atlas is single-channel | `GlyphAtlas` is alpha-only, so color emoji are impossible without an RGBA path. Claude Code's UI is box-drawing and symbols, which JetBrains Mono covers — but emoji in *tool output* will tofu. Accepted for v1. |
 | Keyboard ownership | Not a late bug-fix; a modality design decision in Phase 4, subject to the parent-owns-modality rule. |
 | Streaming repaint cost | Rendering is instanced glyph quads with growable VBOs and damage-driven frames, so the GPU is not the worry — shaping and per-frame allocation are. Module 6 is the mitigation. |
-| ConPTY quirks | Confirmed and bounded (see Findings). On resize it re-emits its buffer and sends us `CSI 8;rows;cols t`; there is no passthrough flag to turn that off. Costs redundant repaints, not correctness. Windows still needs its own corpus — treat the two platforms as separate recordings asserting the same grid, rather than pretending one stream. |
+| ConPTY quirks | Confirmed and bounded (see Findings). On resize it re-emits its buffer and sends us `CSI 8;rows;cols t`; there is no passthrough flag to turn that off. Costs redundant repaints, not correctness. |
+| **No Unix corpus** | Every committed recording is a Windows capture, so the engine is pinned against ConPTY's output only and nothing asserts what a macOS or Linux pseudo-terminal produces. The two platforms are separate recordings asserting the same grid, not one stream — and only one of them exists. See Findings. |
 | conhost owns DA1/DSR | Capability replies on Windows are conhost's, not ours, and we cannot override them. Fine for `claude`; a constraint on anything that negotiates through DA1. |
 | Own-engine cost on Windows | Escaping conhost entirely means reimplementing a console host over the undocumented ConDrv protocol — months, plus a permanent break-on-update liability. Ruled out; the divergence above does not come close to justifying it. |
