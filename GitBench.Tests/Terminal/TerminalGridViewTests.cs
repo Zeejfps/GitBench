@@ -256,6 +256,45 @@ public class TerminalGridViewTests
         Assert.False(view.TryLocate(new PointF(-1f, Height / 2f), out _, out _));
     }
 
+    [Fact]
+    public void ABlockCursor_IsDrawnUnderTheRowsTextAndTheCellIsInverted()
+    {
+        // A block fills the cell, so drawing it over the row would hide the character the shell is
+        // sitting on. It goes under the row's glyphs, and the one cell it covers is drawn again in
+        // the colour it was sitting on so it reads out of the block.
+        var (harness, _) = Draw(Vt("hi\r"));
+
+        var block = Assert.Single(harness.Canvas.Rects, IsTheCursor);
+        var row = Row(harness, "hi");
+        var inverted = Assert.Single(harness.Canvas.GlyphRuns, run => run.Text == "h");
+
+        Assert.True(block.Inputs.ZIndex < row.ZIndex, "The block covers the row's text.");
+        Assert.True(row.ZIndex < inverted.ZIndex, "The inverted cell is under the block.");
+        Assert.Equal(0f, inverted.Origin.X);
+        Assert.Equal(Height, inverted.Origin.Y);
+        Assert.Equal(ThemeStyles.Dark.Terminal.DefaultBackground, inverted.Style.TextColor.Value);
+    }
+
+    [Fact]
+    public void ABlockCursorOverABlankCell_DrawsNoGlyphOfItsOwn()
+    {
+        var (harness, _) = Draw(Vt("hi"));
+
+        Assert.Contains(harness.Canvas.Rects, IsTheCursor);
+        Assert.Equal("hi", Assert.Single(harness.Canvas.GlyphRuns).Text);
+    }
+
+    [Fact]
+    public void ABarCursor_LeavesItsCellAlone()
+    {
+        // A caret two points wide hides nothing, so there is no cell to invert - and inverting one
+        // would leave a character in the background colour with no block behind it.
+        var (harness, _) = Draw(Csi("5 q", "hi\r"));
+
+        Assert.Contains(harness.Canvas.Rects, IsTheCursor);
+        Assert.Equal("hi", Assert.Single(harness.Canvas.GlyphRuns).Text);
+    }
+
     private static RecordedGlyphRun Row(GuiTestHarness harness, string text) =>
         harness.Canvas.GlyphRuns.First(r => r.Text.StartsWith(text));
 

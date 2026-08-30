@@ -267,7 +267,7 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
             DrawRow(c, _cells.AsSpan(0, size.Columns), bounds.Left, top, metrics, z);
         }
 
-        DrawCursor(c, session.State.Cursor, offset, visibleRows, bounds, metrics, z + 2);
+        DrawCursor(c, grid, session.State.Cursor, offset, visibleRows, bounds, metrics, z);
     }
 
     void DrawRow(ICanvas c, ReadOnlySpan<TerminalCell> cells, float left, float top, CellMetrics metrics, int z)
@@ -314,7 +314,7 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
                 CodePoints = codePoints,
                 CellAdvance = metrics.Advance,
                 Style = _runStyle,
-                ZIndex = z + 1,
+                ZIndex = z + 2,
                 Underline = run.Style.Underline,
                 StrikeThrough = run.Style.StrikeThrough,
             });
@@ -328,6 +328,7 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
     /// </remarks>
     void DrawCursor(
         ICanvas c,
+        ITerminalGrid grid,
         TerminalCursor cursor,
         int offset,
         int visibleRows,
@@ -356,7 +357,53 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         {
             Position = rect,
             Style = _rectStyle,
+            ZIndex = z + 1,
+        });
+
+        if (cursor.Shape != CursorShape.Block) return;
+
+        // A block fills the whole cell, so the glyph the row already drew is behind it. Terminals
+        // read it back out by inverting that one cell: the character is drawn again over the block
+        // in the colour it was sitting on.
+        DrawCursorGlyph(c, grid, cursor, left, top, metrics, z + 3);
+    }
+
+    void DrawCursorGlyph(
+        ICanvas c,
+        ITerminalGrid grid,
+        TerminalCursor cursor,
+        float left,
+        float top,
+        CellMetrics metrics,
+        int z)
+    {
+        var columns = grid.Size.Columns;
+        if (cursor.Column < 0 || cursor.Column >= columns) return;
+
+        grid.CopyRow(cursor.Row, _cells.AsSpan(0, columns));
+
+        ref readonly var cell = ref _cells[cursor.Column];
+        if (cell.Width == CellWidth.WideTrailer) return;
+
+        var codePoint = cell.Rune.Value;
+        if (codePoint == ' ' || codePoint == 0) return;
+
+        var style = _styler.Style(cell);
+
+        _runStyle.FontFamily = Face(style);
+        _runStyle.TextColor = style.Background;
+
+        _codePoints[0] = codePoint;
+
+        c.DrawGlyphRun(new DrawGlyphRunInputs
+        {
+            Origin = new PointF(left, top),
+            CodePoints = _codePoints.AsSpan(0, 1),
+            CellAdvance = metrics.Advance,
+            Style = _runStyle,
             ZIndex = z,
+            Underline = style.Underline,
+            StrikeThrough = style.StrikeThrough,
         });
     }
 
