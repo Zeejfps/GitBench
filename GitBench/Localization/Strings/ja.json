@@ -91,6 +91,9 @@
   "app.update.ready_message": "バージョン{version}の準備ができました — 再起動で更新します。",
 
   "terminal.starting": "シェルを起動中…",
+  "terminal.start_session": "セッションを開始",
+  "terminal.restart_session": "新しいセッションを開始",
+  "terminal.session_ended": "シェルが終了しました。",
   "terminal.no_repo": "ターミナルを使うにはリポジトリを開いてください。",
 
   "toolbar.fetch": "フェッチ",

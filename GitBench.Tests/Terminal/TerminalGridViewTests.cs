@@ -135,6 +135,53 @@ public class TerminalGridViewTests
     }
 
     [Fact]
+    public void AnIdleTerminal_DrawsNothingButItsBackground()
+    {
+        // The pane's start gate is what an idle terminal shows, and it is a widget over this view
+        // rather than a message inside it. A "Starting shell…" behind it would be a lie.
+        using var harness = Harness(view =>
+        {
+            view.StartingMessage = "Starting shell…";
+            view.SetRenderState(new TerminalRenderState.Idle());
+        });
+
+        var canvas = harness.Render();
+
+        Assert.Empty(canvas.Texts);
+        Assert.Empty(canvas.GlyphRuns);
+    }
+
+    [Fact]
+    public void AnExitedShell_StillHasItsScreenAndItsCells()
+    {
+        // What a finished command printed is what a reader wants to scroll and point at, so an exit
+        // must not blank the pane or take its geometry away.
+        var (harness, view) = Ended(Vt("hello"), session => new TerminalRenderState.Exited(session));
+
+        Assert.Contains(harness.Canvas.GlyphRuns, run => run.Text.StartsWith("hello"));
+        Assert.True(view.TryLocate(new PointF(Advance + 2f, Height - 4f), out _, out _));
+    }
+
+    [Fact]
+    public void AFaultedShell_KeepsTheScreenItHadPrinted()
+    {
+        var (harness, _) = Ended(
+            Vt("hello"), session => new TerminalRenderState.Faulted(session, "the reader failed"));
+
+        Assert.Contains(harness.Canvas.GlyphRuns, run => run.Text.StartsWith("hello"));
+    }
+
+    [Fact]
+    public void AStateWithNoDrawing_ThrowsRatherThanDrawingSomethingElse()
+    {
+        // The states are the whole of what this view does, so a new one has to arrive as a build
+        // break or a loud failure - never as a pane quietly showing the wrong thing.
+        using var harness = Harness(view => view.SetRenderState(new UnknownState()));
+
+        Assert.Throws<NotSupportedException>(() => harness.Render());
+    }
+
+    [Fact]
     public void AFailedStart_DrawsItsMessageInsteadOfAScreen()
     {
         using var harness = Harness(view =>
@@ -264,6 +311,29 @@ public class TerminalGridViewTests
         harness.Render();
         return (harness, (TerminalGridView)harness.Root);
     }
+
+    /// <summary>Draws a session that has finished, in whichever state a caller says it ended in.</summary>
+    private static (GuiTestHarness Harness, TerminalGridView View) Ended(
+        byte[] output,
+        Func<TerminalSession, TerminalRenderState> ended)
+    {
+        var dispatcher = new QueueDispatcher();
+        var session = TerminalSession.Start(
+            () => new RecordedPtySession(output),
+            new XtermSharpEngineFactory(),
+            new TerminalSize(ExpectedColumns, ExpectedRows),
+            dispatcher);
+
+        Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
+        dispatcher.Pump();
+
+        var harness = Harness(view => view.SetRenderState(ended(session)));
+        harness.Render();
+        return (harness, (TerminalGridView)harness.Root);
+    }
+
+    /// <summary>A state this view has no drawing for, which is the point.</summary>
+    private sealed record UnknownState : TerminalRenderState;
 
     private static GuiTestHarness Harness(Action<TerminalGridView> configure) =>
         GuiTestHarness.Create(

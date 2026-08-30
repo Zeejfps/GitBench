@@ -174,7 +174,11 @@ internal sealed class TerminalInputController : KeyboardMouseController
 
         if (!_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
-        if (e.State == InputState.Pressed) _input.StealFocus(this);
+        // Only a terminal with a shell in it takes the keyboard. One that has none would hold focus
+        // while declining every key, which eats the application's own chords for as long as the
+        // pointer is over nothing else — and it is what a click on the pane's start gate has to be
+        // able to reach past.
+        if (e.State == InputState.Pressed && _terminal.IsAcceptingInput) _input.StealFocus(this);
 
         var action = e.State == InputState.Pressed
             ? TerminalMouseAction.Press

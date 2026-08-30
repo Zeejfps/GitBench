@@ -133,6 +133,9 @@
   "app.update.ready_message": "الإصدار {version} جاهز — انقر على إعادة التشغيل للتحديث.",
 
   "terminal.starting": "جارٍ بدء الصدفة…",
+  "terminal.start_session": "بدء جلسة",
+  "terminal.restart_session": "بدء جلسة جديدة",
+  "terminal.session_ended": "انتهت الصدفة.",
   "terminal.no_repo": "افتح مستودعًا لاستخدام الطرفية.",
 
   "toolbar.fetch": "جلب",

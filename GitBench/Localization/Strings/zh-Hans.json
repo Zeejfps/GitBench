@@ -91,6 +91,9 @@
   "app.update.ready_message": "版本 {version} 已就绪 — 点击重启以更新。",
 
   "terminal.starting": "正在启动 shell…",
+  "terminal.start_session": "启动会话",
+  "terminal.restart_session": "启动新会话",
+  "terminal.session_ended": "Shell 已退出。",
   "terminal.no_repo": "打开一个仓库以使用终端。",
 
   "toolbar.fetch": "获取",

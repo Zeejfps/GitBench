@@ -91,6 +91,9 @@
   "app.update.ready_message": "Version {version} is ready — click Restart to update.",
 
   "terminal.starting": "Starting shell…",
+  "terminal.start_session": "Start session",
+  "terminal.restart_session": "Start new session",
+  "terminal.session_ended": "The shell exited.",
   "terminal.no_repo": "Open a repository to use the terminal.",
 
   "toolbar.fetch": "Fetch",

@@ -157,6 +157,11 @@ internal static class AppServices
         // place that names a concrete VT engine, so replacing XtermSharp is a line here.
         context.AddSingleton<IPtySessionFactory, PtySessionFactory>();
         context.AddSingleton<ITerminalEngineFactory, XtermSharpEngineFactory>();
+        // The terminals themselves: one per repository, in memory for the app session, so switching
+        // repositories swaps which shell the pane shows rather than retargeting the one it has.
+        // Hosted for the same reason the assistant's store is — it watches the registry, which it
+        // can only do once the UI loop exists.
+        context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>();
 
         // Factory because the snapshot store ingests the active repo's file-list summary into the
         // status store, an interface cast (IRepoStatusIngest) the container can't do by plain

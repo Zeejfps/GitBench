@@ -38,73 +38,186 @@ namespace GitBench.Tests.Terminal;
 // ---------------------------------------------------------------------------------------------
 
 /// <summary>
-/// The pane itself, built the way the application builds it: the controller has to actually be
-/// attached, or every other test in this suite passes and the Terminal tab does nothing.
+/// The pane itself, built the way the application builds it: the store's terminal on screen, the
+/// controller actually attached, and a shell that starts when — and only when — it is asked for.
 /// </summary>
-public class TerminalPaneWiringTests
+public class TerminalPaneWiringTests : IDisposable
 {
+    private readonly TempDir _dir = new("gitbench-terminal-wiring-");
+
+    public void Dispose() => _dir.Dispose();
+
     [Fact]
     public void BuildingThePane_AttachesAKeyboardToTheGrid()
     {
-        // Deliberately never rendered. The view model starts its shell on the first viewport report,
-        // which comes from a draw, so this builds the pane and inspects it without spawning anything.
-        using var dir = new TempDir("gitbench-terminal-wiring-");
-        using var harness = PaneHarness(dir.Path, out var view);
+        using var pane = new PaneUnderTest(_dir.Path);
 
-        var controller = harness.Input.GetController(view);
-
-        Assert.IsType<TerminalInputController>(controller);
+        Assert.IsType<TerminalInputController>(pane.Harness.Input.GetController(pane.Grid));
     }
 
     [Fact]
-    public void ThePanesKeyboard_IsTheOneThatTakesFocusOnAClick()
+    public void BeforeItIsAskedFor_NoShellIsStarted()
     {
-        using var dir = new TempDir("gitbench-terminal-wiring-");
-        using var harness = PaneHarness(dir.Path, out var view);
+        // Drawing is what used to start one. The pane is rendered here precisely because that is the
+        // path that must no longer spawn anything - the fake spawn throws if it is reached.
+        using var pane = new PaneUnderTest(_dir.Path);
 
-        harness.Click(400f, 300f);
+        pane.Harness.Render();
 
-        Assert.Same(harness.Input.GetController(view), harness.Input.FocusedComponent);
+        Assert.IsType<TerminalRenderState.Idle>(pane.Terminal.Render.Value);
     }
 
-    static GuiTestHarness PaneHarness(string root, out View paneView)
+    [Fact]
+    public void AnIdleTerminal_DoesNotTakeTheKeyboardOnAClick()
     {
-        var path = Path.Combine(root, "repo");
-        Directory.CreateDirectory(Path.Combine(path, ".git"));
+        // A pane with no shell that holds focus declines every key it is then given, which eats the
+        // application's own chords with nothing on screen saying why.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
 
-        var statePath = Path.Combine(root, "state.json");
-        var registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
-        registry.Open(path);
+        pane.Harness.Click(400f, 120f);
 
-        View? built = null;
-        var harness = GuiTestHarness.Create(
-            ctx =>
-            {
-                built = new TerminalPane().BuildView(ctx);
-                return built;
-            },
-            width: 800,
-            height: 600,
-            configure: ctx =>
-            {
-                ctx.AddService<IThemeService<ThemeStyles>>(
-                    new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
-                ctx.AddService<ITerminalEngineFactory>(new XtermSharpEngineFactory());
-                ctx.AddService<IPtySessionFactory>(new UnusedPtyFactory());
-                ctx.AddService<IRepoRegistry>(registry);
-            });
-
-        paneView = built!;
-        return harness;
+        Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
     }
 
-    /// <summary>A pseudo-terminal factory for a pane that is never drawn, and so never starts one.</summary>
-    sealed class UnusedPtyFactory : IPtySessionFactory
+    [Fact]
+    public void ClickingStartSession_StartsAShellAndLeavesTheKeyboardInIt()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+
+        pane.Harness.ClickOn(TerminalStartGate.StartButtonId);
+
+        Pump.WaitFor(
+            pane.Dispatcher,
+            () => pane.Terminal.Render.Value is TerminalRenderState.Running,
+            "the shell the click asked for");
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void AStartedTerminal_TakesTheKeyboardOnAClick()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Harness.Input.Blur(pane.Harness.Input.FocusedComponent!);
+
+        pane.Harness.Click(400f, 300f);
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void SwitchingRepositories_PutsTheOtherRepositorysTerminalOnScreen()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        var first = pane.Terminal;
+
+        pane.Activate(pane.SecondRepo);
+
+        Assert.NotSame(first, pane.Terminal);
+        Assert.IsType<TerminalRenderState.Idle>(pane.Terminal.Render.Value);
+        Assert.IsType<TerminalRenderState.Running>(first.Render.Value);
+    }
+
+    /// <summary>The real pane over the real store, with the shell spawn faked one layer down.</summary>
+    private sealed class PaneUnderTest : IDisposable
+    {
+        private readonly RepoRegistry _registry;
+        private readonly TerminalSessionStore _store;
+
+        public PaneUnderTest(string root)
+        {
+            var statePath = Path.Combine(root, "state.json");
+            _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
+            FirstRepo = Open(root, "first");
+            SecondRepo = Open(root, "second");
+            _registry.SetActive(FirstRepo);
+
+            _store = new TerminalSessionStore(
+                _registry,
+                new UnusedPtyFactory(),
+                new XtermSharpEngineFactory(),
+                Dispatcher,
+                _ => new PaneLaunch());
+            _store.Start();
+
+            Harness = GuiTestHarness.Create(
+                ctx => new TerminalPane().BuildView(ctx),
+                width: 800,
+                height: 600,
+                configure: ctx =>
+                {
+                    ctx.AddService<IThemeService<ThemeStyles>>(
+                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
+                    ctx.AddService<ILocalizationService>(
+                        new LocalizationService(new State<Locale>(Locale.En)));
+                    ctx.AddService<IUiDispatcher>(Dispatcher);
+                    ctx.AddService<ITerminalEngineFactory>(new XtermSharpEngineFactory());
+                    ctx.AddService<IPtySessionFactory>(new UnusedPtyFactory());
+                    ctx.AddService<IRepoRegistry>(_registry);
+                    ctx.AddService<ITerminalSessionStore>(_store);
+                });
+        }
+
+        public GuiTestHarness Harness { get; }
+        public QueuedDispatcher Dispatcher { get; } = new();
+        public Guid FirstRepo { get; }
+        public Guid SecondRepo { get; }
+
+        public TerminalInstance Terminal => _store.Active.Value!;
+
+        public View Grid => Harness.Get(TerminalScreen.GridId);
+
+        public void Start()
+        {
+            Harness.ClickOn(TerminalStartGate.StartButtonId);
+            Pump.WaitFor(
+                Dispatcher,
+                () => Terminal.Render.Value is TerminalRenderState.Running,
+                "the shell to be adopted");
+        }
+
+        public void Activate(Guid repo)
+        {
+            _registry.SetActive(repo);
+            Harness.Render();
+        }
+
+        public void Dispose()
+        {
+            Harness.Dispose();
+            _store.Dispose();
+        }
+
+        private Guid Open(string root, string name)
+        {
+            var path = Path.Combine(root, name);
+            Directory.CreateDirectory(Path.Combine(path, ".git"));
+            _registry.Open(path);
+            return _registry.Repos.Single(r => r.Path == path).Id;
+        }
+    }
+
+    /// <summary>A launch over a pseudo-terminal that stays open, so a started pane has a live shell
+    /// without a process anywhere near the test.</summary>
+    private sealed class PaneLaunch : ITerminalLaunch
+    {
+        public TerminalSize SizeFor(TerminalSize viewport) => viewport;
+
+        public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
+            TerminalSession.Start(
+                () => new LifecyclePty(), new XtermSharpEngineFactory(), size, dispatcher);
+    }
+
+    /// <summary>The pane must never reach the real spawn path.</summary>
+    private sealed class UnusedPtyFactory : IPtySessionFactory
     {
         public IPtySession Start(PtySessionOptions options) =>
-            throw new InvalidOperationException("The pane started a shell without being drawn.");
+            throw new InvalidOperationException("The pane started a real shell.");
     }
 }
 
@@ -1187,16 +1300,16 @@ internal sealed class TerminalRun : IDisposable
     private TerminalRun(SeamLaunch launch)
     {
         _launch = launch;
-        Vm = new TerminalViewModel(launch, Dispatcher);
+        Vm = new TerminalInstance(launch, Dispatcher);
     }
 
     public QueuedDispatcher Dispatcher { get; } = new();
-    public TerminalViewModel Vm { get; }
+    public TerminalInstance Vm { get; }
     public SeamPty Pty => _launch.Pty;
 
     /// <summary>The live session, read the way the pane reads it: off the render state.</summary>
     public TerminalSession? Session =>
-        Vm.RenderState.Value is TerminalRenderState.Running running ? running.Session : null;
+        Vm.Render.Value is TerminalRenderState.Running running ? running.Session : null;
 
     public static TerminalRun NotYetStarted() => new(new SeamLaunch());
 
@@ -1211,9 +1324,10 @@ internal sealed class TerminalRun : IDisposable
     {
         var run = new TerminalRun(new SeamLaunch { FailWith = "no shell here" });
         run.Vm.ReportViewport(Viewport);
+        run.Vm.Start();
         Pump.WaitFor(
             run.Dispatcher,
-            () => run.Vm.RenderState.Value is TerminalRenderState.Failed,
+            () => run.Vm.Render.Value is TerminalRenderState.Failed,
             "the start to fail");
         return run;
     }
@@ -1236,13 +1350,14 @@ internal sealed class TerminalRun : IDisposable
     public void Start()
     {
         Vm.ReportViewport(Viewport);
+        Vm.Start();
 
         // Adoption, not acceptance. A replay whose bytes have run out is adopted and Running while
         // already reporting no live shell, so waiting on IsAcceptingInput here would hang on exactly
         // the fixtures that exercise a finished session.
         Pump.WaitFor(
             Dispatcher,
-            () => Vm.RenderState.Value is TerminalRenderState.Running,
+            () => Vm.Render.Value is TerminalRenderState.Running,
             "the shell to be adopted");
     }
 

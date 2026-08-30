@@ -675,13 +675,13 @@ public class TerminalInputControllerTests
 /// The two members the pane's keyboard needs from its view model: whether there is a shell, and
 /// where its bytes go.
 /// </summary>
-public class TerminalViewModelInputTests
+public class TerminalInstanceInputTests
 {
     [Fact]
-    public void BeforeAShellIsAdopted_TheViewModelIsNotAcceptingInput()
+    public void BeforeAShellIsAdopted_TheTerminalIsNotAcceptingInput()
     {
         var dispatcher = new QueueDispatcher();
-        using var vm = new TerminalViewModel(new RecordingLaunch(), dispatcher);
+        using var vm = new TerminalInstance(new RecordingLaunch(), dispatcher);
 
         Assert.False(vm.IsAcceptingInput);
     }
@@ -690,7 +690,7 @@ public class TerminalViewModelInputTests
     public void SendingInputWithNoShell_IsANoOpRatherThanAThrow()
     {
         var dispatcher = new QueueDispatcher();
-        using var vm = new TerminalViewModel(new RecordingLaunch(), dispatcher);
+        using var vm = new TerminalInstance(new RecordingLaunch(), dispatcher);
 
         vm.SendInput("q"u8);
     }
@@ -741,7 +741,7 @@ public class TerminalViewModelInputTests
     }
 
     [Fact]
-    public void AfterDisposal_TheViewModelStopsAcceptingInput()
+    public void AfterDisposal_TheTerminalStopsAcceptingInput()
     {
         var launch = new RecordingLaunch();
         var vm = Started(launch, out _);
@@ -755,11 +755,12 @@ public class TerminalViewModelInputTests
     /// A view model whose shell has started and been adopted. The start is a background task that
     /// posts its result, so the test waits for the post rather than for a duration.
     /// </summary>
-    static TerminalViewModel Started(RecordingLaunch launch, out QueueDispatcher dispatcher)
+    static TerminalInstance Started(RecordingLaunch launch, out QueueDispatcher dispatcher)
     {
         dispatcher = new QueueDispatcher();
-        var vm = new TerminalViewModel(launch, dispatcher);
+        var vm = new TerminalInstance(launch, dispatcher);
         vm.ReportViewport(new TerminalSize(80, 24));
+        vm.Start();
 
         Assert.True(dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The shell never started.");
         dispatcher.Pump();

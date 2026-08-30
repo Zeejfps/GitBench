@@ -126,6 +126,9 @@
   "app.update.ready_message": "Версия {version} готова — нажмите «Перезапустить», чтобы обновиться.",
 
   "terminal.starting": "Запуск оболочки…",
+  "terminal.start_session": "Запустить сеанс",
+  "terminal.restart_session": "Запустить новый сеанс",
+  "terminal.session_ended": "Оболочка завершила работу.",
   "terminal.no_repo": "Откройте репозиторий, чтобы использовать терминал.",
 
   "toolbar.fetch": "Извлечь",

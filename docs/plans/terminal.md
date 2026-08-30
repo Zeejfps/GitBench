@@ -105,9 +105,9 @@ with `AppKeybindController` and every dialog's Esc handling. Also the Cmd/Ctrl+C
 copy-selection versus SIGINT.
 
 **Phase 5 — session and polish.** Resize and SIGWINCH, scrollback and wheel, selection and copy,
-window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback and the wheel — mouse
-reports and alternate scroll included — are done; see Findings. What remains here is selection and
-copy, paste, the title, OSC 8, the per-repo lifecycle and the settings.
+window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback, the wheel — mouse
+reports and alternate scroll included — and the per-repo lifecycle are done; see Findings. What
+remains here is selection and copy, paste, the title, OSC 8 and the settings.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
@@ -277,6 +277,47 @@ application, on the same reasoning as the reader thread's catch.
 carries no modifiers — GLFW's scroll callback has none to give and nothing tracks them alongside —
 so xterm's Shift-takes-the-wheel-back convention is not implemented. Shift with the page keys is the
 history's chord in the meantime.
+
+## Findings — one terminal per repository, as built
+
+**A terminal is a repository's, and the pane is only ever looking at one of them.** They live in
+`TerminalSessionStore`, keyed by repo id and made on first activation, which is the same shape the
+assistant's conversations already have. The pane binds the store's active terminal rather than
+reading the registry, so switching repositories swaps which shell is on screen while the others keep
+running — and the pane cannot end up pointed at the repository that happened to be active when the
+Terminal tab was first opened, which is what it did before.
+
+**Drawing a pane no longer starts a shell.** The old view model spawned on the first viewport report,
+which comes from a draw, so opening the tab was the same event as launching a process. Now the
+viewport report only records the size, and `Start` is the only thing that spawns. Asked for before
+the pane has been measured, it waits for the first size rather than guessing one — the "never spawn
+at 80x24" rule the phase-0 notes give, kept intact by moving the trigger rather than the arithmetic.
+
+**Exit is a state, not a flag beside one.** `Running` used to sit next to a `_shellExited` bool that
+every reader had to consult, which is a pair that can disagree. The states are now
+`Idle | Starting | Running | Exited | Faulted | Failed`; whether input is accepted, whether the
+screen is drawn and whether a shell can be started are each one question about one value. `Exited`
+and `Faulted` keep their session, so the screen a finished command left stays readable and
+scrollable, and the renderer's switch over the six throws on anything it has no drawing for rather
+than quietly showing the wrong thing.
+
+**A spawn is handed over, not posted.** The spawn runs on a worker and posts its result to the UI
+thread, and a post is not a handover: the loop can stop in between, and then nothing runs the
+adoption and a live shell is owned by nobody. The session is now recorded under a lock before the
+post, disposal takes whatever is sitting there, and a spawn that lands after disposal ends it on the
+thread that made it.
+
+**A terminal with no shell does not take the keyboard.** The input controller stole focus on any
+press, whatever its state — which for an idle pane means holding focus while declining every key, so
+the application's own chords die for as long as the pointer is over nothing else. The steal is now
+gated on there being a shell, which is also what lets a click reach the start gate stacked over the
+grid. The gate hands focus back on the way out, so the click that starts a shell is the last one
+needed before typing.
+
+**Removal is not only the user's doing.** Worktree and submodule reconciliation removes repository
+rows nobody touched, and the store ends those terminals: a shell whose working directory has been
+pruned has nowhere to be. It reconciles against the live list on every change rather than matching
+removals, because a list says it was cleared or reset without saying what left.
 
 ## Risks
 

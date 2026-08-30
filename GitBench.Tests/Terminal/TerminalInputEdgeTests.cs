@@ -1144,7 +1144,7 @@ public class TerminalInputControllerEdgeTests
 /// The view model's end of the input contract at the edges: what it answers before a shell exists,
 /// and what it does with bytes once one no longer does.
 /// </summary>
-public class TerminalViewModelInputEdgeTests
+public class TerminalInstanceInputEdgeTests
 {
     [Fact]
     public void WithNoShellYet_TheModesAreReadableRatherThanAbsent()
@@ -1152,7 +1152,7 @@ public class TerminalViewModelInputEdgeTests
         // The controller reads Modes on every keystroke, including the ones that arrive while the
         // shell is still spawning. Reaching through a null session here is a crash on the first key.
         var dispatcher = new ImmediateDispatcher();
-        using var vm = new TerminalViewModel(new NeverStarts(), dispatcher);
+        using var vm = new TerminalInstance(new NeverStarts(), dispatcher);
 
         Assert.False(vm.Modes.ApplicationCursorKeys);
     }
@@ -1163,7 +1163,7 @@ public class TerminalViewModelInputEdgeTests
         // The encoder returns 0 for every key the text pipeline carries, and a caller that slices by
         // that count hands over an empty span for each of them.
         var dispatcher = new ImmediateDispatcher();
-        using var vm = new TerminalViewModel(new NeverStarts(), dispatcher);
+        using var vm = new TerminalInstance(new NeverStarts(), dispatcher);
 
         vm.SendInput(ReadOnlySpan<byte>.Empty);
     }
@@ -1172,7 +1172,7 @@ public class TerminalViewModelInputEdgeTests
     public void DisposingTwice_IsNotAnError()
     {
         // The pane is kept alive by the mode switcher and disposed by the window; both ends can run.
-        var vm = new TerminalViewModel(new NeverStarts(), new ImmediateDispatcher());
+        var vm = new TerminalInstance(new NeverStarts(), new ImmediateDispatcher());
 
         vm.Dispose();
         vm.Dispose();
@@ -1184,7 +1184,7 @@ public class TerminalViewModelInputEdgeTests
     public void SendingInputAfterDisposal_IsANoOpRatherThanAThrow()
     {
         // A keystroke already in the OS queue when the window closes arrives after this.
-        var vm = new TerminalViewModel(new NeverStarts(), new ImmediateDispatcher());
+        var vm = new TerminalInstance(new NeverStarts(), new ImmediateDispatcher());
         vm.Dispose();
 
         vm.SendInput("q"u8);

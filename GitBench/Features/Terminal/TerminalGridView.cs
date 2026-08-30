@@ -154,22 +154,45 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
 
         ReportViewport(bounds, metrics);
 
-        if (_render is not TerminalRenderState.Running) _geometry = null;
-
+        // Every state, exhaustively, and a default that throws rather than quietly drawing something
+        // for a state nobody thought about: what is on screen for each of them is the whole of what
+        // this view does, and a missed one is a pane that silently shows the wrong thing.
         switch (_render)
         {
+            case TerminalRenderState.Idle:
+                _geometry = null;
+                break;
+            case TerminalRenderState.Starting:
+                _geometry = null;
+                DrawMessage(c, bounds, _startingMessage, z + 1);
+                break;
             case TerminalRenderState.Running running:
-                c.PushClip(bounds);
-                DrawScreen(c, running.Session, bounds, metrics, z + 1);
-                c.PopClip();
+                DrawSession(c, running.Session, bounds, metrics, z);
+                break;
+            case TerminalRenderState.Exited exited:
+                DrawSession(c, exited.Session, bounds, metrics, z);
+                break;
+            case TerminalRenderState.Faulted faulted:
+                DrawSession(c, faulted.Session, bounds, metrics, z);
                 break;
             case TerminalRenderState.Failed failed:
+                _geometry = null;
                 DrawMessage(c, bounds, failed.Message, z + 1);
                 break;
             default:
-                DrawMessage(c, bounds, _startingMessage, z + 1);
-                break;
+                throw new NotSupportedException($"No terminal drawing for {_render.GetType().Name}.");
         }
+    }
+
+    /// <remarks>
+    /// A shell that has finished still has a screen, and it keeps its geometry with it: the history
+    /// it printed is what a reader most wants to scroll and select once it has stopped moving.
+    /// </remarks>
+    void DrawSession(ICanvas c, TerminalSession session, RectF bounds, CellMetrics metrics, int z)
+    {
+        c.PushClip(bounds);
+        DrawScreen(c, session, bounds, metrics, z + 1);
+        c.PopClip();
     }
 
     void ReportViewport(RectF bounds, CellMetrics metrics)
