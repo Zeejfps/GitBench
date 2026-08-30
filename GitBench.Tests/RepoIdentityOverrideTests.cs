@@ -96,7 +96,7 @@ public class RepoIdentityOverrideTests
             new List<Repo> { new(repoId, dir + Path.DirectorySeparatorChar, "repo") },
             new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { repoId }) },
             repoId,
-            new(), new(),
+            new(), new(), new(),
             new Dictionary<Guid, Guid> { [repoId] = profileId },
             new Dictionary<int, Guid>());
         var registry = new RepoRegistry(state, statePath);
@@ -124,7 +124,7 @@ public class RepoIdentityOverrideTests
             },
             new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
             primaryId,
-            new(), new(),
+            new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = profileId },
             new Dictionary<int, Guid>());
         var registry = new RepoRegistry(state, statePath);
@@ -150,7 +150,7 @@ public class RepoIdentityOverrideTests
             },
             new List<GroupState> { new(Guid.NewGuid(), "g", false, new List<Guid> { primaryId }) },
             primaryId,
-            new(), new(),
+            new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = primaryProfile, [worktreeId] = worktreeProfile },
             new Dictionary<int, Guid>());
         var registry = new RepoRegistry(state, statePath);

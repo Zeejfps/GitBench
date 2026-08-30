@@ -35,6 +35,15 @@ public sealed class WindowsPlatformShell : IPlatformShell
         }
     }
 
+    public void RevealFile(string path)
+    {
+        var psi = new ProcessStartInfo("explorer.exe")
+        {
+            Arguments = $"/select,\"{path}\"",
+        };
+        using var _ = Process.Start(psi);
+    }
+
     public void OpenTerminal(string path)
     {
         // Windows Terminal first; fall back to cmd.exe if wt isn't installed.

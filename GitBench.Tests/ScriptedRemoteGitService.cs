@@ -138,6 +138,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null) => inner.GetFileBytes(repo, path, side, oldSide, maxBytes, commitSha, baseSha);
     public bool IsPathTracked(Repo repo, string relativePath) => inner.IsPathTracked(repo, relativePath);
     public bool IsPathIgnored(Repo repo, string relativePath) => inner.IsPathIgnored(repo, relativePath);
+    public IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths) => inner.IsPathIgnored(repo, relativePaths);
     public IReadOnlyList<string> ListTrackedFiles(Repo repo) => inner.ListTrackedFiles(repo);
     public RepoOperationState GetOperationState(Repo repo) => inner.GetOperationState(repo);
     public RepoOperation? GetOperation(Repo repo) => inner.GetOperation(repo);

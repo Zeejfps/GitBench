@@ -2,6 +2,15 @@ using GitBench.Pty;
 
 namespace GitBench.Features.Terminal;
 
+/// <summary>Which language the shell in the pane speaks, for the one caller that has to write a
+/// command into it rather than a keystroke.</summary>
+internal enum ShellFamily
+{
+    Posix,
+    PowerShell,
+    CommandProcessor,
+}
+
 /// <summary>
 /// What to run in a terminal pane: the user's interactive shell, started in a repository, told what
 /// kind of terminal it is talking to.
@@ -18,9 +27,13 @@ internal static class ShellCommand
 
     const string AcquireAndExec = "exec \"$0\" \"$@\"";
 
+    /// <summary>What the shell this pane starts speaks. Read off the same choice the spawn makes,
+    /// so a command written into the pane can never be quoted for a shell that is not there.</summary>
+    public static ShellFamily Family => Shell().Family;
+
     public static PtySessionOptions For(string workingDirectory, PtySize size)
     {
-        var (executable, arguments) = Shell();
+        var (executable, arguments, _) = Shell();
 
         return new PtySessionOptions
         {
@@ -38,7 +51,7 @@ internal static class ShellCommand
         };
     }
 
-    static (string Executable, string[] Arguments) Shell() =>
+    static (string Executable, string[] Arguments, ShellFamily Family) Shell() =>
         OperatingSystem.IsWindows() ? WindowsShell() : UnixShell();
 
     /// <remarks>
@@ -47,11 +60,11 @@ internal static class ShellCommand
     /// processor. <c>-NoLogo</c> only suppresses the banner; the profile still runs, which is what
     /// makes the user's own PATH and aliases live in the pane.
     /// </remarks>
-    static (string, string[]) WindowsShell()
+    static (string, string[], ShellFamily) WindowsShell()
     {
-        if (OnPath("pwsh.exe")) return ("pwsh.exe", ["-NoLogo"]);
-        if (OnPath("powershell.exe")) return ("powershell.exe", ["-NoLogo"]);
-        return (Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", []);
+        if (OnPath("pwsh.exe")) return ("pwsh.exe", ["-NoLogo"], ShellFamily.PowerShell);
+        if (OnPath("powershell.exe")) return ("powershell.exe", ["-NoLogo"], ShellFamily.PowerShell);
+        return (Environment.GetEnvironmentVariable("ComSpec") ?? "cmd.exe", [], ShellFamily.CommandProcessor);
     }
 
     /// <remarks>
@@ -59,10 +72,10 @@ internal static class ShellCommand
     /// rc files are where nvm, asdf and every hand-edited PATH live, and a shell started without
     /// them cannot find the tools the user expects to type the name of.
     /// </remarks>
-    static (string, string[]) UnixShell()
+    static (string, string[], ShellFamily) UnixShell()
     {
         var shell = Environment.GetEnvironmentVariable("SHELL");
-        return (string.IsNullOrWhiteSpace(shell) ? "/bin/bash" : shell, ["-l"]);
+        return (string.IsNullOrWhiteSpace(shell) ? "/bin/bash" : shell, ["-l"], ShellFamily.Posix);
     }
 
     static bool OnPath(string executable)

@@ -35,6 +35,7 @@ public static class PreferencesStore
         public bool? RepoBarCollapsed { get; set; } = false;
         public float? BranchesWidth { get; set; } = 220f;
         public float? CommitDetailsWidth { get; set; } = 380f;
+        public float? FileBrowserWidth { get; set; } = 260f;
         public float? CommitDetailsSplitFraction { get; set; } = 2f / 3f;
         public FileViewMode? FileViewMode { get; set; } = Features.LocalChanges.FileViewMode.Flat;
         public WorkingChangesLayout? WorkingChangesLayout { get; set; } = Features.LocalChanges.WorkingChangesLayout.Diff;
@@ -96,6 +97,7 @@ public static class PreferencesStore
                 RepoBarCollapsed = file.RepoBarCollapsed ?? defaults.RepoBarCollapsed,
                 BranchesWidth = file.BranchesWidth is > 0 ? file.BranchesWidth.Value : defaults.BranchesWidth,
                 CommitDetailsWidth = file.CommitDetailsWidth is > 0 ? file.CommitDetailsWidth.Value : defaults.CommitDetailsWidth,
+                FileBrowserWidth = file.FileBrowserWidth is > 0 ? file.FileBrowserWidth.Value : defaults.FileBrowserWidth,
                 CommitDetailsSplitFraction = file.CommitDetailsSplitFraction is > 0 ? file.CommitDetailsSplitFraction.Value : defaults.CommitDetailsSplitFraction,
                 FileViewMode = file.FileViewMode ?? defaults.FileViewMode,
                 WorkingChangesLayout = file.WorkingChangesLayout ?? defaults.WorkingChangesLayout,
@@ -135,6 +137,7 @@ public static class PreferencesStore
             RepoBarCollapsed = preferences.RepoBarCollapsed,
             BranchesWidth = preferences.BranchesWidth,
             CommitDetailsWidth = preferences.CommitDetailsWidth,
+            FileBrowserWidth = preferences.FileBrowserWidth,
             CommitDetailsSplitFraction = preferences.CommitDetailsSplitFraction,
             FileViewMode = preferences.FileViewMode,
             WorkingChangesLayout = preferences.WorkingChangesLayout,

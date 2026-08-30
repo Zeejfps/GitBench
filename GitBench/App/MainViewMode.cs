@@ -5,4 +5,5 @@ public enum MainViewMode
     History,
     LocalChanges,
     Terminal,
+    Files,
 }

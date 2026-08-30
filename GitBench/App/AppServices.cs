@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Commits;
+using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
@@ -162,6 +163,9 @@ internal static class AppServices
         // Hosted for the same reason the assistant's store is — it watches the registry, which it
         // can only do once the UI loop exists.
         context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>();
+
+        context.AddSingleton<IFileSystemReader, FileSystemReader>();
+        context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
 
         // Factory because the snapshot store ingests the active repo's file-list summary into the
         // status store, an interface cast (IRepoStatusIngest) the container can't do by plain

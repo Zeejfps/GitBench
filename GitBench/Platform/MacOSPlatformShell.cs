@@ -36,6 +36,14 @@ public sealed class MacOSPlatformShell : IPlatformShell
         }
     }
 
+    public void RevealFile(string path)
+    {
+        var psi = new ProcessStartInfo("/usr/bin/open");
+        psi.ArgumentList.Add("-R");
+        psi.ArgumentList.Add(path);
+        using var _ = Process.Start(psi);
+    }
+
     public void OpenTerminal(string path)
     {
         var psi = new ProcessStartInfo("/usr/bin/open");
