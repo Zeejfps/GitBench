@@ -22,7 +22,7 @@
 | Input | Ours. We own the key encoder, so the **kitty keyboard protocol** is implemented natively and Shift+Enter works with no `/terminal-setup` step. |
 | Testing | **Recorded byte corpora replayed against golden grid snapshots.** We cannot drive a subscription-authenticated `claude` from CI, so we capture real sessions by hand once, commit the bytes, and replay them forever. Engine tests are pure `bytes → grid`. |
 | Placement | A third mode in the switcher: **Changes │ History │ Terminal**. Inside it, a title bar of tabs over one grid: several terminals per repository, one of them on screen. A terminal is still a repository's and its cwd is the repo root. |
-| Title bar | A strip above the grid: one tab per terminal, a `+` on the trailing edge, and the active shell's title. The tabs are the commit-details tabs — `CommitTabChrome` and `TabClickController` move out of `Features/Commits` into a shared `Controls/TabStrip.cs` and both surfaces build on it — so the X, the middle-click close, the ellipsis at the width cap, the active and hover fills and the overflow scroller stay one implementation rather than two that drift. |
+| Title bar | A strip above the grid, from the first started shell onward: one tab per terminal, labelled with that shell's title, and a `+` on the trailing edge that opens and starts another. The tabs are the commit-details tabs — `CommitTabChrome` and `TabClickController` move out of `Features/Commits` into a shared `Controls/TabStrip.cs` and both surfaces build on it — so the X, the middle-click close, the ellipsis at the width cap, the active and hover fills and the overflow scroller stay one implementation rather than two that drift. |
 | Closing a tab | Confirmed when the tab holds a live shell, immediate otherwise. Same reasoning as `ConfirmQuitDialog` — a shell mid-build is not something to lose to a stray middle click — and the same modal machinery, with the tab rather than the application as the subject. An idle, exited or failed tab has nothing to lose and closes on the click. |
 | Shell | The user's interactive login shell, so PATH/nvm/rc files are live — same reasoning as `GitProcessRunner.GitLaunch.Shell`. `TERM=xterm-256color`, `COLORTERM=truecolor`. |
 | Relationship to the assistant | **Unrelated.** `docs/plans/assistant.md` builds an in-process agent over domain tools; this hosts a shell. They share no code and neither blocks the other. Running `claude` in the terminal is not the assistant backend. |
@@ -132,21 +132,22 @@ shell that cannot be overridden.
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
 
-**Phase 7 — the title bar and tabs.** Four steps, each of which ships on its own.
+**Phase 7 — the title bar and tabs.** Built, in four steps that each shipped on their own.
 
-1. **Extract the tab strip.** `CommitTabChrome`, `TabClickController` and the overflow scroller move to
-   `GitBench/Controls/TabStrip.cs`, and the commit-details strip is rebuilt on them with no visual
-   change. A pure refactor, and the commit surface is its own regression test.
-2. **One terminal per repository becomes several.** `TerminalSessionStore` keys a *list* per repo id
-   with an active index instead of a single instance. `Active` still projects the one terminal the pane
-   draws; `HasLiveShell` and `ReposWithLiveShells` count over the whole list, so the quit confirmation
-   keeps naming repositories and starts being right about a repository whose live shell is in a tab that
-   is not on screen.
-3. **The strip.** Tabs bound to the active repository's list, `+` opens another terminal — idle, since
-   making one still starts nothing — click activates, X and middle-click close, overflow pans.
+1. **Extract the tab strip.** `CommitTabChrome`, `TabClickController` and the overflow scroller moved to
+   `GitBench/Controls/TabStrip.cs` — as `TabStrip` (the row, its scroller and an optional trailing slot),
+   `TabChrome` (the pill) and `TabClickController` — and the commit-details strip is rebuilt on them with
+   no visual change. A pure refactor, and the commit surface is its own regression test.
+2. **One terminal per repository becomes several.** `TerminalSessionStore` keys a `TerminalTabs` per
+   repo id — an `ObservableList<TerminalInstance>` with the active one beside it — instead of a single
+   instance, and publishes it as `Tabs`. `HasLiveShell` and `ReposWithLiveShells` count over the whole
+   list, so the quit confirmation keeps naming repositories and is now right about a repository whose
+   live shell is in a tab that is not on screen.
+3. **The strip.** Tabs bound to the active repository's list, `+` opens another terminal *and starts it*,
+   click activates, X and middle-click close, overflow pans.
 4. **Confirmation and title.** `ConfirmCloseTerminalDialog` beside `ConfirmQuitDialog`, gated on the tab
-   holding a live shell, and `TerminalState.Title` finally read above the seam as the tab's label. That
-   closes the window-title item Phase 5 left open.
+   holding a live shell, and `TerminalState.Title` read above the seam as the tab's label. That closes
+   the window-title item Phase 5 left open.
 
 Splits are the obvious next thing and are deliberately not here: a split is two grids on screen at once,
 which is a different question from which of several sessions is on screen, and answering it early would
@@ -586,6 +587,18 @@ says what it is about to end. Two dialogs rather than one parameterised over "ho
 kind", because the sentences are different sentences and the plural machinery would be carrying a case
 that never has more than one item.
 
+**A repository always has at least one terminal, and the last tab has no X.** `TerminalTabs.Active` is
+therefore not nullable and `Close` refuses the last one — an empty strip is a state the pane would have
+to draw something for and the reader would have no way out of. `CanClose` is the one predicate behind
+both the refusal and the affordance, bound rather than decided at build time, since a tab outlives the
+sibling whose arrival made it closable.
+
+**The `+` starts what it opens.** Opening a tab and starting its shell are one gesture: asking for
+another terminal is asking for another shell, and the start gate exists for the first one only because
+a repository is handed a terminal nobody asked for. `TerminalTabs.Open` stays a pure "make one", and the
+`+` calls `Start` after it — the spawn then waits for the new grid's first viewport report, which is the
+same path the gate's own click takes.
+
 **The title is the engine's; the fallback is the tab's.** `TerminalState.Title` already carries what OSC
 0/2 sets, which is what a shell writes and what a program running under it overwrites — so a tab's label
 follows the running command, which is the whole reason a tab strip is legible with four shells open. An
@@ -594,10 +607,14 @@ is the title when there is one and the shell's file name otherwise. Two terminal
 with the same title are told apart by a trailing index; the index is positional and belongs to the strip,
 not to the terminal, since it means "the second one you can see" and nothing else.
 
-**The strip is drawn even with one tab.** It carries the title and the `+`, so hiding it until a second
-terminal exists would mean the grid jumping down by the strip's height under whoever just opened one, and
-no visible way to open the first extra tab. Same reasoning as the underline strip in the working-changes
-pane, which is always laid out and only ever changes what it paints.
+**The strip is drawn even with one tab — but not before there is a shell.** It carries the title and the
+`+`, so hiding it once a terminal is running would mean the grid jumping by the strip's height and no
+visible way to open a second one. But a repository is *given* a terminal it never asked for, and a strip
+naming a shell that does not exist is chrome over the offer to start one — so the strip appears with the
+first start (`TerminalTabs.AnyStarted`) and stays from then on, including for a shell that has since
+exited, whose tab is how that screen stays reachable. This reverses an earlier "always laid out" call,
+after seeing it: the jump is one frame at the moment a shell starts, and the alternative is a tab strip
+over an empty pane.
 
 ## Risks
 

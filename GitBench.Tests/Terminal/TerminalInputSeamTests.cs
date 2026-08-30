@@ -109,6 +109,70 @@ public class TerminalPaneWiringTests : IDisposable
     }
 
     [Fact]
+    public void BeforeAnythingHasBeenStarted_ThereIsNoTabStrip()
+    {
+        // A repository is given a terminal it never asked for, so a strip naming it before it has
+        // run anything would be chrome over the offer to start one.
+        using var pane = new PaneUnderTest(_dir.Path);
+
+        pane.Harness.Render();
+
+        Assert.False(pane.Harness.Get(TerminalTabStrip.StripId).IsVisible);
+    }
+
+    [Fact]
+    public void OnceAShellIsRunning_TheStripIsThere()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+
+        pane.Start();
+        pane.Harness.Render();
+
+        Assert.True(pane.Harness.Get(TerminalTabStrip.StripId).IsVisible);
+    }
+
+    [Fact]
+    public void PressingNewTab_StartsASecondShellAndLeavesTheFirstRunning()
+    {
+        // One gesture, not two: asking for another terminal is asking for another shell.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Harness.Render();
+        var first = pane.Terminal;
+
+        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.Render();
+
+        Assert.Equal(2, pane.Tabs.Terminals.Count);
+        Assert.NotSame(first, pane.Terminal);
+        Pump.WaitFor(
+            pane.Dispatcher,
+            () => pane.Terminal.Render.Value is TerminalRenderState.Running,
+            "the shell the new tab asked for");
+        Assert.IsType<TerminalRenderState.Running>(first.Render.Value);
+    }
+
+    [Fact]
+    public void ActivatingATab_DrawsThatTerminalsGrid()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Harness.Render();
+        var first = pane.Terminal;
+        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.Render();
+
+        pane.Tabs.Activate(first);
+        pane.Harness.Render();
+
+        Assert.Same(first, pane.Terminal);
+        Assert.NotNull(pane.Grid);
+    }
+
+    [Fact]
     public void SwitchingRepositories_PutsTheOtherRepositorysTerminalOnScreen()
     {
         using var pane = new PaneUnderTest(_dir.Path);
@@ -160,6 +224,7 @@ public class TerminalPaneWiringTests : IDisposable
                     ctx.AddService<IPtySessionFactory>(new UnusedPtyFactory());
                     ctx.AddService<IRepoRegistry>(_registry);
                     ctx.AddService<ITerminalSessionStore>(_store);
+                    ctx.AddService<IMessageBus>(new MessageBus());
                 });
         }
 
@@ -168,7 +233,9 @@ public class TerminalPaneWiringTests : IDisposable
         public Guid FirstRepo { get; }
         public Guid SecondRepo { get; }
 
-        public TerminalInstance Terminal => _store.Active.Value!;
+        public TerminalTabs Tabs => _store.Tabs.Value!;
+
+        public TerminalInstance Terminal => Tabs.Active.Value;
 
         public View Grid => Harness.Get(TerminalScreen.GridId);
 
@@ -206,6 +273,8 @@ public class TerminalPaneWiringTests : IDisposable
     /// without a process anywhere near the test.</summary>
     private sealed class PaneLaunch : ITerminalLaunch
     {
+        public string Name => "shell";
+
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
@@ -1436,6 +1505,8 @@ internal sealed class SeamLaunch : ITerminalLaunch
 
     /// <summary>How deep a history to keep, for a test that needs one it can overflow.</summary>
     public int ScrollbackLines { get; init; } = 5000;
+
+    public string Name => "shell";
 
     public TerminalSize SizeFor(TerminalSize viewport) => Recording?.Size ?? viewport;
 

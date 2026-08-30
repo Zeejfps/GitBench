@@ -161,6 +161,12 @@
   },
   "terminal.quit_cancel": "متابعة العمل",
   "terminal.repo_remove_warning": "لا تزال هناك صدفة قيد التشغيل هنا. إزالة المستودع ستنهيها.",
+  "terminal.new_tab": "طرفية جديدة",
+  "terminal.tab_indexed": "{label} ({index})",
+  "terminal.close_tab_title": "هل تريد إنهاء هذه الجلسة؟",
+  "terminal.close_tab_body": "لا تزال هناك صدفة قيد التشغيل في هذه الطرفية. إغلاق علامة التبويب سينهيها مع ما تقوم به.",
+  "terminal.close_tab_action": "إغلاق وإنهاء",
+  "terminal.close_tab_cancel": "متابعة العمل",
 
   "file_browser.no_repo": "افتح مستودعًا لتصفح ملفاته.",
   "file_browser.show_hidden": "إظهار الملفات المتجاهلة والمخفية",

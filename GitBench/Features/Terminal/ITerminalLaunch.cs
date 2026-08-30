@@ -18,6 +18,13 @@ namespace GitBench.Features.Terminal;
 /// </remarks>
 internal interface ITerminalLaunch
 {
+    /// <summary>
+    /// What to call this terminal before a program running in it names itself — the shell's own
+    /// file name for a shell, the recording's for a replay. The fallback behind
+    /// <see cref="TerminalInstance.Title"/>, which is empty until something sets OSC 0/2.
+    /// </summary>
+    string Name { get; }
+
     /// <summary>The size to run at, given what the pane can currently show.</summary>
     TerminalSize SizeFor(TerminalSize viewport);
 
@@ -47,6 +54,8 @@ internal sealed class ShellLaunch : ITerminalLaunch
         _engines = engines;
         _clipboard = clipboard;
     }
+
+    public string Name => ShellCommand.Name;
 
     public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 

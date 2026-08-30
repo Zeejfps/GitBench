@@ -14,13 +14,13 @@ using ZGF.Observable;
 namespace GitBench.Features.Terminal;
 
 /// <summary>
-/// The Terminal mode: the active repository's terminal, drawn as a cell grid.
+/// The Terminal mode: the active repository's terminals, as a strip of tabs over one cell grid.
 /// </summary>
 /// <remarks>
-/// One pane, and one terminal per repository behind it. The pane follows
-/// <see cref="ITerminalSessionStore.Active"/> rather than reading the registry itself, so switching
-/// repositories swaps which shell is on screen while the others keep running — the terminals are the
-/// store's, and the pane is only ever looking at one of them.
+/// One pane, and several terminals per repository behind it. The pane follows
+/// <see cref="ITerminalSessionStore.Tabs"/> rather than reading the registry itself, so switching
+/// repositories swaps the whole strip while the shells it leaves keep running — the terminals are
+/// the store's, and the pane is only ever looking at one of them.
 /// </remarks>
 internal sealed record TerminalPane : Widget
 {
@@ -38,12 +38,50 @@ internal sealed record TerminalPane : Widget
         if (Environment.GetEnvironmentVariable(ReplayEnvVar) is { Length: > 0 } replayPath)
             return new TerminalReplayScreen { RecordingPath = replayPath };
 
-        return new Switch<TerminalInstance?>
+        return new Switch<TerminalTabs?>
         {
-            Value = ctx.Require<ITerminalSessionStore>().Active,
-            Case = instance => instance is null
+            Value = ctx.Require<ITerminalSessionStore>().Tabs,
+            Case = tabs => tabs is null
                 ? new TerminalNotice { Message = L.T(s => s.TerminalNoRepo) }
-                : new TerminalScreen { Instance = instance },
+                : new TerminalTabsPane { Tabs = tabs },
+        };
+    }
+}
+
+/// <summary>
+/// One repository's terminals: the strip naming them, and the grid of whichever is active.
+/// </summary>
+/// <remarks>
+/// The strip appears with the first shell. Until then the pane is one screen offering to start one,
+/// and a tab strip over it would be naming a terminal that has not run anything.
+/// </remarks>
+internal sealed record TerminalTabsPane : Widget
+{
+    public required TerminalTabs Tabs { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var tabs = Tabs;
+
+        return new Column
+        {
+            CrossAxis = CrossAxisAlignment.Stretch,
+            Children =
+            [
+                new TerminalTabStrip
+                {
+                    Tabs = tabs,
+                    Visible = Prop.Bind(() => tabs.AnyStarted),
+                },
+                new Grow
+                {
+                    Child = new Switch<TerminalInstance>
+                    {
+                        Value = tabs.Active,
+                        Case = instance => new TerminalScreen { Instance = instance },
+                    },
+                },
+            ],
         };
     }
 }
@@ -143,7 +181,10 @@ internal sealed record TerminalReplayScreen : Widget
         }
 
         var instance = new TerminalInstance(
-            new ReplayLaunch(recording, ctx.Require<ITerminalEngineFactory>()),
+            new ReplayLaunch(
+                recording,
+                ctx.Require<ITerminalEngineFactory>(),
+                Path.GetFileNameWithoutExtension(RecordingPath)),
             ctx.Require<IUiDispatcher>());
         instance.Start();
 

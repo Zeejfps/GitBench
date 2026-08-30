@@ -101,6 +101,12 @@
   "terminal.quit_action": { "other": "閉じて終了" },
   "terminal.quit_cancel": "作業を続ける",
   "terminal.repo_remove_warning": "ここではシェルがまだ実行中です。リポジトリを削除すると終了します。",
+  "terminal.new_tab": "新しいターミナル",
+  "terminal.tab_indexed": "{label} ({index})",
+  "terminal.close_tab_title": "このセッションを終了しますか?",
+  "terminal.close_tab_body": "このターミナルではシェルがまだ実行中です。タブを閉じると、実行中の処理ごと終了します。",
+  "terminal.close_tab_action": "閉じて終了",
+  "terminal.close_tab_cancel": "作業を続ける",
 
   "file_browser.no_repo": "リポジトリを開くとファイルを閲覧できます。",
   "file_browser.show_hidden": "無視されたファイルと隠しファイルを表示",

@@ -312,6 +312,8 @@ public class TerminalInstanceLifecycleTests
         /// <summary>Signals that a spawn has happened, for a test whose dispatcher never runs.</summary>
         public ManualResetEventSlim Started { get; } = new();
 
+        public string Name => "shell";
+
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher)
@@ -337,6 +339,8 @@ public class TerminalInstanceLifecycleTests
     sealed class FaultingLaunch : ITerminalLaunch
     {
         public LifecyclePty Pty { get; } = new();
+
+        public string Name => "shell";
 
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 

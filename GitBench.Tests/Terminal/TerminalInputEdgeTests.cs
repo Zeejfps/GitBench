@@ -1237,6 +1237,8 @@ public class TerminalInstanceInputEdgeTests
     /// <summary>A launch that is never asked to start, because no viewport is ever reported.</summary>
     sealed class NeverStarts : ITerminalLaunch
     {
+        public string Name => "shell";
+
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>

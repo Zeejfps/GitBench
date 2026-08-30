@@ -106,7 +106,7 @@ internal sealed class FileBrowserContextMenu
     /// </summary>
     private void OpenTerminalAt(string directory)
     {
-        var instance = _terminals?.Active.Value;
+        var instance = _terminals?.Tabs.Value?.Active.Value;
         if (instance is { IsAcceptingInput: true }
             && ShellPathQuoting.ChangeDirectoryCommand(directory, ShellCommand.Family) is { } command)
         {

@@ -151,6 +151,12 @@
   },
   "terminal.quit_cancel": "Продолжить работу",
   "terminal.repo_remove_warning": "Здесь ещё работает оболочка. Удаление репозитория завершит её.",
+  "terminal.new_tab": "Новый терминал",
+  "terminal.tab_indexed": "{label} ({index})",
+  "terminal.close_tab_title": "Завершить этот сеанс?",
+  "terminal.close_tab_body": "В этом терминале ещё работает оболочка. Закрытие вкладки завершит её вместе с тем, что она выполняет.",
+  "terminal.close_tab_action": "Закрыть и завершить",
+  "terminal.close_tab_cancel": "Продолжить работу",
 
   "file_browser.no_repo": "Откройте репозиторий, чтобы просмотреть его файлы.",
   "file_browser.show_hidden": "Показывать игнорируемые и скрытые файлы",

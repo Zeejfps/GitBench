@@ -22,6 +22,10 @@ public class TerminalSessionStoreTests : IDisposable
     readonly RepoRegistry _registry;
     readonly QueuedDispatcher _dispatcher = new();
     readonly Dictionary<Guid, LifecyclePty> _ptys = new();
+
+    // Every pseudo-terminal ever started, since a repository now has several terminals and the
+    // dictionary above only remembers the last one each repository opened.
+    readonly List<LifecyclePty> _allPtys = new();
     readonly Guid _first;
     readonly Guid _second;
 
@@ -50,7 +54,7 @@ public class TerminalSessionStoreTests : IDisposable
             StubLaunch);
         store.Start();
 
-        Assert.Null(store.Active.Value);
+        Assert.Null(ActiveTerminal(store));
     }
 
     [Fact]
@@ -60,7 +64,7 @@ public class TerminalSessionStoreTests : IDisposable
 
         _registry.SetActive(_first);
 
-        var terminal = Assert.IsType<TerminalInstance>(store.Active.Value);
+        var terminal = Assert.IsType<TerminalInstance>(ActiveTerminal(store));
         Assert.IsType<TerminalRenderState.Idle>(terminal.Render.Value);
         Assert.Empty(_ptys);
     }
@@ -71,10 +75,10 @@ public class TerminalSessionStoreTests : IDisposable
         using var store = Store();
 
         _registry.SetActive(_first);
-        var first = store.Active.Value;
+        var first = ActiveTerminal(store);
         _registry.SetActive(_second);
 
-        Assert.NotSame(first, store.Active.Value);
+        Assert.NotSame(first, ActiveTerminal(store));
     }
 
     [Fact]
@@ -82,13 +86,13 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = store.Active.Value!;
+        var terminal = ActiveTerminal(store)!;
         StartShell(terminal);
 
         _registry.SetActive(_second);
         _registry.SetActive(_first);
 
-        Assert.Same(terminal, store.Active.Value);
+        Assert.Same(terminal, ActiveTerminal(store));
         Assert.IsType<TerminalRenderState.Running>(terminal.Render.Value);
         Assert.False(_ptys[_first].IsDisposed, "Switching repositories killed the shell it left.");
     }
@@ -98,9 +102,9 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
         _registry.SetActive(_second);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
 
         Assert.False(_ptys[_first].IsDisposed);
         Assert.False(_ptys[_second].IsDisposed);
@@ -113,13 +117,13 @@ public class TerminalSessionStoreTests : IDisposable
         // touched, and a shell whose working directory has gone has nowhere to be.
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = store.Active.Value!;
+        var terminal = ActiveTerminal(store)!;
         StartShell(terminal);
 
         _registry.RemoveRepo(_first);
 
         Assert.True(_ptys[_first].IsDisposed, "The removed repository's shell was left running.");
-        Assert.NotSame(terminal, store.Active.Value);
+        Assert.NotSame(terminal, ActiveTerminal(store));
     }
 
     [Fact]
@@ -127,13 +131,13 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
         _registry.SetActive(_second);
 
         _registry.RemoveRepo(_first);
 
         Assert.True(_ptys[_first].IsDisposed);
-        Assert.NotNull(store.Active.Value);
+        Assert.NotNull(ActiveTerminal(store));
     }
 
     [Fact]
@@ -143,15 +147,15 @@ public class TerminalSessionStoreTests : IDisposable
         // the application does.
         var store = Store();
         _registry.SetActive(_first);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
         _registry.SetActive(_second);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
 
         store.Dispose();
 
         Assert.True(_ptys[_first].IsDisposed);
         Assert.True(_ptys[_second].IsDisposed);
-        Assert.Null(store.Active.Value);
+        Assert.Null(ActiveTerminal(store));
     }
 
     [Fact]
@@ -171,7 +175,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
         _registry.SetActive(_second);
 
         Assert.Equal(new[] { _first }, store.ReposWithLiveShells());
@@ -184,9 +188,9 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
         _registry.SetActive(_second);
-        StartShell(store.Active.Value!);
+        StartShell(ActiveTerminal(store)!);
 
         Assert.Equal(
             new HashSet<Guid> { _first, _second },
@@ -198,7 +202,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = store.Active.Value!;
+        var terminal = ActiveTerminal(store)!;
         StartShell(terminal);
 
         _ptys[_first].ShellExits();
@@ -216,6 +220,64 @@ public class TerminalSessionStoreTests : IDisposable
 
         Assert.False(store.HasLiveShell(Guid.NewGuid()));
     }
+
+    [Fact]
+    public void SwitchingAwayAndBack_ComesBackToTheTabsThatWereOpen()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        var tabs = store.Tabs.Value!;
+        var second = tabs.Open();
+
+        _registry.SetActive(_second);
+        _registry.SetActive(_first);
+
+        Assert.Same(tabs, store.Tabs.Value);
+        Assert.Equal(2, store.Tabs.Value!.Terminals.Count);
+        Assert.Same(second, ActiveTerminal(store));
+    }
+
+    [Fact]
+    public void AShellInATabThatIsNotOnScreen_StillNamesItsRepository()
+    {
+        // The quit confirmation asks per repository over the whole list, so a live shell one tab
+        // behind the one on screen is still something closing would end.
+        using var store = Store();
+        _registry.SetActive(_first);
+        var tabs = store.Tabs.Value!;
+        StartShell(tabs.Active.Value);
+        tabs.Open();
+
+        Assert.True(store.HasLiveShell(_first));
+        Assert.Equal(new[] { _first }, store.ReposWithLiveShells());
+    }
+
+    [Fact]
+    public void RemovingARepo_EndsEveryOneOfItsShells()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        var tabs = store.Tabs.Value!;
+        StartShell(tabs.Active.Value);
+        StartedTab(tabs);
+
+        _registry.RemoveRepo(_first);
+
+        Assert.All(_allPtys, pty => Assert.True(pty.IsDisposed, "A removed repository left a shell running."));
+        Assert.False(tabs.HasLiveShell);
+        Assert.NotSame(tabs, store.Tabs.Value);
+    }
+
+    /// <summary>Opens a tab and starts its shell, returning the terminal it made.</summary>
+    TerminalInstance StartedTab(TerminalTabs tabs)
+    {
+        var terminal = tabs.Open();
+        StartShell(terminal);
+        return terminal;
+    }
+
+    /// <summary>The terminal the pane would be drawing: the active repository's active tab.</summary>
+    static TerminalInstance? ActiveTerminal(TerminalSessionStore store) => store.Tabs.Value?.Active.Value;
 
     TerminalSessionStore Store()
     {
@@ -235,6 +297,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         var pty = new LifecyclePty();
         _ptys[repoId] = pty;
+        _allPtys.Add(pty);
         return pty;
     }
 
@@ -261,6 +324,8 @@ public class TerminalSessionStoreTests : IDisposable
         readonly Func<IPtySession> _open;
 
         public StoreLaunch(Func<IPtySession> open) => _open = open;
+
+        public string Name => "shell";
 
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 

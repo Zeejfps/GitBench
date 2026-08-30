@@ -63,11 +63,14 @@ internal sealed class ReplayLaunch : ITerminalLaunch
     readonly TerminalRecording _recording;
     readonly ITerminalEngineFactory _engines;
 
-    public ReplayLaunch(TerminalRecording recording, ITerminalEngineFactory engines)
+    public ReplayLaunch(TerminalRecording recording, ITerminalEngineFactory engines, string name = "replay")
     {
         _recording = recording;
         _engines = engines;
+        Name = name;
     }
+
+    public string Name { get; }
 
     public TerminalSize SizeFor(TerminalSize viewport) => _recording.Size;
 

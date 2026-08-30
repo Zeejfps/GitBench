@@ -27,6 +27,13 @@ internal static class ShellCommand
 
     const string AcquireAndExec = "exec \"$0\" \"$@\"";
 
+    /// <summary>
+    /// The shell's own name, for a tab to wear until a program running in it says otherwise.
+    /// The executable that was asked for rather than the acquirer that starts it: <c>/bin/sh</c> is
+    /// how the terminal is taken, not what the user is typing into.
+    /// </summary>
+    public static string Name => Path.GetFileNameWithoutExtension(Shell().Executable);
+
     /// <summary>What the shell this pane starts speaks. Read off the same choice the spawn makes,
     /// so a command written into the pane can never be quoted for a shell that is not there.</summary>
     public static ShellFamily Family => Shell().Family;

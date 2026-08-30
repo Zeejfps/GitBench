@@ -101,6 +101,12 @@
   "terminal.quit_action": { "one": "Close and Terminate", "other": "Close and Terminate {count}" },
   "terminal.quit_cancel": "Keep Working",
   "terminal.repo_remove_warning": "A shell is still running here. Removing the repository ends it.",
+  "terminal.new_tab": "New terminal",
+  "terminal.tab_indexed": "{label} ({index})",
+  "terminal.close_tab_title": "Terminate this session?",
+  "terminal.close_tab_body": "A shell is still running in this terminal. Closing the tab ends it, along with whatever it is in the middle of.",
+  "terminal.close_tab_action": "Close and Terminate",
+  "terminal.close_tab_cancel": "Keep Working",
 
   "file_browser.no_repo": "Open a repository to browse its files.",
   "file_browser.show_hidden": "Show ignored and hidden files",

@@ -886,6 +886,8 @@ public class TerminalInstanceInputTests
             }
         }
 
+        public string Name => "shell";
+
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>

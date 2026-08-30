@@ -61,6 +61,7 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     readonly ITerminalLaunch _launch;
     readonly IUiDispatcher _dispatcher;
     readonly State<TerminalRenderState> _render = new(new TerminalRenderState.Idle());
+    readonly State<string?> _title = new(null);
 
     // Guards the handover of a spawned session from the worker that made it to the UI thread that
     // adopts it, and nothing else. See Spawn.
@@ -79,6 +80,21 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     }
 
     public IReadable<TerminalRenderState> Render => _render;
+
+    /// <summary>
+    /// What the terminal calls itself: what OSC 0/2 last set, and null when nothing has set one.
+    /// </summary>
+    /// <remarks>
+    /// Observable rather than read off <see cref="TerminalSession.State"/> at the point of use,
+    /// because a title changes on output arriving and nothing about a caller's own state says so.
+    /// A shell writes one and every program it runs overwrites it, which is what makes a strip of
+    /// tabs legible: the label follows the running command rather than naming four identical shells.
+    /// </remarks>
+    public IReadable<string?> Title => _title;
+
+    /// <summary>What this terminal is called before anything running in it has said. See
+    /// <see cref="ITerminalLaunch.Name"/>.</summary>
+    public string Name => _launch.Name;
 
     /// <summary>Raised on the UI thread when the screen has changed and wants drawing again.</summary>
     public event Action? Updated;
@@ -302,6 +318,7 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         if (_size is { } size) session.Resize(size);
 
         _render.Value = new TerminalRenderState.Running(session);
+        SyncTitle();
 
         WatchForExit(session);
     }
@@ -350,7 +367,18 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         _render.Value = new TerminalRenderState.Failed(message);
     }
 
-    void OnSessionUpdated() => Updated?.Invoke();
+    void OnSessionUpdated()
+    {
+        SyncTitle();
+        Updated?.Invoke();
+    }
+
+    /// <summary>
+    /// Republishes the screen's title. Called wherever the screen changes rather than only on a
+    /// feed, since a terminal that has just been retired still has a stale title to drop.
+    /// </summary>
+    void SyncTitle() =>
+        _title.Value = Screen?.State.Title is { Length: > 0 } title ? title : null;
 
     /// <summary>Lets go of the session this terminal is holding, if any, and ends it.</summary>
     void Retire()
@@ -361,6 +389,7 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         session.Faulted -= OnSessionFaulted;
         session.Dispose();
         _session = null;
+        _title.Value = null;
     }
 
     public void Dispose()
@@ -381,5 +410,6 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         Retire();
         _render.Value = new TerminalRenderState.Idle();
         _render.Dispose();
+        _title.Dispose();
     }
 }
