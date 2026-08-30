@@ -235,6 +235,18 @@ public class TerminalPaneWiringTests : IDisposable
 /// </remarks>
 public class TerminalKeybindCollisionTests : IDisposable
 {
+    /// <summary>
+    /// The modifier the application's own chords carry: Cmd on macOS, Ctrl elsewhere.
+    /// </summary>
+    /// <remarks>
+    /// Mirrors <c>AppKeybindController.PrimaryModifier</c>, which is the whole point of these tests:
+    /// a collision only happens on the chord the application actually claims, and pressing Ctrl on
+    /// macOS collides with nothing — the assertions then fail, or worse, pass without exercising
+    /// anything.
+    /// </remarks>
+    private static InputModifiers Primary =>
+        OperatingSystem.IsMacOS() ? InputModifiers.Super : InputModifiers.Control;
+
     private readonly CollidingApp _app = new();
 
     public void Dispose() => _app.Dispose();
@@ -257,7 +269,7 @@ public class TerminalKeybindCollisionTests : IDisposable
     {
         _app.HoverTerminalWithoutFocus();
 
-        _app.Press(KeyboardKey.B, InputModifiers.Control);
+        _app.Press(KeyboardKey.B, Primary);
 
         Assert.True(_app.CollapseState.IsCollapsed.Value);
         Assert.Empty(_app.Terminal.Sent);
@@ -328,7 +340,7 @@ public class TerminalKeybindCollisionTests : IDisposable
         _app.AssignHotkey(_app.SecondRepo, slot: 3);
         _app.FocusTerminal();
 
-        _app.Press(KeyboardKey.Alpha3, InputModifiers.Control);
+        _app.Press(KeyboardKey.Alpha3, Primary);
 
         Assert.Equal(_app.SecondRepo, _app.Registry.Active.Value?.Id);
         Assert.Empty(_app.Terminal.Sent);
@@ -340,7 +352,7 @@ public class TerminalKeybindCollisionTests : IDisposable
         _app.AssignHotkey(_app.SecondRepo, slot: 3);
         _app.FocusTerminal();
 
-        _app.Press(KeyboardKey.Numpad3, InputModifiers.Control);
+        _app.Press(KeyboardKey.Numpad3, Primary);
 
         Assert.Equal(_app.SecondRepo, _app.Registry.Active.Value?.Id);
         Assert.Empty(_app.Terminal.Sent);
@@ -368,7 +380,7 @@ public class TerminalKeybindCollisionTests : IDisposable
         _app.FocusTerminal();
         _app.MovePointerOffEveryController();
 
-        _app.Press(KeyboardKey.Alpha3, InputModifiers.Control);
+        _app.Press(KeyboardKey.Alpha3, Primary);
 
         Assert.Equal(_app.FirstRepo, _app.Registry.Active.Value?.Id);
     }
@@ -1318,9 +1330,21 @@ internal sealed class TerminalRun : IDisposable
         }
     }
 
-    /// <summary>The live session, read the way the pane reads it: off the render state.</summary>
-    public TerminalSession? Session =>
-        Vm.Render.Value is TerminalRenderState.Running running ? running.Session : null;
+    /// <summary>
+    /// The session there is a screen for, read the way the pane reads it: off the render state.
+    /// </summary>
+    /// <remarks>
+    /// Running, exited or faulted, matching <c>TerminalInstance.Screen</c>. A replay's bytes run out
+    /// almost immediately, so a session narrowed to Running would be null for exactly the fixtures
+    /// that exist to read a finished screen.
+    /// </remarks>
+    public TerminalSession? Session => Vm.Render.Value switch
+    {
+        TerminalRenderState.Running running => running.Session,
+        TerminalRenderState.Exited exited => exited.Session,
+        TerminalRenderState.Faulted faulted => faulted.Session,
+        _ => null,
+    };
 
     public static TerminalRun NotYetStarted() => new(new SeamLaunch());
 
@@ -1371,12 +1395,16 @@ internal sealed class TerminalRun : IDisposable
         Vm.ReportViewport(Viewport);
         Vm.Start();
 
-        // Adoption, not acceptance. A replay whose bytes have run out is adopted and Running while
-        // already reporting no live shell, so waiting on IsAcceptingInput here would hang on exactly
-        // the fixtures that exercise a finished session.
+        // Adoption, not acceptance, and not Running either. Running is not a state a terminal stays
+        // in: a replay's bytes are exhausted before the spawn is even adopted, so the exit lands in
+        // the same dispatcher drain that delivered the adoption and the render state is already
+        // Exited by the first time this predicate is read. Waiting on Running therefore waits out
+        // the full timeout on every replay fixture — deterministically, though a JIT-warmed process
+        // wins the race often enough to look flaky. HasScreen is the monotonic form of the question
+        // actually being asked: is there a screen to drive yet.
         Pump.WaitFor(
             Dispatcher,
-            () => Vm.Render.Value is TerminalRenderState.Running,
+            () => Vm.HasScreen,
             "the shell to be adopted");
     }
 

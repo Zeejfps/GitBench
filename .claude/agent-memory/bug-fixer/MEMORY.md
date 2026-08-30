@@ -1,0 +1,2 @@
+- [Known failing tests on macOS](known-failing-tests-macos.md) — pre-existing GitBench.Tests failures + their diagnosed causes; check before blaming your diff
+- [Internals probe technique](technique-internals-probe.md) — build a scratchpad app named GitBench.Tests to drive internals outside xUnit; best tool for proving races
