@@ -27,63 +27,49 @@ namespace GitBench.Controls;
 /// than as a chip sitting on top of it. A rule would cut straight through the one place the join
 /// has to be invisible.
 /// </para>
-/// <para>
-/// The trailing slot sits outside the scroller so a control that acts on the strip as a whole (the
-/// terminal's <c>+</c>) stays reachable however far the tabs have overflowed.
-/// </para>
 /// </remarks>
 internal sealed record TabStrip : Widget
 {
     public const float Height = 32f;
 
-    /// <summary>The tabs, in order. A single <see cref="Each{T}"/> is as valid here as a fixed set.</summary>
+    /// <summary>
+    /// The tabs, in order. A single <see cref="Each{T}"/> is as valid here as a fixed set, and a
+    /// control that belongs beside them — the terminal's <c>+</c> — is just the last entry: it
+    /// travels with the tabs rather than being pinned to an edge away from them.
+    /// </summary>
     public required IWidget[] Tabs { get; init; }
 
     public Prop<uint> Background { get; init; }
 
-    /// <summary>Pinned to the trailing edge, outside the scroller. Null for a strip with no such control.</summary>
-    public IWidget? Trailing { get; init; }
-
-    protected override IWidget Build(Context ctx)
+    protected override IWidget Build(Context ctx) => new Box
     {
-        // Reuses the Actions toolbar's scrollbar-less horizontal scroller: once the tabs overflow
-        // the strip it clips them and the wheel — the vertical wheel included — pans it sideways.
-        IWidget scroller = new Grow
-        {
-            Child = new HorizontalScrollArea
+        Height = Height,
+        Background = Background,
+        Children =
+        [
+            new Padding
             {
-                VerticalWheelPans = true,
-                Child = new Row
-                {
-                    CrossAxis = CrossAxisAlignment.Stretch,
-                    Children = Tabs,
-                },
-            },
-        };
-
-        return new Box
-        {
-            Height = Height,
-            Background = Background,
-            Children =
-            [
-                new Padding
-                {
-                    // A hair of lead-in, so the first tab is not welded to whatever the pane's
-                    // leading edge happens to be.
-                    Amount = new PaddingStyle { Left = Spacing.Xs },
-                    Children =
-                    [
-                        new Row
+                // A hair of lead-in, so the first tab is not welded to whatever the pane's leading
+                // edge happens to be.
+                Amount = new PaddingStyle { Left = Spacing.Xs },
+                Children =
+                [
+                    // Reuses the Actions toolbar's scrollbar-less horizontal scroller: once the tabs
+                    // overflow the strip it clips them and the wheel — the vertical wheel included —
+                    // pans it sideways.
+                    new HorizontalScrollArea
+                    {
+                        VerticalWheelPans = true,
+                        Child = new Row
                         {
                             CrossAxis = CrossAxisAlignment.Stretch,
-                            Children = Trailing is { } trailing ? [scroller, trailing] : [scroller],
+                            Children = Tabs,
                         },
-                    ],
-                },
-            ],
-        };
-    }
+                    },
+                ],
+            },
+        ],
+    };
 }
 
 /// <summary>

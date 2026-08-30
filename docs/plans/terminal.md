@@ -22,7 +22,7 @@
 | Input | Ours. We own the key encoder, so the **kitty keyboard protocol** is implemented natively and Shift+Enter works with no `/terminal-setup` step. |
 | Testing | **Recorded byte corpora replayed against golden grid snapshots.** We cannot drive a subscription-authenticated `claude` from CI, so we capture real sessions by hand once, commit the bytes, and replay them forever. Engine tests are pure `bytes → grid`. |
 | Placement | A third mode in the switcher: **Changes │ History │ Terminal**. Inside it, a title bar of tabs over one grid: several terminals per repository, one of them on screen. A terminal is still a repository's and its cwd is the repo root. |
-| Title bar | A strip above the grid, from the first started shell onward: one tab per terminal, labelled with that shell's title, and a `+` on the trailing edge that opens and starts another. The tabs are the commit-details tabs — `CommitTabChrome` and `TabClickController` move out of `Features/Commits` into a shared `Controls/TabStrip.cs` and both surfaces build on it — so the X, the middle-click close, the ellipsis at the width cap, the active and hover fills and the overflow scroller stay one implementation rather than two that drift. |
+| Title bar | A strip above the grid, from the first started shell onward: one tab per terminal, labelled with that shell's title, and a `+` after the last tab that opens and starts another. The tabs are the commit-details tabs — `CommitTabChrome` and `TabClickController` move out of `Features/Commits` into a shared `Controls/TabStrip.cs` and both surfaces build on it — so the X, the middle-click close, the ellipsis at the width cap, the active and hover fills and the overflow scroller stay one implementation rather than two that drift. |
 | Closing a tab | Confirmed when the tab holds a live shell, immediate otherwise. Same reasoning as `ConfirmQuitDialog` — a shell mid-build is not something to lose to a stray middle click — and the same modal machinery, with the tab rather than the application as the subject. An idle, exited or failed tab has nothing to lose and closes on the click. |
 | Shell | The user's interactive login shell, so PATH/nvm/rc files are live — same reasoning as `GitProcessRunner.GitLaunch.Shell`. `TERM=xterm-256color`, `COLORTERM=truecolor`. |
 | Relationship to the assistant | **Unrelated.** `docs/plans/assistant.md` builds an in-process agent over domain tools; this hosts a shell. They share no code and neither blocks the other. Running `claude` in the terminal is not the assistant backend. |
@@ -83,7 +83,7 @@ sequences named and tallied, replay our keystrokes at it. Its output is the capa
 that gates the engine choice *and* the recorded corpus the test suite runs on forever.
 
 **9. The title bar — `GitBench/Features/Terminal`, over one control lifted out of `Features/Commits`.**
-A strip above the grid: tabs on the left, a `+` on the trailing edge, the active terminal's title, and
+A strip above the grid: tabs on the left, a `+` after them, the active terminal's title, and
 below it the grid showing whichever tab is active. The pill is not new work. `CommitTabChrome`,
 `TabClickController` and the `HorizontalScrollArea` the commit strip pans its overflow with are already
 the general article — a label ellipsizing at a width cap, an optional close button, the row-selection
@@ -143,8 +143,8 @@ performance, and optionally `esctest` for anything the corpora miss.
    instance, and publishes it as `Tabs`. `HasLiveShell` and `ReposWithLiveShells` count over the whole
    list, so the quit confirmation keeps naming repositories and is now right about a repository whose
    live shell is in a tab that is not on screen.
-3. **The strip.** Tabs bound to the active repository's list, `+` opens another terminal *and starts it*,
-   click activates, X and middle-click close, overflow pans.
+3. **The strip.** Tabs bound to the active repository's list, a `+` sitting after the last of them that
+   opens another terminal *and starts it*, click activates, X and middle-click close, overflow pans.
 4. **Confirmation and title.** `ConfirmCloseTerminalDialog` beside `ConfirmQuitDialog`, gated on the tab
    holding a live shell, and `TerminalState.Title` read above the seam as the tab's label. That closes
    the window-title item Phase 5 left open.
@@ -612,6 +612,11 @@ straight across the one join that has to be invisible, which is where the active
 it is naming. The accent bar is what keeps that legible in this theme, whose surface steps are only a
 few values apart; it is reserved (transparent) on every tab so activating one never shifts its label,
 the same trick the working-changes underline tabs already use.
+
+**The `+` is one of the tabs' own row, not a control pinned to the far edge.** Pinned it stayed
+reachable at any width, and with three short tabs in a wide pane it read as an unrelated toolbar button
+stranded on the other side of the header. In the row it sits where the reader's eye already is; the cost
+is that it pans away with the tabs once they overflow, which is what every terminal does with it.
 
 **The close button is laid out on every tab and painted on one.** Four tabs should not carry four X's,
 but hiding the button outright resizes the tab under the pointer, so a strip of them would breathe as

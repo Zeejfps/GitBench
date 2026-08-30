@@ -51,40 +51,50 @@ internal sealed record TerminalTabStrip : Widget
             [
                 Each.Of(tabs.Terminals, new TerminalTab { Tabs = tabs }, axis: Axis.Horizontal)
                     with { CrossAxis = CrossAxisAlignment.Stretch },
+                NewTabButton(tabs),
             ],
-            Trailing = new Padding
-            {
-                Amount = new PaddingStyle
-                {
-                    Left = Spacing.Xs,
-                    Right = Spacing.Xs,
-                    Top = ButtonInset,
-                    Bottom = ButtonInset,
-                },
-                Children =
-                [
-                    new IconButtonWidget
-                    {
-                        Id = NewTabButtonId,
-                        Icon = LucideIcons.Plus,
-                        IconSize = 15f,
-                        Width = ButtonSize,
-                        Height = ButtonSize,
-                        // Opens and starts, in that order and in one gesture: asking for another
-                        // terminal is asking for another shell, and the start gate exists for the
-                        // first one only because a repository is given a terminal it never asked
-                        // for. The spawn waits for the new grid's first viewport report, which is
-                        // the same path the gate's own click takes.
-                        Command = new Command(() => tabs.Open().Start()),
-                        Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
-                        Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
-                    }
-                        .WithTooltip(L.T(s => s.TerminalNewTab))
-                        .WithController<KbmController>(),
-                ],
-            },
         };
     }
+
+    /// <summary>
+    /// The <c>+</c>, immediately after the last tab rather than pinned to the strip's far edge.
+    /// </summary>
+    /// <remarks>
+    /// It is one of the tabs' own row, so it sits where the reader's eye already is and pans with
+    /// them when they overflow — which is what every terminal does with it. Pinned to the trailing
+    /// edge it stayed reachable at any width, but with three short tabs in a wide pane it read as
+    /// an unrelated toolbar button stranded on the other side of the header.
+    /// </remarks>
+    static IWidget NewTabButton(TerminalTabs tabs) => new Padding
+    {
+        Amount = new PaddingStyle
+        {
+            Left = Spacing.Xs,
+            Right = Spacing.Xs,
+            Top = ButtonInset,
+            Bottom = ButtonInset,
+        },
+        Children =
+        [
+            new IconButtonWidget
+            {
+                Id = NewTabButtonId,
+                Icon = LucideIcons.Plus,
+                IconSize = 15f,
+                Width = ButtonSize,
+                Height = ButtonSize,
+                // Opens and starts, in that order and in one gesture: asking for another terminal is
+                // asking for another shell, and the start gate exists for the first one only because
+                // a repository is given a terminal it never asked for. The spawn waits for the new
+                // grid's first viewport report, which is the same path the gate's own click takes.
+                Command = new Command(() => tabs.Open().Start()),
+                Surface = s => Theme.Color(t => t.HeaderActionButton.Surface(s)),
+                Foreground = s => Theme.Color(t => t.HeaderActionButton.Icon(s)),
+            }
+                .WithTooltip(L.T(s => s.TerminalNewTab))
+                .WithController<KbmController>(),
+        ],
+    };
 }
 
 /// <summary>
