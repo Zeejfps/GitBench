@@ -71,10 +71,11 @@ internal interface ITerminalInput
 /// dead keys and composition are the operating system's job rather than a table here.
 /// </para>
 /// <para>
-/// Shift with the page keys moves the pane's own view of the history and never reaches the shell.
-/// It is the chord taken back from it, on xterm's precedent, and it is taken whether or not there is
-/// a shell left to take it from: the history outlives the process that printed it. The wheel is the
-/// pane's only while no program is reading the mouse and no full-screen one is up.
+/// Shift is the chord taken back from the shell, on xterm's precedent: with the page keys, and with
+/// the wheel. Both move the pane's own view of the history and neither reaches the shell, and both
+/// are taken whether or not there is one left to take them from — the history outlives the process
+/// that printed it. Without Shift the wheel is the pane's only while no program is reading the mouse
+/// and no full-screen one is up.
 /// </para>
 /// </remarks>
 internal sealed class TerminalInputController : KeyboardMouseController
@@ -206,19 +207,31 @@ internal sealed class TerminalInputController : KeyboardMouseController
     /// Consumed only when something happened, so a wheel over a screen with no history behind it
     /// bubbles out to whatever scrolls around the pane instead of dead-ending on it.
     /// </para>
+    /// <para>
+    /// Shift takes the wheel back, which is xterm's convention and the reason the modifiers had to
+    /// reach this event at all: a program that has asked for mouse events otherwise owns the wheel
+    /// completely, and there would be no way to read the history behind a full-screen program
+    /// without quitting it. It is the same chord as Shift with the page keys and reaches the same
+    /// place, so the two do not have to be learned separately.
+    /// </para>
     /// </remarks>
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
         if (!IsOnScreen() || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
-        var lines = LinesOf(e.DeltaY);
+        var lines = LinesOf(e.DeltaY, IsPrecise(ref e));
         if (lines == 0) return;
+
+        var modifiers = TerminalKeyMap.From(e.Modifiers);
+        var takenBack = e.Modifiers.HasFlag(InputModifiers.Shift);
 
         var button = lines > 0 ? TerminalMouseButton.WheelUp : TerminalMouseButton.WheelDown;
         var notches = Math.Abs(lines);
 
-        if (ReportsTheWheel(notches, button, e.Mouse.Point) || ScrollsWithCursorKeys(notches, lines))
+        if (!takenBack &&
+            (ReportsTheWheel(notches, button, modifiers, e.Mouse.Point) ||
+             ScrollsWithCursorKeys(notches, lines)))
         {
             e.Consume();
             return;
@@ -227,13 +240,24 @@ internal sealed class TerminalInputController : KeyboardMouseController
         if (_terminal.Scroll(lines)) e.Consume();
     }
 
-    bool ReportsTheWheel(int notches, TerminalMouseButton button, PointF point)
+    /// <summary>
+    /// True when the event came from a device that reports a gesture rather than notches — a
+    /// trackpad, or the momentum the system generates after one.
+    /// </summary>
+    static bool IsPrecise(ref MouseWheelScrolledEvent e) =>
+        e.GesturePhase != ScrollPhase.None || e.IsMomentum;
+
+    bool ReportsTheWheel(
+        int notches,
+        TerminalMouseButton button,
+        TerminalKeyModifiers modifiers,
+        PointF point)
     {
         if (!_terminal.IsAcceptingInput) return false;
 
         var sent = false;
         for (var notch = 0; notch < notches; notch++)
-            sent |= Report(button, TerminalMouseAction.Press, TerminalKeyModifiers.None, point);
+            sent |= Report(button, TerminalMouseAction.Press, modifiers, point);
 
         return sent;
     }
@@ -312,16 +336,23 @@ internal sealed class TerminalInputController : KeyboardMouseController
     /// Whole lines out of a wheel delta, carrying the fraction over to the next event.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A trackpad reports a gesture as a stream of small fractions, and truncating each one on its
     /// own would round the whole gesture away. The carry is dropped when the direction changes so
     /// that a flick back the other way starts from a standstill rather than spending leftovers from
     /// the flick before it.
+    /// </para>
+    /// <para>
+    /// The two devices are scaled differently because a unit means different things to them: a notch
+    /// is one deliberate click and is worth a few rows, while a trackpad spends a whole gesture in
+    /// small deltas and would cross the history in a flick at the same rate.
+    /// </para>
     /// </remarks>
-    int LinesOf(float delta)
+    int LinesOf(float delta, bool precise)
     {
         if (Math.Sign(delta) != Math.Sign(_wheelRemainder)) _wheelRemainder = 0f;
 
-        _wheelRemainder += delta * Scrolling.WheelLines;
+        _wheelRemainder += delta * (precise ? Scrolling.PreciseWheelLines : Scrolling.WheelLines);
 
         var lines = (int)_wheelRemainder;
         _wheelRemainder -= lines;

@@ -273,10 +273,27 @@ the window, which is why resizing while Claude Code was up took the pane with it
 cause; the session now also catches a feed that throws and faults the pane rather than the
 application, on the same reasoning as the reader thread's catch.
 
-**Modifiers on the wheel are missing, and that is the framework's.** `MouseWheelScrolledEvent`
-carries no modifiers — GLFW's scroll callback has none to give and nothing tracks them alongside —
-so xterm's Shift-takes-the-wheel-back convention is not implemented. Shift with the page keys is the
-history's chord in the meantime.
+**Modifiers on the wheel had to be remembered, because nothing reports them.** GLFW's scroll callback
+is two coordinates and no mods, so `MouseWheelScrolledEvent` had none to carry and xterm's
+Shift-takes-the-wheel-back convention could not be implemented at all. Keys and mouse buttons *do*
+arrive with the modifier state attached, so `DesktopInputSystem` keeps what it last saw on one and
+stamps it onto the wheel. That is a cache, and the failure it can have is staleness — a chord
+released while the window is away is never seen being released here — so it is cleared on
+`OnFocusChanged(false)`. Querying the key state at scroll time would not go stale, but it needs a new
+`IWindow` member and a backend behind it, and the cache uses the surface that already exists.
+
+With that in place Shift is one chord rather than two: it takes the wheel back the way it already
+took the page keys, so the history is reachable while a program is tracking the mouse. Other
+modifiers are not taken back — they ride along in the report, which is what a program zooming on
+Ctrl+wheel is listening for.
+
+**A notch and a trackpad are not the same unit.** Both arrived as a delta multiplied by one
+`WheelLines`, which is right for a wheel — one deliberate click, a few rows — and far too fast for a
+trackpad, which spends a whole gesture in small deltas and crossed the history in a flick. The event
+already carried `GesturePhase` and `MomentumPhase` and nothing had ever read them; a precise device
+now takes `PreciseWheelLines` instead. Momentum is matched separately from the gesture, because it
+arrives after the fingers lift with no gesture phase left on it, and the tail of every flick would
+otherwise accelerate.
 
 ## Findings — one terminal per repository, as built
 

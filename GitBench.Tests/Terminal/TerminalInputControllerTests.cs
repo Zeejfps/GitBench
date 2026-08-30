@@ -189,6 +189,89 @@ public class TerminalInputControllerTests
         Assert.Empty(pane.Terminal.Written);
     }
 
+    // ---- Shift, which takes the wheel back from whatever is reading it ----
+
+    [Fact]
+    public void ShiftWithTheWheel_OverAProgramReadingTheMouse_IsThePanesOwnHistory()
+    {
+        // The reason the wheel needed modifiers at all: a program tracking the mouse otherwise owns
+        // the wheel outright, and the history behind it could not be read without quitting it.
+        using var pane = Pane.Create(TestTerminal.Live(Then(Lines(50), Tracking)), Cells(4, 2));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f, InputModifiers.Shift);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+        Assert.Empty(pane.Terminal.Written);
+    }
+
+    [Fact]
+    public void ShiftWithTheWheel_OverAFullScreenProgram_IsNotTheCursorKeys()
+    {
+        // The alternate screen has no history of its own, so there is nothing for Shift to show —
+        // but it must still not be answered with the arrows the program would read as movement.
+        using var pane = Pane.Create(TestTerminal.Live(Then(Lines(50), AltScreen)), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f, InputModifiers.Shift);
+
+        Assert.Empty(pane.Terminal.Written);
+    }
+
+    [Fact]
+    public void ShiftWithTheWheel_OverTheNormalScreen_ScrollsItLikeTheBareWheel()
+    {
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f, InputModifiers.Shift);
+
+        Assert.Equal(3, pane.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void ControlWithTheWheel_OverAProgramReadingTheMouse_CarriesTheModifier()
+    {
+        // Ctrl is not taken back — it rides along in the report, which is how a program that zooms
+        // on Ctrl+wheel hears about it. 64 is wheel-up, 16 is the control bit.
+        using var pane = Pane.Create(TestTerminal.Live(Tracking), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f / 3f, InputModifiers.Control);
+
+        Assert.Equal(Csi + "<80;1;1M", pane.Terminal.Text);
+    }
+
+    // ---- how far one turn of the wheel goes ----
+
+    [Fact]
+    public void ATrackpad_MovesFewerLinesThanAWheelReportingTheSameDelta()
+    {
+        using var wheel = Pane.Create(TestTerminal.Live(Lines(50)), Cells(0, 0));
+        using var trackpad = Pane.Create(TestTerminal.Live(Lines(50)), Cells(0, 0));
+        wheel.Hover();
+        trackpad.Hover();
+
+        wheel.Harness.Scroll(0f, 1f);
+        trackpad.Harness.Scroll(0f, 1f, gesture: ScrollPhase.Changed);
+
+        Assert.Equal(3, wheel.Terminal.ScrollOffset);
+        Assert.Equal(1, trackpad.Terminal.ScrollOffset);
+    }
+
+    [Fact]
+    public void TheMomentumAfterAFlick_IsScaledLikeTheFlickAndNotLikeAWheel()
+    {
+        // Momentum arrives with no gesture phase — the fingers have already lifted — so it has to be
+        // recognised on its own or the tail of every flick would accelerate.
+        using var pane = Pane.Create(TestTerminal.Live(Lines(50)), Cells(0, 0));
+        pane.Hover();
+
+        pane.Harness.Scroll(0f, 1f, momentum: ScrollPhase.Changed);
+
+        Assert.Equal(1, pane.Terminal.ScrollOffset);
+    }
+
     // ---- clicks and the pointer ----
 
     [Fact]

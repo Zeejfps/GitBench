@@ -30,6 +30,18 @@ public static class Scrolling
     /// <summary>Lines travelled per mouse-wheel notch, where the content is counted in lines rather
     /// than pixels — a terminal's grid, where a fraction of a row is not a place to stop.</summary>
     public const float WheelLines = 3f;
+
+    /// <summary>
+    /// Lines travelled per unit of a precise scrolling device — a trackpad, or the momentum that
+    /// follows one.
+    /// </summary>
+    /// <remarks>
+    /// Lower than <see cref="WheelLines"/> because the two are not the same unit. A notch is a
+    /// deliberate click of a wheel and wants to move a few rows; a trackpad reports one gesture as a
+    /// stream of small deltas, so multiplying each of them by the notch figure makes a flick cross
+    /// the history far faster than the hand suggests.
+    /// </remarks>
+    public const float PreciseWheelLines = 1f;
 }
 
 /// <summary>Corner-radius scale in pixels for chips, badges, and cards.</summary>
