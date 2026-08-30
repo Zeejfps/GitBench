@@ -109,7 +109,10 @@ copy-selection versus SIGINT.
 **Phase 5 — session and polish.** Resize and SIGWINCH, scrollback and wheel, selection and copy,
 window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback, the wheel — mouse
 reports and alternate scroll included — the per-repo lifecycle, and selection, copy, paste and
-OSC 52 are done; see Findings. What remains here is the title, OSC 8 and the settings.
+OSC 52 are done, and so are OSC 8 links; see Findings. What remains here is the window title —
+the engine parses OSC 0/2 and `TerminalState.Title` carries it, but nothing above the seam reads it
+yet — and the settings, all three of which are still constants: `DefaultScrollbackLines`, the
+renderer's `FontSize.Body`, and a shell that cannot be overridden.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
@@ -406,6 +409,76 @@ there on the user's behalf.
 **Not built, deliberately:** drag auto-scroll past the pane edge. The wheel already reaches the
 history, and the pane repaints on output rather than per frame, so it would have needed a tick of its
 own.
+
+## Findings — OSC 8 links, as built
+
+**The seam carries an id, not a url, and the ids are never reused.** A cell is copied by value for
+every row of every frame, so a string on it would be copied with it; an id is also the only thing
+that answers "how far does this link go", because two cells are the same link when their ids match
+whatever sits between them and whichever row a reflow has since put each on. The table behind them
+mints monotonically and never recycles, which is what makes eviction safe: a full table drops its
+oldest entry, deepest in the scrollback, and a cell still pointing there stops resolving and reads as
+ordinary text. A recycled id would turn that stale cell into a link to somewhere the program never
+named — VTE avoids it with a mark-and-sweep over live cells, and monotonic ids buy the same safety
+with none of the sweep.
+
+**The id sits beside the attribute rather than inside it, and that is the one placement worth
+defending.** Folding it into `CellAttribute` would cost no extra field and would be wrong: only
+another OSC 8 ends a link, `SGR 0` must not, and the attribute reset in `CharAttributes` would
+silently terminate every link at the next `ESC[m` — which is exactly what a program emits between
+the link text and what follows it. The blank matters as much as the cell for the same reason. `Print`
+fills the insert-mode shift and a wide character's trailing column from one `empty`, and carrying
+only the attribute onto it leaves the second column of a wide glyph outside the link it sits in,
+which shows up as a hover highlight with a hole in it.
+
+**The parse is below the seam, unlike OSC 52's.** The adapter only sees the engine at `Feed`
+boundaries, by which time every cell has been written — and OSC 8 is cell state that must exist
+*before* the cells naming it are printed, where a clipboard write is an action and can be handed up
+and performed later. So the adapter is left a straight read, the same shape as `ContinuesPreviousRow`.
+
+**The engine does not judge a url and the application does, which is one predicate and not three.**
+`TerminalHyperlink` is deliberately a string and deliberately not a `Uri`: a terminal's job is to
+report that a program marked these cells as a link to this text, and whether that text is worth
+following has a different answer in every host. `TerminalLinkTarget.FromProgram` is the allowlist —
+absolute `http`/`https` only, which is what keeps a `file:` or UNC url off `OpenUrl`, since that url
+came off a pseudo-terminal and would launch whatever it named. It is also the *only* way to construct
+one, so the hand cursor, the underline and the click all ask the same question. A link this
+application will not open therefore gets no affordance at all, rather than looking clickable and
+doing nothing.
+
+**Where the pointer is, is asked again every time rather than remembered.** The cell under a
+stationary pointer changes whenever the shell prints, and no pointer event is delivered when it does
+— the same force `FollowSelection` exists to absorb. A remembered link would leave the hand cursor
+over blank space and the highlight on whatever text scrolled into its old id's place. The view owns
+the hover point, in window space because a grid coordinate is already a resolution against a scroll
+offset that moves without the pointer, and everything else asks it; the controller keeping a copy
+would be two fields holding one fact, and the one read every frame is the one that goes stale. Hover
+is established on mouse *enter* as much as on move, because the input system's refresh delivers no
+move to a freshly hovered controller.
+
+**The highlight is drawn by id and not by column range**, so a link that wrapped the right margin —
+or that a reflow has moved — lights up whole rather than in the half the pointer is in, and nothing
+drawing it needs to know where the link started. It is an overlay beside the selection rather than a
+rule from `ICellStyler`: the styler is immutable and shared across panes, and being hovered is a fact
+about the pointer and not about the cell. Only on hover, because a program emitting OSC 8 almost
+always underlines the text with SGR itself and a permanent rule would double it.
+
+**Following a link is a modified click and a gesture, for the reasons the other gestures are.** A
+bare click is left alone deliberately — it belongs to whatever full-screen program may be reading the
+mouse, and a gesture that changed meaning when the user started `vim` would be worse than one
+modifier. `FollowingLink` is a case of `TerminalGesture` beside selecting and reporting because a
+press cannot be two of them, and a link held in a field alongside would let one Cmd+click both open a
+link and clear the selection. The target is resolved again at the release and compared against the
+one the press saw, which is what makes pointer staleness harmless on this path: the screen can scroll
+between press and release, and opening what *was* under the pointer would open something nobody
+aimed at. Travel cancels rather than becoming a selection — the modifier is held, so travel means
+they changed their mind.
+
+**The gap was invisible until the seam widened, which is the argument for the golden format
+changing with it.** OSC 8 had no handler and fell to the parser's fallback, so the url was discarded
+rather than leaked: the grid was correct, nothing failed, and no test could observe the difference.
+The snapshot format now records `links` and `urls`, because without them an engine that threw OSC 8
+away would still pass every golden — which is how this stayed unnoticed through sixteen patches.
 
 ## Findings — the corpus is Windows-only
 
