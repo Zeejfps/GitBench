@@ -70,7 +70,9 @@ internal static class FileBrowserRowPainter
         var glyph = Glyph(row);
         var iconWidth = canvas.MeasureTextWidth(glyph, iconStyle);
         iconStyle.TextColor = Tint(
-            isDirectory ? colors.DirectoryIcon : row.IsLink ? colors.LinkIcon : colors.FileIcon,
+            isDirectory ? colors.DirectoryIcon
+            : row.IsLink ? colors.LinkIcon
+            : colors.IconFor(FileKinds.Classify(row.Name)),
             dim);
         canvas.DrawText(new DrawTextInputs
         {

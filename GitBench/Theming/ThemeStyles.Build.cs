@@ -10,6 +10,7 @@ public partial record ThemeStyles
         DiffHunkButtonPalette hunkButton,
         DiffSyntaxPalette diffSyntax,
         CommitBadgePalette commitBadge,
+        FileKindPalette fileKinds,
         AnsiColors ansi) =>
         new()
         {
@@ -21,7 +22,7 @@ public partial record ThemeStyles
             SubmoduleSection = BuildSubmoduleSection(p, status),
             FileChangesSection = BuildFileChangesSection(p),
             FileChangeRow = BuildFileChangeRow(p, status),
-            FileBrowserRow = BuildFileBrowserRow(p, status),
+            FileBrowserRow = BuildFileBrowserRow(p, status, fileKinds),
             DialogFrame = BuildDialogFrame(p, status),
             TextInput = BuildTextInput(p),
             BorderedButton = BuildBorderedButton(p),

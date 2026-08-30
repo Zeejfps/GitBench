@@ -114,6 +114,15 @@ public partial record ThemeStyles
         // darker and more saturated than their bases, because brightening a slot against a white
         // surface destroys the contrast the slot exists for; and White is a mid grey, because the
         // literal one would be invisible.
+        // GitHub-Light lineage, at the darker end of each hue: an icon is a few hundred pixels of
+        // color against white, so the tint has to be saturated to register at all.
+        var fileKinds = new FileKindPalette(
+            Code: 0xFF116329u,     // green
+            Data: 0xFF9A6700u,     // amber
+            Docs: 0xFF1B7C83u,     // teal
+            Media: 0xFFBF3989u,    // pink
+            Binary: 0xFF6E7781u);  // slate — build output should read as inert
+
         var ansi = new AnsiColors(
             Black: 0xFF24292Fu,
             Red: 0xFFCF222Eu,
@@ -132,6 +141,6 @@ public partial record ThemeStyles
             BrightCyan: 0xFF136061u,
             BrightWhite: 0xFF8C959Fu);
 
-        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, ansi);
+        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, fileKinds, ansi);
     }
 }

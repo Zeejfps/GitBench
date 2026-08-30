@@ -108,6 +108,15 @@ public partial record ThemeStyles
             BranchDivergedIcon: status.Warning,
             BranchUntrackedIcon: p.TextDisabled);
 
+        // One Dark lineage: hues already proven to separate over this surface, minus the blue and
+        // purple the directory and symlink icons hold.
+        var fileKinds = new FileKindPalette(
+            Code: 0xFF98C379u,     // green
+            Data: 0xFFE5C07Bu,     // amber
+            Docs: 0xFF56B6C2u,     // teal
+            Media: 0xFFE06C9Au,    // pink
+            Binary: 0xFF7F8794u);  // slate — build output should read as inert
+
         var ansi = new AnsiColors(
             Black: 0xFF2A2C30u,
             Red: 0xFFE06C75u,
@@ -126,6 +135,6 @@ public partial record ThemeStyles
             BrightCyan: 0xFF6FD3DFu,
             BrightWhite: 0xFFFFFFFFu);
 
-        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, ansi);
+        return BuildStyles(p, status, banner, tooltip, hunkButton, diffSyntax, commitBadge, fileKinds, ansi);
     }
 }
