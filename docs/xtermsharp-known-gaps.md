@@ -2,14 +2,16 @@
 
 `dotnet test` on 2026-08-28, before any gap was fixed: **254 tests, 196 pass, 58 fail.**
 
-Eighteen of the nineteen gaps are now fixed, across fifteen patches applied in seven passes. The
-suite stands at **288 tests, all passing**. `claude.grid` now exists: it was hand-audited against
+Every gap is now fixed, across sixteen patches applied in eight passes. The suite stands at
+**327 tests, all passing**. `claude.grid` now exists: it was hand-audited against
 `Corpus/claude.bin` on 2026-08-29 and its `;` block records which frames were read cell by cell and
 which were only checked structurally.
 
-Gap 14 (OSC 8 hyperlinks) is the one left open, and it has no failing test: the URL is discarded
-rather than leaked onto the screen, so nothing can observe it through the seam until the seam
-carries a hyperlink.
+Gap 14 was the last one open, and it had no failing test — the URL was discarded rather than leaked
+onto the screen, so nothing could observe it through the seam until the seam carried a hyperlink.
+Closing it meant widening the seam first, which is also why the snapshot format now records links:
+without that, an engine that discarded OSC 8 passed every golden, which is how the gap stayed
+invisible.
 
 Gap 19 was found by that audit rather than by a spec, which is the argument for auditing goldens by
 hand: the corpora were the only thing feeding a `?1049l` to the engine with the modes on.
@@ -356,12 +358,18 @@ Failing: `AttributeSpec.Attribute_ReachesTheCellsPrintedAfterIt(9)`,
 three tests pass. `CharacterAttribute.ToSGR` still omits `;9`, so a DECRQSS reply under-reports a
 crossed-out cell — no test pins that, and it is one file further out.
 
-### 14. OSC 8 hyperlinks are discarded
+### 14. OSC 8 hyperlinks are discarded — FIXED
 
 `InputHandlers/InputHandler.cs:192-196` registers handlers for 0, 1 and 2 only, and everything else
 goes to the fallback at `:41`. Correct as far as the grid goes — the link text prints and the URL
 does not leak — so no test fails. Recorded because the URL is gone by the time the renderer sees the
 cell, so clickable links need a patch. The acceptance corpus emits four of them.
+
+**Fixed by patch 21.** `CharData` carries an id, `Terminal` interns the urls behind it, and
+`ITerminalGrid.TryGetHyperlink` resolves one. The id is minted in the parser rather than above the
+seam because it has to exist before the cells naming it are printed, and it sits beside the cell's
+attribute rather than inside it because `SGR 0` must not end a link. The new `HyperlinkSpec`
+(24 cases) and one `ReflowSpec` case pass; `claude.grid` gained the two links the corpus contains.
 
 ### 15. Scrollback depth cannot be set — FIXED
 
@@ -501,3 +509,8 @@ while building its first buffer.
   under the key `continues`; see their `;` provenance blocks.
 - **Palette slots 256 and 257** are XtermSharp's "default" and "inverted default"; both map to
   `TerminalColor.Default`, because the inverse bit already carries that meaning at the seam.
+- **`ITerminalGrid.TryGetHyperlink` is a direct read too.** `CharData.Hyperlink` becomes a
+  `HyperlinkId` unchanged and the url comes straight out of `Terminal.Hyperlinks`. Everything that
+  could reject a payload happened inside the parser, because the id has to exist before the cells
+  naming it are printed (patch 21). The adapter forms no opinion of the url — a `file:` link
+  resolves here like any other, and whether it is safe to open is the host application's question.

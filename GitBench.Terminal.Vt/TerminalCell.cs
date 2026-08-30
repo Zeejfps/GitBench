@@ -64,6 +64,17 @@ public readonly record struct TerminalCell(
     /// </remarks>
     public string? Combining { get; init; }
 
+    /// <summary>
+    /// The hyperlink this cell belongs to, or <see cref="HyperlinkId.None"/> for ordinary text.
+    /// </summary>
+    /// <remarks>
+    /// An id and not a url, so a cell stays a value small enough to copy a row of per frame. It is
+    /// also what makes a link's extent answerable without walking text: the cells of one link are
+    /// the cells sharing its id, which survives the link being split across a wrap and the whole
+    /// screen being reflowed. Resolve it with <see cref="ITerminalGrid.TryGetHyperlink"/>.
+    /// </remarks>
+    public HyperlinkId Hyperlink { get; init; }
+
     /// <summary>The full grapheme cluster. Allocates only when <see cref="Combining"/> is set.</summary>
     public string Text => Combining is null ? Rune.ToString() : Rune + Combining;
 

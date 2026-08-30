@@ -187,6 +187,55 @@ namespace XtermSharp {
 			return drained;
 		}
 
+		// PATCH 21: OSC 8 hyperlinks.
+		//
+		// The url is interned here and the cell carries only the id, because a cell is copied by
+		// value on every scroll, reflow and insert-mode shift — which is also what makes a link
+		// survive a resize for free, with nothing tracking where its cells went.
+
+		/// <summary>
+		/// Gets the urls of the OSC 8 hyperlinks seen so far, addressed by
+		/// <see cref="CharData.Hyperlink"/>
+		/// </summary>
+		public HyperlinkTable Hyperlinks { get; } = new HyperlinkTable ();
+
+		/// <summary>
+		/// Gets the hyperlink printed cells currently belong to, or 0 when no link is open
+		/// </summary>
+		/// <remarks>
+		/// Deliberately not saved by DECSC and not restored by DECRC. Only another OSC 8 ends a
+		/// link, and a cursor save is not one; xterm.js is inconsistent here — it rolls back the
+		/// extended-attribute flag while leaving the url id alone, so cells printed after a restore
+		/// get no extended attributes at all.
+		/// </remarks>
+		public int CurrentHyperlinkId { get; private set; }
+
+		/// <summary>
+		/// Handles <c>OSC 8 ; params ; uri ST</c>, whose payload reaches here as
+		/// <c>params;uri</c>
+		/// </summary>
+		/// <remarks>
+		/// The parse is here rather than above the seam because the answer is needed while the
+		/// parser runs: <c>InputHandler.Print</c> stamps the id onto every cell it writes, so by the
+		/// time an adapter could see anything the cells are already written.
+		///
+		/// An empty url closes the link, and so does an overlong or unrepresentable one. A payload
+		/// with no second <c>;</c> is malformed and leaves the open link alone rather than closing
+		/// it — closing on malformed input would end a link early and strand the rest of its text,
+		/// which is the more visible of the two wrong answers. <c>OSC 8 ST</c>, with no <c>;</c> at
+		/// all, never reaches here: the parser's own identifier split sends it to the fallback.
+		/// </remarks>
+		internal void HyperlinkCommand (string payload)
+		{
+			var separator = payload.IndexOf (';');
+			if (separator == -1)
+				return;
+
+			CurrentHyperlinkId = Hyperlinks.Open (
+				payload.Substring (0, separator),
+				payload.Substring (separator + 1));
+		}
+
 		/// <summary>
 		/// Gets the kitty keyboard protocol flags in effect, or 0 for the legacy encoding
 		/// </summary>

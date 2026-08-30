@@ -39,6 +39,42 @@ internal interface ITerminalCellGeometry
 
     /// <summary>Asks for the screen to be drawn again, because the selection moved under a drag.</summary>
     void RequestRedraw();
+
+    /// <summary>
+    /// The hyperlink under <paramref name="point"/> right now, or null when there is none there or
+    /// it is not one this application will open.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Resolved on every call against the live grid rather than remembered. The cell under a
+    /// stationary pointer changes whenever the shell prints, and no pointer event is delivered when
+    /// it does — the same force <c>TerminalSession.FollowSelection</c> exists to absorb. A
+    /// remembered link would leave the hand cursor over blank space and the highlight on whatever
+    /// text scrolled into its old id's place.
+    /// </para>
+    /// <para>
+    /// It answers with a <see cref="TerminalLinkTarget"/>, so one predicate serves the cursor, the
+    /// underline and the click. A link this application will not open is given no affordance rather
+    /// than looking clickable and doing nothing.
+    /// </para>
+    /// </remarks>
+    TerminalLinkTarget? LinkAt(PointF point);
+
+    /// <summary>
+    /// Tells the view where the pointer is, so it can underline the link under it. Null when the
+    /// pointer is elsewhere.
+    /// </summary>
+    void SetHoverPoint(PointF? point);
+
+    /// <summary>
+    /// The link under the pointer, from wherever <see cref="SetHoverPoint"/> last put it.
+    /// </summary>
+    /// <remarks>
+    /// The single owner of that point is the view, and this is how everything else asks about it.
+    /// A caller keeping its own copy to answer with would be two fields holding one fact, and the
+    /// one that is read every frame would be the one that went stale.
+    /// </remarks>
+    TerminalLinkTarget? HoveredLink { get; }
 }
 
 /// <summary>
@@ -101,6 +137,14 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
     int[] _codePoints = [];
     TerminalRowRun[] _runs = [];
     TerminalSize? _reported;
+
+    // Its own buffer rather than the draw's scratch: a point is probed during input dispatch, which
+    // is not inside a draw, and aliasing the two would leave a half-read row behind for the frame.
+    TerminalCell[] _probe = [];
+
+    // The whole of the hover state, and deliberately a window-space point: a grid coordinate is
+    // already a resolution against a scroll offset that moves without the pointer.
+    PointF? _hoverPoint;
 
     public TerminalGridView(IThemeService<ThemeStyles> theme)
     {
@@ -178,6 +222,60 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         row = Math.Min(live, cells.Rows - 1);
         return true;
     }
+
+    public void SetHoverPoint(PointF? point)
+    {
+        if (_hoverPoint == point) return;
+        _hoverPoint = point;
+        Repaint();
+    }
+
+    public TerminalLinkTarget? HoveredLink => _hoverPoint is { } point ? LinkAt(point) : null;
+
+    public TerminalLinkTarget? LinkAt(PointF point) =>
+        SessionOf(_render) is { } session && TryProbe(session, point, out var cell)
+        && session.Grid.TryGetHyperlink(cell.Hyperlink, out var link)
+            ? TerminalLinkTarget.FromProgram(link)
+            : null;
+
+    /// <summary>
+    /// The cell a window-space point falls on, read out of the live grid. False when the pane has
+    /// not been drawn, the point is outside it, or the grid has moved out from under the geometry
+    /// the last draw recorded.
+    /// </summary>
+    bool TryProbe(TerminalSession session, PointF point, out TerminalCell cell)
+    {
+        cell = default;
+
+        if (_geometry is not { } cells) return false;
+        if (!cells.Bounds.ContainsPoint(point)) return false;
+        if (cells.Advance <= 0f || cells.Height <= 0f) return false;
+
+        var grid = session.Grid;
+        var bounds = GridBounds.Of(grid);
+
+        var column = (int)MathF.Floor((point.X - cells.Bounds.Left) / cells.Advance);
+        var row = (int)MathF.Floor((cells.Bounds.Top - point.Y) / cells.Height) - cells.Offset;
+
+        // Against the grid as it is now, not against the geometry: the two disagree for the frame
+        // after a resize, and for as long as the shell keeps printing under a still pointer.
+        if (!bounds.Holds(new GridPoint(column, row))) return false;
+
+        if (_probe.Length < bounds.Columns)
+            _probe = new TerminalCell[bounds.Columns];
+
+        grid.CopyRow(row, _probe.AsSpan(0, bounds.Columns));
+        cell = _probe[column];
+        return true;
+    }
+
+    static TerminalSession? SessionOf(TerminalRenderState render) => render switch
+    {
+        TerminalRenderState.Running running => running.Session,
+        TerminalRenderState.Exited exited => exited.Session,
+        TerminalRenderState.Faulted faulted => faulted.Session,
+        _ => null,
+    };
 
     public GridPoint? ClampToGrid(PointF point)
     {
@@ -294,12 +392,17 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
 
         var selection = session.Selection;
 
+        // Resolved once per frame, from the pointer rather than from anything remembered, so the
+        // underline lands on the link that is under the pointer now.
+        var hovered = HoveredHyperlink(session);
+
         for (var row = 0; row < visibleRows; row++)
         {
             var top = bounds.Top - row * metrics.Height;
             grid.CopyRow(row - offset, _cells.AsSpan(0, size.Columns));
             DrawRow(c, _cells.AsSpan(0, size.Columns), bounds.Left, top, metrics, z);
             DrawSelection(c, selection, row - offset, size.Columns, bounds.Left, top, metrics, z + 1);
+            DrawHoveredLink(c, _cells.AsSpan(0, size.Columns), hovered, bounds.Left, top, metrics, z + 1);
         }
 
         DrawCursor(c, grid, session.State.Cursor, offset, visibleRows, bounds, metrics, z);
@@ -386,6 +489,69 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
             Style = _rectStyle,
             ZIndex = z,
         });
+    }
+
+    /// <summary>
+    /// Which link the pointer is over, or none. Only a link this application would open counts, so
+    /// the underline and the hand cursor cannot disagree about what is clickable.
+    /// </summary>
+    HyperlinkId HoveredHyperlink(TerminalSession session)
+    {
+        if (_hoverPoint is not { } point) return HyperlinkId.None;
+        if (!TryProbe(session, point, out var cell) || cell.Hyperlink.IsNone) return HyperlinkId.None;
+        if (!session.Grid.TryGetHyperlink(cell.Hyperlink, out var link)) return HyperlinkId.None;
+
+        return TerminalLinkTarget.FromProgram(link) is null ? HyperlinkId.None : cell.Hyperlink;
+    }
+
+    /// <summary>
+    /// Rules the hovered link's cells on this row, one rectangle per contiguous stretch of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// By id and not by column range, which is what makes a link that wrapped across the right
+    /// margin — or that a reflow has since moved — light up whole rather than in the half the
+    /// pointer happens to be in. It is also why nothing here needs to know where the link started.
+    /// </para>
+    /// <para>
+    /// Drawn as an overlay beside the selection rather than through <see cref="ICellStyler"/>: the
+    /// styler is immutable and shared across panes, and being hovered is a fact about the pointer
+    /// rather than about the cell. Only on hover, because a program emitting OSC 8 almost always
+    /// underlines the text itself with SGR, and a permanent rule would double it.
+    /// </para>
+    /// </remarks>
+    void DrawHoveredLink(
+        ICanvas c,
+        ReadOnlySpan<TerminalCell> cells,
+        HyperlinkId hovered,
+        float left,
+        float top,
+        CellMetrics metrics,
+        int z)
+    {
+        if (hovered.IsNone) return;
+
+        _rectStyle.BackgroundColor = _styles.Link;
+
+        for (var column = 0; column < cells.Length; column++)
+        {
+            if (cells[column].Hyperlink != hovered) continue;
+
+            var start = column;
+            while (column + 1 < cells.Length && cells[column + 1].Hyperlink == hovered)
+                column++;
+
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(
+                    left + start * metrics.Advance,
+                    top - metrics.Height,
+                    (column - start + 1) * metrics.Advance,
+                    CaretThickness),
+                Style = _rectStyle,
+                ZIndex = z,
+            });
+        }
     }
 
     /// <remarks>

@@ -25,14 +25,16 @@ public sealed record AnsiColors(
 
 /// <summary>
 /// Everything the terminal renderer needs from the theme: the named slots an indexed colour
-/// resolves through, the two colours a cell means by "default", and the caret.
+/// resolves through, the two colours a cell means by "default", the caret, and the rule drawn under
+/// a hyperlink the pointer is over.
 /// </summary>
 public sealed record TerminalStyles(
     AnsiColors Ansi,
     uint DefaultForeground,
     uint DefaultBackground,
     uint Cursor,
-    uint Selection);
+    uint Selection,
+    uint Link);
 
 public partial record ThemeStyles
 {
@@ -42,5 +44,6 @@ public partial record ThemeStyles
             DefaultForeground: p.TextBody,
             DefaultBackground: p.Surface,
             Cursor: p.Accent,
-            Selection: p.Selection);
+            Selection: p.Selection,
+            Link: p.Accent);
 }

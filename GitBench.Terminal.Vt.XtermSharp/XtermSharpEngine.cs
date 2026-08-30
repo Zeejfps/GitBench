@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using XtermSharp;
 using XtermTerminal = XtermSharp.Terminal;
@@ -236,6 +237,17 @@ public sealed class XtermSharpEngine : ITerminalEngine
             return terminal.Buffer.Lines[terminal.Buffer.YBase + row].IsWrapped;
         }
 
+        /// <remarks>
+        /// A straight read, like <see cref="ContinuesPreviousRow"/>. Everything that could reject a
+        /// url has already happened: the payload was parsed and interned inside the parser, because
+        /// the id has to exist before the cells naming it are printed.
+        /// </remarks>
+        public bool TryGetHyperlink(HyperlinkId id, [NotNullWhen(true)] out TerminalHyperlink? link)
+        {
+            link = terminal.Hyperlinks.TryGetUri(id.Value, out var url) ? new TerminalHyperlink(url) : null;
+            return link is not null;
+        }
+
         static TerminalCell Translate(CharData cell) => new(
             cell.IsNullChar() ? new Rune(' ') : ToRune(cell.Code),
             ToColor(cell.Attribute.Foreground),
@@ -249,6 +261,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
             })
         {
             Combining = cell.Combining,
+            Hyperlink = new HyperlinkId(cell.Hyperlink),
         };
 
         static Rune ToRune(int code) => Rune.IsValid(code) ? new Rune(code) : Rune.ReplacementChar;

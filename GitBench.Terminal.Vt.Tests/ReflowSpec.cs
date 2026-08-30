@@ -26,6 +26,26 @@ public class ReflowSpec
         Assert.Equal("klmno", engine.RowText(2));
     }
 
+    /// <remarks>
+    /// The reason a cell carries a link id rather than a link carrying coordinates. Reflow moves
+    /// cells between rows and nothing tracks where a link's cells went; the id rides along in the
+    /// cell, so the link survives a resize with no bookkeeping at all.
+    /// </remarks>
+    [Fact]
+    public void Narrowing_CarriesAHyperlinkOntoTheRowsItSplitsOnto()
+    {
+        using var engine = EngineUnderTest.Create(columns: 10, rows: 4);
+        engine.Feed($"{Osc}8;;https://example.com{St}abcdefghijklmno{Osc}8;;{St}\r\n");
+
+        engine.Resize(new TerminalSize(5, 4));
+
+        var id = engine.CellAt(0, 0).Hyperlink;
+        Assert.False(id.IsNone);
+        Assert.Equal(id, engine.CellAt(0, 2).Hyperlink);
+        Assert.True(engine.Grid.TryGetHyperlink(id, out var link));
+        Assert.Equal("https://example.com", link.Uri);
+    }
+
     [Fact]
     public void Narrowing_MarksEveryRowThatContinuesTheOneAboveIt()
     {

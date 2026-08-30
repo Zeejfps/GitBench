@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 namespace GitBench.Terminal.Vt.Tests;
 
 /// <summary>
@@ -53,6 +54,26 @@ public sealed class StubGrid : ITerminalGrid
     public void CopyRow(int row, Span<TerminalCell> destination) => rows[row].CopyTo(destination);
 
     public bool ContinuesPreviousRow(int row) => false;
+
+    readonly Dictionary<int, string> links = new();
+
+    public bool TryGetHyperlink(HyperlinkId id, [NotNullWhen(true)] out TerminalHyperlink? link)
+    {
+        link = links.TryGetValue(id.Value, out var uri) ? new TerminalHyperlink(uri) : null;
+        return link is not null;
+    }
+
+    /// <summary>Marks a stretch of one row as a link, the way an engine's OSC 8 handler would.</summary>
+    public HyperlinkId Link(int column, int row, int count, string uri)
+    {
+        var id = new HyperlinkId(links.Count + 1);
+        links[id.Value] = uri;
+
+        for (var i = 0; i < count; i++)
+            rows[row][column + i] = rows[row][column + i] with { Hyperlink = id };
+
+        return id;
+    }
 
     public void Write(int column, int row, string text)
     {

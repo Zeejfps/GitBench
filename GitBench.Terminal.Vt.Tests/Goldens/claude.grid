@@ -15,8 +15,10 @@
 ;              by spaces, so every gap cell keeps the default style - which is why s02 reads
 ;              "..g.ggg.ggg..." and not a solid run. [>0q at 1147 is XTVERSION, not DECSCUSR: the
 ;              cursor stays a blinking block. The OSC 8 at 786 and its close at 886 leave no text
-;              on the screen (gap 14 - the URL is discarded, not leaked), and r05/r06 read as the
-;              sentence without it.
+;              on the screen - the URL is kept, not leaked - and r05/r06 read as the sentence
+;              without it. The link is the one place the corpus exercises id=: [1C then "MCP " ends
+;              r05 inside the link, [7;3H then "documentation" continues it on r06, and both runs
+;              carry the same id= so h05 and h06 mark them as one link and not two.
 ;   f3 (b1251) ?1049h at 1243. The cursor carries into the alternate screen at col 119 row 12,
 ;              where 12 CR/LF pairs and the [120C at 1237 had left it. The alt buffer has no
 ;              history, so scrollback is 0 for every frame until it is left again.
@@ -37,6 +39,11 @@
 ; every frame 120x34, matching the recording header; alt off for exactly frames 1, 2, 22 and 23;
 ; scrollback 0 throughout, since the normal screen is only ever addressed inside its 34 rows and
 ; the alternate screen has no history to keep.
+;
+; Rewritten after gap 14 was fixed. Before it, OSC 8 was unhandled, so there were no links or urls
+; sections and r05 ended at "MCP" - the space after it is printed inside the link, which made it a
+; cell holding something and no longer one the trailing-blank trim drops. The text on screen is
+; unchanged; every other line of every frame is byte-identical to the previous golden.
 ;
 ; Written after gap 19 was fixed. Before it, frames 22 and 23 read "modes ... " with no autowrap:
 ; Terminal.RestoreCursor put back four saved modes that Terminal.SaveCursor never saved, so ?1049l
@@ -74,7 +81,7 @@ text
   r02 |  2 new MCP servers found in this project|
   r03 |  Select any you wish to enable.|
   r04 ~blank~
-  r05 |  MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the MCP|
+  r05 |  MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the MCP |
   r06 |  documentation.|
   r07 ~blank~
   r08 |  ❯ [✔] gitbench-gui|
@@ -93,6 +100,11 @@ style
   s10 |.......aaaaaa.aaaaaaaa|
   s11 |.ddddd.dd.dddddd.d.ddd.dd.dddddd.ddd|
   s12-s33 ~default~
+links
+  h00-h04 ~none~
+  h05 |..............................................................................................................aaaa|
+  h06 |..aaaaaaaaaaaaa.|
+  h07-h33 ~none~
 legend
     .  default
   a  default on default bold
@@ -102,6 +114,8 @@ legend
   e  #b1b9f9 on default
   f  #ffc107 on default
   g  #ffc107 on default bold
+urls
+  a  https://code.claude.com/docs/en/mcp
 
 # claude  frame 3/23  after 1251/5558 bytes  (alt screen enter)
 size 120x34
@@ -211,6 +225,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................ccc|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -221,6 +238,8 @@ legend
   f  #d77757 on default
   g  #d77757 on #000000
   h  #ffc107 on default
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 7/23  after 3258/5558 bytes  (sync-frame close)
 size 120x34
@@ -255,6 +274,9 @@ style
   s31 |cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|
   s32 |..ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdddddddddddddddddddddddddddddddddddddddddddd|
   s33 |..ggggggggggggggggdddddddddddddddddddd.............................................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -264,6 +286,8 @@ legend
   e  #d77757 on default
   f  #d77757 on #000000
   g  #ffc107 on default
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 8/23  after 3581/5558 bytes  (sync-frame close)
 size 120x34
@@ -304,6 +328,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -315,6 +342,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 9/23  after 3650/5558 bytes  (sync-frame close)
 size 120x34
@@ -355,6 +384,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -366,6 +398,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 10/23  after 3715/5558 bytes  (sync-frame close)
 size 120x34
@@ -406,6 +440,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -417,6 +454,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 11/23  after 3807/5558 bytes  (sync-frame close)
 size 120x34
@@ -457,6 +496,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -468,6 +510,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 12/23  after 3871/5558 bytes  (sync-frame close)
 size 120x34
@@ -508,6 +552,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -519,6 +566,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 13/23  after 3963/5558 bytes  (sync-frame close)
 size 120x34
@@ -559,6 +608,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -570,6 +622,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 14/23  after 4036/5558 bytes  (sync-frame close)
 size 120x34
@@ -610,6 +664,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -621,6 +678,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 15/23  after 4149/5558 bytes  (sync-frame close)
 size 120x34
@@ -661,6 +720,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -672,6 +734,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 16/23  after 4218/5558 bytes  (sync-frame close)
 size 120x34
@@ -712,6 +776,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -723,6 +790,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 17/23  after 4310/5558 bytes  (sync-frame close)
 size 120x34
@@ -763,6 +832,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -774,6 +846,8 @@ legend
   g  #d77757 on #000000
   h  #ffc107 on default
   i  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 18/23  after 4486/5558 bytes  (sync-frame close)
 size 120x34
@@ -820,6 +894,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -832,6 +909,8 @@ legend
   h  #ffc107 on default
   i  #ffffff on default
   j  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 19/23  after 4617/5558 bytes  (sync-frame close)
 size 120x34
@@ -878,6 +957,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -890,6 +972,8 @@ legend
   h  #ffc107 on default
   i  #ffffff on default
   j  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 20/23  after 4790/5558 bytes  (sync-frame close)
 size 120x34
@@ -936,6 +1020,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -948,6 +1035,8 @@ legend
   h  #ffc107 on default
   i  #ffffff on default
   j  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 21/23  after 5224/5558 bytes  (sync-frame close)
 size 120x34
@@ -1002,6 +1091,9 @@ style
   s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
   s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
   s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+links
+  h00-h32 ~none~
+  h33 |...................................................................................................................aaa|
 legend
     .  default
   a  default on default bold
@@ -1014,6 +1106,8 @@ legend
   h  #ffc107 on default
   i  #ffffff on default
   j  #ffffff on #373737
+urls
+  a  https://claude.ai/code/session_013HQ7UcitujTpCfNPzRvyKT?from=cli
 
 # claude  frame 22/23  after 5239/5558 bytes  (alt screen leave)
 size 120x34

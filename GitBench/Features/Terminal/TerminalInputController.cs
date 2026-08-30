@@ -1,6 +1,8 @@
 using GitBench.App;
+using GitBench.Platform;
 using GitBench.Terminal.Vt;
 using GitBench.Widgets;
+using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -115,9 +117,20 @@ internal abstract record TerminalGesture
 
     /// <summary>The program asked for the mouse, so this drag is its input and not a selection.</summary>
     public sealed record Reporting : TerminalGesture;
+
+    /// <summary>
+    /// A modified press landed on a link. It opens if the pointer has not travelled by the release.
+    /// </summary>
+    /// <remarks>
+    /// A case rather than a flag beside the others, for the reason the rest of them are cases:
+    /// following a link, selecting and reporting are alternatives. A press cannot be two of them,
+    /// and a link held in a field beside this record would let one Cmd+click both open a link and
+    /// clear the selection — or open a link and report the click to a program tracking the mouse.
+    /// </remarks>
+    public sealed record FollowingLink(TerminalLinkTarget Target, PointF Origin) : TerminalGesture;
 }
 
-internal sealed class TerminalInputController : KeyboardMouseController
+internal sealed class TerminalInputController : KeyboardMouseController, IProvidesCursor
 {
     const int MaxUtf8BytesPerRune = 4;
 
@@ -136,6 +149,7 @@ internal sealed class TerminalInputController : KeyboardMouseController
     readonly ITerminalInput _terminal;
     readonly ITerminalCellGeometry _cells;
     readonly IClipboard? _clipboard;
+    readonly IPlatformShell? _shell;
 
     float _wheelRemainder;
     (int Column, int Row)? _reportedCell;
@@ -151,14 +165,51 @@ internal sealed class TerminalInputController : KeyboardMouseController
         InputSystem input,
         ITerminalInput terminal,
         ITerminalCellGeometry cells,
-        IClipboard? clipboard = null)
+        IClipboard? clipboard = null,
+        IPlatformShell? shell = null)
     {
         _view = view;
         _input = input;
         _terminal = terminal;
         _cells = cells;
         _clipboard = clipboard;
+        _shell = shell;
     }
+
+    /// <summary>
+    /// The hand over a link the pane would open, the default arrow everywhere else.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read once per frame by the input system while this controller is the hovered target, so it
+    /// asks the geometry rather than reporting anything remembered — the cell under a still pointer
+    /// changes whenever the shell prints. The controller keeps no copy of where the pointer is; the
+    /// view owns that, and two fields holding it would be one field going stale.
+    /// </para>
+    /// <para>
+    /// The hand appears without the modifier that commits, which is a deliberate mismatch: it means
+    /// "there is a link here", not "click now". Tracking the modifier is not available to a hover —
+    /// <c>MouseMoveEvent</c> carries no modifiers, which is why move reports are sent with none —
+    /// and adding them to it is a framework change this feature does not need.
+    /// </para>
+    /// </remarks>
+    public MouseCursor Cursor =>
+        _cells.HoveredLink is not null ? MouseCursor.Hand : MouseCursor.Default;
+
+    /// <remarks>
+    /// Enter matters as much as move: hover is established by the input system's own refresh, which
+    /// fires enter with the real pointer position but delivers no move to a freshly hovered
+    /// controller.
+    /// </remarks>
+    public override void OnMouseEnter(ref MouseEnterEvent e)
+    {
+        if (e.Phase != EventPhase.Capturing) return;
+        Hover(e.Mouse.Point);
+    }
+
+    public override void OnMouseExit(ref MouseExitEvent e) => Hover(null);
+
+    void Hover(PointF? point) => _cells.SetHoverPoint(point);
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
@@ -252,6 +303,15 @@ internal sealed class TerminalInputController : KeyboardMouseController
             var gesture = _gesture;
             _gesture = new TerminalGesture.None();
 
+            // Taken before the two branches below, and consumed, so that following a link neither
+            // clears the selection the way a plain click does nor reaches the mouse report.
+            if (gesture is TerminalGesture.FollowingLink following)
+            {
+                e.Consume();
+                Follow(following, e.Mouse.Point);
+                return;
+            }
+
             // A press that never travelled is a click, and a click clears whatever was highlighted.
             if (gesture is TerminalGesture.Armed) Deselect();
 
@@ -271,6 +331,20 @@ internal sealed class TerminalInputController : KeyboardMouseController
         // all holds nothing, so the application's own chords survive a pointer resting over it — and
         // that is what a click on the pane's start gate reaches past.
         if (e.State == InputState.Pressed && _terminal.HasScreen) _input.StealFocus(this);
+
+        // Ahead of both selecting and reporting, because it is the one gesture that is unambiguous:
+        // a modified press on a link means the link. A bare click is left alone deliberately — it
+        // belongs to whatever full-screen program may be reading the mouse, and a gesture that
+        // changed meaning when the user started vim would be worse than one modifier.
+        if (e.State == InputState.Pressed
+            && e.Button == MouseButton.Left
+            && (e.Modifiers & CommandLike) != 0
+            && _cells.LinkAt(e.Mouse.Point) is { } target)
+        {
+            _gesture = new TerminalGesture.FollowingLink(target, e.Mouse.Point);
+            e.Consume();
+            return;
+        }
 
         if (e.State == InputState.Pressed && e.Button == MouseButton.Left && WantsToSelect(e.Modifiers))
         {
@@ -296,10 +370,52 @@ internal sealed class TerminalInputController : KeyboardMouseController
     /// </remarks>
     public override void OnFocusLost() => _gesture = new TerminalGesture.None();
 
+    /// <summary>
+    /// Opens the link a press landed on, if the pointer is still on it and has not travelled.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Travel cancels rather than becoming a selection. That reads like the markdown link
+    /// controller's rule and is not the same one: there, travel means the reader was highlighting
+    /// the text; here the modifier is held down, so travel means they changed their mind.
+    /// </para>
+    /// <para>
+    /// The link is resolved again at the release and compared, which is what makes the pointer
+    /// staleness harmless on this path — the screen may have scrolled between press and release,
+    /// and opening what <em>was</em> under the pointer would open something nobody aimed at.
+    /// </para>
+    /// </remarks>
+    void Follow(TerminalGesture.FollowingLink gesture, PointF point)
+    {
+        if (Travelled(point, gesture.Origin) >= DragThreshold) return;
+        if (_cells.LinkAt(point) != gesture.Target) return;
+
+        // Contracted not to throw, but the shell is injected and this runs inside input dispatch,
+        // where anything that escapes takes the window down with it.
+        try
+        {
+            _shell?.OpenUrl(gesture.Target.Text);
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[TerminalInputController] Failed to open '{gesture.Target}': {e.Message}");
+        }
+    }
+
     public override void OnMouseMoved(ref MouseMoveEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
         if (!IsOnScreen()) return;
+
+        // Before every gesture branch, and always to the live point rather than to something held:
+        // a hover frozen for the length of a gesture is the same stale-pointer bug arriving through
+        // a different door. Only the two gestures that still mean "what is under here" keep it —
+        // no gesture at all, and a link press, which is the one the affordance is for. A selection,
+        // a link press that has become a drag, and a program reading the mouse all drop it.
+        Hover(_gesture is TerminalGesture.None or TerminalGesture.FollowingLink
+                && _view.Position.ContainsPoint(e.Mouse.Point)
+            ? e.Mouse.Point
+            : null);
 
         if (_gesture is TerminalGesture.Armed armed)
         {

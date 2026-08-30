@@ -32,6 +32,7 @@ public sealed class GridSnapshot
 {
     readonly TerminalCell[][] rows;
     readonly IReadOnlyList<int> continuations;
+    readonly IReadOnlyDictionary<HyperlinkId, string> urls;
 
     GridSnapshot(
         string label,
@@ -39,8 +40,10 @@ public sealed class GridSnapshot
         int scrollbackRows,
         TerminalState state,
         TerminalCell[][] rows,
-        IReadOnlyList<int> continuations)
+        IReadOnlyList<int> continuations,
+        IReadOnlyDictionary<HyperlinkId, string> urls)
     {
+        this.urls = urls;
         Label = label;
         Size = size;
         ScrollbackRows = scrollbackRows;
@@ -69,6 +72,7 @@ public sealed class GridSnapshot
         var history = grid.ScrollbackRows;
         var rows = new TerminalCell[history + size.Rows][];
         var continuations = new List<int>();
+        var urls = new Dictionary<HyperlinkId, string>();
 
         for (var row = -history; row < size.Rows; row++)
         {
@@ -77,15 +81,25 @@ public sealed class GridSnapshot
             rows[row + history] = cells;
             if (grid.ContinuesPreviousRow(row))
                 continuations.Add(row);
+
+            // Resolved here rather than at render time: a snapshot is frozen, and the grid it came
+            // from is fed again the moment a replay moves to the next frame.
+            foreach (var cell in cells)
+            {
+                if (cell.Hyperlink.IsNone || urls.ContainsKey(cell.Hyperlink)) continue;
+                if (grid.TryGetHyperlink(cell.Hyperlink, out var link))
+                    urls[cell.Hyperlink] = link.Uri;
+            }
         }
 
-        return new GridSnapshot(label, size, history, state, rows, continuations);
+        return new GridSnapshot(label, size, history, state, rows, continuations, urls);
     }
 
     /// <summary>The line-per-row text a golden file is made of.</summary>
     public IEnumerable<string> ToLines()
     {
         var styles = StyleLegend.Build(rows);
+        var links = LinkLegend.Build(rows, urls);
 
         yield return $"# {Label}";
         yield return $"size {Size}";
@@ -112,9 +126,23 @@ public sealed class GridSnapshot
                 yield return line;
         }
 
+        if (!links.IsEmpty)
+        {
+            yield return "links";
+            foreach (var line in Plane(row => links.Row(rows[row - FirstRow]), "~none~", 'h'))
+                yield return line;
+        }
+
         yield return "legend";
         foreach (var entry in styles.Entries)
             yield return $"  {entry}";
+
+        if (!links.IsEmpty)
+        {
+            yield return "urls";
+            foreach (var entry in links.Entries)
+                yield return $"  {entry}";
+        }
 
         var odd = Oddities().ToList();
         if (odd.Count > 0)

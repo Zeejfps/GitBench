@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using GitBench.Features.Terminal;
 using GitBench.Terminal.Vt;
 using ZGF.Observable;
@@ -117,5 +118,11 @@ public class TerminalSessionFaultTests
         public void CopyRow(int row, Span<TerminalCell> destination) => destination.Fill(TerminalCell.Blank);
 
         public bool ContinuesPreviousRow(int row) => false;
+
+        public bool TryGetHyperlink(HyperlinkId id, [NotNullWhen(true)] out TerminalHyperlink? link)
+        {
+            link = null;
+            return false;
+        }
     }
 }

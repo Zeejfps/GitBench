@@ -6,6 +6,8 @@ using GitBench.Terminal.Vt;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Desktop;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
 using ZGF.Observable;
 using Xunit;
@@ -311,6 +313,188 @@ public class TerminalGridViewTests
 
     /// <summary>The escape character, named for the same reason <see cref="Csi"/> spells one out.</summary>
     private const string Esc = "\u001b";
+
+    // ---- hyperlinks ----
+
+    const string Url = "https://example.com/docs";
+
+    static byte[] Linked(string before, string text, string after) =>
+        Vt($"{before}\u001b]8;;{Url}\u001b\\{text}\u001b]8;;\u001b\\{after}");
+
+    /// <summary>The middle of the cell at one column of row 0, in the view's own coordinates.</summary>
+    static PointF Over(int column) =>
+        new(column * Advance + Advance / 2f, Height - CellHeight / 2f);
+
+    /// <summary>The rules drawn in the link colour, which is what a hovered link looks like.</summary>
+    static IReadOnlyList<RecordedRect> LinkRules(GuiTestHarness harness) =>
+        harness.Canvas.Rects
+            .Where(r => r.Inputs.Style.BackgroundColor == ThemeStyles.Dark.Terminal.Link)
+            .Where(r => r.Inputs.Position.Height < CellHeight)
+            .ToList();
+
+    [Fact]
+    public void WithNoPointerOverIt_ALinkIsNotUnderlined()
+    {
+        var (harness, _) = Located(Linked("see ", "docs", " after"));
+
+        Assert.Empty(LinkRules(harness));
+    }
+
+    [Fact]
+    public void ThePointerOverALink_RulesExactlyItsCells()
+    {
+        var (harness, view) = Located(Linked("see ", "docs", " after"));
+
+        view.SetHoverPoint(Over(5));
+        harness.Render();
+
+        var rule = Assert.Single(LinkRules(harness));
+        Assert.Equal(4 * Advance, rule.Inputs.Position.Left);
+        Assert.Equal(4 * Advance, rule.Inputs.Position.Width);
+    }
+
+    [Fact]
+    public void ThePointerBesideALink_RulesNothing()
+    {
+        var (harness, view) = Located(Linked("see ", "docs", " after"));
+
+        view.SetHoverPoint(Over(1));
+        harness.Render();
+
+        Assert.Empty(LinkRules(harness));
+    }
+
+    /// <remarks>
+    /// The property the whole id scheme is for: one link that wrapped is still one link, so hovering
+    /// either half rules both. A column range could not say this.
+    /// </remarks>
+    [Fact]
+    public void ALinkWrappedAcrossTheMargin_IsRuledOnBothRows()
+    {
+        // A full row of the link, then two more cells of it, so the margin does the splitting.
+        var text = new string('x', ExpectedColumns) + "yy";
+        var (harness, view) = Located(Linked(string.Empty, text, string.Empty));
+
+        view.SetHoverPoint(Over(0));
+        harness.Render();
+
+        var rules = LinkRules(harness);
+        Assert.Equal(2, rules.Count);
+        Assert.Equal(ExpectedColumns * Advance, rules[0].Inputs.Position.Width);
+        Assert.Equal(2 * Advance, rules[1].Inputs.Position.Width);
+    }
+
+    /// <remarks>
+    /// The link is under the pointer and the pointer has not moved; the shell printing is what
+    /// changed. A hover that remembered a link rather than a point would still be ruling the old one.
+    /// </remarks>
+    [Fact]
+    public void WhenTheLinkScrollsOutFromUnderAStillPointer_TheRuleGoes()
+    {
+        // Printed, then pushed off the top of the viewport by everything after it.
+        var (harness, view) = Located(
+            Linked("see ", "docs", " after")
+                .Concat(Vt(string.Concat(Enumerable.Repeat("\r\n", ExpectedRows + 3))))
+                .ToArray());
+
+        view.SetHoverPoint(Over(5));
+        harness.Render();
+
+        Assert.Empty(LinkRules(harness));
+    }
+
+    [Fact]
+    public void ALinkThisApplicationWouldNotOpen_IsNotUnderlined()
+    {
+        var (harness, view) = Located(
+            Vt("see \u001b]8;;file:///etc/passwd\u001b\\docs\u001b]8;;\u001b\\"));
+
+        view.SetHoverPoint(Over(5));
+        harness.Render();
+
+        Assert.Empty(LinkRules(harness));
+    }
+
+    /// <remarks>
+    /// The one case that drives a real pointer through the real input system into the real view,
+    /// rather than calling <c>SetHoverPoint</c> for it. Everything between the two — which phase a
+    /// move arrives in, whether the controller is the hovered target, whether it is looking at the
+    /// same view it was given as a geometry — is only covered here, and it is exactly the seam a
+    /// controller test with a fake geometry cannot reach.
+    /// </remarks>
+    [Fact]
+    public void MovingARealPointerOverALink_RulesItAndTurnsThePointerIntoAHand()
+    {
+        var dispatcher = new QueueDispatcher();
+        using var session = TerminalSession.Start(
+            () => new RecordedPtySession(Linked("see ", "docs", " after")),
+            new XtermSharpEngineFactory(),
+            new TerminalSize(ExpectedColumns, ExpectedRows),
+            dispatcher);
+
+        Assert.True(session.Exited.Wait(TimeSpan.FromSeconds(5)), "The recording never finished.");
+        dispatcher.Pump();
+
+        TerminalGridView? view = null;
+        TerminalInputController? controller = null;
+
+        using var harness = GuiTestHarness.Create(
+            ctx =>
+            {
+                var input = ctx.Require<InputSystem>();
+                view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
+                view.SetRenderState(new TerminalRenderState.Running(session));
+                controller = new TerminalInputController(view, input, new IdleTerminal(), view);
+                input.RegisterController(view, controller);
+                return view;
+            },
+            width: Width,
+            height: Height,
+            configure: ctx =>
+            {
+                ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
+                ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
+            });
+
+        harness.Render();
+
+        var point = Over(5);
+        harness.MoveTo(point.X, point.Y);
+        harness.Render();
+
+        Assert.Equal(MouseCursor.Hand, controller!.Cursor);
+        var rule = Assert.Single(LinkRules(harness));
+        Assert.Equal(4 * Advance, rule.Inputs.Position.Left);
+        Assert.Equal(4 * Advance, rule.Inputs.Position.Width);
+    }
+
+    /// <summary>A shell that is up but has printed everything it is going to.</summary>
+    private sealed class IdleTerminal : ITerminalInput
+    {
+        public bool IsAcceptingInput => true;
+
+        public TerminalModes Modes => default;
+
+        public void SendInput(ReadOnlySpan<byte> bytes) { }
+
+        public bool Scroll(int lines) => false;
+
+        public bool ScrollPages(int pages) => false;
+
+        public void SendMouse(ReadOnlySpan<byte> bytes) { }
+
+        public void Paste(string text) { }
+
+        public bool HasScreen => true;
+
+        public TerminalSpan? Selection => null;
+
+        public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) => false;
+
+        public bool ClearSelection() => false;
+
+        public string SelectionText() => string.Empty;
+    }
 
     private static byte[] Vt(string text) => Encoding.UTF8.GetBytes(text);
 

@@ -1026,6 +1026,17 @@ internal sealed class FixedCells(int column, int row) : ITerminalCellGeometry
     public int Redraws { get; private set; }
 
     public void RequestRedraw() => Redraws++;
+
+    public TerminalLinkTarget? LinkAt(PointF point) => Link;
+
+    /// <summary>The link every point of this pane is over, or null for none.</summary>
+    public TerminalLinkTarget? Link { get; set; }
+
+    public PointF? HoverPoint { get; private set; }
+
+    public void SetHoverPoint(PointF? point) => HoverPoint = point;
+
+    public TerminalLinkTarget? HoveredLink => HoverPoint is null ? null : Link;
 }
 
 /// <summary>

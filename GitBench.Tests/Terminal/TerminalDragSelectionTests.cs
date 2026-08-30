@@ -205,15 +205,23 @@ internal sealed class DragPane : IDisposable
         SeamTerminal terminal,
         GuiTestHarness harness,
         ScriptedCells cells,
-        TerminalInputController controller)
+        TerminalInputController controller,
+        RecordingShell shell)
     {
         Terminal = terminal;
         _harness = harness;
         _cells = cells;
         _controller = controller;
+        Shell = shell;
     }
 
     public SeamTerminal Terminal { get; }
+
+    public RecordingShell Shell { get; }
+
+    public ScriptedCells Cells => _cells;
+
+    public TerminalInputController Controller => _controller;
 
     public static DragPane Create() => Build(new SeamTerminal());
 
@@ -228,6 +236,7 @@ internal sealed class DragPane : IDisposable
     static DragPane Build(SeamTerminal terminal)
     {
         var cells = new ScriptedCells();
+        var shell = new RecordingShell();
         TerminalInputController? controller = null;
 
         var harness = GuiTestHarness.Create(
@@ -235,7 +244,7 @@ internal sealed class DragPane : IDisposable
             {
                 var input = ctx.Require<InputSystem>();
                 var view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                controller = new TerminalInputController(view, input, terminal, cells);
+                controller = new TerminalInputController(view, input, terminal, cells, clipboard: null, shell: shell);
                 input.RegisterController(view, controller);
                 return view;
             },
@@ -248,7 +257,7 @@ internal sealed class DragPane : IDisposable
             });
 
         harness.Input.StealFocus(controller!);
-        return new DragPane(terminal, harness, cells, controller!);
+        return new DragPane(terminal, harness, cells, controller!, shell);
     }
 
     const float CellSize = 10f;
@@ -260,11 +269,14 @@ internal sealed class DragPane : IDisposable
         Send(InputState.Pressed, At(column, row), modifiers);
     }
 
-    public void ReleaseAt(int column, int row)
+    public void ReleaseAt(int column, int row, InputModifiers modifiers = InputModifiers.None)
     {
         _cells.At(column, row);
-        Send(InputState.Released, At(column, row), InputModifiers.None);
+        Send(InputState.Released, At(column, row), modifiers);
     }
+
+    /// <summary>Moves the pointer without pressing, which is what establishes a hover.</summary>
+    public void HoverAt(int column, int row) => Move(column, row, At(column, row));
 
     public void ReleaseOutside() =>
         Send(InputState.Released, new PointF(9000f, 9000f), InputModifiers.None);
@@ -349,4 +361,15 @@ internal sealed class ScriptedCells : ITerminalCellGeometry
     public GridPoint? ClampToGrid(PointF point) => new GridPoint(_column, _row);
 
     public void RequestRedraw() => Redraws++;
+
+    public TerminalLinkTarget? LinkAt(PointF point) => Link;
+
+    /// <summary>The link every point of this pane is over, or null for none.</summary>
+    public TerminalLinkTarget? Link { get; set; }
+
+    public PointF? HoverPoint { get; private set; }
+
+    public void SetHoverPoint(PointF? point) => HoverPoint = point;
+
+    public TerminalLinkTarget? HoveredLink => HoverPoint is null ? null : Link;
 }

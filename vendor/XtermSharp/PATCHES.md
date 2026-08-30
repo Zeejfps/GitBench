@@ -483,3 +483,97 @@ selection character, and the decision to answer a read with an empty clipboard r
 it. `Osc52Spec` covers all of it, and `ChunkingAndRobustnessSpec`'s `FeedResult.Nothing` assertion is
 what forced the new field to be a `ReadOnlyMemory` rather than a list — a record struct compares a
 list by reference, so a result carrying an empty one would have stopped equalling `Nothing`.
+
+---
+
+## Patch 21 — OSC 8 hyperlinks reach the grid (gap 14)
+
+`InputHandlers/InputHandler.cs` registered handlers for OSC 0, 1, 2 and 52 only; OSC 8 fell to the
+fallback at `:41` and was discarded. The grid was correct — the link text printed and the URL did
+not leak — so nothing failed, and the URL was gone by the time a renderer saw the cell. The
+acceptance corpus emits four of them.
+
+### New file: `HyperlinkTable.cs`
+
+The urls, addressed by the int a cell carries. Ids are minted monotonically and **never reused**,
+which is the only invariant here that matters: a cell holds an id long after the entry behind it may
+have gone, and an id that could come back meaning a different url would turn a stale cell into a
+link to somewhere the program never named.
+
+Everything else follows from it. Eviction is safe *because* ids are not reused — a full table drops
+its oldest entry, deepest in the scrollback, and any cell still pointing there stops resolving and
+reads as ordinary text. Note this is the opposite of VTE, whose pool recycles indices once a
+mark-and-sweep has proved no live cell references them; recycling without that proof is exactly the
+bug above, and monotonic ids buy the same safety with none of the sweep.
+
+Three caps, two of them with precedent: 65536 entries; 2083 bytes of url, which is what VTE and
+iTerm2 both use, and an overlong one is **dropped rather than truncated** because half a url is a
+link somewhere else; 250 bytes of `id=`, and an overlong one is **ignored** so the link survives as
+an anonymous one, since the id is a grouping hint and losing it costs only the grouping.
+
+The url cap is load-bearing here in a way it is not upstream. xterm.js's parser refuses to dispatch
+an over-long OSC at all; `EscapeSequenceParser.MaxOscBytes` (patch 20) truncates the payload and
+dispatches it anyway, so without the cap a half-written url would arrive looking well-formed.
+
+### Changed files
+
+| File | Change |
+| --- | --- |
+| `CharData.cs` | `public int Hyperlink`, 0 for none, zeroed in both constructors. |
+| `Terminal.cs` | `Hyperlinks`, `CurrentHyperlinkId`, and `HyperlinkCommand` — the OSC 8 parse. |
+| `InputHandlers/InputHandler.cs` | Registers OSC 8. `Print` reads `CurrentHyperlinkId` beside `CurAttr` and stamps it on the cell **and on the blank it fills from**. |
+
+### The id is beside the attribute, not inside it
+
+The one non-obvious placement, and the next reader will want to fold it into `CellAttribute` where
+it would cost no extra field. It cannot go there. Only another OSC 8 ends a link — `SGR 0` must not
+— and `CurAttr = CharData.DefaultAttr` in `CharAttributes` would silently terminate every link at
+the next `ESC[m`, which is precisely what a program emits between the link text and what follows it.
+xterm.js keeps the url id out of its own `_processSGR0` for the same reason and says so in a comment.
+
+`HyperlinkSpec.SgrReset_DoesNotEndTheLink` fails if this is moved.
+
+### The blank matters as much as the cell
+
+`Print` builds one `empty` and uses it for both the insert-mode shift and the trailer of a wide
+character. Carrying only the attribute onto it leaves a wide glyph's second column outside the link
+it sits in, which shows up as a hover highlight with a hole in it.
+`HyperlinkSpec.BothColumnsOfAWideCharacter_CarryTheLink` covers it.
+
+### The parse is here and not above the seam
+
+The adapter only sees anything at `Feed` boundaries, by which time every cell has been written; and
+whether to mint or intern depends on the parameter parse, which is on the critical path at dispatch
+time. Unlike OSC 52 — an action, and deferrable — OSC 8 is cell state that has to exist before the
+cells naming it are printed. The adapter is left a straight read, the same shape as
+`ContinuesPreviousRow`.
+
+The parameter field is colon-separated and `id` need not be first, so the first entry starting with
+`id=` wins and the rest are ignored, as both references do. **The id is an opaque token and is never
+percent-decoded** — the corpus sends `id=u-c415zw%2666840025641304634`, and decoding it would merge
+links a program deliberately kept apart. An empty `id=` counts as no id at all: the specification
+says the two are interchangeable, and interning on the empty string would make every id-less link to
+one url a single link across the whole session.
+
+### Behaviour that changed beyond the fix
+
+- **A blank printed inside a link is no longer a blank cell.** `TerminalCell` equality now includes
+  the id, so the snapshot format's trailing-blank trim keeps it. `claude.grid`'s r05 gained the
+  space after "MCP" for this reason; the note in that file records it.
+- **The snapshot format gained `links` and `urls` sections**, both omitted from a frame with no
+  links. Without them a second engine could discard OSC 8 and still pass every golden — which is how
+  gap 14 went unnoticed in the first place.
+
+### Behaviour deliberately *not* changed
+
+- **DECSC and DECRC do not carry the open link.** `CurrentHyperlinkId` is a plain field: only
+  another OSC 8 ends a link, and a cursor save is not one. xterm.js is inconsistent here, rolling
+  back its extended-attribute flag while leaving the url id alone, so cells printed after a restore
+  get no extended attributes at all. This diverges from it in the coherent direction.
+- **One table, not one per screen.** VTE keeps a pool per screen so that leaving the alternate
+  screen drops its links in one go. Here the alt screen's entries outlive their only cells and age
+  out by eviction instead. That is a bounded dictionary, not a correctness cost, and ids stay
+  globally unique — which two pools would quietly give up.
+- **No scheme check.** Any url is interned, `file:` included. What a link *is* and what is safe to
+  *open* are different questions, and the second is the host application's; xterm.js draws the line
+  in the same place.

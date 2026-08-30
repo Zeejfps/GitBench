@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace GitBench.Terminal.Vt;
 
 /// <summary>
@@ -48,4 +50,27 @@ public interface ITerminalGrid
     /// already stores, so an adapter does not have to translate.
     /// </remarks>
     bool ContinuesPreviousRow(int row);
+
+    /// <summary>
+    /// Where a cell's hyperlink points, or false when the id names no link this grid still holds.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A lookup rather than a url on the cell, because the id is what a cell can afford to carry and
+    /// because a link is one thing however many cells it covers. Called for a link under the
+    /// pointer, not for every cell of every frame — a renderer deciding what to highlight compares
+    /// ids, and never needs a url to do it.
+    /// </para>
+    /// <para>
+    /// False is the ordinary answer for an id whose link has aged out of a long session, and it is
+    /// safe: ids are not reused, so an id that no longer resolves cannot come to name a different
+    /// url. Such a cell reads as text.
+    /// </para>
+    /// <para>
+    /// What comes back is the url the program wrote, unjudged. Deciding which urls are worth an
+    /// affordance or safe to open is the caller's, and doing it here would make every host share
+    /// one terminal's opinion.
+    /// </para>
+    /// </remarks>
+    bool TryGetHyperlink(HyperlinkId id, [NotNullWhen(true)] out TerminalHyperlink? link);
 }

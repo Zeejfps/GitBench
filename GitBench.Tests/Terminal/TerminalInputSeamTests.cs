@@ -1559,6 +1559,17 @@ internal sealed class NoCells : ITerminalCellGeometry
     public GridPoint? ClampToGrid(PointF point) => null;
 
     public void RequestRedraw() => Redraws++;
+
+    public TerminalLinkTarget? LinkAt(PointF point) => Link;
+
+    /// <summary>The link every point of this pane is over, or null for none.</summary>
+    public TerminalLinkTarget? Link { get; set; }
+
+    public PointF? HoverPoint { get; private set; }
+
+    public void SetHoverPoint(PointF? point) => HoverPoint = point;
+
+    public TerminalLinkTarget? HoveredLink => HoverPoint is null ? null : Link;
 }
 
 /// <summary>The shell a controller writes to, reduced to what a test needs to read back.</summary>

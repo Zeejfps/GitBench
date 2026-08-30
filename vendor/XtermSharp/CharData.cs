@@ -19,6 +19,18 @@ namespace XtermSharp {
 		/// </summary>
 		public string Combining;
 
+		/// <summary>
+		/// PATCH 21: the hyperlink this cell belongs to, or 0 for none. An index into
+		/// <see cref="Terminal.Hyperlinks"/>, not a url: a cell is copied by value on every reflow,
+		/// scroll and insert, and an int rides along where a string would be a per-cell allocation.
+		///
+		/// It sits beside <see cref="Attribute"/> rather than inside it deliberately. Only another
+		/// OSC 8 ends a link — SGR 0 must not — and <c>CurAttr = CharData.DefaultAttr</c> in
+		/// <c>InputHandler.CharAttributes</c> would silently terminate every link on the next
+		/// <c>ESC[m</c>. xterm.js keeps the url id out of its own SGR 0 reset for the same reason.
+		/// </summary>
+		public int Hyperlink;
+
 		public static readonly CellAttribute DefaultAttr = CellAttribute.Default;
 		public static readonly CellAttribute InvertedAttr = CellAttribute.InvertedDefault;
 
@@ -39,6 +51,7 @@ namespace XtermSharp {
 			Width = width;
 			Code = code;
 			Combining = null;
+			Hyperlink = 0;
 		}
 
 		// Returns an empty CharData with the specified attribute
@@ -49,6 +62,7 @@ namespace XtermSharp {
 			Width = 1;
 			Code = 0;
 			Combining = null;
+			Hyperlink = 0;
 		}
 
 		/// <summary>

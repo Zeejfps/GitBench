@@ -235,6 +235,8 @@ namespace XtermSharp {
 			parser.SetOscHandler (1, SetIconTitle);
 			//   2 - title
 			parser.SetOscHandler (2, SetTitle);
+			//   8 - hyperlink (PATCH 21)
+			parser.SetOscHandler (8, terminal.HyperlinkCommand);
 			//  52 - clipboard (PATCH 20)
 			parser.SetOscHandler (52, terminal.ClipboardCommand);
 			//   3 - set property X in the form "prop=value"
@@ -1277,6 +1279,9 @@ namespace XtermSharp {
 			var wrapAroundMode = terminal.Wraparound;
 			var insertMode = terminal.InsertMode;
 			var curAttr = terminal.CurAttr;
+			// PATCH 21: read once beside the attribute, and for the same reason — Print is the only
+			// place a cell is authored, so this is the only place a link can be stamped on one.
+			var curHyperlink = terminal.CurrentHyperlinkId;
 			var bufferRow = buffer.Lines [buffer.Y + buffer.YBase];
 
 
@@ -1374,6 +1379,11 @@ namespace XtermSharp {
 
 				var empty = CharData.Null;
 				empty.Attribute = curAttr;
+				// PATCH 21: the filler is what becomes the wide character's trailer and what insert
+				// mode shifts in, so a link that covers a wide glyph covers both of its columns.
+				// Carrying only the attribute would leave the trailer outside the link, which shows
+				// up as a hover highlight with a hole in it.
+				empty.Hyperlink = curHyperlink;
 				// insert mode: move characters to right
 				if (insertMode) {
 					// right shift cells according to the width
@@ -1389,6 +1399,7 @@ namespace XtermSharp {
 
 				// write current char to buffer and advance cursor
 				var charData = new CharData (curAttr, (uint)code, chWidth, ch);
+				charData.Hyperlink = curHyperlink;   // PATCH 21
 				bufferRow [buffer.X++] = charData;
 
 				// fullwidth char - also set next cell to placeholder stub and advance cursor
