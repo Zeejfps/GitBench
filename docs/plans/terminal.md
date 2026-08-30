@@ -602,6 +602,22 @@ a repository is handed a terminal nobody asked for. `TerminalTabs.Open` stays a 
 `+` calls `Start` after it — the spawn then waits for the new grid's first viewport report, which is the
 same path the gate's own click takes.
 
+**A tab is a notch cut through the strip, not a highlighted chip.** The first build gave the active tab
+the shared row-selection fill, which is the mode switcher's own selected-segment colour — so the header
+became two stacked rows of the same control, with the lower one louder than the upper. What it is now:
+the strip is `SurfaceRaised`, a plane of its own; the active tab wears the colour of whatever is *under*
+the strip (the grid, or the details panel) with a 2px accent bar along its top; inactive tabs have no
+fill at all and a secondary label. There is deliberately no rule under the strip — a rule would cut
+straight across the one join that has to be invisible, which is where the active tab meets the surface
+it is naming. The accent bar is what keeps that legible in this theme, whose surface steps are only a
+few values apart; it is reserved (transparent) on every tab so activating one never shifts its label,
+the same trick the working-changes underline tabs already use.
+
+**The close button is laid out on every tab and painted on one.** Four tabs should not carry four X's,
+but hiding the button outright resizes the tab under the pointer, so a strip of them would breathe as
+the mouse crossed it. It is transparent instead — present, sized, and only visible on the active tab or
+the one being hovered, which are the only two a pointer can reach it on anyway.
+
 **The title is the engine's; the fallback is the tab's.** `TerminalState.Title` already carries what OSC
 0/2 sets, which is what a shell writes and what a program running under it overwrites — so a tab's label
 follows the running command, which is the whole reason a tab strip is legible with four shells open. An

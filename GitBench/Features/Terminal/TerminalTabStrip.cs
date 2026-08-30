@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -43,7 +44,9 @@ internal sealed record TerminalTabStrip : Widget
         return new TabStrip
         {
             Id = StripId,
-            Background = Theme.Color(s => s.Terminal.DefaultBackground),
+            // A plane above the grid, so the active tab — which wears the grid's own colour —
+            // reads as a notch cut through to it.
+            Background = Theme.Color(s => s.Palette.SurfaceRaised),
             Tabs =
             [
                 Each.Of(tabs.Terminals, new TerminalTab { Tabs = tabs }, axis: Axis.Horizontal)
@@ -108,6 +111,7 @@ internal sealed record TerminalTab : Widget
             // Tracked: the label follows the running command's title, and the trailing index follows
             // whichever siblings currently share it.
             Label = Prop.Bind(() => Label(loc.Strings.Value, tabs.Terminals, terminal)),
+            ContentBackground = static s => s.Terminal.DefaultBackground,
             IsActive = () => ReferenceEquals(tabs.Active.Value, terminal),
             OnActivate = () => tabs.Activate(terminal),
             OnClose = () => RequestClose(bus, tabs, terminal),

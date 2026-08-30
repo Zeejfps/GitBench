@@ -1,4 +1,5 @@
 using GitBench.Localization;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
@@ -19,6 +20,13 @@ namespace GitBench.Controls;
 /// middle-click, the fills, the overflow pan — is the same decision on both surfaces and a second
 /// copy is the one that silently stops matching. What each caller supplies is what its tabs are
 /// bound to and what closing one means.
+/// <para>
+/// There is deliberately no rule along the bottom. The strip is a plane of its own and the active
+/// tab wears the colour of what is underneath it, so the boundary is a change of colour everywhere
+/// except across the active tab — which is what makes that tab read as the surface below rather
+/// than as a chip sitting on top of it. A rule would cut straight through the one place the join
+/// has to be invisible.
+/// </para>
 /// <para>
 /// The trailing slot sits outside the scroller so a control that acts on the strip as a whole (the
 /// terminal's <c>+</c>) stays reachable however far the tabs have overflowed.
@@ -57,14 +65,21 @@ internal sealed record TabStrip : Widget
         {
             Height = Height,
             Background = Background,
-            BorderSize = new BorderSizeStyle { Bottom = 1 },
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.Palette.Border }),
             Children =
             [
-                new Row
+                new Padding
                 {
-                    CrossAxis = CrossAxisAlignment.Stretch,
-                    Children = Trailing is { } trailing ? [scroller, trailing] : [scroller],
+                    // A hair of lead-in, so the first tab is not welded to whatever the pane's
+                    // leading edge happens to be.
+                    Amount = new PaddingStyle { Left = Spacing.Xs },
+                    Children =
+                    [
+                        new Row
+                        {
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children = Trailing is { } trailing ? [scroller, trailing] : [scroller],
+                        },
+                    ],
                 },
             ],
         };
@@ -72,17 +87,36 @@ internal sealed record TabStrip : Widget
 }
 
 /// <summary>
-/// One tab pill: a label that ellipsizes when long, an optional leading mark, an optional close
-/// button, the row-selection fill when active and the hover fill on hover.
+/// One tab: a label that ellipsizes when long, an optional leading mark, an optional close button,
+/// and — when it is the active one — the colour of the surface below it under an accent bar.
 /// </summary>
+/// <remarks>
+/// The active tab is not a highlighted chip. It wears <see cref="ContentBackground"/>, the colour of
+/// whatever the strip sits over, so it reads as a notch cut out of the strip onto the surface below;
+/// the accent bar along its top is what makes that legible when the two planes are only a few values
+/// apart, as they are in this theme. A saturated fill was what this had first, and it put a second
+/// row of the mode switcher's own selected-segment colour directly beneath the mode switcher.
+/// </remarks>
 internal sealed record TabChrome : Widget
 {
     // Tabs shrink to their content, capped here: a longer name ellipsizes, a shorter one stays snug.
     private const float MaxTabWidth = 220f;
 
+    // Reserved on every tab, painted only on the active one, so activating a tab never moves its
+    // label — the same trick the working-changes underline tabs use for their rule.
+    private const int ActiveBarHeight = 2;
+
     public required Prop<string?> Label { get; init; }
     public required Func<bool> IsActive { get; init; }
     public required Action OnActivate { get; init; }
+
+    /// <summary>
+    /// The background of the surface this strip sits over — the grid for the terminal, the details
+    /// panel for the commit strip. The active tab wears it; that is the whole of the "this tab is
+    /// what you are looking at" signal, so it is the caller's to supply rather than something the
+    /// control could guess.
+    /// </summary>
+    public required Func<ThemeStyles, uint> ContentBackground { get; init; }
 
     /// <summary>Closing this tab. Null for a tab that is never closable — which also withdraws the
     /// middle click, so the gesture never half-works.</summary>
@@ -98,8 +132,12 @@ internal sealed record TabChrome : Widget
     protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
-        var theme = ctx.Theme();
         var hover = new State<bool>(false);
+
+        // The close button is laid out on every tab and painted on the one being looked at, so a
+        // strip of four does not carry four X's — and so that hovering a tab does not resize it,
+        // which is what hiding the button outright would do.
+        bool Closable() => IsActive() || hover.Value;
 
         // The label grows so it ellipsizes into whatever width the (capped) tab leaves it. A flex
         // container measures its intrinsic width from children's *unclamped* natural widths but lays
@@ -112,38 +150,37 @@ internal sealed record TabChrome : Widget
             FontSize = FontSize.Body,
             VAlign = TextAlignment.Center,
             Overflow = TextOverflow.Ellipsis,
-            Color = Prop.Bind(() => IsActive()
-                ? theme.Styles.Value.Palette.TextPrimary
-                : theme.Styles.Value.Palette.TextSecondary),
+            Color = Theme.Color(s => IsActive() ? s.Palette.TextPrimary : s.Palette.TextSecondary),
         };
 
         var rowChildren = new List<IWidget>();
         if (Leading is { } leading) rowChildren.Add(leading);
         rowChildren.Add(new Grow { Child = label });
-        if (OnClose is { } close) rowChildren.Add(CloseButton(close));
+        if (OnClose is { } close) rowChildren.Add(CloseButton(close, Closable));
 
         var pill = new Box
         {
             MaxWidth = MaxTabWidth,
-            // A trailing 1px divider between adjacent tabs (and after the last one).
-            BorderSize = new BorderSizeStyle { Right = 1 },
-            BorderColor = Theme.BorderColor(s => new BorderColorStyle { Right = s.Palette.Border }),
-            Background = Prop.Bind(() =>
+            BorderSize = new BorderSizeStyle { Top = ActiveBarHeight },
+            BorderColor = Theme.BorderColor(s => new BorderColorStyle
             {
-                var sel = theme.Styles.Value.RowSelection;
-                if (IsActive()) return sel.Fill;
-                return hover.Value ? sel.FillHover : 0u;
+                Top = IsActive() ? s.Palette.Accent : 0u,
+            }),
+            Background = Theme.Color(s =>
+            {
+                if (IsActive()) return ContentBackground(s);
+                return hover.Value ? s.Palette.SurfaceHover : 0u;
             }),
             Children =
             [
                 new Padding
                 {
-                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Sm },
+                    Amount = new PaddingStyle { Left = Spacing.Lg, Right = Spacing.Md },
                     Children =
                     [
                         new Row
                         {
-                            Gap = Spacing.Sm,
+                            Gap = Spacing.Md,
                             CrossAxis = CrossAxisAlignment.Center,
                             Children = rowChildren.ToArray(),
                         },
@@ -155,9 +192,15 @@ internal sealed record TabChrome : Widget
         return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose));
     }
 
-    private static IWidget CloseButton(Action onClose) => new ButtonWidget
+    // Transparent rather than hidden when the tab is neither active nor hovered: an unpainted button
+    // still holds its place, so tabs keep their width as the pointer crosses them. It is only
+    // reachable while it is painted anyway — the pointer has to be on the tab to get to it.
+    private static IWidget CloseButton(Action onClose, Func<bool> shown) => new ButtonWidget
     {
-        Style = ButtonStyle.Bare(s => Theme.Color(t => t.Palette.TextMuted)),
+        Style = ButtonStyle.Bare(state => Theme.Color(t =>
+            !shown() ? 0u
+            : state.Hovered.Value ? t.Palette.TextPrimary
+            : t.Palette.TextMuted)),
         Command = new Command(onClose),
         Children = [new ButtonIcon { Value = LucideIcons.X, FontSize = FontSize.Caption }],
     }.WithTooltip(L.T(s => s.CommonClose)).WithController<KbmController>();

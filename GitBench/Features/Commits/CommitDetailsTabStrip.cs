@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Localization;
+using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Views;
@@ -20,9 +21,14 @@ internal sealed record CommitDetailsTabStrip : Widget
 
     public required CommitDetailsViewModel Vm { get; init; }
 
+    /// <summary>What the active tab wears: the panel the strip sits over.</summary>
+    internal static uint Content(ThemeStyles s) => s.CommitDetailsView.Background;
+
     protected override IWidget Build(Context ctx) => new TabStrip
     {
-        Background = Theme.Color(s => s.CommitDetailsView.Background),
+        // A plane of its own, above the panel — the active tab drops back to the panel's own colour,
+        // and that difference is what reads as the tab being the thing below it.
+        Background = Theme.Color(s => s.Palette.SurfaceRaised),
         Tabs =
         [
             new CommitDetailsTab { Vm = Vm },
@@ -40,6 +46,7 @@ internal sealed record CommitDetailsTab : Widget
     protected override IWidget Build(Context ctx) => new TabChrome
     {
         Label = L.T(s => s.CommitsDetailsTab),
+        ContentBackground = CommitDetailsTabStrip.Content,
         IsActive = () => Vm.SelectedPath.Value == null,
         OnActivate = () => Vm.ActivateTab(null),
     };
@@ -58,6 +65,7 @@ internal sealed record CommitFileTabButton : Widget
         return new TabChrome
         {
             Label = tab.FileName,
+            ContentBackground = CommitDetailsTabStrip.Content,
             IsActive = () => Vm.SelectedPath.Value == tab.Path,
             OnActivate = () => Vm.ActivateTab(tab.Path),
             OnClose = () => Vm.CloseTab(tab.Path),
