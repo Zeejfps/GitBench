@@ -23,6 +23,20 @@ namespace GitBench.Features.Terminal;
 internal sealed class TerminalSession : IDisposable
 {
     const int ReadBufferBytes = 64 * 1024;
+
+    /// <summary>How far the reader is allowed to run ahead of the UI thread before it is parked.</summary>
+    /// <remarks>
+    /// A shell can produce faster than the engine can parse — <c>yes</c> outruns it by an order of
+    /// magnitude — so without a bound the queue grows at the difference for as long as the command
+    /// runs. That is not a slow terminal but a diverging one: memory climbs until the process dies,
+    /// and every drain takes longer than the last because the batch it feeds keeps growing. Parking
+    /// the reader hands the backpressure down the pseudo-terminal to the child, which is where a
+    /// program that outruns its terminal is supposed to be slowed. The bound doubles as the cap on
+    /// how long one drain can hold the UI thread, so it is deliberately far below the point where
+    /// memory is a concern.
+    /// </remarks>
+    const int PendingHighWaterBytes = 256 * 1024;
+
     const int DefaultScrollbackLines = 5000;
 
     readonly IPtySession _pty;
@@ -30,7 +44,14 @@ internal sealed class TerminalSession : IDisposable
     readonly IUiDispatcher _dispatcher;
     readonly Thread _reader;
     readonly Lock _gate = new();
-    readonly List<byte> _pending = [];
+    readonly ManualResetEventSlim _room = new(true);
+
+    // Two buffers swapped under the gate rather than one copied out of: the reader fills whichever
+    // is current while the UI thread parses the one it took, so a drain costs a reference swap
+    // instead of an allocation and a copy of the whole backlog.
+    byte[] _pending = new byte[ReadBufferBytes];
+    byte[] _spare = new byte[ReadBufferBytes];
+    int _pendingCount;
 
     bool _drainQueued;
     bool _disposed;
@@ -209,8 +230,39 @@ internal sealed class TerminalSession : IDisposable
         // Ends the output stream, which releases the reader from its blocking read — the whole
         // reason this needs no cancellable I/O.
         _pty.Dispose();
-        _reader.Join(TimeSpan.FromSeconds(2));
+
+        // A disposed pseudo-terminal releases a reader blocked in a read, but not one parked waiting
+        // for room: this is the only thing that wakes that one, and without it teardown waits out
+        // the join's full patience.
+        _room.Set();
+
+        var stopped = _reader.Join(TimeSpan.FromSeconds(2));
         _engine.Dispose();
+
+        // Only once the reader is known to have finished with it. A thread still running would take
+        // an ObjectDisposedException on its next wait, at the top of a thread, which is fatal to the
+        // process — worth strictly less than leaking one event for a reader that already hung.
+        if (stopped) _room.Dispose();
+    }
+
+    /// <remarks>
+    /// Grown by doubling and never shrunk: the buffer settles at the largest burst a session sees,
+    /// which the high-water mark keeps small, and a terminal that reallocated per read would undo
+    /// the point of buffering at all.
+    /// </remarks>
+    void Append(byte[] source, int count)
+    {
+        var needed = _pendingCount + count;
+
+        if (needed > _pending.Length)
+        {
+            var grown = new byte[Math.Max(needed, _pending.Length * 2)];
+            Buffer.BlockCopy(_pending, 0, grown, 0, _pendingCount);
+            _pending = grown;
+        }
+
+        Buffer.BlockCopy(source, 0, _pending, _pendingCount, count);
+        _pendingCount = needed;
     }
 
     void Read()
@@ -219,6 +271,10 @@ internal sealed class TerminalSession : IDisposable
 
         while (true)
         {
+            // Parked while the UI thread is behind, which stops this thread draining the terminal's
+            // own queue into an unbounded one of ours and leaving the child free to run flat out.
+            _room.Wait();
+
             int read;
             try
             {
@@ -246,7 +302,8 @@ internal sealed class TerminalSession : IDisposable
             bool queue;
             lock (_gate)
             {
-                _pending.AddRange(buffer.AsSpan(0, read));
+                Append(buffer, read);
+                if (_pendingCount >= PendingHighWaterBytes) _room.Reset();
                 queue = !_drainQueued;
                 _drainQueued = true;
             }
@@ -271,22 +328,38 @@ internal sealed class TerminalSession : IDisposable
 
     void Drain()
     {
-        if (_disposed || _faulted) return;
+        // Every path out of here releases the reader. A session that has stopped feeding is not a
+        // reason to leave a thread parked on a gate nobody will open again.
+        if (_disposed || _faulted)
+        {
+            _room.Set();
+            return;
+        }
 
         byte[] batch;
+        int count;
         lock (_gate)
         {
             _drainQueued = false;
-            if (_pending.Count == 0) return;
+            count = _pendingCount;
 
-            batch = _pending.ToArray();
-            _pending.Clear();
+            if (count == 0)
+            {
+                _room.Set();
+                return;
+            }
+
+            batch = _pending;
+            _pending = _spare;
+            _spare = batch;
+            _pendingCount = 0;
+            _room.Set();
         }
 
         FeedResult result;
         try
         {
-            result = _engine.Feed(batch);
+            result = _engine.Feed(batch.AsSpan(0, count));
         }
         catch (Exception failure)
         {

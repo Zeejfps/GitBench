@@ -118,7 +118,29 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         }
     }
 
-    public void Repaint() => SetDirty();
+    /// <summary>Asks for the screen to be drawn again, because the shell has printed.</summary>
+    /// <remarks>
+    /// <para>
+    /// A pane kept alive behind another mode is still fed by its shell, so a build running in a
+    /// terminal nobody is looking at would otherwise ask the window for a frame per drain — and get
+    /// one, spent drawing whatever mode is actually on screen. Becoming visible again asks for a
+    /// frame on its own, and the screen is read live from the engine when it is drawn, so a repaint
+    /// declined here is never a repaint missed.
+    /// </para>
+    /// <para>
+    /// A repaint rather than a full invalidation: this view's size comes from the constraint it is
+    /// given and never from the screen it draws, so invalidating the measure of every ancestor up to
+    /// the root each time the shell prints a line cannot change any of them.
+    /// </para>
+    /// </remarks>
+    public void Repaint()
+    {
+        for (View? view = this; view is not null; view = view.Parent)
+            if (!view.IsVisible)
+                return;
+
+        MarkVisualDirty();
+    }
 
     public bool TryLocate(PointF point, out int column, out int row)
     {
@@ -271,13 +293,25 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
                 });
             }
 
+            var codePoints = row.CodePointsOf(run);
+
+            // A row is padded to the full width of the screen, and the padding carries the style of
+            // whatever preceded it, so most of what a run covers on a shell prompt is blank. Each of
+            // those columns costs a font lookup and draws nothing. The background rectangle above is
+            // already the run's full width, so dropping them changes nothing on screen — except
+            // under a decoration, which is drawn to the length of the run and would come up short.
+            if (!run.Style.Underline && !run.Style.StrikeThrough)
+                codePoints = TrimTrailingBlanks(codePoints);
+
+            if (codePoints.IsEmpty) continue;
+
             _runStyle.FontFamily = Face(run.Style);
             _runStyle.TextColor = run.Style.Foreground;
 
             c.DrawGlyphRun(new DrawGlyphRunInputs
             {
                 Origin = new PointF(x, top),
-                CodePoints = row.CodePointsOf(run),
+                CodePoints = codePoints,
                 CellAdvance = metrics.Advance,
                 Style = _runStyle,
                 ZIndex = z + 1,
@@ -369,4 +403,11 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         int Offset,
         int Columns,
         int Rows);
+    static ReadOnlySpan<int> TrimTrailingBlanks(ReadOnlySpan<int> codePoints)
+    {
+        var end = codePoints.Length;
+        while (end > 0 && codePoints[end - 1] == ' ') end--;
+        return codePoints[..end];
+    }
+
 }

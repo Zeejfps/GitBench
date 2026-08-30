@@ -54,24 +54,43 @@ public class TerminalGridViewTests
     [Fact]
     public void AStyleChange_EndsARunAndStartsTheNextAtThatColumn()
     {
-        // Two coloured cells, then the rest of the row in the default style. A run is a span of one
-        // style, not a span of text, so this row is exactly two of them - and the second begins at
-        // the column the style changed on rather than at the row's left edge.
-        var (harness, _) = Draw(Csi("48;2;10;20;30m", "ab"));
+        // Two coloured cells and then two plain ones. A run is a span of one style, not a span of
+        // text, so this row is exactly two of them - and the second begins at the column the style
+        // changed on rather than at the row's left edge.
+        //
+        // Both halves carry text on purpose. A row is padded to the width of the screen in whatever
+        // style was in force, so a row that ends on a style change ends in a run that is entirely
+        // blank - and those the view drops rather than asking the canvas for a glyph per column that
+        // it then draws nothing for.
+        var (harness, _) = Draw(Csi("48;2;10;20;30m", "ab" + Esc + "[0mcd"));
 
         var runs = harness.Canvas.GlyphRuns;
+        Assert.Equal(2, runs.Count);
         Assert.Equal("ab", runs[0].Text);
         Assert.Equal(0f, runs[0].Origin.X);
+        Assert.Equal("cd", runs[1].Text);
         Assert.Equal(2 * Advance, runs[1].Origin.X);
+    }
+
+    [Fact]
+    public void TrailingBlanks_AreNotAskedOfTheCanvas()
+    {
+        // The screen is mostly empty and every blank column would otherwise cost a glyph lookup that
+        // draws nothing, so only the columns carrying text are handed over. The background is a
+        // rectangle drawn to the run's full width, and is unaffected.
+        var (harness, _) = Draw(Vt("hi"));
+
+        Assert.Equal("hi", Assert.Single(harness.Canvas.GlyphRuns).Text);
     }
 
     [Fact]
     public void ATruecolourBackground_IsPaintedBehindItsRun()
     {
-        // Asserted through the background rather than the foreground on purpose: DrawGlyphRun takes
-        // the TextStyle by reference and the view reuses one instance across runs (as DiffRowPainter
-        // does), so a recorded run's colour is whichever one was drawn last. A rect's style is
-        // allocated per call, so this one is the run's own.
+        // Asserted through the background rather than the foreground on purpose: it is the one
+        // colour a row states once per run rather than once per glyph. The view hands the same style
+        // object to every call it makes - a canvas is not allowed to hold on to one, and the
+        // recording canvas takes its copy at the call - so what is read back here is the style as
+        // this rectangle was drawn, not as the last row left it.
         var (harness, _) = Draw(Csi("48;2;10;20;30m", "X"));
 
         Assert.Contains(
@@ -250,6 +269,9 @@ public class TerminalGridViewTests
     /// </summary>
     private static bool IsTheCursor(RecordedRect rect) =>
         rect.Inputs.Style.BackgroundColor == ThemeStyles.Dark.Terminal.Cursor;
+
+    /// <summary>The escape character, named for the same reason <see cref="Csi"/> spells one out.</summary>
+    private const string Esc = "\u001b";
 
     private static byte[] Vt(string text) => Encoding.UTF8.GetBytes(text);
 

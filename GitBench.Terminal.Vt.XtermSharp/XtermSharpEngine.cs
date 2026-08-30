@@ -18,8 +18,6 @@ public sealed class XtermSharpEngine : ITerminalEngine
     readonly ResponseSink responses;
     readonly XtermGrid grid;
 
-    byte[] feedBuffer = new byte[4096];
-
     public XtermSharpEngine(TerminalSetup setup)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(setup.ScrollbackLines);
@@ -45,19 +43,24 @@ public sealed class XtermSharpEngine : ITerminalEngine
         terminal.Title ?? string.Empty,
         terminal.IconTitle ?? string.Empty);
 
-    public FeedResult Feed(ReadOnlySpan<byte> bytes)
+    /// <remarks>
+    /// Fed by pinning the caller's bytes rather than copying them into a buffer of the engine's own.
+    /// XtermSharp's pointer overload reaches the same parser as its array one — the array it takes is
+    /// pinned and passed straight through — so the copy bought nothing but a second pass over every
+    /// byte a shell produces, and an array that stayed as large as the largest burst ever seen.
+    /// </remarks>
+    public unsafe FeedResult Feed(ReadOnlySpan<byte> bytes)
     {
         if (bytes.IsEmpty)
             return FeedResult.Nothing;
 
-        if (feedBuffer.Length < bytes.Length)
-            feedBuffer = new byte[bytes.Length];
-        bytes.CopyTo(feedBuffer);
-
         var historyBefore = terminal.ScrolledIntoHistory;
         var framesBefore = terminal.SynchronizedFrames;
         terminal.ClearUpdateRange();
-        terminal.Feed(feedBuffer, bytes.Length);
+
+        fixed (byte* data = bytes)
+            terminal.Feed((IntPtr)data, bytes.Length);
+
         terminal.GetUpdateRange(out var first, out var last);
 
         return new FeedResult(

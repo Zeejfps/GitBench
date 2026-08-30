@@ -247,6 +247,12 @@ internal sealed class TerminalInputController : KeyboardMouseController
     static bool IsPrecise(ref MouseWheelScrolledEvent e) =>
         e.GesturePhase != ScrollPhase.None || e.IsMomentum;
 
+    /// <remarks>
+    /// One gesture is one write. A single wheel click already arrives as three notches, and trackpad
+    /// momentum multiplies that, so reporting a notch at a time turned one movement of the hand into
+    /// a run of syscalls carrying six bytes each — every one of them the same six bytes, since where
+    /// the pointer is and what it is holding cannot change inside a single event.
+    /// </remarks>
     bool ReportsTheWheel(
         int notches,
         TerminalMouseButton button,
@@ -254,12 +260,23 @@ internal sealed class TerminalInputController : KeyboardMouseController
         PointF point)
     {
         if (!_terminal.IsAcceptingInput) return false;
+        if (notches <= 0) return false;
+        if (!_cells.TryLocate(point, out var column, out var row)) return false;
 
-        var sent = false;
-        for (var notch = 0; notch < notches; notch++)
-            sent |= Report(button, TerminalMouseAction.Press, modifiers, point);
+        Span<byte> report = stackalloc byte[TerminalMouseEncoder.MaxEncodedBytes];
+        if (!TerminalMouseEncoder.Encode(
+                button,
+                TerminalMouseAction.Press,
+                column,
+                row,
+                modifiers,
+                _terminal.Modes,
+                report,
+                out var written))
+            return false;
 
-        return sent;
+        Repeat(report[..written], notches, _terminal.SendMouse);
+        return true;
     }
 
     bool ScrollsWithCursorKeys(int notches, int lines)
@@ -279,11 +296,43 @@ internal sealed class TerminalInputController : KeyboardMouseController
 
         if (delivery != TerminalKeyDelivery.Sequence) return false;
 
-        for (var notch = 0; notch < notches; notch++)
-            _terminal.SendInput(sequence[..written]);
-
+        Repeat(sequence[..written], notches, _terminal.SendInput);
         return true;
     }
+
+    /// <summary>
+    /// Writes <paramref name="sequence"/> <paramref name="times"/> over, in as few writes as it can.
+    /// </summary>
+    /// <remarks>
+    /// Batched through a stack buffer while the whole run fits in one, and written one at a time
+    /// when it does not — a momentum scroll can name more notches than is worth reserving stack for,
+    /// and falling back costs only the syscalls it was already going to cost.
+    /// </remarks>
+    static void Repeat(ReadOnlySpan<byte> sequence, int times, WriteBytes write)
+    {
+        const int MaxBatchedBytes = 256;
+
+        if (sequence.IsEmpty || times <= 0) return;
+
+        if (times * sequence.Length > MaxBatchedBytes)
+        {
+            for (var i = 0; i < times; i++) write(sequence);
+            return;
+        }
+
+        Span<byte> batch = stackalloc byte[MaxBatchedBytes];
+        var at = 0;
+
+        for (var i = 0; i < times; i++)
+        {
+            sequence.CopyTo(batch[at..]);
+            at += sequence.Length;
+        }
+
+        write(batch[..at]);
+    }
+
+    delegate void WriteBytes(ReadOnlySpan<byte> bytes);
 
     bool Report(
         TerminalMouseButton button,
