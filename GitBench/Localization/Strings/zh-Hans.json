@@ -107,6 +107,11 @@
   "terminal.close_tab_body": "此终端中仍有 Shell 在运行。关闭该标签页会将它连同正在进行的操作一并结束。",
   "terminal.close_tab_action": "关闭并终止",
   "terminal.close_tab_cancel": "继续工作",
+  "terminal.tab_rename": "重命名…",
+  "terminal.tab_reset_name": "使用自动名称",
+  "terminal.rename_tab_title": "重命名终端",
+  "terminal.rename_tab_label": "名称",
+  "terminal.rename_tab_hint": "留空则跟随正在运行的程序。",
 
   "file_browser.no_repo": "打开一个仓库以浏览其文件。",
   "file_browser.show_hidden": "显示被忽略和隐藏的文件",

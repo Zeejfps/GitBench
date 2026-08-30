@@ -15,14 +15,17 @@ internal readonly record struct TerminalTabLabel(string Text, int? Index);
 internal static class TerminalTabLabels
 {
     /// <summary>
-    /// What a terminal is called: the title a program running in it set, and the shell's own name
-    /// when nothing has set one.
+    /// What a terminal is called: the name the user gave it, else the title a program running in it
+    /// set, else the shell's own name.
     /// </summary>
     /// <remarks>
     /// An idle tab has no shell and therefore no title; an exited one keeps whatever it last said,
-    /// which is what a reader looking for the command that finished expects to still see.
+    /// which is what a reader looking for the command that finished expects to still see. A name the
+    /// user typed outranks both: a tab is renamed precisely so it stops following whatever is
+    /// running in it.
     /// </remarks>
-    public static string NameOf(TerminalInstance terminal) => terminal.Title.Value ?? terminal.Name;
+    public static string NameOf(TerminalInstance terminal) =>
+        terminal.GivenName.Value ?? terminal.Title.Value ?? terminal.Name;
 
     /// <summary>The label for one terminal, read against the strip it sits in.</summary>
     public static TerminalTabLabel For(IReadOnlyList<TerminalInstance> terminals, TerminalInstance terminal)

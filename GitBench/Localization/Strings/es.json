@@ -107,6 +107,11 @@
   "terminal.close_tab_body": "Todavía hay un intérprete de comandos en ejecución en esta terminal. Si cierras la pestaña, terminará junto con lo que esté haciendo.",
   "terminal.close_tab_action": "Cerrar y terminar",
   "terminal.close_tab_cancel": "Seguir trabajando",
+  "terminal.tab_rename": "Cambiar nombre…",
+  "terminal.tab_reset_name": "Usar nombre automático",
+  "terminal.rename_tab_title": "Cambiar el nombre de la terminal",
+  "terminal.rename_tab_label": "Nombre",
+  "terminal.rename_tab_hint": "Déjalo en blanco para seguir lo que se esté ejecutando.",
 
   "file_browser.no_repo": "Abre un repositorio para explorar sus archivos.",
   "file_browser.show_hidden": "Mostrar archivos ignorados y ocultos",

@@ -243,6 +243,104 @@ public class TerminalTabsTests
     }
 
     [Fact]
+    public void ATerminalTheUserNamed_IsCalledThat()
+    {
+        using var tabs = Tabs();
+        var terminal = tabs.Active.Value;
+
+        terminal.Rename("build");
+
+        Assert.Equal("build", TerminalTabLabels.NameOf(terminal));
+    }
+
+    [Fact]
+    public void ANameTheUserGave_OutranksWhateverTheProgramSets()
+    {
+        // A tab is renamed precisely so it stops following the running command.
+        using var tabs = Tabs();
+        var terminal = tabs.Active.Value;
+        StartShell(terminal);
+        terminal.Rename("build");
+
+        _launches[0].Pty!.Emit("\u001b]2;vim README.md\u0007");
+        Pump.WaitFor(_dispatcher, () => terminal.Title.Value == "vim README.md", "the title");
+
+        Assert.Equal("build", TerminalTabLabels.NameOf(terminal));
+    }
+
+    [Fact]
+    public void DroppingTheGivenName_GoesBackToWhatIsRunningNow()
+    {
+        // Not to the title it had when the rename happened: the name is given back, not restored.
+        using var tabs = Tabs();
+        var terminal = tabs.Active.Value;
+        StartShell(terminal);
+        terminal.Rename("build");
+
+        _launches[0].Pty!.Emit("\u001b]2;vim README.md\u0007");
+        Pump.WaitFor(_dispatcher, () => terminal.Title.Value == "vim README.md", "the title");
+        terminal.Rename(null);
+
+        Assert.Null(terminal.GivenName.Value);
+        Assert.Equal("vim README.md", TerminalTabLabels.NameOf(terminal));
+    }
+
+    [Fact]
+    public void ANameOfNothingButSpaces_IsNoName()
+    {
+        // An emptied field reads as asking for the name the tab had before it was touched, and
+        // whitespace is not something a strip could show.
+        using var tabs = Tabs();
+        var terminal = tabs.Active.Value;
+        terminal.Rename("build");
+
+        terminal.Rename("   ");
+
+        Assert.Null(terminal.GivenName.Value);
+        Assert.Equal("shell", TerminalTabLabels.NameOf(terminal));
+    }
+
+    [Fact]
+    public void AGivenName_IsTrimmed()
+    {
+        using var tabs = Tabs();
+        var terminal = tabs.Active.Value;
+
+        terminal.Rename("  build  ");
+
+        Assert.Equal("build", terminal.GivenName.Value);
+    }
+
+    [Fact]
+    public void RenamingATerminalThatHasGone_IsANoOp()
+    {
+        // The dialog is answered later, and the tab it was opened from can be closed in between.
+        using var tabs = Tabs();
+        tabs.Open();
+        var terminal = tabs.Active.Value;
+        tabs.Close(terminal);
+
+        terminal.Rename("build");
+
+        Assert.Null(terminal.GivenName.Value);
+    }
+
+    [Fact]
+    public void TabsTheUserNamedTheSame_AreNumbered()
+    {
+        using var tabs = Tabs();
+        var first = tabs.Active.Value;
+        var second = tabs.Open();
+        first.Rename("build");
+        second.Rename("build");
+
+        var labels = new[] { first, second }.Select(t => TerminalTabLabels.For(tabs.Terminals, t)).ToArray();
+
+        Assert.Equal(new int?[] { 1, 2 }, labels.Select(l => l.Index));
+        Assert.All(labels, label => Assert.Equal("build", label.Text));
+    }
+
+    [Fact]
     public void TabsThatWouldReadTheSame_AreNumbered()
     {
         using var tabs = Tabs();

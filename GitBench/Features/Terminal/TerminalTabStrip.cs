@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.Repos;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -125,8 +126,48 @@ internal sealed record TerminalTab : Widget
             IsActive = () => ReferenceEquals(tabs.Active.Value, terminal),
             OnActivate = () => tabs.Activate(terminal),
             OnClose = () => RequestClose(bus, tabs, terminal),
+            OnContextMenu = point => RepoBarContextMenu.Show(
+                ctx, point, MenuItems(loc.Strings.Value, bus, tabs, terminal)),
         };
     }
+
+    /// <summary>
+    /// What a tab offers: a name of the reader's own, and the close the X already does.
+    /// </summary>
+    /// <remarks>
+    /// Built on each opening rather than once, so the reset item is offered only while there is a
+    /// given name to drop and the labels are in whatever language is current.
+    /// </remarks>
+    static IReadOnlyList<RepoBarContextMenu.Item> MenuItems(
+        Strings s, IMessageBus bus, TerminalTabs tabs, TerminalInstance terminal)
+    {
+        var items = new List<RepoBarContextMenu.Item>
+        {
+            new(s.TerminalTabRename, () => RequestRename(bus, terminal), LucideIcons.PencilLine),
+        };
+
+        if (terminal.GivenName.Value != null)
+            items.Add(new RepoBarContextMenu.Item(
+                s.TerminalTabResetName, () => terminal.Rename(null), LucideIcons.Undo));
+
+        items.Add(RepoBarContextMenu.Separator);
+        items.Add(new RepoBarContextMenu.Item(
+            s.CommonClose, () => RequestClose(bus, tabs, terminal), LucideIcons.X));
+        return items;
+    }
+
+    /// <summary>
+    /// Asks for a name, and gives the one that comes back to the terminal rather than to the tab: a
+    /// dialog outlives the widget that opened it — a rename answered after the pane has unmounted or
+    /// the repository has changed still names the terminal the reader was pointing at.
+    /// </summary>
+    static void RequestRename(IMessageBus bus, TerminalInstance terminal) =>
+        bus.Broadcast(new ShowDialogMessage(onClose => new RenameTerminalDialog
+        {
+            CurrentName = TerminalTabLabels.NameOf(terminal),
+            OnClose = onClose,
+            OnRename = terminal.Rename,
+        }));
 
     static string Label(Strings strings, IReadOnlyList<TerminalInstance> terminals, TerminalInstance terminal)
     {

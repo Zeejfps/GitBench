@@ -62,6 +62,7 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     readonly IUiDispatcher _dispatcher;
     readonly State<TerminalRenderState> _render = new(new TerminalRenderState.Idle());
     readonly State<string?> _title = new(null);
+    readonly State<string?> _givenName = new(null);
 
     // Guards the handover of a spawned session from the worker that made it to the UI thread that
     // adopts it, and nothing else. See Spawn.
@@ -95,6 +96,33 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     /// <summary>What this terminal is called before anything running in it has said. See
     /// <see cref="ITerminalLaunch.Name"/>.</summary>
     public string Name => _launch.Name;
+
+    /// <summary>
+    /// The name the user gave this terminal, and null when they have given none.
+    /// </summary>
+    /// <remarks>
+    /// Outranks <see cref="Title"/>, which is why it is a separate value rather than a write into it:
+    /// a program that sets a title while a renamed tab is on screen must not take the name back, and
+    /// dropping the name has to reveal whatever the title says *now* rather than whatever it said
+    /// when the rename happened.
+    /// </remarks>
+    public IReadable<string?> GivenName => _givenName;
+
+    /// <summary>
+    /// Names this terminal, or — for a blank name — hands it back to its title and its shell.
+    /// </summary>
+    /// <remarks>
+    /// Blank is not a name a tab could show, and a field the user emptied reads as asking for the
+    /// name it had before they touched it. Normalised here rather than at the dialog, so no caller
+    /// can put whitespace into a strip.
+    /// </remarks>
+    public void Rename(string? name)
+    {
+        if (_disposed) return;
+
+        var trimmed = name?.Trim();
+        _givenName.Value = string.IsNullOrEmpty(trimmed) ? null : trimmed;
+    }
 
     /// <summary>Raised on the UI thread when the screen has changed and wants drawing again.</summary>
     public event Action? Updated;
@@ -411,5 +439,6 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         _render.Value = new TerminalRenderState.Idle();
         _render.Dispose();
         _title.Dispose();
+        _givenName.Dispose();
     }
 }

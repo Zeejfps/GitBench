@@ -631,6 +631,24 @@ is the title when there is one and the shell's file name otherwise. Two terminal
 with the same title are told apart by a trailing index; the index is positional and belongs to the strip,
 not to the terminal, since it means "the second one you can see" and nothing else.
 
+**A name the user gave outranks both, and blank gives it back.** A tab's right click offers Rename…,
+which is a one-field modal, and `TerminalInstance.GivenName` is what a tab reads before its title. It is
+a value of its own rather than a write into the title, for two reasons: a program that sets a title
+while a renamed tab is on screen must not take the name back, and dropping the name has to reveal
+whatever is running *now* rather than restoring whatever was running when the rename happened. An empty
+field is not a name — it reads as asking for the automatic one again, which is the same thing the menu's
+"Use automatic name" does and why that item appears only while there is a name to drop. Nothing about the
+label's width changes: a long name meets the same 220px cap and the same ellipsis as a long title, which
+is what that cap was for. The name lives with the terminal and dies with it — terminals are not restored
+across a restart, so a name for one that no longer exists would be a name for nothing.
+
+**The tab menu is the tab's, not the strip control's.** `TabChrome` takes an `OnContextMenu` callback and
+never learns what a menu is: what a tab can do is the surface's vocabulary — renaming a terminal means
+nothing to a commit-details file tab — and the shared control carrying both surfaces' items is how it
+would stop being shared. Right-click opens on the press and does *not* activate the tab: asking a tab
+what it can do is not asking to look at it, and renaming the tab beside the one you are working in is the
+ordinary case.
+
 **The strip is drawn even with one tab — but not before there is a shell.** It carries the title and the
 `+`, so hiding it once a terminal is running would mean the grid jumping by the strip's height and no
 visible way to open a second one. But a repository is *given* a terminal it never asked for, and a strip

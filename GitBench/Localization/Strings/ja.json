@@ -107,6 +107,11 @@
   "terminal.close_tab_body": "このターミナルではシェルがまだ実行中です。タブを閉じると、実行中の処理ごと終了します。",
   "terminal.close_tab_action": "閉じて終了",
   "terminal.close_tab_cancel": "作業を続ける",
+  "terminal.tab_rename": "名前を変更…",
+  "terminal.tab_reset_name": "自動の名前を使う",
+  "terminal.rename_tab_title": "ターミナルの名前を変更",
+  "terminal.rename_tab_label": "名前",
+  "terminal.rename_tab_hint": "空欄にすると、実行中のプログラムの名前になります。",
 
   "file_browser.no_repo": "リポジトリを開くとファイルを閲覧できます。",
   "file_browser.show_hidden": "無視されたファイルと隠しファイルを表示",

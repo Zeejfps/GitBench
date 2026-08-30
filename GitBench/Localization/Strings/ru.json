@@ -157,6 +157,11 @@
   "terminal.close_tab_body": "В этом терминале ещё работает оболочка. Закрытие вкладки завершит её вместе с тем, что она выполняет.",
   "terminal.close_tab_action": "Закрыть и завершить",
   "terminal.close_tab_cancel": "Продолжить работу",
+  "terminal.tab_rename": "Переименовать…",
+  "terminal.tab_reset_name": "Использовать автоматическое имя",
+  "terminal.rename_tab_title": "Переименование терминала",
+  "terminal.rename_tab_label": "Имя",
+  "terminal.rename_tab_hint": "Оставьте пустым, чтобы имя следовало за запущенной программой.",
 
   "file_browser.no_repo": "Откройте репозиторий, чтобы просмотреть его файлы.",
   "file_browser.show_hidden": "Показывать игнорируемые и скрытые файлы",

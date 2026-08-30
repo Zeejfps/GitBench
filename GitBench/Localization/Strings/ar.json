@@ -167,6 +167,11 @@
   "terminal.close_tab_body": "لا تزال هناك صدفة قيد التشغيل في هذه الطرفية. إغلاق علامة التبويب سينهيها مع ما تقوم به.",
   "terminal.close_tab_action": "إغلاق وإنهاء",
   "terminal.close_tab_cancel": "متابعة العمل",
+  "terminal.tab_rename": "إعادة تسمية…",
+  "terminal.tab_reset_name": "استخدام الاسم التلقائي",
+  "terminal.rename_tab_title": "إعادة تسمية الطرفية",
+  "terminal.rename_tab_label": "الاسم",
+  "terminal.rename_tab_hint": "اتركه فارغًا ليتبع البرنامج قيد التشغيل.",
 
   "file_browser.no_repo": "افتح مستودعًا لتصفح ملفاته.",
   "file_browser.show_hidden": "إظهار الملفات المتجاهلة والمخفية",

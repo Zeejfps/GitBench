@@ -107,6 +107,11 @@
   "terminal.close_tab_body": "이 터미널에서 셸이 아직 실행 중입니다. 탭을 닫으면 진행 중인 작업과 함께 종료됩니다.",
   "terminal.close_tab_action": "닫고 종료",
   "terminal.close_tab_cancel": "계속 작업하기",
+  "terminal.tab_rename": "이름 바꾸기…",
+  "terminal.tab_reset_name": "자동 이름 사용",
+  "terminal.rename_tab_title": "터미널 이름 바꾸기",
+  "terminal.rename_tab_label": "이름",
+  "terminal.rename_tab_hint": "비워 두면 실행 중인 프로그램 이름을 따릅니다.",
 
   "file_browser.no_repo": "저장소를 열면 파일을 탐색할 수 있습니다.",
   "file_browser.show_hidden": "무시된 파일과 숨김 파일 표시",

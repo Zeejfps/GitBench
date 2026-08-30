@@ -1,6 +1,7 @@
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -109,6 +110,17 @@ internal sealed record TabChrome : Widget
     public Action? OnClose { get; init; }
 
     /// <summary>
+    /// Opening this tab's own menu, given the point that asked for it. Null for a tab with nothing to
+    /// offer, which leaves the right click to whatever is underneath.
+    /// </summary>
+    /// <remarks>
+    /// A callback rather than a list of items, so this control never learns what a menu is: what a
+    /// tab can do belongs to the surface whose tabs these are, and both strips would otherwise be
+    /// carrying the other's vocabulary.
+    /// </remarks>
+    public Action<PointF>? OnContextMenu { get; init; }
+
+    /// <summary>
     /// An optional widget before the label. The caller's, not this control's: the commit strip's
     /// Viewed check means something only there, and a shared pill that knew what it meant would be
     /// carrying one surface's vocabulary for every other.
@@ -175,7 +187,7 @@ internal sealed record TabChrome : Widget
             ],
         };
 
-        return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose));
+        return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose, OnContextMenu));
     }
 
     // Transparent rather than hidden when the tab is neither active nor hovered: an unpainted button
@@ -193,21 +205,23 @@ internal sealed record TabChrome : Widget
 }
 
 // Hover tracking + left-click activation for a tab pill, plus middle-click to close (closable tabs
-// only). The close button consumes its own press first (bubbling), so pressing it closes the tab
-// without also arming it here. Activation fires on release, but only when the press armed on this
-// tab with the same button.
+// only) and right-click for the tab's own menu. The close button consumes its own press first
+// (bubbling), so pressing it closes the tab without also arming it here. Activation fires on release,
+// but only when the press armed on this tab with the same button.
 internal sealed class TabClickController : KeyboardMouseController
 {
     private readonly State<bool> _hover;
     private readonly Action _onClick;
     private readonly Action? _onClose;
+    private readonly Action<PointF>? _onContextMenu;
     private MouseButton? _armed;
 
-    public TabClickController(State<bool> hover, Action onClick, Action? onClose)
+    public TabClickController(State<bool> hover, Action onClick, Action? onClose, Action<PointF>? onContextMenu = null)
     {
         _hover = hover;
         _onClick = onClick;
         _onClose = onClose;
+        _onContextMenu = onContextMenu;
     }
 
     public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
@@ -221,6 +235,18 @@ internal sealed class TabClickController : KeyboardMouseController
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
+
+        // On the press, like every other menu in the app — and without activating the tab, since
+        // asking a tab what it can do is not asking to look at it.
+        if (e.Button == MouseButton.Right)
+        {
+            if (_onContextMenu == null || e.State != InputState.Pressed) return;
+
+            _onContextMenu(e.Mouse.Point);
+            e.Consume();
+            return;
+        }
+
         if (e.Button != MouseButton.Left && (e.Button != MouseButton.Middle || _onClose == null)) return;
 
         if (e.State == InputState.Pressed)
