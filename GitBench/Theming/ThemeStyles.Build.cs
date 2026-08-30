@@ -21,6 +21,7 @@ public partial record ThemeStyles
             SubmoduleSection = BuildSubmoduleSection(p, status),
             FileChangesSection = BuildFileChangesSection(p),
             FileChangeRow = BuildFileChangeRow(p, status),
+            FileBrowserRow = BuildFileBrowserRow(p, status),
             DialogFrame = BuildDialogFrame(p, status),
             TextInput = BuildTextInput(p),
             BorderedButton = BuildBorderedButton(p),

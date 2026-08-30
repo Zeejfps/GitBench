@@ -33,6 +33,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
 
     private IReadOnlyList<FileBrowserRow> _rows = [];
     private RowSelectionStyles _selection = ThemeStyles.Dark.RowSelection;
+    private FileBrowserRowStyles _rowColors = ThemeStyles.Dark.FileBrowserRow;
 
     private float _lastVerticalScale = -1f;
     private float _lastNormalizedY;
@@ -120,10 +121,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         this.BindThemed(ctx.Theme(), s =>
         {
             _selection = s.RowSelection;
-            _chevronStyle.TextColor = s.Palette.TextMuted;
-            _iconStyle.TextColor = s.Palette.TextMuted;
-            _textStyle.TextColor = s.Palette.TextSecondary;
-            _textActiveStyle.TextColor = s.RowSelection.Text;
+            _rowColors = s.FileBrowserRow;
             SetDirty();
         });
 
@@ -209,6 +207,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
             isSelected: rowIndex == _vm.IndexOfCursor(_rows),
             isHovered: state.IsHovered || state.IsContextHighlighted,
             _selection,
+            _rowColors,
             _chevronStyle,
             _iconStyle,
             _textStyle,

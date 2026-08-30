@@ -10,6 +10,7 @@ public sealed partial record ThemeStyles
     public required SubmoduleSectionStyles SubmoduleSection { get; init; }
     public required FileChangesSectionStyles FileChangesSection { get; init; }
     public required FileChangeRowStyles FileChangeRow { get; init; }
+    public required FileBrowserRowStyles FileBrowserRow { get; init; }
     public required DialogFrameStyles DialogFrame { get; init; }
     public required TextInputStyles TextInput { get; init; }
     public required BorderedButtonStyles BorderedButton { get; init; }

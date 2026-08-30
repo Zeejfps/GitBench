@@ -36,6 +36,7 @@ internal static class FileBrowserRowPainter
         bool isSelected,
         bool isHovered,
         RowSelectionStyles selection,
+        FileBrowserRowStyles colors,
         TextStyle chevronStyle,
         TextStyle iconStyle,
         TextStyle textStyle,
@@ -47,12 +48,12 @@ internal static class FileBrowserRowPainter
         TreeGuidePainter.Draw(canvas, rowRect, row.Guides, selection.IndentGuide, z + 1, isRtl, gapBridge: 0f);
 
         var dim = row.IsIgnored || row.IsHidden;
+        var isDirectory = row is FileBrowserRow.Directory;
         var left = rowRect.Left + RowPaddingLeft + row.Depth * IndentLevel;
 
         if (row is FileBrowserRow.Directory directory)
         {
-            var chevronColor = chevronStyle.TextColor;
-            if (dim) chevronStyle.TextColor = Dim(chevronColor);
+            chevronStyle.TextColor = Tint(colors.DirectoryChevron, dim);
             canvas.DrawText(new DrawTextInputs
             {
                 Position = Place(rowRect, left, ChevronWidth, isRtl),
@@ -62,15 +63,15 @@ internal static class FileBrowserRowPainter
                 Style = chevronStyle,
                 ZIndex = z + 2,
             });
-            chevronStyle.TextColor = chevronColor;
         }
 
         left += ChevronWidth + ChevronGap;
 
         var glyph = Glyph(row);
         var iconWidth = canvas.MeasureTextWidth(glyph, iconStyle);
-        var iconColor = iconStyle.TextColor;
-        if (dim) iconStyle.TextColor = Dim(iconColor);
+        iconStyle.TextColor = Tint(
+            isDirectory ? colors.DirectoryIcon : row.IsLink ? colors.LinkIcon : colors.FileIcon,
+            dim);
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, left, iconWidth, isRtl),
@@ -78,15 +79,15 @@ internal static class FileBrowserRowPainter
             Style = iconStyle,
             ZIndex = z + 2,
         });
-        iconStyle.TextColor = iconColor;
         left += iconWidth + IconGap;
 
         var textWidth = MathF.Max(0f, rowRect.Right - RowPaddingRight - left);
         if (textWidth <= 0f) return;
 
         var style = isSelected ? textActiveStyle : textStyle;
-        var baseColor = style.TextColor;
-        if (dim) style.TextColor = Dim(baseColor);
+        style.TextColor = Tint(
+            isSelected ? selection.Text : isDirectory ? colors.DirectoryText : colors.FileText,
+            dim);
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, left, textWidth, isRtl),
@@ -94,7 +95,6 @@ internal static class FileBrowserRowPainter
             Style = style,
             ZIndex = z + 3,
         });
-        style.TextColor = baseColor;
     }
 
     private static string Glyph(FileBrowserRow row) => row switch
@@ -105,7 +105,8 @@ internal static class FileBrowserRowPainter
         _ => LucideIcons.File,
     };
 
-    private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
+    private static uint Tint(uint color, bool dim) =>
+        dim ? (color & 0x00FFFFFFu) | (0x80u << 24) : color;
 
     private static RectF Place(in RectF rowRect, float left, float width, bool isRtl) =>
         isRtl
