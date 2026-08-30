@@ -10,8 +10,6 @@ namespace GitBench.Controls;
 /// the parent attaches the controller (<c>segment.WithController&lt;KbmController&gt;()</c>).</summary>
 internal sealed record Segment : Widget<ButtonState>
 {
-    private const float SegmentHeight = 28f;
-
     public required Prop<string?> Label { get; init; }
     public required BorderRadiusStyle Radius { get; init; }
     public required ISegmentModel Model { get; init; }
@@ -20,7 +18,6 @@ internal sealed record Segment : Widget<ButtonState>
 
     protected override IWidget Build(Context ctx, ButtonState state) => new Box
     {
-        Height = SegmentHeight,
         BorderRadius = Radius,
         Background = Theme.Color(s => s.ModeSwitcher.SegmentBackground(Model.IsActive.Value, state.Hovered.Value)),
         Children =
