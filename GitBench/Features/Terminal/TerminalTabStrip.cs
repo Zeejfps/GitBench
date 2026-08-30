@@ -88,8 +88,9 @@ internal sealed record TerminalTabStrip : Widget
 /// One terminal's tab. Resolves its <see cref="TerminalInstance"/> from the list scope.
 /// </summary>
 /// <remarks>
-/// The close button is withdrawn from the last tab rather than refused by it: a repository always
-/// has a terminal, so an X that could not do anything would be an affordance that lies.
+/// Every tab closes, the last one included: closing it ends its shell and hands the repository back
+/// the unstarted terminal it began with, which takes the strip with it and puts the offer to start
+/// a shell back on screen.
 /// </remarks>
 internal sealed record TerminalTab : Widget
 {
@@ -110,9 +111,6 @@ internal sealed record TerminalTab : Widget
             IsActive = () => ReferenceEquals(tabs.Active.Value, terminal),
             OnActivate = () => tabs.Activate(terminal),
             OnClose = () => RequestClose(bus, tabs, terminal),
-            // Bound, not decided at build time: a tab outlives the sibling whose arrival made it
-            // closable, and the last one left must not offer an X that would do nothing.
-            ShowClose = Prop.Bind(() => tabs.CanClose(terminal)),
         };
     }
 
@@ -132,8 +130,6 @@ internal sealed record TerminalTab : Widget
     /// </remarks>
     static void RequestClose(IMessageBus bus, TerminalTabs tabs, TerminalInstance terminal)
     {
-        if (!tabs.CanClose(terminal)) return;
-
         if (!terminal.HasLiveShell)
         {
             tabs.Close(terminal);

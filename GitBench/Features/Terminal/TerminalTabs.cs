@@ -13,11 +13,11 @@ namespace GitBench.Features.Terminal;
 /// would be sitting in a directory that may have been pruned.
 /// </para>
 /// <para>
-/// There is always at least one, which is why <see cref="Active"/> is not nullable and why
-/// <see cref="Close"/> refuses the last tab. A repository with a terminal pane and no terminal in it
-/// is a state the pane would have to draw something for and the user would have no way back out of;
-/// keeping the invariant here means neither exists. The strip shows no close affordance while one
-/// tab is left, so the refusal is never something a user runs into.
+/// There is always at least one, which is why <see cref="Active"/> is not nullable: a repository
+/// with a terminal pane and no terminal in it is a state the pane would have to draw something for
+/// and the user would have no way back out of. Closing the last tab therefore does not empty the
+/// list — it puts a fresh idle terminal in its place, which is the state the repository opened in,
+/// so the strip goes away and the offer to start a shell comes back.
 /// </para>
 /// </remarks>
 internal sealed class TerminalTabs : IDisposable
@@ -87,14 +87,6 @@ internal sealed class TerminalTabs : IDisposable
         return terminal;
     }
 
-    /// <summary>
-    /// Whether this terminal can be taken off the strip: it is one of these, and it is not the last
-    /// one left. One predicate rather than a rule the strip and the close path each remember, so the
-    /// X is offered exactly where closing would do something.
-    /// </summary>
-    public bool CanClose(TerminalInstance terminal) =>
-        !_disposed && _terminals.Count > 1 && _terminals.IndexOf(terminal) >= 0;
-
     /// <summary>Puts an existing terminal on screen. A no-op for one that is not (or no longer) here.</summary>
     public void Activate(TerminalInstance terminal)
     {
@@ -105,7 +97,7 @@ internal sealed class TerminalTabs : IDisposable
 
     /// <summary>
     /// Ends a terminal and takes its tab off the strip. The neighbour takes its place when it was
-    /// the one on screen.
+    /// the one on screen; closing the last one leaves a fresh idle terminal instead of nothing.
     /// </summary>
     /// <remarks>
     /// By identity rather than by index, because a close is asked for and answered at two different
@@ -115,10 +107,17 @@ internal sealed class TerminalTabs : IDisposable
     /// </remarks>
     public void Close(TerminalInstance terminal)
     {
-        if (!CanClose(terminal)) return;
+        if (_disposed) return;
 
         var index = _terminals.IndexOf(terminal);
+        if (index < 0) return;
+
         _terminals.RemoveAt(index);
+
+        // Never empty: the repository keeps a terminal, unstarted, exactly as it was handed one when
+        // it was first activated. Nothing here knows that this makes the strip disappear — that
+        // follows from AnyStarted, which is the same question asked of the same list.
+        if (_terminals.Count == 0) _terminals.Add(_create());
 
         // Reassigned before disposal so nothing is left drawing a screen whose session has gone.
         if (ReferenceEquals(_active.Value, terminal))

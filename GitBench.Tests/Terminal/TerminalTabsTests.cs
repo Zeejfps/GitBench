@@ -90,17 +90,34 @@ public class TerminalTabsTests
     }
 
     [Fact]
-    public void TheLastTab_CannotBeClosed()
+    public void ClosingTheLastTab_LeavesAFreshIdleTerminalInItsPlace()
     {
+        // Not an empty strip: the repository goes back to the state it was activated in, which is
+        // the offer to start a shell with no strip over it.
         using var tabs = Tabs();
         var only = tabs.Active.Value;
-
-        Assert.False(tabs.CanClose(only));
+        StartShell(only);
 
         tabs.Close(only);
 
-        Assert.Single(tabs.Terminals);
-        Assert.Same(only, tabs.Active.Value);
+        var replacement = Assert.Single(tabs.Terminals);
+        Assert.NotSame(only, replacement);
+        Assert.Same(replacement, tabs.Active.Value);
+        Assert.IsType<TerminalRenderState.Idle>(replacement.Render.Value);
+    }
+
+    [Fact]
+    public void ClosingTheLastTab_EndsItsShellAndTakesTheStripWithIt()
+    {
+        using var tabs = Tabs();
+        var only = tabs.Active.Value;
+        StartShell(only);
+
+        tabs.Close(only);
+
+        Assert.True(_launches[0].Pty!.IsDisposed, "Closing the last tab left its shell running.");
+        Assert.False(tabs.HasLiveShell);
+        Assert.False(tabs.AnyStarted);
     }
 
     [Fact]

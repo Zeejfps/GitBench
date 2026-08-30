@@ -89,13 +89,6 @@ internal sealed record TabChrome : Widget
     public Action? OnClose { get; init; }
 
     /// <summary>
-    /// Whether the close button is offered right now, for a tab whose answer changes over its life.
-    /// A tab is built once and outlives the siblings it was built beside, so a strip whose last tab
-    /// must not offer an X cannot decide it by whether <see cref="OnClose"/> was supplied.
-    /// </summary>
-    public Prop<bool> ShowClose { get; init; } = true;
-
-    /// <summary>
     /// An optional widget before the label. The caller's, not this control's: the commit strip's
     /// Viewed check means something only there, and a shared pill that knew what it meant would be
     /// carrying one surface's vocabulary for every other.
@@ -127,7 +120,7 @@ internal sealed record TabChrome : Widget
         var rowChildren = new List<IWidget>();
         if (Leading is { } leading) rowChildren.Add(leading);
         rowChildren.Add(new Grow { Child = label });
-        if (OnClose is { } close) rowChildren.Add(CloseButton(close, ShowClose));
+        if (OnClose is { } close) rowChildren.Add(CloseButton(close));
 
         var pill = new Box
         {
@@ -162,9 +155,8 @@ internal sealed record TabChrome : Widget
         return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose));
     }
 
-    private static IWidget CloseButton(Action onClose, Prop<bool> visible) => new ButtonWidget
+    private static IWidget CloseButton(Action onClose) => new ButtonWidget
     {
-        Visible = visible,
         Style = ButtonStyle.Bare(s => Theme.Color(t => t.Palette.TextMuted)),
         Command = new Command(onClose),
         Children = [new ButtonIcon { Value = LucideIcons.X, FontSize = FontSize.Caption }],

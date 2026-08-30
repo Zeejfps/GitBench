@@ -587,11 +587,14 @@ says what it is about to end. Two dialogs rather than one parameterised over "ho
 kind", because the sentences are different sentences and the plural machinery would be carrying a case
 that never has more than one item.
 
-**A repository always has at least one terminal, and the last tab has no X.** `TerminalTabs.Active` is
-therefore not nullable and `Close` refuses the last one — an empty strip is a state the pane would have
-to draw something for and the reader would have no way out of. `CanClose` is the one predicate behind
-both the refusal and the affordance, bound rather than decided at build time, since a tab outlives the
-sibling whose arrival made it closable.
+**A repository always has at least one terminal, and every tab still closes.** `TerminalTabs.Active` is
+not nullable — an empty strip is a state the pane would have to draw something for and the reader would
+have no way out of — but the last tab is closable like any other: closing it ends its shell and puts a
+fresh *idle* terminal in its place, which is the state the repository was activated in. Nothing in
+`Close` knows that this makes the strip disappear; that follows from `AnyStarted` going false, which is
+the same question asked of the same list. The alternative, refusing the last close and withdrawing its
+X, was built first and thrown away: it left the only way back to an unused terminal being to close the
+repository.
 
 **The `+` starts what it opens.** Opening a tab and starting its shell are one gesture: asking for
 another terminal is asking for another shell, and the start gate exists for the first one only because
