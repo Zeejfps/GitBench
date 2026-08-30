@@ -51,7 +51,11 @@ namespace GitBench.Pty.Platforms.Unix;
 [SupportedOSPlatform("linux")]
 internal sealed class UnixPtySession : IPtySession
 {
-    const int DrainSize = 4096;
+    // 64 KB rather than a page: one read is one syscall, one copy into the queue and one wakeup of
+    // the consumer, so a small buffer costs all three per 4 KB of a flood. Kept under the large
+    // object heap's threshold, since the buffer itself is allocated once per session but the copy
+    // the queue takes is not.
+    const int DrainSize = 64 * 1024;
 
     static readonly TimeSpan ThreadPatience = TimeSpan.FromSeconds(2);
     static readonly object TerminalNaming = new();

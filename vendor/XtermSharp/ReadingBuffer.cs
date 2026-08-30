@@ -19,7 +19,7 @@ namespace XtermSharp {
 	/// that is surfaced via reset
 	/// </remarks>
 	class ReadingBuffer {
-		byte[] putbackBuffer = new byte [0];
+		byte[] putbackBuffer = Array.Empty<byte> ();
 		unsafe byte* buffer;
 		int bufferStart;
 		int totalCount;
@@ -82,7 +82,7 @@ namespace XtermSharp {
 				Array.Copy (putbackBuffer, index, newPutback, 0, newPutback.Length);
 				putbackBuffer = newPutback;
 			} else {
-				putbackBuffer = new byte [0];
+				putbackBuffer = Array.Empty<byte> ();
 			}
 
 			buffer = null;
@@ -90,7 +90,7 @@ namespace XtermSharp {
 
 		public void Reset ()
 		{
-			putbackBuffer = new byte [0];
+			putbackBuffer = Array.Empty<byte> ();
 			index = 0;
 		}
 	}

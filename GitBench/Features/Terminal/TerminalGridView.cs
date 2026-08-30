@@ -68,6 +68,11 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         VerticalAlignment = TextAlignment.Center,
     };
 
+    // Reused across every rectangle a draw stages: DrawRect copies the style's fields out and keeps
+    // no reference, and a fresh one per background run per row per frame is the pane's largest
+    // source of garbage.
+    readonly RectStyle _rectStyle = new();
+
     TerminalStyles _styles = ThemeStyles.Dark.Terminal;
     ICellStyler _styler = new TerminalCellStyler(ThemeStyles.Dark.Terminal);
     uint _messageColor = ThemeStyles.Dark.Palette.TextSecondary;
@@ -140,10 +145,12 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         var bounds = Position;
         var z = GetDrawZIndex();
 
+        _rectStyle.BackgroundColor = _styles.DefaultBackground;
+
         c.DrawRect(new DrawRectInputs
         {
             Position = bounds,
-            Style = new RectStyle { BackgroundColor = _styles.DefaultBackground },
+            Style = _rectStyle,
             ZIndex = z,
         });
 
@@ -254,10 +261,12 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
             // matches it is a rectangle nobody would see.
             if (run.Style.Background != _styles.DefaultBackground)
             {
+                _rectStyle.BackgroundColor = run.Style.Background;
+
                 c.DrawRect(new DrawRectInputs
                 {
                     Position = new RectF(x, top - metrics.Height, width, metrics.Height),
-                    Style = new RectStyle { BackgroundColor = run.Style.Background },
+                    Style = _rectStyle,
                     ZIndex = z,
                 });
             }
@@ -307,10 +316,12 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
             _ => new RectF(left, top - metrics.Height, metrics.Advance, metrics.Height),
         };
 
+        _rectStyle.BackgroundColor = _styles.Cursor;
+
         c.DrawRect(new DrawRectInputs
         {
             Position = rect,
-            Style = new RectStyle { BackgroundColor = _styles.Cursor },
+            Style = _rectStyle,
             ZIndex = z,
         });
     }
