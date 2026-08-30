@@ -41,7 +41,8 @@ public class TerminalCellStylerTests
         Ansi: TestAnsi,
         DefaultForeground: ThemeForeground,
         DefaultBackground: ThemeBackground,
-        Cursor: 0xFFFACADEu);
+        Cursor: 0xFFFACADEu,
+        Selection: 0xFF404C8Cu);
 
     // Same colours with the alpha channel deliberately wrong, in every slot the styler reads. The
     // bright slot carries a plausible translucent value because that is where a real theme is most

@@ -582,7 +582,6 @@ public class TerminalInputControllerEdgeTests
     }
 
     [Theory]
-    [InlineData(KeyboardKey.C, InputModifiers.Super)]
     [InlineData(KeyboardKey.A, InputModifiers.Super | InputModifiers.Control)]
     [InlineData(KeyboardKey.LeftArrow, InputModifiers.Super | InputModifiers.Shift)]
     [InlineData(KeyboardKey.Escape, InputModifiers.Super)]
@@ -599,6 +598,25 @@ public class TerminalInputControllerEdgeTests
         Assert.Empty(pane.Shell.Written);
         Assert.Equal(KeyClaim.None, claim);
         Assert.Contains((key, modifiers), pane.App.Keys);
+    }
+
+    [Theory]
+    [InlineData(KeyboardKey.C)]
+    [InlineData(KeyboardKey.V)]
+    public void TheClipboardChords_AreTheTerminalsRatherThanTheApplications(KeyboardKey key)
+    {
+        // The one carve-out from the rule above, and the reason it is a carve-out rather than an
+        // exception the reader has to remember: on macOS copy and paste are Super chords, so a pane
+        // that handed back every Super chord could not have a copy key at all.
+        if (!OperatingSystem.IsMacOS()) return;
+
+        using var pane = Pane.Focused();
+
+        var claim = pane.Press(key, InputModifiers.Super);
+
+        Assert.Empty(pane.Shell.Written);
+        Assert.Equal(KeyClaim.Command, claim);
+        Assert.DoesNotContain((key, InputModifiers.Super), pane.App.Keys);
     }
 
     [Theory]
@@ -1119,6 +1137,32 @@ public class TerminalInputControllerEdgeTests
             PageScrolls.Add(pages);
             return CanScroll;
         }
+
+        public List<string> Pastes { get; } = [];
+
+        public void Paste(string text) => Pastes.Add(text);
+
+        public bool HasScreen { get; set; } = true;
+
+        public TerminalSpan? Selection { get; private set; }
+
+        public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity)
+        {
+            Selection = TerminalSpan.Between(anchor, focus, new GridBounds(80, 24, 0));
+            return true;
+        }
+
+        public bool ClearSelection()
+        {
+            if (Selection is null) return false;
+
+            Selection = null;
+            return true;
+        }
+
+        public string SelectionTextValue { get; set; } = string.Empty;
+
+        public string SelectionText() => SelectionTextValue;
     }
 
     /// <summary>Stands in for the application's keybinding controller, recording what reached it.</summary>

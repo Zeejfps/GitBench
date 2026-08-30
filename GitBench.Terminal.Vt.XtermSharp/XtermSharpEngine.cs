@@ -1,3 +1,4 @@
+using System.Text;
 using XtermSharp;
 using XtermTerminal = XtermSharp.Terminal;
 
@@ -14,6 +15,12 @@ namespace GitBench.Terminal.Vt.Adapters;
 /// </remarks>
 public sealed class XtermSharpEngine : ITerminalEngine
 {
+    const int MaxClipboardBase64 = 4 * 1024 * 1024;
+
+    static readonly Encoding ReplacementSafeUtf8 = new UTF8Encoding(
+        encoderShouldEmitUTF8Identifier: false,
+        throwOnInvalidBytes: false);
+
     readonly XtermTerminal terminal;
     readonly ResponseSink responses;
     readonly XtermGrid grid;
@@ -63,6 +70,8 @@ public sealed class XtermSharpEngine : ITerminalEngine
 
         terminal.GetUpdateRange(out var first, out var last);
 
+        var clipboard = ReadClipboard();
+
         return new FeedResult(
             Damage: last < first
                 ? RowSpan.None
@@ -70,8 +79,78 @@ public sealed class XtermSharpEngine : ITerminalEngine
             Response: responses.Drain(),
             FramesCompleted: terminal.SynchronizedFrames - framesBefore,
             FramePending: terminal.SynchronizedUpdate,
-            LinesScrolled: terminal.ScrolledIntoHistory - historyBefore);
+            LinesScrolled: terminal.ScrolledIntoHistory - historyBefore)
+        {
+            Clipboard = clipboard,
+        };
     }
+
+    /// <summary>
+    /// The parse at the OSC 52 boundary: base64 in, a request or nothing out.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is thrown and nothing is surfaced unvalidated. A payload that is not base64, or that
+    /// names more text than a clipboard should hold, is a sequence that did not happen — a program
+    /// on the far end of a pseudo-terminal is not trusted to send well-formed anything, and a throw
+    /// here would land on the thread that owns the window.
+    /// </remarks>
+    ReadOnlyMemory<TerminalClipboardRequest> ReadClipboard()
+    {
+        var payloads = terminal.DrainClipboardCommands();
+        if (payloads.Length == 0)
+            return ReadOnlyMemory<TerminalClipboardRequest>.Empty;
+
+        var requests = new List<TerminalClipboardRequest>(payloads.Length);
+
+        foreach (var payload in payloads)
+        {
+            var separator = payload.IndexOf(';');
+            if (separator < 0)
+                continue;
+
+            var selection = payload[..separator];
+            var data = payload[(separator + 1)..];
+            var target = TargetOf(selection);
+
+            // A read. Answered with an empty clipboard rather than with silence: a program that asks
+            // waits for the reply, and a denial indistinguishable from an empty clipboard costs it
+            // nothing while telling it nothing. Never surfaced, so no caller can grant it later.
+            if (data == "?")
+            {
+                responses.Send(Encoding.ASCII.GetBytes($"\u001b]52;{NameOf(target)};\u001b\\"));
+                continue;
+            }
+
+            if (TryDecode(data, out var text))
+                requests.Add(new TerminalClipboardRequest(target, text));
+        }
+
+        return requests.Count == 0
+            ? ReadOnlyMemory<TerminalClipboardRequest>.Empty
+            : requests.ToArray();
+    }
+
+    static bool TryDecode(string data, out string text)
+    {
+        text = string.Empty;
+
+        if (data.Length == 0 || data.Length > MaxClipboardBase64)
+            return false;
+
+        var buffer = new byte[(data.Length / 4 * 3) + 3];
+        if (!Convert.TryFromBase64String(data, buffer, out var written))
+            return false;
+
+        text = ReplacementSafeUtf8.GetString(buffer.AsSpan(0, written));
+        return true;
+    }
+
+    static ClipboardTarget TargetOf(string selection) =>
+        selection.Contains('p') || selection.Contains('s')
+            ? ClipboardTarget.Primary
+            : ClipboardTarget.Clipboard;
+
+    static char NameOf(ClipboardTarget target) => target == ClipboardTarget.Primary ? 'p' : 'c';
 
     public void Resize(TerminalSize size) => terminal.Resize(size.Columns, size.Rows);
 

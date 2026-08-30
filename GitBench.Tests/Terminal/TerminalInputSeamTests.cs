@@ -1305,7 +1305,18 @@ internal sealed class TerminalRun : IDisposable
 
     public QueuedDispatcher Dispatcher { get; } = new();
     public TerminalInstance Vm { get; }
-    public SeamPty Pty => _launch.Pty;
+    /// <remarks>
+    /// The session queues input for its writer thread, so what reached the terminal is only
+    /// everything written once that queue is empty.
+    /// </remarks>
+    public SeamPty Pty
+    {
+        get
+        {
+            Session?.Flush(TimeSpan.FromSeconds(5));
+            return _launch.Pty;
+        }
+    }
 
     /// <summary>The live session, read the way the pane reads it: off the render state.</summary>
     public TerminalSession? Session =>
@@ -1316,6 +1327,14 @@ internal sealed class TerminalRun : IDisposable
     public static TerminalRun Started()
     {
         var run = new TerminalRun(new SeamLaunch());
+        run.Start();
+        return run;
+    }
+
+    /// <summary>A terminal whose history is shallow enough for a test to scroll a selection out of.</summary>
+    public static TerminalRun ShallowHistory()
+    {
+        var run = new TerminalRun(new SeamLaunch { ScrollbackLines = 5 });
         run.Start();
         return run;
     }
@@ -1387,6 +1406,9 @@ internal sealed class SeamLaunch : ITerminalLaunch
 
     public TerminalRecording? Recording { get; init; }
 
+    /// <summary>How deep a history to keep, for a test that needs one it can overflow.</summary>
+    public int ScrollbackLines { get; init; } = 5000;
+
     public TerminalSize SizeFor(TerminalSize viewport) => Recording?.Size ?? viewport;
 
     public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher)
@@ -1400,7 +1422,12 @@ internal sealed class SeamLaunch : ITerminalLaunch
                 recording.Size,
                 dispatcher);
 
-        return TerminalSession.Start(() => Pty, new XtermSharpEngineFactory(), size, dispatcher);
+        return TerminalSession.Start(
+            () => Pty,
+            new XtermSharpEngineFactory(),
+            size,
+            dispatcher,
+            ScrollbackLines);
     }
 }
 
@@ -1492,12 +1519,18 @@ internal sealed class SeamPty : IPtySession
 /// <summary>A pane that has never been drawn, so no point of it is over a cell.</summary>
 internal sealed class NoCells : ITerminalCellGeometry
 {
+    public int Redraws { get; private set; }
+
     public bool TryLocate(PointF point, out int column, out int row)
     {
         column = 0;
         row = 0;
         return false;
     }
+
+    public GridPoint? ClampToGrid(PointF point) => null;
+
+    public void RequestRedraw() => Redraws++;
 }
 
 /// <summary>The shell a controller writes to, reduced to what a test needs to read back.</summary>
@@ -1522,6 +1555,32 @@ internal sealed class SeamTerminal : ITerminalInput
     public bool Scroll(int lines) => false;
 
     public bool ScrollPages(int pages) => false;
+
+    public string Pasted { get; private set; } = string.Empty;
+
+    public void Paste(string text) => Pasted += text;
+
+    public bool HasScreen { get; set; } = true;
+
+    public TerminalSpan? Selection { get; private set; }
+
+    public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity)
+    {
+        Selection = TerminalSpan.Between(anchor, focus, new GridBounds(80, 24, 1000));
+        return true;
+    }
+
+    public bool ClearSelection()
+    {
+        if (Selection is null) return false;
+
+        Selection = null;
+        return true;
+    }
+
+    public string SelectionTextValue { get; set; } = string.Empty;
+
+    public string SelectionText() => SelectionTextValue;
 }
 
 /// <summary>A live session behind the narrow input interface, for the round-trip test.</summary>
@@ -1542,6 +1601,20 @@ internal sealed class LiveTerminal : ITerminalInput
     public bool Scroll(int lines) => _session.Scroll(lines);
 
     public bool ScrollPages(int pages) => _session.ScrollPages(pages);
+
+    public void Paste(string text) =>
+        _session.Write(TerminalPasteEncoder.Encode(text, _session.State.Modes.BracketedPaste));
+
+    public bool HasScreen => true;
+
+    public TerminalSpan? Selection => _session.Selection;
+
+    public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
+        _session.Select(anchor, focus, granularity);
+
+    public bool ClearSelection() => _session.ClearSelection();
+
+    public string SelectionText() => _session.SelectionText();
 }
 
 /// <summary>

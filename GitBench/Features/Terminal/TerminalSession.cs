@@ -1,5 +1,6 @@
 using GitBench.Pty;
 using GitBench.Terminal.Vt;
+using ZGF.Gui;
 using ZGF.Observable;
 
 namespace GitBench.Features.Terminal;
@@ -39,12 +40,18 @@ internal sealed class TerminalSession : IDisposable
 
     const int DefaultScrollbackLines = 5000;
 
+    const int OutgoingBufferBytes = 4 * 1024;
+
     readonly IPtySession _pty;
     readonly ITerminalEngine _engine;
     readonly IUiDispatcher _dispatcher;
+    readonly IClipboard? _clipboard;
     readonly Thread _reader;
+    readonly Thread _writer;
     readonly Lock _gate = new();
+    readonly Lock _outgoingGate = new();
     readonly ManualResetEventSlim _room = new(true);
+    readonly ManualResetEventSlim _outgoingReady = new(false);
 
     // Two buffers swapped under the gate rather than one copied out of: the reader fills whichever
     // is current while the UI thread parses the one it took, so a drain costs a reference swap
@@ -53,19 +60,33 @@ internal sealed class TerminalSession : IDisposable
     byte[] _spare = new byte[ReadBufferBytes];
     int _pendingCount;
 
+    byte[] _outgoing = new byte[OutgoingBufferBytes];
+    byte[] _outgoingSpare = new byte[OutgoingBufferBytes];
+    int _outgoingCount;
+
     bool _drainQueued;
+    bool _writing;
     bool _disposed;
     bool _faulted;
     int _scrollOffset;
+    TerminalSpan? _selection;
 
-    TerminalSession(IPtySession pty, ITerminalEngine engine, IUiDispatcher dispatcher)
+    TerminalSession(
+        IPtySession pty,
+        ITerminalEngine engine,
+        IUiDispatcher dispatcher,
+        IClipboard? clipboard)
     {
         _pty = pty;
         _engine = engine;
         _dispatcher = dispatcher;
+        _clipboard = clipboard;
 
         _reader = new Thread(Read) { IsBackground = true, Name = "terminal-pty-reader" };
         _reader.Start();
+
+        _writer = new Thread(WriteLoop) { IsBackground = true, Name = "terminal-pty-writer" };
+        _writer.Start();
     }
 
     /// <summary>
@@ -78,13 +99,15 @@ internal sealed class TerminalSession : IDisposable
         ITerminalEngineFactory engines,
         PtySessionOptions options,
         IUiDispatcher dispatcher,
-        int scrollbackLines = DefaultScrollbackLines) =>
+        int scrollbackLines = DefaultScrollbackLines,
+        IClipboard? clipboard = null) =>
         Start(
             () => sessions.Start(options),
             engines,
             new TerminalSize(options.Size.Columns, options.Size.Rows),
             dispatcher,
-            scrollbackLines);
+            scrollbackLines,
+            clipboard);
 
     /// <summary>
     /// Starts on whatever pseudo-terminal <paramref name="open"/> produces, for a caller that has
@@ -99,13 +122,14 @@ internal sealed class TerminalSession : IDisposable
         ITerminalEngineFactory engines,
         TerminalSize size,
         IUiDispatcher dispatcher,
-        int scrollbackLines = DefaultScrollbackLines)
+        int scrollbackLines = DefaultScrollbackLines,
+        IClipboard? clipboard = null)
     {
         var engine = engines.Create(new TerminalSetup(size, scrollbackLines));
 
         try
         {
-            return new TerminalSession(open(), engine, dispatcher);
+            return new TerminalSession(open(), engine, dispatcher, clipboard);
         }
         catch
         {
@@ -151,6 +175,43 @@ internal sealed class TerminalSession : IDisposable
     /// <summary>Moves the viewport by whole screens, one line short so the reader keeps a landmark.</summary>
     public bool ScrollPages(int pages) => Scroll(pages * Math.Max(1, Grid.Size.Rows - 1));
 
+    /// <summary>
+    /// The text the user has highlighted, in the grid's own coordinates, or null when nothing is.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the view for the reason the scroll offset is: output moves the text under
+    /// a selection, and this is the only place that sees output arrive. It also outlives the pane,
+    /// which is rebuilt on every repository switch.
+    /// </remarks>
+    public TerminalSpan? Selection => _selection;
+
+    /// <summary>
+    /// Highlights from <paramref name="anchor"/> to <paramref name="focus"/>. Returns whether the
+    /// selection changed.
+    /// </summary>
+    public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity)
+    {
+        if (_disposed) return false;
+
+        var span = TerminalSelectionText.Resolve(Grid, anchor, focus, granularity);
+        if (span == _selection) return false;
+
+        _selection = span;
+        return true;
+    }
+
+    public bool ClearSelection()
+    {
+        if (_selection is null) return false;
+
+        _selection = null;
+        return true;
+    }
+
+    /// <summary>The highlighted text, or an empty string when nothing is highlighted.</summary>
+    public string SelectionText() =>
+        _disposed || _selection is not { } span ? string.Empty : TerminalSelectionText.Build(Grid, span);
+
     /// <summary>Returns the viewport to the live screen, as typing does.</summary>
     public bool ScrollToBottom()
     {
@@ -187,17 +248,109 @@ internal sealed class TerminalSession : IDisposable
     public event Action<string>? Faulted;
 
     /// <summary>Sends bytes to the shell as terminal input.</summary>
+    /// <remarks>
+    /// Queued for the writer thread rather than written here. The master is a blocking descriptor and
+    /// a shell at a prompt has about a kilobyte of line discipline to take: writing a paste on the UI
+    /// thread stops the window until the child has read all of it.
+    /// </remarks>
     public void Write(ReadOnlySpan<byte> bytes)
     {
         if (_disposed || bytes.IsEmpty) return;
 
-        try
+        lock (_outgoingGate)
         {
-            _pty.WriteInput(bytes);
+            var needed = _outgoingCount + bytes.Length;
+
+            if (needed > _outgoing.Length)
+            {
+                var grown = new byte[Math.Max(needed, _outgoing.Length * 2)];
+                Buffer.BlockCopy(_outgoing, 0, grown, 0, _outgoingCount);
+                _outgoing = grown;
+            }
+
+            bytes.CopyTo(_outgoing.AsSpan(_outgoingCount));
+            _outgoingCount = needed;
+            _outgoingReady.Set();
         }
-        catch (ObjectDisposedException)
+    }
+
+    /// <summary>
+    /// Waits until everything written has reached the pseudo-terminal, or the timeout runs out.
+    /// Returns whether it drained.
+    /// </summary>
+    /// <remarks>
+    /// The queue is what keeps a bulk write off the UI thread, and it is also what makes "the shell
+    /// has read this" stop being true the moment <see cref="Write"/> returns. Anything that needs
+    /// the old guarantee — a test asserting on what the shell received — asks for it here.
+    /// </remarks>
+    public bool Flush(TimeSpan timeout)
+    {
+        var deadline = Environment.TickCount64 + (long)timeout.TotalMilliseconds;
+
+        while (true)
         {
-            // The shell is gone; there is nowhere for the keystroke to go and nothing to report.
+            lock (_outgoingGate)
+            {
+                if (_outgoingCount == 0 && !_writing) return true;
+            }
+
+            if (Environment.TickCount64 >= deadline) return false;
+
+            Thread.Sleep(1);
+        }
+    }
+
+    void WriteLoop()
+    {
+        while (true)
+        {
+            try
+            {
+                _outgoingReady.Wait();
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+
+            byte[] batch;
+            int count;
+
+            lock (_outgoingGate)
+            {
+                count = _outgoingCount;
+
+                if (count == 0)
+                {
+                    if (_disposed) return;
+                    _outgoingReady.Reset();
+                    continue;
+                }
+
+                batch = _outgoing;
+                _outgoing = _outgoingSpare;
+                _outgoingSpare = batch;
+                _outgoingCount = 0;
+                _writing = true;
+            }
+
+            try
+            {
+                _pty.WriteInput(batch.AsSpan(0, count));
+            }
+            catch (ObjectDisposedException)
+            {
+                return;
+            }
+            catch (Exception failure)
+            {
+                Report(failure.Message);
+                return;
+            }
+            finally
+            {
+                lock (_outgoingGate) _writing = false;
+            }
         }
     }
 
@@ -212,6 +365,7 @@ internal sealed class TerminalSession : IDisposable
 
         _engine.Resize(size);
         ClampScroll();
+        _selection = null;
 
         try
         {
@@ -235,14 +389,17 @@ internal sealed class TerminalSession : IDisposable
         // for room: this is the only thing that wakes that one, and without it teardown waits out
         // the join's full patience.
         _room.Set();
+        _outgoingReady.Set();
 
         var stopped = _reader.Join(TimeSpan.FromSeconds(2));
+        var writerStopped = _writer.Join(TimeSpan.FromSeconds(2));
         _engine.Dispose();
 
         // Only once the reader is known to have finished with it. A thread still running would take
         // an ObjectDisposedException on its next wait, at the top of a thread, which is fatal to the
         // process — worth strictly less than leaking one event for a reader that already hung.
         if (stopped) _room.Dispose();
+        if (writerStopped) _outgoingReady.Dispose();
     }
 
     /// <remarks>
@@ -356,6 +513,8 @@ internal sealed class TerminalSession : IDisposable
             _room.Set();
         }
 
+        var alternateBefore = _engine.State.Modes.AlternateScreen;
+
         FeedResult result;
         try
         {
@@ -371,8 +530,10 @@ internal sealed class TerminalSession : IDisposable
         // Device-status and capability replies are the program's question answered; they go back up
         // the terminal as input, which is where the program is waiting for them.
         if (result.HasResponse) Write(result.Response.Span);
+        if (result.HasClipboardRequests) ApplyClipboard(result.Clipboard.Span);
 
         FollowOutput(result.LinesScrolled);
+        FollowSelection(result.LinesScrolled, alternateBefore, _engine.State.Modes.AlternateScreen);
 
         Updated?.Invoke();
     }
@@ -400,4 +561,67 @@ internal sealed class TerminalSession : IDisposable
     /// of them ends in a feed or a resize.
     /// </summary>
     void ClampScroll() => _scrollOffset = Math.Clamp(_scrollOffset, 0, Grid.ScrollbackRows);
+
+    /// <summary>
+    /// Puts what a program sent through OSC 52 on the system clipboard.
+    /// </summary>
+    /// <remarks>
+    /// The write half only. A read never reaches here: the engine answers it with an empty clipboard
+    /// so that a program asking is not left waiting, and does not surface it, because a program
+    /// running in this pane reading what the user last copied is exfiltration with a terminal
+    /// sequence for a lever.
+    /// </remarks>
+    void ApplyClipboard(ReadOnlySpan<TerminalClipboardRequest> requests)
+    {
+        if (_clipboard is null) return;
+
+        foreach (var request in requests)
+        {
+            if (request.Target != ClipboardTarget.Clipboard) continue;
+            if (ClipboardText.FromProgram(request.Text) is not { } text) continue;
+
+            try
+            {
+                _clipboard.SetText(text.Value);
+            }
+            catch (Exception)
+            {
+                // A clipboard that will not take the text is not worth faulting a shell over.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Carries the selection with the text it covers, and drops it when that text is gone.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only on the normal screen. <c>LinesScrolled</c> counts lines leaving the top of the screen on
+    /// the alternate buffer too, where there is no history for them to leave into, so shifting by it
+    /// there walks a selection off a grid whose only rows are the visible ones. A full-screen program
+    /// under a scroll region does not increment it at all while its text still moves, so the
+    /// alternate screen's selection is positional and stale by design — which is what every terminal
+    /// does with it.
+    /// </para>
+    /// <para>
+    /// Dropped rather than clamped when the text scrolls out of the history. Clamping would move the
+    /// ends onto rows the user never highlighted and copy text they never selected.
+    /// </para>
+    /// </remarks>
+    void FollowSelection(int linesScrolled, bool alternateBefore, bool alternateAfter)
+    {
+        if (_selection is not { } span) return;
+
+        if (alternateBefore != alternateAfter)
+        {
+            _selection = null;
+            return;
+        }
+
+        var bounds = GridBounds.Of(Grid);
+
+        _selection = alternateAfter
+            ? TerminalSpan.Surviving(span, bounds)
+            : TerminalSpan.Shift(span, linesScrolled, bounds);
+    }
 }

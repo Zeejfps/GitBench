@@ -137,10 +137,41 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         if (LiveSession is not { } session) return;
 
         session.Write(bytes);
-        if (session.ScrollToBottom()) Updated?.Invoke();
+
+        var moved = session.ScrollToBottom();
+        var deselected = session.ClearSelection();
+        if (moved || deselected) Updated?.Invoke();
     }
 
     public void SendMouse(ReadOnlySpan<byte> bytes) => LiveSession?.Write(bytes);
+
+    /// <summary>
+    /// Sends pasted text to the shell, bracketed when the program has asked for it.
+    /// </summary>
+    public void Paste(string text)
+    {
+        if (LiveSession is not { } session) return;
+
+        var bytes = TerminalPasteEncoder.Encode(text, session.State.Modes.BracketedPaste);
+        if (bytes.Length == 0) return;
+
+        SendInput(bytes);
+    }
+
+    /// <summary>
+    /// Whether there is a screen to select text on. True once a shell has started, and still true
+    /// after it exits — the screen a finished command left is what a reader most wants to copy.
+    /// </summary>
+    public bool HasScreen => Screen is not null;
+
+    public TerminalSpan? Selection => Screen?.Selection;
+
+    public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
+        Moved(Screen?.Select(anchor, focus, granularity));
+
+    public bool ClearSelection() => Moved(Screen?.ClearSelection());
+
+    public string SelectionText() => Screen?.SelectionText() ?? string.Empty;
 
     /// <summary>
     /// Moves the viewport through the history. Still works once the shell has exited, because the

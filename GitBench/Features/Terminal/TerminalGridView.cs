@@ -24,6 +24,21 @@ internal interface ITerminalCellGeometry
     /// pane has not been drawn, the point is outside it, or it is over the history.
     /// </summary>
     bool TryLocate(PointF point, out int column, out int row);
+
+    /// <summary>
+    /// The nearest cell to <paramref name="point"/> in the grid's own coordinates, where the history
+    /// sits at negative rows. Null only when the pane has not been drawn a screen yet.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="TryLocate"/>, and named for a different coordinate system, because a
+    /// mouse report must never name a row that scrolled off the screen while a drag must keep
+    /// tracking wherever the pointer goes. One method answering both would put a history row within
+    /// reach of the mouse encoder.
+    /// </remarks>
+    GridPoint? ClampToGrid(PointF point);
+
+    /// <summary>Asks for the screen to be drawn again, because the selection moved under a drag.</summary>
+    void RequestRedraw();
 }
 
 /// <summary>
@@ -142,6 +157,8 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         MarkVisualDirty();
     }
 
+    public void RequestRedraw() => Repaint();
+
     public bool TryLocate(PointF point, out int column, out int row)
     {
         column = 0;
@@ -160,6 +177,21 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
 
         row = Math.Min(live, cells.Rows - 1);
         return true;
+    }
+
+    public GridPoint? ClampToGrid(PointF point)
+    {
+        if (_geometry is not { } cells) return null;
+        if (cells.Advance <= 0f || cells.Height <= 0f || cells.Columns <= 0) return null;
+
+        var column = Math.Clamp(
+            (int)MathF.Floor((point.X - cells.Bounds.Left) / cells.Advance),
+            0,
+            cells.Columns - 1);
+
+        var row = (int)MathF.Floor((cells.Bounds.Top - point.Y) / cells.Height) - cells.Offset;
+
+        return new GridPoint(column, Math.Clamp(row, -cells.Offset, cells.Rows - 1));
     }
 
     protected override void OnDrawSelf(ICanvas c)
@@ -260,11 +292,14 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
             size.Columns,
             size.Rows);
 
+        var selection = session.Selection;
+
         for (var row = 0; row < visibleRows; row++)
         {
             var top = bounds.Top - row * metrics.Height;
             grid.CopyRow(row - offset, _cells.AsSpan(0, size.Columns));
             DrawRow(c, _cells.AsSpan(0, size.Columns), bounds.Left, top, metrics, z);
+            DrawSelection(c, selection, row - offset, size.Columns, bounds.Left, top, metrics, z + 1);
         }
 
         DrawCursor(c, grid, session.State.Cursor, offset, visibleRows, bounds, metrics, z);
@@ -319,6 +354,38 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
                 StrikeThrough = run.Style.StrikeThrough,
             });
         }
+    }
+
+    /// <remarks>
+    /// Under the glyphs and over the row's own backgrounds, which is the layer the block cursor
+    /// already uses: the text keeps its colours and stays legible over the highlight, so a selected
+    /// run needs no restyling and the row splitting is untouched.
+    /// </remarks>
+    void DrawSelection(
+        ICanvas c,
+        TerminalSpan? selection,
+        int gridRow,
+        int columns,
+        float left,
+        float top,
+        CellMetrics metrics,
+        int z)
+    {
+        if (selection is not { } span) return;
+        if (!span.TryColumnsOn(gridRow, columns, out var first, out var last)) return;
+
+        _rectStyle.BackgroundColor = _styles.Selection;
+
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(
+                left + first * metrics.Advance,
+                top - metrics.Height,
+                (last - first + 1) * metrics.Advance,
+                metrics.Height),
+            Style = _rectStyle,
+            ZIndex = z,
+        });
     }
 
     /// <remarks>

@@ -31,7 +31,8 @@ public sealed record TerminalStyles(
     AnsiColors Ansi,
     uint DefaultForeground,
     uint DefaultBackground,
-    uint Cursor);
+    uint Cursor,
+    uint Selection);
 
 public partial record ThemeStyles
 {
@@ -40,5 +41,6 @@ public partial record ThemeStyles
             Ansi: ansi,
             DefaultForeground: p.TextBody,
             DefaultBackground: p.Surface,
-            Cursor: p.Accent);
+            Cursor: p.Accent,
+            Selection: p.Selection);
 }

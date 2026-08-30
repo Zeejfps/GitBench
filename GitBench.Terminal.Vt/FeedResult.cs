@@ -41,5 +41,18 @@ public readonly record struct FeedResult(
     public static FeedResult Nothing { get; } =
         new(RowSpan.None, ReadOnlyMemory<byte>.Empty, 0, false, 0);
 
+    /// <summary>
+    /// The clipboard writes this feed carried, in the order the program sent them.
+    /// </summary>
+    /// <remarks>
+    /// A memory rather than a list, because this is a record struct: the generated equality compares
+    /// a list by reference, so a result carrying an empty one would stop equalling
+    /// <see cref="Nothing"/> — which is what the chunking suite asserts on. It costs no allocation
+    /// when there is nothing to carry, which is every feed but a rare one.
+    /// </remarks>
+    public ReadOnlyMemory<TerminalClipboardRequest> Clipboard { get; init; }
+
     public bool HasResponse => !Response.IsEmpty;
+
+    public bool HasClipboardRequests => !Clipboard.IsEmpty;
 }

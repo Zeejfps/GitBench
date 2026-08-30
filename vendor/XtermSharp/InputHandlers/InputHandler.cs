@@ -235,6 +235,8 @@ namespace XtermSharp {
 			parser.SetOscHandler (1, SetIconTitle);
 			//   2 - title
 			parser.SetOscHandler (2, SetTitle);
+			//  52 - clipboard (PATCH 20)
+			parser.SetOscHandler (52, terminal.ClipboardCommand);
 			//   3 - set property X in the form "prop=value"
 			//   4 - Change Color Number()
 			//   5 - Change Special Color Number

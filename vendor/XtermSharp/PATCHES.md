@@ -459,3 +459,27 @@ row. Three of the four fail without this patch.
 The `vim` and `less` goldens had recorded the wrong value in their last two frames each and have
 been corrected; the correction is noted in both files' `;` blocks. This is also why `claude.grid`
 could only be written afterwards.
+
+---
+
+## Patch 20 — OSC 52 reaches the adapter, and the OSC buffer is bounded (gap 20)
+
+Two changes, in two files, for one feature.
+
+`EscapeSequenceParser.cs` accumulated an OSC payload into `osc` with no bound. The payload ends at
+its terminator, and a stray `ESC ]` in binary output never sends one, so the list grew for as long as
+the program kept writing. `MaxOscBytes` (4 MiB) caps it in `ParserAction.OscPut`; a payload past the
+cap is truncated, which makes it fail the base64 parse downstream and become no request at all. The
+cap belongs here rather than in the adapter because the growth happens before any handler runs.
+
+`InputHandler.cs` registers `SetOscHandler (52, terminal.ClipboardCommand)` beside the three title
+handlers. `Terminal` keeps the payloads in a list bounded at 32 per drain and hands them over through
+`DrainClipboardCommands ()` — the same shape as `ScrolledIntoHistory` from patch 16, and for the same
+reason: the adapter reads what a feed produced when the feed returns, so a delegate call would put
+the clipboard in the middle of the parser. `ITerminalDelegate` is untouched.
+
+Everything above the seam is the adapter's: the base64 parse, the size cap on the decoded text, the
+selection character, and the decision to answer a read with an empty clipboard rather than surface
+it. `Osc52Spec` covers all of it, and `ChunkingAndRobustnessSpec`'s `FeedResult.Nothing` assertion is
+what forced the new field to be a `ReadOnlyMemory` rather than a list — a record struct compares a
+list by reference, so a result carrying an empty one would have stopped equalling `Nothing`.

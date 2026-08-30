@@ -436,6 +436,31 @@ frame of every one of them. Both files have been corrected and say so in their `
 `SavedCursorSpec` pins the round trip in both directions and on the screen as well as the flag.
 
 
+### 20. OSC 52 is unhandled and the OSC buffer is unbounded — FIXED
+
+Two things, and the second is why the first could not simply be added. `InputHandlers/InputHandler.cs`
+registered OSC handlers for 0, 1 and 2 only, so `OSC 52` — the clipboard sequence — fell to the
+fallback at `:41` and was dropped. Correct as far as the grid goes, and `TitleAndHyperlinkSpec` used
+OSC 52 as its example of an unhandled OSC for exactly that reason.
+
+Underneath it, `EscapeSequenceParser.cs` accumulated an operating-system command's payload into a
+`List<byte>` with no cap at all. A payload grows until its terminator arrives, and a stray `ESC ]` in
+binary output has no terminator — so `cat` of the wrong file grew that list until the process died.
+Harmless while nothing read OSC payloads of any size; a memory lever any program could pull the
+moment one of them mattered.
+
+**Fixed by patch 20.** `MaxOscBytes` bounds the accumulation in the parser, `Terminal` collects OSC
+52 payloads for the adapter to drain the way it already drains responses, and the adapter parses the
+base64 at the boundary — a payload that is not base64 produces no request rather than an exception on
+the thread that owns the window. `Osc52Spec` covers the write, the split-across-feeds case, the
+malformed payload, the invalid UTF-8, and the read.
+
+The read half is answered in the adapter and never surfaced: `OSC 52 ; Pc ; ?` asks the terminal to
+hand the program whatever the user last copied, which is exfiltration with a terminal sequence for a
+lever. It is answered with an empty clipboard rather than with silence, because a program that asks
+waits for the reply — neovim's `clipboard=osc52` provider among them — and a denial indistinguishable
+from an empty clipboard costs it nothing.
+
 ## Configuration, not a defect
 
 `TerminalOptions.ConvertEol` defaults to `true`, which makes a bare LF also perform a carriage

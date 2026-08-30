@@ -869,12 +869,27 @@ public class TerminalInstanceInputTests
     /// report its shell gone before the test had typed anything.</summary>
     sealed class RecordingLaunch : ITerminalLaunch
     {
-        public SeamPty Pty { get; } = new();
+        TerminalSession? _session;
+
+        public SeamPty RawPty { get; } = new();
+
+        /// <remarks>
+        /// The session queues input for its writer thread, so what reached the terminal is only
+        /// everything written once that queue is empty.
+        /// </remarks>
+        public SeamPty Pty
+        {
+            get
+            {
+                _session?.Flush(TimeSpan.FromSeconds(5));
+                return RawPty;
+            }
+        }
 
         public TerminalSize SizeFor(TerminalSize viewport) => viewport;
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
-            TerminalSession.Start(() => Pty, new XtermSharpEngineFactory(), size, dispatcher);
+            _session = TerminalSession.Start(() => RawPty, new XtermSharpEngineFactory(), size, dispatcher);
     }
 }
 
@@ -943,11 +958,41 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
 
     public bool ScrollPages(int pages) => _session?.ScrollPages(pages) ?? false;
 
+    public void Paste(string text)
+    {
+        if (_session is not { } session) return;
+
+        var bytes = TerminalPasteEncoder.Encode(text, session.State.Modes.BracketedPaste);
+        if (bytes.Length > 0) session.Write(bytes);
+    }
+
+    public bool HasScreen => _session != null;
+
+    public TerminalSpan? Selection => _session?.Selection;
+
+    public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
+        _session?.Select(anchor, focus, granularity) ?? false;
+
+    public bool ClearSelection() => _session?.ClearSelection() ?? false;
+
+    public string SelectionText() => _session?.SelectionText() ?? string.Empty;
+
     /// <summary>Where the viewport is, so a wheel test can assert on the pane and not on the wheel.</summary>
     public int ScrollOffset => _session?.ScrollOffset ?? 0;
 
     /// <summary>What the keyboard has sent to the shell.</summary>
-    public byte[] Written => _pty.Written[_baseline..];
+    /// <remarks>
+    /// Drained first: the session queues input for its writer thread, so what has reached the
+    /// terminal is not everything written until the queue is empty.
+    /// </remarks>
+    public byte[] Written
+    {
+        get
+        {
+            _session?.Flush(TimeSpan.FromSeconds(5));
+            return _pty.Written[_baseline..];
+        }
+    }
 
     public string Text => Encoding.Latin1.GetString(Written);
 
@@ -975,6 +1020,12 @@ internal sealed class FixedCells(int column, int row) : ITerminalCellGeometry
         row = _row;
         return true;
     }
+
+    public GridPoint? ClampToGrid(PointF point) => new GridPoint(_column, _row);
+
+    public int Redraws { get; private set; }
+
+    public void RequestRedraw() => Redraws++;
 }
 
 /// <summary>

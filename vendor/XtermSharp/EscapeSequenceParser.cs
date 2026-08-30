@@ -277,6 +277,11 @@ namespace XtermSharp {
 		}
 
 		public delegate void CsiHandler (int [] parameters, string collect);
+		// PATCH 20: the cap on one operating-system command's payload. Large enough for a
+		// clipboard's worth of base64 under OSC 52, small enough that a terminator that never
+		// arrives costs a bounded amount of memory.
+		public const int MaxOscBytes = 4 * 1024 * 1024;
+
 		public delegate void OscHandler (string data);
 		public delegate void EscHandler (string collect, int flag);
 		public unsafe delegate void PrintHandler (byte * data, int start, int end);
@@ -626,7 +631,10 @@ namespace XtermSharp {
 				case ParserAction.OscPut:
 					for (var j = i; ; j++) {
 						if (j >= len || data [j] < 0x20) {
-							for (int k = i; k < j; k++)
+							// PATCH 20: bounded. The payload of an operating-system command grows
+							// until its terminator arrives, and a stray ESC ] in binary output has
+							// no terminator, so this list was a memory lever any program could pull.
+							for (int k = i; k < j && osc.Count < MaxOscBytes; k++)
 								osc.Add (data [k]);
 							i = j - 1;
 							break;

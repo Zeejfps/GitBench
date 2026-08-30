@@ -50,6 +50,23 @@ internal interface ITerminalInput
     bool ScrollPages(int pages);
 
     void SendMouse(ReadOnlySpan<byte> bytes);
+
+    /// <summary>Sends pasted text to the shell, bracketed when the program has asked for it.</summary>
+    void Paste(string text);
+
+    /// <summary>
+    /// Whether there is a screen to select on. Unlike <see cref="IsAcceptingInput"/> this stays true
+    /// after the shell exits, because the screen it left is still readable and copyable.
+    /// </summary>
+    bool HasScreen { get; }
+
+    TerminalSpan? Selection { get; }
+
+    bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity);
+
+    bool ClearSelection();
+
+    string SelectionText();
 }
 
 /// <summary>
@@ -78,37 +95,94 @@ internal interface ITerminalInput
 /// and no full-screen one is up.
 /// </para>
 /// </remarks>
+/// <summary>
+/// What the pointer is doing, while a button is down.
+/// </summary>
+/// <remarks>
+/// One value rather than a drag flag beside an anchor beside "is the program tracking the mouse":
+/// selecting and reporting are alternatives, and a pair of booleans can say both at once. It also
+/// makes the gesture sticky, which is the point — releasing Shift halfway through a drag must not
+/// turn the rest of it into mouse reports.
+/// </remarks>
+internal abstract record TerminalGesture
+{
+    public sealed record None : TerminalGesture;
+
+    /// <summary>A press landed on the screen; it becomes a selection if the pointer travels.</summary>
+    public sealed record Armed(GridPoint Anchor, SelectionGranularity Granularity, PointF Origin) : TerminalGesture;
+
+    public sealed record Selecting(GridPoint Anchor, SelectionGranularity Granularity) : TerminalGesture;
+
+    /// <summary>The program asked for the mouse, so this drag is its input and not a selection.</summary>
+    public sealed record Reporting : TerminalGesture;
+}
+
 internal sealed class TerminalInputController : KeyboardMouseController
 {
     const int MaxUtf8BytesPerRune = 4;
 
+    const float DragThreshold = 3f;
+    const int MultiClickThresholdMs = 400;
+    const float MultiClickSlopPx = 4f;
+
     const InputModifiers CommandLike =
         InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
+
+    const InputModifiers RelevantMask =
+        InputModifiers.Shift | InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
 
     readonly View _view;
     readonly InputSystem _input;
     readonly ITerminalInput _terminal;
     readonly ITerminalCellGeometry _cells;
+    readonly IClipboard? _clipboard;
 
     float _wheelRemainder;
     (int Column, int Row)? _reportedCell;
+
+    TerminalGesture _gesture = new TerminalGesture.None();
+    int _clickCount;
+    int _lastClickTickMs;
+    PointF _lastClickPoint;
+    bool _hasLastClick;
 
     public TerminalInputController(
         View view,
         InputSystem input,
         ITerminalInput terminal,
-        ITerminalCellGeometry cells)
+        ITerminalCellGeometry cells,
+        IClipboard? clipboard = null)
     {
         _view = view;
         _input = input;
         _terminal = terminal;
         _cells = cells;
+        _clipboard = clipboard;
     }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.State != InputState.Pressed) return;
         if (!HasTheKeyboard()) return;
+
+        // Before the application's reserved chords, which is the whole carve-out: on macOS the copy
+        // and paste chords are Super, and every Super chord is otherwise handed straight back.
+        // Copy is claimed whether or not anything is highlighted, so that the chord means one thing;
+        // Ctrl+C on its own carries no Shift and is still the shell's interrupt.
+        if (IsClipboardChord(e.Key, e.Modifiers, KeyboardKey.C))
+        {
+            Copy();
+            e.Consume();
+            return;
+        }
+
+        if (IsClipboardChord(e.Key, e.Modifiers, KeyboardKey.V))
+        {
+            Paste();
+            e.Consume();
+            return;
+        }
+
         if (IsReservedForTheApplication(e.Key, e.Modifiers)) return;
 
         // Consumed whether or not it moved. A Shift+PageUp that reaches the top of the history and
@@ -173,28 +247,154 @@ internal sealed class TerminalInputController : KeyboardMouseController
             return;
         }
 
+        if (e.State == InputState.Released)
+        {
+            var gesture = _gesture;
+            _gesture = new TerminalGesture.None();
+
+            // A press that never travelled is a click, and a click clears whatever was highlighted.
+            if (gesture is TerminalGesture.Armed) Deselect();
+
+            // The drag is this controller's, and so is the release that ends it — wherever the
+            // pointer has wandered to by then.
+            if (gesture is TerminalGesture.Selecting)
+            {
+                e.Consume();
+                return;
+            }
+        }
+
         if (!_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
-        // Only a terminal with a shell in it takes the keyboard. One that has none would hold focus
-        // while declining every key, which eats the application's own chords for as long as the
-        // pointer is over nothing else — and it is what a click on the pane's start gate has to be
-        // able to reach past.
-        if (e.State == InputState.Pressed && _terminal.IsAcceptingInput) _input.StealFocus(this);
+        // A terminal with a screen takes the keyboard, which includes one whose shell has finished:
+        // the copy chord has to reach a pane the user is reading back through. One with no screen at
+        // all holds nothing, so the application's own chords survive a pointer resting over it — and
+        // that is what a click on the pane's start gate reaches past.
+        if (e.State == InputState.Pressed && _terminal.HasScreen) _input.StealFocus(this);
+
+        if (e.State == InputState.Pressed && e.Button == MouseButton.Left && WantsToSelect(e.Modifiers))
+        {
+            BeginSelection(e.Mouse.Point);
+            return;
+        }
 
         var action = e.State == InputState.Pressed
             ? TerminalMouseAction.Press
             : TerminalMouseAction.Release;
 
+        if (e.State == InputState.Pressed) _gesture = new TerminalGesture.Reporting();
+
         if (Report(ButtonOf(e.Button), action, TerminalKeyMap.From(e.Modifiers), e.Mouse.Point))
             e.Consume();
     }
 
+    /// <remarks>
+    /// The gesture ends, the selection does not. A drag whose release went somewhere else — a dialog
+    /// opened over the pane, the window lost the pointer — would otherwise still be extending on the
+    /// next move the pane saw, hours later. What was highlighted stays highlighted, because losing
+    /// focus is not the user unselecting it and the next press clears it anyway.
+    /// </remarks>
+    public override void OnFocusLost() => _gesture = new TerminalGesture.None();
+
     public override void OnMouseMoved(ref MouseMoveEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (!IsOnScreen() || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
+        if (!IsOnScreen()) return;
+
+        if (_gesture is TerminalGesture.Armed armed)
+        {
+            if (Travelled(e.Mouse.Point, armed.Origin) < DragThreshold) return;
+
+            _gesture = new TerminalGesture.Selecting(armed.Anchor, armed.Granularity);
+            _input.StealFocus(this);
+        }
+
+        if (_gesture is TerminalGesture.Selecting selecting)
+        {
+            ExtendTo(selecting, e.Mouse.Point);
+            e.Consume();
+            return;
+        }
+
+        if (!_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
         Report(HeldButton(e.Mouse), TerminalMouseAction.Move, TerminalKeyModifiers.None, e.Mouse.Point);
+    }
+
+    /// <remarks>
+    /// The selection is the pane's whenever the program is not tracking the mouse, and Shift takes it
+    /// back when the program is — the same chord that already takes back the wheel and the page keys.
+    /// </remarks>
+    bool WantsToSelect(InputModifiers modifiers)
+    {
+        if (!_terminal.HasScreen) return false;
+        if (modifiers.HasFlag(InputModifiers.Shift)) return true;
+
+        return !_terminal.IsAcceptingInput || _terminal.Modes.MouseTracking == MouseTracking.Off;
+    }
+
+    /// <remarks>
+    /// Deliberately unconsumed. The press still has to reach the pane underneath — the start gate
+    /// stacked over an exited screen is a button a click has to be able to press.
+    /// </remarks>
+    void BeginSelection(PointF point)
+    {
+        if (_cells.ClampToGrid(point) is not { } anchor)
+        {
+            _gesture = new TerminalGesture.None();
+            return;
+        }
+
+        var granularity = CountClick(point) switch
+        {
+            2 => SelectionGranularity.Word,
+            >= 3 => SelectionGranularity.Line,
+            _ => SelectionGranularity.Character,
+        };
+
+        if (granularity == SelectionGranularity.Character)
+        {
+            Deselect();
+            _gesture = new TerminalGesture.Armed(anchor, granularity, point);
+            return;
+        }
+
+        _gesture = new TerminalGesture.Selecting(anchor, granularity);
+        if (_terminal.Select(anchor, anchor, granularity)) _cells.RequestRedraw();
+    }
+
+    void ExtendTo(TerminalGesture.Selecting selecting, PointF point)
+    {
+        if (_cells.ClampToGrid(point) is not { } focus) return;
+        if (_terminal.Select(selecting.Anchor, focus, selecting.Granularity)) _cells.RequestRedraw();
+    }
+
+    void Deselect()
+    {
+        if (_terminal.ClearSelection()) _cells.RequestRedraw();
+    }
+
+    int CountClick(PointF point)
+    {
+        var now = Environment.TickCount;
+
+        var repeats = _hasLastClick
+            && now - _lastClickTickMs <= MultiClickThresholdMs
+            && Travelled(point, _lastClickPoint) <= MultiClickSlopPx;
+
+        _clickCount = repeats ? _clickCount + 1 : 1;
+        _lastClickTickMs = now;
+        _lastClickPoint = point;
+        _hasLastClick = true;
+
+        return _clickCount;
+    }
+
+    static float Travelled(PointF from, PointF to)
+    {
+        var dx = from.X - to.X;
+        var dy = from.Y - to.Y;
+        return MathF.Sqrt(dx * dx + dy * dy);
     }
 
     /// <remarks>
@@ -442,6 +642,43 @@ internal sealed class TerminalInputController : KeyboardMouseController
                 return false;
 
         return true;
+    }
+
+    /// <summary>
+    /// The clipboard chord for <paramref name="expected"/>: Cmd on macOS, Ctrl+Shift elsewhere.
+    /// </summary>
+    /// <remarks>
+    /// Ctrl+Shift rather than Ctrl, because Ctrl+C is the interrupt and a terminal that swallowed it
+    /// would be broken. Shift is already the modifier this pane takes back from the shell for the
+    /// wheel and the page keys, so it is one convention rather than three.
+    /// </remarks>
+    static bool IsClipboardChord(KeyboardKey key, InputModifiers modifiers, KeyboardKey expected)
+    {
+        if (key != expected) return false;
+
+        var held = modifiers & RelevantMask;
+
+        return OperatingSystem.IsMacOS()
+            ? held == InputModifiers.Super
+            : held == (InputModifiers.Control | InputModifiers.Shift);
+    }
+
+    void Copy()
+    {
+        if (_clipboard is null) return;
+
+        var text = _terminal.SelectionText();
+        if (text.Length == 0) return;
+
+        _clipboard.SetText(text);
+    }
+
+    void Paste()
+    {
+        if (!_terminal.IsAcceptingInput) return;
+        if (_clipboard?.GetText() is not { Length: > 0 } text) return;
+
+        _terminal.Paste(text);
     }
 
     static bool IsReservedForTheApplication(KeyboardKey key, InputModifiers modifiers) =>

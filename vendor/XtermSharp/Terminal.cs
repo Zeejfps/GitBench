@@ -158,6 +158,35 @@ namespace XtermSharp {
 		/// </summary>
 		public int ScrolledIntoHistory { get; private set; }
 
+		// PATCH 20: OSC 52 payloads seen since the last drain. Collected rather than dispatched
+		// through ITerminalDelegate for the reason the counter above is a counter: the adapter
+		// reads what a feed produced when the feed returns, and a delegate call would put the
+		// clipboard in the middle of the parser.
+		readonly List<string> clipboardCommands = new List<string> ();
+
+		const int MaxPendingClipboardCommands = 32;
+
+		internal void ClipboardCommand (string payload)
+		{
+			if (clipboardCommands.Count >= MaxPendingClipboardCommands)
+				return;
+
+			clipboardCommands.Add (payload);
+		}
+
+		/// <summary>
+		/// Takes the OSC 52 payloads received since the last call, oldest first
+		/// </summary>
+		public string [] DrainClipboardCommands ()
+		{
+			if (clipboardCommands.Count == 0)
+				return Array.Empty<string> ();
+
+			var drained = clipboardCommands.ToArray ();
+			clipboardCommands.Clear ();
+			return drained;
+		}
+
 		/// <summary>
 		/// Gets the kitty keyboard protocol flags in effect, or 0 for the legacy encoding
 		/// </summary>

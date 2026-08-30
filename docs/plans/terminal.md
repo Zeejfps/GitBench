@@ -106,8 +106,8 @@ copy-selection versus SIGINT.
 
 **Phase 5 — session and polish.** Resize and SIGWINCH, scrollback and wheel, selection and copy,
 window title, OSC 8 links, per-repo lifecycle, settings. Resize, scrollback, the wheel — mouse
-reports and alternate scroll included — and the per-repo lifecycle are done; see Findings. What
-remains here is selection and copy, paste, the title, OSC 8 and the settings.
+reports and alternate scroll included — the per-repo lifecycle, and selection, copy, paste and
+OSC 52 are done; see Findings. What remains here is the title, OSC 8 and the settings.
 
 **Phase 6 — conformance and throughput.** The corpus suite as a regression gate, streaming-repaint
 performance, and optionally `esctest` for anything the corpora miss.
@@ -335,6 +335,75 @@ needed before typing.
 rows nobody touched, and the store ends those terminals: a shell whose working directory has been
 pruned has nowhere to be. It reconciles against the live list on every change rather than matching
 removals, because a list says it was cleared or reset without saying what left.
+
+## Findings — selection, copy and paste, as built
+
+**A selection is carried by output, and the alternate screen is the special case the scrollback did
+not have.** The viewport's position and a selection are both properties of this screen rather than of
+the bytes, so both live on `TerminalSession` — but they do not obey the same rule. Clamping a scroll
+offset that is already zero is a no-op; clamping a *span* collapses both ends onto one row, so a
+selection is **dropped rather than clamped** when the text it covers leaves the history. Clamping
+would move the ends onto rows the user never highlighted and hand them text they never selected.
+
+And `LinesScrolled` cannot carry it on the alternate buffer. The counter increments there too —
+`Terminal.Scroll` takes the `ScrollTop == 0` branch whichever buffer is active, and the alternate
+buffer is always full — while `ScrollbackRows` stays zero, so shifting by it walks a selection off a
+grid whose only rows are the visible ones. A full-screen program under a scroll region does not
+increment it at all while its text still moves. So the shift applies only on the normal screen, a
+selection is cleared on either alt-screen crossing, and on the alternate screen it is positional and
+goes stale under the program — which is what every terminal does with it.
+
+`CSI 3J` and RIS empty the history with no line ever leaving the screen, so there is no count to
+carry a selection by and no resize to hang a clear off. `CopyRow` throws below `-ScrollbackRows`, on
+the UI thread, outside the one `try` the session has — so the text builder is total against whatever
+grid it is handed rather than trusting the span it was given.
+
+**The mouse has two coordinate systems and they are deliberately different methods.**
+`ITerminalCellGeometry.TryLocate` still refuses a point over the history, because a mouse report must
+never name a row that scrolled past. Selection needs the opposite, so it has its own member —
+`ClampToGrid`, named for the coordinate system it answers in and total where the other is partial.
+One method serving both would have put a history row within reach of the mouse encoder.
+
+**The gesture is decided once, at the press.** Selecting and reporting are alternatives, so they are
+one `TerminalGesture` value rather than a drag flag beside an anchor beside a mode read: releasing
+Shift halfway through a drag cannot turn the rest of it into mouse reports aimed at a program that
+never saw it start. Shift takes the drag back from a program tracking the mouse, which is the chord
+that already takes back the wheel and the page keys. The press itself is left unconsumed, so the
+start gate stacked over an exited screen is still clickable.
+
+**Copy is claimed above the reserved-chord check, which is the whole macOS carve-out.** Every Super
+chord is otherwise handed back to the application, so Cmd+C would have fallen through and done
+nothing. The chords are Cmd on macOS and Ctrl+Shift elsewhere — Ctrl+C stays the interrupt, and a
+terminal that swallowed it would be broken. Ctrl+Shift+C previously encoded to `0x03`, since
+`TerminalKeyEncoder.WriteLetter` ignores Shift when Ctrl is held; that is now intercepted before the
+encoder sees it. Copy is claimed whether or not anything is selected, so the chord means one thing.
+It reaches an exited screen too, which is why focus is taken for any pane with a screen rather than
+only one with a shell.
+
+**Paste is sent as-is, and the bracket is the only thing the encoder edits.** Line endings become the
+carriage return a keyboard would have sent, and `ESC [ 201 ~` is stripped from the payload when
+bracketing — without that a crafted clipboard closes the bracket early and the remainder runs as
+typed input. With bracketed paste off, a multi-line paste runs every line but the last. That is what
+every terminal does and it is a deliberate decision rather than an oversight; the test that pins it
+says so.
+
+**A paste used to freeze the window, and that is a write-path defect the read path had already
+solved.** The master is a blocking descriptor and a shell at a prompt has about a kilobyte of line
+discipline to take, so writing 200 KB on the UI thread stopped the window until the child had read
+all of it. `TerminalSession` now has a writer thread and a queue, mirroring the reader's own
+buffering, so `Write` never blocks the caller. The cost is that "the shell has read this" stops being
+true when `Write` returns, which is what `Flush` exists for and what the test doubles call.
+
+**OSC 52's read half is denied in the adapter, not in the app.** Denied with an empty reply rather
+than with silence, because a program that asks waits for it. There is deliberately no request case
+for a read anywhere above the seam: what cannot be constructed cannot be wired up later by accident.
+The write half is sanitised by `ClipboardText.FromProgram` — a clipboard is pasted into other
+terminals, so a carriage return that hides what follows it is not something a program gets to stage
+there on the user's behalf.
+
+**Not built, deliberately:** drag auto-scroll past the pane edge. The wheel already reaches the
+history, and the pane repaints on output rather than per frame, so it would have needed a tick of its
+own.
 
 ## Risks
 

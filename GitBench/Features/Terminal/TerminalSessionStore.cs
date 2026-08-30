@@ -40,6 +40,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
     readonly IPtySessionFactory _ptys;
     readonly ITerminalEngineFactory _engines;
     readonly IUiDispatcher _dispatcher;
+    readonly IClipboard? _clipboard;
     readonly TerminalLaunchFactory _launches;
 
     readonly Dictionary<Guid, TerminalInstance> _instances = new();
@@ -55,12 +56,14 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         IPtySessionFactory ptys,
         ITerminalEngineFactory engines,
         IUiDispatcher dispatcher,
-        TerminalLaunchFactory? launches = null)
+        TerminalLaunchFactory? launches = null,
+        IClipboard? clipboard = null)
     {
         _registry = registry;
         _ptys = ptys;
         _engines = engines;
         _dispatcher = dispatcher;
+        _clipboard = clipboard;
         _launches = launches ?? DefaultLaunch;
     }
 
@@ -116,7 +119,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         }
     }
 
-    ITerminalLaunch DefaultLaunch(Repo repo) => new ShellLaunch(repo.Path, _ptys, _engines);
+    ITerminalLaunch DefaultLaunch(Repo repo) => new ShellLaunch(repo.Path, _ptys, _engines, _clipboard);
 
     public void Dispose()
     {
