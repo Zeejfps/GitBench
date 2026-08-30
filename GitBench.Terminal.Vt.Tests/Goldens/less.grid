@@ -19,6 +19,12 @@
 ; and corpus/less.bin contains no DECSCUSR and no DEC mode 12, so the cursor blinks for the whole
 ; of this recording. All nine frames now read 'blink'.
 ;
+; Corrected 2026-08-29: the two frames taken after less left the alternate screen read
+; "modes focus ..." and "modes mouse=..." with no autowrap, which was gap 19 - Terminal.RestoreCursor
+; put back four saved modes that Terminal.SaveCursor never saved, so every DECRC and every ?1049l
+; reset DECAWM to the false those fields were born with. corpus/less.bin contains no DEC mode 7 at
+; all, so autowrap is on for the whole recording and all nine frames now say so.
+;
 # less  frame 1/9  after 88/1517 bytes  (alt screen enter)
 size 120x30
 alt on
@@ -276,7 +282,7 @@ cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
-modes focus mouse=off/x10 kitty=none
+modes autowrap focus mouse=off/x10 kitty=none
 continues none
 text
   r00-r29 ~blank~
@@ -292,7 +298,7 @@ cursor col=0 row=0 visible shape=block blink
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\less.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\less.exe"
-modes mouse=off/x10 kitty=none
+modes autowrap mouse=off/x10 kitty=none
 continues none
 text
   r00-r29 ~blank~

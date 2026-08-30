@@ -18,10 +18,11 @@ namespace GitBench.Terminal.Vt.Tests;
 /// per-engine variant would be recording an implementation rather than a terminal.
 /// </para>
 /// <para>
-/// There is no golden for the claude corpus and there must not be one. XtermSharp throws
-/// <c>NotImplementedException</c> out of <c>Terminal.MatchColor</c> on the first truecolor SGR, so
-/// no screen can be produced, and a golden nobody could audit against the bytes would be worthless.
-/// This case fails on that throw until the engine can replay the corpus.
+/// The claude corpus is the acceptance case and was the last to get a golden, because it could not
+/// have one until the engine could replay it: truecolor threw out of <c>Terminal.MatchColor</c>
+/// until patch 1. It was hand-audited like the others — its <c>;</c> block says which frames were
+/// read cell by cell and which were only checked structurally, so the next person knows what the
+/// file is worth.
 /// </para>
 /// </remarks>
 public class CorpusReplayTests

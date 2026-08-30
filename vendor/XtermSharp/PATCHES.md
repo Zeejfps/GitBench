@@ -432,3 +432,30 @@ them. Two clamps go beyond upstream, because a saved position can outlive the sc
 to `YBase + newRows - 1` beside the `SavedX` clamp that was already there. `SavedCursorSpec` covers
 the shrink, the grow, the narrowing, and a save and restore with no resize between them; three of its
 five cases fail without this patch.
+
+---
+
+## Patch 19 — a saved cursor saves the modes it restores (gap 19)
+
+`Terminal.RestoreCursor` put back four fields — `MarginMode`, `OriginMode`, `Wraparound`,
+`ReverseWraparound` — that `Terminal.SaveCursor` never captured. The four `saved*` backing fields
+were written in exactly one place, `Setup ()`, which sets them all to `false`. So every restore
+restored the same constant regardless of what the terminal was doing, and the one that matters is
+`Wraparound`: `Setup ()` turns DECAWM on at `:1229` because that is where xterm leaves it, and the
+first DECRC turned it back off.
+
+DECSC and DECRC carry autowrap and origin mode with the cursor, so restoring them is right; the
+missing half was the save. The reach is wider than `ESC 7` / `ESC 8`, because `?1048l` and `?1049l`
+both call `RestoreCursor` — which means **leaving the alternate screen turned autowrap off**, and
+every line a shell printed afterwards stopped wrapping. Claude Code, `vim` and `less` all bracket
+themselves in `?1049`, so all three corpora ended their recordings with DECAWM wrongly off.
+
+`SaveCursor` now stores the four beside the cursor and the attribute. `SavedCursorSpec` covers a
+bare `ESC 7` / `ESC 8`, a `?1049h` / `?1049l` round trip, a save taken while autowrap was off — which
+must come back off, so the fix cannot be "restore true" — and the same round trip asserted on the
+screen rather than the flag, by printing past the right margin and expecting the tail on the next
+row. Three of the four fail without this patch.
+
+The `vim` and `less` goldens had recorded the wrong value in their last two frames each and have
+been corrected; the correction is noted in both files' `;` blocks. This is also why `claude.grid`
+could only be written afterwards.

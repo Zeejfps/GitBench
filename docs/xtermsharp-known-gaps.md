@@ -2,14 +2,17 @@
 
 `dotnet test` on 2026-08-28, before any gap was fixed: **254 tests, 196 pass, 58 fail.**
 
-Fifteen of the sixteen gaps are now fixed, across fourteen patches applied in six passes. The
-suite stands at **276 tests, 275 pass, 1 fail**, and the one failure is not a gap:
+Eighteen of the nineteen gaps are now fixed, across fifteen patches applied in seven passes. The
+suite stands at **288 tests, all passing**. `claude.grid` now exists: it was hand-audited against
+`Corpus/claude.bin` on 2026-08-29 and its `;` block records which frames were read cell by cell and
+which were only checked structurally.
 
-- `Replay_ProducesTheGoldenScreens(claude)` — no golden. It must be hand-audited against the bytes
-  rather than blessed from engine output, which is a person's call, not a run of the suite.
+Gap 14 (OSC 8 hyperlinks) is the one left open, and it has no failing test: the URL is discarded
+rather than leaked onto the screen, so nothing can observe it through the seam until the seam
+carries a hyperlink.
 
-Gap 14 (OSC 8 hyperlinks) is open but has no failing test: the URL is discarded rather than leaked
-onto the screen, so nothing can observe it through the seam until the seam carries a hyperlink.
+Gap 19 was found by that audit rather than by a spec, which is the argument for auditing goldens by
+hand: the corpora were the only thing feeding a `?1049l` to the engine with the modes on.
 
 Every failure below is XtermSharp's. The suite is engine-agnostic — `TerminalEngines.cs` is the
 only file that names an implementation — and every expectation states what a correct xterm-class
@@ -43,10 +46,10 @@ all six `CorpusPropertiesSpec` claude cases, all three `ChunkInvarianceTests` cl
 `CorpusReplayTests.Replay_ProducesTheGoldenScreens(claude)`,
 `CorpusReplayTests.Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock`.
 
-**Why `claude.grid` has no golden, and must not get one.** The engine could not produce a single
-frame of that corpus, so there was nothing to audit against the bytes. It can now, and the rule is
-unchanged: a person reads the frames against `Corpus/claude.bin` and commits the result — never a
-copy of `claude.grid.actual`.
+**Why `claude.grid` had no golden for so long.** The engine could not produce a single frame of
+that corpus, so there was nothing to audit against the bytes. It could after this patch, and the
+golden was written on 2026-08-29 the way the rule requires: a person read the frames against
+`Corpus/claude.bin` and committed the result, never a copy of `claude.grid.actual`.
 
 **Cost of making truecolor real.** `CharData.cs:16` packs a cell's whole appearance into one int as
 `(flags << 18) | (fg << 9) | bg`: nine bits per colour, which holds a 256-entry palette index plus
@@ -95,8 +98,8 @@ terminal behaviour, and have been corrected (verified byte by byte against `Corp
 
 All three pass.
 
-The remaining three — `Replay_ProducesTheGoldenScreens(claude)` (no golden yet, and it must be
-hand-audited against the bytes rather than blessed from engine output),
+The remaining three — `Replay_ProducesTheGoldenScreens(claude)` (no golden at the time; it had to be
+hand-audited against the bytes rather than blessed from engine output, and now is),
 `Replay_OfTheAcceptanceCorpus_CountsOneCompletedFramePerSynchronizedBlock` (gap 9) and
 `WholeSessionFedOneByteAtATime_ProducesTheSameGrid` (gap 2) — are blocked on other gaps as
 predicted. `AttributeSpec.Attributes_InOneSequence_AreAllCarriedAsBits` is listed here and under
@@ -410,6 +413,27 @@ that way.
 
 **Fixed by patch 18.** The field is a buffer row again on both sides, and the restore is clamped to
 the screen the buffer actually has. `SavedCursorSpec` pins it.
+
+### 19. A restored cursor restores modes that were never saved — FIXED
+
+`Terminal.cs:1038-1041` — `RestoreCursor` assigns `MarginMode`, `OriginMode`, `Wraparound` and
+`ReverseWraparound` from four `saved*` fields, and `SaveCursor` at `:1025` does not write any of
+them. `Setup ()` is the only writer, at `:1239-1242`, and it sets all four to `false`. So a restore
+does not restore anything — it applies a constant.
+
+`Wraparound` is the one that shows. `Setup ()` turns DECAWM on at `:1229` because that is where
+xterm leaves it, and the first `RestoreCursor` turns it off; a shell then prints past the right
+margin and the overflow is dropped instead of wrapping onto the next row. `?1048l` and `?1049l` both
+call `RestoreCursor`, so **leaving the alternate screen** is enough, and Claude Code, `vim` and
+`less` all bracket themselves in `?1049`.
+
+Found by auditing `claude.grid` rather than by a spec, and it had already been blessed into two
+goldens: the last two frames of `vim.grid` and of `less.grid` recorded `modes` lines with no
+`autowrap`. None of the five corpora contains a DEC mode 7 anywhere, so autowrap is on in every
+frame of every one of them. Both files have been corrected and say so in their `;` blocks.
+
+**Fixed by patch 19.** `SaveCursor` stores the four beside the cursor and the attribute.
+`SavedCursorSpec` pins the round trip in both directions and on the screen as well as the flag.
 
 
 ## Configuration, not a defect

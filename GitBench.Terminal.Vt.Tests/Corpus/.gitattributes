@@ -1,0 +1,5 @@
+# Recordings are exact byte streams. Without this git treats one with no NUL byte as
+# text and strips the CR from every CRLF on a Windows commit, which is what happened to
+# smoke, vim and claude: the bytes stopped matching the count in their inventory and the
+# goldens failed. The inventories are text and stay text.
+*.bin -text -diff

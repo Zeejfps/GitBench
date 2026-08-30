@@ -77,6 +77,55 @@ public class SavedCursorSpec
         Assert.Equal((9, 2), engine.CursorAt());
     }
 
+    [Fact]
+    public void RestoringACursor_LeavesAutoWrapWhereItWas()
+    {
+        // DECSC and DECRC carry autowrap with the cursor, so a restore may only put back what the
+        // matching save took. A restore that asserts a default instead turns every ?1049l into a
+        // silent DECAWM reset, and the wrapping of every line printed afterwards is wrong.
+        using var engine = EngineUnderTest.Create(columns: 80, rows: 6);
+
+        engine.Feed($"{Esc}7{Esc}8");
+
+        Assert.True(engine.State.Modes.AutoWrap);
+    }
+
+    [Fact]
+    public void LeavingTheAlternateScreen_LeavesAutoWrapWhereItWas()
+    {
+        using var engine = EngineUnderTest.Create(columns: 80, rows: 6);
+
+        engine.Feed($"{Csi}?1049h");
+        engine.Feed($"{Csi}?1049l");
+
+        Assert.True(engine.State.Modes.AutoWrap);
+    }
+
+    [Fact]
+    public void ACursorSavedWithAutoWrapOff_RestoresItOff()
+    {
+        using var engine = EngineUnderTest.Create(columns: 80, rows: 6);
+
+        engine.Feed($"{Csi}?7l{Esc}7");
+        engine.Feed($"{Csi}?7h");
+        engine.Feed($"{Esc}8");
+
+        Assert.False(engine.State.Modes.AutoWrap);
+    }
+
+    [Fact]
+    public void TextPrintedAfterLeavingTheAlternateScreen_StillWraps()
+    {
+        // What the mode is for, stated as the screen rather than the flag.
+        using var engine = EngineUnderTest.Create(columns: 10, rows: 6);
+
+        engine.Feed($"{Csi}?1049h{Csi}?1049l");
+        engine.Feed($"{Csi}1;1Habcdefghijklm");
+
+        Assert.Equal("abcdefghij", engine.RowText(0).TrimEnd());
+        Assert.Equal("klm", engine.RowText(1).TrimEnd());
+    }
+
     /// <summary>A shell that has printed enough to fill its screen, with the cursor left at a prompt
     /// on the last line it wrote.</summary>
     static ITerminalEngine Shell(int rows)

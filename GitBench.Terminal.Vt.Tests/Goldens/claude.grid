@@ -1,0 +1,1048 @@
+; claude.grid - Claude Code starting up: an MCP-approval prompt on the normal screen, then the
+; alternate screen for the session itself, then teardown. The acceptance corpus, and the one that
+; exercises the paths the others do not: 47 truecolor SGRs, 40 mode-2026 boundaries, OSC 8, kitty
+; keyboard pops and modifyOtherKeys.
+;
+; Audited against corpus/claude.bin on 2026-08-29, byte offsets from the recording itself.
+;
+; Frames 1, 2, 3, 4, 5, 22 and 23 were read against the bytes in full - every SGR run matched to
+; the sequence that set it, every column matched to the CUP and CUF arithmetic that placed it:
+;
+;   f1 (b95)   ?25l at 49 leaves the cursor hidden, [H at 29 homes it, OSC 0;claude at 32 sets both
+;              names, ?2004h at 55 and ?1004h at 63 are the two modes on. [2J at 22 left it blank.
+;   f2 (b1171) the MCP prompt. The 120-cell rule on r01 is bytes 114-474, exactly 360 bytes of
+;              U+2500, and does not wrap because a CUP follows it. Words are separated by [1C, not
+;              by spaces, so every gap cell keeps the default style - which is why s02 reads
+;              "..g.ggg.ggg..." and not a solid run. [>0q at 1147 is XTVERSION, not DECSCUSR: the
+;              cursor stays a blinking block. The OSC 8 at 786 and its close at 886 leave no text
+;              on the screen (gap 14 - the URL is discarded, not leaked), and r05/r06 read as the
+;              sentence without it.
+;   f3 (b1251) ?1049h at 1243. The cursor carries into the alternate screen at col 119 row 12,
+;              where 12 CR/LF pairs and the [120C at 1237 had left it. The alt buffer has no
+;              history, so scrollback is 0 for every frame until it is left again.
+;   f4 (b1500) OSC 0 at 1464 sets the title to U+2733 + " Claude Code" - the payload is UTF-8 and
+;              is decoded as UTF-8. ?1003h and ?1006h at 1271/1279 make the mouse anyevent/sgr.
+;   f5 (b2973) the banner. [48;2;0;0;0m at 1528 gives style f, and [49m at 1671 returns to style e
+;              - foreground #d77757 on the default background, not to default - which is the one
+;              place a truecolor background is set and cleared. r30 continues r29: the rule at
+;              1869 is 360 bytes and fills r29 to column 119, so the U+276F at 2232 wraps onto the
+;              next row rather than a CUP placing it there.
+;   f22 (b5239) ?1049l at 5231 restores the cursor saved at f3 - col 119, row 12. The mouse is
+;              already off: it was reset at 5176-5208, before the alt screen was left.
+;   f23 (b5558) OSC 0; at 5531 clears both names to the empty string; ?1004l at 5550 is the last
+;              mode off.
+;
+; The rest were checked structurally rather than cell by cell: 23 frames for the corpus's 20
+; mode-2026 closes plus the two ?1049 transitions plus end of stream; offsets strictly increasing;
+; every frame 120x34, matching the recording header; alt off for exactly frames 1, 2, 22 and 23;
+; scrollback 0 throughout, since the normal screen is only ever addressed inside its 34 rows and
+; the alternate screen has no history to keep.
+;
+; Written after gap 19 was fixed. Before it, frames 22 and 23 read "modes ... " with no autowrap:
+; Terminal.RestoreCursor put back four saved modes that Terminal.SaveCursor never saved, so ?1049l
+; reset DECAWM to false. corpus/claude.bin contains no DEC mode 7 anywhere, so autowrap is on in
+; all 23 frames.
+;
+# claude  frame 1/23  after 95/5558 bytes  (sync-frame close)
+size 120x34
+alt off
+cursor col=0 row=0 hidden shape=block blink
+scrollback 0
+title "claude"
+icon "claude"
+modes autowrap bracketed-paste focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r33 ~blank~
+style
+  s00-s33 ~default~
+legend
+    .  default
+
+# claude  frame 2/23  after 1171/5558 bytes  (sync-frame close)
+size 120x34
+alt off
+cursor col=36 row=11 hidden shape=block blink
+scrollback 0
+title "claude"
+icon "claude"
+modes autowrap bracketed-paste focus mouse=off/x10 kitty=none
+continues none
+text
+  r00 ~blank~
+  r01 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r02 |  2 new MCP servers found in this project|
+  r03 |  Select any you wish to enable.|
+  r04 ~blank~
+  r05 |  MCP servers may execute code or access system resources. All tool calls require approval. Learn more in the MCP|
+  r06 |  documentation.|
+  r07 ~blank~
+  r08 |  ❯ [✔] gitbench-gui|
+  r09 |    [✔] rider|
+  r10 |       Enable selected|
+  r11 | Space to select · Esc to reject all|
+  r12-r33 ~blank~
+style
+  s00 ~default~
+  s01 |ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff|
+  s02 |..g.ggg.ggg.ggggggg.ggggg.gg.gggg.ggggggg|
+  s03 |..cccccc.ccc.ccc.cccc.cc.ccccccc|
+  s04-s07 ~default~
+  s08 |..e.bbb.eeeeeeeeeeee|
+  s09 |....bbb......|
+  s10 |.......aaaaaa.aaaaaaaa|
+  s11 |.ddddd.dd.dddddd.d.ddd.dd.dddddd.ddd|
+  s12-s33 ~default~
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #999999 on default
+  d  #999999 on default italic
+  e  #b1b9f9 on default
+  f  #ffc107 on default
+  g  #ffc107 on default bold
+
+# claude  frame 3/23  after 1251/5558 bytes  (alt screen enter)
+size 120x34
+alt on
+cursor col=119 row=12 hidden shape=block blink
+scrollback 0
+title "claude"
+icon "claude"
+modes autowrap bracketed-paste focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r33 ~blank~
+style
+  s00-s33 ~default~
+legend
+    .  default
+
+# claude  frame 4/23  after 1500/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=119 row=33 hidden shape=block blink
+scrollback 0
+title "✳ Claude Code"
+icon "✳ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues none
+text
+  r00-r33 ~blank~
+style
+  s00-s33 ~default~
+legend
+    .  default
+
+# claude  frame 5/23  after 2973/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "✳ Claude Code"
+icon "✳ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r27 ~blank~
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ Try "fix typecheck errors"|
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                 /rc connecting…|
+style
+  s00 ~default~
+  s01 |eeffffff...aaaaaaaaaaa.dddddddd|
+  s02 |eefffffee..dddddddddddddddddddddddddddddddddddd|
+  s03 |eeeeeeeee..dddddddddddddddddd|
+  s04-s27 ~default~
+  s28 |......................................................................................................dddddddddddddddd|
+  s29 |cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|
+  s30 |..bbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s31 |cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|
+  s32 |..ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdddddddddddddddddddddddddddddddddddddddddddd|
+  s33 |..ggggggggggggggggdddddddddddddddddddd.................................................................ggggggggggggggg|
+legend
+    .  default
+  a  default on default bold
+  b  default on default dim
+  c  #888888 on default
+  d  #999999 on default
+  e  #d77757 on default
+  f  #d77757 on #000000
+  g  #ffc107 on default
+
+# claude  frame 6/23  after 3193/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "✳ Claude Code"
+icon "✳ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r27 ~blank~
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ Try "fix typecheck errors"|
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                             /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s27 ~default~
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |..bbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................ccc|
+legend
+    .  default
+  a  default on default bold
+  b  default on default dim
+  c  #4eba65 on default
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+
+# claude  frame 7/23  after 3258/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=31 row=30 visible shape=block blink
+scrollback 0
+title "◐ Claude Code"
+icon "◐ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r27 ~blank~
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ say hello in exactly one word|
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                             /rc|
+style
+  s00 ~default~
+  s01 |eeffffff...aaaaaaaaaaa.dddddddd|
+  s02 |eefffffee..dddddddddddddddddddddddddddddddddddd|
+  s03 |eeeeeeeee..dddddddddddddddddd|
+  s04-s27 ~default~
+  s28 |......................................................................................................dddddddddddddddd|
+  s29 |cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|
+  s30 ~default~
+  s31 |cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc|
+  s32 |..ggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggdddddddddddddddddddddddddddddddddddddddddddd|
+  s33 |..ggggggggggggggggdddddddddddddddddddd.............................................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #888888 on default
+  d  #999999 on default
+  e  #d77757 on default
+  f  #d77757 on #000000
+  g  #ffc107 on default
+
+# claude  frame 8/23  after 3581/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◐ Claude Code"
+icon "◐ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |* Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 9/23  after 3650/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◐ Claude Code"
+icon "◐ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✢ Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 10/23  after 3715/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◐ Claude Code"
+icon "◐ Claude Code"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |· Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 11/23  after 3807/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◐ Hello in one word"
+icon "◐ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✢ Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 12/23  after 3871/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◐ Hello in one word"
+icon "◐ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |* Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 13/23  after 3963/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✶ Perusing… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.ffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 14/23  after 4036/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✶ Crunching… |
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.fffffffffff|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 15/23  after 4149/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✻ Crunching… (1s · ↓ 1 tokens)|
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.fffffffffffeeeeeee.eeeeeeeee|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 16/23  after 4218/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✽ Crunching… (1s · ↓ 1 tokens)|
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.fffffffffffeeeeeee.eeeeeeeee|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 17/23  after 4310/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "✳ Hello in one word"
+icon "✳ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07-r26 ~blank~
+  r27 |✻ Crunching… (1s · ↓ 1 tokens)|
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |cciiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii|
+  s07-s26 ~default~
+  s27 |f.fffffffffffeeeeeee.eeeeeeeee|
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on #373737
+
+# claude  frame 18/23  after 4486/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "✳ Hello in one word"
+icon "✳ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07 ~blank~
+  r08 |● Hello|
+  r09 ~blank~
+  r10 |✻ Churned for 1s · done 1:05 PM|
+  r11-r27 ~blank~
+  r28 |                                                                                                      ● high · /effort|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                             /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |ccjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|
+  s07 ~default~
+  s08 |i......|
+  s09 ~default~
+  s10 |e.eeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s11-s27 ~default~
+  s28 |......................................................................................................eeeeeeeeeeeeeeee|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 ~default~
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on default
+  j  #ffffff on #373737
+
+# claude  frame 19/23  after 4617/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "✳ Hello in one word"
+icon "✳ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07 ~blank~
+  r08 |● Hello|
+  r09 ~blank~
+  r10 |✻ Churned for 1s · done 1:05 PM|
+  r11-r27 ~blank~
+  r28 |                                                   You've used 83% of your weekly limit · resets 9am (America/Chicago)|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                             /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |ccjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|
+  s07 ~default~
+  s08 |i......|
+  s09 ~default~
+  s10 |e.eeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s11-s27 ~default~
+  s28 |...................................................hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 ~default~
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on default
+  j  #ffffff on #373737
+
+# claude  frame 20/23  after 4790/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=anyevent/sgr kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07 ~blank~
+  r08 |● Hello|
+  r09 ~blank~
+  r10 |✻ Churned for 1s · done 1:05 PM|
+  r11-r27 ~blank~
+  r28 |                                                                                ✔ Update installed · Restart to update|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle)                                                                             /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |ccjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|
+  s07 ~default~
+  s08 |i......|
+  s09 ~default~
+  s10 |e.eeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s11-s27 ~default~
+  s28 |................................................................................bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 ~default~
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeee.............................................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on default
+  j  #ffffff on #373737
+
+# claude  frame 21/23  after 5224/5558 bytes  (sync-frame close)
+size 120x34
+alt on
+cursor col=2 row=30 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=off/x10 kitty=none
+continues r30
+text
+  r00 ~blank~
+  r01 | ▐▛███▛█   Claude Code v2.1.250|
+  r02 |▝▜██████▀  Opus 5 with high effort · Claude Max|
+  r03 |  ▝▝ ▝▝    G:\Dev\C#\GitBench|
+  r04-r05 ~blank~
+  r06 |❯ say hello in exactly one word                                                                                         |
+  r07 ~blank~
+  r08 |● Hello|
+  r09 ~blank~
+  r10 |✻ Churned for 1s · done 1:05 PM|
+  r11 ~blank~
+  r12 |❯ /exit                                                                                                                 |
+  r13-r25 ~blank~
+  r26 |* Beaming… |
+  r27 |  ⎿  Tip: Send messages to Claude while it works to steer Claude in real-time|
+  r28 |                                                                                ✔ Update installed · Restart to update|
+  r29 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r30 |❯ |
+  r31 |────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────|
+  r32 |  ⚠ Transcript saving is off — inherited CLAUDE_CODE_CHILD_SESSION marker · restart with CLAUDE_CODE_FORCE_SESSION_PE…|
+  r33 |  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt                                                          /rc|
+style
+  s00 ~default~
+  s01 |ffgggggg...aaaaaaaaaaa.eeeeeeee|
+  s02 |ffgggggff..eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s03 |fffffffff..eeeeeeeeeeeeeeeeee|
+  s04-s05 ~default~
+  s06 |ccjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|
+  s07 ~default~
+  s08 |i......|
+  s09 ~default~
+  s10 |e.eeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s11 ~default~
+  s12 |ccjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj|
+  s13-s25 ~default~
+  s26 |f.fffffffff|
+  s27 |eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s28 |................................................................................bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb|
+  s29 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s30 |ee|
+  s31 |dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd|
+  s32 |..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee|
+  s33 |..hhhhhhhhhhhhhhhheeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee..........................................................bbb|
+legend
+    .  default
+  a  default on default bold
+  b  #4eba65 on default
+  c  #505050 on #373737
+  d  #888888 on default
+  e  #999999 on default
+  f  #d77757 on default
+  g  #d77757 on #000000
+  h  #ffc107 on default
+  i  #ffffff on default
+  j  #ffffff on #373737
+
+# claude  frame 22/23  after 5239/5558 bytes  (alt screen leave)
+size 120x34
+alt off
+cursor col=119 row=12 visible shape=block blink
+scrollback 0
+title "◑ Hello in one word"
+icon "◑ Hello in one word"
+modes autowrap bracketed-paste focus mouse=off/x10 kitty=none
+continues none
+text
+  r00-r33 ~blank~
+style
+  s00-s33 ~default~
+legend
+    .  default
+
+# claude  frame 23/23  after 5558/5558 bytes  (end of stream)
+size 120x34
+alt off
+cursor col=0 row=0 visible shape=block blink
+scrollback 0
+title ""
+icon ""
+modes autowrap mouse=off/x10 kitty=none
+continues none
+text
+  r00-r33 ~blank~
+style
+  s00-s33 ~default~
+legend
+    .  default

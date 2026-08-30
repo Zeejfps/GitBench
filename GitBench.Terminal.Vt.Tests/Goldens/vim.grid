@@ -20,6 +20,12 @@
 ; at byte 87, before either, so it reads 'blink'; frames 2 to 9 are taken at byte 617 or later and
 ; stay 'steady'. There is no DECSCUSR anywhere in corpus/vim.bin, so the shape stays block.
 ;
+; Corrected 2026-08-29: the two frames taken after vim left the alternate screen read
+; "modes focus ..." and "modes mouse=..." with no autowrap, which was gap 19 - Terminal.RestoreCursor
+; put back four saved modes that Terminal.SaveCursor never saved, so every DECRC and every ?1049l
+; reset DECAWM to the false those fields were born with. corpus/vim.bin contains no DEC mode 7 at
+; all, so autowrap is on for the whole recording and all nine frames now say so.
+;
 # vim  frame 1/9  after 87/4325 bytes  (alt screen enter)
 size 120x30
 alt on
@@ -341,7 +347,7 @@ cursor col=0 row=0 hidden shape=block steady
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
-modes focus mouse=off/x10 kitty=none
+modes autowrap focus mouse=off/x10 kitty=none
 continues none
 text
   r00-r29 ~blank~
@@ -357,7 +363,7 @@ cursor col=0 row=0 visible shape=block steady
 scrollback 0
 title "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
 icon "C:\\Program Files\\Git\\usr\\bin\\vim.exe"
-modes mouse=off/x10 kitty=none
+modes autowrap mouse=off/x10 kitty=none
 continues none
 text
   r00-r29 ~blank~
