@@ -9,6 +9,7 @@ public interface IGitRepositoryReader
     // Whether the ignore rules match a path, asked with `--no-index` so the answer is the rules'
     // and not "it is tracked, so no".
     bool IsPathIgnored(Repo repo, string relativePath);
+    IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths);
     // Every repo-relative path git tracks (`git ls-files --cached`), sorted and deduplicated.
     // Backs the assistant's file search, so a path it half-remembers can be resolved to a real one.
     IReadOnlyList<string> ListTrackedFiles(Repo repo);

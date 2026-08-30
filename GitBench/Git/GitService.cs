@@ -43,6 +43,8 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Which mutating op serializes against which is GitRepoLocks' story; read it there.
     private readonly GitRepoLocks _locks;
 
+    private static readonly IReadOnlySet<string> NoIgnoredPaths = new HashSet<string>(StringComparer.Ordinal);
+
     public GitService(IRepoActivityTracker activity)
     {
         _runner = new GitProcessRunner(activity);
@@ -3702,6 +3704,24 @@ public sealed class GitService : IGitService, IGitRawConfigReader
             new[] { "check-ignore", "--no-index", "-q", "--", relativePath },
             GitProcessRunner.GitLaunch.Direct);
         return result.Ok;
+    }
+
+    public IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths)
+    {
+        if (relativePaths.Count == 0) return NoIgnoredPaths;
+
+        var result = _runner.Run(
+            repo.Path,
+            new[] { "check-ignore", "--no-index", "--stdin", "-z" },
+            GitProcessRunner.GitLaunch.Direct,
+            stdin: string.Concat(relativePaths.Select(path => path + '\0')));
+
+        if (!result.Started || result.ExitCode > 1) return NoIgnoredPaths;
+
+        var matched = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in result.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            matched.Add(path);
+        return matched;
     }
 
     // `--cached -z` lists index entries, so an unmerged path arrives once per stage; the set

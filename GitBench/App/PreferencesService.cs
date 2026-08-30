@@ -59,6 +59,8 @@ public sealed class PreferencesService : IDisposable
 
     public void SetCommitDetailsWidth(float width) => Mutate(p => p with { CommitDetailsWidth = width });
 
+    public void SetFileBrowserWidth(float width) => Mutate(p => p with { FileBrowserWidth = width });
+
     public void SetCommitDetailsSplitFraction(float fraction) => Mutate(p => p with { CommitDetailsSplitFraction = fraction });
 
     public void SetFileViewMode(FileViewMode mode) => Mutate(p => p with { FileViewMode = mode });

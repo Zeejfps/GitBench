@@ -1,4 +1,5 @@
 using GitBench.Features.Branches;
+using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using ZGF.Observable;
 
@@ -58,6 +59,8 @@ public interface IRepoRegistry
     void EndRenameRepo();
     BranchesUiState GetBranchesUi(Guid repoId);
     void SetBranchesUi(Guid repoId, BranchesUiState state);
+    FileBrowserUiState GetFileBrowserUi(Guid repoId);
+    void SetFileBrowserUi(Guid repoId, FileBrowserUiState state);
     IEnumerable<Repo> GetWorktrees(Guid primaryId);
     IEnumerable<Repo> GetSubmodules(Guid primaryId);
     // Shared fold for a row's children (worktrees AND submodules). A live observable so the

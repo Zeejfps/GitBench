@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using GitBench.Features.Branches;
+using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using GitBench.Infrastructure;
 
@@ -8,7 +9,7 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 6;
+    private const int CurrentSchemaVersion = 7;
     private const string DefaultGroupName = "Ungrouped";
     // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
     private const string LegacyDefaultGroupName = "Repositories";
@@ -18,6 +19,7 @@ public static class RepoStateStore
         List<GroupState> Groups,
         Guid? ActiveRepoId,
         Dictionary<Guid, BranchesUiState> BranchesUi,
+        Dictionary<Guid, FileBrowserUiState> FileBrowserUi,
         Dictionary<Guid, bool> WorktreesExpanded,
         Dictionary<Guid, Guid> RepoIdentityOverride,
         Dictionary<int, Guid> Hotkeys);
@@ -29,6 +31,7 @@ public static class RepoStateStore
         public List<GroupState>? Groups { get; set; }
         public Guid? ActiveRepoId { get; set; }
         public Dictionary<Guid, BranchesUiState>? BranchesUi { get; set; }
+        public Dictionary<Guid, FileBrowserUiState>? FileBrowserUi { get; set; }
         public Dictionary<Guid, bool>? WorktreesExpanded { get; set; }
         // repoId → identity profile id (manual override of auto-matching). Absent in pre-v4 files.
         public Dictionary<Guid, Guid>? RepoIdentityOverride { get; set; }
@@ -57,6 +60,7 @@ public static class RepoStateStore
                 groups,
                 file.ActiveRepoId,
                 file.BranchesUi ?? new Dictionary<Guid, BranchesUiState>(),
+                file.FileBrowserUi ?? new Dictionary<Guid, FileBrowserUiState>(),
                 file.WorktreesExpanded ?? new Dictionary<Guid, bool>(),
                 file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>(),
                 hotkeys);
@@ -148,11 +152,12 @@ public static class RepoStateStore
         IReadOnlyList<GroupState> groups,
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
+        IReadOnlyDictionary<Guid, FileBrowserUiState> fileBrowserUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
         IReadOnlyDictionary<int, Guid> hotkeys)
         => AtomicFile.WriteAllText(path,
-            Serialize(repos, groups, activeId, branchesUi, worktreesExpanded, repoIdentityOverride, hotkeys));
+            Serialize(repos, groups, activeId, branchesUi, fileBrowserUi, worktreesExpanded, repoIdentityOverride, hotkeys));
 
     // Snapshots the live model into the on-disk shape and serializes it. Runs on the caller's thread
     // (it reads the mutable model, so it must), producing an immutable string the disk write can take
@@ -162,6 +167,7 @@ public static class RepoStateStore
         IReadOnlyList<GroupState> groups,
         Guid? activeId,
         IReadOnlyDictionary<Guid, BranchesUiState> branchesUi,
+        IReadOnlyDictionary<Guid, FileBrowserUiState> fileBrowserUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
         IReadOnlyDictionary<int, Guid> hotkeys)
@@ -173,6 +179,7 @@ public static class RepoStateStore
             Groups = groups.ToList(),
             ActiveRepoId = activeId,
             BranchesUi = branchesUi.ToDictionary(kv => kv.Key, kv => kv.Value),
+            FileBrowserUi = fileBrowserUi.ToDictionary(kv => kv.Key, kv => kv.Value),
             WorktreesExpanded = worktreesExpanded.ToDictionary(kv => kv.Key, kv => kv.Value),
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
             Hotkeys = hotkeys.ToDictionary(kv => kv.Key, kv => kv.Value),
@@ -192,6 +199,7 @@ public static class RepoStateStore
             new List<GroupState> { defaultGroup },
             null,
             new Dictionary<Guid, BranchesUiState>(),
+            new Dictionary<Guid, FileBrowserUiState>(),
             new Dictionary<Guid, bool>(),
             new Dictionary<Guid, Guid>(),
             new Dictionary<int, Guid>());

@@ -76,6 +76,12 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
         if (e.Phase != EventPhase.Bubbling) return;
         if (e.State != InputState.Pressed) return;
 
+        if (!IsOnScreen())
+        {
+            _input.Blur(this);
+            return;
+        }
+
         var shift = (e.Modifiers & InputModifiers.Shift) != 0;
 
         if (RowActions?.Invoke() is { } actions)
@@ -143,6 +149,15 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
             OnViewInDiff();
             e.Consume();
         }
+    }
+
+    private bool IsOnScreen()
+    {
+        for (var view = _view; view is not null; view = view.Parent)
+            if (!view.IsVisible)
+                return false;
+
+        return true;
     }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)

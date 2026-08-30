@@ -62,8 +62,19 @@ internal sealed record ModeSwitcherView : Widget
                                 new Segment
                                 {
                                     Label = L.T(s => s.AppModeTerminal),
-                                    Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
+                                    Radius = default,
                                     Model = vm.TerminalSegment,
+                                }.WithController<KbmController>(),
+                                new Box
+                                {
+                                    Width = 1f,
+                                    Background = theme.Styles.Bind(t => t.ModeSwitcher.SegmentSeparator),
+                                },
+                                new Segment
+                                {
+                                    Label = L.T(s => s.AppModeFiles),
+                                    Radius = new BorderRadiusStyle { TopRight = innerRadius, BottomRight = innerRadius },
+                                    Model = vm.FilesSegment,
                                 }.WithController<KbmController>(),
                             ],
                         },

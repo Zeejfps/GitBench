@@ -1,4 +1,5 @@
 using GitBench.Features.Branches;
+using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -13,6 +14,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     private readonly string _statePath;
     private readonly BackgroundFileWriter _writer;
     private readonly Dictionary<Guid, BranchesUiState> _branchesUi;
+    private readonly Dictionary<Guid, FileBrowserUiState> _fileBrowserUi;
     private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
     private readonly Dictionary<int, Guid> _hotkeys;
@@ -31,6 +33,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         _statePath = statePath;
         _writer = new BackgroundFileWriter(statePath);
         _branchesUi = new Dictionary<Guid, BranchesUiState>(initial.BranchesUi);
+        _fileBrowserUi = new Dictionary<Guid, FileBrowserUiState>(initial.FileBrowserUi);
         _expanded = new Dictionary<Guid, State<bool>>();
         foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
         _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
@@ -369,6 +372,19 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         Save();
     }
 
+    public FileBrowserUiState GetFileBrowserUi(Guid repoId)
+    {
+        if (_fileBrowserUi.TryGetValue(repoId, out var state))
+            return state.Clone();
+        return new FileBrowserUiState();
+    }
+
+    public void SetFileBrowserUi(Guid repoId, FileBrowserUiState state)
+    {
+        _fileBrowserUi[repoId] = state.Clone();
+        Save();
+    }
+
     public IEnumerable<Repo> GetWorktrees(Guid primaryId)
     {
         foreach (var r in Repos)
@@ -677,7 +693,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         // Serialize here (must read the live model on this thread); hand the finished text to the
         // background writer so the disk write — the slow, UI-thread-stalling part — runs off-thread.
         var json = RepoStateStore.Serialize(Repos, Groups.Select(g => g.ToState()).ToList(),
-            Active.Value?.Id, _branchesUi, collapsed, _identityOverride, _hotkeys);
+            Active.Value?.Id, _branchesUi, _fileBrowserUi, collapsed, _identityOverride, _hotkeys);
         _writer.Schedule(json);
     }
 
