@@ -58,6 +58,7 @@ internal sealed class GitBenchAppHost : IDisposable
         app.UsePlatformIcons();
         app.UseNativeAppMenu();
         app.UseUpdateChecks();
+        app.UseQuitConfirmation();
 
         return new GitBenchAppHost(preferences, app);
     }

@@ -96,6 +96,24 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     public bool CanStart => _render.Value is not (TerminalRenderState.Running or TerminalRenderState.Starting);
 
     /// <summary>
+    /// Whether there is a shell process here that disposing this terminal would kill — the question
+    /// asked before something closes the application or drops the repository.
+    /// </summary>
+    /// <remarks>
+    /// Not read off the render state, because two of them lie about it in opposite directions.
+    /// <see cref="TerminalRenderState.Faulted"/> means reading the terminal failed, not that the
+    /// shell did: the child is untouched and still needs ending, so a faulted terminal counts.
+    /// <see cref="TerminalRenderState.Starting"/> covers a spawn that has been asked for and one
+    /// already in flight, neither of which holds a session to ask. What is left is the session
+    /// itself, and the only thing that knows whether its child is gone is
+    /// <see cref="TerminalSession.Exited"/>.
+    /// </remarks>
+    public bool HasLiveShell =>
+        !_disposed
+        && (_render.Value is TerminalRenderState.Starting
+            || (_session is { } session && !session.Exited.IsCompleted));
+
+    /// <summary>
     /// The shell's current modes, which decide how a key is encoded. The default modes when there is
     /// no shell, which encode nothing anyone can read.
     /// </summary>

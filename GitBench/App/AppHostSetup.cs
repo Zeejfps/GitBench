@@ -1,8 +1,10 @@
 using System.Runtime.InteropServices;
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.Terminal;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Theming;
 using ZGF.AppUtils;
@@ -22,6 +24,38 @@ internal static class AppHostSetup
         {
             appHost.OnWindowResized += preferences.SetWindowSize;
             appHost.OnWindowMoved += preferences.SetWindowPosition;
+        }
+
+        /// <summary>
+        /// Holds the application open when a terminal still has a shell, and asks first. Every way
+        /// the OS raises a close arrives here — the title-bar button, Alt+F4, and macOS's Quit, which
+        /// asks the window to close rather than terminating outright.
+        /// </summary>
+        public void UseQuitConfirmation()
+        {
+            var services = appHost.Context;
+            var terminals = services.Require<ITerminalSessionStore>();
+            var dispatcher = services.Require<IUiDispatcher>();
+            var bus = services.Require<IMessageBus>();
+
+            appHost.OnCloseRequested += request =>
+            {
+                var running = terminals.ReposWithLiveShells();
+                if (running.Count == 0) return;
+
+                request.Cancel();
+
+                // Posted rather than shown here: this runs inside the OS event poll, and the dialog
+                // wants a settled view tree. The tick that drains this queue is the next thing the
+                // run loop does, so the prompt still lands in the frame the user asked to close.
+                dispatcher.Post(() => bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmQuitDialog
+                {
+                    RepoIds = running,
+                    OnClose = onClose,
+                    // Past the guard deliberately: the user has just answered the question it asks.
+                    OnConfirm = appHost.Quit,
+                })));
+            };
         }
 
         public void UseUpdateChecks()

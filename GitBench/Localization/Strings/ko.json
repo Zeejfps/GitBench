@@ -95,6 +95,11 @@
   "terminal.restart_session": "새 세션 시작",
   "terminal.session_ended": "셸이 종료되었습니다.",
   "terminal.no_repo": "터미널을 사용하려면 저장소를 열어주세요.",
+  "terminal.quit_title": { "other": "실행 중인 세션 {count}개를 종료할까요?" },
+  "terminal.quit_body": { "other": "저장소 {count}개에서 셸이 아직 실행 중입니다. 지금 닫으면 진행 중인 작업과 함께 종료됩니다." },
+  "terminal.quit_action": { "other": "닫고 종료" },
+  "terminal.quit_cancel": "계속 작업하기",
+  "terminal.repo_remove_warning": "여기에서 셸이 아직 실행 중입니다. 저장소를 제거하면 종료됩니다.",
 
   "toolbar.fetch": "가져오기",
   "toolbar.fetching": "가져오는 중",

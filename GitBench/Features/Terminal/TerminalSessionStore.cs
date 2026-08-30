@@ -15,6 +15,18 @@ internal interface ITerminalSessionStore
     /// <summary>The active repository's terminal, or null when no repository is active. Swaps on
     /// repo switch, so the pane binds to this and never asks which repo it is showing.</summary>
     IReadable<TerminalInstance?> Active { get; }
+
+    /// <summary>Whether this repository's terminal is holding a shell process.</summary>
+    bool HasLiveShell(Guid repoId);
+
+    /// <summary>
+    /// Every repository holding a shell process, for warning about what closing would end.
+    /// </summary>
+    /// <remarks>
+    /// Unordered: a caller showing these to someone should put them in an order that reader
+    /// recognises, which is the registry's, not this dictionary's.
+    /// </remarks>
+    IReadOnlyList<Guid> ReposWithLiveShells();
 }
 
 /// <summary>
@@ -68,6 +80,12 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
     }
 
     public IReadable<TerminalInstance?> Active => _active;
+
+    public bool HasLiveShell(Guid repoId) =>
+        _instances.TryGetValue(repoId, out var instance) && instance.HasLiveShell;
+
+    public IReadOnlyList<Guid> ReposWithLiveShells() =>
+        _instances.Where(pair => pair.Value.HasLiveShell).Select(pair => pair.Key).ToArray();
 
     public void Start()
     {

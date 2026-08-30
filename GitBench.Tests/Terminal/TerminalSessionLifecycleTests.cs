@@ -193,6 +193,88 @@ public class TerminalInstanceLifecycleTests
         Assert.True(terminal.Scroll(5), "The history a finished shell printed is still readable.");
     }
 
+    [Fact]
+    public void AnIdleTerminal_HasNoShellToEnd()
+    {
+        var launch = new CountingLaunch();
+        using var terminal = new TerminalInstance(launch, new QueuedDispatcher());
+
+        Assert.False(terminal.HasLiveShell);
+    }
+
+    [Fact]
+    public void ATerminalWaitingForAViewport_AlreadyCountsAsAShell()
+    {
+        // Asked for but not yet spawned. Closing now races the spawn, and the process that lands
+        // afterwards is one nobody is left to end — so the answer has to be yes before it exists.
+        var launch = new CountingLaunch();
+        using var terminal = new TerminalInstance(launch, new QueuedDispatcher());
+
+        terminal.Start();
+
+        Assert.IsType<TerminalRenderState.Starting>(terminal.Render.Value);
+        Assert.True(terminal.HasLiveShell);
+    }
+
+    [Fact]
+    public void ARunningTerminal_HasAShellToEnd()
+    {
+        var launch = new CountingLaunch();
+        var dispatcher = new QueuedDispatcher();
+        using var terminal = new TerminalInstance(launch, dispatcher);
+
+        Start(terminal, launch, dispatcher);
+
+        Assert.True(terminal.HasLiveShell);
+    }
+
+    [Fact]
+    public void AShellThatHasExited_IsNotSomethingLeftToEnd()
+    {
+        var launch = new CountingLaunch();
+        var dispatcher = new QueuedDispatcher();
+        using var terminal = new TerminalInstance(launch, dispatcher);
+        Start(terminal, launch, dispatcher);
+
+        launch.Pty.ShellExits();
+        Pump.WaitFor(dispatcher, () => terminal.Render.Value is TerminalRenderState.Exited, "the exit");
+
+        Assert.False(terminal.HasLiveShell);
+    }
+
+    [Fact]
+    public void AFaultedTerminal_StillHasAShellToEnd()
+    {
+        // The reader stopped, not the shell. Reading the render state alone would call this dead and
+        // close over a live process — which is the exact thing a warning about live shells exists to
+        // stop, so it is the one case worth pinning.
+        var launch = new FaultingLaunch();
+        var dispatcher = new QueuedDispatcher();
+        using var terminal = new TerminalInstance(launch, dispatcher);
+        terminal.ReportViewport(Viewport);
+        terminal.Start();
+        Running(terminal, dispatcher);
+
+        launch.Pty.Emit("anything");
+        Pump.WaitFor(dispatcher, () => terminal.Render.Value is TerminalRenderState.Faulted, "the fault");
+
+        Assert.False(launch.Pty.HasExited, "The fault was in the reader; the shell never went anywhere.");
+        Assert.True(terminal.HasLiveShell);
+    }
+
+    [Fact]
+    public void ADisposedTerminal_HasNothingLeftToEnd()
+    {
+        var launch = new CountingLaunch();
+        var dispatcher = new QueuedDispatcher();
+        var terminal = new TerminalInstance(launch, dispatcher);
+        Start(terminal, launch, dispatcher);
+
+        terminal.Dispose();
+
+        Assert.False(terminal.HasLiveShell);
+    }
+
     static TerminalSession Start(
         TerminalInstance terminal, CountingLaunch launch, QueuedDispatcher dispatcher)
     {
@@ -247,6 +329,62 @@ public class TerminalInstanceLifecycleTests
                 () => pty, new XtermSharpEngineFactory(), size, dispatcher);
             Started.Set();
             return session;
+        }
+    }
+
+    /// <summary>A launch whose engine throws on the first output, faulting the reader over a shell
+    /// that is still perfectly alive.</summary>
+    sealed class FaultingLaunch : ITerminalLaunch
+    {
+        public LifecyclePty Pty { get; } = new();
+
+        public TerminalSize SizeFor(TerminalSize viewport) => viewport;
+
+        public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher)
+        {
+            var pty = Pty;
+            return TerminalSession.Start(() => pty, new GivingUpEngineFactory(), size, dispatcher);
+        }
+    }
+
+    sealed class GivingUpEngineFactory : ITerminalEngineFactory
+    {
+        public ITerminalEngine Create(TerminalSetup setup) => new GivingUpEngine();
+    }
+
+    sealed class GivingUpEngine : ITerminalEngine
+    {
+        public ITerminalGrid Grid { get; } = new BlankGrid();
+
+        public TerminalState State => default;
+
+        public FeedResult Feed(ReadOnlySpan<byte> bytes) =>
+            throw new NullReferenceException("the engine gave up");
+
+        public void Resize(TerminalSize size)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+    }
+
+    sealed class BlankGrid : ITerminalGrid
+    {
+        public TerminalSize Size => Viewport;
+
+        public int ScrollbackRows => 0;
+
+        public void CopyRow(int row, Span<TerminalCell> destination) => destination.Fill(TerminalCell.Blank);
+
+        public bool ContinuesPreviousRow(int row) => false;
+
+        public bool TryGetHyperlink(
+            HyperlinkId id, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out TerminalHyperlink? link)
+        {
+            link = null;
+            return false;
         }
     }
 

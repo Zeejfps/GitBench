@@ -154,6 +154,69 @@ public class TerminalSessionStoreTests : IDisposable
         Assert.Null(store.Active.Value);
     }
 
+    [Fact]
+    public void WithNothingStarted_NoRepositoryIsHoldingAShell()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        _registry.SetActive(_second);
+
+        // Both terminals exist — activating a repository makes one — and neither has a process.
+        Assert.Empty(store.ReposWithLiveShells());
+        Assert.False(store.HasLiveShell(_first));
+    }
+
+    [Fact]
+    public void ARepositoryWithAShell_IsListedAndTheOthersAreNot()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        StartShell(store.Active.Value!);
+        _registry.SetActive(_second);
+
+        Assert.Equal(new[] { _first }, store.ReposWithLiveShells());
+        Assert.True(store.HasLiveShell(_first));
+        Assert.False(store.HasLiveShell(_second));
+    }
+
+    [Fact]
+    public void ShellsInSeveralRepositories_AreAllListed()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        StartShell(store.Active.Value!);
+        _registry.SetActive(_second);
+        StartShell(store.Active.Value!);
+
+        Assert.Equal(
+            new HashSet<Guid> { _first, _second },
+            store.ReposWithLiveShells().ToHashSet());
+    }
+
+    [Fact]
+    public void AShellThatHasExited_DropsOutOfTheList()
+    {
+        using var store = Store();
+        _registry.SetActive(_first);
+        var terminal = store.Active.Value!;
+        StartShell(terminal);
+
+        _ptys[_first].ShellExits();
+        Pump.WaitFor(
+            _dispatcher, () => terminal.Render.Value is TerminalRenderState.Exited, "the exit");
+
+        Assert.Empty(store.ReposWithLiveShells());
+    }
+
+    [Fact]
+    public void ARepositoryNeverActivated_IsNotHoldingAShell()
+    {
+        // No terminal was ever made for it, so the question has to answer rather than throw.
+        using var store = Store();
+
+        Assert.False(store.HasLiveShell(Guid.NewGuid()));
+    }
+
     TerminalSessionStore Store()
     {
         var store = new TerminalSessionStore(

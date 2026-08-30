@@ -95,6 +95,11 @@
   "terminal.restart_session": "Iniciar nueva terminal",
   "terminal.session_ended": "La shell terminó.",
   "terminal.no_repo": "Abre un repositorio para usar la terminal.",
+  "terminal.quit_title": { "one": "¿Terminar la sesión en curso?", "other": "¿Terminar {count} sesiones en curso?" },
+  "terminal.quit_body": { "one": "Todavía hay un intérprete de comandos en ejecución. Si cierras ahora, terminará junto con lo que esté haciendo.", "other": "Todavía hay intérpretes de comandos en ejecución en {count} repositorios. Si cierras ahora, terminarán junto con lo que estén haciendo." },
+  "terminal.quit_action": { "one": "Cerrar y terminar", "other": "Cerrar y terminar {count}" },
+  "terminal.quit_cancel": "Seguir trabajando",
+  "terminal.repo_remove_warning": "Todavía hay un intérprete de comandos en ejecución aquí. Al quitar el repositorio, terminará.",
 
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",

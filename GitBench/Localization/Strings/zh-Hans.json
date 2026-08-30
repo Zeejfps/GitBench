@@ -95,6 +95,11 @@
   "terminal.restart_session": "启动新会话",
   "terminal.session_ended": "Shell 已退出。",
   "terminal.no_repo": "打开一个仓库以使用终端。",
+  "terminal.quit_title": { "other": "要终止 {count} 个正在运行的会话吗?" },
+  "terminal.quit_body": { "other": "{count} 个仓库中仍有 Shell 在运行。现在关闭会将它们连同正在进行的操作一并结束。" },
+  "terminal.quit_action": { "other": "关闭并终止" },
+  "terminal.quit_cancel": "继续工作",
+  "terminal.repo_remove_warning": "此处仍有 Shell 在运行。移除该仓库会将其结束。",
 
   "toolbar.fetch": "获取",
   "toolbar.fetching": "正在获取",

@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Terminal;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -22,6 +23,12 @@ internal sealed record RemoveRepoDialog : Widget
     {
         var registry = ctx.Require<IRepoRegistry>();
         var s = ctx.Localization().Strings.Value;
+
+        // Removal drops the repo from the registry, and dropping it disposes its terminal — so a
+        // shell running here dies with it. Said before the fact rather than discovered after.
+        var terminals = ctx.Require<ITerminalSessionStore>();
+        var endsAShell = terminals.HasLiveShell(Repo.Id);
+
         return new Dialog
         {
             Title = s.ReposRepoRemoveTitle,
@@ -41,6 +48,17 @@ internal sealed record RemoveRepoDialog : Widget
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },
+                .. endsAShell
+                    ?
+                    [
+                        new Text
+                        {
+                            Value = s.TerminalRepoRemoveWarning,
+                            Wrap = TextWrap.Wrap,
+                            Color = Theme.Color(t => t.DialogFrame.WarningText),
+                        },
+                    ]
+                    : Array.Empty<IWidget>(),
             ],
         };
     }

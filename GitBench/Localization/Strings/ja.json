@@ -95,6 +95,11 @@
   "terminal.restart_session": "新しいセッションを開始",
   "terminal.session_ended": "シェルが終了しました。",
   "terminal.no_repo": "ターミナルを使うにはリポジトリを開いてください。",
+  "terminal.quit_title": { "other": "実行中の{count}件のセッションを終了しますか?" },
+  "terminal.quit_body": { "other": "{count}個のリポジトリでシェルがまだ実行中です。ここで閉じると、実行中の処理ごと終了します。" },
+  "terminal.quit_action": { "other": "閉じて終了" },
+  "terminal.quit_cancel": "作業を続ける",
+  "terminal.repo_remove_warning": "ここではシェルがまだ実行中です。リポジトリを削除すると終了します。",
 
   "toolbar.fetch": "フェッチ",
   "toolbar.fetching": "フェッチ中",
