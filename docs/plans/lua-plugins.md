@@ -29,7 +29,10 @@ because the Windows engine choice hangs off it"* — and the findings changed th
    attempt static linking.**
 2. Does a managed callback invoked from Lua survive (a) throwing and (b) a `lua_error` raised beneath
    it? `StartupHealth.cs:7-10` says a managed exception unwinding a native callback frame **fail-fasts
-   under NativeAOT**, so error containment is unproven until this is run.
+   under NativeAOT**, so error containment is unproven until this is run. KeraLua marshals callbacks
+   with `Marshal.GetFunctionPointerForDelegate` rather than `[UnmanagedCallersOnly]`, which is
+   supported under NativeAOT for non-generic blittable delegates but is not the annotated path — so
+   this is the question the engine choice actually hangs on.
 3. Can a `lua_sethook` count hook abort a runaway script without taking the process down? Lua raises
    by `longjmp`; if that cannot cross a managed frame safely, **the deadline in the threading decision
    is not implementable** and the contract changes.
@@ -45,7 +48,7 @@ below, which is why they cannot come after.
 | Area | Decision |
 |---|---|
 | Isolation | **Four projects, contracts in the middle.** `GitBench.Extensibility` holds the contracts and depends on nothing. The app and the plugin host both depend on it and never on each other. Enforced by an architecture test **in both directions**, per Rule 2's "encode the intended boundaries as machine-checked rules". |
-| Runtime | **Lua 5.4 via KeraLua, using its shipped per-RID dynamic native.** Not MoonSharp: its interop resolves members by reflection, which AOT trimming removes. Static linking is out of scope — `glfw-static-linking.md:225-232` found `DirectPInvoke` emits no diagnostic when it fails, and KeraLua ships a dynamic native unconditionally, so a failed static link is masked by the fallback and reports green. If ever revisited, the only valid check is `! strings DiffDino \| grep -q lua_pcall`. |
+| Runtime | **Lua 5.4 via KeraLua 1.4.9**, using its shipped dynamic natives. Not NLua (KeraLua plus reflection-based .NET object binding — the binding is what AOT removes, and we hand-write bindings anyway) and not MoonSharp (pure C#, but its interop resolves members by reflection; the hardwired-descriptor generator that makes it AOT-viable is a codegen step to maintain, on top of marshalling through its `DynValue` system). Static linking is out of scope — `glfw-static-linking.md:225-232` found `DirectPInvoke` emits no diagnostic when it fails, and KeraLua ships a dynamic native unconditionally, so a failed static link is masked by the fallback and reports green. If ever revisited, the only valid check is `! strings DiffDino \| grep -q lua_pcall`. |
 | Contribution declaration | **Declared as data in `plugin.json`; Lua loads lazily on first invocation.** Anchors, item ids, string keys, icons and ordering are readable without an interpreter. |
 | Contribution model | Plugins return **data**, the host builds widgets. Crossing the FFI boundary happens once and is **parsed into a contract type**; the raw Lua table is never seen downstream (Rule 1). |
 | Reactivity | Contributions carry **thunks, not snapshots** — `Func<string>` labels, `Func<bool>` enablement. `ToolbarButton.Label` is a `Prop<string?>` bound through `L.T(...)` so labels follow a locale switch without a rebuild; a plain `string` would ship a tooltip stuck in the previous language. |
@@ -55,7 +58,7 @@ below, which is why they cannot come after.
 | Threading | Menu builders and predicates run **synchronously on the UI thread** under a deadline **whose mechanism Phase 0.5 establishes**; they may not call git. Data a builder needs but cannot compute — a remote URL — is pre-resolved into `MenuTarget` by the app. `on_select` may go async. One `lua_State` per plugin, all UI-thread in v1. |
 | Localization | Plugins ship `strings/<locale>.json`, loaded into a dictionary for the selected language. Shared app keys are referenced as `@app/<key>`, not copied. Plurals go through `ZGF.Gui.Localization.PluralRules`, the same runtime call the generated `Strings` makes. |
 | Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require` and `debug`, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
-| Errors | Every callback wrapped; no managed exception may cross the `[UnmanagedCallersOnly]` boundary, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled, **persisted to disk**. |
+| Errors | Every callback wrapped; **no managed exception may unwind into native Lua**, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled, **persisted to disk**. |
 | Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
 | Out of scope for v1 | Widget trees, custom panels, plugin themes, diff transformers, assistant tools in Lua, forge providers, plugin-to-plugin deps, hot reload, a marketplace, static linking. |
 
@@ -209,11 +212,12 @@ constructors and the toolbar, and `App/PluginHostAdapters.cs`.
 
 Three hazards. All three are Phase 0.5 questions before they are design decisions.
 
-**Managed exceptions must not cross the callback boundary.** A `lua_CFunction` is a native callback
-frame, and `StartupHealth.cs:7-10` states that a managed exception unwinding one fail-fasts under
-NativeAOT. Every host port is invoked *from* native Lua. The rule is one total wrapper with one
-`catch`, applied by construction — a `try`/`catch` written per-port by convention will be forgotten
-once, and the failure mode is process death rather than an error toast.
+**Managed exceptions must not unwind into native Lua.** A `lua_CFunction` is a native callback frame,
+and `StartupHealth.cs:7-10` states that a managed exception unwinding one fail-fasts under NativeAOT.
+Every host port is invoked *from* native Lua. The rule is one total wrapper with one `catch`, applied
+by construction — a `try`/`catch` written per-port by convention will be forgotten once, and the
+failure mode is process death rather than an error toast. A caught exception is converted into a Lua
+error at the boundary, not rethrown.
 
 **Lua raises by `longjmp`.** `luaL_error`, `lua_error`, out-of-memory and a count-hook abort all
 longjmp past intervening frames; a managed frame between `lua_pcall` and the raise point does not run
@@ -221,8 +225,10 @@ its `finally` blocks. This directly threatens the deadline mechanism, since a co
 only way to interrupt a runaway script. If Phase 0.5 question 3 comes back negative, builders become
 pure and pre-validated with no ability to loop.
 
-**Delegate lifetime.** Callbacks handed to Lua must be rooted for as long as the `lua_State` holds
-them. Under AOT a collected delegate is a jump into freed memory, not an exception.
+**Delegate lifetime.** KeraLua hands Lua a function pointer obtained from
+`Marshal.GetFunctionPointerForDelegate`; the pointer does not keep the delegate alive. Every delegate
+must be held in a field on the plugin's host object for the lifetime of its `lua_State`. A collected
+delegate is a jump into freed memory, not an exception.
 
 ## Modules
 
@@ -235,7 +241,7 @@ about Lua: it talks to an `IPluginRuntime` seam, so most tests never boot an int
 
 **`GitBench.Plugins.Lua` — the binding layer.** KeraLua P/Invoke, the `gitbench` global, marshalling
 both ways, the callback wrapper. The only module holding a `lua_State`, and the only place where a
-Rule 3 level-1 justification comment is expected on every function.
+Rule 3 level-1 justification comment is expected on every function. See below.
 
 **In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
 per-plugin string table, and the merge function.
@@ -244,6 +250,43 @@ Every JSON boundary — `plugin.json` and `strings/*.json` — needs a source-ge
 `JsonSerializerContext`, as `PreferencesStore.cs:186-191` and four other stores already do. The
 strings file is an open-ended dictionary with plural sub-objects, so it needs a hand-written
 `Utf8JsonReader` path.
+
+### The binding layer
+
+KeraLua is a thin P/Invoke wrapper over the Lua 5.4 C API — a stack, `lua_pushcfunction`,
+`lua_pcall`. It has no .NET object binding, which is the point: the marshalling we want is the
+parse-at-the-boundary kind, hand-written, not reflection over arbitrary types.
+
+**Native coverage, verified against the 1.4.9 package.** All four release RIDs are served:
+
+| RID | Asset | Size |
+|---|---|---|
+| `win-x64` | `runtimes/win-x64/native/lua54.dll` | 522 KB |
+| `linux-x64` | `runtimes/linux-x64/native/liblua54.so` | 394 KB |
+| `osx-arm64`, `osx-x64` | `runtimes/osx/native/liblua54.dylib` | 702 KB |
+
+There is no `osx-arm64`/`osx-x64` RID in the package — a single `osx` folder carries a **universal
+binary with both architectures**, which RID fallback resolves for either. That is fine, and it means
+macOS ships both slices; splitting them is a build-time trim if the ~350 KB ever matters.
+
+**What the layer does, per plugin:**
+
+1. Create one `lua_State`. Open the standard libraries, then remove `io`, `os.execute`,
+   `package.loadlib`, C `require` and `debug` for an untrusted plugin.
+2. Build the `gitbench` global as a table of C functions. Each is a `LuaFunction` delegate whose
+   pointer comes from `Marshal.GetFunctionPointerForDelegate`, and **each delegate is stored in a
+   field on the host object** so the GC cannot collect it while Lua holds the pointer.
+3. Wrap every one of those functions in a single total handler: read arguments off the stack with
+   explicit typed reads, build the contract record, catch everything, and convert a fault into a Lua
+   error rather than letting it unwind into native code.
+4. Load `init.lua` with `load(chunk, name, "t")` — text chunks only.
+5. Return contributions by walking the returned table once into `MenuItem`/`ToolbarItem` records. The
+   raw table never travels further than this function.
+
+Steps 2 and 3 are where the AOT risk lives, and are what Phase 0.5 question 2 exists to settle.
+`Marshal.GetFunctionPointerForDelegate` is supported under NativeAOT for non-generic delegates with
+blittable signatures, and KeraLua's `LuaFunction` qualifies — but the package carries no AOT
+annotations and makes no such claim, so it is plausible rather than proven.
 
 ## Anchor points
 
