@@ -58,6 +58,14 @@ internal static class AppHostSetup
             };
         }
 
+        /// <summary>
+        /// Builds the shared highlighter on a worker before anything asks it for colors. First
+        /// touch compiles thirteen tree-sitter queries and a TextMate registry, and whichever
+        /// surface reached it first used to pay for that — as a stall on the first file opened.
+        /// </summary>
+        public void UseWarmHighlighter()
+            => Task.Run(() => _ = RoutedSyntaxHighlighter.Shared);
+
         public void UseUpdateChecks()
         {
             var services = appHost.Context;

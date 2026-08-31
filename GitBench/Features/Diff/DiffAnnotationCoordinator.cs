@@ -8,8 +8,9 @@ namespace GitBench.Features.Diff;
 /// Works out what one diff's file text means: fetches the needed side(s) once through
 /// <see cref="IGitDiffReader"/>, then tokenizes and parses that text into a
 /// <see cref="DiffAnnotations"/>. Pure orchestration with no threading of its own — the caller
-/// (<see cref="DiffViewModel"/>) runs it on a background, generation-guarded lane so navigating
-/// away discards stale results. Returns null when there is nothing to say about the diff.
+/// (<see cref="DiffViewModel"/>) runs it on the same background, generation-guarded lane that
+/// loaded the diff, so a render reaches the view already annotated rather than turning colored a
+/// beat later. Returns null when there is nothing to say about the diff.
 /// </summary>
 internal static class DiffAnnotationCoordinator
 {
@@ -17,6 +18,27 @@ internal static class DiffAnnotationCoordinator
     public static DiffAnnotations? Compute(
         ISymbolExtractor extractor, IGitDiffReader git, Repo repo, DiffResult diff, string? commitSha, string? baseSha = null)
         => Compute(extractor, git, repo, diff, commitSha, baseSha, HighlightLanguage(diff), StructureLanguage(diff));
+
+    /// <summary>
+    /// The new side alone, from text the caller already holds. For the full-file view, which draws
+    /// the after-file and nothing else: fetching the before-side blob back out of git to tokenize
+    /// and parse it would buy a highlight nobody renders and an outline whose hunk contexts that
+    /// view has no separators to show.
+    /// </summary>
+    public static DiffAnnotations? ComputeNewSide(ISymbolExtractor extractor, DiffResult diff, string newText)
+    {
+        if (diff.IsBinary || diff.ErrorMessage != null || diff.Hunks.Count == 0) return null;
+
+        var languageId = HighlightLanguage(diff);
+        var language = StructureLanguage(diff);
+        if (languageId == null && language == null) return null;
+
+        var spans = languageId == null ? null : RoutedSyntaxHighlighter.Shared.Highlight(newText, languageId);
+        var outline = language is { } l ? extractor.Extract(newText, l) : null;
+        if (spans == null && outline == null) return null;
+
+        return new DiffAnnotations(spans == null ? null : new DiffHighlight(null, spans), outline, null);
+    }
 
     /// <summary>Outlines alone, for a caller that wants the hunk headers and would pay for
     /// tokenizing it never draws.</summary>

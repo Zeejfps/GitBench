@@ -40,9 +40,9 @@ internal sealed record ContextExpansion(
 internal abstract record DiffRenderState
 {
     public sealed record Placeholder(string Text) : DiffRenderState;
-    // Annotations is null until the async syntax/parse pass completes (or stays null when both
-    // are off/unsupported/failed) — the view renders plain in that case, identical to before.
-    // Expansion is null until the first gap-expander click; any reload/target change/optimistic
+    // Annotations are computed on the same background pass that loads the diff, so a Loaded that
+    // reaches the view is already colored; null means both are off/unsupported/failed and the view
+    // renders plain. Expansion is null until the first gap-expander click; any reload/target change/optimistic
     // hunk apply constructs a fresh Loaded, deliberately resetting it (gap indices and line
     // numbers may have shifted).
     public sealed record Loaded(
@@ -127,10 +127,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IPlatformShell? _shell;
     private int _hunkStateGen;
 
-    // Annotating runs on its own lane so an in-flight pass for a file we've navigated away from
-    // is dropped, and so it never invalidates the diff-load lane (Gen).
-    private readonly GenerationGuard _annotationLane;
-
     // The lazy file-text fetch behind the first gap-expander click. Its own lane so it never
     // invalidates an in-flight diff load; staleness is guarded by the Result reference check.
     private readonly GenerationGuard _expandLane;
@@ -142,8 +138,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<LfsBadge> LfsStatus { get; }
 
-    /// <summary>Which declarations this diff added, removed and changed. Empty until the annotation
-    /// lane lands, and empty for anything the parser has no grammar for.</summary>
+    /// <summary>Which declarations this diff added, removed and changed. Empty for anything the
+    /// parser has no grammar for.</summary>
     public IReadable<IReadOnlyList<SymbolChange>> ChangeSummary { get; }
 
     // Per-hunk index state for the current WorkingTree render (aligned with its hunk list; null
@@ -196,7 +192,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _shell = shell;
         _loc = loc;
         _pinnedRepoId = pinnedRepoId;
-        _annotationLane = CreateLane();
         _expandLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
@@ -722,27 +717,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private DiffAnnotations? CurrentAnnotations()
         => State.Value.Render is DiffRenderState.Loaded l ? l.Annotations : null;
 
-    // Carries the still-current render's annotations onto a freshly-loaded render for the same
-    // file, so the diff keeps its colors and hunk contexts instead of dropping to plain until the
-    // async pass re-runs. Read inside StartLoad's onResult before the render is swapped, so State
-    // still holds the previous render. Only seeds when the incoming render has none of its own.
-    private DiffRenderState CarryAnnotationsForward(DiffRenderState next)
-    {
-        (string Path, DiffAnnotations Annotations)? prev = State.Value.Render switch
-        {
-            DiffRenderState.Loaded { Annotations: { } a } l => (l.Result.Path, a),
-            DiffRenderState.FullFile { Annotations: { } a } ff => (ff.Path, a),
-            _ => null,
-        };
-        if (prev is not { } p) return next;
-        return next switch
-        {
-            DiffRenderState.Loaded { Annotations: null } l when l.Result.Path == p.Path => l with { Annotations = p.Annotations },
-            DiffRenderState.FullFile { Annotations: null } ff when ff.Path == p.Path => ff with { Annotations = p.Annotations },
-            _ => next,
-        };
-    }
-
     private bool TryGetPatchContext(int hunkIndex, out Repo repo, out DiffResult diff)
     {
         repo = null!;
@@ -759,10 +733,6 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     private void StartLoad()
     {
-        // Any in-flight annotation pass is for the previous target; invalidate it up front so
-        // its result can't land on the diff we're about to load.
-        _annotationLane.Bump();
-
         if (State.Value.HunkStates != null)
             Update(s => s with { HunkStates = null });
 
@@ -788,6 +758,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var preview = State.Value.Preview;
         var git = _gitDiff;
         var conflicts = _gitConflicts;
+        var extractor = _extractor;
         // Capture localized placeholder text up front so the background worker doesn't touch the
         // observable off the UI thread.
         var binaryText = _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown";
@@ -795,22 +766,26 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // Always load the diff: it supplies the added-line set for full-file tinting and drives the
         // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
         // file off the same worker thread.
-        RunBackground<LoadResult>(
+        RunBackground<DiffRenderState>(
             work: () => LoadDiffAndRender(
-                git, conflicts, repo, path, side, commitSha, baseSha, mode, preview, binaryText, noVersionText),
-            onResult: (result, error) => OnDiffLoaded(result, error, repo, commitSha, baseSha));
+                git, conflicts, extractor, repo, path, side, commitSha, baseSha, mode, preview,
+                binaryText, noVersionText),
+            onResult: OnDiffLoaded);
     }
 
     // Runs on the background worker: no `this` capture, no observable access. Loads the diff (and,
-    // in FullFile mode, the whole new-side file) and packages the render to show.
-    private static (LoadResult? Result, string? Error) LoadDiffAndRender(
-        IGitDiffReader git, IGitConflictOperations conflicts, Repo repo, string path, DiffSide side,
-        string? commitSha, string? baseSha, DiffViewMode mode, bool preview, string binaryText,
-        string noVersionText)
+    // in FullFile mode, the whole new-side file), tokenizes and parses it, and packages the finished
+    // render. Highlighting happens here rather than on a second pass so the render the view receives
+    // is already colored — a diff that paints plain and turns colored a beat later reads as a glitch,
+    // and the pane keeps showing the previous file meanwhile, so nothing is gained by publishing early.
+    private static (DiffRenderState? Result, string? Error) LoadDiffAndRender(
+        IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor, Repo repo,
+        string path, DiffSide side, string? commitSha, string? baseSha, DiffViewMode mode, bool preview,
+        string binaryText, string noVersionText)
     {
         if (preview && MarkdownDiffPreview.IsPreviewablePath(path)
             && MarkdownDiffPreview.Build(git, repo, path, side, commitSha, baseSha) is { } markdown)
-            return (new LoadResult(markdown, null), null);
+            return (markdown, null);
 
         // A conflicted working-tree file gets the resolution header, not a normal diff — but only
         // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
@@ -820,18 +795,21 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         {
             var conflict = conflicts.GetConflictContext(repo, path);
             if (conflict != null)
-                return (new LoadResult(new DiffRenderState.Conflict(path, conflict), null), null);
+                return (new DiffRenderState.Conflict(path, conflict), null);
         }
 
         var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
         // An image blob has no readable patch on either mode's terms, so the picture replaces the
         // body in both — the full-file toggle has nothing else to offer for it.
         if (BuildImagePreview(git, repo, diff, path, side, commitSha, baseSha) is { } image)
-            return (new LoadResult(image, null), null);
+            return (image, null);
         if (mode == DiffViewMode.Diff)
-            return (new LoadResult(new DiffRenderState.Loaded(diff), diff), null);
-        var render = BuildFullFile(git, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText);
-        return (new LoadResult(render, render is DiffRenderState.FullFile ? diff : null), null);
+        {
+            var annotations = DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha);
+            return (new DiffRenderState.Loaded(diff, annotations), null);
+        }
+        return (BuildFullFile(
+            git, extractor, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText), null);
     }
 
     // Reads and decodes the blob behind a binary image file, or returns null to leave the diff
@@ -861,34 +839,21 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             : new DiffRenderState.Image(path, preview, side, isOldSide, diff.IsLfs);
     }
 
-    private void OnDiffLoaded(LoadResult? result, string? error, Repo repo, string? commitSha, string? baseSha)
+    private void OnDiffLoaded(DiffRenderState? result, string? error)
     {
-        var render = error != null ? new DiffRenderState.Placeholder(error) : result!.Render;
-        // Seed the new render with the prior highlight when it's for the same file, so the diff
-        // doesn't blink to plain between this load landing and the async highlight pass finishing.
-        // Staging a file is the common case: the file moves to the other side but its new-side text
-        // — hence the spans — is unchanged, so the body doesn't flash but the highlight would.
-        // StartAnnotations below refreshes them either way.
-        render = CarryAnnotationsForward(render);
+        var render = error != null ? new DiffRenderState.Placeholder(error) : result!;
         Update(s => s with { Render = render });
-        // Annotations apply to either render carrying the new-side file; result.Diff is null for
-        // full-file placeholders (binary/deleted), which need no highlighting.
-        if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
-            StartAnnotations(repo, diff, commitSha, baseSha);
         if (render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
             RefreshWorkingTreeHunkStates();
     }
 
-    // Result of a load: the render to show plus the source diff (when one should drive a highlight
-    // pass). Diff is null for full-file placeholders, where there's nothing to highlight.
-    private sealed record LoadResult(DiffRenderState Render, DiffResult? Diff);
-
     // Assembles a FullFile render from a loaded diff: fetches the after-side file text, caps it,
-    // and marks which lines were added. Returns a Placeholder for cases with no readable current
-    // version (binary, diff error, or a deleted/absent file).
+    // marks which lines were added, and annotates it from the text already in hand. Returns a
+    // Placeholder for cases with no readable current version (binary, diff error, or a
+    // deleted/absent file).
     private static DiffRenderState BuildFullFile(
-        IGitDiffReader git, Repo repo, DiffResult diff, string path, DiffSide side, string? commitSha,
-        string? baseSha, string binaryText, string noVersionText)
+        IGitDiffReader git, ISymbolExtractor extractor, Repo repo, DiffResult diff, string path,
+        DiffSide side, string? commitSha, string? baseSha, string binaryText, string noVersionText)
     {
         if (diff.IsBinary) return new DiffRenderState.Placeholder(binaryText);
         if (diff.ErrorMessage != null) return new DiffRenderState.Placeholder(diff.ErrorMessage);
@@ -928,7 +893,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             }
         }
 
-        return new DiffRenderState.FullFile(path, lines, added, side, truncated, emphasis);
+        return new DiffRenderState.FullFile(
+            path, lines, added, side, truncated, emphasis,
+            DiffAnnotationCoordinator.ComputeNewSide(extractor, diff, text));
     }
 
     // Splits file text into display lines, normalizing CRLF/CR to LF and dropping the single empty
@@ -939,35 +906,5 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var lines = new List<string>(normalized.Split('\n'));
         if (lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
         return lines;
-    }
-
-    // Tokenizes and parses the diff's file(s) off-thread and, when done, re-emits the same Loaded
-    // state carrying the result. Runs on the annotation lane (stale results dropped) and only
-    // attaches to the still-current diff — an optimistic hunk apply may have swapped Result.
-    private void StartAnnotations(Repo repo, DiffResult diff, string? commitSha, string? baseSha)
-    {
-        var git = _gitDiff;
-        var extractor = _extractor;
-        RunBackground<DiffAnnotations>(
-            work: () => (DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha), null),
-            onResult: (annotations, _) =>
-            {
-                if (annotations == null) return; // plain rendering — nothing to apply
-                // Re-attach only to the still-current render for this diff. Loaded matches by
-                // Result reference; FullFile has no Result, so match on Path + Side (an optimistic
-                // hunk apply or a mode toggle may have swapped the render underneath us).
-                switch (State.Value.Render)
-                {
-                    case DiffRenderState.Loaded cur when ReferenceEquals(cur.Result, diff):
-                        // `with` (not a fresh Loaded) so a context expansion made while the pass
-                        // was running survives the re-attach.
-                        Update(s => s with { Render = cur with { Annotations = annotations } });
-                        break;
-                    case DiffRenderState.FullFile ff when ff.Path == diff.Path && ff.Side == diff.Side:
-                        Update(s => s with { Render = ff with { Annotations = annotations } });
-                        break;
-                }
-            },
-            lane: _annotationLane);
     }
 }
