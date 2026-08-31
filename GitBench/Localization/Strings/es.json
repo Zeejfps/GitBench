@@ -2,7 +2,7 @@
   "about.view_on_github": "Ver en GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "Abre un repositorio de tu equipo o clona uno para empezar.",
+  "welcome.greeting": "Abre un repositorio de tu equipo, clona uno o crea uno nuevo para empezar.",
 
   "toast.pushed": "Enviado",
   "toast.pulled": "Extraído",
@@ -427,8 +427,10 @@
   "repos.clone_warning_title": "Clonado, con advertencias",
   "repos.menu_open_from_folder": "Abrir desde carpeta…",
   "repos.menu_clone_repository": "Clonar repositorio…",
+  "repos.menu_new_repository": "Nuevo repositorio…",
   "repos.menu_new_group": "Nuevo grupo",
   "repos.error_not_a_git_repo_title": "No es un repositorio Git",
+  "repos.error_init_failed_title": "No se pudo crear el repositorio",
   "repos.error_not_a_git_repo_message": "{path}\n\nEsta carpeta no es un repositorio Git — no tiene directorio .git. Elige la carpeta raíz del repositorio o clona un repositorio en su lugar.",
   "repos.group_rename": "Renombrar grupo",
   "repos.group_delete": "Eliminar grupo",
@@ -653,6 +655,7 @@
   "repos.clone_action": "Clonar",
   "repos.picker_choose_clone": "Elige dónde clonar",
   "repos.picker_open_repository": "Abrir repositorio",
+  "repos.picker_new_repository": "Carpeta del nuevo repositorio",
   "refname.noun_branch": "rama",
   "refname.noun_tag": "etiqueta",
   "refname.no_spaces": "Los nombres de {noun} no pueden contener espacios.",

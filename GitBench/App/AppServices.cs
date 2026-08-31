@@ -80,7 +80,7 @@ internal static class AppServices
         context.AddSingleton<IRepoActivityTracker, RepoActivityTracker>();
         // One GitService, registered under every capability it implements as well as the whole
         // IGitService. Consumers depend on the narrowest facet they use; the instance is added
-        // rather than factory-registered so the fourteen keys can't ever mean fourteen owners.
+        // rather than factory-registered so the fifteen keys can't ever mean fifteen owners.
         var gitService = new GitService(context.Require<IRepoActivityTracker>());
         context.AddService<IGitService>(gitService);
         context.AddService<IGitRepositoryReader>(gitService);
@@ -97,6 +97,7 @@ internal static class AppServices
         context.AddService<IGitWorktreeOperations>(gitService);
         context.AddService<IGitSubmoduleOperations>(gitService);
         context.AddService<IGitConfigOperations>(gitService);
+        context.AddService<IGitRepositoryLifecycle>(gitService);
         context.AddService<IGitRawConfigReader>(gitService);
         // Reads config through gitService and back-wires itself into it (its hosted Start) so every
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo

@@ -2,7 +2,7 @@
   "about.view_on_github": "View on GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "Open a repository from your computer, or clone one to get started.",
+  "welcome.greeting": "Open a repository from your computer, clone one, or create a new one to get started.",
 
   "toast.pushed": "Pushed",
   "toast.pulled": "Pulled",
@@ -427,8 +427,10 @@
   "repos.clone_warning_title": "Cloned, with warnings",
   "repos.menu_open_from_folder": "Open from Folder…",
   "repos.menu_clone_repository": "Clone Repository…",
+  "repos.menu_new_repository": "New Repository…",
   "repos.menu_new_group": "New group",
   "repos.error_not_a_git_repo_title": "Not a Git Repository",
+  "repos.error_init_failed_title": "Couldn't Create Repository",
   "repos.error_not_a_git_repo_message": "{path}\n\nThis folder isn't a Git repository — it has no .git directory. Pick the repository's root folder, or clone a repository instead.",
   "repos.group_rename": "Rename group",
   "repos.group_delete": "Delete group",
@@ -652,6 +654,7 @@
   "repos.clone_action": "Clone",
   "repos.picker_choose_clone": "Choose where to clone",
   "repos.picker_open_repository": "Open Repository",
+  "repos.picker_new_repository": "New Repository Folder",
   "refname.noun_branch": "Branch",
   "refname.noun_tag": "Tag",
   "refname.no_spaces": "{noun} names can’t contain spaces.",

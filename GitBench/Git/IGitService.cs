@@ -16,7 +16,8 @@ public interface IGitService :
     IGitConflictOperations,
     IGitWorktreeOperations,
     IGitSubmoduleOperations,
-    IGitConfigOperations
+    IGitConfigOperations,
+    IGitRepositoryLifecycle
 {
 }
 

@@ -2,7 +2,7 @@
   "about.view_on_github": "العرض على GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "افتح مستودعًا من جهازك أو استنسخ واحدًا للبدء.",
+  "welcome.greeting": "افتح مستودعًا من جهازك أو استنسخ واحدًا أو أنشئ مستودعًا جديدًا للبدء.",
 
   "toast.pushed": "تم الدفع",
   "toast.pulled": "تم السحب",
@@ -505,8 +505,10 @@
   "repos.clone_warning_title": "تم الاستنساخ مع تحذيرات",
   "repos.menu_open_from_folder": "فتح من مجلد…",
   "repos.menu_clone_repository": "استنساخ مستودع…",
+  "repos.menu_new_repository": "مستودع جديد…",
   "repos.menu_new_group": "مجموعة جديدة",
   "repos.error_not_a_git_repo_title": "ليس مستودع Git",
+  "repos.error_init_failed_title": "تعذّر إنشاء المستودع",
   "repos.error_not_a_git_repo_message": "{path}\n\nهذا المجلد ليس مستودع Git — لا يحتوي على دليل ‎.git. اختر المجلد الجذر للمستودع، أو استنسخ مستودعًا بدلاً من ذلك.",
   "repos.group_rename": "إعادة تسمية المجموعة",
   "repos.group_delete": "حذف المجموعة",
@@ -766,6 +768,7 @@
   "repos.clone_action": "استنساخ",
   "repos.picker_choose_clone": "اختر مكان الاستنساخ",
   "repos.picker_open_repository": "فتح المستودع",
+  "repos.picker_new_repository": "مجلد المستودع الجديد",
   "refname.noun_branch": "الفرع",
   "refname.noun_tag": "الوسم",
   "refname.no_spaces": "لا يمكن أن تحتوي أسماء {noun} على مسافات.",

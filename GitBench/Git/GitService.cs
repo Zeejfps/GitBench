@@ -2250,6 +2250,31 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
+    // Like Clone, Init has no existing Repo to lock or validate — it makes one. The folder is
+    // created when missing so the picker's "new folder" and a brand-new path both work.
+    public GitOutcome Init(string path)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return GitOutcome.Fail("Destination path is required.");
+
+            string fullPath;
+            try { fullPath = Path.GetFullPath(path); }
+            catch (Exception ex) { return GitOutcome.Fail($"Invalid destination path: {ex.Message}"); }
+
+            try { Directory.CreateDirectory(fullPath); }
+            catch (Exception ex) { return GitOutcome.Fail($"Could not create destination folder: {ex.Message}"); }
+
+            var result = _runner.Run(fullPath, new[] { "init" });
+            return result.Ok ? GitOutcome.Ok : GitOutcome.Fail(result.BlockError("git init"));
+        }
+        catch (Exception ex)
+        {
+            return GitOutcome.Fail(ex.Message);
+        }
+    }
+
     private bool HasResolvableHead(string repoPath)
         => _runner.Run(repoPath, new[] { "rev-parse", "--verify", "HEAD" }, GitProcessRunner.GitLaunch.Direct).Ok;
 

@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
@@ -15,6 +16,7 @@ internal static class AddRepoMenu
         [
             new(s.ReposMenuOpenFromFolder, () => OpenFromFolder(ctx, groupId), Icon: LucideIcons.FolderOpen),
             new(s.ReposMenuCloneRepository, () => ShowCloneDialog(ctx, groupId), Icon: LucideIcons.FolderGit2),
+            new(s.ReposMenuNewRepository, () => InitNewRepo(ctx, groupId), Icon: LucideIcons.FolderPlus),
         ];
     }
 
@@ -29,6 +31,24 @@ internal static class AddRepoMenu
                     s.ReposErrorNotAGitRepoTitle,
                     s.ReposErrorNotAGitRepoMessage(path)));
             }
+        });
+    }
+
+    // Picks a folder and runs `git init` in it, then opens the result the same way the folder
+    // picker above does. An already-initialized folder just opens — git's re-init is a no-op.
+    public static void InitNewRepo(Context ctx, Guid? groupId = null)
+    {
+        var s = ctx.Localization().Strings.Value;
+        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerNewRepository, path =>
+        {
+            if (ctx.Get<IGitRepositoryLifecycle>()?.Init(path) is GitOutcome.Failed failed)
+            {
+                ctx.Get<IMessageBus>()?.Broadcast(new ShowOperationErrorMessage(
+                    s.ReposErrorInitFailedTitle, failed.Message));
+                return;
+            }
+
+            ctx.Get<IRepoRegistry>()?.Open(path, groupId);
         });
     }
 

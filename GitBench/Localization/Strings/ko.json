@@ -2,7 +2,7 @@
   "about.view_on_github": "GitHub에서 보기",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "컴퓨터의 저장소를 열거나 복제하여 시작하세요.",
+  "welcome.greeting": "컴퓨터의 저장소를 열거나, 복제하거나, 새로 만들어 시작하세요.",
 
   "toast.pushed": "푸시 완료",
   "toast.pulled": "풀 완료",
@@ -427,8 +427,10 @@
   "repos.clone_warning_title": "복제했지만 경고가 있습니다",
   "repos.menu_open_from_folder": "폴더에서 열기…",
   "repos.menu_clone_repository": "저장소 복제…",
+  "repos.menu_new_repository": "새 저장소…",
   "repos.menu_new_group": "새 그룹",
   "repos.error_not_a_git_repo_title": "Git 저장소가 아님",
+  "repos.error_init_failed_title": "저장소를 만들 수 없습니다",
   "repos.error_not_a_git_repo_message": "{path}\n\n이 폴더는 Git 저장소가 아닙니다 — .git 디렉터리가 없습니다. 저장소의 루트 폴더를 선택하거나 저장소를 복제하세요.",
   "repos.group_rename": "그룹 이름 변경",
   "repos.group_delete": "그룹 삭제",
@@ -653,6 +655,7 @@
   "repos.clone_action": "복제",
   "repos.picker_choose_clone": "복제 위치 선택",
   "repos.picker_open_repository": "저장소 열기",
+  "repos.picker_new_repository": "새 저장소 폴더",
   "refname.noun_branch": "브랜치",
   "refname.noun_tag": "태그",
   "refname.no_spaces": "{noun} 이름에는 공백을 사용할 수 없습니다.",

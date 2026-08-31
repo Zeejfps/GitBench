@@ -2,7 +2,7 @@
   "about.view_on_github": "在 GitHub 上查看",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "打开电脑上的仓库，或克隆一个仓库开始使用。",
+  "welcome.greeting": "打开电脑上的仓库、克隆一个仓库，或新建一个仓库开始使用。",
 
   "toast.pushed": "已推送",
   "toast.pulled": "已拉取",
@@ -427,8 +427,10 @@
   "repos.clone_warning_title": "已克隆，但有警告",
   "repos.menu_open_from_folder": "从文件夹打开…",
   "repos.menu_clone_repository": "克隆仓库…",
+  "repos.menu_new_repository": "新建仓库…",
   "repos.menu_new_group": "新建分组",
   "repos.error_not_a_git_repo_title": "不是 Git 仓库",
+  "repos.error_init_failed_title": "无法创建仓库",
   "repos.error_not_a_git_repo_message": "{path}\n\n此文件夹不是 Git 仓库 — 它没有 .git 目录。请选择仓库的根文件夹，或改为克隆一个仓库。",
   "repos.group_rename": "重命名分组",
   "repos.group_delete": "删除分组",
@@ -653,6 +655,7 @@
   "repos.clone_action": "克隆",
   "repos.picker_choose_clone": "选择克隆位置",
   "repos.picker_open_repository": "打开仓库",
+  "repos.picker_new_repository": "新建仓库文件夹",
   "refname.noun_branch": "分支",
   "refname.noun_tag": "标签",
   "refname.no_spaces": "{noun}名称不能包含空格。",

@@ -2,7 +2,7 @@
   "about.view_on_github": "GitHubで表示",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "コンピューター上のリポジトリを開くか、クローンして始めましょう。",
+  "welcome.greeting": "コンピューター上のリポジトリを開く、クローンする、または新規作成して始めましょう。",
 
   "toast.pushed": "プッシュしました",
   "toast.pulled": "プルしました",
@@ -427,8 +427,10 @@
   "repos.clone_warning_title": "クローンしましたが警告があります",
   "repos.menu_open_from_folder": "フォルダから開く…",
   "repos.menu_clone_repository": "リポジトリをクローン…",
+  "repos.menu_new_repository": "新規リポジトリ…",
   "repos.menu_new_group": "新規グループ",
   "repos.error_not_a_git_repo_title": "Gitリポジトリではありません",
+  "repos.error_init_failed_title": "リポジトリを作成できませんでした",
   "repos.error_not_a_git_repo_message": "{path}\n\nこのフォルダはGitリポジトリではありません — .gitディレクトリがありません。リポジトリのルートフォルダを選択するか、リポジトリをクローンしてください。",
   "repos.group_rename": "グループ名を変更",
   "repos.group_delete": "グループを削除",
@@ -653,6 +655,7 @@
   "repos.clone_action": "クローン",
   "repos.picker_choose_clone": "クローン先を選択",
   "repos.picker_open_repository": "リポジトリを開く",
+  "repos.picker_new_repository": "新規リポジトリのフォルダ",
   "refname.noun_branch": "ブランチ",
   "refname.noun_tag": "タグ",
   "refname.no_spaces": "{noun}名にスペースは使用できません。",

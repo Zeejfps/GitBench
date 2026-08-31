@@ -13,7 +13,8 @@ namespace GitBench.App;
 
 /// <summary>
 /// Full-window first-run screen shown while no repositories are open: the app logo and name,
-/// a short greeting, and the two ways in — open a local repository or clone one.
+/// a short greeting, and the three ways in — open a local repository, clone one, or start a new
+/// one with `git init`.
 /// </summary>
 internal sealed record WelcomeScreenWidget : Widget
 {
@@ -74,6 +75,14 @@ internal sealed record WelcomeScreenWidget : Widget
                                     Label = L.T(s => s.ReposMenuCloneRepository),
                                     Icon = LucideIcons.FolderGit2,
                                     Command = new Command(() => AddRepoMenu.ShowCloneDialog(ctx)),
+                                    Height = DialogFrame.DefaultButtonHeight,
+                                    MinWidth = 180,
+                                }.WithController<KbmController>(),
+                                new SecondaryDialogButton
+                                {
+                                    Label = L.T(s => s.ReposMenuNewRepository),
+                                    Icon = LucideIcons.FolderPlus,
+                                    Command = new Command(() => AddRepoMenu.InitNewRepo(ctx)),
                                     Height = DialogFrame.DefaultButtonHeight,
                                     MinWidth = 180,
                                 }.WithController<KbmController>(),

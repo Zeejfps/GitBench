@@ -2,7 +2,7 @@
   "about.view_on_github": "Открыть на GitHub",
   "about.copyright": "© 2026 Zee Vasilyev",
 
-  "welcome.greeting": "Откройте репозиторий на своём компьютере или клонируйте новый, чтобы начать.",
+  "welcome.greeting": "Откройте репозиторий на своём компьютере, клонируйте его или создайте новый, чтобы начать.",
 
   "toast.pushed": "Отправлено",
   "toast.pulled": "Получено",
@@ -492,8 +492,10 @@
   "repos.clone_warning_title": "Клонировано с предупреждениями",
   "repos.menu_open_from_folder": "Открыть из папки…",
   "repos.menu_clone_repository": "Клонировать репозиторий…",
+  "repos.menu_new_repository": "Новый репозиторий…",
   "repos.menu_new_group": "Новая группа",
   "repos.error_not_a_git_repo_title": "Это не репозиторий Git",
+  "repos.error_init_failed_title": "Не удалось создать репозиторий",
   "repos.error_not_a_git_repo_message": "{path}\n\nЭта папка не является репозиторием Git — в ней нет каталога .git. Выберите корневую папку репозитория или клонируйте репозиторий.",
   "repos.group_rename": "Переименовать группу",
   "repos.group_delete": "Удалить группу",
@@ -734,6 +736,7 @@
   "repos.clone_action": "Клонировать",
   "repos.picker_choose_clone": "Выберите, куда клонировать",
   "repos.picker_open_repository": "Открыть репозиторий",
+  "repos.picker_new_repository": "Папка нового репозитория",
   "refname.noun_branch": "ветки",
   "refname.noun_tag": "тега",
   "refname.no_spaces": "Имя {noun} не может содержать пробелы.",
