@@ -51,7 +51,7 @@ below, which is why they cannot come after.
 | Runtime | **Lua 5.4, our own P/Invoke, our own native build, statically linked.** Not KeraLua (its API is shaped around instance delegates marshalled with `Marshal.GetFunctionPointerForDelegate`, so it cannot express the `[UnmanagedCallersOnly]` callback path AOT prefers), not NLua (KeraLua plus reflection-based object binding), not MoonSharp (reflection interop; the hardwired-descriptor generator that makes it AOT-viable is a codegen step to maintain). We hand-write the bindings regardless — the marshalling we want is parse-at-the-boundary, not general-purpose. |
 | Native build | **Vendored Lua source, built per-RID in CI.** `vendor/lua`, matching how `vendor/XtermSharp` is already carried. Measured on Ubuntu 24.04 / clang 18 from a clean v5.4.7 checkout: 33 dependency-free source files, one compiler invocation, **5.2 s**, 313 KB shared / ~1 MB static archive. This is not the GLFW situation — there is no X11/Wayland/Cocoa tail behind it. |
 | Build tooling | **One C# file-based app**, `scripts/build-lua.cs`, run as `dotnet run scripts/build-lua.cs`. One implementation across Windows, macOS and Linux instead of a `.sh` and a `.ps1` that drift. The SDK is already a build prerequisite, so this adds no toolchain. |
-| Contribution declaration | **Declared as data in `plugin.json`; Lua loads lazily on first invocation.** Anchors, item ids, string keys, icons and ordering are readable without an interpreter. |
+| Registration | **Imperative, in `init.lua`, run once at load.** `plugin.json` carries identity and `api_version` only. Declaring contributions in the manifest *and* implementing them in Lua would duplicate every item across two files that can drift. |
 | Contribution model | Plugins return **data**, the host builds widgets. Crossing the FFI boundary happens once and is **parsed into a contract type**; the raw Lua table is never seen downstream (Rule 1). |
 | Reactivity | Contributions carry **thunks, not snapshots** — `Func<string>` labels, `Func<bool>` enablement. `ToolbarButton.Label` is a `Prop<string?>` bound through `L.T(...)` so labels follow a locale switch without a rebuild; a plain `string` would ship a tooltip stuck in the previous language. |
 | Menu merging | `IMenuExtensions` returns **contributions only**; the app merges them with a pure `MenuMerge.Apply`. A plugin cannot remove or reorder built-in items, and the ordering policy becomes a tested function rather than a convention inside code the app can't see. |
@@ -369,23 +369,28 @@ git.
 available; `At(index)` is bundled-only. Menus are muscle memory, and arbitrary interleaving destroys
 that.
 
-## Startup and the load model
+## Startup cost
 
-Imperative registration is not deferrable: you cannot know what `p.menu("repo.node", fn)` contributes
-without executing `init.lua`, and toolbar contributions are needed on frame one. So **`plugin.json`
-declares contributions as data and Lua loads lazily, on first invocation.**
+Every plugin's `init.lua` runs at load, so the app pays N interpreter boots before the toolbar can
+show plugin buttons. That is the cost of imperative registration, and it is worth being precise about
+rather than designing around a guess.
 
-Startup becomes N small JSON reads rather than N interpreter boots. The registry is statically
-enumerable from disk, so the settings pane and a crash report can name the owning plugin of a
-contribution that has never run.
-
-This matches how the app already handles startup cost by construction rather than by warning:
-`AppHostSetup.cs:100-115` reads system font fallbacks on a worker because *"none needed until
-non-Latin text appears, so reading them must not block first paint"*, and `AppServices.cs:74-75`
-defers repo sweeps behind the active repo's first load.
+`luaL_newstate` + `luaL_openlibs` + a small `init.lua` is a fraction of a millisecond — Lua is a
+famously cheap runtime to start, with no JIT warmup and no module scanning. A dozen plugins should
+land in single-digit milliseconds total. **Phase 0.5 question 4 measures it**; nothing here should be
+believed until it does.
 
 **Budget: the plugin subsystem adds ≤ 15 ms to first paint on the slowest release runner, asserted by
-a test.** Phase 0.5 question 4 confirms that number or replaces it.
+a test.**
+
+If the measurement comes back worse than that, the fix is not to move contributions into the
+manifest — that trades a real duplication problem for a hypothetical performance one. The fix is to
+move the work off the startup path, which is what this codebase already does twice:
+`AppHostSetup.cs:100-115` reads system font fallbacks on a worker because *"none needed until
+non-Latin text appears, so reading them must not block first paint"*, and `AppServices.cs:74-75`
+defers repo sweeps behind the active repo's first load. Plugin loading would follow the same pattern:
+run it on a worker, and let the toolbar and menus pick contributions up through the observables they
+already bind to. Plugin buttons appear a frame or two late; nothing else changes.
 
 ## Crash containment
 
@@ -439,140 +444,82 @@ boots.
 
 ### `plugin.json`
 
-The manifest is the whole contract between a plugin and the app at startup. It declares *what*
-contributions exist and *where*; `init.lua` supplies *what happens*.
+Identity and compatibility only. It exists because two things must be known *before* deciding to
+execute a plugin's code, and nothing else belongs in it:
 
 ```jsonc
 {
-  "id": "shell-tools",              // folder name must match; namespaces string keys and commands
-  "version": "1.0.0",               // the plugin's own version, informational
-  "api_version": 1,                 // refused outside the host's supported range
-  "name": "Shell Tools",            // shown in the settings pane; not localized
+  "id": "shell-tools",        // must match the folder name; namespaces string keys
+  "version": "1.0.0",
+  "api_version": 1,           // refused outside the host's supported range, before init runs
+  "name": "Shell Tools",      // settings pane
   "description": "Open folders and terminals from menus and the toolbar.",
-  "entry": "init.lua",              // optional; this is the default
-
-  "commands": [
-    { "id": "open_folder",
-      "title": "cmd.open_folder",           // string key, resolved by PluginStrings
-      "when": "repo.any" },
-    { "id": "open_terminal",
-      "title": "cmd.open_terminal",
-      "keybinding": { "default": "Ctrl+Shift+T", "mac": "Cmd+Shift+T" } }
-  ],
-
-  "toolbar": [
-    { "id": "folder_button",
-      "command": "open_folder",             // behaviour lives on the command
-      "icon": "FolderOpen",
-      "tooltip": "toolbar.open_folder",
-      "enabled_when": "repo.any" }
-  ],
-
-  "menus": [
-    { "id": "terminal_here",
-      "anchor": "file_browser.row",
-      "command": "open_terminal",
-      "label": "menu.open_in_terminal",
-      "icon": "SquareTerminal",
-      "when": "path.is_directory",
-      "placement": "below" }
-  ]
+  "entry": "init.lua"         // optional; this is the default
 }
 ```
 
-**One behaviour, several surfaces.** A menu item or toolbar button carries a `command` id rather
-than its own handler, so `shell-tools` implements "open a terminal here" once and surfaces it on the
-toolbar and at two menu anchors. Lua registers by command id:
+Contributions are **not** declared here. Declaring them in JSON and implementing them in Lua would
+mean every item exists twice, in two files, free to drift — and the drift would surface as a menu
+entry that does nothing, or a handler nothing invokes.
+
+### Registration
+
+`init.lua` runs once, at load, and registers everything imperatively:
 
 ```lua
-p.command("open_terminal", function(ctx) p.shell.open_terminal_at(ctx.repo, ctx.path) end)
-```
+local p = require("gitbench")
 
-**Dynamic contributions.** A contribution whose *shape* depends on context — `tag-actions` builds one
-submenu per tag on the commit — cannot be declared statically. It says so, and the host calls Lua the
-first time that menu opens:
+p.command("open_terminal", function(ctx)
+  p.shell.open_terminal_at(ctx.repo, ctx.path)
+end)
 
-```jsonc
-{ "id": "tags", "anchor": "commit.row", "dynamic": true, "placement": { "at": 0 } }
-```
+p.toolbar({
+  command = "open_terminal",
+  icon    = "SquareTerminal",
+  tooltip = function() return p.t("toolbar.open_terminal") end,
+  enabled = function(ctx) return ctx.repo ~= nil end,
+})
 
-```lua
-p.menu_items("tags", function(ctx)
-  local items = {}
-  for _, ref in ipairs(ctx.refs) do
-    if ref.kind == "tag" then
-      items[#items + 1] = { label = ref.name, icon = "Tag", submenu = { {
-        label = p.t("menu.delete_tag"), icon = "Trash",
-        on_select = function() p.repo.request(ctx.repo, { kind = "delete_tag", name = ref.name }) end,
-      } } }
-    end
-  end
-  return items
+p.menu("file_browser.row", function(ctx)
+  if not ctx.is_directory then return {} end
+  return { {
+    label     = p.t("menu.open_in_terminal"),
+    icon      = "SquareTerminal",
+    on_select = function() p.invoke("open_terminal", ctx) end,
+  } }
 end)
 ```
 
-So the precise rule is: **Lua loads on first invocation of a command, or on first open of a menu where
-that plugin declared a dynamic contribution.** Menus open on a user gesture, so that load is off the
-startup path. The toolbar is the only surface needing frame one, and toolbar items are always static.
+Three things fall out of this that the declarative version needed extra machinery for:
 
-### `when` predicates
+- **Conditional items are just code.** No `when` predicate vocabulary, no closed set to enumerate, no
+  expression language to parse and sandbox. `if not ctx.is_directory then return {} end`.
+- **Dynamic items are the same as static ones.** `tag-actions` building one submenu per tag is a loop
+  in the builder, not a `"dynamic": true` escape hatch with a separate code path.
+- **Reactive enablement still works**, because contributions carry thunks rather than snapshots — the
+  decision already in the table above. `enabled` is a Lua function the host wraps in an observable and
+  calls on rebuild, so a plugin's toolbar button greys out with no repo open exactly as the built-ins
+  do. The cost is one Lua call per rebuild, which is nothing.
 
-`when` (visible) and `enabled_when` (greyed) name a predicate from a **closed set** the host
-evaluates. Not an expression language — that would be a second thing to sandbox and a second parser
-to get wrong. A leading `!` negates; there is no `and`, no `or`, no parentheses. Anything richer goes
-dynamic.
-
-| Context | Predicates |
-|---|---|
-| any | `repo.any`, `repo.is_dirty`, `repo.is_detached`, `repo.has_upstream`, `repo.has_remote_web_url`, `repo.is_ahead`, `repo.is_behind` |
-| `commit.row` | `commit.is_merge`, `commit.has_tags`, `commit.has_refs` |
-| `branch.*` | `branch.is_head`, `branch.has_upstream` |
-| `localchanges.file` | `files.single`, `files.multiple`, `files.any_staged`, `files.any_unstaged`, `files.any_conflicted` |
-| `file_browser.row` | `path.is_directory`, `path.is_file` |
-
-A predicate naming a context the anchor does not carry is a **load-time error**, not a silent false —
-`commit.is_merge` on `file_browser.row` is a manifest bug and should read as one.
-
-Because these are host-evaluated and reactive, `enabled_when` is what lets a plugin's toolbar button
-grey out with no repo open, matching the built-in buttons, without Lua being loaded at all.
-
-### Validation
-
-The manifest is a boundary, so it is parsed into typed records and never threaded around as loose
-JSON (Rule 1). Rejected at load, each naming the plugin and the offending field:
-
-- `id` not matching the folder name, or colliding with another plugin in the same root
-- `api_version` outside the host's supported range
-- an `anchor` not in the `MenuAnchor` enum
-- a `when`/`enabled_when` predicate not in the table above, or not valid for that anchor
-- a `command` id referenced by a menu or toolbar entry but not declared in `commands`
-- `placement: { "at": N }` from a user plugin — exact-index placement is bundled-only
-- a `label`/`tooltip`/`title` string key absent from `strings/en.json`, when the plugin ships strings
-
-That last one is worth the extra read: a missing key otherwise surfaces as a blank menu item much
-later, in a locale nobody tests.
+A plugin that registers nothing, throws during `init`, or registers against an anchor that does not
+exist is reported and disabled — see [Crash containment](#crash-containment).
 
 ### Load order
 
-1. **Enumerate both roots and read `plugin.json` only.** No Lua is loaded, no `lua_State` created.
+1. **Enumerate both roots and read `plugin.json`.** Identity only — a few hundred bytes each.
 2. **Parse each manifest into a typed record** (Rule 1 — this is a boundary). A malformed manifest is
    skipped with an error naming the file, not a crash and not a silent omission.
 3. **Refuse manifests outside the supported `api_version` range**, naming the plugin and the range.
-4. **Resolve id collisions: bundled wins.** A user plugin sharing an id with a bundled one is
-   ignored and shown as shadowed in the settings pane. The alternative — user overrides bundled —
-   would let a dropped-in folder silently replace a shipped feature, which is both a support problem
-   and a trust hole.
+4. **Resolve id collisions: bundled wins.** A user plugin sharing an id with a bundled one is ignored
+   and shown as shadowed in the settings pane. The alternative — user overrides bundled — would let a
+   dropped-in folder silently replace a shipped feature, which is both a support problem and a trust
+   hole.
 5. **Drop disabled and quarantined ids**, read from the host's own state file.
-6. **Register contributions from the manifest.** The app now knows every menu item, toolbar button
-   and command that exists, and which plugin owns it, without having executed anything.
-7. **On first invocation of a command, or first open of a menu carrying a dynamic contribution**,
-   create that plugin's `lua_State`, load `init.lua`, and keep the state for the rest of the session.
+6. **Create each surviving plugin's `lua_State` and run its `init.lua`**, collecting what it
+   registers. A throw here disables that plugin and reports it; it does not stop the others.
 
-Step 6 is the line between "the app knows what a plugin contributes" and "the app has run a plugin's
-code". Everything before it is parsing. What it buys is the registry, not a rendered dynamic menu:
-the settings pane can list a plugin that has never run, keybindings register and conflict-check
-without Lua, crash reports attribute a contribution to its owner, and the toolbar builds on frame one
-because toolbar items are always static.
+Step 6 is the startup cost, and it is the one number that decides whether this shape holds. See
+below.
 
 ### Host state
 
@@ -780,8 +727,10 @@ parse-at-the-boundary design, so nothing in v1 blocks it.
 Rule 2 forbids implicit registries and ambient pub/sub whose handler set isn't statically knowable. A
 plugin system is, on its face, both. The resolution:
 
-- Contributions are **declared in `plugin.json`**, so the handler set is readable from disk without
-  running anything — the strongest form of "statically knowable" available here.
+- The handler set is knowable at **load** time rather than compile time, and is made explicit
+  rather than left ambient: every plugin's `init.lua` has run before the first frame, so the registry
+  is complete and fixed for the session — nothing registers later, from a menu builder or a
+  callback.
 - `IMenuExtensions` and friends are **injected**, never located; `PluginBootstrap` returns a value
   rather than taking the DI `Context`.
 - The registry is **enumerable and attributable**, surfaced in a Plugins settings pane that is a v1
