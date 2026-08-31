@@ -134,7 +134,7 @@ public class TypeScriptOutlineTests(CodeIntelFixture fixture)
         Assert.Equal(CodeLanguage.TypeScript, CodeLanguages.Detect("src/auth.ts"));
         Assert.Equal(CodeLanguage.TypeScript, CodeLanguages.Detect("src/auth.mts"));
         Assert.Equal(CodeLanguage.Tsx, CodeLanguages.Detect("src/Badge.tsx"));
-        Assert.Null(CodeLanguages.Detect("src/auth.js"));
+        Assert.Equal(CodeLanguage.JavaScript, CodeLanguages.Detect("src/auth.js"));
     }
 
     private static IEnumerable<(string Name, SymbolKind Kind, int Depth)> Flatten(

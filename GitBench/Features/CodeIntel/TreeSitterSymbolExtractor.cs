@@ -32,30 +32,43 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         var capacity = poolCapacity ?? Environment.ProcessorCount;
         var read = queryText ?? ReadEmbeddedQuery;
         var compiled = new Dictionary<CodeLanguage, CompiledLanguage>();
-        try
+        string? firstFailure = null;
+
+        // Per language, not all-or-nothing. A grammar pin that renames a node breaks the query
+        // written against it and nothing else, and with fifteen bundled languages one such break
+        // taking code intelligence down for the other fourteen is a far worse failure than the one
+        // it is reporting. The language that failed simply has no outline, which is a state every
+        // caller already handles.
+        foreach (var language in CodeLanguages.All)
         {
-            foreach (var language in CodeLanguages.All)
+            try
             {
                 compiled.Add(language, CompiledLanguage.Create(language, capacity, read(language)));
             }
+            catch (Exception error)
+            {
+                firstFailure ??= error.Message;
+                _log?.Invoke($"Code intelligence unavailable for {language}: {error}");
+            }
+        }
 
+        if (compiled.Count > 0)
+        {
             _compiled = compiled;
             Availability = CodeIntelAvailability.Ready.Instance;
+            return;
         }
-        catch (Exception error)
-        {
-            foreach (var entry in compiled.Values)
-            {
-                entry.Dispose();
-            }
 
-            _compiled = null;
-            Availability = new CodeIntelAvailability.Unavailable(error.Message);
-            _log?.Invoke($"Code intelligence unavailable: {error}");
-        }
+        _compiled = null;
+        Availability = new CodeIntelAvailability.Unavailable(firstFailure ?? "No language loaded.");
     }
 
     public CodeIntelAvailability Availability { get; }
+
+    /// <summary>Whether this language's grammar and query both loaded. Availability answers "is
+    /// parsing possible at all"; with fifteen bundled languages one can be broken while the rest
+    /// work, and a test that only asked the former would not notice.</summary>
+    internal bool Supports(CodeLanguage language) => _compiled?.ContainsKey(language) == true;
 
     public FileOutline? Extract(string text, CodeLanguage language)
     {
@@ -256,16 +269,18 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
     /// </remarks>
     private static Node TypeOf(Node parameter)
     {
-        if (parameter.ChildByFieldName("type") is { Type: "type_annotation" } annotation)
-        {
-            Node? inner = null;
-            foreach (var child in annotation.NamedChildren) inner = child;
-            return inner ?? annotation;
-        }
+        // Only a node that also binds a name or a pattern is parameter-shaped. C# spills
+        // `params int[] rest` into the parameter list as a bare array_type, which has a type field
+        // of its own and yet already *is* the type — reading that field would return `int`.
+        var named = parameter.ChildByFieldName("name") ?? parameter.ChildByFieldName("pattern");
+        if (named is null || parameter.ChildByFieldName("type") is not { } type) return parameter;
 
-        return parameter.ChildByFieldName("name") is null
-            ? parameter
-            : parameter.ChildByFieldName("type") ?? parameter;
+        // TypeScript writes the type as an annotation node carrying its own colon.
+        if (type.Type != "type_annotation") return type;
+
+        Node? inner = null;
+        foreach (var child in type.NamedChildren) inner = child;
+        return inner ?? type;
     }
 
     private static void AppendCollapsed(StringBuilder builder, string text)

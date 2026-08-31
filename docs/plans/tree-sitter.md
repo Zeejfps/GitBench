@@ -384,17 +384,86 @@ That is also the whole reason the "prompt the user to install a language pack"
 pattern does not fit here. In an editor that pattern exists because no parser
 means no highlighting; for us, no parser means *exactly what ships today*.
 
-**Target set, when we expand:** roughly fifteen to twenty grammars covering the
-overwhelming majority of real repositories — C#, TypeScript, TSX, JavaScript,
-JSX, Python, Go, Rust, Java, C, C++, Ruby, PHP, JSON, YAML, HTML, CSS, Bash,
-Markdown.
+**Target set ✅ Shipped, minus three.** Fifteen grammars: C#, TypeScript, TSX,
+JavaScript, JSON, CSS, HTML, Markdown, YAML, Python, Go, Rust, Java, Bash, C.
+**C++, Ruby and PHP were deliberately left out** — together they are 8.8 MB of
+the 21.8 MB the full set would have cost, and C++ alone is more than the ten
+cheapest grammars combined. JSX needs no grammar of its own;
+tree-sitter-javascript parses it inline.
 
-**Measure before committing to that list.** Each grammar is generated C compiled
-once per shipped RID into `libtree-sitter-grammars`, and some `parser.c` files
-run to megabytes — C++ and TypeScript are the notorious ones. The costs to
-measure are installer size per RID, cold build time, and cached build time.
-Guessing here is how a 40 MB installer happens by accident. Note also that a few
-grammars ship C++ external scanners, which the native build must tolerate.
+The library is **13.6 MB** for the fifteen, up from 8.3 MB for three, and a cold
+build including every clone takes ~41 seconds.
+
+**Measured, so the list can be chosen rather than guessed.** All eighteen
+candidates cloned and compiled with the build's own flags (`-O1`, `-std=c11`),
+then linked into one library per candidate set, on win-x64:
+
+| Set | Grammars | Library | Compressed |
+| --- | --- | --- | --- |
+| What ships today | C#, TypeScript, TSX | 8.4 MB | 0.6 MB |
+| **+ web** (JavaScript, JSON, CSS, HTML, Markdown, YAML) | 9 | 9.5 MB | 0.8 MB |
+| **+ backend** (Python, Go, Rust, Java, Bash) | 14 | 12.9 MB | 1.3 MB |
+| **+ heavy** (C, C++, Ruby, PHP) | 18 | 21.8 MB | 2.0 MB |
+
+Object size per grammar, which is what a set costs to join:
+
+| Cheap (≤ 650 KB) | | Expensive (≥ 1 MB) | |
+| --- | --- | --- | --- |
+| JSON | 8 KB | C# *(already shipping)* | 5.85 MB |
+| HTML | 26 KB | C++ | 5.59 MB |
+| CSS | 123 KB | Ruby | 2.11 MB |
+| YAML | 203 KB | TSX *(already shipping)* | 1.47 MB |
+| Go | 227 KB | TypeScript *(already shipping)* | 1.43 MB |
+| Markdown | 390 KB | Bash | 1.36 MB |
+| Java | 429 KB | Rust | 1.13 MB |
+| JavaScript | 432 KB | PHP | 1.10 MB |
+| Python | 494 KB | | |
+| C | 623 KB | | |
+
+**The headline is that this compresses about eleven to one.** Generated parser
+tables are enormously redundant, so the full eighteen-grammar library is 21.8 MB
+on disk but 2.0 MB in the package — about **+1.4 MB of download** over what ships
+today. §4.7's original worry, a 40 MB installer by accident, is the wrong shape:
+the *download* stays small and the *installed footprint* is what triples.
+
+**So the ten cheap grammars are close to free** — JSON, HTML, CSS, YAML, Go,
+Markdown, Java, JavaScript, Python and C together add 2.9 MB uncompressed and
+roughly 0.3 MB compressed. Ten languages for half of what C++ alone costs. C++,
+Ruby and Bash are where a decision actually has to be made, and C# — already
+shipping — is quietly the single largest grammar in the set.
+
+**Build time is not a reason to hesitate.** Compiling all eighteen took ~16
+seconds single-threaded; the clone is a one-time network cost CI already caches
+on the hash of `build.cs` (§11).
+
+**Two things blocked the wider set, both upstream in `cs_tree_sitter` (§3):**
+
+1. `Grammar(Name, Tag, Subdirectory)` had **no URL** — `VendorClone` hardcoded
+   `https://github.com/tree-sitter/{name}`, and YAML and Markdown live under
+   `tree-sitter-grammars/`. *Fixed by an `Owner` parameter defaulting to
+   `tree-sitter`, which is the whole upstream change this needed.*
+2. The build compiles `parser.c` and `scanner.c` and silently skips anything
+   else, so a grammar with a C++ external scanner would fail to link on a missing
+   `..._external_scanner_*` symbol. **Checked rather than assumed: none of the
+   eighteen candidates ships a `scanner.cc`.** It stays a latent trap for whatever
+   is added next, not a problem for this set.
+
+**Three things the expansion itself taught:**
+
+- *A language's symbol is not always its name.* `tree-sitter-yaml` at HEAD exports
+  `tree_sitter_core_schema`; at the pinned `v0.7.2` it exports `tree_sitter_yaml`.
+  Read the symbol out of the built library rather than assuming it from the repo.
+- *Query failure had to become per-language.* The extractor compiled every
+  bundled query in one `try`, so one bad query left all fifteen languages without
+  an outline. It now keeps whatever compiles and logs the rest — and the "every
+  bundled query compiles" test had to be strengthened in the same breath, because
+  asking whether the extractor is `Ready` would have passed with fourteen of
+  fifteen broken.
+- *The pattern race of §4.3 is not a TypeScript quirk.* Go hit it too: a generic
+  `type_spec` pattern raced the struct and interface ones, so the same shape
+  reported as `Struct` or `Type` depending on match order. Enumerating the
+  alternatives is the fix where a structural discriminator like TypeScript's
+  `(_ !body)` does not exist.
 
 **We do not compile grammars on the user's machine.** This is the model nvim,
 Helix and Emacs use — `:TSInstall` clones a grammar repo and builds it with the
@@ -1075,8 +1144,7 @@ We would get the fast parse, never the fast reparse.
 ## 11. Phases
 
 **Status: Phases 0 through 6 are done — every capability A–F this plan set out to
-build — and TypeScript and TSX are bundled alongside C#. What remains is the
-wider grammar set per §4.7, then G and H.**
+build — and fifteen grammars ship. What remains is G and H.**
 
 **Phase 0 — build foundation. ✅ Done.** *No app behavior changes. Budget a week.*
 

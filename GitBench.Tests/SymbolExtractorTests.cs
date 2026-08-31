@@ -15,13 +15,19 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
         Assert.IsType<CodeIntelAvailability.Ready>(fixture.Extractor.Availability);
     }
 
+    // Per language, deliberately. A query failure now takes down only its own language, so asking
+    // whether the extractor is Ready would pass with fourteen of fifteen broken.
     [Fact]
     public void EveryBundledQueryCompilesAndEveryCaptureNameValidates()
     {
+        using var extractor = new TreeSitterSymbolExtractor();
+        Assert.IsType<CodeIntelAvailability.Ready>(extractor.Availability);
+
+        var missing = CodeLanguages.All.Where(l => !extractor.Supports(l)).ToArray();
+        Assert.Empty(missing);
+
         foreach (var language in CodeLanguages.All)
         {
-            using var extractor = new TreeSitterSymbolExtractor();
-            Assert.IsType<CodeIntelAvailability.Ready>(extractor.Availability);
             Assert.NotEmpty(TreeSitterSymbolExtractor.ReadEmbeddedQuery(language));
         }
     }
