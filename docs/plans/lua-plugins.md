@@ -8,8 +8,9 @@
 > surfaces plugins land on are reactive while the actions they trigger are bespoke** — so a
 > contribution cannot be an inert snapshot, and a port cannot be a thin wrapper over a git verb.
 >
-> **v1 is declarative contributions only.** Plugins describe menu items, toolbar buttons, commands and
-> event handlers as data. They do not build widget trees. See [Why not widget trees](#why-not-widget-trees).
+> **v1 is contributions only.** Plugins register menu items, toolbar buttons, commands and event
+> handlers, and return item *data* the host renders. They never build widget trees. See
+> [Why not widget trees](#why-not-widget-trees).
 
 ## Prerequisites
 
@@ -62,7 +63,7 @@ below, which is why they cannot come after.
 | Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require` and `debug`, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
 | Errors | Every callback wrapped; **no managed exception may unwind into native Lua**, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled, **persisted to disk**. |
 | Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
-| Out of scope for v1 | Widget trees, custom panels, plugin themes, diff transformers, assistant tools in Lua, forge providers, plugin-to-plugin deps, hot reload, a marketplace, static linking. |
+| Out of scope for v1 | Widget trees, custom panels, plugin themes, diff transformers, assistant tools in Lua, forge providers, plugin-to-plugin deps, hot reload, an in-app installer, a marketplace. |
 
 ## The seam
 
@@ -676,6 +677,83 @@ platform-varying labels. Every one of those is a contract phases 1–3 must alre
 identical shortcuts and icons; existing tests still passing; the item in its original position.
 Bundled plugins are enabled by default and can be disabled — "Open on remote" disappearing when a user
 turns off `open-remote` is deliberate, and is why P2 above expires.
+
+## Events
+
+### Plugins never see `IMessageBus`
+
+`GitBench/Messages/` holds twenty message types, and most of them are not events. `ShowDialogMessage`,
+`ShowToastMessage`, `OpenDiffWindowMessage`, `OpenReviewWindowMessage`, `ShowOperationErrorMessage`
+and `AskAssistantAboutSelectionMessage` are *commands* — "do this now" — and
+`HunkAppliedOptimisticMessage`, `LocalCommitOptimisticMessage` and `RemoteSyncOptimisticMessage` are
+optimistic-update plumbing. A plugin subscribing to those is subscribing to internal UI mechanics.
+
+`PullDivergedMessage` carries a whole `Repo`, so exposing the bus directly would hand plugins an app
+type through a back door.
+
+And the decisive one: if plugins subscribed by message type, **adding a message to the bus would
+silently widen the plugin API**. The exposed set has to be a deliberate list, not a side effect.
+
+So `IPluginEvents` publishes a closed set of domain events, and one adapter in the app subscribes to
+the internal messages and maps them.
+
+### The v1 set
+
+| Event | Source message | Payload beyond `repo` |
+|---|---|---|
+| `commit.created` | `CommitCreatedMessage` | — |
+| `refs.changed` | `RefsChangedMessage` | — |
+| `worktree.changed` | `WorkingTreeChangedMessage` | `index_only`, `path` |
+| `worktrees.changed` | `WorktreesChangedMessage` | — |
+| `submodules.changed` | `SubmodulesChangedMessage` | — |
+| `commits.loaded` | `CommitsLoadedMessage` | — |
+| `commit.selected` | `CommitSelectedMessage` | `sha` |
+| `pull.diverged` | `PullDivergedMessage` | — (`Repo` mapped to `RepoRef`) |
+
+Every event carries a `RepoRef`, for the same reason contributions do. Growth is deliberate: adding
+one means adding a row here and a mapping in the adapter.
+
+```lua
+p.on("worktree.changed", function(e)
+  if e.index_only then return end
+  p.log.info("working tree changed in " .. tostring(e.repo))
+end)
+```
+
+Registration happens during `init.lua`, like everything else. `p.on` after init is an error — that is
+what keeps the handler set complete and fixed for the session, which is the whole of the Rule 2
+argument below.
+
+### Delivery is asynchronous, and cannot veto
+
+`MessageBus.Broadcast` invokes handlers synchronously **on whatever thread broadcast**, and git work
+runs on `Task.Run`. Lua is UI-thread only, one `lua_State` per plugin. So the adapter marshals every
+event through `IUiDispatcher` and plugin handlers run *after* the broadcast completes.
+
+Two consequences to state plainly rather than discover:
+
+- **A plugin cannot veto, modify, or delay anything.** Events are notifications. If a plugin needs to
+  affect an operation, that is a contribution or an intent, not an event handler.
+- **State may have moved on** by the time a handler runs. A handler that cares must re-read through
+  `p.git` rather than trusting the payload to still be current.
+
+`MessageBus` is also an unlocked `Dictionary<Type, List<Delegate>>`, so the adapter subscribes and
+unsubscribes on the UI thread only. Plugin load and unload are already UI-thread, so this costs
+nothing — but it is a real constraint and not an incidental one.
+
+### Storms and containment
+
+`WorkingTreeChangedMessage` fires from a file watcher and can arrive in bursts. Delivery **coalesces
+per (event, repo) within a dispatcher tick** and delivers the latest, so a plugin sees one callback
+for a burst of fifty rather than fifty.
+
+Beyond that, event handlers are callbacks like any other: wrapped in the one total handler, deadlined,
+and subject to the three-strike disable. A plugin that throws on every `refs.changed` disables itself
+rather than producing a toast per fetch.
+
+The host holds **one bus subscription per exposed event**, regardless of how many plugins are
+listening, and fans out from there. Dropping a plugin drops its handlers out of the fan-out; nothing
+touches `MessageBus` per plugin.
 
 ## Testing
 
