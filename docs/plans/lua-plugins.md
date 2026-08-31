@@ -25,19 +25,19 @@ reached the same conclusion independently, which makes this the second plan bloc
 numbers, all code thrown away. This is what `terminal.md` did with ConPTY — *"a spike ahead of Phase 1,
 because the Windows engine choice hangs off it"* — and the findings changed that seam.
 
-1. Does a KeraLua hello-world AOT-publish and run on all four RIDs? **Dynamic native only; do not
-   attempt static linking.**
-2. Does a managed callback invoked from Lua survive (a) throwing and (b) a `lua_error` raised beneath
-   it? `StartupHealth.cs:7-10` says a managed exception unwinding a native callback frame **fail-fasts
-   under NativeAOT**, so error containment is unproven until this is run. KeraLua marshals callbacks
-   with `Marshal.GetFunctionPointerForDelegate` rather than `[UnmanagedCallersOnly]`, which is
-   supported under NativeAOT for non-generic blittable delegates but is not the annotated path — so
-   this is the question the engine choice actually hangs on.
+1. Does a hello-world with our own P/Invoke AOT-publish and run on all four RIDs, with Lua
+   **statically linked** and no dynamic dependency left behind?
+2. Does an `[UnmanagedCallersOnly]` callback work, and does a managed callback invoked from Lua
+   survive (a) throwing and (b) a `lua_error` raised beneath it? `StartupHealth.cs:7-10` says a
+   managed exception unwinding a native callback frame **fail-fasts under NativeAOT**, so error
+   containment is unproven until this is run.
 3. Can a `lua_sethook` count hook abort a runaway script without taking the process down? Lua raises
    by `longjmp`; if that cannot cross a managed frame safely, **the deadline in the threading decision
    is not implementable** and the contract changes.
 4. What does `luaL_newstate` + `openlibs` + one 200-line `init.lua` cost in milliseconds on the
    slowest release runner?
+5. Does `scripts/build-lua.cs` produce a working archive on all three host OSes from one
+   implementation?
 
 Publish the answers as a `## Findings — Lua under NativeAOT, measured` section in the shape of
 `terminal.md:156-224`. **Then** freeze contracts. Questions 2 and 3 decide two rows of the table
@@ -48,7 +48,9 @@ below, which is why they cannot come after.
 | Area | Decision |
 |---|---|
 | Isolation | **Four projects, contracts in the middle.** `GitBench.Extensibility` holds the contracts and depends on nothing. The app and the plugin host both depend on it and never on each other. Enforced by an architecture test **in both directions**, per Rule 2's "encode the intended boundaries as machine-checked rules". |
-| Runtime | **Lua 5.4 via KeraLua 1.4.9**, using its shipped dynamic natives. Not NLua (KeraLua plus reflection-based .NET object binding — the binding is what AOT removes, and we hand-write bindings anyway) and not MoonSharp (pure C#, but its interop resolves members by reflection; the hardwired-descriptor generator that makes it AOT-viable is a codegen step to maintain, on top of marshalling through its `DynValue` system). Static linking is out of scope — `glfw-static-linking.md:225-232` found `DirectPInvoke` emits no diagnostic when it fails, and KeraLua ships a dynamic native unconditionally, so a failed static link is masked by the fallback and reports green. If ever revisited, the only valid check is `! strings DiffDino \| grep -q lua_pcall`. |
+| Runtime | **Lua 5.4, our own P/Invoke, our own native build, statically linked.** Not KeraLua (its API is shaped around instance delegates marshalled with `Marshal.GetFunctionPointerForDelegate`, so it cannot express the `[UnmanagedCallersOnly]` callback path AOT prefers), not NLua (KeraLua plus reflection-based object binding), not MoonSharp (reflection interop; the hardwired-descriptor generator that makes it AOT-viable is a codegen step to maintain). We hand-write the bindings regardless — the marshalling we want is parse-at-the-boundary, not general-purpose. |
+| Native build | **Vendored Lua source, built per-RID in CI.** `vendor/lua`, matching how `vendor/XtermSharp` is already carried. Measured on Ubuntu 24.04 / clang 18 from a clean v5.4.7 checkout: 33 dependency-free source files, one compiler invocation, **5.2 s**, 313 KB shared / ~1 MB static archive. This is not the GLFW situation — there is no X11/Wayland/Cocoa tail behind it. |
+| Build tooling | **One C# file-based app**, `scripts/build-lua.cs`, run as `dotnet run scripts/build-lua.cs`. One implementation across Windows, macOS and Linux instead of a `.sh` and a `.ps1` that drift. The SDK is already a build prerequisite, so this adds no toolchain. |
 | Contribution declaration | **Declared as data in `plugin.json`; Lua loads lazily on first invocation.** Anchors, item ids, string keys, icons and ordering are readable without an interpreter. |
 | Contribution model | Plugins return **data**, the host builds widgets. Crossing the FFI boundary happens once and is **parsed into a contract type**; the raw Lua table is never seen downstream (Rule 1). |
 | Reactivity | Contributions carry **thunks, not snapshots** — `Func<string>` labels, `Func<bool>` enablement. `ToolbarButton.Label` is a `Prop<string?>` bound through `L.T(...)` so labels follow a locale switch without a rebuild; a plain `string` would ship a tooltip stuck in the previous language. |
@@ -208,6 +210,12 @@ The residue that stays forever, and is worth paying: `GitBench.Extensibility` re
 along with `MenuAnchor`/`MenuTarget` construction at six call sites, `IMenuExtensions` in five
 constructors and the toolbar, and `App/PluginHostAdapters.cs`.
 
+Static linking adds one more: the `<Import>` carrying the `DirectPInvoke` and archive items has to
+sit in `GitBench.csproj` itself, because MSBuild items do not cross a `ProjectReference`. So removal
+is two project references, one `PluginBootstrap.Install` line, and one `<Import>` — not the two-line
+story it would be with a dynamic native. Worth naming, since the point of P1 is that it is checked
+rather than asserted.
+
 ## Threading and error propagation
 
 Three hazards. All three are Phase 0.5 questions before they are design decisions.
@@ -239,9 +247,11 @@ interfaces, outbound ports, null implementations. No logic beyond the nulls. Thi
 load order, the contribution registry, quarantine, error containment, `PluginBootstrap`. Knows nothing
 about Lua: it talks to an `IPluginRuntime` seam, so most tests never boot an interpreter.
 
-**`GitBench.Plugins.Lua` — the binding layer.** KeraLua P/Invoke, the `gitbench` global, marshalling
-both ways, the callback wrapper. The only module holding a `lua_State`, and the only place where a
-Rule 3 level-1 justification comment is expected on every function. See below.
+**`GitBench.Plugins.Lua` — the binding layer.** Our own `DllImport` surface over the Lua 5.4 C API,
+the `gitbench` global, marshalling both ways, the callback wrapper. The only module holding a
+`lua_State`, and the only place where a Rule 3 level-1 justification comment is expected on every
+function — a P/Invoke declaration and an `[UnmanagedCallersOnly]` callback are checker bypasses by
+construction. See below.
 
 **In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
 per-plugin string table, and the merge function.
@@ -253,40 +263,80 @@ strings file is an open-ended dictionary with plural sub-objects, so it needs a 
 
 ### The binding layer
 
-KeraLua is a thin P/Invoke wrapper over the Lua 5.4 C API — a stack, `lua_pushcfunction`,
-`lua_pcall`. It has no .NET object binding, which is the point: the marshalling we want is the
-parse-at-the-boundary kind, hand-written, not reflection over arbitrary types.
+We own the P/Invoke surface: roughly forty `DllImport` declarations against the Lua 5.4 C API, which
+has not moved in years. No third-party binding, and no dependency whose AOT behaviour we do not
+control.
 
-**Native coverage, verified against the 1.4.9 package.** All four release RIDs are served:
-
-| RID | Asset | Size |
-|---|---|---|
-| `win-x64` | `runtimes/win-x64/native/lua54.dll` | 522 KB |
-| `linux-x64` | `runtimes/linux-x64/native/liblua54.so` | 394 KB |
-| `osx-arm64`, `osx-x64` | `runtimes/osx/native/liblua54.dylib` | 702 KB |
-
-There is no `osx-arm64`/`osx-x64` RID in the package — a single `osx` folder carries a **universal
-binary with both architectures**, which RID fallback resolves for either. That is fine, and it means
-macOS ships both slices; splitting them is a build-time trim if the ~350 KB ever matters.
+**Why hand-rolled rather than KeraLua.** The deciding factor is `[UnmanagedCallersOnly]` — the
+AOT-blessed reverse-P/Invoke path. It takes a static method and a plain function pointer, with no
+delegate involved, which removes two hazards at once: there is no delegate for the GC to collect
+while Lua holds a pointer to it, and there is no reliance on
+`Marshal.GetFunctionPointerForDelegate`, which is supported under NativeAOT but is not the annotated
+path and which KeraLua ships with no AOT claim at all. KeraLua's API is shaped around instance
+delegates, so it structurally cannot offer this.
 
 **What the layer does, per plugin:**
 
 1. Create one `lua_State`. Open the standard libraries, then remove `io`, `os.execute`,
    `package.loadlib`, C `require` and `debug` for an untrusted plugin.
-2. Build the `gitbench` global as a table of C functions. Each is a `LuaFunction` delegate whose
-   pointer comes from `Marshal.GetFunctionPointerForDelegate`, and **each delegate is stored in a
-   field on the host object** so the GC cannot collect it while Lua holds the pointer.
-3. Wrap every one of those functions in a single total handler: read arguments off the stack with
-   explicit typed reads, build the contract record, catch everything, and convert a fault into a Lua
-   error rather than letting it unwind into native code.
+2. Build the `gitbench` global as a table of C functions, each a `static` method carrying
+   `[UnmanagedCallersOnly]` and pushed as a `delegate* unmanaged<IntPtr, int>`. Per-plugin state
+   hangs off the `lua_State` (registry or an upvalue), not off a captured closure — an
+   `[UnmanagedCallersOnly]` method cannot capture.
+3. Wrap every one in a single total handler: read arguments off the stack with explicit typed reads,
+   build the contract record, catch everything, and convert a fault into a Lua error rather than
+   letting it unwind into native code.
 4. Load `init.lua` with `load(chunk, name, "t")` — text chunks only.
 5. Return contributions by walking the returned table once into `MenuItem`/`ToolbarItem` records. The
    raw table never travels further than this function.
 
-Steps 2 and 3 are where the AOT risk lives, and are what Phase 0.5 question 2 exists to settle.
-`Marshal.GetFunctionPointerForDelegate` is supported under NativeAOT for non-generic delegates with
-blittable signatures, and KeraLua's `LuaFunction` qualifies — but the package carries no AOT
-annotations and makes no such claim, so it is plausible rather than proven.
+Point 2 is the substantive design consequence of hand-rolling: because the callbacks are static, the
+per-plugin context has to live on the Lua side rather than in a C# closure. That is a small amount of
+registry bookkeeping, and it is the price of the safer callback path.
+
+### Building the native
+
+**Vendored, not fetched.** Lua source lives in `vendor/lua`, the way `vendor/XtermSharp` already
+does — reproducible, offline, auditable, and about a megabyte. Building it is one compiler
+invocation over 33 files with no dependencies:
+
+```bash
+clang -O2 -fPIC -DLUA_USE_LINUX -c $(ls *.c | grep -vE '^(lua|luac|onelua)\.c$') && ar rcs liblua54.a *.o
+```
+
+`onelua.c` must be excluded — it is an amalgamation of the others and duplicate-defines everything if
+left in.
+
+**`scripts/build-lua.cs`**, a C# file-based app run with `dotnet run`, replaces what would otherwise
+be a shell script and a PowerShell script that drift apart. It selects the platform compiler and
+flags (`LUA_USE_LINUX` / `LUA_USE_MACOSX` / default on Windows), builds the archive for the host RID,
+and writes it where the `<Import>` below expects it. CI already runs four jobs on four runners, so
+each builds its own architecture and no cross-compilation is needed.
+
+**Static linking is back on the table, and for a specific reason.** `glfw-static-linking.md:225-232`
+rejected it because `DirectPInvoke` emits no diagnostic when it fails — it silently falls back to the
+lazy dynamic path — *and the shared native was still shipping, so the fallback worked and the failure
+was invisible*. Owning the build removes the second half: we ship no `lua54` dynamic library at all,
+so a failed static link becomes an unresolved load at the first Lua call. Loud, at startup, on the
+build that produced it.
+
+The mechanics that review established still apply and are not optional:
+
+- The `DirectPInvoke` and archive items **cannot live in a plugin project** — MSBuild items do not
+  flow across a `ProjectReference`. They go in an `<Import>` into `GitBench.csproj`, placed *after*
+  its first `PropertyGroup` (or `$(PublishAot)` is empty and the ItemGroup vanishes silently), with
+  archive paths through `$(MSBuildThisFileDirectory)` and a guard of `'$(RuntimeIdentifier)' != ''`.
+- Use `NativeSystemLibrary` and `NativeFramework`, **not** `LinkerArg` — `Native.Unix.targets`
+  appends `@(NativeLibrary)` into `@(LinkerArg)` during target execution, so evaluation-time
+  `LinkerArg` entries land before the archives.
+- The Windows import-library collision that review flagged does not apply here: it comes from a
+  *shared* build emitting a same-named `.lib`, and we only ever produce the static archive.
+- Verify positively in CI: the published binary must have **no dynamic dependency on Lua**
+  (`ldd` / `otool -L` / `dumpbin /dependents`) and no residual DllImport module string. A green
+  publish is not evidence.
+
+If any of this fights back, the fallback is a per-RID dynamic native built by the same script — the
+binding layer does not care which it links against.
 
 ## Anchor points
 
@@ -562,7 +612,8 @@ the real cost, accepted knowingly, bounded by the settings pane.
 1. **Contracts + host skeleton.** `GitBench.Extensibility` and `GitBench.Plugins` with a fake runtime.
    Two anchors, null bindings, `MenuMerge`, the architecture test, quarantine and safe mode, the
    settings pane, `api_version`. P1 pinned in CI while P2 still holds.
-2. **The Lua runtime**, against contracts the spike has validated.
+2. **The Lua runtime**: vendor the source, write `scripts/build-lua.cs`, write the P/Invoke surface
+   and the callback wrapper, wire the static-link `<Import>` and the CI dependency check.
 3. **Remaining anchors, the toolbar, and `open-remote`.** Strings `@app/`-referenced, not yet moved.
 4. **`copy-paths`, `tag-actions`, `shell-tools`**, in that order.
 5. **Commands and keybindings**, then forge providers built on `open-remote`.
@@ -577,6 +628,12 @@ conflict UI.
 
 - **Phase 0.5 comes back negative on question 2 or 3.** Then error containment or the deadline is not
   available as designed and the contracts change. That is why the spike precedes the freeze.
+- **Static linking fights back.** Mitigated by owning the build: with no dynamic `lua54` shipped, a
+  failed link fails loudly at first use rather than silently falling through, and the fallback is a
+  per-RID dynamic native from the same script. The binding layer is indifferent to which it links.
+- **We now own a C library.** Roughly 30k lines of Lua source in `vendor/`, and its security patches.
+  Lua's release cadence is slow and its CVE history is thin, but this is a real obligation that
+  KeraLua would have carried for us.
 - **Startup regression.** Native AOT was chosen for launch speed; a Git client that got slower to
   launch in exchange for a plugin system is a bad trade. Lazy loading plus a ≤ 15 ms asserted budget
   is the mitigation.
