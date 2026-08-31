@@ -60,7 +60,7 @@ table, which is why they cannot come after.
 | Menu item type | Plugins produce `Extensibility.MenuItem`, a sum type (`Action \| Submenu \| Separator`), projected onto the existing `RepoBarContextMenu.Item`. The app's own 9-field bag is left alone — 29 files touch it, and the invariant is enforced at the parse boundary instead. |
 | Writes | Plugins never call git writes. `IPluginRepoActions` takes a closed sum type of **app intents** (`RepoAction.DeleteTag`), which the adapter routes to the flow that already owns the dialog, the confirmation and the translations. |
 | Threading | Menu builders and predicates run **synchronously on the UI thread** under a deadline **whose mechanism Phase 0.5 must establish**; they may not call git. Data a builder needs but cannot compute — a remote URL — is pre-resolved into `MenuTarget` by the app. `on_select` may go async. One `lua_State` per plugin, all UI-thread in v1. |
-| Localization | Plugins ship `strings/<locale>.json` in the app's format, and reference shared app keys as `@app/<key>` rather than copying them. Lookup is **runtime**, because `Strings` is source-generated and closed. **Plurals are supported**, through a resolver pinned to the app's own selector by a differential test — see [Localization](#localization). |
+| Localization | Plugins ship `strings/<locale>.json` in the app's format, and reference shared app keys as `@app/<key>` rather than copying them. Lookup is **runtime**, because `Strings` is source-generated and closed. **Plurals reuse `ZGF.Gui.Localization.PluralRules`**, which is already a runtime call — see [Localization](#localization). |
 | Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require`, **and `debug`**, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
 | Errors | Every callback wrapped; no managed exception may cross the `[UnmanagedCallersOnly]` boundary, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled — **persisted to disk**, see [Crash containment](#crash-containment). |
 | Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
@@ -254,8 +254,8 @@ both ways, the callback wrapper. The only module holding a `lua_State`, and the 
 Rule 3 level-1 justification comment is expected on every function.
 
 **In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
-per-plugin string table (`@app/` catalog fallthrough, the runtime pseudo transform, and plural
-selection via `PluralRules`), and the merge function.
+per-plugin string table (`@app/` catalog fallthrough, the pseudo transform, and plural selection
+delegated to `ZGF.Gui.Localization.PluralRules`), and the merge function.
 
 **The bundled plugins.** Four, each a converted built-in.
 
@@ -334,58 +334,71 @@ Phase 1 adds, ahead of `RecoveryUpdater`:
 
 Three problems. One of them turned out not to be a problem.
 
-### Plurals: in v1, and pinned to the app's own rule
+### Plurals: call the app's existing runtime resolver
 
-Plugins can define plural strings. Punting it would break the first third-party plugin that needs one,
-and the string-table format cannot gain plural support later without being a breaking change.
+Plugins can define plural strings. An earlier draft deferred them, then proposed reimplementing the
+selector and pinning it with a differential conformance test. **Both were wrong, and the second was
+wrong for an embarrassing reason: plural selection is already a runtime call, in a library GitBench
+already references.**
 
-The hazard is not implementing plural selection — it is implementing *the wrong one*. Measured across
-the catalogs:
+`ZGF.Gui.Localization.PluralRules.Select(CultureInfo, in PluralForms, long)` is public API
+(`framework/ZGF.Gui/Localization/PluralRules.cs:7`), and `GitBench.csproj:95` references `ZGF.Gui`.
+The generator bakes only the *forms* into a `PluralForms` struct and emits a member that selects live:
 
-| Locale | Categories present | CLDR says |
-|---|---|---|
-| en, es | `one`, `other` | matches |
-| ja, ko, zh-Hans | `one`, `other` | **`other` only** |
-| ru | `one`, `few`, `many`, `other` | matches |
-| ar | `one`, `two`, `few`, `many`, `other` | CLDR also has `zero`; unused here |
+```csharp
+// LocalizationGenerator.cs:314-315
+public string {id}(int count) => string.Format(_culture, PluralRules.Select(_culture, {field}, count), count);
+```
 
-The CJK row is the important one. `files.stage` in Japanese is `ステージ` for `one` and
-`{count}個のファイルをステージ` for `other` — genuinely different text, seven such keys per CJK locale.
-Under real CLDR rules the `one` form is unreachable and a Japanese user reads "Stage 1 files". The app
-is evidently using a simplified `n == 1 → one` selector with extra categories for Arabic and Russian:
-a UI convention, not a linguistic one.
+So `PluginStrings` parses a plugin's plural object into a `PluralForms` and renders it through the
+same call the app uses. **One implementation, shared.** No extraction step, no second rule table, no
+conformance test — there is nothing to keep in sync. `PluginStrings` lives app-side, so it may use
+`ZGF.Gui` freely; `GitBench.Extensibility` still depends on nothing, because the port only ever
+exposes `string t(key, count?)`.
 
-**So a textbook CLDR implementation in the plugin resolver would silently disagree with the app**, in
-languages no one on the team reads. That is the failure to design against.
+The app's rule, for reference (`PluralRules.cs:10-16`) — and note it already covers `fr`/`pt`, which
+the app does not yet ship, so it is not a seven-locale table to be re-derived:
 
-**The domain is bounded, which makes this small.** A plugin only ever renders in a locale the app
-supports, so the resolver needs rules for exactly the members of `Localization/Locale.cs` — seven plus
-`Pseudo`. This is not "implement CLDR"; it is a fixed table that grows only when the app gains a
-language, which is already a change that touches the catalogs.
+| Language | Rule |
+|---|---|
+| `ar` | full CLDR: zero / one / two / few / many / other |
+| `ru` | full CLDR: one / few / many / other |
+| `fr`, `pt` | `n` is 0 or 1 → one |
+| everything else | `n == 1` → one |
 
-Four steps, in phase 1:
+The earlier reasoning about CJK was right about the evidence and wrong about the conclusion. `ja`,
+`ko` and `zh` do get `n == 1 → one`, deliberately departing from CLDR, and
+`GitBench.Tests/LocalizationFormatTests.cs:35-43` pins it. But `ru` and `ar` are not ad-hoc extras
+bolted onto a simplified rule — they are verbatim CLDR, and the source says so.
 
-1. **Extract the app's real rule empirically.** The generator lives in the `framework/` submodule; do
-   not read it and do not assume it. Call the generated `Strings` plural members for every locale over
-   counts 0–200 and record which variant comes back. That yields the exact selector as a fact.
-2. **Implement `PluralRules.Select(Locale, int) → PluralCategory`** in `GitBench.Extensibility` as a
-   data table matching step 1.
-3. **Pin it with a differential conformance test.** For every plural key in the app catalog × every
-   locale × counts 0–200, assert the resolver picks the same category the generator did. Divergence is
-   a red test — now, and when someone adds a locale. This is `terminal.md`'s recorded-corpus pattern
-   applied to plurals, and it is what keeps two implementations honest without merging them.
-4. **Validate at the parse boundary.** A plugin plural object must carry every category its locale's
-   rule can select; a missing one fails at load, naming the plugin, key and locale (Rule 1). At
-   runtime the chain is exact category → `other` → `en` → the key itself, so a bad table degrades to
-   readable text rather than a blank label.
+**Validation at load reuses the generator's rule rather than inventing a stricter one.** The
+generator requires per language (`LocalizationGenerator.cs:34-43`): `{other}` for ja/ko/zh,
+`{one, two, few, many, other}` for ar, `{one, few, many, other}` for ru, `{one, other}` elsewhere —
+and **`zero` is optional everywhere**, deliberately, because only a count of 0 selects it and `other`
+reads acceptably there. A plugin table missing a required category fails at load naming plugin, key
+and locale; anything else falls back through `PluralForms.Get`, which resolves a missing category to
+`other`.
 
-If step 1 shows the app's rule is not expressible as a small table, that is a finding worth having
-before phase 3 rather than after — and the fallback is narrower, not absent: plugins get `one`/`other`
-only, validated at load, with the richer categories deferred until the app's own rule is understood.
+An earlier draft said a plugin "must carry every category its locale's rule can select". That would
+demand an Arabic `zero` form that **no catalog in this app ships**, and would reject plugin tables the
+app's own rule accepts.
 
-**Incidental finding, unrelated to plugins:** `ar.json` carries two keys absent from every other
-catalog — `review.context_stage` and `review.context_unstage`. Orphans from a rename. Worth a separate
-cleanup.
+**Interpolation must go through `string.Format` with the culture**, not a string replace. The
+generator rewrites `{count}` → `{0}` at build time and the emitted member does
+`string.Format(_culture, form, count)`. `PluginStrings` does the same rewrite at load and the same
+formatted render, or number formatting drifts from the app's the moment a locale groups digits
+differently.
+
+Two things left open, both worth settling in phase 1:
+
+- **Russian `other` is unreachable for integer counts** — `Russian()`'s default arm returns `Many`,
+  as its comment states, so all 22 `ru` `other` strings are dead. Harmless, but a plugin author will
+  write one and wonder why it never shows. Document it, or warn at load.
+- **Arabic digit shape is unverified.** No catalog contains Arabic-Indic digits, and .NET's
+  `string.Format` emits ASCII regardless of `NativeDigits`, so plugins will match the app either way.
+  But `LocalizationFormatTests.cs:145-150` pointedly avoids asserting rendered digits. If the plugin
+  suite adds plural tests, **assert the rendered string, not just the category** — that is the gap the
+  current tests leave.
 
 ### Shared keys: reference them, do not copy them
 
@@ -419,14 +432,33 @@ This also makes the two-phase migration nearly free:
 `PluginStrings` applies the same transform at runtime. Plugin strings get pseudo coverage for free and
 no plugin author ever ships a `pseudo.json`.
 
+The transform is `Pseudoize` (`LocalizationGenerator.cs:639-660`): wrap in `[`…`]`, accent the
+vowels plus `cCnNyY`, and append `max(1, len/3)` middle dots. Three details a reimplementation must
+match, none of them obvious:
+
+- Pseudo is built from the **English** catalog, not the active locale, with culture `en` — so it
+  takes the `n == 1` plural rule and only the categories `en.json` carries.
+- For parameterized and plural keys the transform runs on the **positional** string, *after*
+  `{count}` → `{0}`. Padding is `positional.Length / 3`. A runtime pass over a template still holding
+  `{count}` computes a different pad and produces visibly different pseudo text — the exact silent
+  divergence this plan avoids elsewhere.
+- Per-category pseudo text comes from the English form for that category.
+
 ### What actually moves
 
-**~16 keys, not the 25–30 previously estimated.** Four `file_browser.*`, four `toolbar.*`, five
-`localchanges.*`, `commits.context_delete_tag`, and two `repos.*`. None of them is plural — every
-plural key in the catalog belongs to a stage/unstage/discard/stash item that stays in C# as a core git
-verb. That is why plural support ships without a bundled plugin exercising it, and why the
-conformance test in step 3 above is the only thing standing between the resolver and silent
-divergence.
+**~16 keys**, down from 25–30: four `file_browser.*`, four `toolbar.*`, five `localchanges.*`,
+`commits.context_delete_tag`, and two `repos.*`. None is plural — every plural key in the catalog
+belongs to a stage/unstage/discard/stash item that stays in C# as a core git verb. So plural support
+ships without a bundled plugin exercising it, which is an argument for a plural test in the hostile-
+plugin corpus, not for deferring the feature.
+
+**The 16 is provisional and sharing is the norm, not the exception.** Across the candidate key
+families, 22 keys have more than one call site — `commits.context_delete_tag` among them
+(`CommitsView.cs:1048` and `:1120`), and it is on the move list. `repos.add_button` has five sites
+across four files. **Enumerate the list against real call sites before Phase B**; anything shared
+becomes an `@app/` reference instead of a move. Two keys (`repos.group_new_default`,
+`repos.group_default_name`) appear to have no call sites at all and want deleting rather than
+migrating.
 
 Two reasons it shrank. Shared keys now stay put. And because `tag-actions` routes an intent to the
 app's `DeleteTagDialog`, five of that dialog's six strings stay in the app — only the menu label
