@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Throwaway spike for docs/plans/lua-plugins.md Phase 0.5. Deliberately NOT in GitBench.sln:
+    it must not affect the app build, and it is deleted once its findings are recorded.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The whole point is to see AOT warnings rather than have them suppressed. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="KeraLua" Version="1.4.9" />
+  </ItemGroup>
+
+</Project>
