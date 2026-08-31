@@ -245,6 +245,16 @@ each documented in repodex's own query file:
 the same node must produce one `OutlineNode`. Keep one per node id, first match
 wins. Tested.
 
+**"First match wins" is not "first pattern wins".** Matches arrive in source
+order, and two patterns matching the *same node* arrive in an order the query
+file does not control — so overlapping patterns that disagree about the answer
+race, and the race is not reproducible from reading the file. Writing the more
+specific pattern first does nothing. TypeScript's `const x = () => {}` versus
+`const x = {…}` is the case that found this: both are a `variable_declarator`,
+one is a function and one is a value, and the only fix is to make the patterns
+**disjoint by structure** — here `value: (_ !body)`, since a value with no `body`
+field is not a function.
+
 **Capture names are validated at extractor construction.** The query compiler
 will not do it for us: tree-sitter validates node types, fields and predicates,
 but not what a capture name *means*, so `@def.Frobnicate` compiles clean. At
@@ -1065,8 +1075,8 @@ We would get the fast parse, never the fast reparse.
 ## 11. Phases
 
 **Status: Phases 0 through 6 are done — every capability A–F this plan set out to
-build. What remains is §11's "Later": TypeScript and TSX, the wider grammar set
-per §4.7, then G and H.**
+build — and TypeScript and TSX are bundled alongside C#. What remains is the
+wider grammar set per §4.7, then G and H.**
 
 **Phase 0 — build foundation. ✅ Done.** *No app behavior changes. Budget a week.*
 
@@ -1193,9 +1203,26 @@ copied text.
 
 **Phase 6 — Capabilities D and E.** §8. Small, independent, either order.
 
-**Later:** TypeScript and TSX (one `.scm` and one enum member each — the
-grammars are already in the submodule's native library, so no native work), then
-the wider grammar set per §4.7, then G and H.
+**TypeScript and TSX ✅ Done.** One `.scm` and one `CodeLanguage` member each, no
+native work — both grammars were already compiled into the submodule's library.
+Three things the phase learned:
+
+- *The two query files are identical, and deliberately duplicated rather than
+  shared. TSX is a separate grammar because JSX is ambiguous with type
+  assertions, so `.tsx` may not be parsed as TypeScript and `.ts` may not be
+  parsed as TSX; one file per grammar keeps that true if either ever diverges.*
+- *A signature pattern has to be anchored to what declares it. `(property_signature …)`
+  on its own also matches the members of an inline object type — `(props: { label: string })` —
+  and a parameter's shape is not a declaration anyone navigates to. Anchored to
+  `interface_body` and to a `type_alias_declaration`'s `object_type` instead.*
+- *`ParameterTypesOf` needed one change, narrowly scoped: TypeScript writes a
+  parameter's type as an annotation node carrying its own colon, so it is
+  unwrapped rather than rendered as `": string"`. The obvious wider rewrite —
+  "always prefer the `type` field" — broke C#'s `params int[] rest`, which that
+  grammar spills into the parameter list as a bare `array_type` that already
+  **is** the type.*
+
+**Later:** the wider grammar set per §4.7, then G and H.
 
 Phases 4 and 5 are independent and can swap. Folding is placed first because it
 was asked for; `ParameterTypes` landing in Phase 1 means C's overload identity

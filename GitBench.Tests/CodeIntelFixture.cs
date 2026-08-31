@@ -9,8 +9,10 @@ public sealed class CodeIntelFixture : IDisposable
 
     internal ISymbolExtractor Extractor => _extractor;
 
-    internal FileOutline Outline(string csharp) =>
-        _extractor.Extract(csharp, CodeLanguage.CSharp)
+    internal FileOutline Outline(string csharp) => Outline(csharp, CodeLanguage.CSharp);
+
+    internal FileOutline Outline(string source, CodeLanguage language) =>
+        _extractor.Extract(source, language)
         ?? throw new InvalidOperationException("Expected an outline, got none.");
 
     public void Dispose() => _extractor.Dispose();

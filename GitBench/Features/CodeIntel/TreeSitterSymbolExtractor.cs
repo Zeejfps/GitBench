@@ -236,15 +236,36 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
                 continue;
             }
 
-            var type = child.ChildByFieldName("name") is null
-                ? child
-                : child.ChildByFieldName("type") ?? child;
+            var type = TypeOf(child);
 
             if (builder.Length > 0) builder.Append(", ");
             AppendCollapsed(builder, type.Text);
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// The parameter's declared type, or the whole node where it does not name one — a lambda's
+    /// untyped argument, or C#'s <c>params int[] rest</c>, which the grammar spills into the
+    /// parameter list as a bare <c>array_type</c> that already <em>is</em> the type.
+    /// </summary>
+    /// <remarks>
+    /// TypeScript writes the type as an annotation node carrying its own colon, so that one case is
+    /// unwrapped rather than rendered as <c>": string"</c>.
+    /// </remarks>
+    private static Node TypeOf(Node parameter)
+    {
+        if (parameter.ChildByFieldName("type") is { Type: "type_annotation" } annotation)
+        {
+            Node? inner = null;
+            foreach (var child in annotation.NamedChildren) inner = child;
+            return inner ?? annotation;
+        }
+
+        return parameter.ChildByFieldName("name") is null
+            ? parameter
+            : parameter.ChildByFieldName("type") ?? parameter;
     }
 
     private static void AppendCollapsed(StringBuilder builder, string text)

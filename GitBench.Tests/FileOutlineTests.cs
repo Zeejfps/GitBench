@@ -79,7 +79,9 @@ public class FileOutlineTests(CodeIntelFixture fixture)
     {
         Assert.Equal(CodeLanguage.CSharp, CodeLanguages.Detect("Widget.cs"));
         Assert.Equal(CodeLanguage.CSharp, CodeLanguages.Detect("src/Deep/Widget.CS"));
-        Assert.Null(CodeLanguages.Detect("Widget.ts"));
+        Assert.Equal(CodeLanguage.TypeScript, CodeLanguages.Detect("Widget.ts"));
+        Assert.Equal(CodeLanguage.Tsx, CodeLanguages.Detect("Widget.tsx"));
+        Assert.Null(CodeLanguages.Detect("Widget.js"));
         Assert.Null(CodeLanguages.Detect("Widget.txt"));
         Assert.Null(CodeLanguages.Detect("Makefile"));
         Assert.Null(CodeLanguages.Detect(string.Empty));
