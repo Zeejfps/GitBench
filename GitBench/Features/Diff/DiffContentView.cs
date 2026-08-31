@@ -170,10 +170,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var (prevPath, prevWasFullFile) = DescribeState(_renderState);
         var hadTopLine = TryGetTopVisibleNewLine(out var prevTopLine);
         var prevScrollY = _list.ScrollY;
+        var prevScrollX = _scrollX;
         var prevRowCount = _rowSet.Rows.Count;
 
         _renderState = state;
-        _scrollX = 0;
         _hoveredHunkIndex = -1;
         _hoveredButton = HunkAction.None;
         _hoveredExpanderRow = -1;
@@ -204,7 +204,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         _list.ItemCount = _rowSet.Rows.Count;
         _list.NotifyItemsChanged();
-        ApplyScrollForTransition(state, prevPath, prevWasFullFile, hadTopLine, prevTopLine, prevScrollY);
+        ApplyScrollForTransition(state, prevPath, prevWasFullFile, hadTopLine, prevTopLine, prevScrollY, prevScrollX);
         SetDirty();
     }
 
@@ -216,11 +216,17 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // for a fresh full-file load. Falls back to the top — the prior behavior for plain diffs.
     private void ApplyScrollForTransition(
         DiffRenderState state, string? prevPath, bool prevWasFullFile,
-        bool hadTopLine, int prevTopLine, float prevScrollY)
+        bool hadTopLine, int prevTopLine, float prevScrollY, float prevScrollX)
     {
         var (newPath, newIsFullFile) = DescribeState(state);
+        var sameFile = newPath != null && newPath == prevPath;
+        // Horizontal travel is a property of the file being read, not of the render that carried
+        // it, so it survives exactly what the vertical offset survives: a different file resets it,
+        // a re-emit of the same one does not. An offset left overhanging narrower content is pulled
+        // back by the clamp every draw already runs.
+        _scrollX = sameFile ? prevScrollX : 0;
 
-        if (newPath != null && newPath == prevPath)
+        if (sameFile)
         {
             // Same file. A flipped mode is a toggle → remap the top line into the new layout;
             // an unchanged mode is a re-emit (highlight attach, working-tree reload) → keep the

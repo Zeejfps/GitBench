@@ -82,7 +82,7 @@ internal sealed record MarkdownDocumentBody : Widget
                             Notice(TopNotice),
                             new Switch<MarkdownDocument?>
                             {
-                                Value = Document.ToReadable(ctx),
+                                Value = Held(Document.ToReadable(ctx)),
                                 Case = doc => doc is null
                                     ? Empty.Widget
                                     : new MarkdownWidget { Document = doc },
@@ -94,6 +94,22 @@ internal sealed record MarkdownDocumentBody : Widget
             },
         ],
     };
+
+    /// <summary>
+    /// The document to draw, which is the last one there was until there is another.
+    /// </summary>
+    /// <remarks>
+    /// A null means "the next one is still loading", not "show nothing": every caller hides this
+    /// whole body when there is genuinely nothing to show, so emptying out on a null is only ever
+    /// visible as a flicker. It is not free, either — an empty body measures to its padding, and
+    /// the scroll pane above clamps an offset into content that short, which is the reader's place
+    /// in the document. Holding the old one keeps the height, and so keeps the place.
+    /// </remarks>
+    private static IReadable<MarkdownDocument?> Held(IReadable<MarkdownDocument?> document)
+    {
+        MarkdownDocument? last = null;
+        return new Derived<MarkdownDocument?>(() => last = document.Value ?? last);
+    }
 
     private static IWidget Notice(Prop<string?> text) => new Text
     {

@@ -108,8 +108,9 @@ internal sealed class FileBrowserViewModel : IDisposable
         Queue(tree => tree.SetShowHidden(show));
     }
 
-    /// <summary>Re-lists what is open. Bounded by what the reader opened, not by what is on disk —
-    /// this runs twice a minute at idle on every platform.</summary>
+    /// <summary>Re-lists what is open and re-reads the previewed file. Bounded by what the reader
+    /// opened, not by what is on disk — this runs twice a minute at idle on every platform, so it
+    /// re-reads silently and publishes nothing when the bytes have not moved.</summary>
     public void Invalidate()
     {
         Queue(tree => tree.Refresh());
@@ -249,6 +250,16 @@ internal sealed class FileBrowserViewModel : IDisposable
         });
     }
 
+    /// <summary>
+    /// Points the preview at the cursor's file. A move to a different file shows <c>Loading</c> and
+    /// then the file; a re-read of the file already on screen — every reconcile tick — stays silent
+    /// and publishes only if the bytes actually moved.
+    /// </summary>
+    /// <remarks>
+    /// The silence is the point. Republishing an identical preview rebuilds the body, and a body
+    /// that rebuilds loses the reader's place in it; passing through <c>Loading</c> on the way
+    /// empties the body first, which zeroes the scroll offset outright.
+    /// </remarks>
     private void SyncPreview(bool force)
     {
         if (_disposed) return;
@@ -256,7 +267,8 @@ internal sealed class FileBrowserViewModel : IDisposable
         var rows = _rows.Value;
         var index = IndexOfCursor(rows);
         var target = index >= 0 && rows[index] is FileBrowserRow.File file ? file.FullPath : null;
-        if (!force && string.Equals(target, _previewPath, StringComparison.Ordinal)) return;
+        var samePath = string.Equals(target, _previewPath, StringComparison.Ordinal);
+        if (!force && samePath) return;
 
         _previewPath = target;
         _previewCancel?.Cancel();
@@ -269,7 +281,8 @@ internal sealed class FileBrowserViewModel : IDisposable
             return;
         }
 
-        _preview.Value = new FilePreview.Loading(target);
+        var shown = _preview.Value;
+        if (!samePath) _preview.Value = new FilePreview.Loading(target);
 
         var cancel = new CancellationTokenSource();
         _previewCancel = cancel;
@@ -293,6 +306,10 @@ internal sealed class FileBrowserViewModel : IDisposable
                 result = new FilePreview.Unavailable(target, FilePreviewRefusal.Unreadable);
             }
 
+            // Compared here rather than on the UI thread: both sides are immutable and the loading
+            // thread already holds them, so an unchanged file costs the UI thread nothing at all.
+            if (samePath && SaysTheSameThing(shown, result)) return;
+
             dispatcher.Post(() =>
             {
                 if (_disposed || generation != _previewGeneration) return;
@@ -300,6 +317,19 @@ internal sealed class FileBrowserViewModel : IDisposable
             });
         }, token);
     }
+
+    /// <summary>Whether a freshly loaded preview would draw exactly what is already on screen.
+    /// Highlighting and the markdown render are derived from the same text, so the lines settle
+    /// it; a picture is settled by the content hash the decoder already computed.</summary>
+    private static bool SaysTheSameThing(FilePreview shown, FilePreview loaded) => (shown, loaded) switch
+    {
+        (FilePreview.Text a, FilePreview.Text b) =>
+            a.Path == b.Path && a.Truncated == b.Truncated && a.Lines.SequenceEqual(b.Lines),
+        (FilePreview.Image a, FilePreview.Image b) =>
+            a.Path == b.Path && a.Preview.ContentHash == b.Preview.ContentHash,
+        (FilePreview.Unavailable a, FilePreview.Unavailable b) => a == b,
+        _ => false,
+    };
 
     private string? Restored(string? relative)
     {
