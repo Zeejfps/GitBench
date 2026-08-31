@@ -1101,7 +1101,13 @@ input is roughly an hour of work and settles the question with a number instead
 of an argument. Report throughput and worst case, not just the mean — the worst
 case is what the current guardrails exist for.
 
-Three things make it *likely* faster, and the third is the real argument:
+**That measurement is done: [tree-sitter-highlighting-benchmark.md](tree-sitter-highlighting-benchmark.md).**
+1,014 files, 11.9 MB, both engines in one process. Tree-sitter is **10.6x** faster
+end to end, and **25-60x** on the marginal cost once Capability A's parse is
+already paid for (8.5x on JSON, the one weak case); it is slower on 4 of 1,014
+files, all sub-millisecond Markdown. `HighlightBenchmarkTests` regenerates it.
+
+Three things made it *likely* faster, and the third is the real argument:
 
 1. `SyntaxHighlighter` carries a 100 ms per-line timeout explicitly to cap
    Oniguruma backtracking, a 750 ms whole-file budget, and a 256 KB cap. Those
