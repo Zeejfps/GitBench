@@ -60,7 +60,7 @@ table, which is why they cannot come after.
 | Menu item type | Plugins produce `Extensibility.MenuItem`, a sum type (`Action \| Submenu \| Separator`), projected onto the existing `RepoBarContextMenu.Item`. The app's own 9-field bag is left alone — 29 files touch it, and the invariant is enforced at the parse boundary instead. |
 | Writes | Plugins never call git writes. `IPluginRepoActions` takes a closed sum type of **app intents** (`RepoAction.DeleteTag`), which the adapter routes to the flow that already owns the dialog, the confirmation and the translations. |
 | Threading | Menu builders and predicates run **synchronously on the UI thread** under a deadline **whose mechanism Phase 0.5 must establish**; they may not call git. Data a builder needs but cannot compute — a remote URL — is pre-resolved into `MenuTarget` by the app. `on_select` may go async. One `lua_State` per plugin, all UI-thread in v1. |
-| Localization | Plugins ship `strings/<locale>.json` in the app's format, and reference shared app keys as `@app/<key>` rather than copying them. Lookup is **runtime**, because `Strings` is source-generated and closed. No plural support in v1 — no bundled plugin owns a plural key. |
+| Localization | Plugins ship `strings/<locale>.json` in the app's format, and reference shared app keys as `@app/<key>` rather than copying them. Lookup is **runtime**, because `Strings` is source-generated and closed. **Plurals are supported**, through a resolver pinned to the app's own selector by a differential test — see [Localization](#localization). |
 | Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require`, **and `debug`**, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
 | Errors | Every callback wrapped; no managed exception may cross the `[UnmanagedCallersOnly]` boundary, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled — **persisted to disk**, see [Crash containment](#crash-containment). |
 | Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
@@ -254,8 +254,8 @@ both ways, the callback wrapper. The only module holding a `lua_State`, and the 
 Rule 3 level-1 justification comment is expected on every function.
 
 **In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
-per-plugin string table (with `@app/` catalog fallthrough and the runtime pseudo transform), and the
-merge function.
+per-plugin string table (`@app/` catalog fallthrough, the runtime pseudo transform, and plural
+selection via `PluralRules`), and the merge function.
 
 **The bundled plugins.** Four, each a converted built-in.
 
@@ -334,20 +334,58 @@ Phase 1 adds, ahead of `RecoveryUpdater`:
 
 Three problems. One of them turned out not to be a problem.
 
-### Plurals: not a v1 concern
+### Plurals: in v1, and pinned to the app's own rule
 
-**Measured: none of the ~16 keys the bundled plugins own is pluralized.** Every plural key in the
-catalog — `files.stage`, `files.unstage`, `files.discard`, `files.stash`, `files.mark_resolved` —
-belongs to a stage/unstage/discard/stash item that stays in C# as a core git verb. `copy-paths` takes
-only the copy items, which are simple strings.
+Plugins can define plural strings. Punting it would break the first third-party plugin that needs one,
+and the string-table format cannot gain plural support later without being a breaking change.
 
-So v1 ships **no plural support**: a plugin string table containing a plural object is rejected at
-load with a clear error naming the key. Build the CLDR resolver when a plugin actually needs one —
-the rules for seven locales are small, and Arabic's five categories are not worth writing before a
-caller exists.
+The hazard is not implementing plural selection — it is implementing *the wrong one*. Measured across
+the catalogs:
 
-An earlier draft put this on the critical path on the strength of `copy-paths` "proving
-pluralization". It does not; those items were never in its scope.
+| Locale | Categories present | CLDR says |
+|---|---|---|
+| en, es | `one`, `other` | matches |
+| ja, ko, zh-Hans | `one`, `other` | **`other` only** |
+| ru | `one`, `few`, `many`, `other` | matches |
+| ar | `one`, `two`, `few`, `many`, `other` | CLDR also has `zero`; unused here |
+
+The CJK row is the important one. `files.stage` in Japanese is `ステージ` for `one` and
+`{count}個のファイルをステージ` for `other` — genuinely different text, seven such keys per CJK locale.
+Under real CLDR rules the `one` form is unreachable and a Japanese user reads "Stage 1 files". The app
+is evidently using a simplified `n == 1 → one` selector with extra categories for Arabic and Russian:
+a UI convention, not a linguistic one.
+
+**So a textbook CLDR implementation in the plugin resolver would silently disagree with the app**, in
+languages no one on the team reads. That is the failure to design against.
+
+**The domain is bounded, which makes this small.** A plugin only ever renders in a locale the app
+supports, so the resolver needs rules for exactly the members of `Localization/Locale.cs` — seven plus
+`Pseudo`. This is not "implement CLDR"; it is a fixed table that grows only when the app gains a
+language, which is already a change that touches the catalogs.
+
+Four steps, in phase 1:
+
+1. **Extract the app's real rule empirically.** The generator lives in the `framework/` submodule; do
+   not read it and do not assume it. Call the generated `Strings` plural members for every locale over
+   counts 0–200 and record which variant comes back. That yields the exact selector as a fact.
+2. **Implement `PluralRules.Select(Locale, int) → PluralCategory`** in `GitBench.Extensibility` as a
+   data table matching step 1.
+3. **Pin it with a differential conformance test.** For every plural key in the app catalog × every
+   locale × counts 0–200, assert the resolver picks the same category the generator did. Divergence is
+   a red test — now, and when someone adds a locale. This is `terminal.md`'s recorded-corpus pattern
+   applied to plurals, and it is what keeps two implementations honest without merging them.
+4. **Validate at the parse boundary.** A plugin plural object must carry every category its locale's
+   rule can select; a missing one fails at load, naming the plugin, key and locale (Rule 1). At
+   runtime the chain is exact category → `other` → `en` → the key itself, so a bad table degrades to
+   readable text rather than a blank label.
+
+If step 1 shows the app's rule is not expressible as a small table, that is a finding worth having
+before phase 3 rather than after — and the fallback is narrower, not absent: plugins get `one`/`other`
+only, validated at load, with the richer categories deferred until the app's own rule is understood.
+
+**Incidental finding, unrelated to plugins:** `ar.json` carries two keys absent from every other
+catalog — `review.context_stage` and `review.context_unstage`. Orphans from a rename. Worth a separate
+cleanup.
 
 ### Shared keys: reference them, do not copy them
 
@@ -384,7 +422,11 @@ no plugin author ever ships a `pseudo.json`.
 ### What actually moves
 
 **~16 keys, not the 25–30 previously estimated.** Four `file_browser.*`, four `toolbar.*`, five
-`localchanges.*`, `commits.context_delete_tag`, and two `repos.*`.
+`localchanges.*`, `commits.context_delete_tag`, and two `repos.*`. None of them is plural — every
+plural key in the catalog belongs to a stage/unstage/discard/stash item that stays in C# as a core git
+verb. That is why plural support ships without a bundled plugin exercising it, and why the
+conformance test in step 3 above is the only thing standing between the resolver and silent
+divergence.
 
 Two reasons it shrank. Shared keys now stay put. And because `tag-actions` routes an intent to the
 app's `DeleteTagDialog`, five of that dialog's six strings stay in the app — only the menu label
