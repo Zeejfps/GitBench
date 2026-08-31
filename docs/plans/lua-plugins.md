@@ -437,6 +437,121 @@ ids, string keys, icons, placement. That is what makes the registry enumerable w
 interpreter, and it is the whole reason startup is N small JSON reads rather than N interpreter
 boots.
 
+### `plugin.json`
+
+The manifest is the whole contract between a plugin and the app at startup. It declares *what*
+contributions exist and *where*; `init.lua` supplies *what happens*.
+
+```jsonc
+{
+  "id": "shell-tools",              // folder name must match; namespaces string keys and commands
+  "version": "1.0.0",               // the plugin's own version, informational
+  "api_version": 1,                 // refused outside the host's supported range
+  "name": "Shell Tools",            // shown in the settings pane; not localized
+  "description": "Open folders and terminals from menus and the toolbar.",
+  "entry": "init.lua",              // optional; this is the default
+
+  "commands": [
+    { "id": "open_folder",
+      "title": "cmd.open_folder",           // string key, resolved by PluginStrings
+      "when": "repo.any" },
+    { "id": "open_terminal",
+      "title": "cmd.open_terminal",
+      "keybinding": { "default": "Ctrl+Shift+T", "mac": "Cmd+Shift+T" } }
+  ],
+
+  "toolbar": [
+    { "id": "folder_button",
+      "command": "open_folder",             // behaviour lives on the command
+      "icon": "FolderOpen",
+      "tooltip": "toolbar.open_folder",
+      "enabled_when": "repo.any" }
+  ],
+
+  "menus": [
+    { "id": "terminal_here",
+      "anchor": "file_browser.row",
+      "command": "open_terminal",
+      "label": "menu.open_in_terminal",
+      "icon": "SquareTerminal",
+      "when": "path.is_directory",
+      "placement": "below" }
+  ]
+}
+```
+
+**One behaviour, several surfaces.** A menu item or toolbar button carries a `command` id rather
+than its own handler, so `shell-tools` implements "open a terminal here" once and surfaces it on the
+toolbar and at two menu anchors. Lua registers by command id:
+
+```lua
+p.command("open_terminal", function(ctx) p.shell.open_terminal_at(ctx.repo, ctx.path) end)
+```
+
+**Dynamic contributions.** A contribution whose *shape* depends on context — `tag-actions` builds one
+submenu per tag on the commit — cannot be declared statically. It says so, and the host calls Lua the
+first time that menu opens:
+
+```jsonc
+{ "id": "tags", "anchor": "commit.row", "dynamic": true, "placement": { "at": 0 } }
+```
+
+```lua
+p.menu_items("tags", function(ctx)
+  local items = {}
+  for _, ref in ipairs(ctx.refs) do
+    if ref.kind == "tag" then
+      items[#items + 1] = { label = ref.name, icon = "Tag", submenu = { {
+        label = p.t("menu.delete_tag"), icon = "Trash",
+        on_select = function() p.repo.request(ctx.repo, { kind = "delete_tag", name = ref.name }) end,
+      } } }
+    end
+  end
+  return items
+end)
+```
+
+So the precise rule is: **Lua loads on first invocation of a command, or on first open of a menu where
+that plugin declared a dynamic contribution.** Menus open on a user gesture, so that load is off the
+startup path. The toolbar is the only surface needing frame one, and toolbar items are always static.
+
+### `when` predicates
+
+`when` (visible) and `enabled_when` (greyed) name a predicate from a **closed set** the host
+evaluates. Not an expression language — that would be a second thing to sandbox and a second parser
+to get wrong. A leading `!` negates; there is no `and`, no `or`, no parentheses. Anything richer goes
+dynamic.
+
+| Context | Predicates |
+|---|---|
+| any | `repo.any`, `repo.is_dirty`, `repo.is_detached`, `repo.has_upstream`, `repo.has_remote_web_url`, `repo.is_ahead`, `repo.is_behind` |
+| `commit.row` | `commit.is_merge`, `commit.has_tags`, `commit.has_refs` |
+| `branch.*` | `branch.is_head`, `branch.has_upstream` |
+| `localchanges.file` | `files.single`, `files.multiple`, `files.any_staged`, `files.any_unstaged`, `files.any_conflicted` |
+| `file_browser.row` | `path.is_directory`, `path.is_file` |
+
+A predicate naming a context the anchor does not carry is a **load-time error**, not a silent false —
+`commit.is_merge` on `file_browser.row` is a manifest bug and should read as one.
+
+Because these are host-evaluated and reactive, `enabled_when` is what lets a plugin's toolbar button
+grey out with no repo open, matching the built-in buttons, without Lua being loaded at all.
+
+### Validation
+
+The manifest is a boundary, so it is parsed into typed records and never threaded around as loose
+JSON (Rule 1). Rejected at load, each naming the plugin and the offending field:
+
+- `id` not matching the folder name, or colliding with another plugin in the same root
+- `api_version` outside the host's supported range
+- an `anchor` not in the `MenuAnchor` enum
+- a `when`/`enabled_when` predicate not in the table above, or not valid for that anchor
+- a `command` id referenced by a menu or toolbar entry but not declared in `commands`
+- `placement: { "at": N }` from a user plugin — exact-index placement is bundled-only
+- a `label`/`tooltip`/`title` string key absent from `strings/en.json`, when the plugin ships strings
+
+That last one is worth the extra read: a missing key otherwise surfaces as a blank menu item much
+later, in a locale nobody tests.
+
 ### Load order
 
 1. **Enumerate both roots and read `plugin.json` only.** No Lua is loaded, no `lua_State` created.
@@ -450,12 +565,14 @@ boots.
 5. **Drop disabled and quarantined ids**, read from the host's own state file.
 6. **Register contributions from the manifest.** The app now knows every menu item, toolbar button
    and command that exists, and which plugin owns it, without having executed anything.
-7. **On first invocation of a contribution**, create that plugin's `lua_State`, load `init.lua`, and
-   keep the state for the rest of the session.
+7. **On first invocation of a command, or first open of a menu carrying a dynamic contribution**,
+   create that plugin's `lua_State`, load `init.lua`, and keep the state for the rest of the session.
 
 Step 6 is the line between "the app knows what a plugin contributes" and "the app has run a plugin's
-code". Everything before it is parsing; the interpreter only appears when the user actually clicks
-something.
+code". Everything before it is parsing. What it buys is the registry, not a rendered dynamic menu:
+the settings pane can list a plugin that has never run, keybindings register and conflict-check
+without Lua, crash reports attribute a contribution to its owner, and the toolbar builds on frame one
+because toolbar items are always static.
 
 ### Host state
 
