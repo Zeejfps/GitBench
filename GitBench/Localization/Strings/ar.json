@@ -403,6 +403,7 @@
   "diff.fullfile_toggle_tooltip": "تبديل عرض الملف الكامل",
   "diff.preview_toggle_tooltip": "تبديل المعاينة",
   "diff.open_window_tooltip": "فتح في نافذة جديدة",
+  "diff.change_summary_more": { "one": "وواحد آخر", "two": "واثنان آخران", "few": "و{count} أخرى", "many": "و{count} أخرى", "other": "و{count} أخرى" },
   "diff.no_selection": "اختر ملفًا لعرض الفروق.",
   "diff.binary_not_shown": "لا يتم عرض الملف الثنائي",
   "diff.image_caption": "{width} × {height} · {size}",

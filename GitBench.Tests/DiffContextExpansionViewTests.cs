@@ -2,7 +2,9 @@ using GitBench.Features.Diff;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
+using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
 using ZGF.Observable;
 using Xunit;
@@ -183,6 +185,31 @@ public class DiffContextExpansionViewTests
                 (1, GapExpandDirection.Up),
                 (2, GapExpandDirection.Down),
             }, calls);
+        }
+    }
+
+    // Alt turns one stepping click into "reveal the rest of the declaration". Unfold-all already
+    // means all of it, so the modifier leaves that one alone rather than routing it somewhere with
+    // a different meaning.
+    [Fact]
+    public void AltClickingAnExpanderAsksForTheEnclosingDeclaration()
+    {
+        var (h, view) = Create();
+        using (h)
+        {
+            var stepped = new List<(int Gap, GapExpandDirection Dir)>();
+            var declared = new List<(int Gap, GapExpandDirection Dir)>();
+            view.OnExpandGap = (gap, dir) => stepped.Add((gap, dir));
+            view.OnExpandGapToDeclaration = (gap, dir) => declared.Add((gap, dir));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            h.Render();
+
+            view.TryClickExpander(new PointF(15f, RowCenterY(6)), InputModifiers.Alt);
+            view.TryClickExpander(new PointF(15f, RowCenterY(7)), InputModifiers.Alt);
+            view.TryClickExpander(new PointF(15f, RowCenterY(8)), InputModifiers.None);
+
+            Assert.Equal([(1, GapExpandDirection.Down)], declared);
+            Assert.Equal([(1, GapExpandDirection.All), (1, GapExpandDirection.Up)], stepped);
         }
     }
 

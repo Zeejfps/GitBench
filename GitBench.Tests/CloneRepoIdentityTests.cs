@@ -118,11 +118,9 @@ public sealed class CloneRepoIdentityTests : IDisposable
     private void RunClone(CloneRepoDialogViewModel vm)
     {
         vm.Clone.Execute();
-        // The command hands its work to the thread pool and posts the continuation back; wait for
-        // the post, then run it on this thread so the registry is touched exactly where it expects.
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (_dispatcher.Queued == 0 && DateTime.UtcNow < deadline) Thread.Sleep(5);
-        _dispatcher.Drain();
+        // The command hands its work to the thread pool and posts the continuation back; drain
+        // until it has landed, so the registry is touched exactly where it expects.
+        Pump.WaitFor(_dispatcher, () => !vm.Clone.IsRunning.Value, "the clone to complete");
         Assert.Null(vm.Clone.Error.Value);
     }
 

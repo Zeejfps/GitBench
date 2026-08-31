@@ -1,6 +1,7 @@
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
@@ -69,6 +70,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
 {
     private readonly IRepoRegistry _registry;
     private readonly IGitService _git;
+    private readonly ISymbolExtractor _extractor;
     private readonly AssistantCredentials _credentials;
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
@@ -107,6 +109,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     public AssistantSessionStore(
         IRepoRegistry registry,
         IGitService git,
+        ISymbolExtractor extractor,
         AssistantCredentials credentials,
         State<AssistantSettings> settings,
         ILocalizationService loc,
@@ -119,6 +122,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     {
         _registry = registry;
         _git = git;
+        _extractor = extractor;
         _credentials = credentials;
         _settings = settings;
         _loc = loc;
@@ -258,7 +262,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_active.Value is not { } session) return;
 
         var agent = _catalog.Get(agentName);
-        var toolset = AssistantToolset.ForRepo(_git, repo, agent);
+        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, agent);
         session.RunPreset(prompt, new AssistantAgentLoop(_backend, agent, toolset, ToolCallingIsUnproven));
     }
 
@@ -275,7 +279,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_sessions.TryGetValue(repo.Id, out var existing)) return existing;
 
         // The toolset is bound to this one checkout, so the assistant cannot reach the others.
-        var toolset = AssistantToolset.ForRepo(_git, repo, _agent, _reviewProgress, _writes);
+        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _agent, _reviewProgress, _writes);
         var session = new AssistantSession(
             repo, _git, new AssistantAgentLoop(_backend, _agent, toolset, ToolCallingIsUnproven), _loc, _dispatcher);
         _sessions[repo.Id] = session;
@@ -289,7 +293,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     {
         if (_commitMessages.TryGetValue(repo.Id, out var existing)) return existing;
 
-        var toolset = AssistantToolset.ForRepo(_git, repo, _commitMessageAgent, _reviewProgress, _writes);
+        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _commitMessageAgent, _reviewProgress, _writes);
         var action = new CommitMessageQuickAction(
             repo,
             _git,

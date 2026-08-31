@@ -1,4 +1,5 @@
 using GitBench.Features.Assistant.Agents;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Review;
 using GitBench.Git;
 
@@ -39,18 +40,20 @@ internal sealed class AssistantToolset
     }
 
     /// <summary>The reads alone, for a caller with nothing for a write to act on.</summary>
-    public static AssistantToolset ForRepo(IGitService git, Repo repo, AgentDefinition agent) =>
-        Create(Reads(git, repo), agent.AllowedTools);
+    public static AssistantToolset ForRepo(
+        IGitService git, Repo repo, ISymbolExtractor extractor, AgentDefinition agent) =>
+        Create(Reads(git, repo, extractor), agent.AllowedTools);
 
     public static AssistantToolset ForRepo(
         IGitService git,
         Repo repo,
+        ISymbolExtractor extractor,
         AgentDefinition agent,
         IReviewProgressStore reviewProgress,
         AssistantWriteSurface writes) =>
         Create(
             [
-                .. Reads(git, repo),
+                .. Reads(git, repo, extractor),
                 .. WriteTools.CreateAll(git, repo, writes),
                 .. ReviewTools.CreateWrites(git, repo, reviewProgress, writes),
                 .. ConflictTools.CreateAll(git, repo, writes),
@@ -58,10 +61,10 @@ internal sealed class AssistantToolset
             ],
             agent.AllowedTools);
 
-    private static IEnumerable<IAssistantTool> Reads(IGitService git, Repo repo) =>
+    private static IEnumerable<IAssistantTool> Reads(IGitService git, Repo repo, ISymbolExtractor extractor) =>
     [
-        .. ReadTools.CreateAll(git, repo),
-        .. ReviewTools.CreateReads(git, repo),
+        .. ReadTools.CreateAll(git, repo, extractor),
+        .. ReviewTools.CreateReads(git, repo, extractor),
         new ReadFileTool(git, repo),
         new FindFilesTool(git, repo),
     ];

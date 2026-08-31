@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
@@ -63,6 +64,10 @@ internal static class AppServices
         var enableUntrackedCache = new State<bool>(preferences.Current.EnableUntrackedCache);
         enableUntrackedCache.Changed += preferences.SetEnableUntrackedCache;
         context.AddService(enableUntrackedCache);
+
+        var crashLogPath = AppPaths.AppDataPath("crash.log");
+        context.AddSingleton<ISymbolExtractor>(_ =>
+            new TreeSitterSymbolExtractor(reason => CrashLog.Note(crashLogPath, reason)));
 
         context.AddPlatformServices();
 
@@ -136,6 +141,7 @@ internal static class AppServices
                 ctx.Require<IGitWorkingTreeOperations>(),
                 ctx.Require<IGitConflictOperations>(),
                 ctx.Require<IGitSubmoduleOperations>(),
+                ctx.Require<ISymbolExtractor>(),
                 ctx.Require<IRepoRegistry>(),
                 ctx.Require<IUiDispatcher>(),
                 ctx.Require<IMessageBus>(),
@@ -224,6 +230,7 @@ internal static class AppServices
         context.AddHostedService<IAssistantSessionStore, AssistantSessionStore>(ctx => new AssistantSessionStore(
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IGitService>(),
+            ctx.Require<ISymbolExtractor>(),
             ctx.Require<AssistantCredentials>(),
             ctx.Require<State<AssistantSettings>>(),
             ctx.Require<ILocalizationService>(),

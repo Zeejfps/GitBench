@@ -1,6 +1,8 @@
 using System.Text.Json;
 using GitBench.Features.Branches;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Git;
 
@@ -13,11 +15,11 @@ internal static class ReadTools
     // Enough of a diff for the model to reason about without flooding the turn's token budget.
     public const int DiffLineCap = 1500;
 
-    public static IReadOnlyList<IAssistantTool> CreateAll(IGitService git, Repo repo) =>
+    public static IReadOnlyList<IAssistantTool> CreateAll(IGitService git, Repo repo, ISymbolExtractor extractor) =>
     [
         new GetStatusTool(git, repo),
         new GetLocalChangesTool(git, repo),
-        new GetDiffTool(git, repo),
+        new GetDiffTool(git, repo, extractor),
         new GetCommitHistoryTool(git, repo),
         new GetCommitDetailsTool(git, repo),
         new GetBranchesTool(git, repo),
@@ -70,8 +72,10 @@ internal static class ReadTools
     }
 
     /// <summary>A diff's path, kind and hunks, capped at <see cref="DiffLineCap"/> emitted lines.
-    /// Shared so a review diff and a working-tree diff read identically to the model.</summary>
-    internal static void WriteDiffBody(Utf8JsonWriter writer, DiffResult diff)
+    /// Shared so a review diff and a working-tree diff read identically to the model. Hunk headers
+    /// come from <paramref name="annotations"/> where it can name the enclosing declaration, so the
+    /// model reads the same header the diff view shows rather than git's xfuncname guess.</summary>
+    internal static void WriteDiffBody(Utf8JsonWriter writer, DiffResult diff, DiffAnnotations? annotations)
     {
         writer.WriteString("path", diff.Path);
         if (diff.OldPath is { Length: > 0 })
@@ -93,7 +97,11 @@ internal static class ReadTools
             }
 
             writer.WriteStartObject();
-            writer.WriteString("header", hunk.Header ?? $"@@ -{hunk.OldStart},{hunk.OldLines} +{hunk.NewStart},{hunk.NewLines} @@");
+            writer.WriteString(
+                "header",
+                annotations?.HunkHeader(hunk)
+                ?? hunk.Header
+                ?? $"@@ -{hunk.OldStart},{hunk.OldLines} +{hunk.NewStart},{hunk.NewLines} @@");
             writer.WritePropertyName("lines");
             writer.WriteStartArray();
             foreach (var line in hunk.Lines)
@@ -120,6 +128,42 @@ internal static class ReadTools
 
         writer.WriteEndArray();
         writer.WriteBoolean("truncated", diff.Truncated || capped);
+        WriteDeclarations(writer, diff, annotations);
+    }
+
+    /// <summary>
+    /// The declarations the change touched, flattened. A model asked "what does this commit do"
+    /// otherwise has to infer it from line offsets, and a capped hunk list may not even contain the
+    /// lines it would have to infer from.
+    /// </summary>
+    private static void WriteDeclarations(Utf8JsonWriter writer, DiffResult diff, DiffAnnotations? annotations)
+    {
+        var changes = SymbolChangeSet.Build(diff, annotations);
+        if (changes.Count == 0) return;
+
+        writer.WritePropertyName("declarations_changed");
+        writer.WriteStartArray();
+        WriteDeclarations(writer, changes);
+        writer.WriteEndArray();
+    }
+
+    private static void WriteDeclarations(Utf8JsonWriter writer, IReadOnlyList<SymbolChange> changes)
+    {
+        foreach (var change in changes)
+        {
+            // Unchanged entries are only in the tree to keep a changed descendant reachable; the
+            // path on each entry already carries what contains it, so flattening loses nothing.
+            if (change.Change != SymbolChangeKind.Unchanged)
+            {
+                writer.WriteStartObject();
+                writer.WriteString("name", change.Path);
+                writer.WriteString("kind", change.Symbol.ToString().ToLowerInvariant());
+                writer.WriteString("change", change.Change.ToString().ToLowerInvariant());
+                writer.WriteEndObject();
+            }
+
+            WriteDeclarations(writer, change.Children);
+        }
     }
 
     internal static void WriteSummary(Utf8JsonWriter writer, GitStatusSummary summary)
@@ -208,11 +252,13 @@ internal sealed class GetDiffTool : IAssistantTool
 {
     private readonly IGitService _git;
     private readonly Repo _repo;
+    private readonly ISymbolExtractor _extractor;
 
-    public GetDiffTool(IGitService git, Repo repo)
+    public GetDiffTool(IGitService git, Repo repo, ISymbolExtractor extractor)
     {
         _git = git;
         _repo = repo;
+        _extractor = extractor;
     }
 
     public string Name => "get_diff";
@@ -257,7 +303,8 @@ internal sealed class GetDiffTool : IAssistantTool
         if (diff.ErrorMessage is { Length: > 0 } error)
             return Task.FromResult(ToolInvocation.Error(error));
 
-        var json = ToolJson.Write(writer => ReadTools.WriteDiffBody(writer, diff));
+        var annotations = DiffAnnotationCoordinator.ComputeOutlines(_extractor, _git, _repo, diff, commitSha, baseSha);
+        var json = ToolJson.Write(writer => ReadTools.WriteDiffBody(writer, diff, annotations));
         return Task.FromResult(ToolInvocation.Ok(json));
     }
 

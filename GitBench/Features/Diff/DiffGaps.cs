@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Git;
 
 namespace GitBench.Features.Diff;
@@ -45,6 +46,36 @@ internal static class DiffGaps
             gaps.Add(new DiffGap(i, start, end, delta));
         }
         return gaps;
+    }
+
+    /// <summary>
+    /// How many more lines one expander click reveals: the fixed step, or — when the caller asked to
+    /// expand by declaration and the file parsed — however many it takes to finish the declaration
+    /// the hunk on the far side of the gap sits in.
+    /// </summary>
+    /// <remarks>
+    /// Expanding down finishes the declaration the hunk <em>above</em> was in; expanding up reaches
+    /// back to the start of the one the hunk <em>below</em> is in. Either way the answer is the fixed
+    /// step when there is no outline, when the adjacent hunk is inside no declaration, or when the
+    /// declaration's boundary is already on screen.
+    /// </remarks>
+    public static int ExpandStep(
+        DiffGap gap, int top, int bottom, GapExpandDirection dir, FileOutline? outline, int remaining)
+    {
+        var fixedStep = Math.Min(DiffOptions.ContextExpandStep, remaining);
+        if (outline is null) return fixedStep;
+
+        var (anchor, edge) = dir == GapExpandDirection.Down
+            ? (gap.NewStart - 1, gap.NewStart + top)
+            : (gap.NewEnd + 1, gap.NewEnd - bottom);
+
+        if (outline.EnclosingAt(anchor) is not { } enclosing) return fixedStep;
+
+        var wanted = dir == GapExpandDirection.Down
+            ? enclosing.EndLine - edge + 1
+            : edge - enclosing.StartLine + 1;
+
+        return wanted <= 0 ? fixedStep : Math.Min(wanted, remaining);
     }
 
     /// <summary>

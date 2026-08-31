@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Notifications;
@@ -39,18 +40,19 @@ internal sealed record ContextExpansion(
 internal abstract record DiffRenderState
 {
     public sealed record Placeholder(string Text) : DiffRenderState;
-    // Highlight is null until the async syntax pass completes (or stays null when highlighting
-    // is off/unsupported/failed) — the view renders plain in that case, identical to before.
+    // Annotations is null until the async syntax/parse pass completes (or stays null when both
+    // are off/unsupported/failed) — the view renders plain in that case, identical to before.
     // Expansion is null until the first gap-expander click; any reload/target change/optimistic
     // hunk apply constructs a fresh Loaded, deliberately resetting it (gap indices and line
     // numbers may have shifted).
     public sealed record Loaded(
         DiffResult Result,
-        DiffHighlight? Highlight = null,
+        DiffAnnotations? Annotations = null,
         ContextExpansion? Expansion = null) : DiffRenderState;
     // Full after-side file. AddedLineNumbers are 1-based new-file line numbers tinted as additions
     // (derived from the diff's Added rows); every other line renders as context. Removed lines are
-    // absent — this is the current state of the file. Highlight reuses the new-side spans.
+    // absent — this is the current state of the file. Annotations reuse the new-side spans; their
+    // hunk contexts are meaningless here, since there are no hunk separators to name.
     // Emphasis maps a new-file line number to its intra-line changed-character ranges: the diff has
     // both sides, so the new-side ranges are paired up here (the view can't, it only sees the
     // after-file). Only added lines that paired with a similar removed line appear.
@@ -61,7 +63,7 @@ internal abstract record DiffRenderState
         DiffSide Side,
         bool Truncated,
         IReadOnlyDictionary<int, IReadOnlyList<CharRange>>? Emphasis = null,
-        DiffHighlight? Highlight = null) : DiffRenderState;
+        DiffAnnotations? Annotations = null) : DiffRenderState;
     // A conflicted (unmerged) working-tree file. Drives the Fork-style resolution header
     // (two side cards + take ours/theirs/both + open-in-editor) instead of a normal diff.
     public sealed record Conflict(string Path, ConflictContext Context) : DiffRenderState;
@@ -110,6 +112,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IGitDiffReader _gitDiff;
     private readonly IGitWorkingTreeOperations _gitWorkingTree;
     private readonly IGitConflictOperations _gitConflicts;
+    private readonly ISymbolExtractor _extractor;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService? _loc;
     // When set, this pane is pinned to a specific repo (a commit diff in the Review window or a
@@ -124,9 +127,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IPlatformShell? _shell;
     private int _hunkStateGen;
 
-    // Syntax highlighting runs on its own lane so an in-flight highlight for a file we've
-    // navigated away from is dropped, and so it never invalidates the diff-load lane (Gen).
-    private readonly GenerationGuard _highlightLane;
+    // Annotating runs on its own lane so an in-flight pass for a file we've navigated away from
+    // is dropped, and so it never invalidates the diff-load lane (Gen).
+    private readonly GenerationGuard _annotationLane;
 
     // The lazy file-text fetch behind the first gap-expander click. Its own lane so it never
     // invalidates an in-flight diff load; staleness is guarded by the Result reference check.
@@ -138,6 +141,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     public IReadable<DiffRenderState> RenderState { get; }
     public IReadable<LfsBadge> LfsStatus { get; }
+
+    /// <summary>Which declarations this diff added, removed and changed. Empty until the annotation
+    /// lane lands, and empty for anything the parser has no grammar for.</summary>
+    public IReadable<IReadOnlyList<SymbolChange>> ChangeSummary { get; }
 
     // Per-hunk index state for the current WorkingTree render (aligned with its hunk list; null
     // until the async pass lands or on other sides). The combined HEAD→disk view doesn't change
@@ -172,6 +179,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IGitConflictOperations gitConflicts,
         IUiDispatcher dispatcher,
         IMessageBus bus,
+        ISymbolExtractor extractor,
         IPlatformShell? shell = null,
         ILocalizationService? loc = null,
         Guid? pinnedRepoId = null)
@@ -183,14 +191,18 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _gitDiff = gitDiff;
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
+        _extractor = extractor;
         _bus = bus;
         _shell = shell;
         _loc = loc;
         _pinnedRepoId = pinnedRepoId;
-        _highlightLane = CreateLane();
+        _annotationLane = CreateLane();
         _expandLane = CreateLane();
 
         RenderState = Slice(s => s.Render);
+        ChangeSummary = Slice(s => s.Render is DiffRenderState.Loaded loaded
+            ? SymbolChangeSet.Build(loaded.Result, loaded.Annotations)
+            : []);
         LfsStatus = Slice(s => s.Render switch
         {
             DiffRenderState.Loaded { Result.IsBinary: true } l =>
@@ -282,13 +294,38 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     // A gap-expander click on a hunk separator bar. The first click fetches the after-side file
     // text in the background and seeds the expansion; every later click re-emits synchronously.
-    public void ExpandGap(int gapIndex, GapExpandDirection dir)
+    public void ExpandGap(int gapIndex, GapExpandDirection dir) =>
+        ExpandGapBy(gapIndex, dir, toDeclaration: false);
+
+    /// <summary>
+    /// Reveals the rest of the declaration the change sits in, rather than another fixed step of
+    /// context. Expanding up stops at the start of the declaration the hunk below is inside;
+    /// expanding down stops at the end of the one the hunk above is inside.
+    /// </summary>
+    /// <remarks>
+    /// A separate entry point rather than a third <see cref="GapExpandDirection"/>: that enum is
+    /// read by a <c>_ =&gt;</c> catch-all when picking a glyph and by a boolean chain when picking
+    /// which expanders a bar shows, so a new member would be quietly mishandled at both instead of
+    /// failing to compile. Falls back to the fixed step when there is no outline, or no declaration
+    /// on the far side of the gap.
+    /// </remarks>
+    public void ExpandGapToDeclaration(int gapIndex, GapExpandDirection dir) =>
+        ExpandGapBy(gapIndex, dir, toDeclaration: true);
+
+    private void ExpandGapBy(int gapIndex, GapExpandDirection dir, bool toDeclaration)
     {
         if (State.Value.Render is not DiffRenderState.Loaded loaded) return;
 
         if (loaded.Expansion is { } expansion)
         {
-            Update(s => s with { Render = loaded with { Expansion = ApplyExpansion(loaded.Result, expansion, gapIndex, dir) } });
+            Update(s => s with
+            {
+                Render = loaded with
+                {
+                    Expansion = ApplyExpansion(
+                        loaded.Result, expansion, gapIndex, dir, Outline(loaded, toDeclaration)),
+                },
+            });
             return;
         }
 
@@ -310,24 +347,36 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             onResult: (lines, _) =>
             {
                 if (lines == null) return; // no new side (deleted underneath us) — nothing to expand
-                // Attach only to the still-current diff (mirrors StartHighlight's guard): a
-                // reload or an optimistic hunk apply swaps Result and must reset expansion.
                 if (State.Value.Render is not DiffRenderState.Loaded cur || !ReferenceEquals(cur.Result, diff)) return;
                 var truncated = lines.Count > DiffOptions.TruncationLineCap;
                 if (truncated) lines.RemoveRange(DiffOptions.TruncationLineCap, lines.Count - DiffOptions.TruncationLineCap);
                 var seeded = new ContextExpansion(lines, truncated, new Dictionary<int, GapShown>());
-                Update(s => s with { Render = cur with { Expansion = ApplyExpansion(cur.Result, seeded, gapIndex, dir) } });
+                Update(s => s with
+                {
+                    Render = cur with
+                    {
+                        Expansion = ApplyExpansion(
+                            cur.Result, seeded, gapIndex, dir, Outline(cur, toDeclaration)),
+                    },
+                });
             },
             lane: _expandLane);
     }
 
+    // The new-side outline, and only when the click asked to expand by declaration — the fixed step
+    // never consults it, so a file with no grammar takes exactly the path it always did.
+    private static FileOutline? Outline(DiffRenderState.Loaded loaded, bool toDeclaration) =>
+        toDeclaration ? loaded.Annotations?.NewSide : null;
+
     // Applies one expander increment to a gap, clamped against the exact gap bounds (the file
     // line count is known once an expansion exists, so every count here is exact).
-    private static ContextExpansion ApplyExpansion(DiffResult diff, ContextExpansion e, int gapIndex, GapExpandDirection dir)
+    private static ContextExpansion ApplyExpansion(
+        DiffResult diff, ContextExpansion e, int gapIndex, GapExpandDirection dir, FileOutline? outline)
     {
         var gaps = DiffGaps.Compute(diff, e.Lines.Count);
         if (gapIndex < 0 || gapIndex >= gaps.Count) return e;
-        var total = gaps[gapIndex].Count ?? 0;
+        var gap = gaps[gapIndex];
+        var total = gap.Count ?? 0;
         var shown = e.Gaps.TryGetValue(gapIndex, out var g) ? g : new GapShown(0, 0);
         var top = Math.Min(shown.Top, total);
         var bottom = Math.Min(shown.Bottom, total - top);
@@ -335,13 +384,14 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (remaining <= 0) return e;
         switch (dir)
         {
-            case GapExpandDirection.Down: top += Math.Min(DiffOptions.ContextExpandStep, remaining); break;
-            case GapExpandDirection.Up: bottom += Math.Min(DiffOptions.ContextExpandStep, remaining); break;
+            case GapExpandDirection.Down: top += DiffGaps.ExpandStep(gap, top, bottom, dir, outline, remaining); break;
+            case GapExpandDirection.Up: bottom += DiffGaps.ExpandStep(gap, top, bottom, dir, outline, remaining); break;
             default: top += remaining; break;
         }
         var updated = new Dictionary<int, GapShown>(e.Gaps) { [gapIndex] = new GapShown(top, bottom) };
         return e with { Gaps = updated };
     }
+
 
     // Pops the current diff into its own top-level window. DiffWindowPresenter handles the
     // message and spins up an independent, live DiffViewModel pinned to this target.
@@ -643,10 +693,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
             var remainingHunks = new List<DiffHunk>(diff.Hunks.Count - 1);
             for (var i = 0; i < diff.Hunks.Count; i++)
                 if (i != hunkIndex) remainingHunks.Add(diff.Hunks[i]);
-            // Whole-file line numbering is unchanged by dropping a hunk, so the existing spans
-            // stay valid — carry them through to avoid a highlight flicker before the reload.
-            var highlight = CurrentHighlight();
-            Update(s => s with { Render = new DiffRenderState.Loaded(diff with { Hunks = remainingHunks }, highlight) });
+            // Whole-file line numbering is unchanged by dropping a hunk, and both halves of the
+            // annotations are keyed by it — carry them through to avoid a flicker before the reload.
+            var annotations = CurrentAnnotations();
+            Update(s => s with { Render = new DiffRenderState.Loaded(diff with { Hunks = remainingHunks }, annotations) });
         }
         else if (toSide.HasValue)
         {
@@ -666,29 +716,29 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
                 ReportFailure(outcome, reverse ? UnstageFailedText : StageFailedText);
                 // Roll the optimistic diff state back to what the file actually still contains.
                 if (outcome is GitOutcome.Failed && State.Value.Render is DiffRenderState.Loaded)
-                    Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentHighlight()) });
+                    Update(s => s with { Render = new DiffRenderState.Loaded(original, CurrentAnnotations()) });
             });
 
-    private DiffHighlight? CurrentHighlight()
-        => State.Value.Render is DiffRenderState.Loaded l ? l.Highlight : null;
+    private DiffAnnotations? CurrentAnnotations()
+        => State.Value.Render is DiffRenderState.Loaded l ? l.Annotations : null;
 
-    // Carries the still-current render's highlight onto a freshly-loaded render for the same file,
-    // so the diff keeps its syntax colors instead of dropping to plain until the async highlight
-    // pass re-runs. Read inside StartLoad's onResult before the render is swapped, so State still
-    // holds the previous render. Only seeds when the incoming render has no highlight of its own.
-    private DiffRenderState CarryHighlightForward(DiffRenderState next)
+    // Carries the still-current render's annotations onto a freshly-loaded render for the same
+    // file, so the diff keeps its colors and hunk contexts instead of dropping to plain until the
+    // async pass re-runs. Read inside StartLoad's onResult before the render is swapped, so State
+    // still holds the previous render. Only seeds when the incoming render has none of its own.
+    private DiffRenderState CarryAnnotationsForward(DiffRenderState next)
     {
-        (string Path, DiffHighlight Highlight)? prev = State.Value.Render switch
+        (string Path, DiffAnnotations Annotations)? prev = State.Value.Render switch
         {
-            DiffRenderState.Loaded { Highlight: { } h } l => (l.Result.Path, h),
-            DiffRenderState.FullFile { Highlight: { } h } ff => (ff.Path, h),
+            DiffRenderState.Loaded { Annotations: { } a } l => (l.Result.Path, a),
+            DiffRenderState.FullFile { Annotations: { } a } ff => (ff.Path, a),
             _ => null,
         };
         if (prev is not { } p) return next;
         return next switch
         {
-            DiffRenderState.Loaded { Highlight: null } l when l.Result.Path == p.Path => l with { Highlight = p.Highlight },
-            DiffRenderState.FullFile { Highlight: null } ff when ff.Path == p.Path => ff with { Highlight = p.Highlight },
+            DiffRenderState.Loaded { Annotations: null } l when l.Result.Path == p.Path => l with { Annotations = p.Annotations },
+            DiffRenderState.FullFile { Annotations: null } ff when ff.Path == p.Path => ff with { Annotations = p.Annotations },
             _ => next,
         };
     }
@@ -709,9 +759,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
 
     private void StartLoad()
     {
-        // Any in-flight highlight is for the previous target; invalidate it up front so its
-        // result can't land on the diff we're about to load.
-        _highlightLane.Bump();
+        // Any in-flight annotation pass is for the previous target; invalidate it up front so
+        // its result can't land on the diff we're about to load.
+        _annotationLane.Bump();
 
         if (State.Value.HunkStates != null)
             Update(s => s with { HunkStates = null });
@@ -818,13 +868,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         // doesn't blink to plain between this load landing and the async highlight pass finishing.
         // Staging a file is the common case: the file moves to the other side but its new-side text
         // — hence the spans — is unchanged, so the body doesn't flash but the highlight would.
-        // StartHighlight below refreshes the spans either way.
-        render = CarryHighlightForward(render);
+        // StartAnnotations below refreshes them either way.
+        render = CarryAnnotationsForward(render);
         Update(s => s with { Render = render });
-        // Highlight applies to either render carrying the new-side file; result.Diff is null for
+        // Annotations apply to either render carrying the new-side file; result.Diff is null for
         // full-file placeholders (binary/deleted), which need no highlighting.
         if (result?.Diff is { } diff && render is DiffRenderState.Loaded or DiffRenderState.FullFile)
-            StartHighlight(repo, diff, commitSha, baseSha);
+            StartAnnotations(repo, diff, commitSha, baseSha);
         if (render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
             RefreshWorkingTreeHunkStates();
     }
@@ -891,32 +941,33 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         return lines;
     }
 
-    // Tokenizes the diff's file(s) off-thread and, when done, re-emits the same Loaded state
-    // carrying the spans. Runs on the highlight lane (stale results dropped) and only attaches
-    // to the still-current diff — an optimistic hunk apply may have swapped Result underneath us.
-    private void StartHighlight(Repo repo, DiffResult diff, string? commitSha, string? baseSha)
+    // Tokenizes and parses the diff's file(s) off-thread and, when done, re-emits the same Loaded
+    // state carrying the result. Runs on the annotation lane (stale results dropped) and only
+    // attaches to the still-current diff — an optimistic hunk apply may have swapped Result.
+    private void StartAnnotations(Repo repo, DiffResult diff, string? commitSha, string? baseSha)
     {
         var git = _gitDiff;
-        RunBackground<DiffHighlight>(
-            work: () => (DiffHighlightCoordinator.Compute(git, repo, diff, commitSha, baseSha), null),
-            onResult: (highlight, _) =>
+        var extractor = _extractor;
+        RunBackground<DiffAnnotations>(
+            work: () => (DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha), null),
+            onResult: (annotations, _) =>
             {
-                if (highlight == null) return; // plain rendering — nothing to apply
+                if (annotations == null) return; // plain rendering — nothing to apply
                 // Re-attach only to the still-current render for this diff. Loaded matches by
                 // Result reference; FullFile has no Result, so match on Path + Side (an optimistic
                 // hunk apply or a mode toggle may have swapped the render underneath us).
                 switch (State.Value.Render)
                 {
                     case DiffRenderState.Loaded cur when ReferenceEquals(cur.Result, diff):
-                        // `with` (not a fresh Loaded) so a context expansion made while the
-                        // highlight was computing survives the re-attach.
-                        Update(s => s with { Render = cur with { Highlight = highlight } });
+                        // `with` (not a fresh Loaded) so a context expansion made while the pass
+                        // was running survives the re-attach.
+                        Update(s => s with { Render = cur with { Annotations = annotations } });
                         break;
                     case DiffRenderState.FullFile ff when ff.Path == diff.Path && ff.Side == diff.Side:
-                        Update(s => s with { Render = ff with { Highlight = highlight } });
+                        Update(s => s with { Render = ff with { Annotations = annotations } });
                         break;
                 }
             },
-            lane: _highlightLane);
+            lane: _annotationLane);
     }
 }

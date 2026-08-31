@@ -1,4 +1,5 @@
 using System.Text;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
 
@@ -38,6 +39,7 @@ internal abstract record FilePreview
         IReadOnlyList<string> Lines,
         bool Truncated,
         DiffHighlight? Highlight,
+        FileOutline? Outline = null,
         MarkdownRender? Markdown = null) : FilePreview;
 
     public sealed record Image(string Path, ImagePreview Preview) : FilePreview;
@@ -64,7 +66,8 @@ internal static class FileContentLoader
 
     private const int SniffBytes = 8 * 1024;
 
-    public static FilePreview Load(string absolutePath, CancellationToken cancellation)
+    public static FilePreview Load(
+        string absolutePath, ISymbolExtractor extractor, CancellationToken cancellation)
     {
         try
         {
@@ -88,6 +91,7 @@ internal static class FileContentLoader
                 lines,
                 truncated,
                 Highlight(absolutePath, text, truncated),
+                Outline(absolutePath, text, extractor),
                 Markdown(absolutePath, text, truncated));
         }
         catch (OperationCanceledException)
@@ -166,6 +170,39 @@ internal static class FileContentLoader
         }
 
         return lines;
+    }
+
+    /// <summary>The declarations in a file, without building a preview of it. For the tree, which
+    /// wants a file's shape and none of its lines.</summary>
+    public static FileOutline? OutlineOf(
+        string absolutePath, ISymbolExtractor extractor, CancellationToken cancellation)
+    {
+        if (!DiffOptions.StructureEnabled) return null;
+        if (CodeLanguages.Detect(absolutePath) is not { } language) return null;
+
+        try
+        {
+            var info = new FileInfo(absolutePath);
+            if (!info.Exists || info.Length > MaxTextBytes) return null;
+
+            var bytes = ReadCapped(absolutePath, MaxTextBytes, cancellation);
+            return IsBinary(bytes) ? null : extractor.Extract(Decode(bytes), language);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
+    }
+
+    private static FileOutline? Outline(string path, string text, ISymbolExtractor extractor)
+    {
+        if (!DiffOptions.StructureEnabled) return null;
+        if (CodeLanguages.Detect(path) is not { } language) return null;
+        return extractor.Extract(text, language);
     }
 
     private static MarkdownRender? Markdown(string path, string text, bool truncated) =>

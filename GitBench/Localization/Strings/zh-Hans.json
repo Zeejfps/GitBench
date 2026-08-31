@@ -331,6 +331,7 @@
   "diff.fullfile_toggle_tooltip": "切换完整文件",
   "diff.preview_toggle_tooltip": "切换预览",
   "diff.open_window_tooltip": "在新窗口中打开",
+  "diff.change_summary_more": { "other": "另有 {count} 项" },
   "diff.no_selection": "请选择一个文件以查看差异。",
   "diff.binary_not_shown": "不显示二进制文件",
   "diff.image_caption": "{width} × {height} · {size}",

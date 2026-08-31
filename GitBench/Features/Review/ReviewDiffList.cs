@@ -557,7 +557,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     {
         var advance = _metricsResolved ? _monoAdvance : AssumedFontSize * FallbackMonoAdvanceRatio;
         var gutters = s.RowSet.SingleGutter ? s.GutterWidth : s.GutterWidth * 2;
-        var width = gutters + DiffRowPainter.GlyphColumnWidth
+        // The review window exposes no way to fold, but the column is the row set's fact and not
+        // this list's, so the two width calculations stay the same calculation.
+        var width = gutters + DiffRowPainter.FoldColumnWidthOf(s.RowSet.FoldColumn)
+            + DiffRowPainter.GlyphColumnWidth
             + s.RowSet.MaxRowCells * advance + DiffRowPainter.BannerPaddingX;
         if (width > _naturalWidth) _naturalWidth = width;
     }
@@ -920,7 +923,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var row = s.RowSet.Rows[local - 1];
         if (DiffRowPainter.GapBarOf(row) is not { } gap) return;
         var contentLeft = CardLeft() - _scrollX;
-        if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is { } dir)
+        if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is not { } dir) return;
+        if (modifiers.HasFlag(InputModifiers.Alt) && dir != GapExpandDirection.All)
+            s.Diff?.Diff.ExpandGapToDeclaration(gap.GapIndex, dir);
+        else
             s.Diff?.Diff.ExpandGap(gap.GapIndex, dir);
     }
 
@@ -1048,7 +1054,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private int CharIndexAt(Section s, string text, float x)
     {
         if (_monoAdvance <= 0) return 0;
-        var origin = DiffRowPainter.LineTextOriginX(CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter);
+        var origin = DiffRowPainter.LineTextOriginX(
+            CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter, s.RowSet.FoldColumn);
         return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
     }
 
@@ -1135,7 +1142,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 ExpanderHovered: state.IsHovered && DiffRowPainter.GapBarOf(row) != null,
                 Viewport: _list.Position,
                 Z: z,
-                Selection: selection));
+                Selection: selection,
+                FoldColumn: s.RowSet.FoldColumn));
 
             var hunkIndex = s.RowSet.HunkIndexOf(local - 1);
             if (hunkIndex >= 0 && hunkIndex == _hoveredHunkIndex

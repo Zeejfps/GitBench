@@ -34,14 +34,20 @@ Confirmed diagnosed:
   "intermittent in the full suite, deterministic in isolation" shape. Introduced by `7050f96` (before it,
   exit was a `_shellExited` bool and `Running` was terminal, so the wait was safe).
 
-Flaky/environmental, not investigated: `TerminalRowRunsTests.Split_RepeatedCalls_AllocateNothing`,
-`WorktreeRemoveTests.FailsAndKeepsTheTreeWhenGitRefuses`,
-`GitRepoLocksTests.Real_git_resolves_a_linked_worktree_onto_the_primary_family`,
-`SyntaxHighlighterTests.Svelte_MarkupAndEmbeddedScript_AreColored`,
-`Markdown.CodeBlockHighlightTests.ThemeFlipRecolorsWithoutRetokenizing`,
-`AssistantRemoteToolsTests.Fetch_WhileAFetchIsAlreadyRunning_...`.
+Since diagnosed (2026-08-31, HEAD `5b7d298`): most of what was listed here as
+"flaky/environmental, not investigated" was thread-pool starvation in the test host, now fixed by a
+`<ThreadPoolMinThreads>` floor in the test csproj — see [[threadpool-starvation-flakes]].
+`Markdown.CodeBlockHighlightTests.ThemeFlipRecolorsWithoutRetokenizing` had a second, separate cause: its
+`AwaitTokenize` waited on the fake highlighter's own signal, which fires *inside* the tokenize pass, a
+moment before the worker posts the spans back — so the drain could run before the result existed.
+
+Still genuinely environmental and macOS-only, unrelated to the pool:
+`WorktreeRemoveTests.FailsAndKeepsTheTreeWhenGitRefuses` and
+`GitRepoLocksTests.Real_git_resolves_a_linked_worktree_onto_the_primary_family` (see
+[[macos-temp-symlink-path-tests]]), plus `TerminalRowRunsTests.Split_RepeatedCalls_AllocateNothing`
+(an allocation assertion, not a timing one).
 
 Reproducing the replay timeout takes one command, no load needed:
 `dotnet test GitBench.Tests/GitBench.Tests.csproj --filter 'FullyQualifiedName~StillDrawsTheScreen'`
 
-Related: [[technique-internals-probe]]
+Related: [[technique-internals-probe]], [[threadpool-starvation-flakes]]

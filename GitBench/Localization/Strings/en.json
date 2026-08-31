@@ -331,6 +331,7 @@
   "diff.fullfile_toggle_tooltip": "Toggle full file",
   "diff.preview_toggle_tooltip": "Toggle preview",
   "diff.open_window_tooltip": "Open in new window",
+  "diff.change_summary_more": { "one": "+1 more", "other": "+{count} more" },
   "diff.no_selection": "Select a file to view diff.",
   "diff.binary_not_shown": "Binary file not shown",
   "diff.image_caption": "{width} × {height} · {size}",

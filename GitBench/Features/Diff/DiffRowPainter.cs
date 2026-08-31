@@ -24,7 +24,9 @@ internal readonly record struct DiffRowPaint(
     bool ExpanderHovered,
     RectF Viewport,
     int Z,
-    DiffRowSelection? Selection = null);
+    DiffRowSelection? Selection = null,
+    bool FoldColumn = false,
+    bool FoldHovered = false);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -38,6 +40,7 @@ internal sealed class DiffRowPainter
     public const float GlyphColumnWidth = 18f;
     public const float BannerPaddingX = 8f;
     private const float HunkHeaderGap = 12f;
+    private const string HeaderEllipsis = "…";
     // Breathing space after each gutter column and after the kind glyph.
     private const float ColumnGap = 4f;
     // How far a selection runs past the last glyph on a row whose newline it swallows, so a
@@ -129,10 +132,25 @@ internal sealed class DiffRowPainter
     /// column. The hit-test maps a pointer back to a character against this same origin, so the
     /// caret lands where the glyph is drawn.
     /// </summary>
-    public static float LineTextOriginX(float left, float gutterWidth, bool singleGutter)
+    public static float LineTextOriginX(
+        float left, float gutterWidth, bool singleGutter, bool foldColumn = false)
     {
         var gutters = singleGutter ? 1 : 2;
-        return left + gutters * (gutterWidth + ColumnGap) + GlyphColumnWidth + ColumnGap;
+        return left + gutters * (gutterWidth + ColumnGap) + FoldColumnWidthOf(foldColumn)
+            + GlyphColumnWidth + ColumnGap;
+    }
+
+    /// <summary>The chevron column's width, reserved for the whole surface or not at all.</summary>
+    public static float FoldColumnWidthOf(bool foldColumn) => foldColumn ? FoldColumnWidth : 0f;
+
+    public const float FoldColumnWidth = 14f;
+
+    /// <summary>Whether a point, measured from the row's left edge, lands in the fold column.</summary>
+    public static bool FoldHit(float xFromRowLeft, float gutterWidth, bool singleGutter)
+    {
+        var gutters = singleGutter ? 1 : 2;
+        var start = gutters * (gutterWidth + ColumnGap);
+        return xFromRowLeft >= start && xFromRowLeft < start + FoldColumnWidth;
     }
 
     /// <summary>The gap bar a row carries, or null for rows that aren't expander targets.</summary>
@@ -210,9 +228,10 @@ internal sealed class DiffRowPainter
             var headerWidth = Math.Max(0f, p.Left + p.Width - BannerPaddingX - cursorX);
             if (headerWidth > 0)
             {
-                DrawMonoText(c, s.Header, cursorX, p.Bottom, headerWidth,
+                var header = FitHeader(s.Header, headerWidth);
+                DrawMonoText(c, header, cursorX, p.Bottom, headerWidth,
                     Styles.SectionMutedText, TextAlignment.Start, p.Z + 1);
-                cursorX += Math.Min(DiffText.VisualCells(s.Header) * MonoAdvance, headerWidth) + HunkHeaderGap;
+                cursorX += Math.Min(DiffText.VisualCells(header) * MonoAdvance, headerWidth) + HunkHeaderGap;
             }
         }
 
@@ -225,6 +244,16 @@ internal sealed class DiffRowPainter
                 DrawMonoText(c, label, cursorX, p.Bottom, labelWidth,
                     Styles.SectionMutedText, TextAlignment.Start, p.Z + 1);
         }
+    }
+
+    // A containment path reads from the outside in, so the member it ends on is the part worth
+    // keeping: what does not fit is dropped off the front, behind an ellipsis. Start-aligned text
+    // would otherwise clip away exactly the name the header exists to show.
+    internal string FitHeader(string header, float width)
+    {
+        var cells = (int)(width / MonoAdvance);
+        if (DiffText.VisualCells(header) <= cells) return header;
+        return HeaderEllipsis + DiffText.SuffixWithin(header, cells - DiffText.VisualCells(HeaderEllipsis));
     }
 
     // Draws a GapBar's accent expander glyphs and returns the x just past the last cell. Shared by
@@ -336,7 +365,37 @@ internal sealed class DiffRowPainter
         if (p.Selection is { } selection)
             DrawSelection(c, l.Text, selection, textLeft, p.Bottom, p.Z + 1);
         DrawLineText(c, l, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
+
+        // After the text and outside it: the chip is chrome standing in for the body, not part of
+        // the row's characters, so nothing selects it and nothing measures a caret against it.
+        if (l.Fold is { Chip: true })
+            DrawFoldChip(c, l, textLeft, p);
     }
+
+    private void DrawFoldChip(ICanvas c, DiffRow.Line l, float textLeft, in DiffRowPaint p)
+    {
+        var (x, width) = FoldChipBounds(l, textLeft);
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(x, p.Bottom + FoldChipInsetY, width, LineHeight - FoldChipInsetY * 2),
+            Style = new RectStyle
+            {
+                BackgroundColor = Styles.FoldChipBackground,
+                BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+            },
+            ZIndex = p.Z + 2,
+        });
+        DrawMonoText(
+            c, DiffRowSet.FoldChipText, x, p.Bottom, width,
+            Styles.LineNumberText, TextAlignment.Start, p.Z + 3);
+    }
+
+    /// <summary>Where a collapsed fold's pill sits on its row, for drawing it and for clicking it.</summary>
+    public (float X, float Width) FoldChipBounds(DiffRow.Line l, float textLeft) => (
+        textLeft + DiffText.VisualCells(l.Text) * MonoAdvance,
+        DiffText.VisualCells(DiffRowSet.FoldChipText) * MonoAdvance);
+
+    private const float FoldChipInsetY = 1f;
 
     // The selected slice as one rect on the monospace cell grid — the same grid the hit-test
     // inverts, so the highlight's edges land exactly where a click would put the caret.
@@ -395,9 +454,53 @@ internal sealed class DiffRowPainter
         DrawMonoText(c, l.NewNumber, x, p.Bottom, p.GutterWidth,
             Styles.LineNumberText, TextAlignment.End, p.Z + 2);
         x += p.GutterWidth + ColumnGap;
+
+        if (p.FoldColumn)
+        {
+            if (l.Fold is { Chevron: true } fold)
+                DrawFoldChevron(c, fold, x, p);
+            x += FoldColumnWidth;
+        }
+
+        // Full-file mode reads as an editor, and an editor rules a line down its left margin. Diff
+        // mode does not: two gutters and a +/- glyph already say where the numbering ends.
+        if (p.SingleGutter)
+        {
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(x, p.Bottom, GutterRuleWidth, LineHeight),
+                Style = SolidBgStyle(Styles.GutterRule),
+                ZIndex = p.Z + 1,
+            });
+        }
+
         DrawMonoText(c, glyph, x, p.Bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, p.Z + 2);
-        return LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter);
+        return LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter, p.FoldColumn);
     }
+
+    // Dim until pointed at, like the gap expanders: a chevron beside every declaration with a body
+    // is a lot of chrome to keep at full contrast on a file the reader is only reading.
+    private void DrawFoldChevron(ICanvas c, in FoldMark fold, float x, in DiffRowPaint p)
+    {
+        var style = new TextStyle
+        {
+            FontFamily = LucideIcons.FontFamily,
+            FontSize = FoldChevronSize,
+            TextColor = p.FoldHovered ? Styles.LineText : Styles.LineNumberText,
+            HorizontalAlignment = TextAlignment.Center,
+            VerticalAlignment = TextAlignment.Center,
+        };
+        c.DrawText(new DrawTextInputs
+        {
+            Position = new RectF(x, p.Bottom, FoldColumnWidth, LineHeight),
+            Text = fold.Collapsed ? LucideIcons.ChevronRight : LucideIcons.ChevronDown,
+            Style = style,
+            ZIndex = p.Z + 2,
+        });
+    }
+
+    private const float FoldChevronSize = 11f;
+    public const float GutterRuleWidth = 1f;
 
     // Intra-line emphasis: a stronger background tint over the changed characters, layered between
     // the line bg (z) and the text (z + 2). Walk the ranges incrementally, carrying cx forward

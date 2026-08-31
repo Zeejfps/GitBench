@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
@@ -34,6 +35,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly IGitWorkingTreeOperations _gitWorkingTree;
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
+    private readonly ISymbolExtractor _extractor;
     private readonly IRepoRegistry _registry;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
@@ -70,6 +72,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IGitWorkingTreeOperations gitWorkingTree,
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
+        ISymbolExtractor extractor,
         IRepoRegistry registry,
         IUiDispatcher dispatcher,
         IMessageBus bus,
@@ -85,6 +88,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
+        _extractor = extractor;
         _registry = registry;
         _bus = bus;
         _loc = loc;
@@ -219,7 +223,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc, _currentBaseSha));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -232,9 +236,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public CommitFileTab? CreateFileDiff(string path)
     {
         if (_workingTree)
-            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc);
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc);
         if (string.IsNullOrEmpty(_currentSha)) return null;
-        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _loc, _currentBaseSha);
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha);
     }
 
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>

@@ -28,7 +28,6 @@ public class CodeBlockHighlightTests
     {
         private int _calls;
 
-        public readonly ManualResetEventSlim Called = new(false);
         public int CallThreadId;
         public int Calls => Volatile.Read(ref _calls);
 
@@ -36,9 +35,7 @@ public class CodeBlockHighlightTests
         {
             CallThreadId = Environment.CurrentManagedThreadId;
             Interlocked.Increment(ref _calls);
-            var spans = SyntaxHighlighter.Shared.Highlight(fileText, languageId);
-            Called.Set();
-            return spans;
+            return SyntaxHighlighter.Shared.Highlight(fileText, languageId);
         }
     }
 
@@ -82,12 +79,13 @@ public class CodeBlockHighlightTests
         canvas.Texts.First(t => t.Inputs.Text.Contains(fragment, StringComparison.Ordinal))
             .Inputs.Style.TextColor.Value;
 
-    private static void AwaitTokenize(Fixture f)
-    {
-        Assert.True(f.Highlighter.Called.Wait(TimeSpan.FromSeconds(10)),
-            "the background tokenize pass never ran");
-        f.Dispatcher.Drain();
-    }
+    // The pass runs on a worker and posts its spans back afterwards, so waiting on the call itself
+    // races the post. What these tests read is the color on the screen; that is what is waited for.
+    private static void AwaitTokenize(Fixture f) =>
+        Pump.WaitFor(
+            f.Dispatcher,
+            () => ColorOf(f.Harness.Render(), "42") != Dark.Markdown.CodeBlockText,
+            "the tokenized spans to reach the screen");
 
     [Fact]
     public void BuildDoesNotTokenizeOnTheUiThread()

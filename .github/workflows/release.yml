@@ -90,6 +90,22 @@ jobs:
         shell: bash
         run: echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
+      # The tree-sitter natives are built from pinned upstream sources, not checked in, so
+      # the publish below fails at CheckNativeArtifacts without this. Keyed on build.cs so a
+      # pin bump rebuilds and everything else reuses the cache instead of re-cloning grammars.
+      - name: Cache native tree-sitter artifacts
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            external/cs_tree_sitter/native/vendor
+            external/cs_tree_sitter/native/artifacts
+          key: native-${{ matrix.rid }}-${{ hashFiles('external/cs_tree_sitter/native/build.cs') }}
+
+      - name: Build native tree-sitter libraries
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: dotnet run scripts/build-native.cs -- --target ${{ matrix.rid }}
+
       # Pin vpk to the same version as the Velopack library referenced by the app, so the
       # generated release feed matches what the installed app's UpdateManager expects.
       - name: Install vpk

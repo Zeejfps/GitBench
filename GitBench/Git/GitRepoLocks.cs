@@ -60,7 +60,7 @@ internal sealed class GitRepoLocks
     /// Two paths with the same key contend; two paths with different keys never do.
     /// </summary>
     public string KeyFor(GitResource resource, string repoPath)
-        => resource == GitResource.Remote ? CommonGitDirKey(repoPath) : Normalize(repoPath);
+        => resource == GitResource.Remote ? CommonGitDirKey(repoPath) : RealPath.Of(repoPath);
 
     /// <summary>
     /// Takes the lock and releases it when the returned scope is disposed. Use with <c>using</c> so
@@ -83,14 +83,14 @@ internal sealed class GitRepoLocks
 
     private string CommonGitDirKey(string repoPath)
     {
-        var self = Normalize(repoPath);
+        var self = RealPath.Of(repoPath);
         if (_commonGitDirs.TryGetValue(self, out var cached)) return cached;
 
         var resolved = self;
         try
         {
             if (_resolveCommonGitDir(repoPath) is { Length: > 0 } dir)
-                resolved = Normalize(Path.IsPathRooted(dir) ? dir : Path.Combine(repoPath, dir));
+                resolved = RealPath.Of(Path.IsPathRooted(dir) ? dir : Path.Combine(repoPath, dir));
         }
         catch
         {
@@ -98,12 +98,6 @@ internal sealed class GitRepoLocks
         }
         _commonGitDirs[self] = resolved;
         return resolved;
-    }
-
-    private static string Normalize(string path)
-    {
-        try { return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar); }
-        catch { return path; }
     }
 
     private static ConcurrentDictionary<string, TValue> NewMap<TValue>()

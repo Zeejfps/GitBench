@@ -40,6 +40,20 @@ internal static class DiffText
         return cells;
     }
 
+    /// <summary>The longest suffix that fits in <paramref name="cells"/> monospace cells, cut on a
+    /// code-point boundary. The whole string when it already fits.</summary>
+    public static string SuffixWithin(string text, int cells)
+    {
+        if (cells <= 0) return string.Empty;
+        var drop = VisualCells(text) - cells;
+        if (drop <= 0) return text;
+
+        var i = 0;
+        var dropped = 0;
+        while (i < text.Length && dropped < drop) dropped += StepCells(text, ref i);
+        return text[i..];
+    }
+
     /// <summary>
     /// The character offset nearest the given column, for turning a pointer x into a caret. A
     /// column landing in a glyph's leading half snaps before it and its trailing half after, so

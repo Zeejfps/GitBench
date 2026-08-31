@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
@@ -37,6 +38,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
     private readonly IRepoRegistry _registry;
     private readonly IGitRepositoryReader _git;
     private readonly IFileSystemReader _files;
+    private readonly ISymbolExtractor _extractor;
     private readonly IMessageBus _bus;
     private readonly IUiDispatcher _dispatcher;
 
@@ -53,12 +55,14 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         IRepoRegistry registry,
         IGitRepositoryReader git,
         IFileSystemReader files,
+        ISymbolExtractor extractor,
         IMessageBus bus,
         IUiDispatcher dispatcher)
     {
         _registry = registry;
         _git = git;
         _files = files;
+        _extractor = extractor;
         _bus = bus;
         _dispatcher = dispatcher;
     }
@@ -97,6 +101,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
             repo,
             _files,
             new GitIgnoreOracle(_git, repo),
+            _extractor,
             _dispatcher,
             _registry.GetFileBrowserUi(repoId),
             state => _registry.SetFileBrowserUi(repoId, state));

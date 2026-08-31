@@ -41,6 +41,15 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     };
 
     public event Action<float>? VerticalScrollPositionChanged;
+
+    /// <summary>The new-file line at the top of the viewport, or 0 while there is none to report.
+    /// Raised only when it changes, and only once metrics have resolved — row geometry is what
+    /// makes the question answerable, so a caller cannot ask before the first draw.</summary>
+    public event Action<int>? TopVisibleLineChanged;
+
+    /// <summary>A declaration's fold chevron was clicked, by the id its <see cref="FoldMark"/>
+    /// carries. The owner decides what that means and hands back a new <see cref="FoldState"/>.</summary>
+    public event Action<string>? OnToggleFold;
     public event Action<float>? HorizontalScrollPositionChanged;
 
     public float VerticalScale { get; private set; } = 1f;
@@ -70,6 +79,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public Action<int>? OnDiscardHunk { get; set; }
     public Action<int, GapExpandDirection>? OnExpandGap { get; set; }
 
+    /// <summary>The same click held with <see cref="InputModifiers.Alt"/>: reveal the rest of the
+    /// declaration rather than another fixed step of context.</summary>
+    public Action<int, GapExpandDirection>? OnExpandGapToDeclaration { get; set; }
+
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
     private readonly Context _ctx;
@@ -90,6 +103,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // bar settles and the value sticks, then release control so the user can scroll freely.
     private float? _pendingScrollY;
     private int _pendingScrollFrames;
+    private int? _pendingScrollLine;
+    private int _lastTopLine = -1;
+    private FoldState? _foldState;
+    private int _hoveredFoldRow = -1;
     private float _lastNormalizedY;
     private float _lastNormalizedX;
     // Sentinel start so the very first NotifyScrollChanged fires the event even when the
@@ -177,13 +194,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _hoveredHunkIndex = -1;
         _hoveredButton = HunkAction.None;
         _hoveredExpanderRow = -1;
+        _hoveredFoldRow = -1;
         _hunksPatchable = false;
         _diffSide = DiffSide.Unstaged;
         // Metrics depend only on font, not content, but content width depends on metrics;
         // a fresh model forces a recompute on next draw.
         _metricsResolved = false;
 
-        _rowSet = DiffRowSet.Build(state, _loc);
+        _rowSet = DiffRowSet.Build(state, _loc, FoldsFor(state));
         if (state is DiffRenderState.Loaded loaded)
         {
             _diffSide = loaded.Result.Side;
@@ -201,12 +219,49 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var (newPath, _) = DescribeState(state);
         if (newPath != prevPath || _rowSet.Rows.Count != prevRowCount)
             _selection.Clear();
+        if (newPath != prevPath) _pendingScrollLine = null;
+        // A different file republishes its top line even when the number is unchanged: it is a
+        // different declaration at line 1.
+        if (newPath != prevPath) _lastTopLine = -1;
 
         _list.ItemCount = _rowSet.Rows.Count;
         _list.NotifyItemsChanged();
         ApplyScrollForTransition(state, prevPath, prevWasFullFile, hadTopLine, prevTopLine, prevScrollY, prevScrollX);
         SetDirty();
     }
+
+    /// <summary>
+    /// Replaces the fold set and re-flattens, deliberately not through <see cref="SetRenderState"/>.
+    /// That path resets horizontal scroll, and restores a *pixel* offset — which after a collapse
+    /// above the viewport would silently move the reader onto a different line. This one re-anchors
+    /// on the line they were reading instead.
+    /// </summary>
+    /// <remarks>
+    /// The selection is cleared rather than remapped. <c>DiffTextPos</c> is a row index into the
+    /// current stream, so an anchor at row 40 means a different line the moment rows disappear
+    /// above it, and remapping anchors through the fold model is more work than folding.
+    /// </remarks>
+    public void SetFoldState(FoldState folds)
+    {
+        _foldState = folds;
+        if (_renderState is not DiffRenderState.FullFile) { SetDirty(); return; }
+
+        var hadTopLine = TryGetTopVisibleNewLine(out var topLine);
+        _rowSet = DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState));
+        _selection.Clear();
+        _hoveredFoldRow = -1;
+        _list.ItemCount = _rowSet.Rows.Count;
+        _list.NotifyItemsChanged();
+        if (hadTopLine) ScrollToNewLine(topLine, leadIn: 0);
+        SetDirty();
+    }
+
+    // A fold set belongs to one file. Holding it past a change of path would fold line ranges the
+    // new file never agreed to, so it simply does not apply.
+    private FoldState? FoldsFor(DiffRenderState state) =>
+        _foldState is { } folds && DescribeState(state) is (string path, true) && folds.Path == path
+            ? folds
+            : null;
 
     // Lead-in rows kept above a "scroll to line" target so the line isn't flush against the top.
     private const int ScrollLeadIn = 3;
@@ -294,6 +349,23 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         return false;
     }
 
+    // Scrolls to a new-file line, holding the target until it can be honoured. Row geometry needs
+    // metrics, and metrics resolve on the first draw, so a jump asked for while the view is fresh —
+    // the file browser's, on the frame it mounts — would otherwise be dropped.
+    public void RequestScrollToNewLine(int lineNumber)
+    {
+        _pendingScrollLine = lineNumber;
+        ApplyPendingScrollLine();
+        SetDirty();
+    }
+
+    private void ApplyPendingScrollLine()
+    {
+        if (_pendingScrollLine is not int line || _lineHeight <= 0) return;
+        _pendingScrollLine = null;
+        ScrollToNewLine(line, ScrollLeadIn);
+    }
+
     // Scrolls so the row for the given new-file line sits leadIn rows below the top. No-op if the
     // line isn't present (e.g. a removed line that never had a new-side number).
     public void ScrollToNewLine(int lineNumber, int leadIn)
@@ -341,7 +413,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // Worst case across row kinds: line rows go gutter|gutter|glyph|text (one gutter in
         // full-file mode); banner rows are flush-left with horizontal padding. Take the max.
         var gutters = _rowSet.SingleGutter ? _gutterWidth : _gutterWidth + _gutterWidth;
-        var lineWidth = gutters + DiffRowPainter.GlyphColumnWidth
+        var lineWidth = gutters + DiffRowPainter.FoldColumnWidthOf(_rowSet.FoldColumn)
+            + DiffRowPainter.GlyphColumnWidth
             + _rowSet.MaxRowCells * _monoAdvance + DiffRowPainter.BannerPaddingX;
         var bannerWidth = DiffRowPainter.BannerPaddingX * 2 + _rowSet.MaxRowCells * _monoAdvance;
         return Math.Max(lineWidth, bannerWidth);
@@ -418,7 +491,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         EnsureMetrics(c);
         ClampHorizontalScroll();
+        ApplyPendingScrollLine();
         ReassertPendingScroll();
+        NotifyTopVisibleLine();
         _selectionController.Tick();
         NotifyScrollChanged(viewportFits: false);
     }
@@ -436,6 +511,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             return;
         }
         _list.SetScrollY(clamped);
+    }
+
+    private void NotifyTopVisibleLine()
+    {
+        var line = TryGetTopVisibleNewLine(out var top) ? top : 0;
+        if (line == _lastTopLine) return;
+        _lastTopLine = line;
+        TopVisibleLineChanged?.Invoke(line);
     }
 
     private float ClampScrollTarget(float y)
@@ -476,7 +559,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             ExpanderHovered: rowIndex == _hoveredExpanderRow,
             Viewport: _list.Position,
             Z: z,
-            Selection: selection));
+            Selection: selection,
+            FoldColumn: _rowSet.FoldColumn,
+            FoldHovered: rowIndex == _hoveredFoldRow));
 
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
@@ -560,6 +645,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         // Expander hover is independent of hunk buttons: it applies to read-only sides too.
         SetExpanderHover(HitTestExpander(point)?.Row ?? -1);
+        SetFoldHover(HitTestFold(point)?.Row ?? -1);
 
         if (!HasHunkButtons()) { SetHunkHover(-1, HunkAction.None); return; }
 
@@ -577,14 +663,58 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public void OnHunkPointerExit()
     {
         SetExpanderHover(-1);
+        SetFoldHover(-1);
         SetHunkHover(-1, HunkAction.None);
     }
 
-    public bool TryClickExpander(PointF point)
+    public bool TryClickExpander(PointF point, InputModifiers modifiers = InputModifiers.None)
     {
         if (HitTestExpander(point) is not { } hit) return false;
-        OnExpandGap?.Invoke(hit.GapIndex, hit.Dir);
+        // Unfold-all already means "all of it", so the modifier only changes what a stepping
+        // chevron counts as one step.
+        var handler = modifiers.HasFlag(InputModifiers.Alt) && hit.Dir != GapExpandDirection.All
+            ? OnExpandGapToDeclaration ?? OnExpandGap
+            : OnExpandGap;
+        handler?.Invoke(hit.GapIndex, hit.Dir);
         return true;
+    }
+
+    public bool TryClickFold(PointF point)
+    {
+        if (HitTestFold(point) is not { } hit) return false;
+        OnToggleFold?.Invoke(hit.Id);
+        return true;
+    }
+
+    // Two targets for one fold: the chevron in the margin, and the pill standing in for the body
+    // it swallowed — which is the one a reader reaches for, because it is the thing they can see.
+    private (int Row, string Id)? HitTestFold(PointF point)
+    {
+        if (!_rowSet.FoldColumn || _lineHeight <= 0) return null;
+        var listPos = _list.Position;
+        if (!listPos.ContainsPoint(point)) return null;
+
+        var rowIndex = HitTestListRow(point);
+        if (rowIndex < 0) return null;
+        if (_rowSet.Rows[rowIndex] is not DiffRow.Line { Fold: { } fold } line) return null;
+
+        var contentLeft = listPos.Left - _scrollX;
+        if (fold.Chevron
+            && DiffRowPainter.FoldHit(point.X - contentLeft, _gutterWidth, _rowSet.SingleGutter))
+            return (rowIndex, fold.Id);
+
+        if (!fold.Chip) return null;
+        var textLeft = DiffRowPainter.LineTextOriginX(
+            contentLeft, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn);
+        var (chipX, chipWidth) = _painter.FoldChipBounds(line, textLeft);
+        return point.X >= chipX && point.X <= chipX + chipWidth ? (rowIndex, fold.Id) : null;
+    }
+
+    private void SetFoldHover(int rowIndex)
+    {
+        if (_hoveredFoldRow == rowIndex) return;
+        _hoveredFoldRow = rowIndex;
+        SetDirty();
     }
 
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
@@ -659,6 +789,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     DiffSelectionModel IDiffSelectionSurface.Selection => _selection;
     RectF IDiffSelectionSurface.SelectionViewport => _list.Position;
     IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) => _rowSet.Rows;
+    Func<int, string?>? IDiffSelectionSurface.HiddenTextOf(object? scope) =>
+        _rowSet.FoldColumn ? _rowSet.HiddenAfter : null;
     void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
     void IDiffSelectionSurface.RequestRedraw() => SetDirty();
 
@@ -666,15 +798,24 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (!AssistantActions || _bus is null) return false;
         if (DescribeState(_renderState).Path is not { } path) return false;
-        if (DiffSelectionQuote.Build(_rowSet.Rows, _selection.Start, _selection.End, path) is not { } quote)
+        if (DiffSelectionQuote.Build(
+                _rowSet.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
             return false;
 
         return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, _bus, quote)) != null;
     }
 
+    private static DiffAnnotations? AnnotationsOf(DiffRenderState state) => state switch
+    {
+        DiffRenderState.Loaded loaded => loaded.Annotations,
+        DiffRenderState.FullFile fullFile => fullFile.Annotations,
+        _ => null,
+    };
+
     bool IDiffSelectionSurface.IsInteractiveAt(PointF point)
     {
         if (HitTestExpander(point) != null) return true;
+        if (HitTestFold(point) != null) return true;
         if (!HasHunkButtons()) return false;
         var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
         return hunkIndex >= 0 && HitTestButton(point, hunkIndex) != HunkAction.None;
@@ -702,7 +843,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_monoAdvance <= 0) return 0;
         var origin = DiffRowPainter.LineTextOriginX(
-            _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter);
+            _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn);
         return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
     }
 

@@ -152,8 +152,8 @@ public sealed class RepoWatcherDeferralTests : IDisposable
 
     // The three tests above drive the classifier directly. This one goes through the real
     // FileSystemWatcher so the arrival path itself is covered: a genuine editor save landing mid-read
-    // must still reach the working-tree channel.
-    [Fact]
+    // must still reach the working-tree channel — on the platforms that watch the working tree.
+    [RecursiveWatchFact]
     public void A_real_file_edit_during_a_git_read_still_reaches_the_working_tree_channel()
     {
         _gate.Active = true;

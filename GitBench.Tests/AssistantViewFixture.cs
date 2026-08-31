@@ -91,6 +91,7 @@ internal sealed class AssistantViewFixture : IDisposable
         var store = new AssistantSessionStore(
             _registry,
             new GitService(new NullActivityTracker()),
+            new UnparsedFiles(),
             new AssistantCredentials(new FakeSecretStore("sk-test")),
             new State<AssistantSettings>(AssistantSettings.Default),
             localization,

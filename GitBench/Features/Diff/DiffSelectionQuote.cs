@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using GitBench.Features.CodeIntel;
 using GitBench.Git;
 
 namespace GitBench.Features.Diff;
@@ -16,27 +17,37 @@ internal enum DiffQuoteSide
 
 /// <summary>
 /// A selection in a diff, described well enough to ask a question about: the code itself, the file
-/// it came from, the lines it covers, and which side of the change it is.
+/// it came from, the declaration it sits in, the lines it covers, and which side of the change it is.
 /// </summary>
 /// <remarks>
 /// The text comes from <see cref="DiffSelectionModel.BuildCopyText"/> — the same function the
 /// clipboard uses — so what the assistant is shown is exactly what Ctrl+C would have produced,
 /// gutters and +/- markers already stripped.
 /// </remarks>
+/// <param name="Declaration">The declaration the selection starts in, as a dotted containment path,
+/// or null where the file did not parse. A line number tells the model where to look; a name tells it
+/// what it is looking at, which is what a question is usually about.</param>
 internal sealed record DiffSelectionQuote(
     string Path,
     int StartLine,
     int EndLine,
     DiffQuoteSide Side,
-    string Text)
+    string Text,
+    string? Declaration = null)
 {
     /// <summary>The quote for a selection, or null when it covers no code lines.</summary>
     public static DiffSelectionQuote? Build(
         IReadOnlyList<DiffRow> rows,
         DiffTextPos start,
         DiffTextPos end,
-        string path)
+        string path,
+        DiffAnnotations? annotations = null)
     {
+        // No fold re-inflation here, and none needed: the quote path is reachable only where
+        // DiffContentView.AssistantActions is set, which the file browser's preview — the one
+        // surface that folds — deliberately leaves false. The day folding reaches the diff pane,
+        // this call and the line-range loop below it both have to learn about hidden rows, or the
+        // model gets re-inflated text with a range that does not describe it.
         var text = DiffSelectionModel.BuildCopyText(rows, start, end);
         if (text.Length == 0) return null;
 
@@ -76,7 +87,10 @@ internal sealed record DiffSelectionQuote(
             _ => DiffQuoteSide.Mixed,
         };
 
-        return new DiffSelectionQuote(path, first, last, side, text);
+        // Which outline names it follows the rule a hunk header follows: a selection of only
+        // removed lines exists in the before-side file and nowhere else.
+        var outline = removed && !added ? annotations?.OldSide : annotations?.NewSide;
+        return new DiffSelectionQuote(path, first, last, side, text, outline?.DeclarationPathAt(first));
     }
 
     /// <summary>
@@ -97,6 +111,9 @@ internal sealed record DiffSelectionQuote(
                 ? $"line {StartLine}"
                 : $"lines {StartLine}-{EndLine}");
         }
+
+        if (Declaration is { Length: > 0 } declaration)
+            builder.Append(", in `").Append(declaration).Append('`');
 
         builder.Append(" (").Append(SideName).Append("):\n\n```\n").Append(Text).Append("\n```");
         return builder.ToString();

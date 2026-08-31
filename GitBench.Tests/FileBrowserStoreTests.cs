@@ -84,7 +84,7 @@ public class FileBrowserStoreTests : IDisposable
 
     private FileBrowserStore Store()
     {
-        var store = new FileBrowserStore(_registry, new NoIgnores(), _files, _bus, _dispatcher);
+        var store = new FileBrowserStore(_registry, new NoIgnores(), _files, new UnparsedFiles(), _bus, _dispatcher);
         store.Start();
         return store;
     }

@@ -116,7 +116,12 @@ internal sealed class DiffSelectionModel
     /// clipboard gets the code as it would appear in the file, without the line-number gutters,
     /// the +/- glyph, or the "@@" separator bars a selection may drag across.
     /// </summary>
-    public static string BuildCopyText(IReadOnlyList<DiffRow> rows, DiffTextPos start, DiffTextPos end)
+    /// <param name="hiddenAfter">What a collapsed fold swallowed after a row, if anything. A
+    /// selection that runs past such a row covers the body it hides, so the body has to come with
+    /// it — text the reader could not see is still text they selected, and dropping it silently
+    /// would be a copy that lies about the file.</param>
+    public static string BuildCopyText(
+        IReadOnlyList<DiffRow> rows, DiffTextPos start, DiffTextPos end, Func<int, string?>? hiddenAfter = null)
     {
         var sb = new StringBuilder();
         var first = true;
@@ -132,6 +137,11 @@ internal sealed class DiffSelectionModel
             if (!first) sb.Append('\n');
             sb.Append(text, from, to - from);
             first = false;
+
+            // Only when the selection actually continues past this row: ending on a fold header
+            // selects the header, not the body behind it.
+            if (row < end.Row && hiddenAfter?.Invoke(row) is { } swallowed)
+                sb.Append('\n').Append(swallowed);
         }
         return sb.ToString();
     }

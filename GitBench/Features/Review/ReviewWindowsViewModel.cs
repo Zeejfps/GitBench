@@ -1,4 +1,5 @@
 using GitBench.App;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -23,6 +24,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
     private readonly IGitWorkingTreeOperations _gitWorkingTree;
     private readonly IGitConflictOperations _gitConflicts;
     private readonly IGitSubmoduleOperations _gitSubmodules;
+    private readonly ISymbolExtractor _extractor;
     private readonly IRepoSnapshotStore _snapshots;
     private readonly IReviewProgressStore _reviewProgress;
     private readonly IUiDispatcher _dispatcher;
@@ -46,6 +48,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         IGitWorkingTreeOperations gitWorkingTree,
         IGitConflictOperations gitConflicts,
         IGitSubmoduleOperations gitSubmodules,
+        ISymbolExtractor extractor,
         IRepoSnapshotStore snapshots,
         IReviewProgressStore reviewProgress,
         IUiDispatcher dispatcher,
@@ -60,6 +63,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
         _gitSubmodules = gitSubmodules;
+        _extractor = extractor;
         _snapshots = snapshots;
         _reviewProgress = reviewProgress;
         _dispatcher = dispatcher;
@@ -82,7 +86,7 @@ internal sealed class ReviewWindowsViewModel : IDisposable
         // The window's own commit-details VM, opted out of the selection bus so the History pane's
         // selection never drives this window's right pane.
         var details = new CommitDetailsViewModel(
-            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
+            _gitHistory, _gitDiff, _gitWorkingTree, _gitConflicts, _gitSubmodules, _extractor, _registry, _dispatcher, _bus, _loc, _preferences, subscribeToSelection: false);
         Windows.Add(new ReviewWindowViewModel(
             session, _source, _dispatcher, details, _loc, _bus, _snapshots, _reviewProgress));
     }

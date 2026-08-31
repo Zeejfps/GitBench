@@ -156,12 +156,21 @@ public class PtySessionSpawnTests
     }
 
     /// <remarks>
+    /// <para>
     /// Empty and absent are different states and only the overlay can tell them apart: an empty string
     /// means the caller set it to nothing, a null means the caller took it away. A child that reports
     /// the variable unset here has had the two collapsed into one.
+    /// </para>
+    /// <para>
+    /// Unix-gated because Windows has no such pair to keep apart. The block this builds is right —
+    /// <c>WindowsEnvironmentBlock</c> encodes an empty value as <c>NAME=</c>, and
+    /// <c>WindowsEnvironmentBlockTests</c> asserts it — but no child can report the difference back:
+    /// <c>GetEnvironmentVariable</c> answers null for an empty variable exactly as it does for a
+    /// missing one. Asserted end to end where a child can see it, and at the block on Windows.
+    /// </para>
     /// </remarks>
-    [PtyFact]
-    public void Start_KeepsAnEmptyOverlayValueAsAnEmptyVariable_RatherThanARemoval()
+    [UnixPtyFact]
+    public void Start_KeepsAnEmptyOverlayValueAsAnEmptyVariableRatherThanARemovalOnUnix()
     {
         using var work = new TempDirectory();
 
@@ -178,8 +187,14 @@ public class PtySessionSpawnTests
             + $"instead of empty. Terminal showed:\n{output.Describe()}");
     }
 
-    [PtyFact]
-    public void Start_InheritsAnEmptyParentVariableAsAnEmptyVariable()
+    /// <remarks>
+    /// Unix-gated for the reason above, and for a second one that bites first: setting a variable to
+    /// the empty string on Windows deletes it, so the parent this inherits from cannot be put into the
+    /// state the test needs. <c>WindowsEnvironmentBlockTests.AnEmptyInheritedValueSurvives</c> covers
+    /// the inherited side there, where the environment is a value rather than the process's own.
+    /// </remarks>
+    [UnixPtyFact]
+    public void Start_InheritsAnEmptyParentVariableAsAnEmptyVariableOnUnix()
     {
         using var work = new TempDirectory();
         using var inherited = new EnvironmentVariable("GITBENCH_PTY_BLANK", "");
@@ -308,11 +323,24 @@ public class PtySessionSpawnTests
     }
 
     /// <remarks>
+    /// <para>
     /// An empty entry that disappeared, or a <c>$HOME</c> that came back expanded, means the arguments
     /// went through a shell instead of into argv.
+    /// </para>
+    /// <para>
+    /// Unix-gated because the gate is the reporter's, not the contract's: the Windows child is
+    /// <c>powershell.exe -File</c>, which drops an empty argument, strips the quote out of
+    /// <c>a"b\c</c>, and rejects a bare <c>-</c> as a malformed parameter name — measured, not
+    /// assumed. Every argument worth asking about is one it mangles, so a Windows arm here would
+    /// assert only the three it happens to survive and would read as coverage it is not. On Windows
+    /// this is <c>WindowsCommandLineTests</c>'s job instead, and it does it better: thirty argument
+    /// shapes round-tripped through <c>CommandLineToArgvW</c>, the parser every Windows program
+    /// actually uses. Restoring an end-to-end arm here needs a child that reports argv without a
+    /// shell in the middle.
+    /// </para>
     /// </remarks>
-    [PtyFact]
-    public void Start_PassesEachArgumentAsOneArgv_IncludingOnesContainingSpaces()
+    [UnixPtyFact]
+    public void Start_PassesEachArgumentAsOneArgv_IncludingOnesContainingSpacesOnUnix()
     {
         using var work = new TempDirectory();
 

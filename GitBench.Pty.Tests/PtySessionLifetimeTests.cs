@@ -28,16 +28,23 @@ public class PtySessionLifetimeTests
     }
 
     /// <remarks>
+    /// <para>
     /// A POSIX wait status carries eight bits of exit code, so a child that asks to exit with 256 exits
-    /// with 0 and one that asks for -1 exits with 255. The truncation belongs to the platform, not to
+    /// with 0 and one that asks for 300 exits with 44. The truncation belongs to the platform, not to
     /// this session, and the session's job is to report what the platform actually recorded rather than
     /// the number the child had in mind. Windows keeps the full thirty-two bits, which is why this is
     /// not asserted there.
+    /// </para>
+    /// <para>
+    /// The other half of the same story — a child asking for -1 and being recorded as 255 — is not
+    /// here because no POSIX shell can be asked for it portably: dash, which is <c>/bin/sh</c> on most
+    /// Linux distributions, rejects a negative operand outright and exits 2 for the usage error. What
+    /// that measures is the shell, not the kernel's truncation.
+    /// </para>
     /// </remarks>
     [UnixPtyTheory]
     [InlineData(256, 0)]
     [InlineData(300, 44)]
-    [InlineData(-1, 255)]
     public void Exited_ReportsTheExitCodeTheKernelRecorded_NotTheOneTheChildAskedForOnUnix(int asked, int recorded)
     {
         using var work = new TempDirectory();

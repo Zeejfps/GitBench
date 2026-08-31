@@ -156,13 +156,23 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         if (rowIndex < 0 || rowIndex >= _rows.Count) return;
 
         var row = _rows[rowIndex];
-        if (row is FileBrowserRow.Directory directory && IsChevronHit(row, point))
+        if (IsChevronHit(row, point))
         {
-            _vm.Toggle(directory);
+            switch (row)
+            {
+                case FileBrowserRow.Directory directory: _vm.Toggle(directory); return;
+                case FileBrowserRow.File { IsExpandable: true } file: _vm.ToggleFile(file); return;
+                case FileBrowserRow.Symbol { IsExpandable: true } container: _vm.ToggleSymbol(container); return;
+            }
+        }
+
+        if (row is FileBrowserRow.Symbol symbol)
+        {
+            _vm.SelectSymbol(symbol);
             return;
         }
 
-        _vm.SetCursor(row.FullPath);
+        _vm.SetCursor(row.RowKey);
     }
 
     private bool IsChevronHit(FileBrowserRow row, PointF point)
@@ -187,7 +197,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         if (onRow)
         {
             _list.SetContextHighlight(rowIndex);
-            _vm.SetCursor(_rows[rowIndex].FullPath);
+            _vm.SetCursor(_rows[rowIndex].RowKey);
         }
         RowContextRequested?.Invoke(onRow ? _rows[rowIndex] : null, point);
     }

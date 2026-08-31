@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Git;
 using Xunit;
@@ -14,11 +15,11 @@ public sealed class DiffSelectionQuoteTests
     private static readonly IReadOnlyList<DiffRow> Rows =
     [
         new DiffRow.HunkSeparator("@@ -40,4 +40,4 @@", null),
-        new DiffRow.Line(DiffLineKind.Context, "40", "40", "public void Run()", 17),
-        new DiffRow.Line(DiffLineKind.Context, "41", "41", "{", 1),
-        new DiffRow.Line(DiffLineKind.Removed, "42", "", "    Legacy();", 13),
-        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();", 13),
-        new DiffRow.Line(DiffLineKind.Context, "43", "43", "}", 1),
+        new DiffRow.Line(DiffLineKind.Context, "40", "40", "public void Run()"),
+        new DiffRow.Line(DiffLineKind.Context, "41", "41", "{"),
+        new DiffRow.Line(DiffLineKind.Removed, "42", "", "    Legacy();"),
+        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();"),
+        new DiffRow.Line(DiffLineKind.Context, "43", "43", "}"),
     ];
 
     private static DiffSelectionQuote Quote(int fromRow, int toRow, string path = "src/Runner.cs") =>
@@ -27,6 +28,61 @@ public sealed class DiffSelectionQuoteTests
             new DiffTextPos(fromRow, 0),
             new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.Length : 0),
             path)!;
+
+    // A line number tells the model where to look; the declaration tells it what it is looking at.
+    [Fact]
+    public void AnAddedSelectionNamesTheDeclarationItSitsIn()
+    {
+        var quote = QuoteWith(4, 4, Annotations());
+
+        Assert.Equal("Runner.Run()", quote.Declaration);
+        Assert.Contains("in `Runner.Run()`", quote.ToPrompt(null), StringComparison.Ordinal);
+    }
+
+    // A selection of only removed lines exists in the before-side file and nowhere else, so the
+    // before-side outline is the one that can name it — the rule a hunk header already follows.
+    [Fact]
+    public void ARemovedSelectionIsNamedByTheBeforeSideOutline()
+    {
+        var quote = QuoteWith(3, 3, Annotations());
+
+        Assert.Equal("Runner.Legacy()", quote.Declaration);
+    }
+
+    [Fact]
+    public void WithNoOutlineTheQuoteNamesNoDeclarationAndSaysNothingExtra()
+    {
+        var quote = Quote(4, 4);
+
+        Assert.Null(quote.Declaration);
+        Assert.DoesNotContain(" in `", quote.ToPrompt(null), StringComparison.Ordinal);
+    }
+
+    private static DiffAnnotations Annotations() => new(
+        null,
+        new FileOutline([Node("Runner", 38, 50, [Node("Run()", 40, 43)])]),
+        new FileOutline([Node("Runner", 38, 50, [Node("Legacy()", 40, 43)])]));
+
+    private static OutlineNode Node(string name, int start, int end, IReadOnlyList<OutlineNode>? children = null)
+    {
+        var open = name.EndsWith("()", StringComparison.Ordinal);
+        return new OutlineNode(
+            open ? name[..^2] : name,
+            open ? SymbolKind.Method : SymbolKind.Class,
+            open ? string.Empty : null,
+            start,
+            end,
+            SignatureEndLine: start,
+            children ?? []);
+    }
+
+    private static DiffSelectionQuote QuoteWith(int fromRow, int toRow, DiffAnnotations annotations) =>
+        DiffSelectionQuote.Build(
+            Rows,
+            new DiffTextPos(fromRow, 0),
+            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.Length : 0),
+            "src/Runner.cs",
+            annotations)!;
 
     [Fact]
     public void AnAddedSelection_CarriesThePathTheLineAndTheSide()

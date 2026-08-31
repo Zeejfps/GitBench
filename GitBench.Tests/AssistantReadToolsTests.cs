@@ -11,6 +11,9 @@ namespace GitBench.Tests;
 
 // The read tools are thin wrappers over IGitService, so they are exercised against a real fixture
 // repository rather than a mock — a shape change in git's output should fail here.
+// In the CodeIntel collection because get_diff reads DiffOptions.StructureEnabled, which
+// DiffHunkHeaderTests flips: xUnit runs collections in parallel, so sharing one serializes them.
+[Collection(nameof(CodeIntelCollection))]
 public sealed class AssistantReadToolsTests : IDisposable
 {
     private sealed class NullActivityTracker : IRepoActivityTracker
@@ -57,7 +60,7 @@ public sealed class AssistantReadToolsTests : IDisposable
         File.WriteAllText(Path.Combine(_root, "config", ".env"), "API_KEY=hunter2\n");
 
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.GeneralAgent);
-        _toolset = AssistantToolset.ForRepo(_git, _repo, agent);
+        _toolset = AssistantToolset.ForRepo(_git, _repo, new UnparsedFiles(), agent);
     }
 
     public void Dispose()

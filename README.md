@@ -48,12 +48,15 @@ shows a banner, and clicking **Restart** applies it.
 You'll need the [**.NET 10 SDK**](https://dotnet.microsoft.com/download) and **Git**.
 
 ```bash
-# Clone with submodules (the UI framework lives in a nested submodule)
+# Clone with submodules (the UI framework and the tree-sitter bindings are submodules)
 git clone --recurse-submodules https://github.com/Zeejfps/GitBench.git
 cd GitBench
 
 # If you already cloned without --recurse-submodules:
 git submodule update --init --recursive
+
+# One-time: build the native tree-sitter libraries (needs git and a C compiler)
+dotnet run scripts/build-native.cs
 
 # Build
 dotnet build GitBench.sln
@@ -61,6 +64,25 @@ dotnet build GitBench.sln
 # Run
 dotnet run --project GitBench/GitBench.csproj
 ```
+
+### The native tree-sitter step
+
+`external/cs_tree_sitter` ships C# bindings for tree-sitter but **not** the native
+libraries they load — those are built from pinned upstream sources rather than checked
+in. `scripts/build-native.cs` wraps `dotnet run external/cs_tree_sitter/native/build.cs`,
+which clones tree-sitter and the grammars on its first run and writes
+`external/cs_tree_sitter/native/artifacts/<rid>/`. It takes the same arguments —
+`--clean`, and `--target <rid>` to cross-build.
+
+Run it once per clone, and again after a `build.cs` pin moves. Until you do,
+`dotnet build` fails at `CheckNativeArtifacts` naming the command, and so does
+`dotnet test` — the test project references the app. It is not run from MSBuild on
+purpose: it needs the network.
+
+`external/cs_tree_sitter` is **ours to edit**, not a vendored third-party drop. A
+missing `ts_*` declaration, a wrapper convenience, anything needing `unsafe`, or build
+support for a RID we ship belongs there — and changing it means two commits, one in the
+submodule and one bumping the pointer here.
 
 > Auto-update only works in an installed build, so a local `dotnet run` simply skips the
 > update check.

@@ -68,4 +68,12 @@ internal static class LucideIcons
     public const string FileX = "";         // file-x (conflicted)
     public const string TriangleAlert = ""; // alert-triangle (merge conflict warning)
     public const string RefreshCw = ""; // refresh-cw (retry a failed status load)
+
+    // The file browser's declaration rows, one glyph per category rather than per SymbolKind:
+    // a fourteen-icon legend is a thing to learn, and these four are the distinctions a reader
+    // is actually making while scanning an outline.
+    public const string Braces = "";   // braces (namespace)
+    public const string Box = "";      // box (class, struct, record, interface, enum, type)
+    public const string FunctionSquare = ""; // function-square (method, constructor, function)
+    public const string Variable = ""; // variable (property, field, event, enum member)
 }

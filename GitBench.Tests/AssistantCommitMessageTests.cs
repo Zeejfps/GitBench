@@ -98,7 +98,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     {
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.CommitMessageAgent);
         var toolset = AssistantToolset.ForRepo(
-            _git, ActiveRepo(), agent, new ReviewProgressStore(), WriteSurface());
+            _git, ActiveRepo(), new UnparsedFiles(), agent, new ReviewProgressStore(), WriteSurface());
 
         Assert.Equal(
             new[] { "get_diff", "get_local_changes", "set_commit_message" },
@@ -388,6 +388,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         _store = new AssistantSessionStore(
             _registry,
             _git,
+            new UnparsedFiles(),
             new AssistantCredentials(new FakeSecretStore("sk-test")),
             new State<AssistantSettings>(settings ?? AssistantSettings.Default),
             localization,

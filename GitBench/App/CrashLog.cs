@@ -19,6 +19,8 @@ internal static class CrashLog
         };
     }
 
+    public static void Note(string path, string message) => Write(path, message, exception: null);
+
     private static void Write(string path, string source, object? exception)
     {
         var entry = $"[{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}] {source} " +

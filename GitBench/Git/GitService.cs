@@ -2910,20 +2910,14 @@ public sealed class GitService : IGitService, IGitRawConfigReader
                 : new WorktreeRemoveOutcome.RemovedWithLeftovers(leftovers.Path, leftovers.Reason);
         }, static m => new WorktreeRemoveOutcome.Failed(m));
 
+    // `git worktree list` prints forward slashes on Windows, and prints a path with every symlink on
+    // it already followed, while the caller holds whatever the registry recorded — so compare the two
+    // through RealPath rather than as strings.
     private bool IsRegisteredWorktree(Repo primary, string worktreePath)
     {
-        var wanted = NormalizeWorktreePath(worktreePath);
+        var wanted = RealPath.Of(worktreePath);
         return ListWorktrees(primary).Any(w =>
-            string.Equals(NormalizeWorktreePath(w.Path), wanted, PathComparison));
-
-        // `git worktree list` prints forward slashes on Windows while the caller holds whatever
-        // the registry recorded, so compare resolved paths rather than the strings.
-        static string NormalizeWorktreePath(string p)
-        {
-            try { p = Path.GetFullPath(p); }
-            catch { /* keep the raw path; a malformed one just won't match */ }
-            return p.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
+            string.Equals(RealPath.Of(w.Path), wanted, PathComparison));
     }
 
     private static readonly StringComparison PathComparison =

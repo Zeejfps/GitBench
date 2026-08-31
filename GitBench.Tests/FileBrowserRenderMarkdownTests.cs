@@ -48,6 +48,7 @@ public class FileBrowserRenderMarkdownTests : IDisposable
         new Repo(Guid.NewGuid(), _dir.Path, "repo"),
         new EmptyFileSystem(),
         NoIgnoreOracle.Instance,
+        new UnparsedFiles(),
         _dispatcher,
         restored,
         _persisted.Add);

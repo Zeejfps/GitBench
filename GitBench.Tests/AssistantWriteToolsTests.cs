@@ -78,6 +78,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
         AssistantToolset.ForRepo(
             _git,
             repo,
+            new UnparsedFiles(),
             AgentCatalog.LoadEmbedded().Get(AgentCatalog.GeneralAgent),
             new ReviewProgressStore(),
             new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations()));

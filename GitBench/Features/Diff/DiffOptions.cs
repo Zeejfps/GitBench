@@ -17,4 +17,9 @@ internal static class DiffOptions
     // at flatten time like SyntaxHighlightingEnabled, so a runtime flip takes effect on the next
     // FlattenRows (next diff load / re-emit), not instantly.
     public static bool IntraLineHighlightingEnabled = true;
+
+    // Tree-sitter parsing of the diff's file text, which backs the declaration a hunk separator
+    // names. Off means every hunk falls back to git's own xfuncname header — exactly what shipped
+    // before the parser existed.
+    public static bool StructureEnabled = true;
 }

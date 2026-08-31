@@ -1,0 +1,87 @@
+name: build
+
+on:
+  push:
+    branches: [ '**' ]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            shared: tree-sitter.dll
+            grammars: tree-sitter-grammars.dll
+            archive: tree-sitter.lib
+          - os: macos-latest
+            rid: osx-arm64
+            shared: libtree-sitter.dylib
+            grammars: libtree-sitter-grammars.dylib
+            archive: libtree-sitter.a
+          - os: macos-15-intel
+            rid: osx-x64
+            shared: libtree-sitter.dylib
+            grammars: libtree-sitter-grammars.dylib
+            archive: libtree-sitter.a
+          - os: ubuntu-latest
+            rid: linux-x64
+            shared: libtree-sitter.so
+            grammars: libtree-sitter-grammars.so
+            archive: libtree-sitter.a
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Init public submodules over HTTPS
+        shell: bash
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git submodule update --init --recursive
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Cache native tree-sitter artifacts
+        id: native-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            external/cs_tree_sitter/native/vendor
+            external/cs_tree_sitter/native/artifacts
+          key: native-${{ matrix.rid }}-${{ hashFiles('external/cs_tree_sitter/native/build.cs') }}
+
+      - name: Report native toolchain
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          echo "CC=${CC:-<unset>}"
+          "${CC:-$([ "$RUNNER_OS" = Windows ] && echo gcc || echo cc)}" --version || true
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" \
+              -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 \
+              -property installationPath || true
+          fi
+
+      - name: Build native tree-sitter libraries
+        if: steps.native-cache.outputs.cache-hit != 'true'
+        run: dotnet run scripts/build-native.cs -- --target ${{ matrix.rid }}
+
+      - name: Verify native artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="external/cs_tree_sitter/native/artifacts/${{ matrix.rid }}"
+          for f in "${{ matrix.shared }}" "${{ matrix.grammars }}" "${{ matrix.archive }}"; do
+            test -f "$dir/$f" || { echo "missing $dir/$f"; exit 1; }
+          done
+          ls -l "$dir"
+
+      - name: Build
+        run: dotnet build GitBench.sln -c Debug
+
+      - name: Test
+        run: dotnet test GitBench.sln -c Debug --no-build

@@ -10,7 +10,7 @@ namespace GitBench.Tests;
 public class DiffTextSelectionTests
 {
     private static DiffRow.Line Line(string text, DiffLineKind kind = DiffLineKind.Context)
-        => new(kind, "1", "1", text, DiffText.VisualCells(text));
+        => new(kind, "1", "1", text);
 
     private static DiffRow Bar() => new DiffRow.HunkSeparator("@@ -1,2 +1,2 @@", null);
 

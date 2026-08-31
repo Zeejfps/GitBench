@@ -391,6 +391,7 @@
   "diff.fullfile_toggle_tooltip": "Показать файл целиком",
   "diff.preview_toggle_tooltip": "Показать предпросмотр",
   "diff.open_window_tooltip": "Открыть в новом окне",
+  "diff.change_summary_more": { "one": "ещё {count}", "few": "ещё {count}", "many": "ещё {count}", "other": "ещё {count}" },
   "diff.no_selection": "Выберите файл, чтобы посмотреть различия.",
   "diff.binary_not_shown": "Двоичный файл не показан",
   "diff.image_caption": "{width} × {height} · {size}",

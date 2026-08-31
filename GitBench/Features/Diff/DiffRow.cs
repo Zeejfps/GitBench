@@ -31,14 +31,15 @@ internal abstract record DiffRow
     /// same tab-expanded column space as <see cref="Text"/>; null/empty means plain rendering.
     /// <see cref="Emphasis"/> carries intra-line changed-character ranges in that same column
     /// space (a background concern, separate from the foreground <see cref="Spans"/>); null for
-    /// context lines, unpaired adds/removes, and full rewrites.
+    /// context lines, unpaired adds/removes, and full rewrites. <see cref="Fold"/> is set only on
+    /// the two rows a foldable declaration touches.
     /// </summary>
     public sealed record Line(
         DiffLineKind Kind,
         string OldNumber,
         string NewNumber,
         string Text,
-        int Chars,
         IReadOnlyList<TokenSpan>? Spans = null,
-        IReadOnlyList<CharRange>? Emphasis = null) : DiffRow;
+        IReadOnlyList<CharRange>? Emphasis = null,
+        FoldMark? Fold = null) : DiffRow;
 }

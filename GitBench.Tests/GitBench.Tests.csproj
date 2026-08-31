@@ -9,6 +9,13 @@
         <!-- The project under test is AOT-published, but the test host runs on the CLR; don't
              inherit AOT/trim settings here. -->
         <PublishAot>false</PublishAot>
+        <!-- xUnit runs one collection per core, and many of these tests park a pool thread on
+             purpose to hold a gate open. The pool's default floor is ProcessorCount and it grows
+             past that by hill-climbing at about a thread per second, so a Task.Run issued while
+             those threads are parked can sit queued for seconds — long enough to blow the deadline
+             of whichever unrelated test happens to be waiting on it. The floor is sized here for
+             the concurrency the suite actually creates. -->
+        <ThreadPoolMinThreads>256</ThreadPoolMinThreads>
     </PropertyGroup>
 
     <ItemGroup>

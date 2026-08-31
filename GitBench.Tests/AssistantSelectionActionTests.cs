@@ -20,7 +20,7 @@ public sealed class AssistantSelectionActionTests
 {
     private static readonly IReadOnlyList<DiffRow> Rows =
     [
-        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();", 13),
+        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();"),
     ];
 
     private static DiffSelectionQuote Quote() =>

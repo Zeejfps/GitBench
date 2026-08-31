@@ -3,9 +3,24 @@ using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
+using Xunit;
 using ZGF.Observable;
 
 namespace GitBench.Tests;
+
+// A fact that edits a working-tree file and waits for the watcher to report it. Only the platforms
+// where a recursive watch is one handle watch the working tree at all: on Linux RepoWatchRoots
+// deliberately watches none of it, because a recursive inotify watch is one watch per directory out
+// of a per-user budget. RepoWatchRootsTests pins both layouts on every platform, so gating here
+// gives up nothing but the live-filesystem leg of a contract Linux does not have.
+internal sealed class RecursiveWatchFactAttribute : FactAttribute
+{
+    public RecursiveWatchFactAttribute()
+    {
+        if (RepoWatchRoots.CurrentCost != WatchCost.RecursiveIsOneHandle)
+            Skip = "Working-tree files are not watched where a recursive watch costs one watch per directory.";
+    }
+}
 
 // The timing source §7 injects. Default TimeSpan? is null, so every existing deferral/classifier
 // test keeps its fixed-250ms behaviour unchanged.

@@ -99,6 +99,24 @@
     </ItemGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\external\cs_tree_sitter\TreeSitter\TreeSitter.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="Assets\Queries\**\*.scm" />
+        <EmbeddedResource Include="Assets\Queries\**\*.scm">
+            <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+    </ItemGroup>
+
+    <Import Project="..\external\cs_tree_sitter\native\Native.props" />
+
+    <ItemGroup>
+        <DirectPInvoke Include="tree-sitter" />
+        <NativeLibrary Include="$(NativeArtifactsDir)$(StaticLibraryPrefix)tree-sitter$(StaticLibraryExtension)" />
+    </ItemGroup>
+
+    <ItemGroup>
         <AdditionalFiles Include="Localization\Strings\*.json" />
     </ItemGroup>
 

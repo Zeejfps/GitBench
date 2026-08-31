@@ -97,9 +97,7 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
     private void RunClone(CloneRepoDialogViewModel vm)
     {
         vm.Clone.Execute();
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (_dispatcher.Queued == 0 && DateTime.UtcNow < deadline) Thread.Sleep(5);
-        _dispatcher.Drain();
+        Pump.WaitFor(_dispatcher, () => !vm.Clone.IsRunning.Value, "the clone to complete");
         Assert.Null(vm.Clone.Error.Value);
     }
 

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -15,6 +16,15 @@ internal sealed class SilentCommitEditor : ICommitEditor
     public IReadable<string> Description { get; } = new State<string>(string.Empty);
     public void SetTitle(string value) { }
     public void SetDescription(string value) { }
+}
+
+// Stands in for the parser where a test asks nothing about declarations: every file reads as one
+// with nothing to say, so hunk headers stay exactly what git reported.
+internal sealed class UnparsedFiles : ISymbolExtractor
+{
+    public CodeIntelAvailability Availability { get; } = new CodeIntelAvailability.Unavailable("parsing off in tests");
+
+    public FileOutline? Extract(string text, CodeLanguage language) => null;
 }
 
 // Stands in for the remote-operations store where a test's tools never fetch or pull: nothing is

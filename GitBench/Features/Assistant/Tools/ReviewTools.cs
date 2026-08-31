@@ -1,5 +1,7 @@
 using System.Text.Json;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
+using GitBench.Features.Diff;
 using GitBench.Features.Review;
 using GitBench.Git;
 
@@ -77,10 +79,10 @@ internal sealed record ReviewScope(
 /// one mark worth writing back.
 internal static class ReviewTools
 {
-    public static IReadOnlyList<IAssistantTool> CreateReads(IGitService git, Repo repo) =>
+    public static IReadOnlyList<IAssistantTool> CreateReads(IGitService git, Repo repo, ISymbolExtractor extractor) =>
     [
         new GetReviewStackTool(git, repo),
-        new GetReviewDiffTool(git, repo),
+        new GetReviewDiffTool(git, repo, extractor),
         new GetFileAtBaseTool(git, repo),
     ];
 
@@ -148,11 +150,13 @@ internal sealed class GetReviewDiffTool : IAssistantTool
 {
     private readonly IGitService _git;
     private readonly Repo _repo;
+    private readonly ISymbolExtractor _extractor;
 
-    public GetReviewDiffTool(IGitService git, Repo repo)
+    public GetReviewDiffTool(IGitService git, Repo repo, ISymbolExtractor extractor)
     {
         _git = git;
         _repo = repo;
+        _extractor = extractor;
     }
 
     public string Name => "get_review_diff";
@@ -181,10 +185,12 @@ internal sealed class GetReviewDiffTool : IAssistantTool
         if (diff.ErrorMessage is { Length: > 0 } message)
             return Task.FromResult(ToolInvocation.Error(message));
 
+        var annotations = DiffAnnotationCoordinator.ComputeOutlines(
+            _extractor, _git, _repo, diff, scope.HeadSha, scope.BaseSha);
         return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
         {
             scope.WriteRange(writer);
-            ReadTools.WriteDiffBody(writer, diff);
+            ReadTools.WriteDiffBody(writer, diff, annotations);
         })));
     }
 }

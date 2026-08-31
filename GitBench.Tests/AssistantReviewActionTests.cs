@@ -43,7 +43,7 @@ public sealed class AssistantReviewActionTests
         using var dir = new TempDir("gitbench-review-action-");
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.ReviewBranchAgent);
         var toolset = AssistantToolset.ForRepo(
-            new GitService(new NullActivityTracker()), new Repo(Guid.NewGuid(), dir.Path, "repo"), agent);
+            new GitService(new NullActivityTracker()), new Repo(Guid.NewGuid(), dir.Path, "repo"), new UnparsedFiles(), agent);
 
         Assert.Equal(ReviewTools, toolset.Tools.Select(t => t.Name));
         Assert.DoesNotContain(toolset.Tools, t => t.IsWrite);

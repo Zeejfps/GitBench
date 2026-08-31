@@ -26,7 +26,8 @@ public class FileContentLoaderTests : IDisposable
         return path;
     }
 
-    private static FilePreview Load(string path) => FileContentLoader.Load(path, CancellationToken.None);
+    private static FilePreview Load(string path) =>
+        FileContentLoader.Load(path, new UnparsedFiles(), CancellationToken.None);
 
     [Fact]
     public void TextIsSplitIntoLinesWithBothLineEndings()

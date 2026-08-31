@@ -331,6 +331,7 @@
   "diff.fullfile_toggle_tooltip": "전체 파일 표시 전환",
   "diff.preview_toggle_tooltip": "미리보기 전환",
   "diff.open_window_tooltip": "새 윈도우에서 열기",
+  "diff.change_summary_more": { "other": "외 {count}개" },
   "diff.no_selection": "차이를 볼 파일을 선택하세요.",
   "diff.binary_not_shown": "바이너리 파일은 표시되지 않습니다",
   "diff.image_caption": "{width} × {height} · {size}",

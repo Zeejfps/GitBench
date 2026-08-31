@@ -1,3 +1,4 @@
+using GitBench.Features.CodeIntel;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
@@ -17,6 +18,7 @@ internal sealed class DiffWindowsViewModel : IDisposable
     private readonly IGitDiffReader _gitDiff;
     private readonly IGitWorkingTreeOperations _gitWorkingTree;
     private readonly IGitConflictOperations _gitConflicts;
+    private readonly ISymbolExtractor _extractor;
     private readonly IUiDispatcher _dispatcher;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
@@ -29,6 +31,7 @@ internal sealed class DiffWindowsViewModel : IDisposable
         IGitDiffReader gitDiff,
         IGitWorkingTreeOperations gitWorkingTree,
         IGitConflictOperations gitConflicts,
+        ISymbolExtractor extractor,
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc)
@@ -37,6 +40,7 @@ internal sealed class DiffWindowsViewModel : IDisposable
         _gitDiff = gitDiff;
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
+        _extractor = extractor;
         _dispatcher = dispatcher;
         _bus = bus;
         _loc = loc;
@@ -48,7 +52,7 @@ internal sealed class DiffWindowsViewModel : IDisposable
         // A fixed, never-mutated target observable: the main window's selection cannot change
         // what this window shows. The DiffViewModel still reloads on WorkingTreeChangedMessage.
         var pinned = new State<DiffTarget?>(m.Target);
-        var diff = new DiffViewModel(pinned, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, _dispatcher, _bus, loc: _loc, pinnedRepoId: m.RepoId);
+        var diff = new DiffViewModel(pinned, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, _dispatcher, _bus, _extractor, loc: _loc, pinnedRepoId: m.RepoId);
         Windows.Add(new DiffWindowViewModel(m.Target.Path, diff));
     }
 

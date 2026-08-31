@@ -17,6 +17,9 @@ namespace GitBench.Tests;
 /// file list, per-file diffs at that base, and the one write — a Viewed mark that goes through the
 /// same store a reviewer's checkbox writes to, and expires the same way.
 /// </summary>
+// In the CodeIntel collection because get_review_diff reads DiffOptions.StructureEnabled, which
+// DiffHunkHeaderTests flips: xUnit runs collections in parallel, so sharing one serializes them.
+[Collection(nameof(CodeIntelCollection))]
 public sealed class AssistantReviewToolsTests : IDisposable
 {
     private sealed class NullActivityTracker : IRepoActivityTracker
@@ -81,7 +84,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     private AssistantToolset ReviewToolsetFor(Repo repo) =>
         AssistantToolset.Create(
             [
-                .. ReviewTools.CreateReads(_git, repo),
+                .. ReviewTools.CreateReads(_git, repo, new UnparsedFiles()),
                 .. ReviewTools.CreateWrites(_git, repo, _progress, WriteSurface()),
             ],
             ["get_file_at_base", "get_review_diff", "get_review_stack", "mark_viewed"]);
@@ -165,7 +168,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
         Assert.Equal(
             new[] { "mark_viewed" },
             ReviewTools.CreateWrites(_git, _repo, _progress, WriteSurface()).Select(t => t.Name));
-        Assert.All(ReviewTools.CreateReads(_git, _repo), t => Assert.False(t.IsWrite));
+        Assert.All(ReviewTools.CreateReads(_git, _repo, new UnparsedFiles()), t => Assert.False(t.IsWrite));
     }
 
     [Fact]

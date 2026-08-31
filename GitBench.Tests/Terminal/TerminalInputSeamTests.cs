@@ -1559,7 +1559,9 @@ internal sealed class TerminalRun : IDisposable
 
     /// <summary>Waits for the reader thread to have posted a drain without running it.</summary>
     public void WaitForPendingDrain() =>
-        SpinWait.SpinUntil(() => Dispatcher.Queued > 0, TimeSpan.FromSeconds(5));
+        Assert.True(
+            SpinWait.SpinUntil(() => Dispatcher.Queued > 0, TimeSpan.FromSeconds(10)),
+            "the reader thread never posted a drain");
 
     public string RowText(int row) =>
         Session is { } session ? GridText.Row(session.Grid, row) : string.Empty;

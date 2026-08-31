@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Features.CodeIntel;
 using GitBench.Infrastructure;
 
 namespace GitBench.Features.FileBrowser;
@@ -20,6 +21,19 @@ namespace GitBench.Features.FileBrowser;
 /// walk refuses (a link back up its own path, or a directory past the depth cap). Entries under a
 /// directory the walk never listed are left alone — nothing was learned about them.
 /// </para>
+/// <para>
+/// A file expands too, into the declarations inside it, which costs a read and a parse of that one
+/// file. Those go through the <c>outline</c> delegate the owner supplies — the tree knows what a
+/// declaration is shaped like and nothing about how one is found — and are cached beside the
+/// directory listings, so they are re-read on exactly the same events.
+/// </para>
+/// <para>
+/// A declaration that declares something itself opens too, but the other way round from a
+/// directory: opening the file shows the whole outline, and what is tracked is the set the reader
+/// has explicitly <em>closed</em>. Anything else would make reading a file's shape a drill-down —
+/// three clicks to reach a method — and would need state for every node to say the ordinary thing.
+/// The closed set is keyed by containment chain, so it survives a re-parse, and it is not persisted.
+/// </para>
 /// </remarks>
 internal sealed class FileBrowserTree
 {
@@ -33,8 +47,11 @@ internal sealed class FileBrowserTree
     private readonly IFileSystemReader _files;
     private readonly IIgnoreOracle _ignore;
     private readonly int _maxDepth;
+    private readonly Func<string, CancellationToken, FileOutline?>? _outline;
     private readonly Dictionary<string, Cached> _cache = new(PathKey.Comparer);
+    private readonly Dictionary<string, FileOutline?> _outlines = new(PathKey.Comparer);
     private readonly HashSet<string> _expanded = new(PathKey.Comparer);
+    private readonly HashSet<string> _closedSymbols = new(StringComparer.Ordinal);
 
     private IReadOnlyList<FileBrowserRow> _rows = [];
 
@@ -42,10 +59,12 @@ internal sealed class FileBrowserTree
         IFileSystemReader files,
         IIgnoreOracle ignore,
         string rootPath,
+        Func<string, CancellationToken, FileOutline?>? outline = null,
         int maxDepth = DefaultMaxDepth)
     {
         _files = files;
         _ignore = ignore;
+        _outline = outline;
         _maxDepth = Math.Max(1, maxDepth);
         RootPath = PathKey.Normalize(rootPath);
         Flatten(CancellationToken.None);
@@ -85,6 +104,14 @@ internal sealed class FileBrowserTree
         else Expand(absolutePath, cancellation);
     }
 
+    /// <summary>Opens or closes one declaration, by the <see cref="FileBrowserRow.RowKey"/> of the
+    /// row that names it.</summary>
+    public void ToggleSymbol(string rowKey, CancellationToken cancellation = default)
+    {
+        if (!_closedSymbols.Remove(rowKey)) _closedSymbols.Add(rowKey);
+        Flatten(cancellation);
+    }
+
     public void SetShowHidden(bool show, CancellationToken cancellation = default)
     {
         if (ShowHidden == show) return;
@@ -109,6 +136,7 @@ internal sealed class FileBrowserTree
     public void Refresh(CancellationToken cancellation = default)
     {
         _cache.Clear();
+        _outlines.Clear();
         Flatten(cancellation);
     }
 
@@ -159,7 +187,19 @@ internal sealed class FileBrowserTree
 
             if (!entry.IsDirectory)
             {
-                rows.Add(new FileBrowserRow.File(full, entry.Name, depth, ignored, entry.IsHidden, entry.IsLink, guides));
+                var expandable = _outline != null && CodeLanguages.Detect(entry.Name) != null;
+                var showing = expandable && _expanded.Contains(full);
+                if (!expandable) _expanded.Remove(full);
+
+                rows.Add(new FileBrowserRow.File(
+                    full, entry.Name, depth, ignored, entry.IsHidden, entry.IsLink, guides, expandable, showing));
+
+                if (showing)
+                {
+                    EmitSymbols(
+                        rows, full, depth + 1, ignored, entry.IsHidden,
+                        ChildTrunk(depth, trunkMask, isLast), cancellation);
+                }
                 continue;
             }
 
@@ -173,13 +213,79 @@ internal sealed class FileBrowserTree
 
             if (!open) continue;
 
-            var childTrunk = depth == 0
-                ? 0L
-                : TreeGuides.SetKind(trunkMask, depth, isLast ? TreeGuide.None : TreeGuide.Through);
+            var childTrunk = ChildTrunk(depth, trunkMask, isLast);
             chain.Add(canonical);
             Emit(rows, full, depth + 1, ignored, childTrunk, chain, cancellation);
             chain.Remove(canonical);
         }
+    }
+
+    private static long ChildTrunk(int depth, long trunkMask, bool isLast) =>
+        depth == 0
+            ? 0L
+            : TreeGuides.SetKind(trunkMask, depth, isLast ? TreeGuide.None : TreeGuide.Through);
+
+    // A declaration's own children are always shown with it: the unit of expansion is the file, so
+    // there is no second chevron to place and the guides only ever branch off the file's trunk.
+    private void EmitSymbols(
+        List<FileBrowserRow> rows,
+        string file,
+        int depth,
+        bool ignored,
+        bool hidden,
+        long trunkMask,
+        CancellationToken cancellation)
+    {
+        var outline = Outline(file, cancellation);
+        if (outline is null) return;
+        Append(rows, file, outline.Roots, null, depth, ignored, hidden, trunkMask, cancellation);
+    }
+
+    private void Append(
+        List<FileBrowserRow> rows,
+        string file,
+        IReadOnlyList<OutlineNode> nodes,
+        string? parentPath,
+        int depth,
+        bool ignored,
+        bool hidden,
+        long trunkMask,
+        CancellationToken cancellation)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            cancellation.ThrowIfCancellationRequested();
+
+            var node = nodes[i];
+            var isLast = i == nodes.Count - 1;
+            var guides = new TreeGuides(
+                TreeGuides.SetKind(trunkMask, depth, isLast ? TreeGuide.Corner : TreeGuide.Tee),
+                depth + 1);
+
+            var symbolPath = FileOutline.PathOf(parentPath, node);
+            var expandable = node.Children.Count > 0 && depth + 1 < _maxDepth;
+            var open = expandable && !_closedSymbols.Contains(SymbolKey(file, symbolPath));
+
+            rows.Add(new FileBrowserRow.Symbol(
+                file, node.Name, depth, ignored, hidden, guides,
+                node.Kind, node.ParameterTypes, node.StartLine, symbolPath, expandable, open));
+
+            if (!open) continue;
+            Append(
+                rows, file, node.Children, symbolPath, depth + 1, ignored, hidden,
+                ChildTrunk(depth, trunkMask, isLast), cancellation);
+        }
+    }
+
+    private static string SymbolKey(string file, string symbolPath) => file + '\n' + symbolPath;
+
+    private FileOutline? Outline(string file, CancellationToken cancellation)
+    {
+        if (_outlines.TryGetValue(file, out var hit)) return hit;
+
+        var outline = _outline?.Invoke(file, cancellation);
+        _outlines[file] = outline;
+        return outline;
     }
 
     private bool CanDescend(
@@ -200,9 +306,11 @@ internal sealed class FileBrowserTree
     {
         if (_expanded.Count == 0) return;
 
+        // Files count as present too: a file can be open, and dropping its entry here would close
+        // every expanded file on the next flatten.
         var present = new HashSet<string>(PathKey.Comparer);
         foreach (var entry in entries)
-            if (entry.IsDirectory) present.Add(Path.Combine(directory, entry.Name));
+            present.Add(Path.Combine(directory, entry.Name));
 
         foreach (var path in _expanded.ToArray())
         {

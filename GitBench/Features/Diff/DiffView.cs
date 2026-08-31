@@ -40,6 +40,7 @@ internal sealed record DiffView : Widget
             OnUnstageHunk = vm.UnstageHunk,
             OnDiscardHunk = vm.RequestDiscardHunk,
             OnExpandGap = vm.ExpandGap,
+            OnExpandGapToDeclaration = vm.ExpandGapToDeclaration,
         };
         var vScrollBar = ScrollBars.CreateVertical(ctx);
         var hScrollBar = ScrollBars.CreateHorizontal(ctx);

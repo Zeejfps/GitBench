@@ -15,7 +15,11 @@ public sealed record DiffViewStyles(
     uint LfsBadgeTrackedBackground,
     uint LfsBadgeTrackedText,
     uint LfsBadgeUntrackedBackground,
-    uint LfsBadgeUntrackedText)
+    uint LfsBadgeUntrackedText,
+    uint SummaryAddedText,
+    uint SummaryRemovedText,
+    uint SummaryModifiedText,
+    uint SummaryMutedText)
 {
     // Header icon-button glyph: the idle/hover ramp shared by the chevron, title, and buttons.
     internal uint HeaderButtonColor(IInteractable s) =>
@@ -46,6 +50,8 @@ public sealed record DiffContentStyles(
     uint ExpanderIcon,
     uint ExpanderHoverBackground,
     uint SelectionBackground,
+    uint GutterRule,
+    uint FoldChipBackground,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -93,7 +99,14 @@ public partial record ThemeStyles
             LfsBadgeTrackedBackground: status.Info,
             LfsBadgeTrackedText: p.OnStatusText,
             LfsBadgeUntrackedBackground: p.SurfaceSunken,
-            LfsBadgeUntrackedText: p.TextMuted);
+            LfsBadgeUntrackedText: p.TextMuted,
+            // The declaration summary borrows the diff's own vocabulary — added is the add color,
+            // removed the remove color — so nothing has to be explained. A modified declaration is
+            // neither, and takes the header's own text tone rather than a third hue.
+            SummaryAddedText: status.SuccessLineGlyph,
+            SummaryRemovedText: status.DangerLineGlyph,
+            SummaryModifiedText: p.TextBody,
+            SummaryMutedText: p.TextMuted);
 
     // Opacity applied to the diff's add/remove row background tints so syntax colors stay
     // legible through them. 0x00 = invisible, 0xFF = fully opaque (the pre-highlighting look).
@@ -138,6 +151,10 @@ public partial record ThemeStyles
             // Translucent so the add/remove row tint and the changed-character box stay readable
             // underneath — a selection marks text, it doesn't replace what the row was saying.
             SelectionBackground: WithAlpha(p.Accent, DiffSelectionAlpha),
+            // The rule between the line numbers and the code, and the pill standing in for a
+            // folded body. Both are margin furniture: present, never competing with the text.
+            GutterRule: p.BorderSubtle,
+            FoldChipBackground: p.SurfaceHoverStrong,
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

@@ -286,6 +286,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
         _store = new AssistantSessionStore(
             registry,
             new GitService(new NullActivityTracker()),
+            new UnparsedFiles(),
             new AssistantCredentials(_secrets),
             new State<AssistantSettings>(settings),
             _loc,
@@ -550,6 +551,7 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
         _store = new AssistantSessionStore(
             registry,
             new GitService(new NullActivityTracker()),
+            new UnparsedFiles(),
             new AssistantCredentials(_secrets),
             new State<AssistantSettings>(settings),
             _loc,
@@ -742,6 +744,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
         using var store = new AssistantSessionStore(
             registry,
             new GitService(new NullActivityTracker()),
+            new UnparsedFiles(),
             new AssistantCredentials(new NoopSecretStore()),
             settings,
             _loc,

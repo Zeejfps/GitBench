@@ -1,3 +1,6 @@
 [submodule "framework"]
 	path = framework
 	url = git@github.com:Zeejfps/ENV-Game-Framework.git
+[submodule "external/cs_tree_sitter"]
+	path = external/cs_tree_sitter
+	url = https://github.com/Zeejfps/cs_tree_sitter.git

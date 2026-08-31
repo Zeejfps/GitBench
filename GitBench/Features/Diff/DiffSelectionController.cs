@@ -38,6 +38,10 @@ internal interface IDiffSelectionSurface
     /// <summary>The rows of a scope, for building clipboard text and Select All spans.</summary>
     IReadOnlyList<DiffRow>? RowsOf(object? scope);
 
+    /// <summary>The text a collapsed fold swallowed after a row of <paramref name="scope"/>, or null
+    /// where nothing folds. Surfaces without folding return null and copy exactly as before.</summary>
+    Func<int, string?>? HiddenTextOf(object? scope) => null;
+
     /// <summary>Opens the actions a right-click offers over a live selection, if this surface has
     /// any. False for one that does not, and the press falls through untouched.</summary>
     bool ShowSelectionMenu(PointF point);
@@ -289,7 +293,8 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
         if (!selection.HasRange || _clipboard == null) return false;
         if (_surface.RowsOf(selection.Scope) is not { } rows) return false;
 
-        var text = DiffSelectionModel.BuildCopyText(rows, selection.Start, selection.End);
+        var text = DiffSelectionModel.BuildCopyText(
+            rows, selection.Start, selection.End, _surface.HiddenTextOf(selection.Scope));
         if (text.Length == 0) return false;
         _clipboard.SetText(text);
         return true;

@@ -107,6 +107,25 @@ internal sealed record FileBrowserTextBody : Widget
         {
             if (preview is FilePreview.Text text) content.SetRenderState(ToRenderState(text));
         });
+        // After the render state, and on its own path: a fold toggle must not run the render-state
+        // transition, which would reset horizontal scroll and restore a stale pixel offset.
+        content.Bind(browser.Folds, content.SetFoldState);
+
+        // Both directions of the header's conversation with the body: a line to reveal on the way
+        // in, the line at the top of the viewport on the way back out. Held for the view's mounted
+        // period rather than for the browser's, which outlives every body the preview swaps
+        // through.
+        content.Use(() =>
+        {
+            var subscriptions = new SubscriptionGroup();
+            browser.LineRevealRequested += content.RequestScrollToNewLine;
+            subscriptions.Add(() => browser.LineRevealRequested -= content.RequestScrollToNewLine);
+            content.TopVisibleLineChanged += browser.SetTopVisibleLine;
+            subscriptions.Add(() => content.TopVisibleLineChanged -= browser.SetTopVisibleLine);
+            content.OnToggleFold += browser.ToggleFold;
+            subscriptions.Add(() => content.OnToggleFold -= browser.ToggleFold);
+            return subscriptions;
+        });
 
         return new BorderLayout
         {
@@ -124,7 +143,9 @@ internal sealed record FileBrowserTextBody : Widget
             Side: DiffSide.WorkingTree,
             Truncated: text.Truncated,
             Emphasis: null,
-            Highlight: text.Highlight);
+            Annotations: text.Highlight is null && text.Outline is null
+                ? null
+                : new DiffAnnotations(text.Highlight, text.Outline, null));
 
     private static readonly IReadOnlySet<int> EmptyLineNumbers = new HashSet<int>();
 }

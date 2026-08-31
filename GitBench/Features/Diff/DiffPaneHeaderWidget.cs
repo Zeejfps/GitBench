@@ -86,14 +86,22 @@ internal sealed record DiffPaneHeaderWidget : Widget<ButtonState>
         }
         else
         {
+            // "Diff View" over a diff says nothing; the declarations it touched say the thing the
+            // reader opened it to find out. The title stays for everything the parser cannot read.
             trailing.Add(new Grow
             {
-                Child = new Text
+                Child = new Switch<bool>
                 {
-                    Value = L.T(s => s.DiffHeaderTitle),
-                    FontSize = FontSize.Body,
-                    VAlign = TextAlignment.Center,
-                    Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
+                    Value = new Derived<bool>(() => vm.ChangeSummary.Value.Count > 0),
+                    Case = summarized => summarized
+                        ? new DiffChangeSummary { Vm = vm }
+                        : new Text
+                        {
+                            Value = L.T(s => s.DiffHeaderTitle),
+                            FontSize = FontSize.Body,
+                            VAlign = TextAlignment.Center,
+                            Color = Theme.Color(s => s.DiffView.HeaderButtonColor(state)),
+                        },
                 },
             });
         }
