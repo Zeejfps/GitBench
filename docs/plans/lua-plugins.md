@@ -60,7 +60,7 @@ table, which is why they cannot come after.
 | Menu item type | Plugins produce `Extensibility.MenuItem`, a sum type (`Action \| Submenu \| Separator`), projected onto the existing `RepoBarContextMenu.Item`. The app's own 9-field bag is left alone — 29 files touch it, and the invariant is enforced at the parse boundary instead. |
 | Writes | Plugins never call git writes. `IPluginRepoActions` takes a closed sum type of **app intents** (`RepoAction.DeleteTag`), which the adapter routes to the flow that already owns the dialog, the confirmation and the translations. |
 | Threading | Menu builders and predicates run **synchronously on the UI thread** under a deadline **whose mechanism Phase 0.5 must establish**; they may not call git. Data a builder needs but cannot compute — a remote URL — is pre-resolved into `MenuTarget` by the app. `on_select` may go async. One `lua_State` per plugin, all UI-thread in v1. |
-| Localization | Plugins ship `strings/<locale>.json` in the app's format. Lookup is **runtime**, because `Strings` is source-generated and closed. Requires a CLDR plural resolver — see [Localization](#localization). |
+| Localization | Plugins ship `strings/<locale>.json` in the app's format, and reference shared app keys as `@app/<key>` rather than copying them. Lookup is **runtime**, because `Strings` is source-generated and closed. No plural support in v1 — no bundled plugin owns a plural key. |
 | Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require`, **and `debug`**, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
 | Errors | Every callback wrapped; no managed exception may cross the `[UnmanagedCallersOnly]` boundary, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled — **persisted to disk**, see [Crash containment](#crash-containment). |
 | Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
@@ -254,7 +254,8 @@ both ways, the callback wrapper. The only module holding a `lua_State`, and the 
 Rule 3 level-1 justification comment is expected on every function.
 
 **In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
-per-plugin string table with its plural resolver, and the merge function.
+per-plugin string table (with `@app/` catalog fallthrough and the runtime pseudo transform), and the
+merge function.
 
 **The bundled plugins.** Four, each a converted built-in.
 
@@ -331,33 +332,67 @@ Phase 1 adds, ahead of `RecoveryUpdater`:
 
 ## Localization
 
-Plugins ship the same flat dotted-key JSON the app uses, namespaced by plugin id at load. Lookup is
-runtime, which costs a dictionary hit per label and buys the thing that matters: a plugin author adds
-a locale by dropping in a file, with no build step and no access to the source generator.
+Three problems. One of them turned out not to be a problem.
 
-Three things the first draft missed, all on the critical path because `copy-paths` was chosen
-specifically to prove pluralization:
+### Plurals: not a v1 concern
 
-- **A CLDR plural resolver is required, and nobody budgeted it.** Measured: `en.json` carries 22
-  plural keys; `files.stage` is `{one, other}` in English, `{one, few, many, other}` in Russian, and
-  `{one, two, few, many, other}` in Arabic. The generator does category selection at build time today.
-  A runtime resolver for seven locales is real work and belongs in the Modules section, not a footnote.
-- **Shared keys cannot move.** `s.CommonOpenFolder` has three call sites, all in `RepoNodeViewModel`
-  (`:253`, `:376`, `:400`), and `repo.node` is not in `shell-tools`' scope. The key must stay in the
-  app *and* be copied into the plugin, breaking the "moved, never rewritten" rule and creating seven
-  locales of drift. **Grep the generated member, not the JSON key, for every candidate before
-  migrating.**
-- **`Locale.Pseudo` is generator-synthesized** and `LocalizationServiceTests` asserts it differs from
-  English for every key. Plugin tables ship no `pseudo.json`, so migrated keys fall back to `en` and
-  silently drop out of the layout-QA pass.
+**Measured: none of the ~16 keys the bundled plugins own is pluralized.** Every plural key in the
+catalog — `files.stage`, `files.unstage`, `files.discard`, `files.stash`, `files.mark_resolved` —
+belongs to a stage/unstage/discard/stash item that stays in C# as a core git verb. `copy-paths` takes
+only the copy items, which are simple strings.
 
-**Revised estimate: 25–30 keys × 7 locales**, not the ~15 first claimed. `shell-tools` and
-`copy-paths` alone account for roughly 19.
+So v1 ships **no plural support**: a plugin string table containing a plural object is rejected at
+load with a clear error naming the key. Build the CLDR resolver when a plugin actually needs one —
+the rules for seven locales are small, and Arabic's five categories are not worth writing before a
+caller exists.
 
-**Make the migration two-phase.** For one release, keys stay in the app catalog and the plugin string
-table reads them; only then are they deleted. Reversal is deleting a file rather than reconstructing
-seven translations. The good news worth stating: because `Strings` is source-generated, a key moved
-out while a C# reference survives is a **build** break, not a runtime one.
+An earlier draft put this on the critical path on the strength of `copy-paths` "proving
+pluralization". It does not; those items were never in its scope.
+
+### Shared keys: reference them, do not copy them
+
+`common.open_folder` has three call sites (`RepoNodeViewModel:253`, `:376`, `:400`) and `repo.node` is
+not in `shell-tools`' scope. Moving it is impossible; copying it means seven locales of drift.
+
+Plugins read the app catalog by explicit namespace:
+
+```lua
+p.t("menu.open_remote")         -- the plugin's own table
+p.t("@app/common.open_folder")  -- the app catalog, read-only
+```
+
+Shared keys stay in the app, owned in one place. Only genuinely private keys move. `@app/` is
+read-only and resolved against the generated `Strings`, so a key that disappears from the app is a
+load-time failure for the plugin with a clear message, not a silent blank label.
+
+This also makes the two-phase migration nearly free:
+
+- **Phase A** — the plugin ships with *no string table at all* and uses `@app/` for every key. Nothing
+  moves. Reverting the conversion is deleting a folder.
+- **Phase B** — a release later, keys private to the plugin move into its own table. `@app/` remains
+  for the shared ones, permanently.
+
+### Pseudo locale: generate it, do not ship it
+
+`Locale.Pseudo` is a deterministic transform of English, not a translation, and
+`LocalizationServiceTests` asserts it differs from English for every key. Plugin tables ship no
+`pseudo.json`, so migrated keys would fall back to `en` and silently drop out of the layout-QA pass.
+
+`PluginStrings` applies the same transform at runtime. Plugin strings get pseudo coverage for free and
+no plugin author ever ships a `pseudo.json`.
+
+### What actually moves
+
+**~16 keys, not the 25–30 previously estimated.** Four `file_browser.*`, four `toolbar.*`, five
+`localchanges.*`, `commits.context_delete_tag`, and two `repos.*`.
+
+Two reasons it shrank. Shared keys now stay put. And because `tag-actions` routes an intent to the
+app's `DeleteTagDialog`, five of that dialog's six strings stay in the app — only the menu label
+moves. Choosing intent-shaped ports paid for itself here.
+
+Before migrating, **grep the generated member, not the JSON key**, for every candidate: a key with a
+surviving C# reference must be `@app/`-referenced rather than moved. Because `Strings` is
+source-generated, getting this wrong is a **build** break, not a runtime one.
 
 ## Dogfooding: four built-ins become bundled plugins
 
@@ -377,8 +412,9 @@ remote URL and `Git/RemoteWebUrl.cs` moves into plugin code — at which point t
 need an owner. Decide it in phase 1; it changes the port signature.
 
 **2. `copy-paths` — the clipboard items.** Takes over the three copy items in
-`FileOpsContextMenu.AddCopyItems` and their file-browser counterparts. Proves multi-select context and
-the plural resolver. Second because it is the one that stresses localization hardest.
+`FileOpsContextMenu.AddCopyItems` and their file-browser counterparts. Proves multi-select context
+(`files[]` with N > 1) and the `@app/` catalog reference, since it sits alongside items whose strings
+stay in the app. Second because it is the smallest conversion that touches more than one anchor.
 
 **3. `tag-actions` — dynamic submenus and a write.** Takes over `AddTagMenuItems`
 (`CommitsView.cs:1105`). Proves submenus built from context data and the `IPluginRepoActions` intent
@@ -480,8 +516,7 @@ the real cost, accepted knowingly, bounded by the settings pane.
 2. **The Lua runtime**, against contracts the spike has already validated.
 3. **Remaining anchors, the toolbar, and `open-remote`.** First conversion; strings duplicated, not
    yet deleted.
-4. **`copy-paths`, `tag-actions`, `shell-tools`**, in that order, with the plural resolver landing
-   ahead of `copy-paths`.
+4. **`copy-paths`, `tag-actions`, `shell-tools`**, in that order.
 5. **Commands and keybindings** (consulted *after* built-ins — see below), then forge providers.
 6. **Panel schema**, assistant tools in Lua, diff transformers.
 
@@ -502,8 +537,9 @@ conflict UI.
   anchors, `api_version`, and a written deprecation policy.
 - **Seam decay.** The failure mode is a good design eroded by six months of "just import the host
   here". The bidirectional architecture test is the only real prevention, which is why phase 0 exists.
-- **The localization migration is the expensive rollback.** Two-phase it, and do not delete a key from
-  the app catalog until the conversion has shipped a release.
+- **The localization migration is the expensive rollback.** Two-phase it — `@app/` references first,
+  private keys moved a release later — and do not delete a key from the app catalog until the
+  conversion has shipped a release.
 - **Trust.** A plugin is code on the user's machine with access to their repositories. The
   bundled/untrusted split, the text-chunks-only loader, the removed `debug` library and the separate
   `IPluginFileLaunch` grant are the v1 answer. It is not a sandbox and should never be described as
