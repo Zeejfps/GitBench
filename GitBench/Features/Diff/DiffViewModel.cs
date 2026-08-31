@@ -112,7 +112,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly IGitDiffReader _gitDiff;
     private readonly IGitWorkingTreeOperations _gitWorkingTree;
     private readonly IGitConflictOperations _gitConflicts;
-    private readonly ISymbolExtractor _extractor;
+    private readonly DiffPreviewLoader _loader;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService? _loc;
     // When set, this pane is pinned to a specific repo (a commit diff in the Review window or a
@@ -187,7 +187,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _gitDiff = gitDiff;
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
-        _extractor = extractor;
+        _loader = new DiffPreviewLoader(gitDiff, gitConflicts, extractor);
         _bus = bus;
         _shell = shell;
         _loc = loc;
@@ -332,13 +332,9 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var diff = loaded.Result;
         if (target.Path != diff.Path || target.Side != diff.Side) return;
 
-        var git = _gitDiff;
+        var loader = _loader;
         RunBackground<List<string>>(
-            work: () =>
-            {
-                var text = git.GetFileText(repo, target.Path, target.Side, oldSide: false, target.CommitSha, target.BaseSha);
-                return (text == null ? null : SplitLines(text), null);
-            },
+            work: () => (loader.NewSideLines(repo, target), null),
             onResult: (lines, _) =>
             {
                 if (lines == null) return; // no new side (deleted underneath us) — nothing to expand
@@ -750,93 +746,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         if (State.Value.Render is not (DiffRenderState.Loaded or DiffRenderState.FullFile))
             Update(s => s with { Render = new DiffRenderState.Placeholder(LoadingText) });
 
-        var path = target.Path;
-        var side = target.Side;
-        var commitSha = target.CommitSha;
-        var baseSha = target.BaseSha;
-        var mode = State.Value.Mode;
-        var preview = State.Value.Preview;
-        var git = _gitDiff;
-        var conflicts = _gitConflicts;
-        var extractor = _extractor;
-        // Capture localized placeholder text up front so the background worker doesn't touch the
-        // observable off the UI thread.
-        var binaryText = _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown";
-        var noVersionText = _loc?.Strings.Value.DiffNoCurrentVersion ?? "File has no current version";
-        // Always load the diff: it supplies the added-line set for full-file tinting and drives the
-        // highlight pass for both modes. In FullFile mode we additionally fetch the whole new-side
-        // file off the same worker thread.
-        RunBackground<DiffRenderState>(
-            work: () => LoadDiffAndRender(
-                git, conflicts, extractor, repo, path, side, commitSha, baseSha, mode, preview,
-                binaryText, noVersionText),
-            onResult: OnDiffLoaded);
-    }
+        // Everything the load depends on is read here, on the UI thread, and handed over as a
+        // value — the localized placeholders included. The worker then touches no observable.
+        var request = new DiffPreviewRequest(
+            repo, target, State.Value.Mode, State.Value.Preview,
+            _loc?.Strings.Value.DiffBinaryNotShown ?? "Binary file not shown",
+            _loc?.Strings.Value.DiffNoCurrentVersion ?? "File has no current version");
+        var loader = _loader;
 
-    // Runs on the background worker: no `this` capture, no observable access. Loads the diff (and,
-    // in FullFile mode, the whole new-side file), tokenizes and parses it, and packages the finished
-    // render. Highlighting happens here rather than on a second pass so the render the view receives
-    // is already colored — a diff that paints plain and turns colored a beat later reads as a glitch,
-    // and the pane keeps showing the previous file meanwhile, so nothing is gained by publishing early.
-    private static (DiffRenderState? Result, string? Error) LoadDiffAndRender(
-        IGitDiffReader git, IGitConflictOperations conflicts, ISymbolExtractor extractor, Repo repo,
-        string path, DiffSide side, string? commitSha, string? baseSha, DiffViewMode mode, bool preview,
-        string binaryText, string noVersionText)
-    {
-        if (preview && MarkdownDiffPreview.IsPreviewablePath(path)
-            && MarkdownDiffPreview.Build(git, repo, path, side, commitSha, baseSha) is { } markdown)
-            return (markdown, null);
-
-        // A conflicted working-tree file gets the resolution header, not a normal diff — but only
-        // in Diff mode. Toggling to FullFile escapes the header to show the raw working-tree file
-        // (conflict markers and all). GetConflictContext is cheap (one `ls-files -u`) and returns
-        // null for the common non-conflict case.
-        if (side is DiffSide.Unstaged or DiffSide.WorkingTree && mode == DiffViewMode.Diff)
-        {
-            var conflict = conflicts.GetConflictContext(repo, path);
-            if (conflict != null)
-                return (new DiffRenderState.Conflict(path, conflict), null);
-        }
-
-        var diff = git.GetDiff(repo, path, side, commitSha, baseSha);
-        // An image blob has no readable patch on either mode's terms, so the picture replaces the
-        // body in both — the full-file toggle has nothing else to offer for it.
-        if (BuildImagePreview(git, repo, diff, path, side, commitSha, baseSha) is { } image)
-            return (image, null);
-        if (mode == DiffViewMode.Diff)
-        {
-            var annotations = DiffAnnotationCoordinator.Compute(extractor, git, repo, diff, commitSha, baseSha);
-            return (new DiffRenderState.Loaded(diff, annotations), null);
-        }
-        return (BuildFullFile(
-            git, extractor, repo, diff, path, side, commitSha, baseSha, binaryText, noVersionText), null);
-    }
-
-    // Reads and decodes the blob behind a binary image file, or returns null to leave the diff
-    // rendering as it did before (non-image path, unreadable/oversized blob, LFS pointer standing
-    // in for the real bytes, a format neither codec handles).
-    private static DiffRenderState? BuildImagePreview(
-        IGitDiffReader git, Repo repo, DiffResult diff, string path, DiffSide side,
-        string? commitSha, string? baseSha)
-    {
-        if (!diff.IsBinary || diff.ErrorMessage != null) return null;
-        if (!ImagePreviewDecoder.IsPreviewablePath(path)) return null;
-
-        var max = ImagePreviewDecoder.MaxSourceBytes;
-        var isOldSide = false;
-        var bytes = git.GetFileBytes(repo, path, side, oldSide: false, max, commitSha, baseSha);
-        if (bytes == null)
-        {
-            // Deleted on this side: show what it looked like before rather than nothing.
-            bytes = git.GetFileBytes(repo, path, side, oldSide: true, max, commitSha, baseSha);
-            isOldSide = true;
-        }
-        if (bytes == null) return null;
-
-        var preview = ImagePreviewDecoder.TryDecode(bytes);
-        return preview == null
-            ? null
-            : new DiffRenderState.Image(path, preview, side, isOldSide, diff.IsLfs);
+        RunBackground<DiffRenderState>(work: () => (loader.Load(request), null), onResult: OnDiffLoaded);
     }
 
     private void OnDiffLoaded(DiffRenderState? result, string? error)
@@ -845,66 +763,5 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         Update(s => s with { Render = render });
         if (render is DiffRenderState.Loaded { Result.Side: DiffSide.WorkingTree })
             RefreshWorkingTreeHunkStates();
-    }
-
-    // Assembles a FullFile render from a loaded diff: fetches the after-side file text, caps it,
-    // marks which lines were added, and annotates it from the text already in hand. Returns a
-    // Placeholder for cases with no readable current version (binary, diff error, or a
-    // deleted/absent file).
-    private static DiffRenderState BuildFullFile(
-        IGitDiffReader git, ISymbolExtractor extractor, Repo repo, DiffResult diff, string path,
-        DiffSide side, string? commitSha, string? baseSha, string binaryText, string noVersionText)
-    {
-        if (diff.IsBinary) return new DiffRenderState.Placeholder(binaryText);
-        if (diff.ErrorMessage != null) return new DiffRenderState.Placeholder(diff.ErrorMessage);
-
-        var text = git.GetFileText(repo, path, side, oldSide: false, commitSha, baseSha);
-        if (text == null) return new DiffRenderState.Placeholder(noVersionText);
-
-        var lines = SplitLines(text);
-        var truncated = false;
-        if (lines.Count > DiffOptions.TruncationLineCap)
-        {
-            lines.RemoveRange(DiffOptions.TruncationLineCap, lines.Count - DiffOptions.TruncationLineCap);
-            truncated = true;
-        }
-
-        var added = new HashSet<int>();
-        Dictionary<int, IReadOnlyList<CharRange>>? emphasis = null;
-        foreach (var hunk in diff.Hunks)
-        {
-            // Intra-line pairing needs both sides; do it here while the diff is in hand, keyed by
-            // new-line number so the after-file view can attach the new-side ranges per row.
-            IReadOnlyList<CharRange>?[]? hunkEmphasis = null;
-            if (DiffOptions.IntraLineHighlightingEnabled)
-            {
-                var expanded = new string[hunk.Lines.Count];
-                for (var i = 0; i < hunk.Lines.Count; i++)
-                    expanded[i] = DiffText.ExpandTabs(hunk.Lines[i].Text);
-                hunkEmphasis = IntraLineDiff.ForHunk(hunk.Lines, expanded);
-            }
-            for (var i = 0; i < hunk.Lines.Count; i++)
-            {
-                var line = hunk.Lines[i];
-                if (line.Kind != DiffLineKind.Added || line.NewLineNumber is not int n) continue;
-                added.Add(n);
-                if (hunkEmphasis?[i] is { Count: > 0 } ranges)
-                    (emphasis ??= new Dictionary<int, IReadOnlyList<CharRange>>())[n] = ranges;
-            }
-        }
-
-        return new DiffRenderState.FullFile(
-            path, lines, added, side, truncated, emphasis,
-            DiffAnnotationCoordinator.ComputeNewSide(extractor, diff, text));
-    }
-
-    // Splits file text into display lines, normalizing CRLF/CR to LF and dropping the single empty
-    // element a trailing newline produces (so a file ending in "\n" doesn't show a phantom row).
-    private static List<string> SplitLines(string text)
-    {
-        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        var lines = new List<string>(normalized.Split('\n'));
-        if (lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
-        return lines;
     }
 }
