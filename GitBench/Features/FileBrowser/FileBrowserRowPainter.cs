@@ -1,3 +1,4 @@
+using GitBench.Widgets;
 using GitBench.Controls;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
@@ -68,8 +69,13 @@ internal static class FileBrowserRowPainter
 
         left += ChevronWidth + ChevronGap;
 
-        var glyph = Glyph(row);
-        var iconWidth = canvas.MeasureTextWidth(glyph, iconStyle);
+        // The style is shared across rows, so family, size and colour are all set every row rather
+        // than only when they change — a row that inherited the previous one's font would look up
+        // its glyph in the wrong one, and a size derived from the current value would compound.
+        var (glyph, family) = Glyph(row);
+        iconStyle.FontFamily = family;
+        iconStyle.FontSize = family == SetiIcons.FontFamily ? SetiIconSize : IconSize;
+        iconStyle.HorizontalAlignment = TextAlignment.Center;
         iconStyle.TextColor = Tint(
             isDirectory ? colors.DirectoryIcon
             : row is FileBrowserRow.Symbol ? colors.FileIcon
@@ -78,12 +84,12 @@ internal static class FileBrowserRowPainter
             dim);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = Place(rowRect, left, iconWidth, isRtl),
+            Position = Place(rowRect, left, IconColumnWidth, isRtl),
             Text = glyph,
             Style = iconStyle,
             ZIndex = z + 2,
         });
-        left += iconWidth + IconGap;
+        left += IconColumnWidth + IconGap;
 
         if (row is FileBrowserRow.Symbol symbol)
         {
@@ -162,14 +168,42 @@ internal static class FileBrowserRowPainter
         _ => null,
     };
 
-    private static string Glyph(FileBrowserRow row) => row switch
+    /// <summary>
+    /// The mark a row draws, and the font it lives in. A file the parser has a grammar for gets its
+    /// language's Seti mark, so the icon set and the outline set say the same thing: a row wearing a
+    /// language mark is a row whose declarations the tree can open.
+    /// </summary>
+    /// <remarks>
+    /// A symlink keeps the link mark whatever it points at — that it is a link is the more
+    /// surprising fact about it, and the one a reader is scanning for.
+    /// </remarks>
+    private static (string Glyph, string Family) Glyph(FileBrowserRow row) => row switch
     {
-        FileBrowserRow.Directory { IsExpanded: true } => LucideIcons.FolderOpen,
-        FileBrowserRow.Directory => LucideIcons.Folder,
-        FileBrowserRow.Symbol symbol => SymbolGlyph(symbol.Kind),
-        _ when row.IsLink => LucideIcons.FileSymlink,
-        _ => LucideIcons.File,
+        FileBrowserRow.Directory { IsExpanded: true } => (LucideIcons.FolderOpen, LucideIcons.FontFamily),
+        FileBrowserRow.Directory => (LucideIcons.Folder, LucideIcons.FontFamily),
+        FileBrowserRow.Symbol symbol => (SymbolGlyph(symbol.Kind), LucideIcons.FontFamily),
+        _ when row.IsLink => (LucideIcons.FileSymlink, LucideIcons.FontFamily),
+        _ when LanguageMark(row.Name) is { } mark => (mark, SetiIcons.FontFamily),
+        _ => (LucideIcons.File, LucideIcons.FontFamily),
     };
+
+    /// <summary>
+    /// A fixed column, the way the chevron has one, so every filename starts at the same x whichever
+    /// font drew the icon. Both fonts advance a full em, so sizing the column from the measured
+    /// advance instead would move the text by however much the glyph was scaled.
+    /// </summary>
+    private const float IconColumnWidth = 16f;
+
+    /// <summary>
+    /// Seti's glyphs sit smaller within their em than Lucide's — 0.77 against 0.93, measured off the
+    /// two fonts — and being detailed marks rather than line icons they need a little more than
+    /// parity to read at a glance. Tune this one number if they look off.
+    /// </summary>
+    private const float IconSize = FontSize.Body;
+    private const float SetiIconSize = 17f;
+
+    private static string? LanguageMark(string name) =>
+        CodeLanguages.Detect(name) is { } language ? SetiIcons.For(language) : null;
 
     // Four categories, not fourteen: a reader scanning an outline is separating what runs from what
     // holds a value from what contains either, and a glyph per SymbolKind would be a legend.
