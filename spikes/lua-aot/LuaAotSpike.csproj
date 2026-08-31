@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Throwaway spike for docs/plans/lua-plugins.md Phase 0.5. Deliberately NOT in GitBench.sln:
+    it must not affect the app build, and it is deleted once its findings are recorded.
+
+    Run scripts/build-lua.cs first — this expects the archive in native/.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- The point is to see AOT warnings, not to have them collapsed into one line. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+  </PropertyGroup>
+
+  <!--
+    Static linking. DirectPInvoke tells ILC to bind "lua54" imports directly rather than emitting
+    a lazy dlopen stub; NativeLibrary hands the linker the archive.
+
+    The guard matters: without a RuntimeIdentifier, $(PublishAot) is empty and this ItemGroup
+    would vanish silently. In the real app this block lives in an <Import> placed after
+    GitBench.csproj's first PropertyGroup, because MSBuild items do not cross a ProjectReference
+    (see docs/plans/glfw-static-linking.md).
+  -->
+  <ItemGroup Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">
+    <DirectPInvoke Include="lua54" />
+    <NativeLibrary Condition="!$([MSBuild]::IsOSPlatform('Windows'))"
+                   Include="$(MSBuildThisFileDirectory)native/liblua54.a" />
+    <NativeLibrary Condition="$([MSBuild]::IsOSPlatform('Windows'))"
+                   Include="$(MSBuildThisFileDirectory)native/lua54.lib" />
+  </ItemGroup>
+
+  <Target Name="CheckLuaArchive" BeforeTargets="Build"
+          Condition="'$(RuntimeIdentifier)' != ''">
+    <Error Condition="!Exists('$(MSBuildThisFileDirectory)native/liblua54.a') and !Exists('$(MSBuildThisFileDirectory)native/lua54.lib')"
+           Text="No Lua archive. Run: dotnet run scripts/build-lua.cs" />
+  </Target>
+
+</Project>
