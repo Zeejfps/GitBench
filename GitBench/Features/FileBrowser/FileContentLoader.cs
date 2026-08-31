@@ -1,5 +1,6 @@
 using System.Text;
 using GitBench.Features.Diff;
+using GitBench.Features.Markdown;
 
 namespace GitBench.Features.FileBrowser;
 
@@ -36,7 +37,8 @@ internal abstract record FilePreview
         string Path,
         IReadOnlyList<string> Lines,
         bool Truncated,
-        DiffHighlight? Highlight) : FilePreview;
+        DiffHighlight? Highlight,
+        MarkdownRender? Markdown = null) : FilePreview;
 
     public sealed record Image(string Path, ImagePreview Preview) : FilePreview;
 
@@ -81,7 +83,12 @@ internal static class FileContentLoader
 
             var text = Decode(bytes);
             var lines = SplitLines(text, dropLastPartialLine: truncated);
-            return new FilePreview.Text(absolutePath, lines, truncated, Highlight(absolutePath, text, truncated));
+            return new FilePreview.Text(
+                absolutePath,
+                lines,
+                truncated,
+                Highlight(absolutePath, text, truncated),
+                Markdown(absolutePath, text, truncated));
         }
         catch (OperationCanceledException)
         {
@@ -160,6 +167,9 @@ internal static class FileContentLoader
 
         return lines;
     }
+
+    private static MarkdownRender? Markdown(string path, string text, bool truncated) =>
+        MarkdownFile.IsMarkdownPath(path) ? MarkdownFile.Render(text, truncated) : null;
 
     private static DiffHighlight? Highlight(string path, string text, bool truncated)
     {

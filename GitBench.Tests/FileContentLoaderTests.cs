@@ -1,5 +1,6 @@
 using System.Text;
 using GitBench.Features.FileBrowser;
+using GitBench.Features.Markdown.Parsing;
 using PngSharp.Api;
 using Xunit;
 
@@ -138,5 +139,40 @@ public class FileContentLoaderTests : IDisposable
         var text = Assert.IsType<FilePreview.Text>(Load(Write("a.cs", "class A { }\n")));
 
         Assert.NotNull(text.Highlight);
+    }
+
+    [Fact]
+    public void AMarkdownFileCarriesBothItsLinesAndItsParsedDocument()
+    {
+        var text = Assert.IsType<FilePreview.Text>(Load(Write("notes.md", "# Title\n\nSome prose.\n")));
+
+        Assert.Equal(["# Title", "", "Some prose."], text.Lines);
+        Assert.NotNull(text.Markdown);
+        Assert.Collection(
+            text.Markdown.Document.Blocks,
+            block => Assert.Equal(1, Assert.IsType<HeadingBlock>(block).Level),
+            block => Assert.IsType<ParagraphBlock>(block));
+        Assert.False(text.Markdown.Truncated);
+    }
+
+    [Theory]
+    [InlineData("notes.markdown")]
+    [InlineData("NOTES.MD")]
+    public void EveryMarkdownExtensionGetsADocument(string name) =>
+        Assert.NotNull(Assert.IsType<FilePreview.Text>(Load(Write(name, "# Title\n"))).Markdown);
+
+    [Fact]
+    public void AFileThatIsNotMarkdownHasNoDocumentToRender() =>
+        Assert.Null(Assert.IsType<FilePreview.Text>(Load(Write("Program.cs", "class C { }\n"))).Markdown);
+
+    [Fact]
+    public void PastTheLineCapTheDocumentSaysSoRatherThanParsingItAll()
+    {
+        var source = string.Concat(Enumerable.Repeat("paragraph\n\n", 4_000));
+        var render = Assert.IsType<FilePreview.Text>(Load(Write("long.md", source))).Markdown;
+
+        Assert.NotNull(render);
+        Assert.True(render.Truncated);
+        Assert.True(render.Document.Blocks.Count < 4_000);
     }
 }

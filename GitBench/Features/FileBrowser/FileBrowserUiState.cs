@@ -16,11 +16,13 @@ public sealed class FileBrowserUiState
     public List<string> Expanded { get; set; } = [];
     public bool ShowHidden { get; set; } = true;
     public string? Cursor { get; set; }
+    public bool RenderMarkdown { get; set; } = true;
 
     public FileBrowserUiState Clone() => new()
     {
         Expanded = [.. Expanded],
         ShowHidden = ShowHidden,
         Cursor = Cursor,
+        RenderMarkdown = RenderMarkdown,
     };
 }

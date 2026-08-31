@@ -1,3 +1,4 @@
+using GitBench.Features.Markdown;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using ZGF.Observable;
@@ -32,6 +33,7 @@ internal sealed class FileBrowserViewModel : IDisposable
     private readonly State<string?> _cursor = new(null);
     private readonly State<bool> _showHidden = new(true);
     private readonly State<FilePreview> _preview = new(FilePreview.None.Instance);
+    private readonly State<bool> _renderMarkdown = new(true);
 
     private string[] _expanded = [];
 
@@ -58,6 +60,7 @@ internal sealed class FileBrowserViewModel : IDisposable
         _persist = persist;
 
         _showHidden.Value = restored.ShowHidden;
+        _renderMarkdown.Value = restored.RenderMarkdown;
         _cursor.Value = Restored(restored.Cursor);
 
         var expanded = restored.Expanded.Select(Restored).OfType<string>().ToArray();
@@ -82,9 +85,21 @@ internal sealed class FileBrowserViewModel : IDisposable
     /// <summary>What the pane draws beside the tree: the cursor's file, or why it cannot be drawn.</summary>
     public IReadable<FilePreview> Preview => _preview;
 
+    public IReadable<bool> RenderMarkdown => _renderMarkdown;
+
+    public MarkdownRender? MarkdownPreview =>
+        (_preview.Value as FilePreview.Text)?.Markdown;
+
     /// <summary>The tail of the serial lane. Held so a test can wait for the disk work it started
     /// rather than sleeping for it; nothing in the application awaits it.</summary>
     internal Task Pending => _lane;
+
+    public void SetRenderMarkdown(bool render)
+    {
+        if (_renderMarkdown.Value == render) return;
+        _renderMarkdown.Value = render;
+        Persist();
+    }
 
     public void SetShowHidden(bool show)
     {
@@ -230,6 +245,7 @@ internal sealed class FileBrowserViewModel : IDisposable
             Expanded = _expanded.Select(ToRelative).OfType<string>().ToList(),
             ShowHidden = _showHidden.Value,
             Cursor = _cursor.Value is { } cursor ? ToRelative(cursor) : null,
+            RenderMarkdown = _renderMarkdown.Value,
         });
     }
 
@@ -310,6 +326,7 @@ internal sealed class FileBrowserViewModel : IDisposable
         _rows.Dispose();
         _cursor.Dispose();
         _showHidden.Dispose();
+        _renderMarkdown.Dispose();
         _preview.Dispose();
     }
 }

@@ -10,7 +10,7 @@ namespace GitBench.Features.LocalChanges;
 
 internal sealed record LocalChangesHeaderActionButton : Widget
 {
-    private const float ButtonSize = 22f;
+    internal const float ButtonSize = 22f;
     private const float IconSize = 13f;
 
     /// <summary>Icon glyph; a constant or an auto-tracked binding (<c>Prop.Bind(() =&gt; …)</c>).</summary>

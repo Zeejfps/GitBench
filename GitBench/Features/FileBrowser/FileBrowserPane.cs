@@ -67,7 +67,15 @@ internal sealed record FileBrowserBody : Widget
                 InitialWidth = preferences.Current.FileBrowserWidth,
                 OnWidthChanged = preferences.SetFileBrowserWidth,
             },
-            Center = new FileBrowserPreview { Model = browser },
+            Center = new Column
+            {
+                CrossAxis = CrossAxisAlignment.Stretch,
+                Children =
+                [
+                    new FileBrowserPreviewHeader { Model = browser },
+                    new Grow { Child = new FileBrowserPreview { Model = browser } },
+                ],
+            },
         };
     }
 }
@@ -100,6 +108,53 @@ internal sealed record FileBrowserHeader : Widget
                 toggle,
             },
         });
+    }
+}
+
+internal sealed record FileBrowserPreviewHeader : Widget
+{
+    public required FileBrowserViewModel Model { get; init; }
+
+    protected override View CreateView(Context ctx)
+    {
+        var browser = Model;
+
+        var title = new TextView(ctx.Canvas);
+        title.BindThemedTextColor(ctx.Theme(), s => s.FileChangesSection.HeaderText);
+        title.Bind(browser.Preview, preview => title.Text = Title(browser, preview));
+
+        var toggle = new LocalChangesHeaderActionButton
+        {
+            Icon = Prop.Bind<string?>(() =>
+                browser.RenderMarkdown.Value ? LucideIcons.FileText : LucideIcons.BookOpen),
+            Visible = Prop.Bind(() => browser.MarkdownPreview != null),
+            Tooltip = L.T(s => s.DiffPreviewToggleTooltip),
+            Command = new Command(() => browser.SetRenderMarkdown(!browser.RenderMarkdown.Value)),
+        }.BuildView(ctx);
+
+        return FileChangesUI.CreateHeaderBar(ctx, new FlexRowView
+        {
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            MinHeightConstraint = LocalChangesHeaderActionButton.ButtonSize,
+            Children =
+            {
+                new FlexItem { Grow = 1, Child = title },
+                toggle,
+            },
+        });
+    }
+
+    private static string Title(FileBrowserViewModel browser, FilePreview preview)
+    {
+        var path = preview switch
+        {
+            FilePreview.Loading loading => loading.Path,
+            FilePreview.Text text => text.Path,
+            FilePreview.Image image => image.Path,
+            FilePreview.Unavailable unavailable => unavailable.Path,
+            _ => null,
+        };
+        return path is null ? string.Empty : Path.GetRelativePath(browser.RootPath, path).Replace('\\', '/');
     }
 }
 

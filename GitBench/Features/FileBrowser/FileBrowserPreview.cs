@@ -1,5 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.Markdown;
+using GitBench.Features.Markdown.Parsing;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -13,7 +15,7 @@ namespace GitBench.Features.FileBrowser;
 
 /// <summary>Which body the preview shows. Text is the common case; a picture and a sentence are the
 /// two things a patch view cannot render.</summary>
-internal enum FileBrowserBodyKind { Text, Image, Placeholder }
+internal enum FileBrowserBodyKind { Text, Markdown, Image, Placeholder }
 
 /// <summary>
 /// The pane beside the tree: the selected file, rendered.
@@ -50,6 +52,8 @@ internal sealed record FileBrowserPreview : Widget
                 {
                     Value = new Derived<FileBrowserBodyKind>(() => browser.Preview.Value switch
                     {
+                        FilePreview.Text { Markdown: not null } when browser.RenderMarkdown.Value =>
+                            FileBrowserBodyKind.Markdown,
                         FilePreview.Text => FileBrowserBodyKind.Text,
                         FilePreview.Image => FileBrowserBodyKind.Image,
                         _ => FileBrowserBodyKind.Placeholder,
@@ -58,6 +62,7 @@ internal sealed record FileBrowserPreview : Widget
                     Case = kind => kind switch
                     {
                         FileBrowserBodyKind.Text => new FileBrowserTextBody { Model = browser },
+                        FileBrowserBodyKind.Markdown => new FileBrowserMarkdownBody { Model = browser },
                         FileBrowserBodyKind.Image => new FileBrowserImageBody { Model = browser },
                         _ => new FileBrowserNotice { Message = Prop.Bind<string?>(() => Placeholder(ctx, browser)) },
                     },
@@ -122,6 +127,25 @@ internal sealed record FileBrowserTextBody : Widget
             Highlight: text.Highlight);
 
     private static readonly IReadOnlySet<int> EmptyLineNumbers = new HashSet<int>();
+}
+
+internal sealed record FileBrowserMarkdownBody : Widget
+{
+    public required FileBrowserViewModel Model { get; init; }
+
+    protected override IWidget Build(Context ctx)
+    {
+        var browser = Model;
+        var loc = ctx.Localization();
+
+        return new MarkdownDocumentView
+        {
+            Document = Prop.Bind<MarkdownDocument?>(() => browser.MarkdownPreview?.Document),
+            BottomNotice = Prop.Bind<string?>(() => browser.MarkdownPreview is { Truncated: true }
+                ? loc.Strings.Value.DiffFileTruncated(DiffOptions.TruncationLineCap)
+                : null),
+        };
+    }
 }
 
 /// <summary>The file as a picture.</summary>
