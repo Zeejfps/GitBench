@@ -405,6 +405,80 @@ Phase 1 adds, ahead of `RecoveryUpdater`:
   entry header. It is the only reporting this app has — there is no telemetry — and without it the
   first report after phase 4 is "the app crashes" with no way to know a plugin was involved.
 
+## Where plugins live, and how they load
+
+### Two roots
+
+| Root | Path | Lifecycle |
+|---|---|---|
+| **Bundled** | `<app>/plugins/<id>/` | Ships as `Content` items; Velopack replaces the app directory wholesale on update, so these update with the app. On macOS this resolves to `DiffDino.app/Contents/MacOS/plugins/`, because `release.yml:128` copies the publish directory into `Contents/MacOS/` — not `Resources/`. |
+| **User** | `<AppData>/plugins/<id>/` | Survives updates and uninstalls. These are the ones that can go stale against a new `api_version`, and the ones a crash loop can strand — hence quarantine. |
+
+`AppPaths` currently exposes only `AppDataPath(string fileName)`; it gains an `AppDataDir(string name)`
+alongside it. The env-var override and the legacy-folder seeding already handle everything else, so a
+scratch data dir gets a scratch plugin set for free.
+
+There is no in-app installer in v1. Installing a user plugin is dropping a folder in; the settings
+pane offers a "reveal plugins folder" button and nothing more. No registry, no auto-update, no hot
+reload — a change requires a restart, and the settings pane says so.
+
+### A plugin folder
+
+```
+plugins/open-remote/
+  plugin.json          manifest — the only file read at startup
+  init.lua             behaviour — loaded lazily, on first invocation
+  strings/en.json      optional; one file per locale the plugin supports
+  strings/ja.json
+```
+
+`plugin.json` carries id, version, `api_version`, and the contributions as **data**: anchors, item
+ids, string keys, icons, placement. That is what makes the registry enumerable without an
+interpreter, and it is the whole reason startup is N small JSON reads rather than N interpreter
+boots.
+
+### Load order
+
+1. **Enumerate both roots and read `plugin.json` only.** No Lua is loaded, no `lua_State` created.
+2. **Parse each manifest into a typed record** (Rule 1 — this is a boundary). A malformed manifest is
+   skipped with an error naming the file, not a crash and not a silent omission.
+3. **Refuse manifests outside the supported `api_version` range**, naming the plugin and the range.
+4. **Resolve id collisions: bundled wins.** A user plugin sharing an id with a bundled one is
+   ignored and shown as shadowed in the settings pane. The alternative — user overrides bundled —
+   would let a dropped-in folder silently replace a shipped feature, which is both a support problem
+   and a trust hole.
+5. **Drop disabled and quarantined ids**, read from the host's own state file.
+6. **Register contributions from the manifest.** The app now knows every menu item, toolbar button
+   and command that exists, and which plugin owns it, without having executed anything.
+7. **On first invocation of a contribution**, create that plugin's `lua_State`, load `init.lua`, and
+   keep the state for the rest of the session.
+
+Step 6 is the line between "the app knows what a plugin contributes" and "the app has run a plugin's
+code". Everything before it is parsing; the interpreter only appears when the user actually clicks
+something.
+
+### Host state
+
+Two files under `<AppData>/plugins/`, written through the existing `AtomicFile`:
+
+- `state.json` — disabled plugin ids. **Not `Preferences`**: `Preferences` is a `public sealed record`
+  serialized to disk, so a plugin field there would survive removal of the plugin system as dead
+  public API with an orphaned key in the user's file. `Preferences.cs` already argues this convention
+  for the assistant, holding provider settings as plain strings so the preferences layer stays free
+  of assistant types. Keeping the disabled set here means `Preferences` needs no edit at all, which
+  removes one touch point from the budget.
+- `quarantine.json` — the id currently being loaded, written before the load and cleared after. On
+  the next launch, an id still recorded from a launch that never reached `MarkHealthy` is skipped.
+  See [Crash containment](#crash-containment).
+
+### What happens on update and uninstall
+
+- **Update**: bundled plugins are replaced with the new build's copies. User plugins are untouched,
+  which is why `api_version` refusal has to be a clear message rather than a silent skip — a stale
+  user plugin disappearing without explanation after an update is the worst version of this.
+- **Uninstall**: `<AppData>/plugins/` is left behind, like the rest of the app data folder. Worth
+  naming; not worth solving differently from the existing state files.
+
 ## Localization
 
 A plugin ships `strings/<locale>.json` in the app's flat dotted-key format. At load, the file for the
