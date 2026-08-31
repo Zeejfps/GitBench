@@ -12,13 +12,13 @@ using Xunit.Abstractions;
 namespace GitBench.Tests.HighlightBench;
 
 /// <summary>
-/// Measures the shipped TextMate highlighter against a tree-sitter one over this checkout's own
-/// source, and writes the numbers to a markdown report.
+/// Measures the two engines behind <see cref="RoutedSyntaxHighlighter"/> against each other over
+/// this checkout's own source, and writes the numbers to a markdown report.
 /// </summary>
 /// <remarks>
 /// Gated on <c>GITBENCH_HIGHLIGHT_BENCH=1</c> because it walks the whole repository and takes
-/// minutes: this answers a design question once, it is not a regression test. Set
-/// <c>GITBENCH_HIGHLIGHT_BENCH_OUT</c> to choose where the report lands.
+/// minutes: this settled a design question once and re-answers it after a grammar bump, it is not
+/// a regression test. Set <c>GITBENCH_HIGHLIGHT_BENCH_OUT</c> to choose where the report lands.
 /// </remarks>
 public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
 {
@@ -32,6 +32,24 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
     private const string Configuration = "Release";
 #endif
 
+    // The corpus is gathered per grammar, but both engines are addressed by TextMate's language id.
+    private static readonly (CodeLanguage Language, string LanguageId)[] Routed =
+    [
+        (CodeLanguage.CSharp, "csharp"),
+        (CodeLanguage.TypeScript, "typescript"),
+        (CodeLanguage.Tsx, "typescriptreact"),
+        (CodeLanguage.JavaScript, "javascript"),
+        (CodeLanguage.Json, "json"),
+        (CodeLanguage.Css, "css"),
+        (CodeLanguage.Yaml, "yaml"),
+        (CodeLanguage.Python, "python"),
+        (CodeLanguage.Go, "go"),
+        (CodeLanguage.Rust, "rust"),
+        (CodeLanguage.Java, "java"),
+        (CodeLanguage.Bash, "shellscript"),
+        (CodeLanguage.C, "c"),
+    ];
+
     [Fact]
     public void MeasureAgainstTextMate()
     {
@@ -41,22 +59,16 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             return;
         }
 
+        using var treeSitter = new TreeSitterSyntaxHighlighter();
+        var textMate = SyntaxHighlighter.Shared;
         var report = new StringBuilder();
-        var languages = LoadProbes(report, out var probes);
 
-        try
-        {
-            var measurements = Measure(languages, probes, report);
-            MeasureConcurrency(probes, report);
-            ReportGuardrails(report);
-            ReportQuality(languages, probes, report);
-            ReportSnippets(probes, report);
-            _ = measurements;
-        }
-        finally
-        {
-            foreach (var probe in probes.Values) probe.Dispose();
-        }
+        Preamble(treeSitter, report);
+        Measure(treeSitter, textMate, report);
+        MeasureConcurrency(treeSitter, textMate, report);
+        ReportGuardrails(report);
+        ReportQuality(treeSitter, textMate, report);
+        ReportSnippets(treeSitter, textMate, report);
 
         var path = Path.Combine(
             Environment.GetEnvironmentVariable("GITBENCH_HIGHLIGHT_BENCH_OUT") ?? Path.GetTempPath(),
@@ -66,9 +78,7 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
         output.WriteLine($"Report written to {path}");
     }
 
-    private static List<CodeLanguage> LoadProbes(
-        StringBuilder report,
-        out Dictionary<CodeLanguage, TreeSitterHighlightProbe> probes)
+    private static void Preamble(TreeSitterSyntaxHighlighter treeSitter, StringBuilder report)
     {
         report.AppendLine("# Tree-sitter vs TextMate highlighting");
         report.AppendLine();
@@ -79,55 +89,33 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             $"best of {Repeats} runs per file");
         report.AppendLine($"- Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
         report.AppendLine();
-        report.AppendLine("## Query compilation");
+        report.AppendLine("Both engines as the app ships them: `TreeSitterSyntaxHighlighter` with " +
+            "its embedded queries, and `SyntaxHighlighter` behind it. Markdown and HTML are absent " +
+            "because they route to TextMate outright — their queries need injections this engine " +
+            "does not run.");
         report.AppendLine();
-        report.AppendLine("| Language | Patterns kept | Patterns in file | Note |");
-        report.AppendLine("| --- | --- | --- | --- |");
 
-        probes = [];
-        var languages = new List<CodeLanguage>();
-
-        foreach (var language in CodeLanguages.All)
+        var unavailable = Routed.Where(r => !treeSitter.Supports(r.LanguageId)).ToArray();
+        if (unavailable.Length > 0)
         {
-            var query = BenchCorpus.Query(language);
-            if (query is null)
-            {
-                report.AppendLine($"| {language} | — | — | no upstream highlights.scm |");
-                continue;
-            }
-
-            try
-            {
-                var probe = TreeSitterHighlightProbe.Create(language, query);
-                probes.Add(language, probe);
-                languages.Add(language);
-                var note = probe.PatternsKept == probe.PatternsTotal ? "" : "patterns dropped, see below";
-                report.AppendLine($"| {language} | {probe.PatternsKept} | {probe.PatternsTotal} | {note} |");
-            }
-            catch (Exception error)
-            {
-                report.AppendLine($"| {language} | — | — | failed: {Escape(error.Message)} |");
-            }
+            report.AppendLine($"**{unavailable.Length} language(s) failed to load a query and are " +
+                $"falling back to TextMate: {string.Join(", ", unavailable.Select(u => u.Language))}.**");
+            report.AppendLine();
         }
-
-        report.AppendLine();
-        return languages;
     }
 
-    private List<LanguageMeasurement> Measure(
-        List<CodeLanguage> languages,
-        Dictionary<CodeLanguage, TreeSitterHighlightProbe> probes,
+    private static void Measure(
+        TreeSitterSyntaxHighlighter treeSitter,
+        ISyntaxHighlighter textMate,
         StringBuilder report)
     {
-        var highlighter = SyntaxHighlighter.Shared;
         var results = new List<LanguageMeasurement>();
 
-        foreach (var language in languages)
+        foreach (var (language, languageId) in Routed)
         {
             var files = BenchCorpus.Files(language, FilesPerLanguage);
             if (files.Count == 0) continue;
 
-            var probe = probes[language];
             var measurement = new LanguageMeasurement(language);
 
             foreach (var file in files)
@@ -135,37 +123,30 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
                 var text = BenchCorpus.ReadText(file.Path);
                 if (text is null) continue;
 
-                var languageId = LanguageRegistry.DetectLanguageId(file.Path);
-                if (languageId is null) continue;
+                // Warm both on this file before timing it: the first touch of a grammar loads and
+                // caches it, which is a startup cost, not a per-file one.
+                _ = textMate.Highlight(text, languageId);
+                _ = treeSitter.Highlight(text, languageId);
 
-                // Warm both engines on this file before timing it: the first touch of a grammar
-                // loads and caches it, which is a startup cost, not a per-file one.
-                _ = highlighter.Highlight(text, languageId);
-                _ = probe.Highlight(text);
-
-                var textMate = double.MaxValue;
-                var textMateFellBack = false;
-                var treeSitter = double.MaxValue;
-                var parse = double.MaxValue;
-                var query = double.MaxValue;
-                var build = double.MaxValue;
+                var textMateBest = double.MaxValue;
+                var treeSitterBest = double.MaxValue;
+                var fellBack = false;
 
                 for (var repeat = 0; repeat < Repeats; repeat++)
                 {
                     var watch = Stopwatch.StartNew();
-                    var spans = highlighter.Highlight(text, languageId);
+                    var spans = textMate.Highlight(text, languageId);
                     watch.Stop();
-                    textMate = Math.Min(textMate, watch.Elapsed.TotalMilliseconds);
-                    textMateFellBack |= spans is null;
+                    textMateBest = Math.Min(textMateBest, watch.Elapsed.TotalMilliseconds);
+                    fellBack |= spans is null;
 
-                    var run = probe.Highlight(text);
-                    treeSitter = Math.Min(treeSitter, run.Total.TotalMilliseconds);
-                    parse = Math.Min(parse, run.Parse.TotalMilliseconds);
-                    query = Math.Min(query, run.Query.TotalMilliseconds);
-                    build = Math.Min(build, run.Build.TotalMilliseconds);
+                    watch.Restart();
+                    _ = treeSitter.Highlight(text, languageId);
+                    watch.Stop();
+                    treeSitterBest = Math.Min(treeSitterBest, watch.Elapsed.TotalMilliseconds);
                 }
 
-                measurement.Add(file, text.Length, textMate, textMateFellBack, treeSitter, parse, query, build);
+                measurement.Add(file, text.Length, textMateBest, fellBack, treeSitterBest);
             }
 
             results.Add(measurement);
@@ -179,135 +160,98 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             "tree-sitter med | tree-sitter p95 | tree-sitter max | Speedup (total) | TM plain |");
         report.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
 
-        foreach (var measurement in results)
+        foreach (var m in results)
         {
             report.AppendLine(
-                $"| {measurement.Language} | {measurement.Count} | {measurement.Kilobytes:F0} | " +
-                $"{Ms(measurement.TextMate.Median)} | {Ms(measurement.TextMate.P95)} | " +
-                $"{Ms(measurement.TextMate.Max)} | " +
-                $"{Ms(measurement.TreeSitter.Median)} | {Ms(measurement.TreeSitter.P95)} | " +
-                $"{Ms(measurement.TreeSitter.Max)} | " +
-                $"{measurement.TextMate.Total / Math.Max(measurement.TreeSitter.Total, 0.0001):F1}x | " +
-                $"{measurement.FellBack} |");
+                $"| {m.Language} | {m.Count} | {m.Kilobytes:F0} | " +
+                $"{Ms(m.TextMate.Median)} | {Ms(m.TextMate.P95)} | {Ms(m.TextMate.Max)} | " +
+                $"{Ms(m.TreeSitter.Median)} | {Ms(m.TreeSitter.P95)} | {Ms(m.TreeSitter.Max)} | " +
+                $"{m.TextMate.Total / Math.Max(m.TreeSitter.Total, 0.0001):F1}x | {m.FellBack} |");
         }
 
         var allTextMate = results.Sum(r => r.TextMate.Total);
         var allTreeSitter = results.Sum(r => r.TreeSitter.Total);
-        var allBytes = results.Sum(r => r.Kilobytes);
+        var allKb = results.Sum(r => r.Kilobytes);
         report.AppendLine();
         report.AppendLine(
-            $"**Whole corpus:** {results.Sum(r => r.Count)} files, {allBytes / 1024:F1} MB. " +
-            $"TextMate {allTextMate:F0} ms ({allBytes / 1024 / (allTextMate / 1000):F1} MB/s), " +
-            $"tree-sitter {allTreeSitter:F0} ms ({allBytes / 1024 / (allTreeSitter / 1000):F1} MB/s) — " +
+            $"**Whole corpus:** {results.Sum(r => r.Count)} files, {allKb / 1024:F1} MB. " +
+            $"TextMate {allTextMate:F0} ms ({allKb / 1024 / (allTextMate / 1000):F1} MB/s), " +
+            $"tree-sitter {allTreeSitter:F0} ms ({allKb / 1024 / (allTreeSitter / 1000):F1} MB/s) — " +
             $"**{allTextMate / allTreeSitter:F1}x**.");
         report.AppendLine();
 
         report.AppendLine("## Is tree-sitter ever the slower one?");
         report.AppendLine();
-        report.AppendLine("| Language | Files where tree-sitter is slower | Worst ratio (files TextMate actually tokenized) |");
+        report.AppendLine("| Language | Files where tree-sitter is slower | " +
+            "Worst ratio (files TextMate actually tokenized) |");
         report.AppendLine("| --- | --- | --- |");
 
-        foreach (var measurement in results)
+        foreach (var m in results)
         {
-            report.AppendLine(
-                $"| {measurement.Language} | {measurement.TreeSitterSlower} / {measurement.Count} | " +
-                $"{measurement.WorstTreeSitter} |");
+            report.AppendLine($"| {m.Language} | {m.TreeSitterSlower} / {m.Count} | {m.WorstTreeSitter} |");
         }
 
         report.AppendLine();
-        report.AppendLine("## Where the tree-sitter time goes");
-        report.AppendLine();
-        report.AppendLine("Capability A already parses every file it shows a hunk header for. " +
-            "The parse column is the cost that is already being paid; query plus build is the " +
-            "marginal cost of highlighting from that tree.");
-        report.AppendLine();
-        report.AppendLine("| Language | Parse ms | Query ms | Build ms | Marginal share | " +
-            "TextMate ms vs marginal |");
-        report.AppendLine("| --- | --- | --- | --- | --- | --- |");
-
-        foreach (var measurement in results)
-        {
-            var marginal = measurement.QueryTotal + measurement.BuildTotal;
-            report.AppendLine(
-                $"| {measurement.Language} | {measurement.ParseTotal:F0} | {measurement.QueryTotal:F0} | " +
-                $"{measurement.BuildTotal:F0} | {marginal / measurement.TreeSitter.Total * 100:F0}% | " +
-                $"{measurement.TextMate.Total / Math.Max(marginal, 0.0001):F1}x |");
-        }
-
-        report.AppendLine();
-        return results;
     }
 
     private static void MeasureConcurrency(
-        Dictionary<CodeLanguage, TreeSitterHighlightProbe> probes,
+        TreeSitterSyntaxHighlighter treeSitter,
+        ISyntaxHighlighter textMate,
         StringBuilder report)
     {
         report.AppendLine("## Concurrency");
         report.AppendLine();
 
-        if (!probes.ContainsKey(CodeLanguage.CSharp))
-        {
-            report.AppendLine("Skipped: no C# probe.");
-            report.AppendLine();
-            return;
-        }
-
         var files = BenchCorpus.Files(CodeLanguage.CSharp, ConcurrencyFiles)
-            .Select(f => (File: f, Text: BenchCorpus.ReadText(f.Path)))
-            .Where(f => f.Text is not null)
-            .Select(f => f.Text!)
+            .Select(f => BenchCorpus.ReadText(f.Path))
+            .OfType<string>()
             .ToArray();
-
-        var highlighter = SyntaxHighlighter.Shared;
         var workers = Environment.ProcessorCount;
 
-        foreach (var text in files) _ = highlighter.Highlight(text, "csharp");
+        foreach (var text in files)
+        {
+            _ = textMate.Highlight(text, "csharp");
+            _ = treeSitter.Highlight(text, "csharp");
+        }
 
-        var sequential = Stopwatch.StartNew();
-        foreach (var text in files) _ = highlighter.Highlight(text, "csharp");
-        sequential.Stop();
+        var sequentialTextMate = Time(() =>
+        {
+            foreach (var text in files) _ = textMate.Highlight(text, "csharp");
+        });
 
-        var parallelTextMate = Stopwatch.StartNew();
-        Parallel.ForEach(
+        var parallelTextMate = Time(() => Parallel.ForEach(
             files,
             new ParallelOptions { MaxDegreeOfParallelism = workers },
-            text => highlighter.Highlight(text, "csharp"));
-        parallelTextMate.Stop();
+            text => textMate.Highlight(text, "csharp")));
 
-        // Built before the clock starts, the way a pool would be: compiling the query is a
-        // once-per-process cost and charging it to the parallel run would measure the setup.
-        var query = BenchCorpus.Query(CodeLanguage.CSharp)!;
-        var perWorker = Enumerable.Range(0, workers)
-            .Select(_ => TreeSitterHighlightProbe.Create(CodeLanguage.CSharp, query))
-            .ToArray();
-
-        var sequentialTreeSitter = Stopwatch.StartNew();
-        foreach (var text in files) _ = probes[CodeLanguage.CSharp].Highlight(text);
-        sequentialTreeSitter.Stop();
-
-        var parallelTreeSitter = Stopwatch.StartNew();
-        Parallel.For(0, workers, worker =>
+        var sequentialTreeSitter = Time(() =>
         {
-            for (var i = worker; i < files.Length; i += workers) perWorker[worker].Highlight(files[i]);
+            foreach (var text in files) _ = treeSitter.Highlight(text, "csharp");
         });
-        parallelTreeSitter.Stop();
 
-        foreach (var probe in perWorker) probe.Dispose();
+        var parallelTreeSitter = Time(() => Parallel.ForEach(
+            files,
+            new ParallelOptions { MaxDegreeOfParallelism = workers },
+            text => treeSitter.Highlight(text, "csharp")));
 
-        report.AppendLine($"{files.Length} C# files, {workers} workers. TextMate serializes every " +
-            "surface through one lock; tree-sitter parsers are per-worker.");
+        report.AppendLine($"{files.Length} C# files, {workers} workers — the shape of the review " +
+            "window, which starts a lane per visible file. TextMate serializes every surface " +
+            "through one lock; tree-sitter takes a parser per worker from its pool.");
         report.AppendLine();
-        report.AppendLine("| Engine | 1 thread | " + workers + " threads | Scaling |");
+        report.AppendLine($"| Engine | 1 thread | {workers} threads | Scaling |");
         report.AppendLine("| --- | --- | --- | --- |");
-        report.AppendLine(
-            $"| TextMate | {sequential.Elapsed.TotalMilliseconds:F0} ms | " +
-            $"{parallelTextMate.Elapsed.TotalMilliseconds:F0} ms | " +
-            $"{sequential.Elapsed.TotalMilliseconds / parallelTextMate.Elapsed.TotalMilliseconds:F2}x |");
-        report.AppendLine(
-            $"| tree-sitter | {sequentialTreeSitter.Elapsed.TotalMilliseconds:F0} ms | " +
-            $"{parallelTreeSitter.Elapsed.TotalMilliseconds:F0} ms | " +
-            $"{sequentialTreeSitter.Elapsed.TotalMilliseconds / parallelTreeSitter.Elapsed.TotalMilliseconds:F2}x |");
+        report.AppendLine($"| TextMate | {sequentialTextMate:F0} ms | {parallelTextMate:F0} ms | " +
+            $"{sequentialTextMate / parallelTextMate:F2}x |");
+        report.AppendLine($"| tree-sitter | {sequentialTreeSitter:F0} ms | {parallelTreeSitter:F0} ms | " +
+            $"{sequentialTreeSitter / parallelTreeSitter:F2}x |");
         report.AppendLine();
+    }
+
+    private static double Time(Action work)
+    {
+        var watch = Stopwatch.StartNew();
+        work();
+        return watch.Elapsed.TotalMilliseconds;
     }
 
     private static void ReportGuardrails(StringBuilder report)
@@ -315,19 +259,15 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
         report.AppendLine("## Files nobody highlights today");
         report.AppendLine();
         report.AppendLine($"`SyntaxHighlighter.MaxFileChars` is {SyntaxHighlighter.MaxFileChars / 1024} KB; " +
-            $"`TreeSitterSymbolExtractor.MaxFileBytes` is {TreeSitterSymbolExtractor.MaxFileBytes / 1024} KB. " +
-            "Files between the two render plain today and would not have to.");
+            $"`TreeSitterSyntaxHighlighter.MaxFileBytes` is {TreeSitterSyntaxHighlighter.MaxFileBytes / 1024} KB. " +
+            "Files between the two rendered plain before routing and no longer have to.");
         report.AppendLine();
 
         var oversized = BenchCorpus.Oversized();
-        var betweenCaps = oversized
-            .Where(f => f.Bytes <= TreeSitterSymbolExtractor.MaxFileBytes)
-            .ToList();
-
         report.AppendLine($"- Over {SyntaxHighlighter.MaxFileChars / 1024} KB in this checkout: " +
             $"{oversized.Count(f => f.Bytes > SyntaxHighlighter.MaxFileChars)} files in a bundled language.");
-        report.AppendLine($"- Between the two caps (plain today, highlightable by tree-sitter): " +
-            $"{betweenCaps.Count} files.");
+        report.AppendLine($"- Between the two caps (was plain, now colored): " +
+            $"{oversized.Count(f => f.Bytes <= TreeSitterSyntaxHighlighter.MaxFileBytes)} files.");
         report.AppendLine();
 
         foreach (var file in oversized.Take(10))
@@ -339,60 +279,52 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
     }
 
     private static void ReportQuality(
-        List<CodeLanguage> languages,
-        Dictionary<CodeLanguage, TreeSitterHighlightProbe> probes,
+        TreeSitterSyntaxHighlighter treeSitter,
+        ISyntaxHighlighter textMate,
         StringBuilder report)
     {
         report.AppendLine("## Agreement and coverage");
         report.AppendLine();
-        report.AppendLine("Measured per non-whitespace character of every corpus file, after both " +
-            "engines are reduced to the same `TokenColorSlot` vocabulary.");
+        report.AppendLine("Per non-whitespace character of every corpus file, both engines reduced " +
+            "to the same `TokenColorSlot` vocabulary.");
         report.AppendLine();
         report.AppendLine("| Language | TextMate colored | tree-sitter colored | Same slot | " +
             "Only TextMate | Only tree-sitter | Both, different |");
         report.AppendLine("| --- | --- | --- | --- | --- | --- | --- |");
 
-        var highlighter = SyntaxHighlighter.Shared;
-
-        foreach (var language in languages)
+        foreach (var (language, languageId) in Routed)
         {
-            var files = BenchCorpus.Files(language, FilesPerLanguage);
-            long total = 0, textMateColored = 0, treeSitterColored = 0, same = 0, onlyTextMate = 0,
-                onlyTreeSitter = 0, differ = 0;
+            long total = 0, left = 0, right = 0, same = 0, onlyLeft = 0, onlyRight = 0, differ = 0;
 
-            foreach (var file in files)
+            foreach (var file in BenchCorpus.Files(language, FilesPerLanguage))
             {
                 var text = BenchCorpus.ReadText(file.Path);
                 if (text is null) continue;
-                var languageId = LanguageRegistry.DetectLanguageId(file.Path);
-                if (languageId is null) continue;
 
-                var textMate = highlighter.Highlight(text, languageId);
-                if (textMate is null) continue;
-                var treeSitter = probes[language].Highlight(text).Spans;
+                var textMateSpans = textMate.Highlight(text, languageId);
+                var treeSitterSpans = treeSitter.Highlight(text, languageId);
+                if (textMateSpans is null || treeSitterSpans is null) continue;
 
                 var lines = text.ReplaceLineEndings("\n").Split('\n');
-                var count = Math.Min(Math.Min(lines.Length, textMate.Count), treeSitter.Count);
+                var count = Math.Min(Math.Min(lines.Length, textMateSpans.Count), treeSitterSpans.Count);
 
                 for (var i = 0; i < count; i++)
                 {
                     var expanded = DiffText.ExpandTabs(lines[i]);
-                    var left = Paint(expanded.Length, textMate[i]);
-                    var right = Paint(expanded.Length, treeSitter[i]);
+                    var a = Paint(expanded.Length, textMateSpans[i]);
+                    var b = Paint(expanded.Length, treeSitterSpans[i]);
 
                     for (var c = 0; c < expanded.Length; c++)
                     {
                         if (char.IsWhiteSpace(expanded[c])) continue;
                         total++;
-                        var l = left[c];
-                        var r = right[c];
-                        if (l != TokenColorSlot.Default) textMateColored++;
-                        if (r != TokenColorSlot.Default) treeSitterColored++;
+                        if (a[c] != TokenColorSlot.Default) left++;
+                        if (b[c] != TokenColorSlot.Default) right++;
 
-                        if (l == r && l != TokenColorSlot.Default) same++;
-                        else if (l != TokenColorSlot.Default && r == TokenColorSlot.Default) onlyTextMate++;
-                        else if (l == TokenColorSlot.Default && r != TokenColorSlot.Default) onlyTreeSitter++;
-                        else if (l != r) differ++;
+                        if (a[c] == b[c] && a[c] != TokenColorSlot.Default) same++;
+                        else if (a[c] != TokenColorSlot.Default && b[c] == TokenColorSlot.Default) onlyLeft++;
+                        else if (a[c] == TokenColorSlot.Default && b[c] != TokenColorSlot.Default) onlyRight++;
+                        else if (a[c] != b[c]) differ++;
                     }
                 }
             }
@@ -400,16 +332,17 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             if (total == 0) continue;
 
             report.AppendLine(
-                $"| {language} | {Percent(textMateColored, total)} | {Percent(treeSitterColored, total)} | " +
-                $"{Percent(same, total)} | {Percent(onlyTextMate, total)} | " +
-                $"{Percent(onlyTreeSitter, total)} | {Percent(differ, total)} |");
+                $"| {language} | {Percent(left, total)} | {Percent(right, total)} | " +
+                $"{Percent(same, total)} | {Percent(onlyLeft, total)} | " +
+                $"{Percent(onlyRight, total)} | {Percent(differ, total)} |");
         }
 
         report.AppendLine();
     }
 
     private static void ReportSnippets(
-        Dictionary<CodeLanguage, TreeSitterHighlightProbe> probes,
+        TreeSitterSyntaxHighlighter treeSitter,
+        ISyntaxHighlighter textMate,
         StringBuilder report)
     {
         report.AppendLine("## Side by side");
@@ -418,18 +351,14 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             "`F`unction `V`ariable `O`perator `P`unctuation con`X`tant, `.` for uncolored.");
         report.AppendLine();
 
-        var highlighter = SyntaxHighlighter.Shared;
-
         foreach (var (language, languageId, source) in HighlightSnippets.All)
         {
-            if (!probes.TryGetValue(language, out var probe)) continue;
-
             report.AppendLine($"### {language}");
             report.AppendLine();
             report.AppendLine("```text");
 
-            var textMate = highlighter.Highlight(source, languageId);
-            var treeSitter = probe.Highlight(source).Spans;
+            var left = textMate.Highlight(source, languageId);
+            var right = treeSitter.Highlight(source, languageId);
             var lines = source.ReplaceLineEndings("\n").Split('\n');
 
             for (var i = 0; i < lines.Length; i++)
@@ -438,14 +367,17 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
                 if (expanded.Trim().Length == 0) continue;
 
                 report.AppendLine($"     {expanded}");
-                report.AppendLine($"  tm {Letters(expanded, textMate is null || i >= textMate.Count ? [] : textMate[i])}");
-                report.AppendLine($"  ts {Letters(expanded, i >= treeSitter.Count ? [] : treeSitter[i])}");
+                report.AppendLine($"  tm {Letters(expanded, SpansAt(left, i))}");
+                report.AppendLine($"  ts {Letters(expanded, SpansAt(right, i))}");
             }
 
             report.AppendLine("```");
             report.AppendLine();
         }
     }
+
+    private static IReadOnlyList<TokenSpan> SpansAt(IReadOnlyList<IReadOnlyList<TokenSpan>>? spans, int line) =>
+        spans is null || line >= spans.Count ? [] : spans[line];
 
     private static TokenColorSlot[] Paint(int length, IReadOnlyList<TokenSpan> spans)
     {
@@ -492,12 +424,11 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
 
     private static string Ms(double value) => value.ToString("F2", CultureInfo.InvariantCulture);
 
-    private static string Escape(string text) => text.ReplaceLineEndings(" ").Replace("|", "\\|");
-
     private sealed class LanguageMeasurement(CodeLanguage language)
     {
         private readonly List<double> _textMate = [];
         private readonly List<double> _treeSitter = [];
+        private double _worstRatio;
 
         public CodeLanguage Language { get; } = language;
 
@@ -507,31 +438,15 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
 
         public double Kilobytes { get; private set; }
 
-        public double ParseTotal { get; private set; }
-
-        public double QueryTotal { get; private set; }
-
-        public double BuildTotal { get; private set; }
-
         public int TreeSitterSlower { get; private set; }
 
         public string WorstTreeSitter { get; private set; } = "";
-
-        private double _worstRatio;
 
         public Stats TextMate => Stats.Of(_textMate);
 
         public Stats TreeSitter => Stats.Of(_treeSitter);
 
-        public void Add(
-            CorpusFile file,
-            int chars,
-            double textMate,
-            bool fellBack,
-            double treeSitter,
-            double parse,
-            double query,
-            double build)
+        public void Add(CorpusFile file, int chars, double textMate, bool fellBack, double treeSitter)
         {
             Count++;
             Kilobytes += chars / 1024.0;
@@ -553,9 +468,6 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
             if (fellBack) FellBack++;
             _textMate.Add(textMate);
             _treeSitter.Add(treeSitter);
-            ParseTotal += parse;
-            QueryTotal += query;
-            BuildTotal += build;
         }
     }
 

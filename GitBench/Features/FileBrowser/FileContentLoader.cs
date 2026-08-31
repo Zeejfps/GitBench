@@ -212,7 +212,7 @@ internal static class FileContentLoader
     {
         if (truncated || !DiffOptions.SyntaxHighlightingEnabled) return null;
         if (LanguageRegistry.DetectLanguageId(path) is not { } languageId) return null;
-        var spans = SyntaxHighlighter.Shared.Highlight(text, languageId);
+        var spans = RoutedSyntaxHighlighter.Shared.Highlight(text, languageId);
         return spans is null ? null : new DiffHighlight(null, spans);
     }
 }

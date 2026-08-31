@@ -1088,11 +1088,20 @@ today.
 matching pass across the two sides. Genuinely valuable, genuinely a project.
 Revisit after Capability C, which builds the old/new outline matching G extends.
 
-**H — tree-sitter syntax highlighting.** Not a replacement for TextMateSharp; a
-second implementation behind the `ISyntaxHighlighter` seam that already exists,
-routed per language. Tree-sitter where we bundle a grammar, TextMate for
-everything else, so coverage never regresses and adding a language is a build
-decision rather than a code one.
+**H — tree-sitter syntax highlighting. ✅ Shipped.** Not a replacement for
+TextMateSharp; a second implementation behind the `ISyntaxHighlighter` seam that
+already exists, routed per language. Tree-sitter where we bundle a grammar,
+TextMate for everything else, so coverage never regresses and adding a language
+is a build decision rather than a code one.
+
+`RoutedSyntaxHighlighter` is what every surface calls now.
+`TreeSitterSyntaxHighlighter` takes thirteen languages; Markdown and HTML stay on
+TextMate because their upstream queries highlight through *injections* — a fenced
+block's own language, a `<script>` body, and for Markdown a whole second grammar
+for its inline syntax — which this engine does not run. Shipping no
+`highlights.scm` for a language is the whole of the routing rule, and a language
+tree-sitter declines mid-file falls back rather than going plain, so nothing a
+user sees can regress.
 
 **Start with a measurement, not an implementation.** Once Phase 1 lands both
 engines are in-process, so a benchmark over a few hundred real files comparing
@@ -1102,10 +1111,11 @@ of an argument. Report throughput and worst case, not just the mean — the wors
 case is what the current guardrails exist for.
 
 **That measurement is done: [tree-sitter-highlighting-benchmark.md](tree-sitter-highlighting-benchmark.md).**
-1,014 files, 11.9 MB, both engines in one process. Tree-sitter is **10.6x** faster
-end to end, and **25-60x** on the marginal cost once Capability A's parse is
-already paid for (8.5x on JSON, the one weak case); it is slower on 4 of 1,014
-files, all sub-millisecond Markdown. `HighlightBenchmarkTests` regenerates it.
+888 files, 11.3 MB, both engines in one process. Tree-sitter is **10.9x** faster
+end to end and slower on **none** of them; on the review window's shape — 500
+files across every core — it is 7,069 ms against 80 ms, because TextMate's global
+lock gets it 0.98x from 24 cores. `HighlightBenchmarkTests` regenerates the
+report against the shipped code.
 
 Three things made it *likely* faster, and the third is the real argument:
 
@@ -1150,7 +1160,7 @@ We would get the fast parse, never the fast reparse.
 ## 11. Phases
 
 **Status: Phases 0 through 6 are done — every capability A–F this plan set out to
-build — and fifteen grammars ship. What remains is G and H.**
+build — fifteen grammars ship, and H (highlighting) is routed. What remains is G.**
 
 **Phase 0 — build foundation. ✅ Done.** *No app behavior changes. Budget a week.*
 

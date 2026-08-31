@@ -104,8 +104,14 @@
 
     <ItemGroup>
         <None Remove="Assets\Queries\**\*.scm" />
-        <EmbeddedResource Include="Assets\Queries\**\*.scm">
+        <!-- Outline queries (the @def./@name capture protocol), one per bundled grammar. -->
+        <EmbeddedResource Include="Assets\Queries\*.scm">
             <LogicalName>%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
+        <!-- Highlight queries, vendored from each grammar's own repository. A separate logical
+             prefix because both sets name their files after the grammar. -->
+        <EmbeddedResource Include="Assets\Queries\Highlights\*.scm">
+            <LogicalName>highlights.%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>
     </ItemGroup>
 

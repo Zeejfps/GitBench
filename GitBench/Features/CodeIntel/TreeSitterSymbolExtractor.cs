@@ -332,7 +332,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
 
         private CompiledLanguage(
             Query query,
-            ExtractorPool pool,
+            ParseSessionPool pool,
             Dictionary<uint, SymbolKind> definitionCaptures,
             uint nameCaptureId,
             uint bodyCaptureId,
@@ -354,7 +354,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
 
         public Query Query { get; }
 
-        public ExtractorPool Pool { get; }
+        public ParseSessionPool Pool { get; }
 
         public uint NameCaptureId { get; }
 
@@ -439,7 +439,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
 
                 return new CompiledLanguage(
                     query,
-                    new ExtractorPool(grammar, poolCapacity),
+                    new ParseSessionPool(grammar, poolCapacity),
                     definitionCaptures,
                     nameCaptureId,
                     bodyCaptureId,

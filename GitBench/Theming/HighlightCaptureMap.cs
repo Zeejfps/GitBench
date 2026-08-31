@@ -1,6 +1,4 @@
-using GitBench.Theming;
-
-namespace GitBench.Tests.HighlightBench;
+namespace GitBench.Theming;
 
 /// <summary>
 /// Pure mapping from a tree-sitter highlight capture name (e.g. <c>"function.method"</c>) to the

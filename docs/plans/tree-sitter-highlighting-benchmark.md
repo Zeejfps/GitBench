@@ -2,27 +2,9 @@
 
 - Host: Microsoft Windows NT 10.0.26200.0, 24 logical cores, .NET 10.0.2, Release build
 - Corpus: this checkout, 120 files per language max, best of 3 runs per file
-- Generated: 2026-08-31 16:49
+- Generated: 2026-08-31 17:18
 
-## Query compilation
-
-| Language | Patterns kept | Patterns in file | Note |
-| --- | --- | --- | --- |
-| CSharp | 35 | 35 |  |
-| TypeScript | 32 | 34 | patterns dropped, see below |
-| Tsx | 32 | 34 | patterns dropped, see below |
-| JavaScript | 25 | 27 | patterns dropped, see below |
-| Json | 6 | 6 |  |
-| Css | 27 | 27 |  |
-| Html | 7 | 7 |  |
-| Markdown | 11 | 11 |  |
-| Yaml | 15 | 15 |  |
-| Python | 19 | 19 |  |
-| Go | 15 | 15 |  |
-| Rust | 43 | 43 |  |
-| Java | 24 | 24 |  |
-| Bash | 10 | 10 |  |
-| C | 18 | 18 |  |
+Both engines as the app ships them: `TreeSitterSyntaxHighlighter` with its embedded queries, and `SyntaxHighlighter` behind it. Markdown and HTML are absent because they route to TextMate outright — their queries need injections this engine does not run.
 
 ## Throughput
 
@@ -30,78 +12,53 @@ Per-file wall time in milliseconds, best of three.
 
 | Language | Files | KB | TextMate med | TextMate p95 | TextMate max | tree-sitter med | tree-sitter p95 | tree-sitter max | Speedup (total) | TM plain |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| CSharp | 120 | 548 | 10.87 | 58.21 | 249.21 | 1.16 | 5.83 | 35.72 | 9.7x | 0 |
-| TypeScript | 39 | 586 | 6.82 | 155.26 | 156.16 | 0.50 | 7.86 | 71.58 | 9.4x | 1 |
-| JavaScript | 120 | 809 | 1.94 | 216.03 | 750.73 | 0.10 | 10.19 | 95.14 | 14.0x | 2 |
-| Json | 120 | 5206 | 0.79 | 54.71 | 74.79 | 0.48 | 12.79 | 19.67 | 3.4x | 4 |
-| Css | 5 | 314 | 58.50 | 750.34 | 750.34 | 2.98 | 58.55 | 58.55 | 13.3x | 2 |
-| Html | 7 | 27 | 0.88 | 49.65 | 49.65 | 0.08 | 34.44 | 34.44 | 2.3x | 0 |
-| Markdown | 120 | 659 | 2.76 | 17.36 | 76.70 | 0.61 | 4.05 | 17.90 | 4.2x | 0 |
-| Yaml | 114 | 147 | 1.04 | 4.19 | 14.77 | 0.10 | 0.37 | 1.12 | 11.6x | 0 |
-| Python | 82 | 248 | 2.34 | 102.12 | 151.87 | 0.16 | 6.26 | 9.54 | 15.7x | 0 |
-| Go | 33 | 210 | 0.26 | 79.95 | 137.24 | 0.05 | 13.88 | 16.42 | 7.2x | 0 |
-| Rust | 120 | 1736 | 13.51 | 164.38 | 362.71 | 0.98 | 11.29 | 26.47 | 14.8x | 0 |
-| Java | 3 | 3 | 0.72 | 10.06 | 10.06 | 0.08 | 0.34 | 0.34 | 24.0x | 0 |
-| Bash | 11 | 66 | 1.98 | 25.23 | 25.23 | 0.75 | 7.10 | 7.10 | 3.4x | 0 |
-| C | 120 | 1651 | 4.83 | 214.06 | 750.48 | 0.42 | 12.37 | 108.81 | 16.0x | 2 |
+| CSharp | 120 | 551 | 6.94 | 39.35 | 168.15 | 0.80 | 3.77 | 19.94 | 10.1x | 0 |
+| TypeScript | 39 | 586 | 3.73 | 100.19 | 121.72 | 0.25 | 4.70 | 47.26 | 9.4x | 1 |
+| JavaScript | 120 | 809 | 1.79 | 132.03 | 750.30 | 0.09 | 5.99 | 43.96 | 21.1x | 1 |
+| Json | 120 | 5206 | 0.75 | 53.57 | 73.64 | 0.49 | 12.82 | 20.43 | 3.3x | 4 |
+| Css | 5 | 314 | 35.96 | 497.79 | 497.79 | 2.21 | 27.48 | 27.48 | 17.9x | 0 |
+| Yaml | 114 | 147 | 1.00 | 4.19 | 14.68 | 0.10 | 0.33 | 1.12 | 11.1x | 0 |
+| Python | 83 | 254 | 2.35 | 104.74 | 155.13 | 0.17 | 6.61 | 10.49 | 14.8x | 0 |
+| Go | 33 | 210 | 0.27 | 84.41 | 136.75 | 0.05 | 12.68 | 17.43 | 7.3x | 0 |
+| Rust | 120 | 1736 | 11.62 | 142.27 | 351.28 | 0.81 | 11.28 | 29.72 | 13.9x | 0 |
+| Java | 3 | 3 | 0.68 | 9.65 | 9.65 | 0.07 | 0.35 | 0.35 | 22.7x | 0 |
+| Bash | 11 | 66 | 2.08 | 25.18 | 25.18 | 0.87 | 7.41 | 7.41 | 3.2x | 0 |
+| C | 120 | 1651 | 4.83 | 179.50 | 724.31 | 0.54 | 11.92 | 115.74 | 11.7x | 2 |
 
-**Whole corpus:** 1014 files, 11.9 MB. TextMate 21775 ms (0.5 MB/s), tree-sitter 2054 ms (5.8 MB/s) — **10.6x**.
+**Whole corpus:** 888 files, 11.3 MB. TextMate 17190 ms (0.7 MB/s), tree-sitter 1583 ms (7.1 MB/s) — **10.9x**.
 
 ## Is tree-sitter ever the slower one?
 
 | Language | Files where tree-sitter is slower | Worst ratio (files TextMate actually tokenized) |
 | --- | --- | --- |
-| CSharp | 0 / 120 | `GitBench\Localization\Locale.cs` 0.05 ms vs 0.09 ms (0.50x) |
-| TypeScript | 0 / 39 | `external\cs_tree_sitter\native\vendor\tree-sitter\lib\binding_web\src\index.ts` 0.15 ms vs 0.68 ms (0.22x) |
-| JavaScript | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter-json\eslint.config.mjs` 0.04 ms vs 0.30 ms (0.14x) |
-| Json | 0 / 120 | `GitBench\Localization\Strings\zh-Hans.json` 2.36 ms vs 6.82 ms (0.35x) |
-| Css | 0 / 5 | `external\cs_tree_sitter\native\vendor\tree-sitter-css\test\highlight\test_css.css` 0.41 ms vs 5.17 ms (0.08x) |
-| Html | 0 / 7 | `external\cs_tree_sitter\native\vendor\tree-sitter-html\examples\deeply-nested-custom.html` 34.44 ms vs 42.86 ms (0.80x) |
-| Markdown | 4 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter-yaml\README.md` 0.53 ms vs 0.50 ms (1.06x) |
-| Yaml | 0 / 114 | `external\cs_tree_sitter\native\vendor\tree-sitter-c\.github\ISSUE_TEMPLATE\config.yml` 0.01 ms vs 0.04 ms (0.38x) |
-| Python | 0 / 82 | `external\cs_tree_sitter\native\vendor\tree-sitter-python\examples\compound-statement-without-trailing-newline.py` 0.01 ms vs 0.07 ms (0.19x) |
-| Go | 0 / 33 | `external\cs_tree_sitter\native\vendor\tree-sitter-typescript\bindings\go\tsx.go` 0.04 ms vs 0.18 ms (0.24x) |
-| Rust | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter\crates\loader\build.rs` 0.10 ms vs 0.65 ms (0.15x) |
-| Java | 0 / 3 | `external\cs_tree_sitter\native\vendor\tree-sitter-java\test\highlight\types.java` 0.08 ms vs 0.72 ms (0.11x) |
-| Bash | 0 / 11 | `external\cs_tree_sitter\native\vendor\tree-sitter-bash\examples\update-authors.sh` 0.03 ms vs 0.05 ms (0.58x) |
-| C | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter-c-sharp\bindings\c\tree-sitter-c-sharp.h` 0.07 ms vs 0.30 ms (0.22x) |
-
-## Where the tree-sitter time goes
-
-Capability A already parses every file it shows a hunk header for. The parse column is the cost that is already being paid; query plus build is the marginal cost of highlighting from that tree.
-
-| Language | Parse ms | Query ms | Build ms | Marginal share | TextMate ms vs marginal |
-| --- | --- | --- | --- | --- | --- |
-| CSharp | 182 | 40 | 7 | 20% | 47.7x |
-| TypeScript | 78 | 42 | 3 | 36% | 26.1x |
-| JavaScript | 160 | 97 | 10 | 39% | 36.0x |
-| Json | 213 | 126 | 14 | 40% | 8.5x |
-| Css | 69 | 23 | 3 | 24% | 54.5x |
-| Html | 52 | 2 | 0 | 4% | 59.2x |
-| Markdown | 134 | 20 | 2 | 14% | 29.8x |
-| Yaml | 10 | 4 | 1 | 33% | 35.3x |
-| Python | 33 | 16 | 1 | 35% | 45.4x |
-| Go | 24 | 9 | 1 | 29% | 24.5x |
-| Rust | 173 | 109 | 10 | 40% | 36.8x |
-| Java | 0 | 0 | 0 | 37% | 64.2x |
-| Bash | 11 | 3 | 0 | 21% | 16.0x |
-| C | 250 | 85 | 7 | 27% | 59.6x |
+| CSharp | 0 / 120 | `GitBench\Localization\Locale.cs` 0.04 ms vs 0.08 ms (0.46x) |
+| TypeScript | 0 / 39 | `external\cs_tree_sitter\native\vendor\tree-sitter\lib\binding_web\src\index.ts` 0.10 ms vs 0.47 ms (0.20x) |
+| JavaScript | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter-python\eslint.config.mjs` 0.02 ms vs 0.16 ms (0.12x) |
+| Json | 0 / 120 | `GitBench\Localization\Strings\ja.json` 2.55 ms vs 7.03 ms (0.36x) |
+| Css | 0 / 5 | `external\cs_tree_sitter\native\vendor\tree-sitter-css\test\highlight\test_css.css` 0.26 ms vs 2.75 ms (0.09x) |
+| Yaml | 0 / 114 | `external\cs_tree_sitter\native\vendor\tree-sitter-rust\.github\ISSUE_TEMPLATE\config.yml` 0.01 ms vs 0.04 ms (0.34x) |
+| Python | 0 / 83 | `external\cs_tree_sitter\native\vendor\tree-sitter-python\examples\compound-statement-without-trailing-newline.py` 0.01 ms vs 0.07 ms (0.19x) |
+| Go | 0 / 33 | `external\cs_tree_sitter\native\vendor\tree-sitter-bash\bindings\go\binding.go` 0.04 ms vs 0.15 ms (0.25x) |
+| Rust | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter\crates\loader\build.rs` 0.05 ms vs 0.40 ms (0.14x) |
+| Java | 0 / 3 | `external\cs_tree_sitter\native\vendor\tree-sitter\crates\cli\src\templates\test.java` 0.06 ms vs 0.55 ms (0.11x) |
+| Bash | 0 / 11 | `external\cs_tree_sitter\native\vendor\tree-sitter-bash\examples\update-authors.sh` 0.05 ms vs 0.07 ms (0.80x) |
+| C | 0 / 120 | `external\cs_tree_sitter\native\vendor\tree-sitter-typescript\bindings\swift\tsx\TreeSitterTSX\tsx.h` 0.10 ms vs 0.42 ms (0.25x) |
 
 ## Concurrency
 
-500 C# files, 24 workers. TextMate serializes every surface through one lock; tree-sitter parsers are per-worker.
+500 C# files, 24 workers — the shape of the review window, which starts a lane per visible file. TextMate serializes every surface through one lock; tree-sitter takes a parser per worker from its pool.
 
 | Engine | 1 thread | 24 threads | Scaling |
 | --- | --- | --- | --- |
-| TextMate | 9065 ms | 7926 ms | 1.14x |
-| tree-sitter | 715 ms | 101 ms | 7.08x |
+| TextMate | 7069 ms | 7197 ms | 0.98x |
+| tree-sitter | 641 ms | 80 ms | 8.00x |
 
 ## Files nobody highlights today
 
-`SyntaxHighlighter.MaxFileChars` is 256 KB; `TreeSitterSymbolExtractor.MaxFileBytes` is 1024 KB. Files between the two render plain today and would not have to.
+`SyntaxHighlighter.MaxFileChars` is 256 KB; `TreeSitterSyntaxHighlighter.MaxFileBytes` is 1024 KB. Files between the two rendered plain before routing and no longer have to.
 
 - Over 256 KB in this checkout: 13 files in a bundled language.
-- Between the two caps (plain today, highlightable by tree-sitter): 0 files.
+- Between the two caps (was plain, now colored): 0 files.
 
   - `external\cs_tree_sitter\native\vendor\tree-sitter-c-sharp\src\parser.c` — 28969 KB
   - `external\cs_tree_sitter\native\vendor\tree-sitter-bash\src\parser.c` — 9679 KB
@@ -116,24 +73,22 @@ Capability A already parses every file it shows a hunk header for. The parse col
 
 ## Agreement and coverage
 
-Measured per non-whitespace character of every corpus file, after both engines are reduced to the same `TokenColorSlot` vocabulary.
+Per non-whitespace character of every corpus file, both engines reduced to the same `TokenColorSlot` vocabulary.
 
 | Language | TextMate colored | tree-sitter colored | Same slot | Only TextMate | Only tree-sitter | Both, different |
 | --- | --- | --- | --- | --- | --- | --- |
-| CSharp | 99.9% | 99.8% | 87.4% | 0.2% | 0.0% | 12.3% |
+| CSharp | 99.9% | 99.8% | 89.6% | 0.2% | 0.0% | 10.2% |
 | TypeScript | 93.5% | 98.5% | 82.8% | 1.5% | 6.5% | 9.2% |
 | JavaScript | 93.9% | 98.4% | 88.0% | 1.6% | 6.1% | 4.3% |
 | Json | 100.0% | 88.1% | 47.8% | 11.9% | 0.0% | 40.2% |
 | Css | 93.9% | 92.0% | 59.8% | 2.2% | 0.4% | 31.8% |
-| Html | 93.4% | 71.9% | 68.0% | 24.6% | 3.1% | 0.8% |
-| Markdown | 33.1% | 10.2% | 6.4% | 22.9% | 0.0% | 3.8% |
 | Yaml | 100.0% | 100.0% | 80.9% | 0.0% | 0.0% | 19.1% |
-| Python | 77.9% | 88.5% | 64.4% | 11.4% | 22.0% | 2.1% |
-| Go | 81.8% | 91.2% | 62.6% | 7.8% | 17.2% | 11.4% |
-| Rust | 95.2% | 79.6% | 69.3% | 19.8% | 4.2% | 6.2% |
+| Python | 78.2% | 88.7% | 64.9% | 11.2% | 21.7% | 2.1% |
+| Go | 81.8% | 91.2% | 72.8% | 7.8% | 17.2% | 1.2% |
+| Rust | 95.2% | 79.6% | 69.6% | 19.8% | 4.2% | 5.8% |
 | Java | 96.3% | 90.4% | 52.5% | 9.6% | 3.7% | 34.2% |
 | Bash | 74.1% | 80.3% | 66.6% | 4.5% | 10.7% | 3.0% |
-| C | 74.7% | 84.5% | 55.4% | 12.5% | 22.3% | 6.9% |
+| C | 75.7% | 84.2% | 52.9% | 13.1% | 21.6% | 9.7% |
 
 ## Side by side
 
@@ -156,13 +111,13 @@ One letter per column: `K`eyword `S`tring `C`omment `N`umber `T`ype `F`unction `
   ts KKK VVV O SSSSS SSSS SSSS SS SSSSSP
      if (a < b && c > d) Swap(a, b);       // comparison, not a type argument list
   tm KK PV O V OO V O VP FFFFPVP VPP       CC CCCCCCCCCCC CCC C CCCC CCCCCCCC CCCC
-  ts KK PV O V OO V O VP VVVVPVP VPP       CC CCCCCCCCCCC CCC C CCCC CCCCCCCC CCCC
+  ts KK PV O V OO V O VP FFFFPVP VPP       CC CCCCCCCCCCC CCC C CCCC CCCCCCCC CCCC
      var list = new Dictionary<string, List<int>>();
   tm KKK VVVV O OOO TTTTTTTTTTPKKKKKKP TTTTPKKKPPPPP
   ts KKK VVVV O KKK TTTTTTTTTTOTTTTTTP TTTTOTTTOOPPP
      var result = obj switch { > 0 and < 10 => "small", _ => nameof(obj) };
   tm KKK VVVVVV O VVV KKKKKK P O N OOO O NN OO SSSSSSSP V OO OOOOOOPVVVP PP
-  ts KKK VVVVVV O VVV KKKKKK P O N ... O NN OO SSSSSSSP . OO VVVVVVPVVVP PP
+  ts KKK VVVVVV O VVV KKKKKK P O N ... O NN OO SSSSSSSP . OO FFFFFFPVVVP PP
      [Obsolete("gone")] static int Local(scoped ReadOnlySpan<char> s) => s.Length;
   tm PTTTTTTTTPSSSSSSPP KKKKKK KKK FFFFFPTTTTTT VVVVVVVVVVVV...... .P OO VPVVVVVVP
   ts PVVVVVVVVPSSSSSSPP KKKKKK TTT FFFFFP...... TTTTTTTTTTTTOTTTTO VP OO VPVVVVVVP
@@ -257,7 +212,7 @@ One letter per column: `K`eyword `S`tring `C`omment `N`umber `T`ype `F`unction `
   ts .
      func Map[T any, U any](in []T, f func(T) U) []U { return nil }
   tm KKKK ...P. ...P . ...PP.. PP.P . KKKKP.P .P PP. P KKKKKK XXX P
-  ts KKKK VVV.V TTT. V TTT..VV ..T. V KKKK.T. T. ..T . KKKKKK XXX .
+  ts KKKK FFF.V TTT. V TTT..VV ..T. V KKKK.T. T. ..T . KKKKKK XXX .
      const raw = `line one
   tm KKKKK VVV O SSSSS SSS
   ts KKKKK VVV O SSSSS SSS
@@ -266,7 +221,7 @@ One letter per column: `K`eyword `S`tring `C`omment `N`umber `T`ype `F`unction `
   ts SSSS SSSS
      ch := make(chan<- int, 8)
   tm VV OO FFFFPKKKKOO KKKP NP
-  ts VV OO VVVV.KKKKOO TTT. N.
+  ts VV OO FFFF.KKKKOO TTT. N.
 ```
 
 ### JavaScript

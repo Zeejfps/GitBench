@@ -5,8 +5,8 @@ using GitBench.Features.CodeIntel;
 namespace GitBench.Tests.HighlightBench;
 
 /// <summary>
-/// The real files the two highlighters are measured over, and the upstream highlight queries the
-/// tree-sitter side runs. Both come off disk from the checkout the tests were built in.
+/// The real files the two highlighters are measured over, off disk from the checkout the tests
+/// were built in.
 /// </summary>
 internal static class BenchCorpus
 {
@@ -56,48 +56,6 @@ internal static class BenchCorpus
 
         files.Sort(static (a, b) => b.Bytes.CompareTo(a.Bytes));
         return files;
-    }
-
-    /// <summary>
-    /// The upstream <c>highlights.scm</c> for a language, as the grammar's own repository ships it.
-    /// </summary>
-    /// <remarks>
-    /// TypeScript and TSX are the exception the <c>tree-sitter-highlight</c> configuration also
-    /// makes: their query files hold only what JavaScript's does not, so the two are concatenated.
-    /// </remarks>
-    public static string? Query(CodeLanguage language)
-    {
-        var javascript = ReadQuery("tree-sitter-javascript");
-
-        return language switch
-        {
-            CodeLanguage.CSharp => ReadQuery("tree-sitter-c-sharp"),
-            CodeLanguage.JavaScript => javascript,
-            CodeLanguage.TypeScript or CodeLanguage.Tsx =>
-                Concat(javascript, ReadQuery("tree-sitter-typescript")),
-            CodeLanguage.Json => ReadQuery("tree-sitter-json"),
-            CodeLanguage.Css => ReadQuery("tree-sitter-css"),
-            CodeLanguage.Html => ReadQuery("tree-sitter-html"),
-            CodeLanguage.Markdown => ReadQuery("tree-sitter-markdown", "tree-sitter-markdown"),
-            CodeLanguage.Yaml => ReadQuery("tree-sitter-yaml"),
-            CodeLanguage.Python => ReadQuery("tree-sitter-python"),
-            CodeLanguage.Go => ReadQuery("tree-sitter-go"),
-            CodeLanguage.Rust => ReadQuery("tree-sitter-rust"),
-            CodeLanguage.Java => ReadQuery("tree-sitter-java"),
-            CodeLanguage.Bash => ReadQuery("tree-sitter-bash"),
-            CodeLanguage.C => ReadQuery("tree-sitter-c"),
-            _ => null,
-        };
-    }
-
-    private static string? Concat(string? first, string? second) =>
-        first is null ? second : second is null ? first : first + "\n" + second;
-
-    private static string? ReadQuery(params string[] segments)
-    {
-        var path = Path.Combine(
-            [RepoRoot, "external", "cs_tree_sitter", "native", "vendor", .. segments, "queries", "highlights.scm"]);
-        return File.Exists(path) ? File.ReadAllText(path) : null;
     }
 
     /// <summary>An evenly spaced sample, so a cap does not silently mean "the first N directories".</summary>

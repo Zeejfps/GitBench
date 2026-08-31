@@ -34,10 +34,11 @@ internal sealed class CodeBlockViewModel : ViewModelBase<CodeBlockState>
     {
         if (!block.IsClosed || block.Language is not { } language) return;
 
-        // The shared highlighter is reached inside the job, never before it: its first touch
-        // builds the TextMate registry, which is exactly the cost this lane keeps off the UI thread.
+        // The shared highlighter is reached inside the job, never before it: its first touch builds
+        // the TextMate registry and compiles the tree-sitter queries, which is exactly the cost
+        // this lane keeps off the UI thread.
         RunBackground<IReadOnlyList<IReadOnlyList<TokenSpan>>>(
-            work: () => ((highlighter ?? SyntaxHighlighter.Shared).Highlight(block.Text, language), null),
+            work: () => ((highlighter ?? RoutedSyntaxHighlighter.Shared).Highlight(block.Text, language), null),
             onResult: (spans, _) => Update(s => s with { Spans = spans }));
     }
 }

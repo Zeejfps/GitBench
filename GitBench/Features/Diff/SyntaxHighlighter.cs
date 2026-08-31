@@ -17,10 +17,11 @@ namespace GitBench.Features.Diff;
 internal sealed class SyntaxHighlighter : ISyntaxHighlighter
 {
     /// <summary>
-    /// The one instance every highlighting surface shares — diffs and markdown code blocks alike.
+    /// The one TextMate instance in the process. Surfaces do not reach for it directly any more —
+    /// <see cref="RoutedSyntaxHighlighter"/> is what they call, and this is the engine behind it
+    /// for the fifty-odd languages tree-sitter has no grammar for, plus any file it declines.
     /// Constructing it builds the TextMate registry, and each instance warms its own grammar cache,
-    /// so a second instance means paying both costs twice. First touch is what builds the registry:
-    /// reach for this only from a background lane, never during a widget build.
+    /// so a second instance means paying both costs twice.
     /// </summary>
     public static SyntaxHighlighter Shared { get; } = new();
 

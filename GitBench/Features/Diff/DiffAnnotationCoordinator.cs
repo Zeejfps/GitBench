@@ -81,8 +81,9 @@ internal static class DiffAnnotationCoordinator
 
     private static DiffHighlight? Tokenize(string? oldText, string? newText, string languageId)
     {
-        var oldSpans = oldText == null ? null : SyntaxHighlighter.Shared.Highlight(oldText, languageId);
-        var newSpans = newText == null ? null : SyntaxHighlighter.Shared.Highlight(newText, languageId);
+        var highlighter = RoutedSyntaxHighlighter.Shared;
+        var oldSpans = oldText == null ? null : highlighter.Highlight(oldText, languageId);
+        var newSpans = newText == null ? null : highlighter.Highlight(newText, languageId);
         return oldSpans == null && newSpans == null ? null : new DiffHighlight(oldSpans, newSpans);
     }
 }

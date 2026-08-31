@@ -35,14 +35,26 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
     [Fact]
     public void EveryEmbeddedQueryResourceBelongsToACodeLanguage()
     {
-        var expected = CodeLanguages.All.Select(l => l.QueryResourceName()).ToHashSet(StringComparer.Ordinal);
         var embedded = typeof(TreeSitterSymbolExtractor).Assembly
             .GetManifestResourceNames()
             .Where(name => name.EndsWith(".scm", StringComparison.Ordinal))
             .ToArray();
 
         Assert.NotEmpty(embedded);
-        Assert.Equal(expected.OrderBy(n => n, StringComparer.Ordinal), embedded.OrderBy(n => n, StringComparer.Ordinal));
+
+        // Outline queries: every bundled language has one, and nothing else is in that folder.
+        var outlines = CodeLanguages.All.Select(l => l.QueryResourceName());
+        Assert.Equal(
+            outlines.OrderBy(n => n, StringComparer.Ordinal),
+            embedded.Where(n => !n.StartsWith("highlights.", StringComparison.Ordinal))
+                .OrderBy(n => n, StringComparer.Ordinal));
+
+        // Highlight queries: a language may have none — that absence is what routes Markdown and
+        // HTML to TextMate — but a file that matches no language at all would embed and never load.
+        var known = CodeLanguages.All.Select(l => l.HighlightQueryResourceName()).ToHashSet(StringComparer.Ordinal);
+        Assert.Empty(embedded
+            .Where(n => n.StartsWith("highlights.", StringComparison.Ordinal))
+            .Where(n => !known.Contains(n)));
     }
 
     [Fact]

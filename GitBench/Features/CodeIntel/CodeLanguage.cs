@@ -95,6 +95,18 @@ internal static class CodeLanguages
 
     public static string QueryResourceName(this CodeLanguage language) => $"{language.GrammarName()}.scm";
 
+    /// <summary>
+    /// The embedded <c>highlights.scm</c> for a language, which only the languages we highlight
+    /// with tree-sitter have.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the outline query, this one is allowed to be missing: Markdown and HTML ship no
+    /// highlights query because theirs need injections we do not run, and that absence is what
+    /// routes them to TextMate.
+    /// </remarks>
+    public static string HighlightQueryResourceName(this CodeLanguage language) =>
+        $"highlights.{language.GrammarName()}.scm";
+
     public static IReadOnlyList<string> LeadingDecorationNodeTypes(this CodeLanguage language) =>
         Of(language).LeadingDecorations;
 

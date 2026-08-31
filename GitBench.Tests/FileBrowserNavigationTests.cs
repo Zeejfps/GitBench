@@ -319,6 +319,13 @@ public class FileBrowserNavigationTests(CodeIntelFixture fixture) : IDisposable
         using var browser = Show("Auth.cs");
         Expand(browser, "Token.cs");
 
+        // Expanding put the cursor on Token.cs and started previewing it, so the selection below
+        // would not cross files at all — it only looked like it did while the read was slow enough
+        // to lose the race. Put the reader back on Auth.cs so the pending reveal is what is tested.
+        browser.SetCursor(Path.Combine(_dir.Path, "Auth.cs"));
+        WaitFor(browser, () => browser.Preview.Value is FilePreview.Text { Path: var path }
+            && path == Path.Combine(_dir.Path, "Auth.cs"));
+
         var revealed = new List<int>();
         browser.LineRevealRequested += revealed.Add;
         browser.SelectSymbol(Symbol(browser, "Get"));

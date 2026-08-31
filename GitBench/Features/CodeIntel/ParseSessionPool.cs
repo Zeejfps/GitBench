@@ -31,13 +31,13 @@ internal sealed class ParseSession : IDisposable
     }
 }
 
-internal sealed class ExtractorPool : IDisposable
+internal sealed class ParseSessionPool : IDisposable
 {
     private readonly Language _language;
     private readonly SemaphoreSlim _slots;
     private readonly ConcurrentBag<ParseSession> _idle = [];
 
-    public ExtractorPool(Language language, int capacity)
+    public ParseSessionPool(Language language, int capacity)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(capacity, 1);
         _language = language;

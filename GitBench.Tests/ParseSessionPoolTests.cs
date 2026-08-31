@@ -7,14 +7,14 @@ using Xunit;
 namespace GitBench.Tests;
 
 [Collection(nameof(CodeIntelCollection))]
-public class ExtractorPoolTests
+public class ParseSessionPoolTests
 {
     private static Language CSharp() => Language.Load("tree-sitter-grammars", "c_sharp");
 
     [Fact]
     public void ASessionIsReusedAcrossCalls()
     {
-        using var pool = new ExtractorPool(CSharp(), 1);
+        using var pool = new ParseSessionPool(CSharp(), 1);
 
         var first = pool.Use(0, static (session, _) => session);
         var second = pool.Use(0, static (session, _) => session);
@@ -25,7 +25,7 @@ public class ExtractorPoolTests
     [Fact]
     public void ASessionWhoseWorkThrewIsNotHandedOutAgain()
     {
-        using var pool = new ExtractorPool(CSharp(), 1);
+        using var pool = new ParseSessionPool(CSharp(), 1);
 
         var poisoned = pool.Use(0, static (session, _) => session);
 
@@ -42,7 +42,7 @@ public class ExtractorPoolTests
     [Fact]
     public void ThePoolIsBoundedAndTheOverflowWaits()
     {
-        using var pool = new ExtractorPool(CSharp(), 1);
+        using var pool = new ParseSessionPool(CSharp(), 1);
         using var occupied = new ManualResetEventSlim();
         using var release = new ManualResetEventSlim();
         using var entered = new ManualResetEventSlim();
@@ -73,7 +73,7 @@ public class ExtractorPoolTests
     public void NoMoreSessionsThanTheCapacityAreEverLive()
     {
         const int capacity = 3;
-        using var pool = new ExtractorPool(CSharp(), capacity);
+        using var pool = new ParseSessionPool(CSharp(), capacity);
         var sessions = new HashSet<ParseSession>();
 
         Parallel.For(0, 64, new ParallelOptions { MaxDegreeOfParallelism = 4 }, _ =>
@@ -88,6 +88,6 @@ public class ExtractorPoolTests
     [Fact]
     public void ACapacityBelowOneIsRejected()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new ExtractorPool(CSharp(), 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ParseSessionPool(CSharp(), 0));
     }
 }
