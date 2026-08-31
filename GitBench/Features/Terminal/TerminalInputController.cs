@@ -292,7 +292,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     {
         if (e.Phase != EventPhase.Capturing) return;
 
-        if (!IsOnScreen())
+        if (!IsOnScreen)
         {
             _input.Blur(this);
             return;
@@ -405,7 +405,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     public override void OnMouseMoved(ref MouseMoveEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (!IsOnScreen()) return;
+        if (!IsOnScreen) return;
 
         // Before every gesture branch, and always to the live point rather than to something held:
         // a hover frozen for the length of a gesture is the same stale-pointer bug arriving through
@@ -534,7 +534,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
-        if (!IsOnScreen() || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
+        if (!IsOnScreen || !_view.Position.ContainsPoint(e.Mouse.Point)) return;
 
         var lines = LinesOf(e.DeltaY, IsPrecise(ref e));
         if (lines == 0) return;
@@ -742,7 +742,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
 
     bool HasTheKeyboard()
     {
-        if (!IsOnScreen())
+        if (!IsOnScreen)
         {
             _input.Blur(this);
             return false;
@@ -751,13 +751,20 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         return ReferenceEquals(_input.FocusedComponent, this);
     }
 
-    bool IsOnScreen()
+    /// <summary>
+    /// Whether the pane this types into is actually showing. A mounted grid is not a visible one:
+    /// the mode switcher keeps the pane alive behind whichever mode is on screen.
+    /// </summary>
+    public bool IsOnScreen
     {
-        for (var view = _view; view is not null; view = view.Parent)
-            if (!view.IsVisible)
-                return false;
+        get
+        {
+            for (var view = _view; view is not null; view = view.Parent)
+                if (!view.IsVisible)
+                    return false;
 
-        return true;
+            return true;
+        }
     }
 
     /// <summary>

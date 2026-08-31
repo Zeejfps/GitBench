@@ -129,6 +129,7 @@ internal sealed record TerminalScreen : Widget
         grid.Bind(instance.Render, grid.SetRenderState);
         grid.Use(() => new TerminalRepaintLink(instance, grid));
         grid.UseController(input, () => new TerminalInputController(grid, input, instance, grid, ctx.Get<IClipboard>(), ctx.Get<IPlatformShell>()));
+        grid.Use(() => new TerminalKeyboardHandover(instance, grid, input));
 
         return new Stack
         {
@@ -285,6 +286,56 @@ internal sealed record TerminalStartGate : Widget
         render is TerminalRenderState.Idle
             ? strings.TerminalStartSession
             : strings.TerminalRestartSession;
+}
+
+/// <summary>
+/// Gives the keyboard to the terminal that has just been put on screen, once it has a shell.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Bringing a terminal to the front is asking to type in it — switching tabs, opening one, or
+/// switching to a repository whose shell is still running. Without this the keyboard stayed wherever
+/// the last click left it, so every one of those had to be followed by a click on the grid.
+/// </para>
+/// <para>
+/// It waits for the render state rather than taking the keyboard when the view mounts, because the
+/// strip's <c>+</c> activates a tab before it starts it: that grid is mounted while its terminal is
+/// still idle. An idle terminal is left alone for the same reason a click on one is — it is showing
+/// the offer to start a shell, and the application's own chords have to survive over it.
+/// </para>
+/// <para>
+/// Only while the pane is showing, and only once. The mode switcher keeps this view mounted behind
+/// whichever mode is on screen, so a repository switched from another mode would otherwise hand the
+/// keyboard to a terminal nobody can see; and a shell exiting long afterwards would pull it back
+/// from wherever the reader had moved on to.
+/// </para>
+/// </remarks>
+internal sealed class TerminalKeyboardHandover : IDisposable
+{
+    readonly TerminalGridView _grid;
+    readonly InputSystem _input;
+    readonly IDisposable _subscription;
+
+    bool _handedOver;
+
+    public TerminalKeyboardHandover(TerminalInstance instance, TerminalGridView grid, InputSystem input)
+    {
+        _grid = grid;
+        _input = input;
+        _subscription = instance.Render.Subscribe(OnRender);
+    }
+
+    void OnRender(TerminalRenderState render)
+    {
+        if (_handedOver || render is TerminalRenderState.Idle) return;
+        if (_input.GetController(_grid) is not TerminalInputController controller) return;
+        if (!controller.IsOnScreen) return;
+
+        _handedOver = true;
+        _input.StealFocus(controller);
+    }
+
+    public void Dispose() => _subscription.Dispose();
 }
 
 /// <summary>

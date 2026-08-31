@@ -173,6 +173,82 @@ public class TerminalPaneWiringTests : IDisposable
     }
 
     [Fact]
+    public void PressingNewTab_LeavesTheKeyboardInTheNewTerminal()
+    {
+        // Asking for another terminal is asking to type in it, and the + is the whole gesture.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Harness.Render();
+
+        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.Render();
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void ActivatingATab_LeavesTheKeyboardInThatTerminal()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Harness.Render();
+        var first = pane.Terminal;
+        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.Render();
+        pane.Harness.Input.Blur(pane.Harness.Input.FocusedComponent!);
+
+        pane.Tabs.Activate(first);
+        pane.Harness.Render();
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void SwitchingBackToARunningRepository_LeavesTheKeyboardInItsTerminal()
+    {
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Activate(pane.SecondRepo);
+
+        pane.Activate(pane.FirstRepo);
+
+        Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void SwitchingToARepositoryWithNoShell_LeavesTheKeyboardAlone()
+    {
+        // That pane is showing the offer to start one. A terminal holding the keyboard there
+        // declines every key it is given, which eats the application's own chords.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+
+        pane.Activate(pane.SecondRepo);
+
+        Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
+    public void APaneThatIsNotShowing_DoesNotTakeTheKeyboard()
+    {
+        // The mode switcher keeps this view mounted behind whichever mode is on screen, so a
+        // repository switched from another mode must not hand the keyboard to a hidden terminal.
+        using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+        pane.Start();
+        pane.Activate(pane.SecondRepo);
+        pane.Harness.Root.IsVisible = false;
+
+        pane.Activate(pane.FirstRepo);
+
+        Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+    }
+
+    [Fact]
     public void SwitchingRepositories_PutsTheOtherRepositorysTerminalOnScreen()
     {
         using var pane = new PaneUnderTest(_dir.Path);
@@ -210,7 +286,9 @@ public class TerminalPaneWiringTests : IDisposable
             _store.Start();
 
             Harness = GuiTestHarness.Create(
-                ctx => new TerminalPane().BuildView(ctx),
+                // Wrapped so a test can hide the pane the way the mode switcher does. The pane's own
+                // root is a swap region, which owns its IsVisible and sets it back on every swap.
+                ctx => new Box { Children = [new TerminalPane()] }.BuildView(ctx),
                 width: 800,
                 height: 600,
                 configure: ctx =>
