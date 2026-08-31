@@ -1,9 +1,9 @@
 name: build
 
+# Manual only. The cross-platform native build is exercised by release.yml on a tag,
+# so this runs when you want the test suite over all four RIDs before tagging.
 on:
-  push:
-    branches: [ '**' ]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
