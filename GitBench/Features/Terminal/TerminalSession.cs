@@ -1,4 +1,4 @@
-using GitBench.Pty;
+﻿using GitBench.Pty;
 using GitBench.Terminal.Vt;
 using ZGF.Gui;
 using ZGF.Observable;
@@ -100,14 +100,16 @@ internal sealed class TerminalSession : IDisposable
         PtySessionOptions options,
         IUiDispatcher dispatcher,
         int scrollbackLines = DefaultScrollbackLines,
-        IClipboard? clipboard = null) =>
+        IClipboard? clipboard = null,
+        ITerminalPalette? palette = null) =>
         Start(
             () => sessions.Start(options),
             engines,
             new TerminalSize(options.Size.Columns, options.Size.Rows),
             dispatcher,
             scrollbackLines,
-            clipboard);
+            clipboard,
+            palette);
 
     /// <summary>
     /// Starts on whatever pseudo-terminal <paramref name="open"/> produces, for a caller that has
@@ -123,9 +125,10 @@ internal sealed class TerminalSession : IDisposable
         TerminalSize size,
         IUiDispatcher dispatcher,
         int scrollbackLines = DefaultScrollbackLines,
-        IClipboard? clipboard = null)
+        IClipboard? clipboard = null,
+        ITerminalPalette? palette = null)
     {
-        var engine = engines.Create(new TerminalSetup(size, scrollbackLines));
+        var engine = engines.Create(new TerminalSetup(size, scrollbackLines) { Palette = palette });
 
         try
         {

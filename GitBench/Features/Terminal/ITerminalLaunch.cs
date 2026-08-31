@@ -1,4 +1,4 @@
-using GitBench.Pty;
+﻿using GitBench.Pty;
 using GitBench.Terminal.Vt;
 using ZGF.Gui;
 using ZGF.Observable;
@@ -42,16 +42,19 @@ internal sealed class ShellLaunch : ITerminalLaunch
     readonly IPtySessionFactory _sessions;
     readonly ITerminalEngineFactory _engines;
     readonly IClipboard? _clipboard;
+    readonly ITerminalPalette _palette;
 
     public ShellLaunch(
         string workingDirectory,
         IPtySessionFactory sessions,
         ITerminalEngineFactory engines,
+        ITerminalPalette palette,
         IClipboard? clipboard = null)
     {
         _workingDirectory = workingDirectory;
         _sessions = sessions;
         _engines = engines;
+        _palette = palette;
         _clipboard = clipboard;
     }
 
@@ -63,7 +66,11 @@ internal sealed class ShellLaunch : ITerminalLaunch
         TerminalSession.Start(
             _sessions,
             _engines,
-            ShellCommand.For(_workingDirectory, new PtySize(size.Columns, size.Rows)),
+            ShellCommand.For(
+                _workingDirectory,
+                new PtySize(size.Columns, size.Rows),
+                _palette.Resolve(TerminalColorSlot.Background)),
             dispatcher,
-            clipboard: _clipboard);
+            clipboard: _clipboard,
+            palette: _palette);
 }

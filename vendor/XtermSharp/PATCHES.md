@@ -577,3 +577,31 @@ one url a single link across the whole session.
 - **No scheme check.** Any url is interned, `file:` included. What a link *is* and what is safe to
   *open* are different questions, and the second is the host application's; xterm.js draws the line
   in the same place.
+
+---
+
+## Patch 22 — OSC 10/11/12 are answered (gap 21)
+
+`InputHandlers/InputHandler.cs` registers the three dynamic-colour identifiers beside the title and
+clipboard handlers. `Terminal` gains `ColorQueryHandler`, a `Func<int, string, string>` the adapter
+installs, and `ColorCommand (identifier, payload)` which invokes it and `SendResponse`s a non-empty
+result. That is the whole of the change to these sources: this core has never held a colour it did
+not receive in a sequence, and what the pane's foreground, background and cursor actually are is the
+renderer's to say, so the answer is asked for rather than stored.
+
+### A callback, where patch 20 used a drained list
+
+The two are not the same shape, deliberately. A clipboard write is an action the adapter performs
+after the feed, so collecting it and handing it over at the boundary keeps it out of the parser. A
+colour query is a *reply*, and a reply has a position: a program that sends `CSI 6n` and `OSC 11;?`
+in one write reads the two answers back as one stream and can only tell them apart by their order.
+Collecting these and appending them after the feed would reverse that pair whenever the query came
+first. Going through `SendResponse` during the parse puts the reply exactly where every other reply
+this core produces already goes. `DynamicColorSpec` pins both orderings.
+
+### Everything else is above the seam
+
+Which payloads are questions, what the repeating `Pt` field means, the `rgb:` formatting, the
+terminator, and the refusal to let a program *set* a colour are all the adapter's. This file's half
+cannot tell a query from a set and does not try — with no handler installed the sequence is consumed
+and ignored, which is what it did before the patch.

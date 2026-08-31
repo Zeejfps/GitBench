@@ -8,6 +8,18 @@ namespace GitBench.Terminal.Vt;
 public readonly record struct TerminalSetup(TerminalSize Size, int ScrollbackLines)
 {
     public static TerminalSetup Default { get; } = new(new TerminalSize(80, 24), 1000);
+
+    /// <summary>
+    /// Who answers a program that asks what the pane's colours are, or none to leave those
+    /// sequences unanswered.
+    /// </summary>
+    /// <remarks>
+    /// Optional because a terminal with no renderer behind it has no honest answer to give, and
+    /// silence is the honest reply: a program reads no support and keeps whatever assumption it
+    /// arrived with, where an invented colour would send it a confident wrong one. Every engine
+    /// test that is not about colour queries leaves this null for that reason.
+    /// </remarks>
+    public ITerminalPalette? Palette { get; init; }
 }
 
 /// <summary>

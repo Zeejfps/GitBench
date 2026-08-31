@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
 using GitBench.App;
 using GitBench.Features.Assistant;
@@ -1401,7 +1401,7 @@ public class TerminalLiveShellRoundTripTests
         using var session = TerminalSession.Start(
             new PtySessionFactory(),
             new XtermSharpEngineFactory(),
-            ShellCommand.For(dir.Path, new PtySize(100, 37)),
+            ShellCommand.For(dir.Path, new PtySize(100, 37), new TerminalRgb(0x1E, 0x1F, 0x22)),
             dispatcher);
 
         var terminal = new LiveTerminal(session);
