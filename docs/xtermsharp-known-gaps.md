@@ -469,6 +469,32 @@ lever. It is answered with an empty clipboard rather than with silence, because 
 waits for the reply — neovim's `clipboard=osc52` provider among them — and a denial indistinguishable
 from an empty clipboard costs it nothing.
 
+### 21. The pane cannot say what colour it is — FIXED
+
+`InputHandlers/InputHandler.cs` registered OSC handlers for 0, 1, 2, 8 and 52 and nothing else, so
+`OSC 10/11/12 ; ? ST` — a program asking for the foreground, background or cursor colour — reached
+`SetOscHandlerFallback` and was logged as an unknown code. Nothing broke and nothing printed, which
+is why this went unnoticed: the cost is paid somewhere else entirely, in the program that asked.
+
+A program that gets no answer does not conclude nothing; it concludes the terminal is dark, because
+that is the safer default on a terminal that cannot say. So every TUI that themes itself against the
+background — neovim's `background` detection, `delta`, `bat` — assumed a dark pane in the light
+theme and painted for one. With `COLORFGBG` unset in the spawn as well, there was no channel by
+which the application's own light mode could reach anything running inside it.
+
+**Fixed by patch 22.** The three identifiers are registered and answered from `ITerminalPalette`,
+which the application implements against the live theme, so the answer follows a light/dark switch
+rather than being fixed when the pane opened. `ShellCommand` sets `COLORFGBG` from the same colour
+for the programs that read the environment and never ask. `DynamicColorSpec` covers the three slots,
+the chained `Pt` form, the split-across-feeds case, reply ordering against a cursor report, and the
+engine with no palette behind it.
+
+Colour *setting* is deliberately not implemented: `OSC 11 ; #ff0000` is parsed and ignored. The
+theme owns the surface, and a program that exited mid-sequence would otherwise leave the pane a
+colour the user's own light/dark switch no longer reaches. OSC 4 (indexed palette queries) and OSC
+104/110-112 (resets) remain unhandled for the same reason the rest of this section exists: nothing
+observed needs them, and an unanswered query is a defined outcome.
+
 ## Configuration, not a defect
 
 `TerminalOptions.ConvertEol` defaults to `true`, which makes a bare LF also perform a carriage

@@ -1,4 +1,5 @@
-using GitBench.Pty;
+﻿using GitBench.Pty;
+using GitBench.Terminal.Vt;
 
 namespace GitBench.Features.Terminal;
 
@@ -38,7 +39,13 @@ internal static class ShellCommand
     /// so a command written into the pane can never be quoted for a shell that is not there.</summary>
     public static ShellFamily Family => Shell().Family;
 
-    public static PtySessionOptions For(string workingDirectory, PtySize size)
+    /// <summary>
+    /// The spawn, told what kind of terminal it is talking to and roughly what colour it is.
+    /// </summary>
+    /// <param name="background">
+    /// What the pane's default background is being drawn in, which decides <c>COLORFGBG</c>.
+    /// </param>
+    public static PtySessionOptions For(string workingDirectory, PtySize size, TerminalRgb background)
     {
         var (executable, arguments, _) = Shell();
 
@@ -54,9 +61,34 @@ internal static class ShellCommand
             {
                 ["TERM"] = "xterm-256color",
                 ["COLORTERM"] = "truecolor",
+                ["COLORFGBG"] = ColorFgBg(background),
             },
         };
     }
+
+    /// <summary>
+    /// The rxvt-era light/dark hint: two palette indices, foreground and background.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Read by the programs that never ask — a shell prompt framework, or a <c>vim</c> that starts
+    /// before its OSC 11 reply lands — and the only signal they get. Almost nothing consumes the
+    /// numbers themselves; what is read is whether the background index is 0..6 or 7..15, so the
+    /// two ends of the range are all that is worth reporting.
+    /// </para>
+    /// <para>
+    /// Derived from the colour rather than from which theme is selected, so a third theme, or a
+    /// light background on a dark theme, cannot make this disagree with the pane. It is fixed at
+    /// the spawn and a later theme switch does not revise it — an environment variable is copied
+    /// into the child at birth, and the query is what answers honestly after that.
+    /// </para>
+    /// </remarks>
+    static string ColorFgBg(TerminalRgb background) => IsLight(background) ? "0;15" : "15;0";
+
+    // Rec. 601 luma, which is the weighting these two-tone decisions are conventionally made on and
+    // close enough for a question whose whole answer space is "light" or "dark".
+    static bool IsLight(TerminalRgb c) =>
+        (299 * c.Red + 587 * c.Green + 114 * c.Blue) / 1000 >= 128;
 
     static (string Executable, string[] Arguments, ShellFamily Family) Shell() =>
         OperatingSystem.IsWindows() ? WindowsShell() : UnixShell();

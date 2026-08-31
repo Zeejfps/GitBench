@@ -1,4 +1,4 @@
-using GitBench.Controls;
+﻿using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Commits;
@@ -11,6 +11,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Terminal;
+using GitBench.Terminal.Vt;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Localization;
@@ -159,6 +160,10 @@ internal static class AppServices
         // place that names a concrete VT engine, so replacing XtermSharp is a line here.
         context.AddSingleton<IPtySessionFactory, PtySessionFactory>();
         context.AddSingleton<ITerminalEngineFactory, XtermSharpEngineFactory>();
+        // What a program in the pane is told when it asks what colour the pane is. Registered
+        // beside them because it is the third thing the shell needs from the application and the
+        // only one that has to follow the theme.
+        context.AddSingleton<ITerminalPalette, ThemeTerminalPalette>();
         // The terminals themselves: one per repository, in memory for the app session, so switching
         // repositories swaps which shell the pane shows rather than retargeting the one it has.
         // Hosted for the same reason the assistant's store is — it watches the registry, which it

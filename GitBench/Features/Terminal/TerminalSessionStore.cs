@@ -1,4 +1,4 @@
-using GitBench.Features.Repos;
+﻿using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Pty;
 using GitBench.Terminal.Vt;
@@ -54,6 +54,7 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
     readonly ITerminalEngineFactory _engines;
     readonly IUiDispatcher _dispatcher;
     readonly IClipboard? _clipboard;
+    readonly ITerminalPalette? _palette;
     readonly TerminalLaunchFactory _launches;
 
     readonly Dictionary<Guid, TerminalTabs> _tabs = new();
@@ -70,14 +71,24 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         ITerminalEngineFactory engines,
         IUiDispatcher dispatcher,
         TerminalLaunchFactory? launches = null,
-        IClipboard? clipboard = null)
+        IClipboard? clipboard = null,
+        ITerminalPalette? palette = null)
     {
         _registry = registry;
         _ptys = ptys;
         _engines = engines;
         _dispatcher = dispatcher;
         _clipboard = clipboard;
+        _palette = palette;
         _launches = launches ?? DefaultLaunch;
+
+        // Only the shell launch spawns anything, and only a spawn has to say what colour the pane
+        // is. A caller that brings its own launch brings whatever that launch needs with it, which
+        // is why this is checked here rather than required of everyone.
+        if (launches is null && palette is null)
+            throw new ArgumentNullException(
+                nameof(palette),
+                "A store that starts real shells needs the palette they are told the pane's colours from.");
     }
 
     public IReadable<TerminalTabs?> Tabs => _active;
@@ -138,7 +149,10 @@ internal sealed class TerminalSessionStore : ITerminalSessionStore, IHostedServi
         }
     }
 
-    ITerminalLaunch DefaultLaunch(Repo repo) => new ShellLaunch(repo.Path, _ptys, _engines, _clipboard);
+    // Reached only when the constructor accepted no launch of its own, which is the one case the
+    // constructor insisted on a palette for.
+    ITerminalLaunch DefaultLaunch(Repo repo) =>
+        new ShellLaunch(repo.Path, _ptys, _engines, _palette!, _clipboard);
 
     public void Dispose()
     {

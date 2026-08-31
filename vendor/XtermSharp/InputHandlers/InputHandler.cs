@@ -239,6 +239,10 @@ namespace XtermSharp {
 			parser.SetOscHandler (8, terminal.HyperlinkCommand);
 			//  52 - clipboard (PATCH 20)
 			parser.SetOscHandler (52, terminal.ClipboardCommand);
+			//  10, 11, 12 - dynamic colours: text foreground, text background, cursor (PATCH 22)
+			parser.SetOscHandler (10, data => terminal.ColorCommand (10, data));
+			parser.SetOscHandler (11, data => terminal.ColorCommand (11, data));
+			parser.SetOscHandler (12, data => terminal.ColorCommand (12, data));
 			//   3 - set property X in the form "prop=value"
 			//   4 - Change Color Number()
 			//   5 - Change Special Color Number

@@ -1,4 +1,4 @@
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using XtermSharp;
 using XtermTerminal = XtermSharp.Terminal;
@@ -25,6 +25,7 @@ public sealed class XtermSharpEngine : ITerminalEngine
     readonly XtermTerminal terminal;
     readonly ResponseSink responses;
     readonly XtermGrid grid;
+    readonly ITerminalPalette? palette;
 
     public XtermSharpEngine(TerminalSetup setup)
     {
@@ -40,6 +41,8 @@ public sealed class XtermSharpEngine : ITerminalEngine
             Scrollback = setup.ScrollbackLines,
         });
         grid = new XtermGrid(terminal);
+        palette = setup.Palette;
+        terminal.ColorQueryHandler = AnswerColorQuery;
         terminal.ClearUpdateRange();
     }
 
@@ -85,6 +88,55 @@ public sealed class XtermSharpEngine : ITerminalEngine
             Clipboard = clipboard,
         };
     }
+
+    /// <summary>
+    /// The parse at the OSC 10/11/12 boundary: what a program asked about, and the reply.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only <c>?</c> is a question. Any other <c>Pt</c> is a program setting the colour, which is
+    /// consumed and ignored — the theme owns the surface, and a program that exited mid-sequence
+    /// would otherwise leave the pane a colour the user's own light/dark toggle no longer reaches.
+    /// An unanswered set is also the reply xterm gives, so nothing is waiting on it.
+    /// </para>
+    /// <para>
+    /// The <c>Pt</c> field repeats, each entry addressing the next slot up from the one the
+    /// sequence named: <c>OSC 10;?;?</c> asks for the foreground and then the background in one
+    /// go. Walking them is what keeps a chained query from going half-answered, which reads to a
+    /// caller as no support at all. A slot past the last this understands ends the walk rather
+    /// than wrapping.
+    /// </para>
+    /// <para>
+    /// Terminated with ST rather than BEL because the parser has already eaten the terminator the
+    /// program used and cannot say which it was; ST is what the sequence's own definition names,
+    /// and every client that sends BEL still accepts it.
+    /// </para>
+    /// </remarks>
+    string? AnswerColorQuery(int identifier, string payload)
+    {
+        if (palette is null) return null;
+
+        var reply = new StringBuilder();
+
+        foreach (var field in payload.Split(';'))
+        {
+            if (SlotOf(identifier) is not { } slot) break;
+            if (field != "?") break;
+
+            reply.Append($"\u001b]{identifier};{palette.Resolve(slot).ToXParseColor()}\u001b\\");
+            identifier++;
+        }
+
+        return reply.Length == 0 ? null : reply.ToString();
+    }
+
+    static TerminalColorSlot? SlotOf(int identifier) => identifier switch
+    {
+        10 => TerminalColorSlot.Foreground,
+        11 => TerminalColorSlot.Background,
+        12 => TerminalColorSlot.Cursor,
+        _ => null,
+    };
 
     /// <summary>
     /// The parse at the OSC 52 boundary: base64 in, a request or nothing out.

@@ -236,6 +236,40 @@ namespace XtermSharp {
 				payload.Substring (separator + 1));
 		}
 
+		// PATCH 22: OSC 10/11/12 dynamic colour queries.
+		//
+		// A dispatch point and nothing more. What the pane's foreground, background and cursor
+		// actually are is the renderer's to say, and this core has never held a colour it did not
+		// receive in a sequence, so the answer is asked for rather than stored.
+
+		/// <summary>
+		/// Gets or sets what answers <c>OSC 10/11/12</c> on this terminal's behalf; returning null
+		/// or an empty string leaves the sequence unanswered
+		/// </summary>
+		/// <remarks>
+		/// Invoked during the parse, so a reply joins the response stream in the order the program
+		/// asked for it — a program that sends a cursor report and a colour query in one write reads
+		/// its answers back in that order. That ordering is why this is a callback and not a drained
+		/// list like <see cref="DrainClipboardCommands"/>.
+		/// </remarks>
+		public Func<int, string, string> ColorQueryHandler { get; set; }
+
+		/// <summary>
+		/// Handles <c>OSC 10/11/12 ; Pt ST</c>, whose <c>Pt</c> reaches here as
+		/// <paramref name="payload"/>
+		/// </summary>
+		/// <remarks>
+		/// Every decision about what <c>Pt</c> means belongs to the handler, including whether a
+		/// payload is a query at all. With no handler installed the sequence is consumed and
+		/// ignored, which is what this core did with it before.
+		/// </remarks>
+		internal void ColorCommand (int identifier, string payload)
+		{
+			var response = ColorQueryHandler?.Invoke (identifier, payload ?? string.Empty);
+			if (!string.IsNullOrEmpty (response))
+				SendResponse (response);
+		}
+
 		/// <summary>
 		/// Gets the kitty keyboard protocol flags in effect, or 0 for the legacy encoding
 		/// </summary>
