@@ -3,3 +3,4 @@
 - [Input seam facts](input-seam-facts-gitbench.md) — InputSystem dispatch order, KeyClaim tri-state, hover-built focus queue; declining is not routing, and nothing blurs a hidden focus holder
 - [Review style](feedback-review-style.md) — report only, never edit; say "closed" rather than manufacture findings; flag decisive facts wearing a taste label
 - [PTY seam facts](pty-seam-facts-gitbench.md) — frozen types vs editable docs; invented contracts (Completed(128+sig), EIO-is-not-a-throw); measured: EINTR unreachable, macOS revokes the tty so Linux teardown bugs pass green
+- [Plugin seam facts](plugin-seam-facts-gitbench.md) — repo identity is Guid not path; toolbar labels/enabled are reactive so snapshot contributions regress; open-in-terminal already means two things; strings are source-generated and shared keys can't move; destructive actions are bespoke dialogs
