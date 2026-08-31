@@ -1,63 +1,88 @@
 # Lua plugins — extending DiffDino from the outside
 
+> **STATUS: CONTRACTS NOT FROZEN.** Revised 2026-08-31 after two reviews. The first draft asserted
+> where this repo measures: it cited `glfw-static-linking.md` as supporting precedent without noticing
+> that document's first line is `STATUS: NOT VIABLE AS WRITTEN`, and cited oniguruma as static-linking
+> precedent when it is a per-RID *dynamic* native that the same document explicitly puts out of scope.
+> Both citations are gone. Every number below is either measured or marked as an estimate to be
+> measured in **Phase 0.5**, and the contracts do not freeze until that spike publishes findings.
+
 > **Framing:** the goal is not "an escape hatch bolted on the side". It is a *contribution seam* that
-> the app itself goes through, proven by moving real shipped features onto it. If four built-in
-> features can be deleted from the C# and re-appear as bundled Lua plugins with no user-visible
-> change — same strings, same icons, same seven locales — then the seam is real. If they can't, the
-> seam is a demo and third-party plugins would have hit the same wall on day one.
+> the app itself goes through, proven by moving real shipped features onto it.
 >
-> **The seam is the deliverable, not the Lua.** A plugin system smeared through the feature code is
-> a permanent tax on every file it touches. So the whole design is organised around one testable
-> property: *deleting the plugin system is a four-line change and the app still compiles.* See
-> [The seam](#the-seam) — it is the part to review hardest.
->
-> The constraint that shapes the rest: **we publish Native AOT**. That rules out the reflection-based
-> embedding everyone reaches for first, and it means the plugin API is a hand-written marshalling
-> boundary rather than a generated one. Which is fine — a hand-written boundary is a *parsed* boundary,
-> and `docs/coding_rules.md` Rule 1 wanted that anyway.
+> The constraint that shapes the runtime: **we publish Native AOT**, four RIDs on four runners. The
+> constraint that shapes the contracts: **the surfaces plugins land on are reactive and the actions
+> they trigger are bespoke**, so a contribution cannot be an inert snapshot and a port cannot be a
+> thin wrapper over a git verb.
 >
 > **v1 is declarative contributions only.** Plugins describe menu items, toolbar buttons, commands and
 > event handlers as data. They do not build widget trees. See [Why not widget trees](#why-not-widget-trees).
+
+## Prerequisites
+
+Two things must exist before phase 1, and neither is really about plugins.
+
+**Phase 0 — PR-time CI.** `.github/workflows/` contains one file. `release.yml` triggers on
+`push: tags: ['v*']` and its only build step is `dotnet publish`. **Nothing builds or runs
+`GitBench.Tests` on push or PR.** This plan leans on a machine-checked architecture boundary in three
+places; all three are unimplementable until a workflow exists to run them. `glfw-static-linking.md`
+reached the same conclusion independently, which makes this the second plan blocked on it.
+
+**Phase 0.5 — the measured Lua-under-AOT spike.** One week, four questions, all answered with
+numbers, all code thrown away. This is what `terminal.md` did with ConPTY — *"a spike ahead of Phase 1,
+because the Windows engine choice hangs off it"* — and the findings changed that seam.
+
+1. Does a KeraLua hello-world AOT-publish and run on all four RIDs? **Dynamic native only; do not
+   attempt static linking.**
+2. Does a managed callback invoked from Lua survive (a) throwing and (b) a `lua_error` raised beneath
+   it? `StartupHealth.cs:7-10` says a managed exception unwinding a native callback frame **fail-fasts
+   under NativeAOT** — so the plan's error containment is unproven until this is run.
+3. Can a `lua_sethook` count hook abort a runaway script without taking the process down? Lua raises
+   by `longjmp`; if that cannot cross a managed frame safely, **the deadline in the threading decision
+   is not implementable as described** and the contract changes.
+4. What does `luaL_newstate` + `openlibs` + one 200-line `init.lua` cost in milliseconds on the
+   slowest release runner?
+
+Publish the answers as a `## Findings — Lua under NativeAOT, measured` section in the shape of
+`terminal.md:156-224`. **Then** freeze contracts. Questions 2 and 3 decide two rows of the decisions
+table, which is why they cannot come after.
 
 ## Decisions
 
 | Area | Decision |
 |---|---|
-| Isolation | **Four projects, contracts in the middle.** `GitBench.Extensibility` holds the contracts and depends on nothing. The app and the plugin host both depend on it and never on each other, except one line in the composition root. Enforced by an architecture test in CI, per Rule 2's "encode the intended boundaries as machine-checked rules". |
-| Runtime | **Lua 5.4 via KeraLua**, statically linked into the AOT image. Not MoonSharp: its interop layer resolves members by reflection, which is exactly what AOT trimming removes, so every exposed type would need a hand-written descriptor — the same work as a C binding, minus the ecosystem and the speed. Precedent for a native dependency exists (`TextMateSharp`'s onigwrap, noted NativeAOT-clean in `GitBench.csproj`), and Lua's ~200KB static build is friendlier than that one. Tracks the same appetite as `docs/plans/glfw-static-linking.md`. |
-| What a plugin can extend | v1: **context menu items, toolbar buttons, named commands with keybindings, repo event handlers, and its own localized strings.** Nothing else. |
-| Contribution model | Plugins return **data**, the host builds widgets. A contribution crosses the FFI boundary once, is **parsed into a contract type**, and the raw Lua table is never seen downstream (Rule 1: parse at every boundary). |
-| Menu item type | Plugins produce `Extensibility.MenuItem`, a **sum type** (`Action | Submenu | Separator`), which the host projects onto the existing `RepoBarContextMenu.Item`. The app's own 9-field optional bag is left alone for now — see [Sequencing the Item refactor](#sequencing-the-item-refactor). |
-| Registry | One `IPluginHost`, registered in `AppServices` and **injected** where consumed — not a static, not a service locator. Contributions are enumerable and every one is attributable to a plugin id. |
-| Threading | Menu builders and `enabled`/`visible` predicates run **synchronously on the UI thread** under a deadline; they may not call git. `on_select` bodies are dispatched like any other command and may go async. One `lua_State` per plugin, all UI-thread in v1. |
-| Localization | Plugins ship `strings/<locale>.json` in the app's flat dotted-key format. Lookup is **runtime** (`p.t("key")`), because `Strings` is source-generated from `Localization/Strings/*.json` and closed to outsiders. Fallback chain: requested locale → `en` → the key itself. |
-| Trust | **Bundled plugins are trusted. User-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib` or `require` of C modules; filesystem and process access go through host ports that prompt, reusing the existing `ToolApproval` machinery from the assistant. |
-| Errors | Every callback is wrapped. An error becomes a toast naming the plugin plus a log line; three errors from one plugin disables it for the session. A plugin never takes down a menu, a frame, or the app. |
-| Distribution | Folder-based. Bundled: `<app>/plugins/<id>/`. User: `<AppData>/plugins/<id>/` via `AppPaths`. No registry, no marketplace, no auto-update in v1. |
-| Out of scope for v1 | Widget trees, custom panels, custom themes from plugins, diff transformers, assistant tools written in Lua, forge/CI providers, plugin-to-plugin dependencies, hot reload, a plugin marketplace. Each is a later phase, and none of them changes the v1 seam. |
+| Isolation | **Four projects, contracts in the middle.** `GitBench.Extensibility` holds the contracts and depends on nothing. The app and the plugin host both depend on it and never on each other. Enforced by an architecture test **in both directions**, per Rule 2's "encode the intended boundaries as machine-checked rules". |
+| Runtime | **Lua 5.4 via KeraLua, using its shipped per-RID dynamic native.** Not MoonSharp: its interop resolves members by reflection, which AOT trimming removes. Static linking is **not in v1** — `glfw-static-linking.md:225-232` found that `DirectPInvoke` emits no diagnostic when it fails, and KeraLua ships a dynamic native unconditionally, so a failed static link would be masked by the fallback and report green. If revisited, the only valid success check is `! strings DiffDino \| grep -q lua_pcall`. |
+| Contribution declaration | **Declared as data in `plugin.json`; Lua loads lazily on first invocation.** Anchors, item ids, string keys, icons and ordering are readable without an interpreter. See [Startup](#startup-and-the-load-model). |
+| Contribution model | Plugins return **data**, the host builds widgets. Crossing the FFI boundary happens once and is **parsed into a contract type**; the raw Lua table is never seen downstream (Rule 1). |
+| Reactivity | Contributions carry **thunks, not snapshots** — `Func<string>` labels and `Func<bool>` enablement. `ToolbarButton.Label` is a `Prop<string?>` bound through `L.T(...)` so labels follow a locale switch without a rebuild; a plain `string` would ship a tooltip stuck in the previous language. |
+| Menu merging | `IMenuExtensions` returns **contributions only**; the app merges them with a pure `MenuMerge.Apply`. A plugin cannot remove or reorder built-in items, and the ordering policy becomes a tested function rather than a convention inside code the app can't see. |
+| Menu item type | Plugins produce `Extensibility.MenuItem`, a sum type (`Action \| Submenu \| Separator`), projected onto the existing `RepoBarContextMenu.Item`. The app's own 9-field bag is left alone — 29 files touch it, and the invariant is enforced at the parse boundary instead. |
+| Writes | Plugins never call git writes. `IPluginRepoActions` takes a closed sum type of **app intents** (`RepoAction.DeleteTag`), which the adapter routes to the flow that already owns the dialog, the confirmation and the translations. |
+| Threading | Menu builders and predicates run **synchronously on the UI thread** under a deadline **whose mechanism Phase 0.5 must establish**; they may not call git. Data a builder needs but cannot compute — a remote URL — is pre-resolved into `MenuTarget` by the app. `on_select` may go async. One `lua_State` per plugin, all UI-thread in v1. |
+| Localization | Plugins ship `strings/<locale>.json` in the app's format. Lookup is **runtime**, because `Strings` is source-generated and closed. Requires a CLDR plural resolver — see [Localization](#localization). |
+| Trust | **Bundled plugins are trusted; user-installed plugins are not.** Untrusted plugins load without `io`, `os.execute`, `package.loadlib`, C `require`, **and `debug`**, and with `load(chunk, name, "t")` — text chunks only, since Lua 5.4 has no bytecode verifier and crafted binary chunks are arbitrary native code. |
+| Errors | Every callback wrapped; no managed exception may cross the `[UnmanagedCallersOnly]` boundary, enforced by one total wrapper rather than by convention. Faults become a toast naming the plugin. Repeat offenders are disabled — **persisted to disk**, see [Crash containment](#crash-containment). |
+| Distribution | Folder-based. Bundled: `<app>/plugins/<id>/` as `Content` items. User: `<AppData>/plugins/<id>/`. No registry or auto-update in v1. |
+| Out of scope for v1 | Widget trees, custom panels, plugin themes, diff transformers, assistant tools in Lua, forge providers, plugin-to-plugin deps, hot reload, a marketplace, static linking. |
 
 ## The seam
 
 ### The shape
 
-Four projects. The contracts project sits in the middle and **both arrows point at it**:
+Four projects, contracts in the middle, **both arrows pointing at it**:
 
 ```
-                     GitBench.Extensibility
+                     GitBench.Extensibility          (depends on nothing)
                      ─────────────────────
-                     · MenuAnchor, MenuContext      what the app offers
-                     · MenuItem, ToolbarItem        what plugins return
-                     · IMenuExtensions,             what the app consumes
-                       IToolbarExtensions
-                     · IPluginGitReads, IPluginShell,
-                       IPluginClipboard, IPluginUi,
-                       IPluginEvents, IIconResolver  what plugins may call
-                     · Null* implementations of all of it
-                     (depends on nothing)
+   inbound  · MenuAnchor, MenuTarget, MenuContext, MenuItem, ToolbarItem
+            · IMenuExtensions, IToolbarExtensions, ICommandContributor
+  outbound  · IPluginGitReads, IPluginRepoActions, IPluginShell, IPluginFileLaunch,
+              IPluginClipboard, IPluginUi, IPluginEvents, IIconResolver
+            · Null* implementations of all of it
                           ▲                    ▲
              implements   │                    │   implements
              the ports    │                    │   the extensions
-                          │                    │
                      GitBench              GitBench.Plugins
                      (the app)   ·······►   (manifest, registry, containment)
                                 one line          ▲
@@ -66,309 +91,422 @@ Four projects. The contracts project sits in the middle and **both arrows point 
                                              (KeraLua — the only Lua in the codebase)
 ```
 
-Two directions of contract, which is the thing that makes it work:
+**Inbound** — what plugins contribute. The app asks for contributions and merges them itself.
+**Outbound** — what plugins may call, implemented in the app as adapters over `IGitService`,
+`IPlatformShell`, `IMessageBus`, `LucideIcons`.
 
-- **Inbound** — what plugins contribute. The app asks `IMenuExtensions.Extend(anchor, context, items)`
-  and gets a list back. It does not know a plugin system exists; the default binding is
-  `NullMenuExtensions`, which returns `items` unchanged.
-- **Outbound** — what plugins may call. `IPluginGitReads`, `IPluginShell`, `IPluginUi` and friends are
-  declared in Extensibility and *implemented in the app* as thin adapters over `IGitService`,
-  `IPlatformShell`, `IMessageBus`. The plugin host holds only the interfaces.
+### The envelope: every contribution names its repo
 
-Neither side references the other. `GitBench.Plugins` cannot reach into a view model; a feature
-cannot reach into a plugin.
-
-### The deletion test
-
-The property to hold onto, and the one to actually verify:
-
-> Delete the two `ProjectReference` lines and the single `PluginBootstrap.Install(context);` line in
-> `AppServices`, and the app compiles, runs, and behaves exactly as it does today.
-
-That is why the install is one call in one file rather than registrations sprinkled through
-`AppServices`. `PluginBootstrap` lives in `GitBench.Plugins` and does all of it — discovery, host
-construction, rebinding `IMenuExtensions` from the null implementation to the real one. Nothing else
-in the app names a plugin type.
-
-The corollary is the CI check, which Rule 2 asks for explicitly: an architecture test in
-`GitBench.Tests` asserting that **no file under `GitBench/Features/` mentions `GitBench.Plugins`**,
-and that `GitBench.Extensibility` has no project references. A cheap test that catches the exact
-decay this design exists to prevent — someone reaching for the host "just this once".
-
-### What a feature-side touch actually looks like
-
-The whole edit at a menu site, at the end of an existing builder:
+The first draft gave each anchor its own context record and nothing in common. Five of six variants
+carried no repository at all, so `tag-actions` could not name the repo it was deleting a tag in and
+the forge story had nothing to build a URL from. The sixth identified its repo by **path string**,
+which is wrong everywhere else in this app: `IGitRemoteOperations.GetRemoteUrl(Repo, string)` takes a
+`Repo`, and every message in `GitBench/Messages/` is `(Guid RepoId, ...)`.
 
 ```csharp
-// FileBrowserContextMenu.Build(...) — last line
-return _extensions.Extend(
-    MenuAnchor.FileBrowserRow,
-    new MenuContext.FileBrowserRow(relative, full, row is FileBrowserRow.Directory),
-    items);
+public readonly record struct RepoRef(Guid Value);      // identity; marshals to Lua as an opaque string
+public sealed record MenuTarget(RepoRef Repo, string RepoPath, MenuContext Context);
+
+public interface IMenuExtensions {
+    IReadOnlyList<MenuContribution> Contributions(MenuAnchor anchor, MenuTarget target);
+}
+public sealed record MenuContribution(PluginId Plugin, MenuPlacement Placement, IReadOnlyList<MenuItem> Items);
+public abstract record MenuPlacement { /* Below | Above | At(int) — At is bundled-only */ }
 ```
 
-`_extensions` is `IMenuExtensions`, injected like anything else. `MenuContext` is a closed sum type
-of plain records, so the feature builds a snapshot of what it already has in hand and is done. It
-does not build a Lua table, does not know about anchoring order, and does not handle plugin errors —
-containment lives on the other side of the interface.
+`RepoPath` remains as display and shell data; `RepoRef` is identity and every port takes it. Growth
+now lands in the payload union, where a new variant *should* break the build, rather than being copied
+into six records.
 
-`MenuContext` being a closed sum type in Extensibility is also what freezes the API surface: adding a
-field a plugin can see means editing the contracts project, deliberately. The plugin API cannot grow
-by accident.
+### Merging is the app's job
 
-### The touch-point budget
+```csharp
+// FileBrowserContextMenu.Build — last line
+return MenuMerge.Apply(items, _extensions.Contributions(MenuAnchor.FileBrowserRow, target));
+```
 
-Honest accounting of main-app files that change. Nine edits and one new file:
+`MenuMerge.Apply` is a pure function in the app: built-ins first, plugin sections below a separator in
+load order, `Above` before, `At` honored only for bundled plugins. It is directly testable with no
+host and no interpreter — including the property that matters most:
 
-| File | Change |
-|---|---|
-| `Features/Repos/RepoNodeViewModel.cs` | wrap return, build `MenuContext.Repo` |
-| `Features/Commits/CommitsView.cs` | wrap return, build `MenuContext.Commit` |
-| `Features/Branches/BranchRowState.cs` | wrap return, build `MenuContext.Branch` |
-| `Features/LocalChanges/FileOpsContextMenu.cs` | wrap return, build `MenuContext.Files` |
-| `Features/FileBrowser/FileBrowserContextMenu.cs` | wrap return, build `MenuContext.FileBrowserRow` |
-| `Features/Toolbar/ActionsToolbar.cs` | concat toolbar contributions into `BuildActions` |
-| `App/AppKeybindController.cs` | consult command contributions before the built-in chords |
-| `App/AppServices.cs` | register the host-port adapters; one `PluginBootstrap.Install` line |
-| `App/Preferences.cs` | disabled-plugin ids |
-| `App/PluginHostAdapters.cs` *(new)* | implements the outbound ports over existing services |
+```csharp
+[Fact] void APluginCannotRemoveBuiltInItems() {
+    var merged = MenuMerge.Apply(BuiltIns, [ new(new("evil"), MenuPlacement.Below, []) ]);
+    Assert.Equal(BuiltIns, merged.Take(BuiltIns.Count).ToList());
+}
+```
 
-Everything else — discovery, manifests, Lua, marshalling, error containment, the settings pane — is
-inside the plugin projects and invisible to the app.
+Under the first draft's `Extend(anchor, ctx, items) → items`, that test could not be written: a plugin
+returning `{}` deleted Stage, Unstage and Discard, indistinguishable from an anchor that legitimately
+produced nothing. The same argument applies more strongly to the toolbar, where `BuildActions` returns
+an `IWidget[]` whose `Spacer`/`SeparatorSpacer` structure a plugin must not be able to touch.
 
-`IIconResolver` is a small illustration of why the ports exist. `LucideIcons` is `internal static` and
-its members are private-use glyph characters, not names; a plugin says `icon = "ExternalLink"`. Rather
-than making the plugin host reference an app type, the app implements a one-method port that maps
-name → glyph and returns null for anything it doesn't know. Same pattern for every capability, and
-the reason `GitBench.Plugins` never needs to see inside the app.
+### Ports are intent-shaped, not mechanism-shaped
 
-### Sequencing the Item refactor
+Two ports earn specific comment.
 
-An earlier draft made converting `RepoBarContextMenu.Item` into a sum type a prerequisite. It should
-not be: **29 files touch that type**, and coupling a large mechanical refactor to a risky new
-subsystem is how both end up stalled.
+**`IPluginRepoActions`** — plugins never call git writes:
 
-The motivation was that a plugin author will write the nonsense combination (`separator = true` plus
-a label plus a submenu). But that risk is handled at the boundary, not in the type: plugins produce
-`Extensibility.MenuItem`, which *is* a sum type, and the host projects it onto `Item`. The parser is
-the only constructor and it is total, so no illegal `Item` can originate from Lua whatever the type
-permits.
+```csharp
+public interface IPluginRepoActions { void Request(RepoRef repo, RepoAction action); }
+public abstract record RepoAction { public sealed record DeleteTag(string Name) : RepoAction; }
+```
 
-So: `Item` stays as it is. Converting it — and moving it out of `Features/Repos`, where a type used
-by every menu in the app has no business living — is worth doing on its own schedule, and this plan
-neither blocks on it nor blocks it.
+`CommitsViewModel.RequestDeleteTag:373` does not delete anything — it broadcasts a `ShowDialogMessage`
+for `DeleteTagDialog`, which carries a *"delete from remote repositories"* checkbox, a destructive-role
+button, `ConfirmKeys` and five dedicated strings. `p.ui.confirm(text)` reproduces none of that. Routing
+an intent to the existing flow keeps the confirmation, the styling and the seven locales in the app,
+and avoids the escape hatch this would otherwise grow under schedule pressure —
+`p.command("commits.delete_tag")`, invoke-by-string-name, which un-closes exactly the surface
+`MenuContext` is closed to protect.
+
+**`IPluginShell`** — split by intent, and the code-execution primitive separated:
+
+```csharp
+public interface IPluginShell {
+    void OpenUrl(string url);                             // adapter validates the scheme
+    void OpenFolder(string path);
+    void RevealPath(string path);
+    void OpenTerminalAt(RepoRef repo, string directory);  // adapter owns embedded-vs-OS
+}
+public interface IPluginFileLaunch { void OpenWithDefaultApp(string path); }   // separate grant, off by default
+```
+
+`OpenTerminalAt` exists because "open in terminal" already means two things: `FileBrowserContextMenu`
+prefers the embedded pane — `SendInput("cd <dir>\r")` into `ITerminalSessionStore`, then flips
+`State<MainViewMode>` — while `LocalChangesViewModel:807` calls the OS shell. A port that exposed the
+mechanism would let a plugin pick, and one of the two anchors would regress.
+
+`IPluginFileLaunch` is separate because `IPlatformShell.OpenFile` is `UseShellExecute` on Windows.
+`FileBrowserContextMenu`'s own remarks spend a paragraph explaining that the defense against a `.bat`
+or `.lnk` from a hostile repository is deliberately *at the caller*. Handing it to untrusted plugins
+moves that defense to a prompt whose entire content is a path.
+
+### Composition without a service locator
+
+```csharp
+public sealed record PluginHostPorts(IPluginGitReads Git, IPluginRepoActions Actions, IPluginShell Shell,
+                                     IPluginFileLaunch FileLaunch, IPluginClipboard Clipboard,
+                                     IPluginUi Ui, IPluginEvents Events, IIconResolver Icons,
+                                     IUiDispatcher Dispatcher);
+
+public static class PluginBootstrap {
+    public static PluginExtensions Install(PluginHostPorts ports);   // returns; registers nothing
+}
+```
+
+Taking the ZGF `Context` instead would mean `GitBench.Plugins` referencing `ZGF.Gui` and being able to
+`ctx.Get<T>()` anything the app registered — a type-keyed service locator, on Rule 2's explicit list,
+and one the architecture test would not catch because it runs the other way. Returning a value also
+removes the ordering hazard where anything resolving the singleton before `Install` keeps the null.
+
+`IPluginEvents` marshals through `IUiDispatcher` itself: `MessageBus` is an unlocked
+`Dictionary<Type, List<Delegate>>` whose handlers run on the broadcasting thread.
+
+### What the deletion test actually proves
+
+The first draft claimed deleting the plugin system was a four-line change leaving an app that behaves
+identically. That conflated two properties, one of which is false from phase 3 onward. Separate them:
+
+- **P1 — holds forever, checked on every CI build.** The app builds and the non-plugin suite passes
+  with the `Null*` bindings bound. This is a **build configuration**, not a manual exercise — nobody
+  performs a manual exercise in month nine.
+- **P2 — true only until phase 3.** The app is *behaviourally* unchanged. Once bundled plugins own
+  shipped features, deleting them removes those features. That is the dogfooding working as intended,
+  and it means P2 expires. Say so rather than discovering it.
+
+The residue that stays forever, and is worth paying: `GitBench.Extensibility` remains referenced,
+along with `MenuAnchor`/`MenuTarget` construction at six call sites, `IMenuExtensions` in five
+constructors and the toolbar, and `App/PluginHostAdapters.cs`.
+
+## Threading and error propagation
+
+Three hazards, none of which the first draft named. All three are Phase 0.5 questions before they are
+design decisions.
+
+**Managed exceptions must not cross the callback boundary.** A `lua_CFunction` is a native callback
+frame, and `StartupHealth.cs:7-10` states plainly that a managed exception unwinding one fail-fasts
+under NativeAOT. Every host port is invoked *from* native Lua. The rule is one total wrapper with one
+`catch`, applied by construction — a `try`/`catch` written per-port by convention will be forgotten
+once and the failure mode is process death, not an error toast.
+
+**Lua raises by `longjmp`.** `luaL_error`, `lua_error`, out-of-memory and a count-hook abort all
+longjmp past intervening frames. If a managed frame sits between `lua_pcall` and the raise point,
+`finally` blocks do not run. This directly threatens the deadline mechanism, since a count hook is the
+only way Lua 5.4 offers to interrupt a runaway script. **If Phase 0.5 question 3 comes back negative,
+the synchronous-with-deadline threading model is not available and the contract must change** — most
+likely to builders that are pure and pre-validated, with no ability to loop.
+
+**Delegate lifetime.** Callbacks handed to Lua must be rooted for as long as the `lua_State` holds
+them. Under AOT a collected delegate is a jump into freed memory, not an exception.
 
 ## Modules
 
-Inside the projects above.
+**`GitBench.Extensibility` — contracts only.** Anchors, targets, contexts, item types, inbound
+interfaces, outbound ports, null implementations. No logic beyond the nulls. This project is the API.
 
-**`GitBench.Extensibility` — contracts only.**
-Anchors, contexts, item types, the inbound extension interfaces, the outbound host ports, and null
-implementations of everything. No logic beyond the nulls. This project is the API; changes to it are
-the changes that need review.
+**`GitBench.Plugins` — discovery, lifetime, containment.** Folder enumeration, `plugin.json` parsing,
+load order, the contribution registry, quarantine, error containment, `PluginBootstrap`. Knows nothing
+about Lua: it talks to an `IPluginRuntime` seam, so most tests never boot an interpreter.
 
-**`GitBench.Plugins` — discovery, lifetime, containment.**
-Plugin folder enumeration, `plugin.json` parsing, load order, the contribution registry, error
-containment, `PluginBootstrap`. Knows nothing about Lua: it talks to an `IPluginRuntime` seam. That
-seam is what makes the whole thing testable — the suite registers contributions from a fake runtime
-and never boots an interpreter.
+**`GitBench.Plugins.Lua` — the binding layer.** KeraLua P/Invoke, the `gitbench` global, marshalling
+both ways, the callback wrapper. The only module holding a `lua_State`, and the only place where a
+Rule 3 level-1 justification comment is expected on every function.
 
-**`GitBench.Plugins.Lua` — the binding layer.**
-KeraLua P/Invoke, the `gitbench` global table, marshalling both ways. The only module allowed to hold
-a `lua_State`, and the only place where a Rule 3 level-1 justification comment is expected on every
-function — an FFI call is a checker bypass by construction.
+**In the app: `PluginHostAdapters`, `PluginStrings`, `MenuMerge`.** The port implementations, the
+per-plugin string table with its plural resolver, and the merge function.
 
-**In the app: `PluginHostAdapters` and `PluginStrings`.**
-The port implementations, and the per-plugin string table that loads `strings/<locale>.json`,
-resolves against the current `Locale`, and re-resolves when the user switches language.
+**The bundled plugins.** Four, each a converted built-in.
 
-**The bundled plugins.** Four of them, each a converted built-in. The acceptance test for all of the
-above.
+Every JSON boundary — `plugin.json` and `strings/*.json` — needs a source-generated
+`JsonSerializerContext`, as `PreferencesStore.cs:186-191` and four other stores already do. The
+strings file is an open-ended dictionary with plural sub-objects, so it needs a hand-written
+`Utf8JsonReader` path.
 
 ## Anchor points
 
-An anchor is a named place a plugin may contribute, plus the `MenuContext` variant its builder
-receives. The context is a **flat snapshot**, not a live handle: built once when the menu opens,
-inert afterward. A plugin that wants fresh data asks for it in `on_select`.
+An anchor is a named place a plugin may contribute, plus the `MenuContext` variant carried in the
+`MenuTarget`. Contexts are inert snapshots built at menu-open.
 
-| Anchor | Call site | Context fields |
+| Anchor | Call site | Context fields (beyond `MenuTarget`'s repo) |
 |---|---|---|
-| `repo.node` | `Features/Repos/RepoNodeViewModel.cs:222` | `path`, `name`, `branch`, `is_detached`, `has_upstream`, `ahead`, `behind`, `is_dirty` |
-| `commit.row` | `Features/Commits/CommitsView.cs:1079` (`BuildCommitMenuItems`) | `sha`, `short_sha`, `subject`, `author`, `date`, `refs[]` (`{name, kind}`), `parents[]`, `is_merge` |
-| `branch.local` / `branch.remote` | `Features/Branches/BranchRowState.cs:59` | `name`, `full_ref`, `upstream`, `ahead`, `behind`, `is_head` |
-| `localchanges.file` | `Features/LocalChanges/FileOpsContextMenu.cs` | `files[]` (`{path, absolute_path, status, staged}`) — always a list, selection is multi |
-| `file_browser.row` | `Features/FileBrowser/FileBrowserContextMenu.cs` | `path`, `absolute_path`, `is_directory` |
-| `toolbar.actions` | `Features/Toolbar/ActionsToolbar.cs:55` (`BuildActions`) | repo snapshot, same fields as `repo.node` |
+| `repo.node` | `RepoNodeViewModel.cs:222` | `name`, `branch`, `is_detached`, `has_upstream`, `ahead`, `behind`, `is_dirty`, `remote_web_url` (pre-resolved) |
+| `commit.row` | `CommitsView.cs:1079` (`BuildCommitMenuItems`) | `sha`, `short_sha`, `subject`, `author`, `date`, `refs[]`, `parents[]`, `is_merge` |
+| `branch.local` / `branch.remote` | `BranchRowState.cs:59` — **see below** | `name`, `full_ref`, `upstream`, `ahead`, `behind`, `is_head` |
+| `localchanges.file` | `FileOpsContextMenu.cs` — **three call sites** | `files[]` (`{path, absolute_path, status, staged}`) |
+| `file_browser.row` | `FileBrowserContextMenu.cs` | `path`, `absolute_path`, `is_directory` |
+| `toolbar.actions` | `ActionsToolbar.cs:55` (`BuildActions`) | same as `repo.node` |
 
-`stash.row`, `worktree.row`, `submodule.row` and `tag` follow the same pattern and are deferred to
-phase 4 — not because they are hard, but because four anchors is enough to learn whether the context
-design holds, and every one we ship is one we cannot casually change.
+Two corrections to the first draft's "wrap the return" budget:
 
-**Ordering.** Plugin items land in a section below a separator, after the built-ins, in plugin load
-order (manifest id, alphabetical). A contribution may request `position = "top"` to sit above the
-built-ins; nothing finer. Menus are muscle memory, and letting plugins interleave arbitrarily is how
-that gets destroyed.
+- **`BranchRowState.cs:59` is not one anchor.** That switch dispatches **nine** row kinds — local,
+  remotes and stashes headers, remote headers, local and remote folders, local and remote branches,
+  and stash rows. One `MenuContext.Branch` cannot describe a folder or a stash. This is per-case anchor
+  selection, and stash/folder anchors are deferred rather than wrongly unified.
+- **`FileOpsContextMenu` has three call sites**, two of them in the review window
+  (`ReviewDiffList.cs:948`, `ReviewWindowRootView.cs:124`). Those windows have their own `Context`, so
+  `IMenuExtensions` must be registered there too or contributions silently vanish in one surface.
 
-## The Lua surface
+`remote_web_url` is pre-resolved by the app because the threading rule forbids builders from calling
+git — see [`open-remote`](#dogfooding-four-built-ins-become-bundled-plugins).
 
-```lua
--- plugins/open-remote/init.lua
-local p = require("gitbench")
+## Startup and the load model
 
-p.menu("repo.node", function(ctx)
-  local url = p.git.remote_web_url(ctx.path, "origin")
-  if not url then return {} end
-  return {
-    { label = p.t("menu.open_remote"), icon = "ExternalLink",
-      on_select = function() p.shell.open_url(url) end },
-  }
-end)
-```
+The first draft budgeted startup by measuring and logging slow plugins. That is below the standard the
+codebase already meets: `AppHostSetup.cs:100-115` reads system font fallbacks on a worker because
+*"none needed until non-Latin text appears, so reading them must not block first paint"*, and
+`AppServices.cs:74-75` defers repo sweeps behind the active repo's first load. Neither logs and hopes;
+both move the work.
 
-Item fields: `label`, `icon` (a `LucideIcons` name resolved through `IIconResolver`; an unknown name
-renders a default glyph rather than throwing), `on_select`, `enabled`, `checked`, `shortcut`,
-`submenu`, `separator = true`. Deliberately the same vocabulary the C# `Item` already has — converting
-a built-in should be a transliteration, not a redesign.
+Worse, imperative registration is **not deferrable**: you cannot know what `p.menu("repo.node", fn)`
+contributes without executing `init.lua`, and toolbar contributions are needed on frame one. So:
 
-Host tables in v1, each backed by one port: `p.t`, `p.git` (reads only), `p.shell`, `p.clipboard`,
-`p.ui` (toast, confirm, prompt), `p.on` (repo events), `p.log`.
+**`plugin.json` declares contributions as data. Lua loads lazily, on first invocation of a declared
+contribution.** Startup becomes N small JSON reads rather than N interpreter boots. This also makes
+the registry statically enumerable from disk — a materially better answer to the Rule 2 tension than
+the first draft had, and it lets the settings pane and a crash report name the owning plugin of a
+contribution that has never run.
 
-`p.on` deserves a note: it subscribes through `IPluginEvents`, not `IMessageBus`. The app's message
-structs stay internal and the adapter maps them to plugin-facing event records, so adding a message
-to the bus does not silently widen the plugin API.
+**Budget: the plugin subsystem adds ≤ 15 ms to first paint on the slowest release runner, asserted by
+a test.** Phase 0.5 question 4 either confirms that number or replaces it.
+
+## Crash containment
+
+`Program.cs:13-19` and `StartupHealth.cs:14`: two consecutive launches that never reach the run loop
+make the app assume a bad *build* and call `RecoveryUpdater.TryApplyLatest()`. A user plugin that
+faults during load produces exactly that signature — but it lives in `AppData` and **survives the
+update**. The result is crash, crash, download, crash, crash, download, and the app's existing
+self-healing works against the plugin system. In-session "three strikes" does not help: a native
+fail-fast never reaches it.
+
+Phase 1 adds, ahead of `RecoveryUpdater`:
+
+- A **persisted quarantine**: write the plugin id to disk before loading, clear it after. On the next
+  launch, an id still recorded from a launch that never reached `MarkHealthy` is skipped and shown as
+  disabled in the settings pane.
+- **Safe mode**: `StartupHealth.IsCrashLooping` starts the app with all plugins disabled.
+- **Plugin ids in `CrashLog`**: `CrashLog.Install` captures the loaded manifest (id + version) into
+  every entry header. It is the only reporting this app has — there is no telemetry — and without it
+  the first report after phase 4 is "the app crashes" with no way to know a plugin was involved.
 
 ## Localization
 
-Plugins ship the same flat dotted-key JSON the app uses:
+Plugins ship the same flat dotted-key JSON the app uses, namespaced by plugin id at load. Lookup is
+runtime, which costs a dictionary hit per label and buys the thing that matters: a plugin author adds
+a locale by dropping in a file, with no build step and no access to the source generator.
 
-```
-plugins/open-remote/strings/en.json     { "menu.open_remote": "Open on remote" }
-plugins/open-remote/strings/ja.json     { "menu.open_remote": "リモートで開く" }
-```
+Three things the first draft missed, all on the critical path because `copy-paths` was chosen
+specifically to prove pluralization:
 
-Keys are namespaced by plugin at load, so two plugins can both use `menu.open`. Lookup is runtime
-rather than generated, which costs a dictionary hit per label and buys the thing that matters: a
-plugin author adds a locale by dropping in a file, with no build step and no access to our source
-generator.
+- **A CLDR plural resolver is required, and nobody budgeted it.** Measured: `en.json` carries 22
+  plural keys; `files.stage` is `{one, other}` in English, `{one, few, many, other}` in Russian, and
+  `{one, two, few, many, other}` in Arabic. The generator does category selection at build time today.
+  A runtime resolver for seven locales is real work and belongs in the Modules section, not a footnote.
+- **Shared keys cannot move.** `s.CommonOpenFolder` has three call sites, all in `RepoNodeViewModel`
+  (`:253`, `:376`, `:400`), and `repo.node` is not in `shell-tools`' scope. The key must stay in the
+  app *and* be copied into the plugin, breaking the "moved, never rewritten" rule and creating seven
+  locales of drift. **Grep the generated member, not the JSON key, for every candidate before
+  migrating.**
+- **`Locale.Pseudo` is generator-synthesized** and `LocalizationServiceTests` asserts it differs from
+  English for every key. Plugin tables ship no `pseudo.json`, so migrated keys fall back to `en` and
+  silently drop out of the layout-QA pass.
 
-**The bundled plugins are why this gets tested properly.** Converting them means *moving* roughly
-fifteen already-translated keys out of seven `Localization/Strings/*.json` files into the plugins'
-own `strings/` folders. So the plugin localization path ships covering seven real locales including
-RTL Arabic, rather than an English-only stub that quietly breaks the first time someone translates a
-plugin. The migration is mechanical but must be exact — a key moved with its translations intact, not
-re-keyed and re-translated.
+**Revised estimate: 25–30 keys × 7 locales**, not the ~15 first claimed. `shell-tools` and
+`copy-paths` alone account for roughly 19.
+
+**Make the migration two-phase.** For one release, keys stay in the app catalog and the plugin string
+table reads them; only then are they deleted. Reversal is deleting a file rather than reconstructing
+seven translations. The good news worth stating: because `Strings` is source-generated, a key moved
+out while a C# reference survives is a **build** break, not a runtime one.
 
 ## Dogfooding: four built-ins become bundled plugins
 
-Chosen so each proves a different part of the seam, and so together they cover every v1 capability.
-Ordered by what they prove, which is also the order to build them.
+Reordered. The first draft opened with `shell-tools`, which is the least convertible of the four.
 
-**1. `shell-tools` — the shell escapes.**
-Takes over the two toolbar icon buttons (`ActionsToolbar.cs:94,100` — Open Folder, Open Terminal) and
-the "Open in terminal" / "Reveal" / "Open in default app" items on both `file_browser.row` and
-`localchanges.file`. Proves: toolbar contributions, one plugin at three anchors, platform-varying
-labels (Finder / Explorer / file manager), and the shell port.
+**1. `open-remote` — the remote link.** Takes over `RepoNodeViewModel.AddOpenRemoteItem` (`:327`).
+The only true transliteration in the set, so it goes first.
 
-First because these are the only built-in toolbar buttons that are *not* core git verbs. Everything
-else on that toolbar is fetch/pull/push/branch/stash — those stay in C# and should.
+One contract consequence to settle in phase 1: `OpenRemote:339` wraps `GetRemoteNames` +
+`GetRemoteUrl` in `Task.Run` because they are two process spawns, and menu builders may not call git.
+So `MenuTarget` carries a **pre-resolved** `remote_web_url`, and the plugin keeps today's
+always-show-then-error shape — today the item always appears and failure surfaces
+`ReposErrorNoRemoteUrl` or `ReposErrorRemoteUrlNotWeb(rawUrl)`, a formatted message naming the
+offending URL. A hidden item tells the user nothing, so "no item at all for a local-path remote" is
+dropped as a goal. If phase 5 wants forge-specific URL shaping in Lua, the port must expose the *raw*
+remote URL and `Git/RemoteWebUrl.cs` moves into plugin code — at which point those two error strings
+need an owner. Decide it in phase 1; it changes the port signature.
 
-**2. `open-remote` — the remote link.**
-Takes over `RepoNodeViewModel.AddOpenRemoteItem` (`:327`) and the `RemoteWebUrl` derivation behind it.
-Proves: git reads through a port, and conditional contribution (no item at all for a local-path
-remote). Also the most valuable one to have as a plugin: forge-specific URL shapes — PR links, compare
-links, blame permalinks for Azure DevOps or a self-hosted GitLab — are exactly what we do not want
-accumulating in the binary. The on-ramp to forge providers in phase 5.
+**2. `copy-paths` — the clipboard items.** Takes over the three copy items in
+`FileOpsContextMenu.AddCopyItems` and their file-browser counterparts. Proves multi-select context and
+the plural resolver. Second because it is the one that stresses localization hardest.
 
-**3. `copy-paths` — the clipboard items.**
-Takes over the three copy items in `FileOpsContextMenu.AddCopyItems` and their file-browser
-counterparts. Proves: multi-select context (`files[]` with N > 1), and **pluralized strings** through
-the plugin string table — `s.FilesStage(count)` style parameterization has to survive the move to
-runtime lookup, and if it doesn't, better to find out on a copy item than on a third-party plugin.
+**3. `tag-actions` — dynamic submenus and a write.** Takes over `AddTagMenuItems`
+(`CommitsView.cs:1105`). Proves submenus built from context data and the `IPluginRepoActions` intent
+port. Note that these submenus sit **at the top** of the commit menu, so the conversion exercises
+`MenuPlacement.At` — a bundled-only placement no third-party plugin may use. That is a real limit of
+the dogfooding claim and is stated rather than glossed.
 
-**4. `tag-actions` — dynamic submenus and a write.**
-Takes over `AddTagMenuItems` (`CommitsView.cs:1105`): one submenu per tag on the commit, each with
-"Delete Tag…". Proves: submenus built from context data rather than declared statically, and a
-**destructive action** routed through the confirmation dialog. The one that tests the trust boundary,
-since a write from Lua is the case the permission model exists for.
+**4. `shell-tools` — the shell escapes.** Last, because it is the hardest. Takes over the two toolbar
+icon buttons and the open/reveal/terminal items on two menu anchors. It needs the thunk-shaped
+toolbar contract (reactive `enabled`, locale-following tooltip), the intent-shaped `OpenTerminalAt`,
+the separate `IPluginFileLaunch` grant, and an OS-name port for platform-varying labels. Every one of
+those is a contract that phases 1–3 must already have gotten right, which is exactly why it is the
+last conversion and not the first.
 
-**Rules for a conversion.** It is a regression if any of these slip:
-- Strings are *moved*, never rewritten. All seven locales come along.
-- Keyboard shortcuts and icons are identical.
-- The existing tests covering the feature keep passing, adjusted only for where the item comes from.
-- The item appears in its original position, not shunted into a plugin section — bundled plugins may
-  target an exact index; third-party ones may not.
-- Bundled plugins are enabled by default and **can be disabled**. "Open on remote" disappearing when
-  a user turns off `open-remote` is the feature working, not a regression.
+**Rules for a conversion.** It is a regression if any of these slip: strings moved with all seven
+locales (or explicitly duplicated where shared); identical shortcuts and icons; existing tests still
+passing; the item in its original position. Bundled plugins are enabled by default and can be
+disabled — the product decision that "Open on remote" disappears when a user turns off `open-remote`
+is deliberate, and is the reason P2 above expires.
+
+## Testing
+
+The first draft's fake-runtime seam meant the suite would *never* boot an interpreter. Combined with
+phase 4, four shipped features currently covered by a 110-file test project would move to code the
+suite deliberately does not execute. So, in addition to the fake-runtime tests:
+
+- **A bundled-plugin suite that does boot Lua**: loads all four plugins, builds every anchor's menu in
+  all seven locales, and asserts labels, icons, shortcuts and order against the pre-conversion C#
+  output.
+- **A hostile-plugin corpus**: throws, infinite loop, returns nil, returns a 10k-item list, returns a
+  table whose `__index` metamethod errors, returns cyclic data, declares an anchor that doesn't exist.
+  This is the plugin equivalent of `terminal.md`'s recorded byte corpora and is the asset that keeps
+  paying.
+- **A published-binary smoke test.** `GitBench.Tests` does not set `PublishAot`, so it runs under
+  CoreCLR — the same trap `glfw-static-linking.md:53-59` documented. Green Lua tests prove nothing
+  about callbacks, `longjmp` or delegate lifetime in the shipped binary. `release.yml` needs a step
+  that loads the bundled plugins in the published app and exits non-zero on fault.
+
+## API versioning
+
+`plugin.json` carries an integer `api_version`; the host declares a supported range and refuses
+outside it with a message naming the plugin and the range. "Context schemas are permanent" is a policy
+and needs a mechanism behind it. Write the deprecation rule down: adding a field to a context is a
+minor bump; removing or retyping one is a major bump and a load refusal.
+
+Also version the icon name table. `IIconResolver` exposes `LucideIcons` *names* to plugins, so
+renaming or dropping an icon becomes a plugin-visible break.
+
+## Rollback
+
+Per phase, since `glfw-static-linking.md:179-183` sets the house expectation:
+
+- **Phases 0–2** — free. Nothing shipped depends on them.
+- **Phase 3** — free. Contributions are additive; the `Null*` bindings restore the previous behavior.
+- **Phase 4** — the expensive one, entirely because of localization. The two-phase string migration
+  above is what makes it reversible: while keys still live in the app catalog, reverting a conversion
+  is `git revert` plus a plugin folder deletion. **Do not delete a migrated key from the app catalog
+  until the release after its conversion has shipped.**
 
 ## Why not widget trees
 
-The tempting next step is letting Lua build UI directly. Resist it in v1, for a reason specific to
-this codebase: ZGF widgets are records built through a source generator, wired to `Prop<T>`/
-`IReadable<T>` observables and rebuilt as state changes. Bridging that to Lua means marshalling across
-FFI on every rebuild — the exact design that makes plugin systems slow and makes host crashes look
-like plugin bugs.
+ZGF widgets are records built through a source generator, wired to `Prop<T>`/`IReadable<T>` and
+rebuilt as state changes. Bridging that to Lua means marshalling across FFI on every rebuild — the
+design that makes plugin systems slow and makes host crashes look like plugin bugs.
 
-The middle tier, when we want it (phase 6), is a **constrained panel schema**: the plugin returns a
-tree from a small closed vocabulary — `vstack`, `hstack`, `label`, `button`, `list`, `spinner` — which
-we render with our own widgets, refreshed when the plugin says so rather than per frame. Enough for a
-PR list or a CI status pane without exposing the layout engine. It is a strictly larger version of the
-same parse-at-the-boundary design as menus, so nothing in v1 blocks it.
+The middle tier, when we want it (phase 6), is a **constrained panel schema**: a tree from a small
+closed vocabulary — `vstack`, `hstack`, `label`, `button`, `list`, `spinner` — rendered with our own
+widgets and refreshed when the plugin says so. A strictly larger version of the same
+parse-at-the-boundary design, so nothing in v1 blocks it.
 
 ## Tension with `docs/coding_rules.md`
 
-Worth naming rather than discovering in review. Rule 2 says: no implicit registries, no ambient
-pub/sub where the handler set isn't statically knowable. A plugin system is, on its face, both.
+Rule 2 forbids implicit registries and ambient pub/sub whose handler set isn't statically knowable. A
+plugin system is, on its face, both. The resolution:
 
-The resolution is that the handler set is knowable — at load time rather than compile time — and the
-design makes that literal:
+- Contributions are **declared in `plugin.json`**, so the handler set is readable from disk without
+  running anything — the strongest form of "statically knowable" available here.
+- `IMenuExtensions` and friends are **injected**, never located; `PluginBootstrap` returns a value
+  rather than taking the DI `Context`.
+- The registry is **enumerable and attributable**, surfaced in a Plugins settings pane that is a v1
+  deliverable rather than a nicety.
+- Anchors are a **closed enum**; an unknown anchor fails at load with a clear message.
+- Events go through `IPluginEvents`, which owns the subscriptions and drops them on unload.
+- The module boundary is **machine-checked in CI, in both directions** — `Features/**` must not
+  reference `GitBench.Plugins`, and `GitBench.Plugins` must reference only `GitBench.Extensibility`
+  and the BCL.
 
-- `IMenuExtensions` and friends are **injected**, never reached for. A call site that wants
-  contributions says so in its constructor, like every other dependency.
-- The registry is **enumerable and attributable**: at any moment we can list every contribution, its
-  anchor, and the owning plugin. A "Plugins" settings pane showing exactly this is a v1 deliverable,
-  not a nicety — it is what keeps the registry from being opaque.
-- Anchors are a **closed enum**, so the set of extension points is a compile-time fact and a plugin
-  binding to a name we don't have fails at load with a clear error.
-- Event handlers go through `IPluginEvents`, which holds the subscriptions and drops them on unload.
-  No plugin gets a raw `IMessageBus`.
-- The module boundary is **machine-checked in CI**, which is what Rule 2 actually asks for.
-
-What remains genuinely at odds with Rule 2 is that a menu's contents are no longer readable from one
-file. That is the real cost of the feature, accepted knowingly, bounded by the settings pane above.
+What remains genuinely at odds is that a menu's contents are no longer readable from one file. That is
+the real cost, accepted knowingly, bounded by the settings pane.
 
 ## Phases
 
-1. **Contracts + host skeleton.** `GitBench.Extensibility` and `GitBench.Plugins` with a hardcoded
-   fake runtime — no Lua at all. Wire two anchors, the null bindings, the architecture test, and the
-   settings pane. The parse boundary and the registry get their tests here. **This phase is where the
-   seam is proven**, and it is worth being slow about: everything after it is committed to these
-   contracts.
-2. **Lua runtime.** KeraLua, static link, AOT publish verified on all three platforms *before*
-   anything depends on it. A spike that can fail; better to find out before building on top.
-3. **Remaining anchors + toolbar + `shell-tools`.** The first conversion.
-4. **The other three conversions.** By the end, four bundled plugins own their features and the
-   corresponding C# is deleted.
-5. **Commands and keybindings**, then forge providers built on `open-remote`.
+0. **PR-time CI.** Build and run `GitBench.Tests` on push and PR. Prerequisite, not really ours.
+0.5. **The measured Lua-under-AOT spike.** Four questions, numbers, code thrown away, findings
+   published. Contracts do not freeze until this lands.
+1. **Contracts + host skeleton.** `GitBench.Extensibility` and `GitBench.Plugins` with a fake runtime.
+   Two anchors, null bindings, `MenuMerge`, the architecture test, quarantine and safe mode, the
+   settings pane, `api_version`. P1 pinned in CI while P2 still holds.
+2. **The Lua runtime**, against contracts the spike has already validated.
+3. **Remaining anchors, the toolbar, and `open-remote`.** First conversion; strings duplicated, not
+   yet deleted.
+4. **`copy-paths`, `tag-actions`, `shell-tools`**, in that order, with the plural resolver landing
+   ahead of `copy-paths`.
+5. **Commands and keybindings** (consulted *after* built-ins — see below), then forge providers.
 6. **Panel schema**, assistant tools in Lua, diff transformers.
 
-Phase 2 is the technical risk. Phase 1 is the design risk, and the more expensive of the two to get
-wrong.
+On phase 5: plugin commands are consulted **after** the built-in chords, not before. `AppKeybindController`
+consumes Cmd+K, Cmd+B, F5 and Cmd+1..9 unconditionally today, and letting a plugin shadow them by load
+order is a policy decision, not a one-line table row. If overriding is wanted later it gets a visible
+conflict UI.
 
 ## Risks
 
-- **Static-linking Lua under AOT on three platforms** is the one unknown. Mitigated by making it
-  phase 2, standalone, and abandonable — a dynamic per-RID native, like onigwrap, is the fallback.
-- **Startup cost.** Converting built-ins means Lua must load before the first menu opens. Budget it
-  explicitly: plugin load is measured at startup and a slow plugin is named in the log. A Git client
-  that got slower to launch in exchange for a plugin system is a bad trade — Native AOT was chosen
-  for launch speed in the first place.
-- **Context schemas are permanent.** Once a third-party plugin reads `ctx.sha`, we own that name.
-  Hence four anchors in v1, not ten.
-- **Seam decay.** The failure mode is not a bad design, it is a good design eroded by six months of
-  "just import the host here". The architecture test is the only thing that actually prevents it, and
-  it belongs in phase 1 rather than added later.
-- **Menu latency.** A builder that blocks is a menu that stutters. Deadline them, log the offender,
-  drop a plugin that repeatedly overruns.
-- **Trust.** A plugin is code on the user's machine with access to their repositories. The bundled/
-  user split plus the `ToolApproval` reuse is the v1 answer; it is not a sandbox and should never be
-  described as one.
+- **Phase 0.5 comes back negative on question 2 or 3.** Then error containment or the deadline is not
+  available as designed and the contracts change. This is the whole reason the spike precedes the
+  freeze.
+- **Startup regression.** Native AOT was chosen for launch speed; a Git client that got slower to
+  launch in exchange for a plugin system is a bad trade. Lazy loading plus a ≤ 15 ms asserted budget is
+  the mitigation.
+- **Context schemas are permanent.** Once a third-party plugin reads `ctx.sha`, we own it. Hence six
+  anchors, `api_version`, and a written deprecation policy.
+- **Seam decay.** The failure mode is a good design eroded by six months of "just import the host
+  here". The bidirectional architecture test is the only real prevention, which is why phase 0 exists.
+- **The localization migration is the expensive rollback.** Two-phase it, and do not delete a key from
+  the app catalog until the conversion has shipped a release.
+- **Trust.** A plugin is code on the user's machine with access to their repositories. The
+  bundled/untrusted split, the text-chunks-only loader, the removed `debug` library and the separate
+  `IPluginFileLaunch` grant are the v1 answer. It is not a sandbox and should never be described as
+  one. A general consent surface does not exist yet — `ToolApproval` is `internal` to
+  `Features/Assistant` and renders as an assistant transcript row — so building one is real work that
+  belongs in the phase-1 budget.
