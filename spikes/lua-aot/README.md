@@ -1,59 +1,66 @@
 # Phase 0.5 spike — Lua under NativeAOT
 
-Throwaway. Answers the four questions in `docs/plans/lua-plugins.md` § Prerequisites, then gets
-deleted once its findings are written into a `## Findings — Lua under NativeAOT, measured` section.
+Throwaway. Answers the questions in `docs/plans/lua-plugins.md` § Prerequisites, then gets deleted
+once its findings are written into a `## Findings — Lua under NativeAOT, measured` section.
 
-Not in `GitBench.sln` on purpose — it must not affect the app build.
+Everything goes through **our own P/Invoke against a statically linked Lua** — the shape we intend
+to ship, not an approximation. No KeraLua, no NuGet dependency at all.
+
+Not in `GitBench.sln` on purpose: it must not affect the app build.
 
 ## Run it
 
 ```bash
+dotnet run scripts/build-lua.cs                        # builds native/liblua54.a (or lua54.lib)
 cd spikes/lua-aot
-dotnet publish -c Release -r linux-x64    # or win-x64 / osx-arm64 / osx-x64
+dotnet publish -c Release -r linux-x64                 # or win-x64 / osx-arm64 / osx-x64
 ./bin/Release/net10.0/<rid>/publish/LuaAotSpike
 ```
 
-Exits non-zero if any check fails, so it can go straight into CI across all four release RIDs.
-**Publish, don't `dotnet run`** — the whole point is the AOT binary. A CoreCLR run proves nothing
-about callbacks or `longjmp`.
+Exits non-zero if any check fails, so it drops straight into CI across all four release RIDs.
+
+**Publish, don't `dotnet run`.** A CoreCLR run proves nothing about `[UnmanagedCallersOnly]`,
+`longjmp`, or static linking — the three things this exists to test.
 
 ## What each check decides
 
 | Check | Question | What a failure changes |
 |---|---|---|
-| Q1 | Does the native load and execute under AOT? | KeraLua is out; hand-rolled bindings or MoonSharp. |
-| Q2a | Does a managed exception unwinding into Lua kill the process? | If it dies, the "one total wrapper" rule is load-bearing, not tidiness. |
-| Q2b | Is a `lua_error` beneath a managed frame catchable, and does `finally` run? | If `finally` is skipped, no cleanup may live in a frame Lua can `longjmp` past — the host must own all disposal outside the callback. |
-| Q2c | Does `[UnmanagedCallersOnly]` work against the same native? | If this passes where the delegate path struggles, hand-roll the bindings rather than falling back to MoonSharp. |
-| Q3 | Can a count hook abort a runaway script? | If not, the synchronous-with-deadline threading model is unavailable and builders become pure and non-looping. |
+| Q1 | Does a statically linked Lua execute under AOT? | Fall back to a per-RID dynamic native from the same build script. The binding layer is indifferent. |
+| Q2a | Does an `[UnmanagedCallersOnly]` callback work? | The reason for hand-rolling evaporates; reconsider KeraLua or MoonSharp. |
+| Q2b | Does a managed exception unwinding into Lua kill the process? | If it dies, the "one total wrapper" rule is load-bearing, not tidiness. |
+| Q2c | Is a `lua_error` beneath a managed frame catchable, and does `finally` run? | If `finally` is skipped, no cleanup may live in a frame Lua can `longjmp` past — the host owns all disposal outside the callback. |
+| Q3 | Can a count hook abort a runaway script? | If not, the synchronous-with-deadline threading model is unavailable and menu builders become pure and non-looping. |
 | Q4 | What does one interpreter boot cost? | Confirms or replaces the ≤ 15 ms first-paint budget. |
 
-Q2a and Q3 print a `CRASH-IF-ABSENT:` line before the risky call and a `...survived` line after.
-**A first line with no second line is the finding** — the process died, and that is a result, not a
-broken spike.
+Q2b and Q3 print `CRASH-IF-ABSENT:` before the risky call and `...survived` after. **A first line
+with no second line is the finding** — the process died, which is a result, not a broken spike.
 
-## Reading Q2c
+## Verifying the static link
 
-Q2c and Q3 use the hand-rolled `Raw` bindings at the bottom of `Program.cs` rather than KeraLua,
-because KeraLua's API is shaped around instance delegates marshalled with
-`Marshal.GetFunctionPointerForDelegate` and cannot express a static
-`delegate* unmanaged<IntPtr, int>`. That comparison is the point: if the AOT-blessed callback path
-works and the delegate path does not, the engine decision changes from "use KeraLua" to "use
-KeraLua's native, own the bindings".
+A green publish is not evidence. `DirectPInvoke` emits no diagnostic when it fails; it silently
+falls back to a lazy `dlopen`. What makes that survivable here is that we ship no `lua54` dynamic
+library at all, so the fallback has nothing to find and Q1 fails loudly at the first call.
 
-`Raw` is also a fair sample of what owning the P/Invoke surface costs — about a dozen declarations
-here, perhaps forty for the real thing.
-
-## Building the native yourself
-
-If the decision goes to hand-rolled bindings, the native side is cheap. Measured on Ubuntu 24.04,
-clang 18, from a clean `lua/lua` v5.4.7 checkout:
+Check the published binary directly as well:
 
 ```bash
-clang -O2 -shared -fPIC -DLUA_USE_LINUX -o liblua54.so \
-    $(ls *.c | grep -vE '^(lua|luac|onelua)\.c$') -lm
+ldd    publish/LuaAotSpike | grep -i lua   # Linux  — expect no output
+otool -L publish/LuaAotSpike | grep -i lua # macOS  — expect no output
+dumpbin /dependents publish\LuaAotSpike.exe | findstr /i lua   # Windows — expect nothing
 ```
 
-33 source files, no dependencies, **5.2 s**, 313 KB, 154 exported `lua*` symbols. Note the
-`onelua.c` exclusion — it is an amalgamation of the others and duplicate-defines everything if left
-in. This is not the GLFW situation: there is no X11/Wayland/Cocoa tail behind it.
+## Notes for the real thing
+
+- The `DirectPInvoke` / `NativeLibrary` ItemGroup in `LuaAotSpike.csproj` is guarded on
+  `'$(RuntimeIdentifier)' != ''`. Without that guard `$(PublishAot)` is empty and the whole
+  ItemGroup vanishes silently. In the app it must live in an `<Import>` placed *after*
+  `GitBench.csproj`'s first `PropertyGroup`, because MSBuild items do not cross a
+  `ProjectReference` — see `docs/plans/glfw-static-linking.md`.
+- Use `NativeSystemLibrary` / `NativeFramework` rather than `LinkerArg` for any system libraries:
+  `Native.Unix.targets` appends `@(NativeLibrary)` into `@(LinkerArg)` during target execution, so
+  evaluation-time `LinkerArg` entries land ahead of the archives.
+- `onelua.c`, `lua.c` and `luac.c` are excluded from the build. The first is an amalgamation that
+  duplicate-defines the whole API; the other two carry their own `main()`.
+- `scripts/build-lua.cs` prefers `vendor/lua` and otherwise shallow-clones the pinned tag into
+  `.lua-src`. Vendoring under `vendor/lua` — as `vendor/XtermSharp` already is — is the end state.
