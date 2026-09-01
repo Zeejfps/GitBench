@@ -8,7 +8,6 @@ using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Features.Worktrees;
 using GitBench.Infrastructure;
-using LibGit2Sharp;
 using SubmoduleStatus = GitBench.Features.Submodules.SubmoduleStatus;
 
 namespace GitBench.Git;
@@ -89,11 +88,13 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (!IsGitRepo(repo.Path))
                 return new Fetched<CommitSnapshot>.Failed("Not a git repository.");
 
-            using var lg = new Repository(repo.Path);
+            var refs = ReadGraphRefs(repo.Path, out var refErr);
+            if (refs == null)
+                return new Fetched<CommitSnapshot>.Failed(refErr ?? "git for-each-ref failed.");
 
-            var head = ReadHead(lg);
-            var scan = ScanRefs(lg, head);
-            var commits = WalkCommits(lg, scan.RefTips, cap, out var truncated);
+            var head = ReadHead(repo.Path, refs);
+            var scan = ScanRefs(repo.Path, refs, head);
+            var commits = WalkCommits(repo.Path, scan.RefTips, cap, out var truncated);
 
             var (indexBySha, parentShasByIndex) = BuildParentIndex(commits);
             // Remote-only = displayed but not reachable from any local tip. Anchored widens the
@@ -115,117 +116,173 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     // BranchName is null when HEAD is detached; otherwise the checked-out branch's friendly name.
-    private readonly record struct HeadState(Commit? Tip, string? Sha, bool IsDetached, string? BranchName);
+    private readonly record struct HeadState(string? Sha, bool IsDetached, string? BranchName);
+
+    // One commit of the graph walk. Everything the history view draws, and nothing more.
+    private readonly record struct GraphCommit(
+        string Sha, string Summary, string Author, DateTimeOffset When, string[] ParentShas);
+
+    // A local or remote branch tip. UpstreamShort is %(upstream:short) — empty when none is set.
+    private readonly record struct BranchRef(string Name, string Sha, string UpstreamShort);
+
+    // Branch and tag tips in one `for-each-ref` pass. Tags are already peeled to their commit;
+    // ShaByName covers heads and remotes so an upstream can be resolved back to a tip.
+    private sealed class GraphRefs
+    {
+        public readonly List<BranchRef> Local = new();
+        public readonly List<BranchRef> Remote = new();
+        public readonly List<(string Name, string Sha)> Tags = new();
+        public readonly Dictionary<string, string> ShaByName = new(StringComparer.Ordinal);
+        public string? HeadBranch;
+    }
 
     // Ref tips and badges gathered from a repo's branches, HEAD, stashes, and tags.
     private sealed class RefScan
     {
         // Seeds for the topological commit walk (all displayed refs).
-        public readonly List<Commit> RefTips = new();
+        public readonly List<string> RefTips = new();
         // Tips reachable purely from local refs (branches, HEAD, tags, stashes). A displayed
         // commit not reachable from any of these is remote-only.
-        public readonly List<Commit> LocalTips = new();
+        public readonly List<string> LocalTips = new();
         // Remote tips anchored by a local counterpart; widen the "not remote-only" set.
-        public readonly List<Commit> MatchedRemoteTips = new();
+        public readonly List<string> MatchedRemoteTips = new();
         public readonly Dictionary<string, List<RefBadge>> BadgesBySha = new();
         // Remote branches folded into a local branch's synced badge; skipped in the remote pass.
         public readonly HashSet<string> AbsorbedRemotes = new(StringComparer.Ordinal);
     }
 
-    private static HeadState ReadHead(Repository lg)
+    private const char GraphFieldSep = '\x1F';
+
+    // %(*objectname) is the peeled target of an annotated tag and empty for everything else, so
+    // the peeled columns pick the commit a tag ultimately names. %(HEAD) marks the checked-out
+    // branch, which saves a separate symbolic-ref call.
+    private static readonly string GraphRefFormat = string.Join(GraphFieldSep,
+        "%(HEAD)", "%(refname)", "%(objectname)", "%(objecttype)", "%(*objectname)", "%(*objecttype)", "%(upstream:short)");
+
+    private GraphRefs? ReadGraphRefs(string repoPath, out string? error)
     {
-        var tip = lg.Head?.Tip;
-        var isDetached = lg.Info.IsHeadDetached;
-        return new HeadState(tip, tip?.Sha, isDetached, isDetached ? null : lg.Head?.FriendlyName);
+        var output = RunGit(repoPath, out error,
+            "for-each-ref", $"--format={GraphRefFormat}", "refs/heads", "refs/remotes", "refs/tags");
+        if (output == null) return null;
+
+        var refs = new GraphRefs();
+        foreach (var line in output.Split('\n'))
+        {
+            if (line.Length == 0) continue;
+            var parts = line.Split(GraphFieldSep);
+            if (parts.Length < 7) continue;
+
+            var refname = parts[1];
+            var peeledSha = parts[4].Length > 0 ? parts[4] : parts[2];
+            var peeledType = parts[4].Length > 0 ? parts[5] : parts[3];
+
+            if (refname.StartsWith("refs/heads/", StringComparison.Ordinal))
+            {
+                var name = refname["refs/heads/".Length..];
+                refs.Local.Add(new BranchRef(name, parts[2], parts[6]));
+                refs.ShaByName[name] = parts[2];
+                if (parts[0] == "*") refs.HeadBranch = name;
+            }
+            else if (refname.StartsWith("refs/remotes/", StringComparison.Ordinal))
+            {
+                var name = refname["refs/remotes/".Length..];
+                // The symbolic "origin/HEAD" only mirrors the remote's default branch, so it's
+                // pure noise next to the branch it points at.
+                if (name.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
+                refs.Remote.Add(new BranchRef(name, parts[2], parts[6]));
+                refs.ShaByName[name] = parts[2];
+            }
+            else if (refname.StartsWith("refs/tags/", StringComparison.Ordinal)
+                && string.Equals(peeledType, "commit", StringComparison.Ordinal))
+            {
+                refs.Tags.Add((refname["refs/tags/".Length..], peeledSha));
+            }
+        }
+        return refs;
     }
 
-    private static RefScan ScanRefs(Repository lg, HeadState head)
+    // The checked-out branch comes from %(HEAD) in the ref scan; a detached HEAD carries no such
+    // marker, so its sha needs its own read. Empty output means an unborn branch.
+    private HeadState ReadHead(string repoPath, GraphRefs refs)
+    {
+        if (refs.HeadBranch is { } branch)
+            return new HeadState(refs.ShaByName.GetValueOrDefault(branch), false, branch);
+
+        var sha = TrimOrNull(RunGit(repoPath, out _, "rev-parse", "--verify", "--quiet", "HEAD"));
+        return new HeadState(sha, sha != null, null);
+    }
+
+    private RefScan ScanRefs(string repoPath, GraphRefs refs, HeadState head)
     {
         var scan = new RefScan();
-        var (localBranches, remoteBranches) = SplitBranches(lg, scan);
-        CollectMatchedRemoteTips(localBranches, remoteBranches, scan);
-        AddLocalBranchBadges(localBranches, remoteBranches, head, scan);
-        AddRemoteBranchBadges(remoteBranches, scan);
+        SeedBranchTips(refs, scan);
+        CollectMatchedRemoteTips(refs, scan);
+        AddLocalBranchBadges(refs, head, scan);
+        AddRemoteBranchBadges(refs.Remote, scan);
         AddDetachedHeadBadge(head, scan);
-        AddStashRefs(lg, scan);
-        AddTagRefs(lg, scan);
+        AddStashRefs(repoPath, scan);
+        AddTagRefs(refs.Tags, scan);
         SeedHeadTip(head, scan);
         return scan;
     }
 
-    // Split branches by kind so the local pass can absorb matching remotes. Drop the remote's
-    // symbolic "origin/HEAD" ref — it only ever mirrors the remote's default branch, so it's
-    // pure noise next to the branch it points at.
-    private static (List<Branch> Local, List<Branch> Remote) SplitBranches(Repository lg, RefScan scan)
+    private static void SeedBranchTips(GraphRefs refs, RefScan scan)
     {
-        var localBranches = new List<Branch>();
-        var remoteBranches = new List<Branch>();
-        foreach (var branch in lg.Branches)
+        foreach (var local in refs.Local)
         {
-            var tip = branch.Tip;
-            if (tip == null) continue;
-            if (branch.IsRemote)
-            {
-                if (branch.FriendlyName.EndsWith("/HEAD", StringComparison.Ordinal)) continue;
-                remoteBranches.Add(branch);
-            }
-            else
-            {
-                localBranches.Add(branch);
-                scan.LocalTips.Add(tip);
-            }
-            scan.RefTips.Add(tip);
+            scan.LocalTips.Add(local.Sha);
+            scan.RefTips.Add(local.Sha);
         }
-        return (localBranches, remoteBranches);
+        foreach (var remote in refs.Remote)
+            scan.RefTips.Add(remote.Sha);
     }
 
     // Remote branches anchored by a local counterpart (a local branch tracks them, or a local
     // branch shares their short name). The history view's remote filter keeps commits reachable
     // from these — hiding remote-only branches must not hide e.g. origin/main's unpulled commits
     // while main exists locally.
-    private static void CollectMatchedRemoteTips(
-        List<Branch> localBranches, List<Branch> remoteBranches, RefScan scan)
+    private static void CollectMatchedRemoteTips(GraphRefs refs, RefScan scan)
     {
         var localNames = new HashSet<string>(StringComparer.Ordinal);
         var trackedUpstreams = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var local in localBranches)
+        foreach (var local in refs.Local)
         {
-            localNames.Add(local.FriendlyName);
-            if (local.TrackedBranch is { } upstream) trackedUpstreams.Add(upstream.FriendlyName);
+            localNames.Add(local.Name);
+            if (local.UpstreamShort.Length > 0) trackedUpstreams.Add(local.UpstreamShort);
         }
-        foreach (var remote in remoteBranches)
+        foreach (var remote in refs.Remote)
         {
-            if (trackedUpstreams.Contains(remote.FriendlyName) || localNames.Contains(RemoteBranchShortName(remote)))
-                scan.MatchedRemoteTips.Add(remote.Tip!);
+            if (trackedUpstreams.Contains(remote.Name) || localNames.Contains(RemoteBranchShortName(remote.Name)))
+                scan.MatchedRemoteTips.Add(remote.Sha);
         }
     }
 
     // A local branch sitting on the same commit as its tracking remote absorbs that remote into a
     // single "synced" badge; the absorbed remote names go into scan.AbsorbedRemotes so the remote
     // pass skips them. The checked-out branch also absorbs the HEAD badge.
-    private static void AddLocalBranchBadges(
-        List<Branch> localBranches, List<Branch> remoteBranches, HeadState head, RefScan scan)
+    private static void AddLocalBranchBadges(GraphRefs refs, HeadState head, RefScan scan)
     {
-        foreach (var local in localBranches)
+        foreach (var local in refs.Local)
         {
-            var tip = local.Tip!;
-            var isCurrent = !head.IsDetached && local.FriendlyName == head.BranchName;
-            var sync = ResolveBranchSync(local, tip, remoteBranches, scan.AbsorbedRemotes);
-            AddBadge(scan.BadgesBySha, tip.Sha,
-                new RefBadge(local.FriendlyName, RefKind.LocalBranch, IsCurrent: isCurrent, Sync: sync));
+            var isCurrent = !head.IsDetached && local.Name == head.BranchName;
+            var sync = ResolveBranchSync(local, refs, scan.AbsorbedRemotes);
+            AddBadge(scan.BadgesBySha, local.Sha,
+                new RefBadge(local.Name, RefKind.LocalBranch, IsCurrent: isCurrent, Sync: sync));
         }
     }
 
     private static RefSyncState ResolveBranchSync(
-        Branch local, Commit tip, List<Branch> remoteBranches, HashSet<string> absorbedRemotes)
+        BranchRef local, GraphRefs refs, HashSet<string> absorbedRemotes)
     {
-        var tracked = local.TrackedBranch;
-        if (tracked?.Tip != null)
+        // An upstream that is configured but whose ref no longer exists ("gone") resolves to no
+        // sha, and falls through to the same-name heuristic below.
+        if (local.UpstreamShort.Length > 0
+            && refs.ShaByName.TryGetValue(local.UpstreamShort, out var upstreamSha))
         {
             // Equal tips means neither ahead nor behind — in sync. A divergent upstream lives on a
             // different commit (its own row), so only fold the remote badge in when the two are level.
-            var inSync = tracked.Tip.Sha == tip.Sha;
-            if (inSync) absorbedRemotes.Add(tracked.FriendlyName);
+            var inSync = upstreamSha == local.Sha;
+            if (inSync) absorbedRemotes.Add(local.UpstreamShort);
             return inSync ? RefSyncState.InSync : RefSyncState.Diverged;
         }
 
@@ -233,19 +290,21 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         // records no relationship, but if a remote branch with the conventional "<remote>/<name>"
         // name sits on this exact commit it's effectively the same ref — fold it into one synced
         // badge rather than showing a redundant local/remote pair on the same commit.
-        var twin = remoteBranches.FirstOrDefault(r =>
-            r.Tip!.Sha == tip.Sha && RemoteBranchShortName(r) == local.FriendlyName);
-        if (twin == null) return RefSyncState.Untracked;
-        absorbedRemotes.Add(twin.FriendlyName);
-        return RefSyncState.InSync;
+        foreach (var remote in refs.Remote)
+        {
+            if (remote.Sha != local.Sha || RemoteBranchShortName(remote.Name) != local.Name) continue;
+            absorbedRemotes.Add(remote.Name);
+            return RefSyncState.InSync;
+        }
+        return RefSyncState.Untracked;
     }
 
-    private static void AddRemoteBranchBadges(List<Branch> remoteBranches, RefScan scan)
+    private static void AddRemoteBranchBadges(List<BranchRef> remoteBranches, RefScan scan)
     {
         foreach (var remote in remoteBranches)
         {
-            if (scan.AbsorbedRemotes.Contains(remote.FriendlyName)) continue;
-            AddBadge(scan.BadgesBySha, remote.Tip!.Sha, new RefBadge(remote.FriendlyName, RefKind.RemoteBranch));
+            if (scan.AbsorbedRemotes.Contains(remote.Name)) continue;
+            AddBadge(scan.BadgesBySha, remote.Sha, new RefBadge(remote.Name, RefKind.RemoteBranch));
         }
     }
 
@@ -259,33 +318,28 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     // Walk stash tips too so stash commits show in the graph. Stash entries are merge commits whose
     // parents include the index/untracked snapshots — those get pulled in via the topological walk.
-    private static void AddStashRefs(Repository lg, RefScan scan)
+    private void AddStashRefs(string repoPath, RefScan scan)
     {
-        var stashIndex = 0;
-        foreach (var stash in lg.Stashes)
+        foreach (var stash in LoadStashes(repoPath))
         {
-            var tip = stash.WorkTree;
-            if (tip == null) { stashIndex++; continue; }
-            scan.RefTips.Add(tip);
-            scan.LocalTips.Add(tip);
-            var label = StripStashPrefix(stash.Message ?? string.Empty);
-            if (string.IsNullOrEmpty(label)) label = $"stash@{{{stashIndex}}}";
-            AddBadge(scan.BadgesBySha, tip.Sha, new RefBadge(label, RefKind.Stash));
-            stashIndex++;
+            scan.RefTips.Add(stash.Sha);
+            scan.LocalTips.Add(stash.Sha);
+            var label = stash.Subject;
+            if (string.IsNullOrEmpty(label)) label = $"stash@{{{stash.Index}}}";
+            AddBadge(scan.BadgesBySha, stash.Sha, new RefBadge(label, RefKind.Stash));
         }
     }
 
     // Tags peel to the commit they ultimately reference (annotated tags point at a tag object,
     // lightweight ones directly at the commit). Adding the commit as a ref tip keeps tagged
     // history reachable even when no branch points at it.
-    private static void AddTagRefs(Repository lg, RefScan scan)
+    private static void AddTagRefs(List<(string Name, string Sha)> tags, RefScan scan)
     {
-        foreach (var tag in lg.Tags)
+        foreach (var (name, sha) in tags)
         {
-            if (tag.PeeledTarget is not Commit tagged) continue;
-            scan.RefTips.Add(tagged);
-            scan.LocalTips.Add(tagged);
-            AddBadge(scan.BadgesBySha, tagged.Sha, new RefBadge(tag.FriendlyName, RefKind.Tag));
+            scan.RefTips.Add(sha);
+            scan.LocalTips.Add(sha);
+            AddBadge(scan.BadgesBySha, sha, new RefBadge(name, RefKind.Tag));
         }
     }
 
@@ -295,49 +349,66 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // the graph, making committed work look lost.
     private static void SeedHeadTip(HeadState head, RefScan scan)
     {
-        if (head.Tip == null) return;
-        scan.RefTips.Add(head.Tip);
-        scan.LocalTips.Add(head.Tip);
+        if (head.Sha == null) return;
+        scan.RefTips.Add(head.Sha);
+        scan.LocalTips.Add(head.Sha);
     }
 
-    private static List<Commit> WalkCommits(Repository lg, List<Commit> refTips, int cap, out bool truncated)
-    {
-        var filter = new CommitFilter
-        {
-            IncludeReachableFrom = refTips,
-            SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
-        };
+    // Per-commit fields for the graph, NUL-separated. Every one of them is single-line by git's
+    // own rules (idents forbid newlines, %s is a subject), so a record is exactly one line.
+    private const string GraphLogFormat = "%H%x00%s%x00%an%x00%aI%x00%cI%x00%P";
 
-        var commits = new List<Commit>(cap);
+    // The tips go in on stdin rather than the command line: a repo with a few hundred branches
+    // would otherwise build an argv near the platform limit. `--topo-order` matches the walk the
+    // graph is drawn against — no parent before its children, commit time breaking ties. Asking
+    // for one commit past the cap is what tells us the history was truncated.
+    private List<GraphCommit> WalkCommits(string repoPath, List<string> refTips, int cap, out bool truncated)
+    {
         truncated = false;
-        foreach (var c in lg.Commits.QueryBy(filter))
+        var commits = new List<GraphCommit>(cap);
+        if (refTips.Count == 0) return commits;
+
+        var result = _runner.Run(
+            repoPath,
+            new[] { "log", "--topo-order", $"--max-count={cap + 1}", $"--format={GraphLogFormat}", "--stdin" },
+            GitProcessRunner.GitLaunch.Direct,
+            stdin: string.Join('\n', refTips) + "\n");
+        if (!result.Ok) return commits;
+
+        foreach (var line in result.Stdout.Split('\n'))
         {
-            if (commits.Count >= cap)
-            {
-                truncated = true;
-                break;
-            }
-            commits.Add(c);
+            if (line.Length == 0) continue;
+            if (commits.Count >= cap) { truncated = true; break; }
+            var parts = line.Split('\0');
+            if (parts.Length < 6) continue;
+            commits.Add(new GraphCommit(
+                parts[0],
+                parts[1],
+                parts[2],
+                ParseIsoDateOrDefault(parts[3].Length > 0 ? parts[3] : parts[4]),
+                parts[5].Length == 0
+                    ? Array.Empty<string>()
+                    : parts[5].Split(' ', StringSplitOptions.RemoveEmptyEntries)));
         }
         return commits;
     }
 
     private static (Dictionary<string, int> IndexBySha, string[][] ParentShasByIndex) BuildParentIndex(
-        List<Commit> commits)
+        List<GraphCommit> commits)
     {
         var indexBySha = new Dictionary<string, int>(commits.Count);
         var parentShasByIndex = new string[commits.Count][];
         for (var i = 0; i < commits.Count; i++)
         {
             indexBySha[commits[i].Sha] = i;
-            parentShasByIndex[i] = commits[i].Parents.Select(p => p.Sha).ToArray();
+            parentShasByIndex[i] = commits[i].ParentShas;
         }
         return (indexBySha, parentShasByIndex);
     }
 
     // A commit is auxiliary (off the main lane graph) when it's remote-only or a stash tip.
     private static LaneAssigner.Input[] BuildLaneInputs(
-        List<Commit> commits, string[][] parentShasByIndex, bool[] localReachable,
+        List<GraphCommit> commits, string[][] parentShasByIndex, bool[] localReachable,
         Dictionary<string, List<RefBadge>> badgesBySha)
     {
         var inputs = new LaneAssigner.Input[commits.Count];
@@ -359,7 +430,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     private static CommitNode[] BuildNodes(
-        List<Commit> commits, LaneAssigner.Input[] inputs, LaneAssignment[] assignments,
+        List<GraphCommit> commits, LaneAssigner.Input[] inputs, LaneAssignment[] assignments,
         Dictionary<string, List<RefBadge>> badgesBySha, bool[] localReachable, bool[] anchoredReachable)
     {
         var nodes = new CommitNode[commits.Count];
@@ -371,9 +442,9 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             nodes[i] = new CommitNode(
                 Sha: c.Sha,
-                Summary: c.MessageShort ?? string.Empty,
-                Author: c.Author?.Name ?? string.Empty,
-                When: c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
+                Summary: c.Summary,
+                Author: c.Author,
+                When: c.When,
                 ParentShas: (IReadOnlyList<string>)inputs[i].ParentShas,
                 Lane: a.Lane,
                 HasIncomingAtCommitLane: a.HasIncomingAtCommitLane,
@@ -402,11 +473,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // Marks every commit reachable from the seed tips. The walk is topologically sorted (a
     // commit precedes its parents), so a single forward pass propagates the mark to ancestors.
     private static bool[] ComputeReachability(
-        Dictionary<string, int> indexBySha, string[][] parentShasByIndex, IEnumerable<Commit> seeds)
+        Dictionary<string, int> indexBySha, string[][] parentShasByIndex, IEnumerable<string> seeds)
     {
         var reachable = new bool[parentShasByIndex.Length];
         foreach (var seed in seeds)
-            if (indexBySha.TryGetValue(seed.Sha, out var si))
+            if (indexBySha.TryGetValue(seed, out var si))
                 reachable[si] = true;
         for (var i = 0; i < parentShasByIndex.Length; i++)
         {
@@ -431,45 +502,39 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (!IsGitRepo(repo.Path))
                 return new Fetched<ReviewStack>.Failed("Not a git repository.");
 
-            using var lg = new Repository(repo.Path);
-
-            var headCommit = lg.Lookup<Commit>(headRef);
-            if (headCommit == null)
+            var headSha = ResolveCommit(repo.Path, headRef);
+            if (headSha == null)
                 return new Fetched<ReviewStack>.Failed($"Could not resolve '{headRef}'.");
-            var baseCommit = lg.Lookup<Commit>(baseRef);
-            if (baseCommit == null)
+            var baseSha = ResolveCommit(repo.Path, baseRef);
+            if (baseSha == null)
                 return new Fetched<ReviewStack>.Failed($"Could not resolve '{baseRef}'.");
 
-            var filter = new CommitFilter
-            {
-                IncludeReachableFrom = headCommit,
-                ExcludeReachableFrom = baseCommit,
-                FirstParentOnly = true,
-                SortBy = CommitSortStrategies.Topological | CommitSortStrategies.Time,
-            };
-
             // Churn for the rows' "+N −M": commit-vs-first-parent counts, fetched for the whole
-            // range in one `git log --numstat` pass. Not Compare<Patch> — like GetDiff, patch
-            // building would go through the callback marshalling path that crashes NativeAOT.
-            var churnBySha = LoadRangeChurn(repo.Path, baseCommit.Sha, headCommit.Sha, cap);
+            // range in one `git log --numstat` pass.
+            var churnBySha = LoadRangeChurn(repo.Path, baseSha, headSha, cap);
 
             var increments = new List<ReviewIncrement>();
             var truncated = false;
-            foreach (var c in lg.Commits.QueryBy(filter))
-            {
-                if (increments.Count >= cap)
-                {
-                    truncated = true;
-                    break;
-                }
+            var walk = RunGit(repo.Path, out var walkErr,
+                "log", "--first-parent", "--topo-order", $"--max-count={cap + 1}",
+                $"--format={GraphLogFormat}", $"{baseSha}..{headSha}");
+            if (walk == null)
+                return new Fetched<ReviewStack>.Failed(walkErr ?? "git log failed.");
 
-                churnBySha.TryGetValue(c.Sha, out var churn);
+            foreach (var line in walk.Split('\n'))
+            {
+                if (line.Length == 0) continue;
+                if (increments.Count >= cap) { truncated = true; break; }
+                var parts = line.Split('\0');
+                if (parts.Length < 6) continue;
+
+                churnBySha.TryGetValue(parts[0], out var churn);
                 increments.Add(new ReviewIncrement(
-                    c.Sha,
-                    ShortSha(c.Sha),
-                    c.MessageShort ?? string.Empty,
-                    c.Author?.Name ?? string.Empty,
-                    c.Author?.When ?? c.Committer?.When ?? DateTimeOffset.MinValue,
+                    parts[0],
+                    ShortSha(parts[0]),
+                    parts[1],
+                    parts[2],
+                    ParseIsoDateOrDefault(parts[3].Length > 0 ? parts[3] : parts[4]),
                     FilesChanged: churn.Files, Added: churn.Added, Removed: churn.Removed));
             }
 
@@ -477,10 +542,10 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             return new ReviewStack(
                 repo.Id,
-                baseCommit.Sha,
-                headCommit.Sha,
-                ShortSha(baseCommit.Sha),
-                ShortSha(headCommit.Sha),
+                baseSha,
+                headSha,
+                ShortSha(baseSha),
+                ShortSha(headSha),
                 increments,
                 truncated);
         }
@@ -554,12 +619,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     // "origin/main" -> "main"; "origin/feature/x" -> "feature/x". Remote names can't contain
     // slashes, so the local-branch name is everything after the first segment.
-    private static string RemoteBranchShortName(Branch remote)
+    private static string RemoteBranchShortName(string name)
     {
-        var name = remote.FriendlyName;
         var slash = name.IndexOf('/');
         return slash >= 0 ? name[(slash + 1)..] : name;
     }
+
+    // Peels any ref, sha or revision expression to a commit sha. Null when it doesn't name one,
+    // which is how the review stack reports an unresolvable base/head.
+    private string? ResolveCommit(string repoPath, string rev)
+        => TrimOrNull(RunGit(repoPath, out _, "rev-parse", "--verify", "--quiet", $"{rev}^{{commit}}"));
 
     private static void AddBadge(Dictionary<string, List<RefBadge>> map, string sha, RefBadge badge)
     {
@@ -743,7 +812,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     // Seed with all configured remotes so groups still show even when a remote has no branches
-    // yet (matches the prior LibGit2Sharp behavior). Returns null on a genuine git failure.
+    // yet. Returns null on a genuine git failure.
     private Dictionary<string, List<RemoteBranchEntry>>? SeedRemoteGroups(string repoPath, out string? error)
     {
         var remotesOut = RunGit(repoPath, out error, "remote");
@@ -3445,10 +3514,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private GitOutcome RunGitCheckout(string repoPath, IReadOnlyList<string> gitArgs)
         => ToOutcome(_runner.Run(repoPath, gitArgs), "git checkout");
 
-    // LibGit2Sharp's Patch API drives diff output through native→managed callbacks (per
-    // hunk and per line), which the NativeAOT-generated marshalling stubs for GitDiffHunk
-    // NRE on. Everything else in libgit2 we use is fine; only diff goes through this
-    // callback path. Shell out to `git diff` for diffs to sidestep it entirely.
     public DiffResult GetDiff(Repo repo, string path, DiffSide side, string? commitSha = null, string? baseSha = null)
     {
         try
