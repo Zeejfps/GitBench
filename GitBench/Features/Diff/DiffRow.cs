@@ -26,19 +26,20 @@ internal abstract record DiffRow
     /// has <c>ShowUnfold</c> set and an exact <c>HiddenCount</c>.</summary>
     public sealed record Tear(GapBar Gap) : DiffRow;
     /// <summary>
-    /// Pre-formatted strings (line numbers stringified, tabs expanded) so per-frame draw
-    /// work doesn't allocate. <see cref="Spans"/> carries syntax-highlight color runs in the
-    /// same tab-expanded column space as <see cref="Text"/>; null/empty means plain rendering.
-    /// <see cref="Emphasis"/> carries intra-line changed-character ranges in that same column
-    /// space (a background concern, separate from the foreground <see cref="Spans"/>); null for
-    /// context lines, unpaired adds/removes, and full rewrites. <see cref="Fold"/> is set only on
-    /// the two rows a foldable declaration touches.
+    /// Pre-formatted for drawing (line numbers stringified, tabs expanded) so per-frame draw
+    /// work doesn't allocate. <see cref="Text"/> keeps the raw file line beside its expansion, so
+    /// the clipboard and the assistant can have the characters the file actually holds.
+    /// <see cref="Spans"/> carries syntax-highlight color runs in the tab-expanded column space;
+    /// null/empty means plain rendering. <see cref="Emphasis"/> carries intra-line
+    /// changed-character ranges in that same column space (a background concern, separate from the
+    /// foreground <see cref="Spans"/>); null for context lines, unpaired adds/removes, and full
+    /// rewrites. <see cref="Fold"/> is set only on the two rows a foldable declaration touches.
     /// </summary>
     public sealed record Line(
         DiffLineKind Kind,
         string OldNumber,
         string NewNumber,
-        string Text,
+        DiffLineText Text,
         IReadOnlyList<TokenSpan>? Spans = null,
         IReadOnlyList<CharRange>? Emphasis = null,
         FoldMark? Fold = null) : DiffRow;

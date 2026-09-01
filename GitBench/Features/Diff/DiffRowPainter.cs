@@ -363,7 +363,7 @@ internal sealed class DiffRowPainter
         // Above the emphasis wash (same layer, drawn after) and below the text, which stays
         // fully legible through the selection tint.
         if (p.Selection is { } selection)
-            DrawSelection(c, l.Text, selection, textLeft, p.Bottom, p.Z + 1);
+            DrawSelection(c, l.Text.Expanded, selection, textLeft, p.Bottom, p.Z + 1);
         DrawLineText(c, l, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
 
         // After the text and outside it: the chip is chrome standing in for the body, not part of
@@ -392,7 +392,7 @@ internal sealed class DiffRowPainter
 
     /// <summary>Where a collapsed fold's pill sits on its row, for drawing it and for clicking it.</summary>
     public (float X, float Width) FoldChipBounds(DiffRow.Line l, float textLeft) => (
-        textLeft + DiffText.VisualCells(l.Text) * MonoAdvance,
+        textLeft + DiffText.VisualCells(l.Text.Expanded) * MonoAdvance,
         DiffText.VisualCells(DiffRowSet.FoldChipText) * MonoAdvance);
 
     private const float FoldChipInsetY = 1f;
@@ -402,8 +402,8 @@ internal sealed class DiffRowPainter
     private void DrawSelection(
         ICanvas c, string text, in DiffRowSelection selection, float textLeft, float bottom, int z)
     {
-        var startCell = DiffText.CellsBefore(text, selection.StartChar);
-        var endCell = DiffText.CellsBefore(text, selection.EndChar);
+        var startCell = DiffText.CellsBefore(text, selection.StartChar.Value);
+        var endCell = DiffText.CellsBefore(text, selection.EndChar.Value);
         var width = (endCell - startCell) * MonoAdvance;
         if (selection.IncludesEol) width += MonoAdvance * SelectionEolWidth;
         if (width <= 0f) return;
@@ -511,7 +511,8 @@ internal sealed class DiffRowPainter
         var emBg = l.Kind == DiffLineKind.Removed
             ? Styles.LineRemovedEmphasisBackground
             : Styles.LineAddedEmphasisBackground;
-        var len = l.Text.Length;
+        var text = l.Text.Expanded;
+        var len = text.Length;
         var col = 0;
         var cx = textLeft;
         foreach (var rng in ranges)
@@ -522,8 +523,8 @@ internal sealed class DiffRowPainter
             var start = Math.Clamp(rng.Start, col, len);
             var end = Math.Clamp(rng.Start + rng.Length, start, len);
             if (start > col)
-                cx += c.MeasureTextWidth(l.Text.Substring(col, start - col), MonoStartStyle);
-            var w = c.MeasureTextWidth(l.Text.Substring(start, end - start), MonoStartStyle);
+                cx += c.MeasureTextWidth(text.Substring(col, start - col), MonoStartStyle);
+            var w = c.MeasureTextWidth(text.Substring(start, end - start), MonoStartStyle);
             c.DrawRect(new DrawRectInputs
             {
                 Position = new RectF(cx, bottom, w, LineHeight),
@@ -540,15 +541,15 @@ internal sealed class DiffRowPainter
     // each run sits at textStart + column*advance and every DrawText batches into one GPU draw.
     private void DrawLineText(ICanvas c, DiffRow.Line l, float textStart, float bottom, float maxRight, int z)
     {
+        var text = l.Text.Expanded;
         var spans = l.Spans;
         if (spans == null || spans.Count == 0)
         {
-            DrawMonoText(c, l.Text, textStart, bottom, Math.Max(0f, maxRight - textStart),
+            DrawMonoText(c, text, textStart, bottom, Math.Max(0f, maxRight - textStart),
                 Styles.LineText, TextAlignment.Start, z);
             return;
         }
 
-        var text = l.Text;
         var len = text.Length;
         var col = 0;
         var x = textStart;

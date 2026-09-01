@@ -10,11 +10,16 @@ namespace GitBench.Tests;
 public class DiffTextSelectionTests
 {
     private static DiffRow.Line Line(string text, DiffLineKind kind = DiffLineKind.Context)
-        => new(kind, "1", "1", text);
+        => new(kind, "1", "1", DiffLineText.Of(text));
 
     private static DiffRow Bar() => new DiffRow.HunkSeparator("@@ -1,2 +1,2 @@", null);
 
-    private static DiffTextPos At(int row, int ch) => new(row, ch);
+    private static DiffTextPos At(int row, int ch) => new(row, new ExpandedColumn(ch));
+
+    private static ExpandedColumn Col(int ch) => new(ch);
+
+    private static DiffRowSelection Span(int from, int to, bool includesEol) =>
+        new(Col(from), Col(to), includesEol);
 
     // ---- copy text ----
 
@@ -81,14 +86,14 @@ public class DiffTextSelectionTests
         var selection = new DiffSelectionModel();
         selection.SetRange(null, At(0, 3), At(2, 2));
 
-        Assert.True(selection.TryRowSpan(null, 0, textLength: 8, out var first));
-        Assert.Equal(new DiffRowSelection(3, 8, IncludesEol: true), first);
+        Assert.True(selection.TryRowSpan(null, 0, textLength: Col(8), out var first));
+        Assert.Equal(Span(3, 8, true), first);
 
-        Assert.True(selection.TryRowSpan(null, 1, textLength: 5, out var middle));
-        Assert.Equal(new DiffRowSelection(0, 5, IncludesEol: true), middle);
+        Assert.True(selection.TryRowSpan(null, 1, textLength: Col(5), out var middle));
+        Assert.Equal(Span(0, 5, true), middle);
 
-        Assert.True(selection.TryRowSpan(null, 2, textLength: 9, out var last));
-        Assert.Equal(new DiffRowSelection(0, 2, IncludesEol: false), last);
+        Assert.True(selection.TryRowSpan(null, 2, textLength: Col(9), out var last));
+        Assert.Equal(Span(0, 2, false), last);
     }
 
     [Fact]
@@ -96,8 +101,8 @@ public class DiffTextSelectionTests
     {
         var selection = new DiffSelectionModel();
         selection.SetRange(null, At(1, 0), At(1, 4));
-        Assert.False(selection.TryRowSpan(null, 0, 4, out _));
-        Assert.False(selection.TryRowSpan(null, 2, 4, out _));
+        Assert.False(selection.TryRowSpan(null, 0, Col(4), out _));
+        Assert.False(selection.TryRowSpan(null, 2, Col(4), out _));
     }
 
     // An empty line swallowed by a multi-line selection still shows a sliver, so the highlight
@@ -107,8 +112,8 @@ public class DiffTextSelectionTests
     {
         var selection = new DiffSelectionModel();
         selection.SetRange(null, At(0, 0), At(2, 1));
-        Assert.True(selection.TryRowSpan(null, 1, textLength: 0, out var span));
-        Assert.Equal(new DiffRowSelection(0, 0, IncludesEol: true), span);
+        Assert.True(selection.TryRowSpan(null, 1, textLength: Col(0), out var span));
+        Assert.Equal(Span(0, 0, true), span);
     }
 
     [Fact]
@@ -117,7 +122,7 @@ public class DiffTextSelectionTests
         var selection = new DiffSelectionModel();
         selection.Begin(null, At(0, 3));
         Assert.False(selection.HasRange);
-        Assert.False(selection.TryRowSpan(null, 0, 8, out _));
+        Assert.False(selection.TryRowSpan(null, 0, Col(8), out _));
     }
 
     // ---- scope isolation (the review list stacks many files on one surface) ----
@@ -138,7 +143,7 @@ public class DiffTextSelectionTests
     {
         var selection = new DiffSelectionModel();
         selection.SetRange("a.cs", At(0, 0), At(0, 4));
-        Assert.False(selection.TryRowSpan("b.cs", 0, 4, out _));
+        Assert.False(selection.TryRowSpan("b.cs", 0, Col(4), out _));
     }
 
     // ---- anchor / focus ordering ----

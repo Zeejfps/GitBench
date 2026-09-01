@@ -54,7 +54,7 @@ public class FoldingTests(CodeIntelFixture fixture)
         Assert.DoesNotContain(rows, r => Text(r) == "    }");
 
         var chip = Assert.Single(rows.OfType<DiffRow.Line>().Where(r => r.Fold is { Chip: true }));
-        Assert.Equal("    void Login(string user)", chip.Text);
+        Assert.Equal("    void Login(string user)", chip.Text.Raw);
         Assert.True(chip.Fold!.Value.Chevron, "the one visible row carries both the toggle and the chip");
     }
 
@@ -114,7 +114,8 @@ public class FoldingTests(CodeIntelFixture fixture)
             .First(r => r.row is DiffRow.Line { Fold.Chip: true }).index;
 
         var text = DiffSelectionModel.BuildCopyText(
-            set.Rows, new DiffTextPos(0, 0), new DiffTextPos(chipRow, 5), set.HiddenAfter);
+            set.Rows, new DiffTextPos(0, default), new DiffTextPos(chipRow, new ExpandedColumn(5)),
+            set.HiddenAfter);
 
         Assert.DoesNotContain("Check(user);", text);
     }
@@ -149,8 +150,8 @@ public class FoldingTests(CodeIntelFixture fixture)
 
     private static string TextAt(IReadOnlyList<DiffRow> rows, int index) => Text(rows[index]);
 
-    private static string Text(DiffRow row) => row is DiffRow.Line line ? line.Text : string.Empty;
+    private static string Text(DiffRow row) => row is DiffRow.Line line ? line.Text.Raw : string.Empty;
 
     private static int NumberOf(IReadOnlyList<DiffRow> rows, string text) =>
-        int.Parse(rows.OfType<DiffRow.Line>().Single(r => r.Text == text).NewNumber);
+        int.Parse(rows.OfType<DiffRow.Line>().Single(r => r.Text.Raw == text).NewNumber);
 }

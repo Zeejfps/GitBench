@@ -15,18 +15,18 @@ public sealed class DiffSelectionQuoteTests
     private static readonly IReadOnlyList<DiffRow> Rows =
     [
         new DiffRow.HunkSeparator("@@ -40,4 +40,4 @@", null),
-        new DiffRow.Line(DiffLineKind.Context, "40", "40", "public void Run()"),
-        new DiffRow.Line(DiffLineKind.Context, "41", "41", "{"),
-        new DiffRow.Line(DiffLineKind.Removed, "42", "", "    Legacy();"),
-        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();"),
-        new DiffRow.Line(DiffLineKind.Context, "43", "43", "}"),
+        new DiffRow.Line(DiffLineKind.Context, "40", "40", DiffLineText.Of("public void Run()")),
+        new DiffRow.Line(DiffLineKind.Context, "41", "41", DiffLineText.Of("{")),
+        new DiffRow.Line(DiffLineKind.Removed, "42", "", DiffLineText.Of("    Legacy();")),
+        new DiffRow.Line(DiffLineKind.Added, "", "42", DiffLineText.Of("    Modern();")),
+        new DiffRow.Line(DiffLineKind.Context, "43", "43", DiffLineText.Of("}")),
     ];
 
     private static DiffSelectionQuote Quote(int fromRow, int toRow, string path = "src/Runner.cs") =>
         DiffSelectionQuote.Build(
             Rows,
-            new DiffTextPos(fromRow, 0),
-            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.Length : 0),
+            new DiffTextPos(fromRow, default),
+            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
             path)!;
 
     // A line number tells the model where to look; the declaration tells it what it is looking at.
@@ -79,8 +79,8 @@ public sealed class DiffSelectionQuoteTests
     private static DiffSelectionQuote QuoteWith(int fromRow, int toRow, DiffAnnotations annotations) =>
         DiffSelectionQuote.Build(
             Rows,
-            new DiffTextPos(fromRow, 0),
-            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.Length : 0),
+            new DiffTextPos(fromRow, default),
+            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
             "src/Runner.cs",
             annotations)!;
 
@@ -131,8 +131,8 @@ public sealed class DiffSelectionQuoteTests
     [Fact]
     public void TheText_IsWhatTheCopyPipelineProduces()
     {
-        var start = new DiffTextPos(0, 0);
-        var end = new DiffTextPos(5, 1);
+        var start = new DiffTextPos(0, default);
+        var end = new DiffTextPos(5, new ExpandedColumn(1));
 
         var quote = DiffSelectionQuote.Build(Rows, start, end, "src/Runner.cs")!;
 
@@ -144,7 +144,7 @@ public sealed class DiffSelectionQuoteTests
     [Fact]
     public void ASelectionOverNoCodeLines_IsNoQuestion()
     {
-        Assert.Null(DiffSelectionQuote.Build(Rows, new DiffTextPos(0, 0), new DiffTextPos(0, 0), "x.cs"));
+        Assert.Null(DiffSelectionQuote.Build(Rows, new DiffTextPos(0, default), new DiffTextPos(0, default), "x.cs"));
     }
 
     [Fact]

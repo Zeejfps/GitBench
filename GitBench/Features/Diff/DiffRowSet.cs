@@ -45,9 +45,9 @@ internal sealed class DiffRowSet
     /// when it landed would jog every line of text sideways a beat after the file opened.</summary>
     public bool FoldColumn { get; private set; }
 
-    /// <summary>The text a collapsed fold swallowed after the given row, newline-joined, or null
-    /// when that row hides nothing. Copying across a fold re-inflates from this — text the reader
-    /// could not see is still text they selected.</summary>
+    /// <summary>The raw text a collapsed fold swallowed after the given row, newline-joined, or
+    /// null when that row hides nothing. Copying across a fold re-inflates from this — text the
+    /// reader could not see is still text they selected.</summary>
     public string? HiddenAfter(int rowIndex) =>
         _hiddenAfter.TryGetValue(rowIndex, out var text) ? text : null;
 
@@ -182,9 +182,13 @@ internal sealed class DiffRowSet
     {
         // Tab-expand once: each row needs it for Text, and emphasis is computed in the same
         // tab-expanded column space so it aligns with Spans and the glyph grid.
+        var texts = new DiffLineText[h.Lines.Count];
         var expanded = new string[h.Lines.Count];
         for (var j = 0; j < h.Lines.Count; j++)
-            expanded[j] = DiffText.ExpandTabs(h.Lines[j].Text);
+        {
+            texts[j] = DiffLineText.Of(h.Lines[j].Text);
+            expanded[j] = texts[j].Expanded;
+        }
         var emphasis = DiffOptions.IntraLineHighlightingEnabled
             ? IntraLineDiff.ForHunk(h.Lines, expanded)
             : null;
@@ -192,7 +196,7 @@ internal sealed class DiffRowSet
         for (var j = 0; j < h.Lines.Count; j++)
         {
             var l = h.Lines[j];
-            var text = expanded[j];
+            var text = texts[j];
             // Spans are produced over tab-expanded text (same ExpandTabs), so columns align.
             var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
             if (spans != null && spans.Count == 0) spans = null;
@@ -203,7 +207,7 @@ internal sealed class DiffRowSet
                 text,
                 spans,
                 emphasis?[j]));
-            var cells = DiffText.VisualCells(text);
+            var cells = DiffText.VisualCells(text.Expanded);
             if (cells > MaxRowCells) MaxRowCells = cells;
         }
     }
@@ -279,13 +283,13 @@ internal sealed class DiffRowSet
         for (var n = from; n <= to; n++)
         {
             if (n < 1 || n > expansion.Lines.Count) continue;
-            var text = DiffText.ExpandTabs(expansion.Lines[n - 1]);
+            var text = DiffLineText.Of(expansion.Lines[n - 1]);
             // DiffHighlight tokenizes the whole new-side file, so spans exist beyond the hunks.
             var spans = highlight?.ForLine(DiffLineKind.Context, n + oldNewDelta, n);
             if (spans != null && spans.Count == 0) spans = null;
             _rows.Add(new DiffRow.Line(
                 DiffLineKind.Context, (n + oldNewDelta).ToString(), n.ToString(), text, spans));
-            var cells = DiffText.VisualCells(text);
+            var cells = DiffText.VisualCells(text.Expanded);
             if (cells > MaxRowCells) MaxRowCells = cells;
         }
     }
@@ -308,7 +312,7 @@ internal sealed class DiffRowSet
             if (plan.IsHidden(lineNumber)) continue;
 
             var kind = ff.AddedLineNumbers.Contains(lineNumber) ? DiffLineKind.Added : DiffLineKind.Context;
-            var text = DiffText.ExpandTabs(ff.Lines[i]);
+            var text = DiffLineText.Of(ff.Lines[i]);
             // Context kind drives ForLine to the new-side spans for every row (added or not),
             // which is exactly what the full after-side file needs.
             var spans = ff.Annotations?.Highlight?.ForLine(DiffLineKind.Context, null, lineNumber);
@@ -318,7 +322,7 @@ internal sealed class DiffRowSet
             var mark = plan.MarkAt(lineNumber);
             _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, spans, em, mark));
 
-            var cells = DiffText.VisualCells(text);
+            var cells = DiffText.VisualCells(text.Expanded);
             if (mark is { Chip: true }) cells += DiffText.VisualCells(FoldChipText);
             if (cells > MaxRowCells) MaxRowCells = cells;
 
@@ -423,15 +427,14 @@ internal sealed class DiffRowSet
             };
         }
 
-        // Tab-expanded like the visible rows, so re-inflated text lines up with what was copied
-        // around it.
+        // Raw, like the visible rows' own raw text: this is only ever re-inflated into a copy.
         private static string Swallowed(IReadOnlyList<string> lines, int from, int to)
         {
             var text = new System.Text.StringBuilder();
             for (var line = from; line <= to; line++)
             {
                 if (text.Length > 0) text.Append('\n');
-                text.Append(DiffText.ExpandTabs(lines[line - 1]));
+                text.Append(lines[line - 1]);
             }
             return text.ToString();
         }

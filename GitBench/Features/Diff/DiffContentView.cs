@@ -551,7 +551,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         DiffRowSelection? selection = null;
         if (rows[rowIndex] is DiffRow.Line line
-            && _selection.TryRowSpan(null, rowIndex, line.Text.Length, out var span))
+            && _selection.TryRowSpan(null, rowIndex, line.Text.End, out var span))
             selection = span;
 
         _painter.DrawRow(c, rows[rowIndex], new DiffRowPaint(
@@ -826,7 +826,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_lineHeight <= 0 || !_list.Position.ContainsPoint(point)) return null;
         var rowIndex = HitTestListRow(point);
         if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
-        return new DiffTextHit(null, new DiffTextPos(rowIndex, CharIndexAt(line.Text, point.X)));
+        return new DiffTextHit(null, new DiffTextPos(rowIndex, CharIndexAt(line.Text.Expanded, point.X)));
     }
 
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
@@ -835,16 +835,16 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var rowIndex = Math.Clamp(RawRowIndex(point), 0, _rowSet.Rows.Count - 1);
         // A drag crossing a banner or a hunk bar keeps extending through it; those rows carry no
         // selectable text, so they contribute nothing to the copy.
-        var text = _rowSet.Rows[rowIndex] is DiffRow.Line line ? line.Text : string.Empty;
+        var text = _rowSet.Rows[rowIndex] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
         return new DiffTextHit(null, new DiffTextPos(rowIndex, CharIndexAt(text, point.X)));
     }
 
-    private int CharIndexAt(string text, float x)
+    private ExpandedColumn CharIndexAt(string text, float x)
     {
-        if (_monoAdvance <= 0) return 0;
+        if (_monoAdvance <= 0) return default;
         var origin = DiffRowPainter.LineTextOriginX(
             _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn);
-        return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
+        return new ExpandedColumn(DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance));
     }
 
     private MouseCursor CursorAt(PointF point)

@@ -3,11 +3,11 @@ using System.Text;
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// A caret position in a diff's row stream: a row index and a character offset into that row's
-/// text. Offsets are into the pre-formatted <see cref="DiffRow.Line.Text"/> — tabs already
-/// expanded — so a position means the same thing to the hit-test, the painter, and the clipboard.
+/// A caret position in a diff's row stream: a row index and a column into that row's rendered
+/// text. The column is in expanded space — the space the hit-test and the painter share — and the
+/// clipboard maps it back to the file's own characters through <see cref="DiffLineText"/>.
 /// </summary>
-internal readonly record struct DiffTextPos(int Row, int Char) : IComparable<DiffTextPos>
+internal readonly record struct DiffTextPos(int Row, ExpandedColumn Char) : IComparable<DiffTextPos>
 {
     public int CompareTo(DiffTextPos other) =>
         Row != other.Row ? Row.CompareTo(other.Row) : Char.CompareTo(other.Char);
@@ -25,10 +25,11 @@ internal readonly record struct DiffTextPos(int Row, int Char) : IComparable<Dif
 /// </summary>
 internal readonly record struct DiffTextHit(object? Scope, DiffTextPos Pos);
 
-/// <summary>The slice of one row's text that is selected, in character offsets.
+/// <summary>The selected slice of one row, in the expanded columns the painter draws in.
 /// <see cref="IncludesEol"/> marks a row whose line break falls inside the selection, so the
 /// painter can extend the highlight past the last glyph the way editors do.</summary>
-internal readonly record struct DiffRowSelection(int StartChar, int EndChar, bool IncludesEol);
+internal readonly record struct DiffRowSelection(
+    ExpandedColumn StartChar, ExpandedColumn EndChar, bool IncludesEol);
 
 /// <summary>
 /// Anchor/focus text selection over a diff's rows, scoped to one file. Held by a diff surface
@@ -91,7 +92,7 @@ internal sealed class DiffSelectionModel
     /// The selected slice of the given row, or false when the row lies outside the selection.
     /// <paramref name="textLength"/> clamps positions captured against a since-rebuilt row.
     /// </summary>
-    public bool TryRowSpan(object? scope, int row, int textLength, out DiffRowSelection span)
+    public bool TryRowSpan(object? scope, int row, ExpandedColumn textLength, out DiffRowSelection span)
     {
         span = default;
         if (!HasRange || !Equals(Scope, scope)) return false;
@@ -100,8 +101,8 @@ internal sealed class DiffSelectionModel
         var end = End;
         if (row < start.Row || row > end.Row) return false;
 
-        var from = row == start.Row ? Math.Clamp(start.Char, 0, textLength) : 0;
-        var to = row == end.Row ? Math.Clamp(end.Char, 0, textLength) : textLength;
+        var from = row == start.Row ? Clamp(start.Char, textLength) : default;
+        var to = row == end.Row ? Clamp(end.Char, textLength) : textLength;
         if (to < from) return false;
 
         var includesEol = row < end.Row;
@@ -113,13 +114,14 @@ internal sealed class DiffSelectionModel
 
     /// <summary>
     /// The selected text, newline-joined. Only <see cref="DiffRow.Line"/> rows contribute: the
-    /// clipboard gets the code as it would appear in the file, without the line-number gutters,
-    /// the +/- glyph, or the "@@" separator bars a selection may drag across.
+    /// clipboard gets the code as it would appear in the file — raw text, tabs and all, without
+    /// the line-number gutters, the +/- glyph, or the "@@" separator bars a selection may drag
+    /// across.
     /// </summary>
-    /// <param name="hiddenAfter">What a collapsed fold swallowed after a row, if anything. A
-    /// selection that runs past such a row covers the body it hides, so the body has to come with
-    /// it — text the reader could not see is still text they selected, and dropping it silently
-    /// would be a copy that lies about the file.</param>
+    /// <param name="hiddenAfter">The raw text a collapsed fold swallowed after a row, if anything.
+    /// A selection that runs past such a row covers the body it hides, so the body has to come
+    /// with it — text the reader could not see is still text they selected, and dropping it
+    /// silently would be a copy that lies about the file.</param>
     public static string BuildCopyText(
         IReadOnlyList<DiffRow> rows, DiffTextPos start, DiffTextPos end, Func<int, string?>? hiddenAfter = null)
     {
@@ -130,12 +132,12 @@ internal sealed class DiffSelectionModel
         {
             if (rows[row] is not DiffRow.Line line) continue;
             var text = line.Text;
-            var from = row == start.Row ? Math.Clamp(start.Char, 0, text.Length) : 0;
-            var to = row == end.Row ? Math.Clamp(end.Char, 0, text.Length) : text.Length;
+            var from = row == start.Row ? Clamp(start.Char, text.End) : default;
+            var to = row == end.Row ? Clamp(end.Char, text.End) : text.End;
             if (to < from) continue;
 
             if (!first) sb.Append('\n');
-            sb.Append(text, from, to - from);
+            sb.Append(text.RawSlice(from, to));
             first = false;
 
             // Only when the selection actually continues past this row: ending on a fold header
@@ -151,8 +153,8 @@ internal sealed class DiffSelectionModel
     {
         if (rows.Count == 0) return null;
         var lastRow = rows.Count - 1;
-        var lastLength = rows[lastRow] is DiffRow.Line line ? line.Text.Length : 0;
-        return (new DiffTextPos(0, 0), new DiffTextPos(lastRow, lastLength));
+        var lastLength = rows[lastRow] is DiffRow.Line line ? line.Text.End : default;
+        return (new DiffTextPos(0, default), new DiffTextPos(lastRow, lastLength));
     }
 
     /// <summary>The word around a position, or the whole run of whitespace it sits in. Falls back
@@ -162,16 +164,18 @@ internal sealed class DiffSelectionModel
         if (rows.Count == 0 || pos.Row < 0 || pos.Row >= rows.Count || rows[pos.Row] is not DiffRow.Line line)
             return (pos, pos);
 
-        var text = line.Text;
-        if (text.Length == 0) return (new DiffTextPos(pos.Row, 0), new DiffTextPos(pos.Row, 0));
+        var text = line.Text.Expanded;
+        if (text.Length == 0) return (new DiffTextPos(pos.Row, default), new DiffTextPos(pos.Row, default));
 
-        var at = Math.Clamp(pos.Char, 0, text.Length - 1);
+        var at = Math.Clamp(pos.Char.Value, 0, text.Length - 1);
         var kind = ClassOf(text[at]);
         var from = at;
         while (from > 0 && ClassOf(text[from - 1]) == kind) from--;
         var to = at + 1;
         while (to < text.Length && ClassOf(text[to]) == kind) to++;
-        return (new DiffTextPos(pos.Row, from), new DiffTextPos(pos.Row, to));
+        return (
+            new DiffTextPos(pos.Row, new ExpandedColumn(from)),
+            new DiffTextPos(pos.Row, new ExpandedColumn(to)));
     }
 
     /// <summary>The whole line a position sits on, including its trailing newline when another
@@ -179,9 +183,12 @@ internal sealed class DiffSelectionModel
     public static (DiffTextPos Start, DiffTextPos End) LineSpan(IReadOnlyList<DiffRow> rows, DiffTextPos pos)
     {
         if (rows.Count == 0 || pos.Row < 0 || pos.Row >= rows.Count) return (pos, pos);
-        var length = rows[pos.Row] is DiffRow.Line line ? line.Text.Length : 0;
-        return (new DiffTextPos(pos.Row, 0), new DiffTextPos(pos.Row, length));
+        var length = rows[pos.Row] is DiffRow.Line line ? line.Text.End : default;
+        return (new DiffTextPos(pos.Row, default), new DiffTextPos(pos.Row, length));
     }
+
+    private static ExpandedColumn Clamp(ExpandedColumn column, ExpandedColumn end) =>
+        new(Math.Clamp(column.Value, 0, end.Value));
 
     private enum CharClass { Whitespace, Word, Symbol }
 

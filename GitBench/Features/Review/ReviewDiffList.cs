@@ -1022,7 +1022,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         if (s == null || local == 0 || s.RowSet.Rows.Count == 0) return null;
         if (s.RowSet.Rows[local - 1] is not DiffRow.Line line) return null;
 
-        return new DiffTextHit(s.File.Path, new DiffTextPos(local - 1, CharIndexAt(s, line.Text, point.X)));
+        return new DiffTextHit(
+            s.File.Path, new DiffTextPos(local - 1, CharIndexAt(s, line.Text.Expanded, point.X)));
     }
 
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
@@ -1036,7 +1037,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var row = (int)MathF.Floor((contentY - bodyTop) / LineHeight());
         row = Math.Clamp(row, 0, s.RowSet.Rows.Count - 1);
 
-        var text = s.RowSet.Rows[row] is DiffRow.Line line ? line.Text : string.Empty;
+        var text = s.RowSet.Rows[row] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
         return new DiffTextHit(s.File.Path, new DiffTextPos(row, CharIndexAt(s, text, point.X)));
     }
 
@@ -1051,12 +1052,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         return s != null && local > 0 ? s : null;
     }
 
-    private int CharIndexAt(Section s, string text, float x)
+    private ExpandedColumn CharIndexAt(Section s, string text, float x)
     {
-        if (_monoAdvance <= 0) return 0;
+        if (_monoAdvance <= 0) return default;
         var origin = DiffRowPainter.LineTextOriginX(
             CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter, s.RowSet.FoldColumn);
-        return DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance);
+        return new ExpandedColumn(DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance));
     }
 
     // ---- drawing ----
@@ -1130,7 +1131,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             var row = s.RowSet.Rows[local - 1];
             DiffRowSelection? selection = null;
             if (row is DiffRow.Line line
-                && _selection.TryRowSpan(s.File.Path, local - 1, line.Text.Length, out var span))
+                && _selection.TryRowSpan(s.File.Path, local - 1, line.Text.End, out var span))
                 selection = span;
 
             _painter.DrawRow(c, row, new DiffRowPaint(

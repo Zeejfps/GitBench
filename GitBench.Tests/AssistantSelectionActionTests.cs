@@ -20,11 +20,11 @@ public sealed class AssistantSelectionActionTests
 {
     private static readonly IReadOnlyList<DiffRow> Rows =
     [
-        new DiffRow.Line(DiffLineKind.Added, "", "42", "    Modern();"),
+        new DiffRow.Line(DiffLineKind.Added, "", "42", DiffLineText.Of("    Modern();")),
     ];
 
     private static DiffSelectionQuote Quote() =>
-        DiffSelectionQuote.Build(Rows, new DiffTextPos(0, 0), new DiffTextPos(0, 13), "src/Runner.cs")!;
+        DiffSelectionQuote.Build(Rows, new DiffTextPos(0, default), new DiffTextPos(0, new ExpandedColumn(13)), "src/Runner.cs")!;
 
     private static (List<AskAssistantAboutSelectionMessage> Asks, IReadOnlyList<RepoBarContextMenu.Item> Items) Menu()
     {
