@@ -27,12 +27,6 @@ internal sealed class GitProcessRunner
     // the resolver never blocks on git here after the first read per repo.
     public Func<string, IReadOnlyList<string>>? IdentityPrefixResolver { get; set; }
 
-    // Direct = the git executable straight (reads: fast, no shell, no auth needed).
-    // Shell  = on macOS, the user's interactive login shell sources their rc files first so
-    //          ssh-agent / credential helpers / Homebrew PATH are visible (mutations that may
-    //          hit the network). On Windows/Linux both modes invoke git directly.
-    public enum GitLaunch { Direct, Shell }
-
     public readonly record struct GitResult(int ExitCode, string Stdout, string Stderr, bool Started = true)
     {
         public bool Ok => Started && ExitCode == 0;
@@ -62,7 +56,6 @@ internal sealed class GitProcessRunner
     public GitResult Run(
         string workingDir,
         IReadOnlyList<string> args,
-        GitLaunch launch = GitLaunch.Shell,
         string? stdin = null,
         Action<ProcessStartInfo>? configure = null,
         bool inject = true)
@@ -72,7 +65,7 @@ internal sealed class GitProcessRunner
         // from this op's scope.
         var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
-        var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args, prefix) : BuildShellPsi(args, workingDir, prefix);
+        var psi = BuildPsi(workingDir, args, prefix);
         if (stdin != null)
         {
             psi.RedirectStandardInput = true;
@@ -107,12 +100,11 @@ internal sealed class GitProcessRunner
         string workingDir,
         IReadOnlyList<string> args,
         int maxBytes,
-        GitLaunch launch = GitLaunch.Direct,
         bool inject = true)
     {
         var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
-        var psi = launch == GitLaunch.Direct ? BuildDirectPsi(workingDir, args, prefix) : BuildShellPsi(args, workingDir, prefix);
+        var psi = BuildPsi(workingDir, args, prefix);
 
         using var proc = Process.Start(psi);
         if (proc == null) return (-1, [], false, false);
@@ -144,7 +136,7 @@ internal sealed class GitProcessRunner
     {
         var prefix = inject ? IdentityPrefixResolver?.Invoke(workingDir) : null;
         using var _ = _activity.Begin(workingDir);
-        var psi = BuildShellPsi(args, workingDir, prefix);
+        var psi = BuildPsi(workingDir, args, prefix);
 
         using var proc = Process.Start(psi);
         if (proc == null) return (-1, string.Empty, false);
@@ -168,20 +160,20 @@ internal sealed class GitProcessRunner
     }
 
     // Start info for a long-lived plumbing process the caller drives itself — see GitBlobReader,
-    // which keeps a `cat-file --batch` alive per repo. Same executable, PATH and environment as
-    // every other Direct invocation, plus stdin so requests can be fed in. No identity prefix and
+    // which keeps a `cat-file --batch` alive per repo. Same executable and environment as every
+    // other invocation, plus stdin so requests can be fed in. No identity prefix and
     // no activity scope: neither applies to a process that only ever reads objects, and holding a
     // scope open for the process's whole life would suppress the FSW events we do want.
     public ProcessStartInfo BuildLongRunningPsi(string workingDir, IReadOnlyList<string> args)
     {
-        var psi = BuildDirectPsi(workingDir, args);
+        var psi = BuildPsi(workingDir, args);
         psi.RedirectStandardInput = true;
         return psi;
     }
 
     // ────────── process start info ──────────
 
-    private static ProcessStartInfo BuildDirectPsi(string workingDir, IReadOnlyList<string> args, IReadOnlyList<string>? prefix = null)
+    private static ProcessStartInfo BuildPsi(string workingDir, IReadOnlyList<string> args, IReadOnlyList<string>? prefix = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -196,83 +188,22 @@ internal sealed class GitProcessRunner
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         // Even with git itself resolved to an absolute path, git spawns helpers (git-lfs for
         // the filter-process, credential helpers) via PATH — the GUI app's bare PATH lacks
         // /usr/local/bin & /opt/homebrew/bin, which surfaces as "git-lfs: command not found" +
         // "the remote end hung up unexpectedly" on every status/diff in an LFS repo.
-        var loginPath = LoginShellPath();
-        if (loginPath != null) psi.Environment["PATH"] = loginPath;
+        foreach (var (key, value) in LoginEnvironment()) psi.Environment[key] = value;
+        foreach (var key in UninheritedEnvKeys) psi.Environment.Remove(key);
+        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         // Identity `-c key=value` overrides must come before the subcommand.
         if (prefix != null) foreach (var a in prefix) psi.ArgumentList.Add(a);
         foreach (var a in args) psi.ArgumentList.Add(a);
         return psi;
     }
 
-    // On macOS, GUI apps launched outside a terminal (Finder, IDE, Launch Services) don't
-    // inherit the user's shell environment. Anything set up in .zprofile / .zshrc — the
-    // Homebrew/path_helper PATH (so post-checkout hooks find git-lfs), 1Password's
-    // SSH_AUTH_SOCK, ssh-agent, GIT_SSH_COMMAND — is invisible to the child process. We run
-    // git through the user's shell with `-l -i` so BOTH login files (.zprofile, where PATH /
-    // path_helper live) and interactive files (.zshrc, where ssh-agent usually lives) are
-    // sourced. Each user-typed arg is shell-quoted so metacharacters can't break or inject.
-    private static ProcessStartInfo BuildShellPsi(IReadOnlyList<string> gitArgs, string workingDir, IReadOnlyList<string>? prefix = null)
-    {
-        var psi = new ProcessStartInfo
-        {
-            WorkingDirectory = workingDir,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            // Git emits UTF-8 (diff bodies are the file's raw bytes); without this .NET decodes
-            // with the OS default code page (CP1252 on Windows), which turns CJK into mojibake.
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
-
-        if (OperatingSystem.IsMacOS())
-        {
-            var shell = Environment.GetEnvironmentVariable("SHELL");
-            if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
-            psi.FileName = shell;
-            psi.ArgumentList.Add("-l");
-            psi.ArgumentList.Add("-i");
-            psi.ArgumentList.Add("-c");
-            var sb = new StringBuilder("GIT_TERMINAL_PROMPT=0 git");
-            // Identity `-c key=value` overrides must come before the subcommand. Each is a single
-            // arg (e.g. the whole `core.sshCommand=ssh -i ... -o IdentitiesOnly=yes`), so quoting
-            // each independently keeps its embedded spaces inside one shell word.
-            if (prefix != null)
-                foreach (var a in prefix)
-                {
-                    sb.Append(' ');
-                    sb.Append(SingleQuoteShellArg(a));
-                }
-            foreach (var a in gitArgs)
-            {
-                sb.Append(' ');
-                sb.Append(SingleQuoteShellArg(a));
-            }
-            psi.ArgumentList.Add(sb.ToString());
-        }
-        else
-        {
-            psi.FileName = "git";
-            if (prefix != null) foreach (var a in prefix) psi.ArgumentList.Add(a);
-            foreach (var a in gitArgs) psi.ArgumentList.Add(a);
-        }
-
-        return psi;
-    }
-
-    private static string SingleQuoteShellArg(string s)
-        => "'" + s.Replace("'", "'\\''") + "'";
-
     // macOS GUI apps launched outside a terminal don't inherit the user's shell PATH, so
     // Homebrew git (/opt/homebrew/bin/git, /usr/local/bin/git) is invisible to a bare
-    // Process.Start("git"). Ask the login shell where git lives, once, and reuse the
+    // Process.Start("git"). Find it on the login shell's PATH, once, and reuse the
     // absolute path everywhere.
     private static string? _gitExecutable;
     private static readonly object _gitExecutableLock = new();
@@ -291,30 +222,12 @@ internal sealed class GitProcessRunner
     {
         if (!OperatingSystem.IsMacOS()) return "git";
 
-        try
-        {
-            var shell = Environment.GetEnvironmentVariable("SHELL");
-            if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
-            var psi = new ProcessStartInfo
+        if (LoginEnvironment().TryGetValue("PATH", out var path))
+            foreach (var dir in path.Split(':', StringSplitOptions.RemoveEmptyEntries))
             {
-                FileName = shell,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add("-l");
-            psi.ArgumentList.Add("-c");
-            psi.ArgumentList.Add("command -v git");
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                var path = proc.StandardOutput.ReadToEnd().Trim();
-                proc.WaitForExit();
-                if (path.Length > 0 && File.Exists(path)) return path;
+                var candidate = Path.Combine(dir, "git");
+                if (File.Exists(candidate)) return candidate;
             }
-        }
-        catch { /* fall through to defaults */ }
 
         foreach (var p in new[] { "/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git" })
             if (File.Exists(p)) return p;
@@ -368,20 +281,33 @@ internal sealed class GitProcessRunner
         }
     }
 
-    private static string? _loginShellPath;
-    private static readonly object _loginShellPathLock = new();
+    private const string EnvSnapshotMarker = "@@gitbench-env@@";
+    private const int EnvSnapshotTimeoutMs = 10_000;
 
-    private static string? LoginShellPath()
+    private static readonly string[] UninheritedEnvKeys =
     {
-        if (!OperatingSystem.IsMacOS()) return null;
-        lock (_loginShellPathLock)
+        "PWD", "OLDPWD", "SHLVL", "_",
+        "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_PREFIX", "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+    };
+
+    private static IReadOnlyDictionary<string, string>? _loginEnvironment;
+    private static readonly object _loginEnvironmentLock = new();
+
+    private static IReadOnlyDictionary<string, string> LoginEnvironment()
+    {
+        if (_loginEnvironment != null) return _loginEnvironment;
+        lock (_loginEnvironmentLock)
         {
-            return _loginShellPath ??= ResolveLoginShellPath();
+            return _loginEnvironment ??= ResolveLoginEnvironment();
         }
     }
 
-    private static string ResolveLoginShellPath()
+    private static Dictionary<string, string> ResolveLoginEnvironment()
     {
+        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (!OperatingSystem.IsMacOS()) return env;
+
         try
         {
             var shell = Environment.GetEnvironmentVariable("SHELL");
@@ -389,28 +315,60 @@ internal sealed class GitProcessRunner
             var psi = new ProcessStartInfo
             {
                 FileName = shell,
+                RedirectStandardInput = true,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
             psi.ArgumentList.Add("-l");
+            psi.ArgumentList.Add("-i");
             psi.ArgumentList.Add("-c");
-            psi.ArgumentList.Add("printf %s \"$PATH\"");
+            psi.ArgumentList.Add($"printf '%s' '{EnvSnapshotMarker}'; env -0");
+
             using var proc = Process.Start(psi);
             if (proc != null)
             {
-                var path = proc.StandardOutput.ReadToEnd().Trim();
-                proc.WaitForExit();
-                if (path.Length > 0) return path;
+                proc.StandardInput.Close();
+                var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+                var stderrTask = proc.StandardError.ReadToEndAsync();
+                if (proc.WaitForExit(EnvSnapshotTimeoutMs))
+                {
+                    ParseEnvSnapshot(stdoutTask.GetAwaiter().GetResult(), env);
+                    stderrTask.GetAwaiter().GetResult();
+                }
+                else
+                {
+                    try { proc.Kill(entireProcessTree: true); } catch { }
+                }
             }
         }
-        catch { /* fall through to defaults */ }
+        catch { /* fall through to the PATH-only default */ }
 
-        var current = Environment.GetEnvironmentVariable("PATH");
-        var extras = new[] { "/opt/homebrew/bin", "/usr/local/bin" }
-            .Where(p => current == null || !current.Split(':').Contains(p));
-        return string.Join(':', extras.Prepend(current ?? string.Empty).Where(s => s.Length > 0));
+        if (!env.ContainsKey("PATH"))
+        {
+            var current = Environment.GetEnvironmentVariable("PATH");
+            var extras = new[] { "/opt/homebrew/bin", "/usr/local/bin" }
+                .Where(p => current == null || !current.Split(':').Contains(p));
+            env["PATH"] = string.Join(':', extras.Prepend(current ?? string.Empty).Where(s => s.Length > 0));
+        }
+
+        return env;
+    }
+
+    private static void ParseEnvSnapshot(string output, Dictionary<string, string> env)
+    {
+        var start = output.LastIndexOf(EnvSnapshotMarker, StringComparison.Ordinal);
+        if (start < 0) return;
+
+        foreach (var entry in output[(start + EnvSnapshotMarker.Length)..].Split('\0'))
+        {
+            var eq = entry.IndexOf('=');
+            if (eq <= 0) continue;
+            env[entry[..eq]] = entry[(eq + 1)..];
+        }
     }
 
     // ────────── error-text extraction ──────────

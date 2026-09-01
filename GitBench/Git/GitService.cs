@@ -66,7 +66,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         var result = _runner.Run(
             repoPath,
             new[] { "rev-parse", "--git-common-dir" },
-            GitProcessRunner.GitLaunch.Direct,
             inject: false);
         return result.Ok ? FirstLine(result.Stdout) : null;
     }
@@ -371,7 +370,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         var result = _runner.Run(
             repoPath,
             new[] { "log", "--topo-order", $"--max-count={cap + 1}", $"--format={GraphLogFormat}", "--stdin" },
-            GitProcessRunner.GitLaunch.Direct,
             stdin: string.Join('\n', refTips) + "\n");
         if (!result.Ok) return commits;
 
@@ -1146,8 +1144,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         detail = null;
         var result = _runner.Run(
             workingDir,
-            new[] { "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" },
-            GitProcessRunner.GitLaunch.Direct);
+            new[] { "status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all", "--ignored=no", "--ignore-submodules=dirty" });
         if (result.Ok) return result.Stdout;
         // One-line headline for the inline placeholder; full block for the on-demand dialog.
         // The detail block keeps any trailing "fatal:"/"hint:" lines that FirstLineError drops.
@@ -1173,8 +1170,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (!IsGitRepo(repo.Path)) return GitStatusSummary.Unknown;
             var result = _runner.Run(
                 repo.Path,
-                new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "--ignored=no", "--ignore-submodules=dirty" },
-                GitProcessRunner.GitLaunch.Direct);
+                new[] { "status", "--porcelain=v2", "--branch", "--untracked-files=normal", "--ignored=no", "--ignore-submodules=dirty" });
             return result.Ok ? ParseStatusSummary(result.Stdout) : null;
         }
         catch
@@ -1199,8 +1195,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var head = _runner.Run(
                 repo.Path,
-                new[] { "symbolic-ref", "--quiet", "--short", "HEAD" },
-                GitProcessRunner.GitLaunch.Direct);
+                new[] { "symbolic-ref", "--quiet", "--short", "HEAD" });
             // --quiet turns "HEAD isn't a branch" into a silent non-zero exit; anything on stderr
             // means the read failed rather than that HEAD is detached.
             if (!head.Ok)
@@ -1211,8 +1206,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var refs = _runner.Run(
                 repo.Path,
-                new[] { "for-each-ref", "--format=%(refname:short)\t%(upstream)\t%(upstream:track)", "refs/heads/" + branch },
-                GitProcessRunner.GitLaunch.Direct);
+                new[] { "for-each-ref", "--format=%(refname:short)\t%(upstream)\t%(upstream:track)", "refs/heads/" + branch });
             if (!refs.Ok) return null;
 
             return ParseSyncSummary(branch, refs.Stdout);
@@ -1710,7 +1704,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     // — `git show :n:path` exits non-zero, which we treat as "this side doesn't exist".
     private string? ShowStage(string repoPath, int stage, string path)
     {
-        var result = _runner.Run(repoPath, new[] { "show", $":{stage}:{path}" }, GitProcessRunner.GitLaunch.Direct);
+        var result = _runner.Run(repoPath, new[] { "show", $":{stage}:{path}" });
         return result.Ok ? result.Stdout : null;
     }
 
@@ -1739,7 +1733,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             if (cached) args.Add("--cached");
             if (reverse) args.Add("--reverse");
             args.Add("-");
-            var result = _runner.Run(repo.Path, args, GitProcessRunner.GitLaunch.Direct, patch);
+            var result = _runner.Run(repo.Path, args, patch);
             return result.Ok ? GitOutcome.Ok : new GitOutcome.Failed(result.BlockError("git apply"));
         });
 
@@ -2354,7 +2348,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     }
 
     private bool HasResolvableHead(string repoPath)
-        => _runner.Run(repoPath, new[] { "rev-parse", "--verify", "HEAD" }, GitProcessRunner.GitLaunch.Direct).Ok;
+        => _runner.Run(repoPath, new[] { "rev-parse", "--verify", "HEAD" }).Ok;
 
     public GitOutcome FastForwardBranch(Repo repo, string localBranch, string remoteName, string remoteBranch, Action<string>? onLine = null)
         => RunOperation(repo, () =>
@@ -2442,8 +2436,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         if (!IsGitRepo(repo.Path)) return false;
         var result = _runner.Run(
             repo.Path,
-            new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant },
-            GitProcessRunner.GitLaunch.Direct);
+            new[] { "merge-base", "--is-ancestor", maybeAncestor, descendant });
         return result.ExitCode == 0;
     }
 
@@ -2614,8 +2607,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             // dialog quietly skips the preview rather than blocking the user from merging.
             var result = _runner.Run(
                 repo.Path,
-                new[] { "merge-tree", "--write-tree", "--no-messages", "HEAD", sourceRef },
-                GitProcessRunner.GitLaunch.Direct);
+                new[] { "merge-tree", "--write-tree", "--no-messages", "HEAD", sourceRef });
             if (!result.Started) return new MergePreviewResult(MergePreviewState.Unknown, "Failed to start git.");
 
             return result.ExitCode switch
@@ -2679,8 +2671,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
             var result = _runner.Run(
                 repo.Path,
-                new[] { "merge-tree", "--write-tree", "--no-messages", targetRef, "HEAD" },
-                GitProcessRunner.GitLaunch.Direct);
+                new[] { "merge-tree", "--write-tree", "--no-messages", targetRef, "HEAD" });
             if (!result.Started) return new RebasePreviewResult(RebasePreviewState.Unknown, "Failed to start git.");
 
             return result.ExitCode switch
@@ -3464,7 +3455,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             args.AddRange(preArgs);
             args.Add("--pathspec-from-file=-");
             args.Add("--pathspec-file-nul");
-            return _runner.Run(repoPath, args, GitProcessRunner.GitLaunch.Direct, string.Join('\0', paths));
+            return _runner.Run(repoPath, args, string.Join('\0', paths));
         }
 
         var last = new GitProcessRunner.GitResult(0, string.Empty, string.Empty);
@@ -3474,7 +3465,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             args.AddRange(preArgs);
             args.Add("--");
             args.AddRange(batch);
-            last = _runner.Run(repoPath, args, GitProcessRunner.GitLaunch.Direct);
+            last = _runner.Run(repoPath, args);
             if (!last.Ok) return last;
         }
         return last;
@@ -3697,7 +3688,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             case GitBlobReader.Status.Missing: return null;
         }
 
-        var result = _runner.Run(workingDir, new[] { "show", revPath }, GitProcessRunner.GitLaunch.Direct);
+        var result = _runner.Run(workingDir, new[] { "show", revPath });
         return result.Ok ? result.Stdout : null;
     }
 
@@ -3759,7 +3750,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private string? RunGitInternal(string workingDir, bool allowExitCode1, out string? error, string[] args, bool inject = true)
     {
         error = null;
-        var result = _runner.Run(workingDir, args, GitProcessRunner.GitLaunch.Direct, inject: inject);
+        var result = _runner.Run(workingDir, args, inject: inject);
         if (result.Ok || (allowExitCode1 && result.ExitCode == 1)) return result.Stdout;
         error = result.FirstLineError("git");
         return null;
@@ -3811,8 +3802,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     {
         var result = _runner.Run(
             repo.Path,
-            new[] { "check-ignore", "--no-index", "-q", "--", relativePath },
-            GitProcessRunner.GitLaunch.Direct);
+            new[] { "check-ignore", "--no-index", "-q", "--", relativePath });
         return result.Ok;
     }
 
@@ -3823,7 +3813,6 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         var result = _runner.Run(
             repo.Path,
             new[] { "check-ignore", "--no-index", "--stdin", "-z" },
-            GitProcessRunner.GitLaunch.Direct,
             stdin: string.Concat(relativePaths.Select(path => path + '\0')));
 
         if (!result.Started || result.ExitCode > 1) return NoIgnoredPaths;
@@ -3854,8 +3843,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     {
         var result = _runner.Run(
             workingDir,
-            new[] { "ls-files", "--error-unmatch", "--", path },
-            GitProcessRunner.GitLaunch.Direct);
+            new[] { "ls-files", "--error-unmatch", "--", path });
         return result.Ok;
     }
 
@@ -3866,8 +3854,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     {
         var result = _runner.Run(
             workingDir,
-            new[] { "check-attr", "filter", "--", path },
-            GitProcessRunner.GitLaunch.Direct);
+            new[] { "check-attr", "filter", "--", path });
         return result.Ok && result.Stdout.Contains("filter: lfs");
     }
 
