@@ -1095,13 +1095,43 @@ TextMate for everything else, so coverage never regresses and adding a language
 is a build decision rather than a code one.
 
 `RoutedSyntaxHighlighter` is what every surface calls now.
-`TreeSitterSyntaxHighlighter` takes thirteen languages; Markdown and HTML stay on
-TextMate because their upstream queries highlight through *injections* — a fenced
-block's own language, a `<script>` body, and for Markdown a whole second grammar
-for its inline syntax — which this engine does not run. Shipping no
+`TreeSitterSyntaxHighlighter` takes all fifteen languages. Shipping no
 `highlights.scm` for a language is the whole of the routing rule, and a language
 tree-sitter declines mid-file falls back rather than going plain, so nothing a
 user sees can regress.
+
+**Injections ✅ Shipped**, which is what Markdown and HTML were waiting on: both
+are largely made of *other* languages — a fenced block writes its own, a
+`<script>` body is JavaScript, a `<style>` body is CSS, and Markdown's block
+grammar leaves every span of inline syntax as one opaque node for a second
+grammar to parse. Four things it took:
+
+- **A sixteenth grammar.** `markdown_inline` is compiled from the same checkout
+  as `markdown`, the way TSX is compiled from TypeScript's. It is written in no
+  file, so `CodeLanguages.All` excludes it and `CodeLanguages.Bundled` does not —
+  the outline extractor iterates the first, the highlighter the second.
+- **`#set!` in the wrapper.** An injections query says which language a region is
+  in either with an `@injection.language` capture (a fenced block's info string,
+  which the author typed) or with a `(#set! injection.language "css")` directive,
+  and the submodule refused every directive as an unimplemented predicate — so no
+  upstream injections query compiled at all. A directive is not a predicate: it
+  cannot broaden a match, it describes one. `Query.PropertiesFor` /
+  `TryGetProperty` read them, and an unrecognized directive is still refused.
+- **Regions batched by language, recursed outside the pool.** A Markdown file
+  hands the inline grammar one region per paragraph; a pool slot per region would
+  put a semaphore in front of every sentence. And the recursion has to happen
+  after the session is returned, or a pool of one deadlocks on a slot the caller
+  is holding.
+- **Depth as the tie-break.** Captures already resolve outer-then-inner by extent;
+  an injected capture over the *identical* range — a fenced block's content
+  against the `@text.literal` covering the block — has to win, so `Coalesce` sorts
+  on injection depth before the pattern index. Three hops is the cap, which is
+  Markdown → HTML → JavaScript, and it is what makes a grammar that injected into
+  itself terminate.
+
+One local edit came with it: upstream paints `**` and the backticks as plain
+delimiters, which leaves a bold run three colors wide. TextMate colors them with
+what they delimit, and a file changing engines should not change appearance.
 
 **Start with a measurement, not an implementation.** Once Phase 1 lands both
 engines are in-process, so a benchmark over a few hundred real files comparing
@@ -1160,7 +1190,8 @@ We would get the fast parse, never the fast reparse.
 ## 11. Phases
 
 **Status: Phases 0 through 6 are done — every capability A–F this plan set out to
-build — fifteen grammars ship, and H (highlighting) is routed. What remains is G.**
+build — sixteen grammars ship, and H (highlighting) is routed for every one of
+them, injections included. What remains is G.**
 
 **Phase 0 — build foundation. ✅ Done.** *No app behavior changes. Budget a week.*
 
@@ -1306,7 +1337,14 @@ Three things the phase learned:
   grammar spills into the parameter list as a bare `array_type` that already
   **is** the type.*
 
-**Later:** the wider grammar set per §4.7, then G and H.
+**Injections ✅ Done.** §10's H, second half: `markdown_inline` added to the
+submodule's grammar list, `#set!` directives read by the wrapper, an
+`Assets/Queries/Injections` set vendored beside the highlights, and the recursive
+paint in `TreeSitterSyntaxHighlighter`. Markdown and HTML route to the parser now.
+The benchmark report predates this and still says they do not — it is a dated
+measurement, and re-running it is what updates it.
+
+**Later:** the wider grammar set per §4.7, then G.
 
 Phases 4 and 5 are independent and can swap. Folding is placed first because it
 was asked for; `ParameterTypes` landing in Phase 1 means C's overload identity

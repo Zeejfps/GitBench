@@ -48,6 +48,8 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
         (CodeLanguage.Java, "java"),
         (CodeLanguage.Bash, "shellscript"),
         (CodeLanguage.C, "c"),
+        (CodeLanguage.Markdown, "markdown"),
+        (CodeLanguage.Html, "html"),
     ];
 
     [Fact]
@@ -90,9 +92,9 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
         report.AppendLine($"- Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
         report.AppendLine();
         report.AppendLine("Both engines as the app ships them: `TreeSitterSyntaxHighlighter` with " +
-            "its embedded queries, and `SyntaxHighlighter` behind it. Markdown and HTML are absent " +
-            "because they route to TextMate outright — their queries need injections this engine " +
-            "does not run.");
+            "its embedded queries, and `SyntaxHighlighter` behind it. Markdown and HTML are in the " +
+            "corpus and are the interesting rows: both are parsed several times over, once per " +
+            "injected region.");
         report.AppendLine();
 
         var unavailable = Routed.Where(r => !treeSitter.Supports(r.LanguageId)).ToArray();

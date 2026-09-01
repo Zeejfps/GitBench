@@ -13,6 +13,10 @@ namespace GitBench.Features.Diff;
 /// grammar's own <c>highlights.scm</c> over the tree, and paints the captures into the same
 /// per-line <see cref="TokenSpan"/> lists <see cref="SyntaxHighlighter"/> produces.
 ///
+/// A region a grammar hands to another language — a fenced code block, a <c>&lt;script&gt;</c>
+/// body, Markdown's inline syntax — is parsed again with that language and painted over the top,
+/// which is what a file made of several languages needs and what regexes approximate.
+///
 /// Returns null — "I cannot color this" — for a language it holds no query for, an over-cap file,
 /// a blown budget or any failure, which is what lets <see cref="RoutedSyntaxHighlighter"/> hand
 /// the file back to TextMate rather than dropping it to plain.
@@ -34,9 +38,11 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     // job the extractor's budget does.
     private static readonly TimeSpan WholeFileBudget = TimeSpan.FromMilliseconds(750);
 
-    // TextMate's vocabulary in, ours out. Only ids we hold a highlights query for appear here:
-    // "markdown" and "html" are absent on purpose (their queries need injections we do not run),
-    // and so is "jsonc", whose comments the JSON grammar would parse as errors.
+    private const int MaxInjectionDepth = 3;
+
+    // TextMate's vocabulary in, ours out. Only ids we hold a highlights query for appear here —
+    // "jsonc" is absent, whose comments the JSON grammar would parse as errors, and so is
+    // "markdown_inline", which is a grammar rather than a language a file is written in.
     private static readonly (string LanguageId, CodeLanguage Language)[] LanguageIds =
     [
         ("csharp", CodeLanguage.CSharp),
@@ -53,6 +59,8 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         ("java", CodeLanguage.Java),
         ("shellscript", CodeLanguage.Bash),
         ("c", CodeLanguage.C),
+        ("markdown", CodeLanguage.Markdown),
+        ("html", CodeLanguage.Html),
     ];
 
     private readonly Dictionary<CodeLanguage, CompiledHighlights> _compiled = [];
@@ -63,24 +71,29 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     public TreeSitterSyntaxHighlighter(
         Action<string>? log = null,
         int? poolCapacity = null,
-        Func<CodeLanguage, string>? queryText = null)
+        Func<CodeLanguage, string>? queryText = null,
+        Func<CodeLanguage, string?>? injectionQueryText = null)
     {
         _log = log;
 
         var capacity = poolCapacity ?? Environment.ProcessorCount;
         var read = queryText ?? ReadEmbeddedQuery;
+        var readInjections = injectionQueryText ?? ReadEmbeddedInjectionQuery;
 
+        // Every bundled grammar rather than only the routed ones: markdown_inline is written in no
+        // file and reached only because Markdown injects into it.
+        //
         // Per language, not all-or-nothing, for the reason the outline extractor gives: a pin bump
         // that renames a node breaks the query written against it and nothing else, and one broken
-        // language taking colors away from the other twelve is the worse failure. A language that
+        // language taking colors away from the other fifteen is the worse failure. A language that
         // fails here simply routes to TextMate, which is where it was already.
-        foreach (var (_, language) in LanguageIds)
+        foreach (var language in CodeLanguages.Bundled)
         {
-            if (_compiled.ContainsKey(language)) continue;
-
             try
             {
-                _compiled.Add(language, CompiledHighlights.Create(language, capacity, read(language)));
+                _compiled.Add(
+                    language,
+                    CompiledHighlights.Create(language, capacity, read(language), readInjections(language)));
             }
             catch (Exception error)
             {
@@ -110,9 +123,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         IReadOnlyList<IReadOnlyList<TokenSpan>> lines;
         try
         {
-            lines = compiled.Pool.Use(
-                (compiled, normalized, utf8),
-                static (session, s) => Paint(session, s.compiled, s.normalized, s.utf8));
+            lines = Paint(language, normalized, utf8);
         }
         catch (Exception error)
         {
@@ -154,19 +165,70 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         return reader.ReadToEnd();
     }
 
+    private static string? ReadEmbeddedInjectionQuery(CodeLanguage language)
+    {
+        var resource = language.InjectionQueryResourceName();
+        using var stream = typeof(TreeSitterSyntaxHighlighter).Assembly.GetManifestResourceStream(resource);
+        if (stream is null) return null;
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
     private static string NormalizeNewlines(string text) =>
         text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
 
-    private static IReadOnlyList<IReadOnlyList<TokenSpan>> Paint(
+    private IReadOnlyList<IReadOnlyList<TokenSpan>> Paint(CodeLanguage language, string text, byte[] utf8)
+    {
+        var captures = new List<Capture>();
+        Collect(language, utf8, [new Region(0, utf8.Length)], depth: 0, captures);
+        return Coalesce(text, utf8.Length, captures);
+    }
+
+    // Recursion runs after the session is returned: nesting Use on a pool of one would wait on a
+    // slot this caller is holding.
+    private void Collect(CodeLanguage language, byte[] utf8, List<Region> regions, int depth, List<Capture> captures)
+    {
+        if (!_compiled.TryGetValue(language, out var compiled)) return;
+
+        var injected = compiled.Pool.Use(
+            (compiled, utf8, regions, depth, captures, follow: depth < MaxInjectionDepth),
+            static (session, s) =>
+            {
+                List<Injection>? found = null;
+                foreach (var region in s.regions)
+                {
+                    Scan(session, s.compiled, s.utf8, region, s.depth, s.captures, s.follow, ref found);
+                }
+
+                return found;
+            });
+
+        if (injected is null) return;
+
+        foreach (var group in injected.GroupBy(i => i.Language))
+        {
+            Collect(group.Key, utf8, [.. group.Select(i => i.Region)], depth + 1, captures);
+        }
+    }
+
+    private static void Scan(
         ParseSession session,
         CompiledHighlights compiled,
-        string text,
-        byte[] utf8)
+        byte[] utf8,
+        Region region,
+        int depth,
+        List<Capture> captures,
+        bool followInjections,
+        ref List<Injection>? injected)
     {
-        using var tree = session.Parser.Parse(utf8);
+        if (region.Length <= 0) return;
 
-        var captures = new List<Capture>();
-        session.Cursor.ForEachMatch(compiled.Query, tree.RootNode, match =>
+        var origin = region.Start;
+        using var tree = session.Parser.Parse(utf8.AsSpan(region.Start, region.Length));
+        var root = tree.RootNode;
+
+        session.Cursor.ForEachMatch(compiled.Query, root, match =>
         {
             for (var i = 0; i < match.CaptureCount; i++)
             {
@@ -175,11 +237,52 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
 
                 var node = match.NodeAt(i);
                 if (node.EndByte <= node.StartByte) continue;
-                captures.Add(new Capture(node.StartByte, node.EndByte, match.PatternIndex, slot));
+                captures.Add(new Capture(
+                    (uint)(origin + node.StartByte),
+                    (uint)(origin + node.EndByte),
+                    match.PatternIndex,
+                    depth,
+                    slot));
             }
         });
 
-        return Coalesce(text, utf8.Length, captures);
+        if (!followInjections || compiled.Injections is not { } injections) return;
+
+        var found = injected;
+        session.Cursor.ForEachMatch(injections.Query, root, match =>
+        {
+            var language = injections.LanguageOf(match.PatternIndex) ?? DynamicLanguageOf(injections, match);
+            if (language is not { } target) return;
+
+            for (var i = 0; i < match.CaptureCount; i++)
+            {
+                if (match.CaptureIdAt(i) != injections.ContentCaptureId) continue;
+
+                var node = match.NodeAt(i);
+                if (node.EndByte <= node.StartByte) continue;
+
+                var content = new Region(origin + (int)node.StartByte, (int)(node.EndByte - node.StartByte));
+
+                if (target == compiled.Language && content == region) continue;
+
+                (found ??= []).Add(new Injection(target, content));
+            }
+        });
+
+        injected = found;
+    }
+
+    private static CodeLanguage? DynamicLanguageOf(CompiledInjections injections, QueryMatch match)
+    {
+        if (injections.LanguageCaptureId is not { } languageCapture) return null;
+
+        for (var i = 0; i < match.CaptureCount; i++)
+        {
+            if (match.CaptureIdAt(i) != languageCapture) continue;
+            return CodeLanguages.FromInjectionName(match.NodeAt(i).Text);
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -192,10 +295,12 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     /// containing it.
     /// </para>
     /// <para>
-    /// Two captures over the <em>identical</em> range resolve to whichever pattern is written later
-    /// in the query, which is the convention twelve of the thirteen vendored files are written for:
-    /// a broad pattern up top that the specific ones below it override. Go is the exception and is
-    /// reordered when it is vendored, because one file order has to serve one rule.
+    /// Two captures over the <em>identical</em> range resolve to the more deeply injected one — a
+    /// fenced block's own language over the <c>@text.literal</c> covering the block — and failing
+    /// that to whichever pattern is written later in the query, which is the convention all but one
+    /// of the vendored files are written for: a broad pattern up top that the specific ones below
+    /// it override. Go is the exception and is reordered when it is vendored, because one file
+    /// order has to serve one rule.
     /// </para>
     /// <para>
     /// The tie-break has to be the pattern index and not the order matches arrive in — tree-sitter
@@ -215,6 +320,9 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
 
             var byEnd = b.EndByte.CompareTo(a.EndByte);
             if (byEnd != 0) return byEnd;
+
+            var byDepth = a.Depth.CompareTo(b.Depth);
+            if (byDepth != 0) return byDepth;
 
             return a.PatternIndex.CompareTo(b.PatternIndex);
         });
@@ -300,7 +408,19 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         if (Interlocked.Exchange(ref flag, 1) == 0) _log?.Invoke(message);
     }
 
-    private readonly record struct Capture(uint StartByte, uint EndByte, int PatternIndex, TokenColorSlot Slot);
+    private readonly record struct Capture(
+        uint StartByte,
+        uint EndByte,
+        int PatternIndex,
+        int Depth,
+        TokenColorSlot Slot);
+
+    private readonly record struct Region(int Start, int Length)
+    {
+        public int End => Start + Length;
+    }
+
+    private readonly record struct Injection(CodeLanguage Language, Region Region);
 
     /// <summary>One language's compiled query, its parser pool, and its capture ids already
     /// resolved to color slots so the per-match path is an array index.</summary>
@@ -308,23 +428,39 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     {
         private readonly TokenColorSlot[] _slotOfCapture;
 
-        private CompiledHighlights(Query query, ParseSessionPool pool, TokenColorSlot[] slotOfCapture)
+        private CompiledHighlights(
+            CodeLanguage language,
+            Query query,
+            ParseSessionPool pool,
+            TokenColorSlot[] slotOfCapture,
+            CompiledInjections? injections)
         {
+            Language = language;
             Query = query;
             Pool = pool;
             _slotOfCapture = slotOfCapture;
+            Injections = injections;
         }
+
+        public CodeLanguage Language { get; }
 
         public Query Query { get; }
 
         public ParseSessionPool Pool { get; }
 
+        public CompiledInjections? Injections { get; }
+
         public TokenColorSlot SlotOf(uint captureId) => _slotOfCapture[captureId];
 
-        public static CompiledHighlights Create(CodeLanguage language, int poolCapacity, string queryText)
+        public static CompiledHighlights Create(
+            CodeLanguage language,
+            int poolCapacity,
+            string queryText,
+            string? injectionQueryText)
         {
-            var grammar = Language.Load(GrammarLibrary, language.GrammarName());
+            var grammar = TreeSitter.Language.Load(GrammarLibrary, language.GrammarName());
             var query = Query.Compile(grammar, queryText);
+            CompiledInjections? injections = null;
 
             try
             {
@@ -334,7 +470,85 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
                     slots[id] = HighlightCaptureMap.Map(query.CaptureName(id));
                 }
 
-                return new CompiledHighlights(query, new ParseSessionPool(grammar, poolCapacity), slots);
+                if (injectionQueryText is not null)
+                {
+                    injections = CompiledInjections.Create(grammar, injectionQueryText);
+                }
+
+                return new CompiledHighlights(
+                    language,
+                    query,
+                    new ParseSessionPool(grammar, poolCapacity),
+                    slots,
+                    injections);
+            }
+            catch
+            {
+                injections?.Dispose();
+                query.Dispose();
+                throw;
+            }
+        }
+
+        public void Dispose()
+        {
+            Injections?.Dispose();
+            Pool.Dispose();
+            Query.Dispose();
+        }
+    }
+
+    private sealed class CompiledInjections : IDisposable
+    {
+        private const string ContentCapture = "injection.content";
+        private const string LanguageCapture = "injection.language";
+        private const string LanguageProperty = "injection.language";
+
+        private readonly CodeLanguage?[] _languageOfPattern;
+
+        private CompiledInjections(
+            Query query,
+            uint contentCaptureId,
+            uint? languageCaptureId,
+            CodeLanguage?[] languageOfPattern)
+        {
+            Query = query;
+            ContentCaptureId = contentCaptureId;
+            LanguageCaptureId = languageCaptureId;
+            _languageOfPattern = languageOfPattern;
+        }
+
+        public Query Query { get; }
+
+        public uint ContentCaptureId { get; }
+
+        public uint? LanguageCaptureId { get; }
+
+        public CodeLanguage? LanguageOf(int patternIndex) => _languageOfPattern[patternIndex];
+
+        public static CompiledInjections Create(Language grammar, string queryText)
+        {
+            var query = Query.Compile(grammar, queryText);
+
+            try
+            {
+                if (!query.TryGetCaptureId(ContentCapture, out var contentId))
+                {
+                    throw new InvalidOperationException(
+                        $"An injections query declares no @{ContentCapture}, so it marks no region.");
+                }
+
+                uint? languageId = query.TryGetCaptureId(LanguageCapture, out var id) ? id : null;
+
+                var languages = new CodeLanguage?[query.PatternCount];
+                for (var pattern = 0; pattern < languages.Length; pattern++)
+                {
+                    languages[pattern] = query.TryGetProperty(pattern, LanguageProperty, out var name)
+                        ? CodeLanguages.FromInjectionName(name)
+                        : null;
+                }
+
+                return new CompiledInjections(query, contentId, languageId, languages);
             }
             catch
             {
@@ -343,10 +557,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
             }
         }
 
-        public void Dispose()
-        {
-            Pool.Dispose();
-            Query.Dispose();
-        }
+        public void Dispose() => Query.Dispose();
     }
 }

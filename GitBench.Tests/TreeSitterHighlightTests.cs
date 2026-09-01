@@ -71,6 +71,12 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
 
         ("c", "int go(void) { return 0; }",
             [("go", TokenColorSlot.Function), ("0", TokenColorSlot.Number)]),
+
+        ("markdown", "# Title\n\nA `span` of code.\n",
+            [("Title", TokenColorSlot.Heading), ("`span`", TokenColorSlot.Code)]),
+
+        ("html", "<p class=\"a\">hi</p>",
+            [("p", TokenColorSlot.Keyword), ("class", TokenColorSlot.Variable)]),
     ];
 
     /// <summary>
@@ -201,12 +207,12 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
     [Fact]
     public void ALanguageWithNoBundledQueryIsDeclined()
     {
-        // Markdown and HTML have grammars but deliberately no highlights query: theirs need
-        // injections this engine does not run, so they belong to TextMate.
-        Assert.False(fixture.Highlighter.Supports("markdown"));
-        Assert.False(fixture.Highlighter.Supports("html"));
+        // Shipping no highlights query is the whole of the routing rule, and jsonc is the one id
+        // deliberately left off a grammar we do bundle: the JSON parser reads its comments as
+        // errors, so its files are better colored by TextMate.
         Assert.False(fixture.Highlighter.Supports("fsharp"));
-        Assert.Null(fixture.Highlighter.Highlight("# heading", "markdown"));
+        Assert.False(fixture.Highlighter.Supports("jsonc"));
+        Assert.Null(fixture.Highlighter.Highlight("let x = 1", "fsharp"));
     }
 
     /// <summary>A file with a syntax error still colors — the reason a parser is usable on a diff

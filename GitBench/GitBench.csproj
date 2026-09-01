@@ -113,6 +113,11 @@
         <EmbeddedResource Include="Assets\Queries\Highlights\*.scm">
             <LogicalName>highlights.%(Filename)%(Extension)</LogicalName>
         </EmbeddedResource>
+        <!-- Injection queries: which regions of a file are written in another language. Only the
+             few grammars that embed one ship a file here. -->
+        <EmbeddedResource Include="Assets\Queries\Injections\*.scm">
+            <LogicalName>injections.%(Filename)%(Extension)</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
     <Import Project="..\external\cs_tree_sitter\native\Native.props" />

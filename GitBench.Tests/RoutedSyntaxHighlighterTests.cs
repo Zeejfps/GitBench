@@ -27,19 +27,19 @@ public class RoutedSyntaxHighlighterTests(TreeSitterHighlightFixture fixture)
     }
 
     [Fact]
-    public void MarkdownAndHtmlStayOnTextMate()
+    public void MarkdownAndHtmlAreColoredByTheParserToo()
     {
         var textMate = new RecordingHighlighter();
         var routed = new RoutedSyntaxHighlighter(fixture.Highlighter, textMate);
 
-        // Their upstream queries highlight through injections this engine does not run, so they
-        // ship no query and are better off where they are.
-        routed.Highlight("# heading\n\n**bold**", "markdown");
-        routed.Highlight("<p class=\"x\">hi</p>", "html");
+        // The two that spent a phase on TextMate: their queries are almost entirely injections, so
+        // routing them was the injection engine landing rather than a query being written.
+        routed.Highlight("# heading\n\n**bold**\n\n```json\n{ \"a\": 1 }\n```", "markdown");
+        routed.Highlight("<p class=\"x\">hi</p>\n<script>const a = 1;</script>", "html");
 
-        Assert.Equal(2, textMate.Calls);
-        Assert.False(routed.RoutesToTreeSitter("markdown"));
-        Assert.False(routed.RoutesToTreeSitter("html"));
+        Assert.Equal(0, textMate.Calls);
+        Assert.True(routed.RoutesToTreeSitter("markdown"));
+        Assert.True(routed.RoutesToTreeSitter("html"));
     }
 
     [Fact]

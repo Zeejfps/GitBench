@@ -38,6 +38,8 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
     // can't bog the worker. Generous enough that normal files never trip it.
     private static readonly TimeSpan WholeFileBudget = TimeSpan.FromMilliseconds(750);
 
+    private static readonly TimeSpan WarmUpTimeout = TimeSpan.FromSeconds(5);
+
     private readonly RegistryOptions _options;
     private readonly Registry _registry;
     private readonly Dictionary<string, IGrammar?> _grammarCache = new();
@@ -147,6 +149,15 @@ internal sealed class SyntaxHighlighter : ISyntaxHighlighter
             catch
             {
                 grammar = null;
+            }
+
+            // TextMateSharp compiles rules on the first TokenizeLine (markdown: 178 ms, then
+            // 0.1 ms). Pay it here so it lands outside a file's WholeFileBudget rather than on
+            // whichever file of that language happens to be first.
+            if (grammar != null)
+            {
+                try { grammar.TokenizeLine(string.Empty, null, WarmUpTimeout); }
+                catch { /* warm-up is an optimization; a failed one costs only the saving */ }
             }
             _grammarCache[languageId] = grammar; // cache nulls too: an unknown id won't resolve on retry
             return grammar;

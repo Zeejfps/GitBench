@@ -17,9 +17,9 @@ namespace GitBench.Features.Diff;
 /// <para>
 /// Measured over 1,014 files of this repository, tree-sitter is 10.6x faster end to end and is not
 /// meaningfully slower on any file; see <c>docs/plans/tree-sitter-highlighting-benchmark.md</c>.
-/// The languages it is <em>worse</em> at are the two it is not given: Markdown and HTML need
-/// injections (a fenced block's own language, a <c>&lt;script&gt;</c> body) that this engine does
-/// not run, so they ship no highlights query and route to TextMate by construction.
+/// That report predates injections and so has no Markdown or HTML row: both routed to TextMate
+/// until the parser could follow a fenced block, a <c>&lt;script&gt;</c> body and Markdown's own
+/// inline grammar into the languages they are written in.
 /// </para>
 /// </remarks>
 internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable
@@ -29,7 +29,7 @@ internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable
     /// code blocks alike.
     /// </summary>
     /// <remarks>
-    /// Each instance builds a TextMate registry and compiles thirteen tree-sitter queries, so a
+    /// Each instance builds a TextMate registry and compiles a query per bundled grammar, so a
     /// second one means paying both costs twice. First touch is what builds them: reach for this
     /// only from a background lane, never during a widget build.
     /// </remarks>

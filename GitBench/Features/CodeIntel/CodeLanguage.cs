@@ -17,6 +17,7 @@ internal enum CodeLanguage
     Java,
     Bash,
     C,
+    MarkdownInline,
 }
 
 /// <summary>
@@ -67,9 +68,43 @@ internal static class CodeLanguages
         new(CodeLanguage.Bash, "bash", [".sh", ".bash"], None),
         // Only C ships, so a .h is unambiguous here in a way it is not in general.
         new(CodeLanguage.C, "c", [".c", ".h"], None),
+        // No file is written in it: Markdown's block grammar leaves every span of inline syntax as
+        // one node, and this is what gets injected into those.
+        new(CodeLanguage.MarkdownInline, "markdown_inline", [], None, InjectedOnly: true),
     ];
 
-    public static IReadOnlyList<CodeLanguage> All { get; } = [.. Table.Select(e => e.Language)];
+    private static readonly (string Alias, CodeLanguage Language)[] Aliases =
+    [
+        ("cs", CodeLanguage.CSharp),
+        ("c#", CodeLanguage.CSharp),
+        ("csharp", CodeLanguage.CSharp),
+        ("ts", CodeLanguage.TypeScript),
+        ("typescriptreact", CodeLanguage.Tsx),
+        ("javascriptreact", CodeLanguage.JavaScript),
+        ("js", CodeLanguage.JavaScript),
+        ("jsx", CodeLanguage.JavaScript),
+        ("mjs", CodeLanguage.JavaScript),
+        ("cjs", CodeLanguage.JavaScript),
+        ("jsonc", CodeLanguage.Json),
+        ("htm", CodeLanguage.Html),
+        ("md", CodeLanguage.Markdown),
+        ("yml", CodeLanguage.Yaml),
+        ("py", CodeLanguage.Python),
+        ("python3", CodeLanguage.Python),
+        ("golang", CodeLanguage.Go),
+        ("rs", CodeLanguage.Rust),
+        ("sh", CodeLanguage.Bash),
+        ("shell", CodeLanguage.Bash),
+        ("zsh", CodeLanguage.Bash),
+        ("console", CodeLanguage.Bash),
+    ];
+
+    /// <summary>The languages a file can be written in.</summary>
+    public static IReadOnlyList<CodeLanguage> All { get; } =
+        [.. Table.Where(e => !e.InjectedOnly).Select(e => e.Language)];
+
+    /// <summary>Every bundled grammar, including the ones only reached through an injection.</summary>
+    public static IReadOnlyList<CodeLanguage> Bundled { get; } = [.. Table.Select(e => e.Language)];
 
     /// <summary>The grammar a file's name says it is written in, or null where we bundle none.</summary>
     public static CodeLanguage? Detect(string path)
@@ -100,12 +135,38 @@ internal static class CodeLanguages
     /// with tree-sitter have.
     /// </summary>
     /// <remarks>
-    /// Unlike the outline query, this one is allowed to be missing: Markdown and HTML ship no
-    /// highlights query because theirs need injections we do not run, and that absence is what
-    /// routes them to TextMate.
+    /// Unlike the outline query, this one is allowed to be missing: shipping no highlights query
+    /// is the whole of what routes a language to TextMate instead.
     /// </remarks>
     public static string HighlightQueryResourceName(this CodeLanguage language) =>
         $"highlights.{language.GrammarName()}.scm";
+
+    /// <summary>The embedded <c>injections.scm</c>, which only a language embedding another has.</summary>
+    public static string InjectionQueryResourceName(this CodeLanguage language) =>
+        $"injections.{language.GrammarName()}.scm";
+
+    /// <summary>
+    /// The grammar an injection names, or null where we bundle none — which is not an error, the
+    /// region simply stays uncolored. Aliased because what follows the backticks is whatever the
+    /// author typed, and <c>```sh</c> is as common as <c>```bash</c>.
+    /// </summary>
+    public static CodeLanguage? FromInjectionName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return null;
+
+        var trimmed = name.Trim();
+        foreach (var entry in Table)
+        {
+            if (string.Equals(entry.GrammarName, trimmed, StringComparison.OrdinalIgnoreCase)) return entry.Language;
+        }
+
+        foreach (var (alias, language) in Aliases)
+        {
+            if (string.Equals(alias, trimmed, StringComparison.OrdinalIgnoreCase)) return language;
+        }
+
+        return null;
+    }
 
     public static IReadOnlyList<string> LeadingDecorationNodeTypes(this CodeLanguage language) =>
         Of(language).LeadingDecorations;
@@ -124,5 +185,6 @@ internal static class CodeLanguages
         CodeLanguage Language,
         string GrammarName,
         string[] Extensions,
-        string[] LeadingDecorations);
+        string[] LeadingDecorations,
+        bool InjectedOnly = false);
 }

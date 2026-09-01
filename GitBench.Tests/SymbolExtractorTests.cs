@@ -42,18 +42,24 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
 
         Assert.NotEmpty(embedded);
 
-        // Outline queries: every bundled language has one, and nothing else is in that folder.
+        // Outline queries: every language a file can be written in has one, and nothing else is in
+        // that folder. markdown_inline is absent because no file is written in it.
         var outlines = CodeLanguages.All.Select(l => l.QueryResourceName());
         Assert.Equal(
             outlines.OrderBy(n => n, StringComparer.Ordinal),
             embedded.Where(n => !n.StartsWith("highlights.", StringComparison.Ordinal))
+                .Where(n => !n.StartsWith("injections.", StringComparison.Ordinal))
                 .OrderBy(n => n, StringComparer.Ordinal));
 
-        // Highlight queries: a language may have none — that absence is what routes Markdown and
-        // HTML to TextMate — but a file that matches no language at all would embed and never load.
-        var known = CodeLanguages.All.Select(l => l.HighlightQueryResourceName()).ToHashSet(StringComparer.Ordinal);
+        // Highlight and injection queries: a language may have neither — no highlights query is
+        // what routes a language to TextMate — but a file that matches no language at all would
+        // embed and never load.
+        var known = CodeLanguages.Bundled
+            .SelectMany(l => new[] { l.HighlightQueryResourceName(), l.InjectionQueryResourceName() })
+            .ToHashSet(StringComparer.Ordinal);
         Assert.Empty(embedded
-            .Where(n => n.StartsWith("highlights.", StringComparison.Ordinal))
+            .Where(n => n.StartsWith("highlights.", StringComparison.Ordinal)
+                     || n.StartsWith("injections.", StringComparison.Ordinal))
             .Where(n => !known.Contains(n)));
     }
 
