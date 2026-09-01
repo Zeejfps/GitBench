@@ -63,6 +63,14 @@ opt-in decision cheap. Boundaries enforced by an architecture test in both direc
   Correlation, ids and notification dispatch exist; the framing is line-delimited where LSP needs
   `Content-Length`, and `ITransport` is exactly that seam. The package is ours
   (nuspec `authors: Zeejfps`, `github.com/Zeejfps/EnvMcp`), so extending it is available.
+- **The column half of the position mapping, shipped.** `Features/Diff/DiffLineText.cs` (`a3021c6`)
+  holds a line in both spaces at once behind a private constructor and one factory, so a row whose
+  raw and expanded text disagree is unconstructible. It carries `ToRaw(ExpandedColumn, TabEdge)`,
+  `ToExpanded(RawColumn)` and `RawSlice`, with `RawColumn` and `ExpandedColumn` as distinct record
+  structs threaded through `DiffTextPos`, `DiffRowSelection`, `TryRowSpan` and both surfaces'
+  `CharIndexAt`. **Both directions matter here**: we send raw columns to the server, and a
+  server-supplied diagnostic or definition range arrives in raw columns and has to be *painted* in
+  expanded ones. `ToExpanded` has no production caller yet and exists for exactly that.
 - **The *landing* half of navigation.** `FileBrowserViewModel.NavigateToLine` (`:144`) unfolds,
   reveals, and — via `_pendingReveal` — holds a line while the previewed file is still being read,
   firing `LineRevealRequested` when the text lands (`:495`). Reaching a line in a file the pane
@@ -175,28 +183,32 @@ keyed by `(uri, version)`, read by the painter at draw time**, coalesced on the 
 any publish whose version is not on screen dropped. "Same shape as `DiffHighlight`" is true spatially
 and false temporally.
 
-**C10 — position mapping is wrong on both axes, silently.** This is the top risk.
-`DiffTextPos.Char` is an offset into **tab-expanded** text — `DiffText.ExpandTabs` replaces each tab
-with a flat `TabWidth` spaces, and the type's own doc comment says "tabs already expanded". LSP
-`character` indexes the **raw** line. gofmt tab-indents every Go file and gopls is server #1, so every
-hover and diagnostic on an indented line lands `(TabWidth - 1) × leadingTabs` columns off — and looks
-like a working feature. Separately, `DiffTextPos.Row` is an index into the flattened row stream
-(banners, hunk separators, tears, folded gaps), not a file line; the source line is only recoverable
-from `DiffRow.Line.OldNumber`/`NewNumber`, which are **pre-stringified** (`DiffRow.cs:38-39`). So the
-first draft's "a `(line, character)` from a mouse point and nothing else" is where it over-claimed
-reuse. **Fix:** one `LspPosition` module, two total functions mapping
-`(FileLine, RawCol) ↔ (RowIndex, ExpandedCol)`, with a distinct type per coordinate kind so they
-cannot be swapped at a call site — Rule 1's highest-yield newtype here. The good news the draft
-missed: .NET string indices are already UTF-16 code units, LSP's default `positionEncoding`, so
-surrogate pairs and emoji are correct *for free* — provided nothing converts to runes, which
-`DiffText.StepCells` deliberately does for display width. Declare
-`general.positionEncodings: ["utf-16"]` and refuse a server that negotiates otherwise (clangd defaults
-to utf-8 via its `offsetEncoding` extension).
+**C10 — position mapping: the column axis is now solved, the row axis is not.** Position mapping
+would be wrong on both axes, silently, and it remains the top risk — but half of it shipped in
+`a3021c6` and the plan should not re-budget that half.
 
-> The raw↔expanded half of `LspPosition` is being built now, independently: the same root cause is a
-> live clipboard bug — `DiffSelectionModel.BuildCopyText` copies expanded text, so copying a
-> tab-indented line yields spaces, and a copied Makefile line is broken. `DiffSelectionQuote`
-> deliberately shares that function, so the assistant is fed the same mangled text.
+**Column — done.** `DiffTextPos.Char` was an offset into **tab-expanded** text (`DiffText.ExpandTabs`
+replaces each tab with a flat `TabWidth` spaces) while LSP `character` indexes the **raw** line. gofmt
+tab-indents every Go file and gopls is server #1, so every hover and diagnostic on an indented line
+would have landed `(TabWidth - 1) × leadingTabs` columns off, looking like a working feature. That is
+now structurally prevented: `DiffTextPos.Char` is an `ExpandedColumn`, `RawColumn` is a distinct type
+with no conversion to it, and `DiffLineText` owns the mapping in both directions.
+
+**Row — open, and now the whole of this risk.** `DiffTextPos.Row` is still a bare `int` index into the
+flattened row stream — banners, hunk separators, tears and folded gaps all occupy rows — not a file
+line. The source line is still only recoverable from `DiffRow.Line.OldNumber`/`NewNumber`, which are
+still **pre-stringified**. Two bare `int`s that mean different things remain freely swappable, which
+is exactly the hazard the column fix removed. **Remaining fix:** a `FileLine` type and the total
+`RowIndex ↔ FileLine` mapping, in the same shape as `DiffLineText` — which is now a worked precedent
+in this codebase rather than a proposal: retyping made the compiler point at precisely the call sites
+where the two spaces had been interchangeable, and nowhere else.
+
+So the first draft's "a `(line, character)` from a mouse point and nothing else" over-claimed on both
+axes; it is now half true. The good news the draft missed still holds: .NET string indices are already
+UTF-16 code units, LSP's default `positionEncoding`, so surrogate pairs and emoji are correct *for
+free* — provided nothing converts to runes, which `DiffText.StepCells` deliberately does for display
+width. Declare `general.positionEncodings: ["utf-16"]` and refuse a server that negotiates otherwise
+(clangd defaults to utf-8 via its `offsetEncoding` extension).
 
 ## Findings — LSP under a read-only viewer, measured
 
@@ -265,8 +277,9 @@ worked, but degraded-workspace states need a reason string in the UI.
 
 - **1 — One vertical slice.** Framing over `ITransport` + `initialize` + `didOpen` + one `hover`
   against a **hard-coded** server, rendered in a popup. Config for N servers before hover for 1 is
-  abstraction ahead of the variation. Includes `LspPosition` (C10) — nothing downstream is
-  trustworthy without it.
+  abstraction ahead of the variation. Includes the **row axis** of C10 — the `FileLine` type and the
+  `RowIndex ↔ FileLine` mapping. The column axis is already done (`a3021c6`), so this is half the job
+  it was, but nothing downstream is trustworthy until the other half lands.
 - **2 — Config, lifecycle, readiness, discovery.** `language-servers.json` → `LanguageServerSpec`
   records, malformed entries dropped individually with a reason. `ILanguageServerStore` keyed per
   repo; the active-repo-only policy from F3; restart-with-backoff and a give-up cap (no supervision
@@ -353,10 +366,12 @@ that covers C4, and the one that closes the Linux/macOS gap the spike could not.
 
 ## Risks, ranked
 
-1. **Silent position wrongness** (C10). Every other risk here announces itself: an orphan shows in
-   Task Manager, a hang shows a spinner, a missing binary shows a message. A diagnostic underlining
-   the wrong three characters *looks like the feature working*, in a subsystem whose entire value is
-   being right about code.
+1. **Silent position wrongness — now the row axis only** (C10). Every other risk here announces
+   itself: an orphan shows in Task Manager, a hang shows a spinner, a missing binary shows a message.
+   A jump that lands on the wrong line *looks like the feature working*, in a subsystem whose entire
+   value is being right about code. Halved by `a3021c6` — the column axis can no longer be got wrong
+   without a compile error — and it stays at the top because the row axis is still two bare `int`s
+   meaning different things, and because the fix is now a known quantity rather than a guess.
 2. **rust-analyzer's footprint and cold start** (F2, F3) — now measured, and the reason the process
    policy and the readiness UI are decisions rather than nice-to-haves. The identity tension is real:
    "native, no runtime, launches fast" and "spawns a 1.7 GB indexer" are opposed, and the mitigation
