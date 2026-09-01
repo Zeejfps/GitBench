@@ -1,299 +1,205 @@
-# Language servers — IDE reading in the Files pane
+# Language servers in the Files pane
 
-> **Framing:** the Files pane already reads code. It syntax-highlights it, folds it, outlines its
-> declarations and names the enclosing one in a breadcrumb — all from tree-sitter, which parses one
-> file with no idea the rest of the repo exists. Everything a *project* knows and a single file
-> cannot — this call goes there, this expression is that type, this line does not compile — is the
-> gap an LSP client fills.
->
-> **Verdict: build it.** The Phase 0 spike has run; its numbers are in
-> [Findings](#findings--lsp-under-a-read-only-viewer-measured) and they answer the question the
-> feature hung on — real compiler diagnostics do arrive from a single `didOpen` with no edit, ever,
-> on all three servers tested. The read-only pane is the reason this is tractable: document
-> synchronization is the hardest and buggiest part of any LSP client, and a viewer that never edits
-> does not have it.
->
-> Two things the spike moved. The orphaned-server risk this plan led with is **largely already
-> handled on Windows** — every server exits on stdin EOF — while rust-analyzer's **1.7 GB steady /
-> 3.5 GB transient / 32 s cold index** is worse than assumed and now drives the process policy. And a
-> review against the code knocked out the plan's central structural claim: `ISymbolExtractor` is
-> *not* the seam. What survives is below; the corrections are most of the value.
+## What this is
+
+The Files pane shows the working tree and previews whatever file you select. Today it understands
+code one file at a time: it colors syntax, folds declarations, and lists an outline. It does that
+with tree-sitter, a parser that reads a single file and knows nothing about the rest of the project.
+
+A **language server** is a separate program that understands a whole project. You run one per
+language — `rust-analyzer` for Rust, `gopls` for Go, `typescript-language-server` for TypeScript.
+It reads your code, resolves imports, type-checks, and answers questions over a standard protocol
+(LSP). Editors use them; that is where "go to definition" and red squiggles come from.
+
+This plan adds an LSP client to the Files pane, so it can answer the questions a single file cannot:
+
+- **Hover** — what is this symbol, and what is its type?
+- **Diagnostics** — which lines do not compile, marked inline.
+- **Go to definition** — jump to where a symbol is declared.
+
+Servers are not bundled. The user installs them and lists them in a config file. If they never do,
+nothing changes and nothing runs.
+
+## Why this is affordable
+
+The pane is **read-only**. It displays files; it never edits them.
+
+That matters more than it sounds. Most of the difficulty in writing an LSP client is keeping the
+server's copy of a file in sync with the editor's as the user types — incremental updates, version
+numbers, and a long tail of bugs when the two drift apart. A viewer that never edits has none of
+that. We tell the server "here is this file, read from disk", and the two copies cannot disagree.
+
+The remaining work splits cleanly:
+
+- **The protocol** — mechanical, pure, easy to test.
+- **Running the servers** — process lifecycle, memory, failure. This is the part that costs.
+
+## What the servers actually do
+
+Measured with a throwaway client against real projects: a 54k-line Rust workspace, a 239k-line Go
+module, and a 3.2k-line TypeScript package. No file was ever edited — each was opened once from disk.
+
+| | rust-analyzer | gopls | typescript-language-server |
+|---|---|---|---|
+| Handshake | 15 ms | 60 ms | 93 ms |
+| First useful answer, cold | **32 s** | 2.4 s | 0.6 s |
+| First useful answer, warm | 11 s | — | 0.6 s |
+| Answers once ready | 0 ms | 0 ms | 1–3 ms |
+| Diagnostics appear after | 1.9 s | 6.6 s | 1.9 s |
+| Memory, server process | **1.7 GB** | 754 MB | 38 MB |
+| Memory, whole process tree | **3.5 GB** | 775 MB | 442 MB |
+| Exits when asked | yes | yes | yes |
+| Exits if we crash | yes | yes | yes |
+
+Five things follow from this, and they drive most of the decisions below.
+
+**Diagnostics work without editing.** Every server reported real compiler errors from a file opened
+once and never modified. rust-analyzer runs `cargo check` on load; gopls and tsserver type-check on
+open. This was the open question the whole feature depended on, and the answer is yes.
+
+**Diagnostics arrive in waves, and can change minutes later.** gopls sends type errors first and
+analyzer warnings four seconds later. rust-analyzer re-sent results for the same file three times as
+its background check progressed. So diagnostics for a file must be *replaced* on each update, never
+added to, and the UI has to tolerate a settled file changing.
+
+**rust-analyzer is expensive.** 32 seconds before its first useful answer on a cold project, and 1.7
+GB held steady afterward. During startup it spawns dozens of `cargo` and `rustc` children, briefly
+reaching 3.5 GB across the tree. That is the number that sets the process policy.
+
+**A finished handshake does not mean ready.** rust-analyzer completed its handshake in 15 ms while
+still half a minute from answering anything. While indexing, it rejects requests with a specific
+error code that means "ask again", not "failed". A client that treats that as failure will look
+broken for the first 30 seconds.
+
+**Servers clean themselves up.** Killing the client without killing its children left no orphans:
+every server exited on its own within a second. They do this because they read their input from a
+pipe we hold, and that pipe closes when we die. This was expected to be a major cost and is not —
+with one caveat under Risks.
+
+## How it is built
+
+Four layers. Each depends only on the one above it.
+
+| Layer | Lives in | Knows about |
+|---|---|---|
+| Message framing and request/response matching | `GitBench.Lsp` | a byte stream, nothing else |
+| Protocol messages, parsed into real types | `GitBench.Lsp` | LSP only — no repos, no processes |
+| Config, launching servers, per-repo tracking | `Features/LanguageServers` | repos, app paths, the UI thread |
+| Showing results | `Features/FileBrowser` | one open document at a time |
+
+The Files pane never touches a server. It holds a small handle for the file currently on screen —
+its diagnostics, and two methods to ask about a position — and drops it when the selection changes.
+When no config file exists, that handle has an empty implementation, which is what makes the whole
+feature cost nothing when unused.
+
+This deliberately does **not** extend `ISymbolExtractor`, the existing code-intelligence interface.
+That interface is synchronous, per-file, and has 38 references across 7 features including the
+assistant and the review window. Putting server processes behind it would wire language servers into
+surfaces that should never touch them.
 
 ## Decisions
 
 | Area | Decision |
 |---|---|
-| Scope of v1 | **Reading only** — hover, diagnostics, go-to-definition. No completion, formatting, rename or code actions: all four are edits, and there is no editor. |
-| Document sync | `didOpen` on preview, `didClose` when the cursor leaves. **No `didChange` ever in v1.** Disk is the only writer, so the server's copy and ours cannot diverge — provided we notice the write (D10). |
-| Structure | **Four layers, three boundaries**, mirroring the `GitBench.Pty` / `GitBench.Terminal.Vt` split this repo already uses for external-process concerns. See [Architecture](#architecture). Not a second `ISymbolExtractor` (C0). |
-| Config | One **user-scoped** `language-servers.json` in `AppPaths.AppDataPath`. Not per-repo — not as a matter of principle, but because this app has no consent surface to hang a trust prompt on (D8). |
-| Server sourcing | **None bundled.** The user installs the servers. "Not found" is a designed state with a message, and resolution goes through the login shell's `PATH` (C8). |
-| Process policy | **One server per language, for the active repo only.** Not one per (root × server) across every open repo — the measured footprint forbids it (F3). Stopped, not idled, when a repo goes inactive for T; global cap N with LRU eviction. |
-| Readiness | A sum type — `NotConfigured \| Starting \| Indexing(progress) \| Ready \| Failed(reason)` — surfaced in the pane, wired to `$/progress`. **Not optional**: a 32-second cold index is indistinguishable from a broken feature without it (F2). |
-| Opt-in & discovery | Off until the config file exists; per-repo enable on top. A Language Servers settings card is a **v1 deliverable**, not a follow-up — otherwise the feature ships invisible (D7). |
-| Go-to-definition targets | In-repo definitions land in the tree as they do today. Out-of-repo ones — stdlib, `~/.cargo/registry`, `node_modules`, `GOMODCACHE` — open a **detached preview**: the preview target becomes `FromCursor(rowKey) \| Detached(absolutePath)`, the tree cursor clears, and the header names the absolute path. `FileContentLoader.Load` already takes any absolute path, so the loader does not change — only the target's *provenance* decouples from the cursor. |
-| Blast radius | The document may **never** light up outside the Files pane. Enforced structurally: the session comes from the Files view-model, not from `ctx`, so no other `DiffRenderState` consumer can reach one (D9). |
-| Gating | A `DiffOptions.StructureEnabled`-style flag, so the whole subsystem is one boolean away from off. |
-| Out of scope for v1 | `workspace/symbol`, references panel, semantic tokens, call hierarchy, inlay hints, multi-root workspaces, servers over TCP or WebSocket. |
+| Features | Hover, diagnostics, go to definition. Nothing that edits code: no completion, formatting, rename, or code actions. There is no editor to put them in. |
+| File sync | Send the file when previewed, drop it when the selection moves. Never send edits. |
+| Which servers run | One per language, for the **active repository only**. Not one per open repo — the memory figures forbid it. Stopped when a repo goes idle, with a cap on how many run at once. |
+| Config | A single file the user writes, stored with the app's other settings. Not stored per-repository — see Risks. |
+| Finding the server binary | Resolved against the login shell's `PATH`, so a Mac GUI launch finds tools in `~/.cargo/bin` and Homebrew. Never run through a shell. |
+| Progress | The pane always shows what the server is doing: not configured, starting, indexing (with a percentage), ready, or failed with a reason. Not optional — a 32-second silent wait is indistinguishable from a broken feature. |
+| Discovery | A settings card listing languages in the current repo that have no server configured, with a button to create a starter config. Ships in v1, or nobody finds the feature. |
+| Go to definition, in repo | Expands the tree to the target file and jumps to the line. |
+| Go to definition, outside repo | Opens a **detached preview**: the file is shown, the tree selection clears, and the header shows the full path. Needed because most jumps in Rust and Go land in the standard library or a package cache, which the tree cannot show. |
+| Where it applies | The Files pane only. Never the diff view, commit details, or review window — those show file contents *at a commit*, and a server asked about them would answer confidently and wrongly. |
+| Off switch | One flag disables the whole subsystem. |
+| Not in v1 | Project-wide symbol search, a references panel, semantic highlighting, call hierarchy, inlay hints, multiple workspace roots. |
 
-## Architecture
+## What already exists
 
-`ISymbolExtractor` is **not** the extension point (C0). Four layers instead:
+Most of the supporting pieces are in the codebase.
 
-| Layer | Where | Knows about |
-|---|---|---|
-| Framing + JSON-RPC correlation | `GitBench.Lsp` (new project) | a `Stream` pair. Nothing else. |
-| LSP semantics — payloads parsed into closed types | `GitBench.Lsp` | the protocol. No `Repo`, no process. |
-| Lifecycle: config, spawn, roots, per-repo keying | `Features/LanguageServers` | `Repo`, `AppPaths`, `IUiDispatcher` |
-| Consumption | `Features/FileBrowser` | a per-document handle, and nothing else |
+- **A JSON-RPC library, already referenced.** `McpSdk.Shared` and `McpSdk.Protocol` arrive through
+  `ZGF.Gui.Desktop` and provide request/response matching, message types, and a pluggable transport.
+  LSP uses a different message framing than they do by default, but the transport interface is
+  exactly the right place to add it. The package is ours, so it can be extended.
+- **Column mapping between rendered and real text.** `Features/Diff/DiffLineText.cs` holds each line
+  both as it appears on screen (tabs expanded to spaces) and as it is in the file, with typed
+  conversions in both directions. Both are needed: positions we send must be in file coordinates,
+  and ranges the server sends back must be painted in screen coordinates.
+- **A place to draw diagnostics.** Diff rows already carry a list of character ranges used for
+  intra-line highlighting, drawn independently of syntax colors. Underlines fit that channel. The
+  gutter already has icon columns and click handling.
+- **Popup positioning.** The tooltip service builds popups from any widget with automatic placement
+  and flipping. A hover popup is that, with a markdown view inside.
+- **Login-shell `PATH` lookup.** Added recently for finding `git` on macOS; it needs to be shared
+  rather than written.
+- **Process teardown across platforms.** The terminal already handles process groups and signals on
+  Unix and process attributes on Windows.
+- **Background work with cancellation.** The Files pane already runs file loads off the UI thread and
+  cancels them when the selection moves.
 
-The Files pane depends on a narrow, document-scoped handle obtained from the store and disposed when
-the preview changes — roughly `IReadable<IReadOnlyList<LineDiagnostics>> Diagnostics`,
-`Task<Hover?> HoverAt(FileLine, RawCol, CancellationToken)`, `Task<Definition?> DefinitionAt(…)`.
-That interface has a trivial null implementation for "no config file", which is what makes the
-opt-in decision cheap. Boundaries enforced by an architecture test in both directions, as
-`lua-plugins.md` does.
+## The hard parts
 
-## What already exists — verified against the code
+**Line-number mapping.** A position on screen is a row in a rendered list, which contains headers,
+separators, and collapsed regions as well as code. A position in the file is a line number. These are
+different things, currently both plain integers, and mixing them up produces a jump to the wrong
+line that looks exactly like a working feature. The equivalent problem for columns is already solved
+with distinct types; lines need the same treatment, with a total conversion in both directions that
+handles rows with no line (a separator) and lines with no row (inside a collapsed fold).
 
-- **A JSON-RPC layer is already a transitive dependency.** `ZGF.Gui.Desktop` references
-  `McpSdk.Server`, pulling `McpSdk.Shared` and `McpSdk.Protocol` into `GitBench`
-  (`framework/Directory.Packages.props:23-25`). Their assemblies export `JsonRpcTransport`,
-  `ITransport`, `ITransportFactory`, `JsonRpcRequest/Response/Notification/Message`, `JsonRpcFraming`.
-  Correlation, ids and notification dispatch exist; the framing is line-delimited where LSP needs
-  `Content-Length`, and `ITransport` is exactly that seam. The package is ours
-  (nuspec `authors: Zeejfps`, `github.com/Zeejfps/EnvMcp`), so extending it is available.
-- **The column half of the position mapping, shipped.** `Features/Diff/DiffLineText.cs` (`a3021c6`)
-  holds a line in both spaces at once behind a private constructor and one factory, so a row whose
-  raw and expanded text disagree is unconstructible. It carries `ToRaw(ExpandedColumn, TabEdge)`,
-  `ToExpanded(RawColumn)` and `RawSlice`, with `RawColumn` and `ExpandedColumn` as distinct record
-  structs threaded through `DiffTextPos`, `DiffRowSelection`, `TryRowSpan` and both surfaces'
-  `CharIndexAt`. **Both directions matter here**: we send raw columns to the server, and a
-  server-supplied diagnostic or definition range arrives in raw columns and has to be *painted* in
-  expanded ones. `ToExpanded` has no production caller yet and exists for exactly that.
-- **The *landing* half of navigation.** `FileBrowserViewModel.NavigateToLine` (`:144`) unfolds,
-  reveals, and — via `_pendingReveal` — holds a line while the previewed file is still being read,
-  firing `LineRevealRequested` when the text lands (`:495`). Reaching a line in a file the pane
-  already shows costs nothing. Reaching a *different* file does not work; see C7.
-- **A per-line character-range channel for diagnostics.** `DiffRow.Line.Emphasis` is
-  `IReadOnlyList<CharRange>` (`DiffRow.cs:43`), plumbed from `DiffRowSet` and painted as a background
-  channel independent of the foreground `Spans`. That is the diagnostic-range shape, and it is
-  separate from `TokenSpan.Slot`, a closed `TokenColorSlot` enum with no underline concept. The
-  gutter already has glyph columns and hit-testing (`DiffContentView.cs:214, 416, 703-708`).
-- **Popup placement for hover.** `PopupTooltipService` is ~60 lines over `IPopupWindowFactory`,
-  taking `BuildRoot = ctx => <any widget>.BuildView(ctx)`, with preferred/flipped placement, pooling
-  and `MousePassThrough`. A markdown hover is that call with `MarkdownDocumentView` substituted.
-- **Login-shell `PATH` resolution** — see C8. Solved four commits ago and directly needed here.
-- **Cross-platform child-process teardown plumbing.** `GitBench.Pty/Platforms/Unix/UnixPtySession.cs`
-  already does `POSIX_SPAWN_SETSID`, `getpgid` verification (`:464`), a closed `SignalTarget`
-  Child/Group hierarchy (`:392-404`) and `kill(-pgid)` teardown (`:406-416`); `WindowsNative.cs` has
-  `InitializeProcThreadAttributeList`/`UpdateProcThreadAttribute` (`:93-125`), which is where
-  `PROC_THREAD_ATTRIBUTE_JOB_LIST` attaches. Parent-death *binding* is new; the platform plumbing has
-  a home.
-- **Config mechanics.** `AppPaths.AppDataPath(name)` + `AtomicFile` + four existing
-  `JsonSerializerContext`s. All four serialize app-authored state, so the hand-edited case is new.
-- **Off the UI thread, already.** `FileBrowserViewModel`'s serial lane with `_previewGeneration` and
-  `_previewCancel` is the cancellation model an LSP request needs.
+**Diagnostics cannot be baked into the rendered rows.** Syntax colors are computed once when the file
+is flattened into rows. Diagnostics arrive repeatedly, seconds apart, while the file sits on screen.
+Folding them into the same structure would mean rebuilding every row on each update. They belong in a
+separate layer, keyed by file and version, read at draw time, with stale updates discarded.
 
-## Corrections — what a first pass got wrong
+**Go to definition needs machinery that does not exist.** The pane can currently only preview a file
+the tree has already listed and the user has selected. Jumping to a definition means expanding the
+tree to a file, waiting for the directory listing, and moving the selection — or, for a file outside
+the repo, showing a preview with no tree selection at all. It also needs a back stack, which the app
+does not have anywhere.
 
-**C0 — `ISymbolExtractor` is not the seam, and putting this behind it would be a Rule 2 violation.**
-It is `FileOutline? Extract(string text, CodeLanguage language)` — synchronous, pure, per-file, no
-repo, no cancellation, no push channel. LSP is async, stateful, workspace-scoped and push-based. And
-C1 concludes LSP must not produce the outline, so a second implementation would return `null` from
-the interface's only method. Worse: it has **38 references across 17 files** in 7 features, including
-`Features/Assistant/Tools/AssistantToolset`, `ReadTools`, `ReviewTools` and
-`Features/Review/ReviewWindowsViewModel`. Wiring process spawning behind it puts language servers
-into the assistant toolset and the review window. Hence [Architecture](#architecture).
+**Some protocol responses have no fixed shape.** Hover content and definition results can each come
+back in three different forms. The JSON code generator the app uses for everything else cannot
+express that, so those few fields need hand-written readers. This is confirmed to work: the approach
+compiles clean under the app's ahead-of-time build with no warnings, provided two specific
+reflection-based JSON calls are avoided.
 
-**C1 — `documentSymbol` is a downgrade for the outline.** `OutlineNode` carries `ParameterTypes` and
-`SignatureEndLine`; the latter is load-bearing at `DiffRowSet.cs:379-400` (fold start) and
-`FileBrowserViewModel.cs:480`. LSP's `DocumentSymbol` has `range` and `selectionRange` and nothing
-meaning "where the signature stops and the body starts", and its `SymbolKind` has 26 members against
-this app's 14. LSP does have `textDocument/foldingRange`, which the first draft missed — but it still
-cannot reproduce the signature/body split that drives collapse-onto-the-signature. **Tree-sitter owns
-the outline; LSP augments.**
+**Nothing in the app supervises a long-running process.** Restarting a crashed server with backoff,
+giving up after repeated failures, shutting down an idle one — none of this has precedent here. It
+all has to be written and tested.
 
-**C2 — `ITooltipService` cannot show a hover.** `Show(object owner, string text, RectF)` — one
-string, no markup. LSP hover returns `MarkupContent`, routinely with a fenced code block. No popup
-hosts markdown today; the placement machinery to build one does (see above).
+**Large files must not be sent.** The preview truncates files over 2 MB and drops the last partial
+line. Sending that to a server would produce errors for a file that does not exist. Truncated preview
+means no server request.
 
-**C3 — truncated files must not be opened.** `FileContentLoader.MaxTextBytes` is 2 MB (`:65`) and
-`SplitLines(dropLastPartialLine: true)` discards the tail (`:166`). Sending that as the file's
-contents produces diagnostics for a file that does not exist. `Highlight()` already refuses on
-`truncated` (`:213`), so this matches existing policy.
+**The outline stays with tree-sitter.** Language servers can list a file's symbols, but the app's
+folding depends on knowing where a declaration's signature ends and its body begins, which the
+protocol does not express. Servers add information; they do not replace the outline.
 
-**C4 — the orphan risk was overstated; the real requirement is narrower and cheaper.** Measured (F4):
-killing only the client, with no tree kill, left **no orphan** on any of the three servers — they exit
-on **stdin EOF**, not via the LSP `processId` contract (verified by passing `processId: null`). So the
-requirement is: **never let anything else hold a handle to the server's stdin**, and never interpose a
-wrapper that keeps the pipe open. Job objects / `PR_SET_PDEATHSIG` / `kqueue` remain worth having as
-belt-and-braces — stdin-EOF is a server convention, not a guarantee, and Linux and macOS were not
-tested — but this is no longer the plan's top risk. Related: **any kill or memory readout must walk
-the tree**, because for two of three servers the memory is not in the direct child (tsserver's 442 MB
-lives in grandchild node processes; `rust-analyzer` on `PATH` is a 13 MB rustup shim that execs the
-real binary).
+**Files change on disk.** The working tree can change while a file is on screen, and the app already
+watches for that. Since we never send edits, "the server's copy matches disk" holds only if we react:
+a changed file is closed and reopened at a new version, and results tagged with an old version are
+discarded.
 
-**C5 — LSP's union types defeat the source generator, and there is no precedent for the fix.**
-`Hover.contents` is `MarkedString | MarkedString[] | MarkupContent`; `textDocument/definition` returns
-`Location | Location[] | LocationLink[] | null`. `[JsonSerializable]` cannot express that. The first
-draft claimed `OpenAiStreamReader` already does this — **it does not**: it deserializes *with* the
-source generator (`OpenAiStreamReader.cs:117`) and hand-writes only SSE line framing. There is **no
-`Utf8JsonReader` and no `JsonConverter<T>` anywhere in the repo**. These would be the first. The spike
-confirms the approach is sound (F5): hand-written readers over `JsonNode`/`Utf8JsonReader` analyze
-AOT-clean; the only discipline needed is avoiding `JsonSerializer.Serialize<Dictionary<string,object>>`
-and the generic `JsonArray.Add<T>`.
+## Build order
 
-**C6 — CI exists but is manual.** `.github/workflows/` holds **two** files. `build.yml` already runs
-`dotnet build GitBench.sln -c Debug` and `dotnet test GitBench.sln -c Debug` over a four-RID matrix —
-but `on: workflow_dispatch` only. The conclusion `lua-plugins.md:19` and `glfw-static-linking.md:271`
-reach still holds; their premise is stale, and this plan should not repeat it a third time. The
-remediation is two trigger lines on a job that already works. That it is now the third plan to hit
-this says it should be its own one-page plan.
+Each phase produces something visible. Nothing is built two layers deep before anything works.
 
-**C7 — `NavigateToLine` cannot open a file, and that is most of go-to-definition.** `_previewPath` is
-derived *solely* from the tree cursor: `SyncPreview` reads `rows[IndexOfCursor(rows)]` and takes its
-`FullPath` (`:383-389`), and `NavigateToLine` sets `_pendingReveal` only when `_previewPath` is already
-non-null (`:157`). Its one caller, `SelectSymbol` (`:222-227`), jumps within an already-materialized
-row. So landing on a definition needs three things, none of which exist: **(a)** for an in-repo target,
-expand ancestors (`FileBrowserTree.cs:89,124`), await the serial lane, then `SetCursor` on a row key
-that now exists; **(b)** for an out-of-repo target, the detached preview from the Decisions table;
-**(c)** a back stack — verified absent everywhere. Narrower than it appears: `ToRelative` (`:520`)
-constrains **persisted** state only (`:358,363`) — live rows carry absolute paths — so a detached
-preview is representable at runtime today, as long as it never tries to persist as a cursor.
+1. **One thing, end to end.** Message framing, handshake, open a file, one hover, shown in a popup —
+   against a single hard-coded server. Includes the line-number mapping, since nothing downstream can
+   be trusted without it.
+2. **Real server management.** The config file, per-repo tracking, the active-repo-only policy,
+   restart and shutdown, progress reporting, and the settings card.
+3. **Diagnostics.** The overlay, the retry handling, wave replacement, underlines and gutter marks.
+4. **Go to definition.** Detached previews, tree expansion, the back stack.
 
-**C8 — the login-shell `PATH` problem is already solved, and this plan needs it.** A macOS GUI app
-does not inherit the user's shell `PATH`, so `rust-analyzer` in `~/.cargo/bin` would report "not
-found" on machines where it is installed. Commit `28643f8` added `GitProcessRunner.LoginEnvironment()`
-(`:297-306`) and `ResolveGitExecutable()` (`:220-236`), which walk the login `PATH` plus
-`/opt/homebrew/bin` and `/usr/local/bin`, with an `UninheritedEnvKeys` scrub at `:287`. Both are
-`private static` today: the work is promote-and-share, not build.
-`DetectPathspecFromFileSupport()` (`:255-280`) is a working precedent for probing an external tool's
-version.
+Deferred: references panel, project-wide symbol search, semantic highlighting.
 
-**C9 — diagnostics cannot live on `FilePreview.Text`, and spans are frozen at flatten time.**
-`DiffRowPainter` never sees `DiffHighlight`: `DiffRowSet` calls `ForLine` (`:197,284,314`) and bakes
-the result into `DiffRow.Line.Spans`, which the painter reads at `DiffRowPainter.cs:543`.
-`DiffOptions`'s own comment notes a runtime flip "takes effect on the next FlattenRows … not
-instantly" (`:19-21`). Meanwhile `publishDiagnostics` is pushed repeatedly while a server indexes —
-measured at two and three waves per file (F1). Folding them into the render state means re-flattening
-every line per push, and adds a fourth optional field to a record whose own doc comment says it is a
-sum type *specifically* to avoid an optional-field bag. **Diagnostics are a separate reactive overlay
-keyed by `(uri, version)`, read by the painter at draw time**, coalesced on the `IUiDispatcher`, with
-any publish whose version is not on screen dropped. "Same shape as `DiffHighlight`" is true spatially
-and false temporally.
+Before phase 1: the repo has a CI job that builds and tests across four platforms, but it only runs
+when triggered by hand. It needs to run on pull requests. That is a two-line change and it is assumed
+by everything below.
 
-**C10 — position mapping: the column axis is now solved, the row axis is not.** Position mapping
-would be wrong on both axes, silently, and it remains the top risk — but half of it shipped in
-`a3021c6` and the plan should not re-budget that half.
-
-**Column — done.** `DiffTextPos.Char` was an offset into **tab-expanded** text (`DiffText.ExpandTabs`
-replaces each tab with a flat `TabWidth` spaces) while LSP `character` indexes the **raw** line. gofmt
-tab-indents every Go file and gopls is server #1, so every hover and diagnostic on an indented line
-would have landed `(TabWidth - 1) × leadingTabs` columns off, looking like a working feature. That is
-now structurally prevented: `DiffTextPos.Char` is an `ExpandedColumn`, `RawColumn` is a distinct type
-with no conversion to it, and `DiffLineText` owns the mapping in both directions.
-
-**Row — open, and now the whole of this risk.** `DiffTextPos.Row` is still a bare `int` index into the
-flattened row stream — banners, hunk separators, tears and folded gaps all occupy rows — not a file
-line. The source line is still only recoverable from `DiffRow.Line.OldNumber`/`NewNumber`, which are
-still **pre-stringified**. Two bare `int`s that mean different things remain freely swappable, which
-is exactly the hazard the column fix removed. **Remaining fix:** a `FileLine` type and the total
-`RowIndex ↔ FileLine` mapping, in the same shape as `DiffLineText` — which is now a worked precedent
-in this codebase rather than a proposal: retyping made the compiler point at precisely the call sites
-where the two spaces had been interchangeable, and nowhere else.
-
-So the first draft's "a `(line, character)` from a mouse point and nothing else" over-claimed on both
-axes; it is now half true. The good news the draft missed still holds: .NET string indices are already
-UTF-16 code units, LSP's default `positionEncoding`, so surrogate pairs and emoji are correct *for
-free* — provided nothing converts to runes, which `DiffText.StepCells` deliberately does for display
-width. Declare `general.positionEncodings: ["utf-16"]` and refuse a server that negotiates otherwise
-(clangd defaults to utf-8 via its `offsetEncoding` extension).
-
-## Findings — LSP under a read-only viewer, measured
-
-Standalone harness, `Content-Length` JSON-RPC over stdio, `initialize` → `initialized` → `didOpen`
-(disk text) → `hover`/`definition` → `shutdown`/`exit`. **No `didChange` was sent in any run.**
-Server→client requests (`workspace/configuration`, `client/registerCapability`,
-`window/workDoneProgress/create`) are answered — required, or gopls and tsserver stall.
-
-Projects: the vendored `tree-sitter` Rust workspace (9 crates, 102 files, 53,785 lines);
-`golang.org/x/tools@v0.49.0` (1,283 files, 238,766 lines); `tree-sitter/lib/binding_web` (strict TS,
-3,243 lines, 224 npm deps).
-
-| | rust-analyzer 1.90 | gopls v0.23 | typescript-language-server |
-|---|---|---|---|
-| `initialize` round-trip | 15 ms | 56–61 ms | 93 ms |
-| First useful hover, cold | **31,812 ms** | 2,368 ms (7,411 ms first-ever) | 648 ms |
-| First useful hover, warm | 10,706 ms | — | 634 ms |
-| Warm hover / definition | 0 ms | 0 ms | 1–3 ms |
-| Diagnostics, broken file | **+1,943 ms** | **+6,634 ms** | **+1,871 ms** |
-| Peak WS, server process | 1,739 MB | 754 MB | 38 MB (direct child only) |
-| Peak WS, process tree | **3,509 MB** cold | 775 MB | 442 MB across 4 procs |
-| `shutdown`+`exit` | yes, 2,147 ms | yes, 38 ms | yes, 4 ms |
-| Orphaned on client kill? | **no**, 647 ms | **no**, 71 ms | **no**, 74 ms |
-| `$/progress` notifications | 2,983 | 2 | 2 |
-
-**F1 — diagnostics arrive, unambiguously.** rust-analyzer published 5 (`severity: 1`,
-`source: "rustc"`, `mismatched types`) because workspace load runs `cargo check` once — no `didSave`,
-no `didChangeConfiguration`. gopls published 3 (`source: "compiler"`), tsserver 4
-(`source: "typescript"`). Clean files publish `n=0`, so "no errors" is an explicit signal rather than
-an absence to time out on. **gopls publishes in two waves** (type-check +2,289 ms `n=0`, analyzers
-+5,334 ms `n=2` hints); rust-analyzer republished the same URI three times as flycheck progressed.
-Per-URI state must be **replaced, never appended**, and the UI must tolerate diagnostics changing
-seconds after a file settles.
-
-**F2 — cold start is rust-analyzer's problem alone**, and it is severe: 31.8 s to first useful hover
-with `target/` deleted, 10.7 s warm. Once indexed, hover and definition are 0 ms — the cost is
-entirely one-time project load. Two traps, both observed: hover during indexing returns JSON-RPC error
-**`-32801 "content modified"`**, which is a *retry* signal, not a failure; and `initialize` returned in
-15 ms while the server was still ~30 s from useful, so a successful handshake says nothing about
-readiness. The 2,983 progress notifications carry real percentages (`Indexing 85%`), so a determinate
-bar is available. gopls and tsserver need no progress UI.
-
-**F3 — memory forbids the obvious process policy.** rust-analyzer holds 1,739 MB for a 54k-line
-workspace and does not shrink; cold load spawns a `cargo`/`rustc` build-script storm (40+ transient
-children) reaching **3,509 MB working set / 4,113 MB private** across the tree. That transient spike,
-not the steady state, is what collides with the user's own build. Hence one server per language for
-the active repo only.
-
-**F4 — no orphans on Windows.** See C4.
-
-**F5 — AOT analysis reaches zero warnings.** First pass produced exactly two warned call sites (each
-IL2026 + IL3050): `JsonSerializer.Serialize<Dictionary<string,object>>`, and the *generic*
-`JsonArray.Add<T>`, which is reachable from ordinary `JsonNode` DOM code and easy to hit by accident.
-Replacing them with a hand-built `JsonObject` + `ToJsonString()` and
-`((IList<JsonNode?>)arr).Add(...)` gave **0 trim/AOT warnings**. Framing, `JsonNode.Parse`,
-`JsonObject` indexer assignment and union-typed readers all analyzed clean.
-
-**Not measured:** Linux and macOS orphan behavior (Windows only — do not assume stdin-EOF transfers);
-a truly cold OS page cache; gopls with a cold `GOCACHE`. One caveat: rust-analyzer reported
-`Failed to run build scripts of some packages` on the large workspace — hover and definition still
-worked, but degraded-workspace states need a reason string in the UI.
-
-## Phases
-
-**Prerequisite (not this feature's cost):** two trigger lines on `build.yml` (C6).
-
-- **1 — One vertical slice.** Framing over `ITransport` + `initialize` + `didOpen` + one `hover`
-  against a **hard-coded** server, rendered in a popup. Config for N servers before hover for 1 is
-  abstraction ahead of the variation. Includes the **row axis** of C10 — the `FileLine` type and the
-  `RowIndex ↔ FileLine` mapping. The column axis is already done (`a3021c6`), so this is half the job
-  it was, but nothing downstream is trustworthy until the other half lands.
-- **2 — Config, lifecycle, readiness, discovery.** `language-servers.json` → `LanguageServerSpec`
-  records, malformed entries dropped individually with a reason. `ILanguageServerStore` keyed per
-  repo; the active-repo-only policy from F3; restart-with-backoff and a give-up cap (no supervision
-  precedent exists anywhere — this is all new). The readiness sum type and the settings card ship
-  here, not later.
-- **3 — Diagnostics.** The overlay from C9, `-32801` retry handling, wave-replacement from F1, the
-  `Emphasis` range channel and a gutter mark.
-- **4 — Go-to-definition.** The largest phase, not the smallest — C7 has the accounting: the
-  preview-target sum type and detached header, ancestor expansion + `SetCursor` for in-repo targets, a
-  back stack, and the `Location | Location[] | LocationLink[]` reader from C5.
-
-Deferred: references panel, `workspace/symbol`, semantic tokens.
-
-## Config shape
+## Config file
 
 ```jsonc
 {
@@ -316,71 +222,50 @@ Deferred: references panel, `workspace/symbol`, semantic tokens.
 }
 ```
 
-Hand-edited, which no JSON file in this app is today — so `ReadCommentHandling.Skip`,
-`AllowTrailingCommas`, and a parse error that names the line and is *shown*, not swallowed. The file
-is standalone, so a parse failure cannot wipe other settings.
+This is the only file in the app a user writes by hand, so it allows comments and trailing commas,
+and a syntax error names the line and is shown rather than swallowed. One bad entry is skipped with a
+reason; it does not discard the rest. The file stands alone, so a parse failure cannot affect other
+settings.
 
-Against Rule 1: `command` is resolved against the **login-shell `PATH`** (C8), absolute paths taken
-verbatim, **never through a shell**, `args` passed via `ArgumentList` and never a joined string.
-`settings` exists because phase 1 must answer `workspace/configuration` and otherwise has nowhere to
-get an answer from. `initializationOptions` is an untyped `JsonElement` hole passed to the wire —
-acceptable, but it is a Rule 3 level-1 item and should be flagged as one rather than left looking
-typed. Two entries claiming the same extension need a stated winner, or the key should be the app's
-`CodeLanguage` enum with unknown names refused at parse.
-
-**D8 — on per-repo config.** A repo-supplied file naming a command to spawn is arbitrary code
-execution on clone, in an app whose job is pointing at other people's repositories. But the honest v1
-reason is narrower than principle: **this app has no consent surface to hang a trust prompt on** —
-`lua-plugins.md` says so explicitly, `ToolApproval` being `internal` to `Features/Assistant` and
-rendered as a transcript row. Stated that way, the two plans agree, and per-repo config unlocks the
-moment that surface exists.
-
-**D9 — the document may not light up outside the Files pane.** Hover and definition naturally hang off
-`DiffContentView`/`IDiffSelectionSurface`, which the diff pane, commit-details tabs and the review
-window all share. There the text is a **blob at a commit**, not what is on disk, and a server asked
-about it will be confidently wrong. Structural, not conventional: the session comes from the Files
-view-model, never from `ctx`.
-
-**D10 — the working tree moving under an open document.** `FileBrowserStore` already re-lists on
-`WorkingTreeChangedMessage` (skipping `IndexOnly`), and `RepoReconcileService` fires one every 30 s.
-With no `didChange`, "disk is the only writer" is an invariant only if we *notice* the write. Document
-identity is `(path, contentVersion)`; a content change is `didClose` + `didOpen` at a new version;
-diagnostics whose version is not current are discarded. `didOpen` sends the whole decoded string, not
-the `Lines` list. This is the only place the plan's central simplifying assumption can break, so it
-gets a named test.
+`rootMarkers` finds the project root by walking up from the file, which is also what makes
+submodules and nested projects work. `settings` exists because servers ask the client for their
+configuration during startup and we need an answer to give them. Two entries claiming the same file
+extension need a defined winner.
 
 ## Testing
 
-A scripted fake server is a **phase 1 deliverable**, with the hostile corpus `lua-plugins.md`
-established as the pattern: never answers `initialize`; answers after the timeout; exits mid-request;
-garbage before the first header; a header with no `\r\n\r\n`; a `Content-Length` that lies short and
-long; a 50 MB hover; a response with an unknown `id`; a notification storm; `publishDiagnostics` for a
-file never opened; `null` where `Location[]` was expected; `workspace/configuration` before
-`initialize` completes; a server that ignores `shutdown`; `-32801` on every request until the tenth.
+**A fake server** is built in phase 1 and behaves badly on purpose: never answers, answers too late,
+exits mid-request, sends a wrong byte count, sends a huge response, replies to a request that was
+never made, sends results for a file that was never opened, and asks for configuration before
+startup finishes.
 
-`LspPosition` gets its own corpus: tab-indented Go, CRLF, a line with an emoji, a line of CJK, mixed
-tabs and spaces, and a folded region.
+**The position mapping** gets its own tests: tab-indented Go, Windows line endings, emoji, CJK text,
+mixed tabs and spaces, and collapsed regions.
 
-Plus one process-level test per platform that kills the client and asserts no orphan — the only test
-that covers C4, and the one that closes the Linux/macOS gap the spike could not.
+**Process cleanup** gets one test per platform that kills the client and checks nothing survives.
 
-## Risks, ranked
+## Risks
 
-1. **Silent position wrongness — now the row axis only** (C10). Every other risk here announces
-   itself: an orphan shows in Task Manager, a hang shows a spinner, a missing binary shows a message.
-   A jump that lands on the wrong line *looks like the feature working*, in a subsystem whose entire
-   value is being right about code. Halved by `a3021c6` — the column axis can no longer be got wrong
-   without a compile error — and it stays at the top because the row axis is still two bare `int`s
-   meaning different things, and because the fix is now a known quantity rather than a guess.
-2. **rust-analyzer's footprint and cold start** (F2, F3) — now measured, and the reason the process
-   policy and the readiness UI are decisions rather than nice-to-haves. The identity tension is real:
-   "native, no runtime, launches fast" and "spawns a 1.7 GB indexer" are opposed, and the mitigation
-   is that no config file means nothing ever spawns.
-3. **Server heterogeneity and readiness semantics.** `-32801` as a retry signal, multi-wave
-   diagnostics, `initialize` returning long before usefulness, degraded workspaces with failing build
-   scripts. Every request needs a timeout and every failure a reason a user can act on.
-4. **Orphans on Linux and macOS** — downgraded from #1. Windows is measured safe via stdin EOF; the
-   other two are untested, and stdin-EOF is a convention, not a guarantee.
-5. **"No problems" is indistinguishable from "no server"** — mitigated by the readiness sum type.
-6. **Localization drag.** Lowest: LOC004 is `DiagnosticSeverity.Error`, so a missing translation
-   breaks the build, which is the definition of a risk that cannot reach a user.
+1. **Wrong positions.** Every other failure here is visible: a crashed server shows an error, a slow
+   one shows a spinner. A definition that jumps to the wrong line looks like it worked. This is why
+   the line mapping is typed and tested before anything uses it.
+2. **rust-analyzer's cost.** 1.7 GB and half a minute, in an app that sells on being small and fast
+   to start. Mitigated by: nothing runs without a config file, only the active repo's servers run,
+   idle servers stop, and there is a visible off switch.
+3. **Servers behave differently from each other.** Different readiness signals, different timing,
+   different setup requirements. Every request needs a timeout and every failure needs a message a
+   user can act on.
+4. **Cleanup on Linux and macOS is unverified.** Servers exiting on their own was measured on Windows
+   only, and it relies on convention rather than a guarantee. The per-platform test above covers it,
+   and the terminal's existing process handling is the fallback.
+5. **Silence looks like breakage.** A file with no errors and a server that never started produce the
+   same empty screen. The status display is the fix.
+
+## Why config is not per-repository
+
+A config file names a program to run. If it lived in the repository, cloning someone's project and
+opening it would run their command. That is a bad property for an app whose whole job is opening
+other people's repositories.
+
+The honest version is narrower: per-repo config would be fine with a trust prompt, and the app has no
+general prompt to hang it on today. When one exists, this can be revisited.
