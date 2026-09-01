@@ -83,7 +83,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     private readonly IRepoRegistry _registry;
     private readonly IGitStatusReader _git;
     private readonly IMessageBus _bus;
-    private readonly IStartupSweepCoordinator _sweep;
     private readonly IGitReadGate _gate;
     private readonly IUiDispatcher _dispatcher;
     private readonly IRepoHeadStore _head;
@@ -109,13 +108,12 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitStatusReader git, IMessageBus bus, IStartupSweepCoordinator sweep, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitStatusReader git, IMessageBus bus, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
     {
         _ops = ops;
         _registry = registry;
         _git = git;
         _bus = bus;
-        _sweep = sweep;
         _gate = gate;
         _dispatcher = dispatcher;
         _head = head;
@@ -146,8 +144,8 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         _reposSub = _registry.Repos.Subscribe(OnRepoListChange);
         // A switch has to re-probe: every consumer reads the *active* repo's slot, so without this
         // the toolbar, the status bar and the branches badge all keep showing the previous repo's
-        // numbers until an unrelated message happens to fire. Subscribing fires immediately, which
-        // also seeds the active repo ahead of the startup sweep the Reset above defers.
+        // numbers until an unrelated message happens to fire. Subscribing fires immediately, so the
+        // repo already active at startup is probed too.
         _activeSub = _registry.Active.Subscribe(repo =>
         {
             if (repo != null) Refresh(repo.Id);

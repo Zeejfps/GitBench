@@ -35,8 +35,7 @@ public sealed class GitReadGateStoreTests : IDisposable
         var git = new GitService(new RepoActivityTracker());
         var probe = new ConcurrencyProbeGate(new GitReadGate(), GitReadGate.MaxConcurrentReads);
         using var store = new RepoSnapshotStore(
-            _registry, git, git, git, git, new MessageBus(),
-            new StartupSweepCoordinator(new GitReadGate()), new NoIngest(), probe, _dispatcher);
+            _registry, git, git, git, git, new MessageBus(), new NoIngest(), probe, _dispatcher);
 
         // Subscribing fires OnActiveChanged for the active repo, which issues exactly the three-slice
         // fan-out. All three must reach the gate at once — if the gate were sized to 2, the third

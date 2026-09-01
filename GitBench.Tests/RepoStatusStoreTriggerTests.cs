@@ -13,8 +13,8 @@ namespace GitBench.Tests;
 // one slot. So a repo switch has to re-probe: without it every one of those shows the *previous*
 // repo's numbers until an unrelated message happens to fire.
 //
-// Drives the real store over real throwaway repos, with the startup sweep deliberately never
-// released — so the only thing that can produce a probe here is the active-repo trigger itself.
+// Drives the real store over real throwaway repos. There is no all-repos sweep, so the only thing
+// that can produce a probe here is the active-repo trigger itself.
 public sealed class RepoStatusStoreTriggerTests : IDisposable
 {
     private readonly string _root;
@@ -35,7 +35,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         var head = new SettledHead();
         _store = new RepoStatusStore(
             new IdleOperations(), _registry, new GitService(new RepoActivityTracker()),
-            new MessageBus(), _sweep, _gate, _dispatcher, head, head);
+            new MessageBus(), _gate, _dispatcher, head, head);
     }
 
     [Fact]
@@ -53,10 +53,10 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     }
 
     [Fact]
-    public void The_active_repo_is_seeded_without_waiting_for_the_startup_sweep()
+    public void The_active_repo_is_probed_at_startup()
     {
         // Opening makes it active, so subscribing at Start must probe it straight away rather than
-        // leaving the toolbar Unknown until MarkActiveReady releases the deferred all-repos sweep.
+        // leaving the toolbar Unknown.
         InitRepo("solo", "solo-branch");
 
         _store.Start();
@@ -89,6 +89,64 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     // RepoSnapshotStore ingests — so the status store must NOT probe on those channels, or the
     // working-tree walk runs twice. A counting decorator around the real GitService makes the
     // difference observable.
+
+    // Startup used to probe every registered repo, which on a machine with a few dozen was the burst
+    // that made the app feel busy exactly when the user wanted to work in one of them.
+    [Fact]
+    public void Startup_probes_only_the_active_repo()
+    {
+        InitRepo("active", "active-branch");
+        InitRepo("other", "other-branch");
+        InitRepo("third", "third-branch");
+        SetActive("active");
+        using var h = new CountingHarness(_registry);
+
+        h.Store.Start();
+        DrainUntil(h.Dispatcher, () => h.Store.Active.Value.CurrentBranchName == "active-branch", "active's probe to land");
+        Quiesce(h);
+
+        Assert.Equal(1, h.Git.StatusSummaryCalls);
+        Assert.Null(h.Store.For(RepoId("other")).CurrentBranchName);
+        Assert.Null(h.Store.For(RepoId("third")).CurrentBranchName);
+    }
+
+    // The dot a non-active row draws comes from what the last session persisted, not from a read.
+    [Fact]
+    public void A_remembered_dirty_flag_shows_without_probing()
+    {
+        InitRepo("active", "active-branch");
+        InitRepo("other", "other-branch");
+        _registry.SetLastKnownDirty(RepoId("other"), true);
+        SetActive("active");
+        using var h = new CountingHarness(_registry);
+
+        h.Store.Start();
+        DrainUntil(h.Dispatcher, () => h.Store.Active.Value.CurrentBranchName == "active-branch", "active's probe to land");
+        Quiesce(h);
+
+        Assert.True(h.Store.For(RepoId("other")).IsDirty);
+        Assert.Equal(1, h.Git.StatusSummaryCalls);
+    }
+
+    // And a real read replaces it, so a repo cleaned while the app was closed corrects itself the
+    // moment something looks at it rather than showing a dot forever.
+    [Fact]
+    public void A_probe_overwrites_the_remembered_flag()
+    {
+        InitRepo("active", "active-branch");
+        InitRepo("other", "other-branch");
+        _registry.SetLastKnownDirty(RepoId("other"), true);
+        SetActive("active");
+        using var h = new CountingHarness(_registry);
+        h.Store.Start();
+        DrainUntil(h.Dispatcher, () => h.Store.Active.Value.CurrentBranchName == "active-branch", "active's probe to land");
+        Quiesce(h);
+
+        h.Bus.Broadcast(new WorkingTreeChangedMessage(RepoId("other")));
+        DrainUntil(h.Dispatcher, () => !h.Store.For(RepoId("other")).IsDirty, "the probe to clear the stale dot");
+
+        Assert.False(_registry.GetLastKnownDirty(RepoId("other")));
+    }
 
     [Fact]
     public void WorkingTreeChanged_for_the_active_repo_runs_no_summary_probe()
@@ -386,12 +444,11 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     {
         var gate = new GitReadGate();
         var head = new SettledHead();
-        return new(new IdleOperations(), _registry, git, new MessageBus(), new StartupSweepCoordinator(gate), gate, dispatcher, head, head);
+        return new(new IdleOperations(), _registry, git, new MessageBus(), gate, dispatcher, head, head);
     }
 
     // Two real repos with "active" made the active one, over a store wired to a counting GitService.
-    // The store's own startup sweep is never released, so the only probes are the active-repo trigger
-    // (§1) plus whatever a test broadcasts — exactly the isolation the existing tests rely on.
+    // The only probes are the active-repo trigger (§1) plus whatever a test broadcasts.
     private CountingHarness StartActive()
     {
         InitRepo("active", "active-branch");
@@ -517,7 +574,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         public CountingHarness(IRepoRegistry registry)
         {
             var head = new SettledHead();
-            Store = new RepoStatusStore(new IdleOperations(), registry, Git, Bus, new StartupSweepCoordinator(Gate), Gate, Dispatcher, head, head);
+            Store = new RepoStatusStore(new IdleOperations(), registry, Git, Bus, Gate, Dispatcher, head, head);
         }
 
         public void Dispose() => Store.Dispose();

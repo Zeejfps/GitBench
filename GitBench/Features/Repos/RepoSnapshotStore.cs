@@ -49,7 +49,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
 
     // If the active repo's first load never lands (no active repo, a load error, a hang), release
     // the deferred startup sweeps anyway after this long so per-repo decorations aren't blocked.
-    private const int ActiveReadyFallbackMs = 5000;
 
     private readonly IRepoRegistry _registry;
     private readonly IGitHistoryReader _gitHistory;
@@ -57,12 +56,10 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
     private readonly IGitBranchOperations _gitBranches;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IMessageBus _bus;
-    private readonly IStartupSweepCoordinator _sweep;
     private readonly IRepoStatusIngest _statusIngest;
     private readonly IGitReadGate _gate;
     // The active repo's first load kicks three slice loads; once all three have landed the active
     // repo is "ready" and the deferred all-repos sweeps may run. UI-thread only.
-    private int _firstLoadRemaining = 3;
     private readonly IUiDispatcher _dispatcher;
     private bool _started;
 
@@ -102,7 +99,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         IGitBranchOperations gitBranches,
         IGitSubmoduleOperations gitSubmodules,
         IMessageBus bus,
-        IStartupSweepCoordinator sweep,
         IRepoStatusIngest statusIngest,
         IGitReadGate gate,
         IUiDispatcher dispatcher)
@@ -113,7 +109,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         _gitBranches = gitBranches;
         _gitSubmodules = gitSubmodules;
         _bus = bus;
-        _sweep = sweep;
         _statusIngest = statusIngest;
         _gate = gate;
         _dispatcher = dispatcher;
@@ -134,14 +129,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
         _commitCreatedSub = _bus.SubscribeScoped<CommitCreatedMessage>(OnCommitCreated);
         _submodulesSub = _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
         _refreshSub = _bus.SubscribeScoped<RepoRefreshRequestedMessage>(OnRefreshRequested);
-
-        // Safety net for the active-ready signal below: if the first load never lands, release the
-        // deferred startup sweeps anyway so per-repo decorations and discovery still run.
-        Task.Run(async () =>
-        {
-            await Task.Delay(ActiveReadyFallbackMs).ConfigureAwait(false);
-            _dispatcher.Post(_sweep.MarkActiveReady);
-        });
     }
 
     // ---- triggers ----
@@ -158,8 +145,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
             _commits.Value = null;
             _branches.Value = null;
             _local.Value = null;
-            // No active repo to wait on — let the deferred all-repos sweeps run.
-            _sweep.MarkActiveReady();
             return;
         }
 
@@ -400,9 +385,6 @@ internal sealed class RepoSnapshotStore : IRepoSnapshotStore, IHostedService, ID
 
             dispatcher.Post(() =>
             {
-                // First three slice loads landing = active repo ready; release the startup sweeps.
-                if (_firstLoadRemaining > 0 && --_firstLoadRemaining == 0)
-                    _sweep.MarkActiveReady();
                 if (result != null) cache.Set(repo.Id, result);
                 // Before the lane-stale return: a lane-stale result is still a legitimate observation
                 // of *this* repo, which is what the ingest orders by (its own reservation), not by

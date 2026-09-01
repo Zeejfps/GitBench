@@ -191,7 +191,6 @@ internal static class AppServices
             ctx.Require<IGitBranchOperations>(),
             ctx.Require<IGitSubmoduleOperations>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<IStartupSweepCoordinator>(),
             (IRepoStatusIngest)ctx.Require<IRepoStatusStore>(),
             ctx.Require<IGitReadGate>(),
             ctx.Require<IUiDispatcher>()));
@@ -210,7 +209,6 @@ internal static class AppServices
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IGitStatusReader>(),
             ctx.Require<IMessageBus>(),
-            ctx.Require<IStartupSweepCoordinator>(),
             ctx.Require<IGitReadGate>(),
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IRepoHeadStore>(),

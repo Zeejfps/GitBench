@@ -34,8 +34,8 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         var git = new GitService(new RepoActivityTracker());
         _sweep = new StartupSweepCoordinator(_gate);
         var head = new SettledHead();
-        _status = new RepoStatusStore(new IdleOperations(), _registry, git, _bus, _sweep, _gate, _dispatcher, head, head);
-        _snapshots = new RepoSnapshotStore(_registry, git, git, git, git, _bus, _sweep, _status, _gate, _dispatcher);
+        _status = new RepoStatusStore(new IdleOperations(), _registry, git, _bus, _gate, _dispatcher, head, head);
+        _snapshots = new RepoSnapshotStore(_registry, git, git, git, git, _bus, _status, _gate, _dispatcher);
     }
 
     [Fact]

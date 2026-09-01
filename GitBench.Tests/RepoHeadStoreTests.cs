@@ -37,8 +37,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         _head = new RepoHeadStore(_gitService, _bus, _loc, _dispatcher);
         _status = new RepoStatusStore(
-            new IdleOperations(), _registry, _gitService, _bus, new StartupSweepCoordinator(_gate),
-            _gate, _dispatcher, _head, _head);
+            new IdleOperations(), _registry, _gitService, _bus, _gate, _dispatcher, _head, _head);
     }
 
     // The whole point of the store: from the instant the checkout starts, the name every caller reads
