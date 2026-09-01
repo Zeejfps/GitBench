@@ -33,7 +33,7 @@ public interface IGitRawConfigReader
     void AttachIdentityResolver(GitIdentityService identity);
 }
 
-public sealed class GitService : IGitService, IGitRawConfigReader
+public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 {
     // Every git invocation runs through the runner, which opens an activity scope so
     // RepoWatcher can drop the FSW events our own writes cause. Without this the auto-reload
@@ -43,13 +43,22 @@ public sealed class GitService : IGitService, IGitRawConfigReader
     // Which mutating op serializes against which is GitRepoLocks' story; read it there.
     private readonly GitRepoLocks _locks;
 
+    // Blob reads go through a live `cat-file --batch` per repo rather than a `git show` each;
+    // see GitBlobReader. It starts nothing until a repo is actually read from, and falls back to
+    // the spawn below whenever it has no answer.
+    private readonly GitBlobReader _blobs;
+
     private static readonly IReadOnlySet<string> NoIgnoredPaths = new HashSet<string>(StringComparer.Ordinal);
 
     public GitService(IRepoActivityTracker activity)
     {
         _runner = new GitProcessRunner(activity);
         _locks = new GitRepoLocks(ReadCommonGitDir);
+        _blobs = new GitBlobReader(dir => _runner.BuildLongRunningPsi(dir, ["cat-file", "--batch"]));
     }
+
+    /// <summary>Ends the per-repo blob readers. Everything else here is stateless.</summary>
+    public void Dispose() => _blobs.Dispose();
 
     // `git rev-parse --git-common-dir` resolves a linked worktree's `.git` file down to the
     // primary's `.git` directory. Plumbing, so it skips the identity prefix and the login shell.
@@ -3612,18 +3621,40 @@ public sealed class GitService : IGitService, IGitRawConfigReader
         }
     }
 
-    // `git show <rev>:<path>` prints a blob's raw contents. Returns null on any non-zero exit
-    // (path absent on that side, bad rev, etc.) so the caller falls back to plain rendering.
+    // A blob's raw contents. Returns null when there is nothing to read on that side (path absent,
+    // bad rev) so the caller falls back to plain rendering. Text reads are uncapped, as they were
+    // when this spawned `git show` — the line cap that keeps a huge file drawable is DiffOptions'.
     private string? ShowBlob(string workingDir, string revPath)
     {
+        switch (_blobs.TryRead(workingDir, revPath, long.MaxValue, out var bytes))
+        {
+            case GitBlobReader.Status.Found: return DecodeBlobText(bytes!);
+            case GitBlobReader.Status.Missing: return null;
+        }
+
         var result = _runner.Run(workingDir, new[] { "show", revPath }, GitProcessRunner.GitLaunch.Direct);
         return result.Ok ? result.Stdout : null;
     }
 
     private byte[]? ShowBlobBytes(string workingDir, string revPath, int maxBytes)
     {
+        switch (_blobs.TryRead(workingDir, revPath, maxBytes, out var bytes))
+        {
+            case GitBlobReader.Status.Found: return bytes;
+            case GitBlobReader.Status.Missing: return null;
+        }
+
         var result = _runner.RunBytes(workingDir, new[] { "show", revPath }, maxBytes);
         return result.Started && result.ExitCode == 0 && !result.Truncated ? result.Stdout : null;
+    }
+
+    // `git show`'s output reached us through a StreamReader, which silently drops a leading UTF-8
+    // BOM; reading the raw pipe does not. Dropping it here is what keeps a BOM'd file's first line
+    // identical either way, rather than gaining a U+FEFF the moment the fast path is taken.
+    private static string DecodeBlobText(byte[] bytes)
+    {
+        var start = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
+        return System.Text.Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
     }
 
     private static string? ReadWorkingFile(string workingDir, string path)

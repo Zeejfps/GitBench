@@ -1,3 +1,4 @@
+using GitBench.Git;
 using GitBench.Platform;
 using ZGF.Desktop;
 using ZGF.Gui;
@@ -68,6 +69,9 @@ internal sealed class GitBenchAppHost : IDisposable
 
     public void Dispose()
     {
+        // Ends the per-repo `git cat-file --batch` readers. The context only disposes singletons it
+        // created itself, and the git service is handed to it as an instance.
+        (App.Context.Require<IGitService>() as IDisposable)?.Dispose();
         App.Dispose();
         _preferences.Dispose();
     }

@@ -167,6 +167,18 @@ internal sealed class GitProcessRunner
         return (proc.ExitCode, text, true);
     }
 
+    // Start info for a long-lived plumbing process the caller drives itself — see GitBlobReader,
+    // which keeps a `cat-file --batch` alive per repo. Same executable, PATH and environment as
+    // every other Direct invocation, plus stdin so requests can be fed in. No identity prefix and
+    // no activity scope: neither applies to a process that only ever reads objects, and holding a
+    // scope open for the process's whole life would suppress the FSW events we do want.
+    public ProcessStartInfo BuildLongRunningPsi(string workingDir, IReadOnlyList<string> args)
+    {
+        var psi = BuildDirectPsi(workingDir, args);
+        psi.RedirectStandardInput = true;
+        return psi;
+    }
+
     // ────────── process start info ──────────
 
     private static ProcessStartInfo BuildDirectPsi(string workingDir, IReadOnlyList<string> args, IReadOnlyList<string>? prefix = null)
