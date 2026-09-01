@@ -9,7 +9,7 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 7;
+    private const int CurrentSchemaVersion = 8;
     private const string DefaultGroupName = "Ungrouped";
     // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
     private const string LegacyDefaultGroupName = "Repositories";
@@ -22,7 +22,8 @@ public static class RepoStateStore
         Dictionary<Guid, FileBrowserUiState> FileBrowserUi,
         Dictionary<Guid, bool> WorktreesExpanded,
         Dictionary<Guid, Guid> RepoIdentityOverride,
-        Dictionary<int, Guid> Hotkeys);
+        Dictionary<int, Guid> Hotkeys,
+        Dictionary<Guid, bool> RepoDirty);
 
     internal sealed class FileShape
     {
@@ -37,6 +38,7 @@ public static class RepoStateStore
         public Dictionary<Guid, Guid>? RepoIdentityOverride { get; set; }
         // slot (1-9) → repo id for keyboard repo switching. Absent in pre-v6 files.
         public Dictionary<int, Guid>? Hotkeys { get; set; }
+        public Dictionary<Guid, bool>? RepoDirty { get; set; }
     }
 
     public static State Load(string path)
@@ -63,7 +65,8 @@ public static class RepoStateStore
                 file.FileBrowserUi ?? new Dictionary<Guid, FileBrowserUiState>(),
                 file.WorktreesExpanded ?? new Dictionary<Guid, bool>(),
                 file.RepoIdentityOverride ?? new Dictionary<Guid, Guid>(),
-                hotkeys);
+                hotkeys,
+                KeepKnownRepos(file.RepoDirty, repos));
         }
         catch (Exception ex)
         {
@@ -155,9 +158,10 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, FileBrowserUiState> fileBrowserUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
-        IReadOnlyDictionary<int, Guid> hotkeys)
+        IReadOnlyDictionary<int, Guid> hotkeys,
+        IReadOnlyDictionary<Guid, bool> repoDirty)
         => AtomicFile.WriteAllText(path,
-            Serialize(repos, groups, activeId, branchesUi, fileBrowserUi, worktreesExpanded, repoIdentityOverride, hotkeys));
+            Serialize(repos, groups, activeId, branchesUi, fileBrowserUi, worktreesExpanded, repoIdentityOverride, hotkeys, repoDirty));
 
     // Snapshots the live model into the on-disk shape and serializes it. Runs on the caller's thread
     // (it reads the mutable model, so it must), producing an immutable string the disk write can take
@@ -170,7 +174,8 @@ public static class RepoStateStore
         IReadOnlyDictionary<Guid, FileBrowserUiState> fileBrowserUi,
         IReadOnlyDictionary<Guid, bool> worktreesExpanded,
         IReadOnlyDictionary<Guid, Guid> repoIdentityOverride,
-        IReadOnlyDictionary<int, Guid> hotkeys)
+        IReadOnlyDictionary<int, Guid> hotkeys,
+        IReadOnlyDictionary<Guid, bool> repoDirty)
     {
         var file = new FileShape
         {
@@ -183,8 +188,19 @@ public static class RepoStateStore
             WorktreesExpanded = worktreesExpanded.ToDictionary(kv => kv.Key, kv => kv.Value),
             RepoIdentityOverride = repoIdentityOverride.ToDictionary(kv => kv.Key, kv => kv.Value),
             Hotkeys = hotkeys.ToDictionary(kv => kv.Key, kv => kv.Value),
+            RepoDirty = repoDirty.Where(kv => kv.Value).ToDictionary(kv => kv.Key, kv => kv.Value),
         };
         return JsonSerializer.Serialize(file, RepoStateJsonContext.Default.FileShape);
+    }
+
+    private static Dictionary<Guid, bool> KeepKnownRepos(Dictionary<Guid, bool>? stored, List<Repo> repos)
+    {
+        var kept = new Dictionary<Guid, bool>();
+        if (stored is null) return kept;
+        var known = repos.Select(r => r.Id).ToHashSet();
+        foreach (var (id, dirty) in stored)
+            if (known.Contains(id)) kept[id] = dirty;
+        return kept;
     }
 
     public static bool IsGitRepo(string path) =>
@@ -202,7 +218,8 @@ public static class RepoStateStore
             new Dictionary<Guid, FileBrowserUiState>(),
             new Dictionary<Guid, bool>(),
             new Dictionary<Guid, Guid>(),
-            new Dictionary<int, Guid>());
+            new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>());
     }
 
     // Worktrees are children of a primary repo and never appear directly in a Group —

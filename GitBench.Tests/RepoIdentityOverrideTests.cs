@@ -98,7 +98,8 @@ public class RepoIdentityOverrideTests
             repoId,
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [repoId] = profileId },
-            new Dictionary<int, Guid>());
+            new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 
         var trimmedKey = Path.GetFullPath(dir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -126,7 +127,8 @@ public class RepoIdentityOverrideTests
             primaryId,
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = profileId },
-            new Dictionary<int, Guid>());
+            new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 
         Assert.Equal(profileId, registry.GetIdentityOverrideByPath(worktreeDir));
@@ -152,7 +154,8 @@ public class RepoIdentityOverrideTests
             primaryId,
             new(), new(), new(),
             new Dictionary<Guid, Guid> { [primaryId] = primaryProfile, [worktreeId] = worktreeProfile },
-            new Dictionary<int, Guid>());
+            new Dictionary<int, Guid>(),
+            new Dictionary<Guid, bool>());
         var registry = new RepoRegistry(state, statePath);
 
         Assert.Equal(worktreeProfile, registry.GetIdentityOverrideByPath(worktreeDir));

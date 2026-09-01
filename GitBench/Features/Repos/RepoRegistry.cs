@@ -17,6 +17,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
     private readonly Dictionary<Guid, FileBrowserUiState> _fileBrowserUi;
     private readonly Dictionary<Guid, State<bool>> _expanded;
     private readonly Dictionary<Guid, Guid> _identityOverride;
+    private readonly Dictionary<Guid, bool> _repoDirty = new();
     private readonly Dictionary<int, Guid> _hotkeys;
 
     // Immutable lookups the resolver reads lock-free from background git threads (path→profile-id
@@ -36,6 +37,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         _fileBrowserUi = new Dictionary<Guid, FileBrowserUiState>(initial.FileBrowserUi);
         _expanded = new Dictionary<Guid, State<bool>>();
         foreach (var (repoId, expanded) in initial.WorktreesExpanded) _expanded[repoId] = new State<bool>(expanded);
+        foreach (var (repoId, dirty) in initial.RepoDirty) _repoDirty[repoId] = dirty;
         _identityOverride = new Dictionary<Guid, Guid>(initial.RepoIdentityOverride);
         _hotkeys = new Dictionary<int, Guid>(initial.Hotkeys);
 
@@ -440,6 +442,18 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         Save();
     }
 
+    /// <summary>Whether this repo was dirty when last read, or null if it never has been.</summary>
+    public bool? GetLastKnownDirty(Guid repoId)
+        => _repoDirty.TryGetValue(repoId, out var dirty) ? dirty : null;
+
+    /// <summary>Records what a status read observed. Only a change schedules a save.</summary>
+    public void SetLastKnownDirty(Guid repoId, bool isDirty)
+    {
+        if (_repoDirty.TryGetValue(repoId, out var known) && known == isDirty) return;
+        _repoDirty[repoId] = isDirty;
+        Save();
+    }
+
     // Resolver-facing lookup: the resolution memo is keyed by working-dir path, so we serve an
     // O(1) read from the precomputed map (built on the UI thread). Keys use PathKey, the same
     // normalization the resolver applies to its memo key, so the two can't drift.
@@ -693,7 +707,7 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         // Serialize here (must read the live model on this thread); hand the finished text to the
         // background writer so the disk write — the slow, UI-thread-stalling part — runs off-thread.
         var json = RepoStateStore.Serialize(Repos, Groups.Select(g => g.ToState()).ToList(),
-            Active.Value?.Id, _branchesUi, _fileBrowserUi, collapsed, _identityOverride, _hotkeys);
+            Active.Value?.Id, _branchesUi, _fileBrowserUi, collapsed, _identityOverride, _hotkeys, _repoDirty);
         _writer.Schedule(json);
     }
 

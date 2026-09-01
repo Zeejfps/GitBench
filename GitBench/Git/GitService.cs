@@ -3707,36 +3707,31 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     bool IGitRawConfigReader.IsRepoAvailable(string repoPath) => IsGitRepo(repoPath);
 
     IReadOnlyList<string> IGitRawConfigReader.GetRemoteNamesRaw(string repoPath)
-    {
-        // Surface a git failure (e.g. held lock) as an exception so the resolver treats it as
-        // transient rather than memoizing "no remotes". The repo-available check is done once by
-        // the resolver before any of these reads, so it isn't repeated here.
-        var names = ReadRemoteNames(repoPath, inject: false, out var error);
-        if (error != null) throw new IOException($"git remote: {error}");
-        return names;
-    }
+        => ReadLocalConfig(repoPath, "git remote").Subsections("remote");
 
     string? IGitRawConfigReader.GetRemoteUrlRaw(string repoPath, string remoteName)
-    {
-        // Surface a git failure as an exception so the resolver treats it as transient instead of
-        // memoizing "no match" — mirroring GetRemoteNamesRaw. A transient `remote get-url` failure
-        // would otherwise pin the repo to the global identity until the next flush.
-        var url = ReadRemoteUrl(repoPath, remoteName, inject: false, out var error);
-        if (error != null) throw new IOException($"git remote get-url: {error}");
-        return url;
-    }
+        => ReadLocalConfig(repoPath, "git remote get-url").Get("remote", remoteName, "url");
 
     (string? Name, string? Email) IGitRawConfigReader.GetLocalIdentityRaw(string repoPath)
     {
-        // --local --get exits 1 when the key is unset; treat that as "not configured". Any OTHER
-        // git failure (held lock, etc.) is surfaced as an exception so the resolver treats it as
-        // transient — otherwise a momentary read failure would look like "no local identity" and
-        // let an auto-matched profile override a deliberately pinned --local identity, then cache it.
-        var name = RunGitInternal(repoPath, allowExitCode1: true, out var nameErr, new[] { "config", "--local", "--get", "user.name" }, inject: false)?.Trim();
-        if (nameErr != null) throw new IOException($"git config user.name: {nameErr}");
-        var email = RunGitInternal(repoPath, allowExitCode1: true, out var emailErr, new[] { "config", "--local", "--get", "user.email" }, inject: false)?.Trim();
-        if (emailErr != null) throw new IOException($"git config user.email: {emailErr}");
+        var config = ReadLocalConfig(repoPath, "git config user.name");
+        var name = config.Get("user", null, "name");
+        var email = config.Get("user", null, "email");
         return (string.IsNullOrEmpty(name) ? null : name, string.IsNullOrEmpty(email) ? null : email);
+    }
+
+    // Throws rather than returning empty: the resolver must treat an unreadable file as transient,
+    // not as "no local identity".
+    private static GitConfigFile ReadLocalConfig(string repoPath, string what)
+    {
+        try
+        {
+            return GitConfigFile.ForRepo(repoPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            throw new IOException($"{what}: {ex.Message}", ex);
+        }
     }
 
     void IGitRawConfigReader.AttachIdentityResolver(GitIdentityService identity)

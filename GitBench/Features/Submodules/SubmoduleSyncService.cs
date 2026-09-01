@@ -29,6 +29,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
     private IDisposable? _reposSub;
+    private IDisposable? _activeSub;
     private IDisposable? _submodulesChangedSub;
     private IDisposable? _refsChangedSub;
 
@@ -49,6 +50,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     public void Start()
     {
         _reposSub ??= _registry.Repos.Subscribe(OnRepoListChange);
+        _activeSub ??= _registry.Active.Subscribe(OnActiveChanged);
         _submodulesChangedSub ??= _bus.SubscribeScoped<SubmodulesChangedMessage>(OnSubmodulesChanged);
         _refsChangedSub ??= _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
     }
@@ -57,19 +59,17 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     {
         switch (change.Kind)
         {
-            case ListChangeKind.Reset:
-                // Defer the startup discovery burst until the active repo's first load has landed.
-                _sweep.RunInitialSweep(() =>
-                {
-                    foreach (var repo in _registry.Repos)
-                        if (repo.IsPrimary || repo.IsWorktree) ScheduleSync(repo.Id);
-                });
-                break;
             case ListChangeKind.Added:
                 if (change.Item is { } added && (added.IsPrimary || added.IsWorktree))
                     ScheduleSync(added.Id);
                 break;
         }
+    }
+
+    private void OnActiveChanged(Repo? active)
+    {
+        if (active is null) return;
+        ScheduleSync(active.ParentRepoId ?? active.Id);
     }
 
     private void OnSubmodulesChanged(SubmodulesChangedMessage msg) => ScheduleSync(msg.PrimaryRepoId);
@@ -153,6 +153,7 @@ internal sealed class SubmoduleSyncService : IHostedService, IDisposable
     public void Dispose()
     {
         _reposSub?.Dispose();
+        _activeSub?.Dispose();
         _submodulesChangedSub?.Dispose();
         _refsChangedSub?.Dispose();
     }

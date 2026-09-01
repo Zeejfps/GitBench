@@ -33,6 +33,10 @@ public interface IRepoRegistry
     State<int> HotkeysChanged { get; }
     OpenRepoOutcome Open(string path, Guid? groupId = null);
     void SetActive(Guid id);
+
+    // Persisted, so a sidebar dot survives a restart without re-probing every repo.
+    bool? GetLastKnownDirty(Guid repoId);
+    void SetLastKnownDirty(Guid repoId, bool isDirty);
     // The primary repo bound to a 1-9 hotkey slot, or null if the slot is unassigned.
     Guid? RepoForHotkey(int slot);
     // The slot (1-9) a repo currently occupies, or null if it has none.

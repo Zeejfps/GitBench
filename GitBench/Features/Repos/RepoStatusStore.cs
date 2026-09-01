@@ -170,13 +170,6 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     {
         switch (change.Kind)
         {
-            case ListChangeKind.Reset:
-                // Defer the startup probe burst until the active repo's first load has landed.
-                _sweep.RunInitialSweep(() =>
-                {
-                    foreach (var r in _registry.Repos) Refresh(r.Id);
-                });
-                break;
             case ListChangeKind.Added:
                 if (change.Item is { } added) Refresh(added.Id);
                 break;
@@ -193,7 +186,10 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
     {
         if (!_probe.TryGetValue(id, out var s))
         {
-            s = new State<GitStatusSummary>(GitStatusSummary.Unknown);
+            var seed = _registry.GetLastKnownDirty(id) is true
+                ? GitStatusSummary.Unknown with { IsDirty = true }
+                : GitStatusSummary.Unknown;
+            s = new State<GitStatusSummary>(seed);
             _probe[id] = s;
         }
         return s;
@@ -324,7 +320,11 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         // can't confirm where HEAD landed.
         if (!_epoch.TryGetValue(repoId, out var cur) || cur == gen)
         {
-            if (summary != null) Probe(repoId).Value = summary;
+            if (summary != null)
+            {
+                Probe(repoId).Value = summary;
+                _registry.SetLastKnownDirty(repoId, summary.IsDirty);
+            }
             // A sync read never looked at the working tree, so it patches the sync half onto the
             // dirty flag the last full observation left. That flag is re-observed on every
             // working-tree change, which is the only thing that can have moved it.

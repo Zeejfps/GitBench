@@ -25,6 +25,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     private readonly IMessageBus _bus;
     private readonly IStartupSweepCoordinator _sweep;
     private IDisposable? _reposSub;
+    private IDisposable? _activeSub;
     private IDisposable? _worktreesChangedSub;
     private IDisposable? _refsChangedSub;
 
@@ -45,6 +46,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     public void Start()
     {
         _reposSub ??= _registry.Repos.Subscribe(OnRepoListChange);
+        _activeSub ??= _registry.Active.Subscribe(OnActiveChanged);
         _worktreesChangedSub ??= _bus.SubscribeScoped<WorktreesChangedMessage>(OnWorktreesChanged);
         _refsChangedSub ??= _bus.SubscribeScoped<RefsChangedMessage>(OnRefsChanged);
     }
@@ -53,19 +55,17 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     {
         switch (change.Kind)
         {
-            case ListChangeKind.Reset:
-                // Defer the startup discovery burst until the active repo's first load has landed.
-                _sweep.RunInitialSweep(() =>
-                {
-                    foreach (var repo in _registry.Repos)
-                        if (repo.IsPrimary) ScheduleSync(repo.Id);
-                });
-                break;
             case ListChangeKind.Added:
                 if (change.Item is { } added && added.IsPrimary)
                     ScheduleSync(added.Id);
                 break;
         }
+    }
+
+    private void OnActiveChanged(Repo? active)
+    {
+        if (active is null) return;
+        ScheduleSync(active.ParentRepoId ?? active.Id);
     }
 
     private void OnWorktreesChanged(WorktreesChangedMessage msg) => ScheduleSync(msg.PrimaryRepoId);
@@ -153,6 +153,7 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
     public void Dispose()
     {
         _reposSub?.Dispose();
+        _activeSub?.Dispose();
         _worktreesChangedSub?.Dispose();
         _refsChangedSub?.Dispose();
     }
