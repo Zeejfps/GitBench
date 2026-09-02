@@ -24,6 +24,11 @@ public sealed record Repo(
     // the background sync completes.
     public string? Branch { get; init; }
 
+    // Optional image chosen for this primary repository's sidebar identity. The source file stays
+    // where the user picked it; a missing or unreadable file simply falls back to the normal folder
+    // glyph / generated initials. Child rows keep their kind glyphs and never carry this value.
+    public string? CustomIconPath { get; init; }
+
     // Persisted so the registry can tell at load time whether a child row is a worktree
     // or a submodule. Old state files (pre-submodule) have no field — see RepoStateStore.Load,
     // which migrates by treating any pre-existing child (ParentRepoId set) as a worktree.

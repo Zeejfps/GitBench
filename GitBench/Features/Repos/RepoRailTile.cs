@@ -44,6 +44,13 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
                     VAlign = TextAlignment.Center,
                     Color = Theme.Color(s => vm.IsMissing.Value ? s.Palette.TextDisabled : s.Palette.TextOnAccent),
                 },
+                new Switch<string?>
+                {
+                    Value = vm.CustomIconPath,
+                    Case = path => path is null
+                        ? Empty.Widget
+                        : new RepoIconImage { Path = path, Size = TileSize },
+                },
             ],
         };
 
