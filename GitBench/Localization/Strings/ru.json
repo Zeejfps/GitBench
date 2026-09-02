@@ -205,6 +205,11 @@
   "file_browser.reveal": "Показать в файловом менеджере",
   "file_browser.copy_path": "Скопировать путь",
   "file_browser.copy_relative_path": "Скопировать относительный путь",
+  "file_browser.back": "Назад",
+  "file_browser.forward": "Вперёд",
+  "file_browser.close_other_tabs": "Закрыть другие вкладки",
+  "file_browser.close_all_tabs": "Закрыть все вкладки",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "Извлечь",
   "toolbar.fetching": "Извлечение",

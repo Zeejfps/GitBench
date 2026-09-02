@@ -1,23 +1,12 @@
 namespace GitBench.Features.FileBrowser;
 
-internal abstract record PreviewFocus
-{
-    private PreviewFocus() { }
-
-    public static readonly PreviewFocus Nothing = new None();
-
-    public sealed record None : PreviewFocus;
-
-    public sealed record Row(string RowKey) : PreviewFocus;
-
-    public sealed record Detached(string AbsolutePath) : PreviewFocus;
-}
-
-internal abstract record FileBrowserPlace
-{
-    private FileBrowserPlace() { }
-
-    public sealed record Row(string RowKey, int Line) : FileBrowserPlace;
-
-    public sealed record Detached(string AbsolutePath, int Line) : FileBrowserPlace;
-}
+/// <summary>
+/// A place in the browser, as the navigation history holds it: the file that was on screen, the row
+/// the tree was on inside it, and the line the reader was reading.
+/// </summary>
+/// <remarks>
+/// The row key is kept beside the path rather than instead of it, because a declaration's key is not
+/// a path and the file it names has to survive the tree no longer listing that declaration — a jump
+/// back to a file whose parse has moved on still lands on the file.
+/// </remarks>
+internal sealed record FileBrowserPlace(string AbsolutePath, string? RowKey, int Line);

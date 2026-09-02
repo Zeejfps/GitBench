@@ -101,12 +101,15 @@ internal static class FileChangesUI
         };
     }
 
-    public static RectView CreateHeaderBar(Context ctx, View content)
+    /// <param name="topBorder">Whether the bar rules its own top edge. Dropped when a tab strip sits
+    /// directly above it: the active tab wears this bar's colour so it reads as a notch cut through
+    /// to it, and a rule would cut straight across the one join that has to be invisible.</param>
+    public static RectView CreateHeaderBar(Context ctx, View content, bool topBorder = true)
     {
         var theme = ctx.Theme();
         var view = new RectView
         {
-            BorderSize = new BorderSizeStyle { Top = 1, Bottom = 1 },
+            BorderSize = new BorderSizeStyle { Top = topBorder ? 1 : 0, Bottom = 1 },
             Children =
             {
                 new PaddingView
@@ -125,7 +128,7 @@ internal static class FileChangesUI
         view.BindThemedBackgroundColor(theme, s => s.FileChangesSection.HeaderBackground);
         view.BindThemedBorderColor(theme, s => new BorderColorStyle
         {
-            Top = s.FileChangesSection.HeaderBorder,
+            Top = topBorder ? s.FileChangesSection.HeaderBorder : 0u,
             Bottom = s.FileChangesSection.HeaderBorder,
         });
         return view;

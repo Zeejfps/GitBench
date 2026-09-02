@@ -153,8 +153,9 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         Assert.Equal(At("Auth.cs"), browser.Cursor.Value);
     }
 
+    // Selecting a file opens it, and anything that opens a file is somewhere the reader has been.
     [Fact]
-    public void MovingTheCursorByHandIsNotSomethingToComeBackFrom()
+    public void MovingTheCursorOntoAnotherFileIsSomethingToComeBackFrom()
     {
         Write("Auth.cs", "class AuthService", "{", "}");
         Write("Other.cs", "class Other", "{", "}");
@@ -163,7 +164,22 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         browser.SetCursor(At("Other.cs"));
         Settle(browser);
 
+        Assert.True(browser.CanGoBack.Value);
+    }
+
+    // A directory opens nothing, so it is not a place — the file beside it is still on screen.
+    [Fact]
+    public void MovingTheCursorOntoADirectoryIsNot()
+    {
+        Write("Auth.cs", "class AuthService", "{", "}");
+        Write("src/deep/Token.cs", Token);
+        using var browser = Show("Auth.cs");
+
+        browser.SetCursor(At("src"));
+        Settle(browser);
+
         Assert.False(browser.CanGoBack.Value);
+        Assert.Equal(At("Auth.cs"), (browser.Preview.Value as FilePreview.Text)?.Path);
     }
 
     [Fact]

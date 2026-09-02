@@ -137,6 +137,11 @@
   "file_browser.reveal": "在文件管理器中显示",
   "file_browser.copy_path": "复制路径",
   "file_browser.copy_relative_path": "复制相对路径",
+  "file_browser.back": "后退",
+  "file_browser.forward": "前进",
+  "file_browser.close_other_tabs": "关闭其他标签页",
+  "file_browser.close_all_tabs": "关闭所有标签页",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "获取",
   "toolbar.fetching": "正在获取",

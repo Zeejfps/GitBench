@@ -251,6 +251,9 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
             case KeyboardKey.LeftBracket when IsCommand(modifiers):
                 _navigator.GoBack();
                 return true;
+            case KeyboardKey.RightBracket when IsCommand(modifiers):
+                _navigator.GoForward();
+                return true;
             default:
                 return false;
         }

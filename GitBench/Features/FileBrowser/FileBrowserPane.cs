@@ -73,6 +73,7 @@ internal sealed record FileBrowserBody : Widget
                 CrossAxis = CrossAxisAlignment.Stretch,
                 Children =
                 [
+                    new FileBrowserTabStrip { Model = browser },
                     new FileBrowserPreviewHeader { Model = browser },
                     new Grow { Child = new FileBrowserPreview { Model = browser } },
                 ],
@@ -154,7 +155,7 @@ internal sealed record FileBrowserPreviewHeader : Widget
                 servers,
                 toggle,
             },
-        });
+        }, topBorder: false);
     }
 
     // U+203A, not a chevron glyph: the header's text runs are in the UI font, and a lucide glyph

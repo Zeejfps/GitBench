@@ -138,6 +138,11 @@
   "file_browser.reveal": "Mostrar en el explorador de archivos",
   "file_browser.copy_path": "Copiar ruta",
   "file_browser.copy_relative_path": "Copiar ruta relativa",
+  "file_browser.back": "Atrás",
+  "file_browser.forward": "Adelante",
+  "file_browser.close_other_tabs": "Cerrar las demás pestañas",
+  "file_browser.close_all_tabs": "Cerrar todas las pestañas",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",

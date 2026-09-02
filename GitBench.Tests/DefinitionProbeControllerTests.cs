@@ -267,6 +267,16 @@ public sealed class DefinitionProbeControllerTests
     }
 
     [Fact]
+    public void CommandRightBracketGoesForward()
+    {
+        var fx = new Fixture();
+
+        Assert.True(fx.Key(KeyboardKey.RightBracket, Command));
+
+        Assert.Equal(1, fx.Navigator.Forwards);
+    }
+
+    [Fact]
     public void LeftBracketWithoutTheCommandModifierDoesNotGoBack()
     {
         var fx = new Fixture();
@@ -651,9 +661,13 @@ public sealed class DefinitionProbeControllerTests
 
         public int Backs { get; private set; }
 
+        public int Forwards { get; private set; }
+
         public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
 
         public void GoBack() => Backs++;
+
+        public void GoForward() => Forwards++;
     }
 
     private sealed class ImmediateDispatcher : IUiDispatcher

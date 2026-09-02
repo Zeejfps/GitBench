@@ -137,6 +137,11 @@
   "file_browser.reveal": "파일 관리자에서 보기",
   "file_browser.copy_path": "경로 복사",
   "file_browser.copy_relative_path": "상대 경로 복사",
+  "file_browser.back": "뒤로",
+  "file_browser.forward": "앞으로",
+  "file_browser.close_other_tabs": "다른 탭 닫기",
+  "file_browser.close_all_tabs": "모든 탭 닫기",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "가져오기",
   "toolbar.fetching": "가져오는 중",

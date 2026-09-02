@@ -137,6 +137,11 @@
   "file_browser.reveal": "ファイルマネージャーで表示",
   "file_browser.copy_path": "パスをコピー",
   "file_browser.copy_relative_path": "相対パスをコピー",
+  "file_browser.back": "戻る",
+  "file_browser.forward": "進む",
+  "file_browser.close_other_tabs": "他のタブを閉じる",
+  "file_browser.close_all_tabs": "すべてのタブを閉じる",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "フェッチ",
   "toolbar.fetching": "フェッチ中",

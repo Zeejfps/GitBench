@@ -219,6 +219,11 @@
   "file_browser.reveal": "إظهار في مدير الملفات",
   "file_browser.copy_path": "نسخ المسار",
   "file_browser.copy_relative_path": "نسخ المسار النسبي",
+  "file_browser.back": "رجوع",
+  "file_browser.forward": "تقدم",
+  "file_browser.close_other_tabs": "إغلاق علامات التبويب الأخرى",
+  "file_browser.close_all_tabs": "إغلاق كل علامات التبويب",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "جلب",
   "toolbar.fetching": "جارٍ الجلب",

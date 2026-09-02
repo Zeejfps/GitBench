@@ -138,6 +138,11 @@
   "file_browser.reveal": "Reveal in file manager",
   "file_browser.copy_path": "Copy path",
   "file_browser.copy_relative_path": "Copy relative path",
+  "file_browser.back": "Back",
+  "file_browser.forward": "Forward",
+  "file_browser.close_other_tabs": "Close other tabs",
+  "file_browser.close_all_tabs": "Close all tabs",
+  "file_browser.tab_qualified": "{name} ({path})",
 
   "toolbar.fetch": "Fetch",
   "toolbar.fetching": "Fetching",

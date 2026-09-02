@@ -40,15 +40,26 @@ internal sealed record TabStrip : Widget
     /// </summary>
     public required IWidget[] Tabs { get; init; }
 
+    /// <summary>
+    /// A control on the leading edge, outside the scroller — the file browser's back and forward.
+    /// </summary>
+    /// <remarks>
+    /// Outside it because it is not one of the tabs: it stays put while they pan under it, and a
+    /// history button that scrolled away with the twentieth tab would be a history button you have
+    /// to go looking for. Anything that belongs <em>with</em> the tabs — the terminal's <c>+</c> —
+    /// goes in <see cref="Tabs"/> instead.
+    /// </remarks>
+    public IWidget? Leading { get; init; }
+
     public Prop<uint> Background { get; init; }
 
-    protected override IWidget Build(Context ctx) => new Box
+    protected override IWidget Build(Context ctx)
     {
-        Height = Height,
-        Background = Background,
-        Children =
-        [
-            new Padding
+        var children = new List<IWidget>();
+        if (Leading is { } leading) children.Add(leading);
+        children.Add(new Grow
+        {
+            Child = new Padding
             {
                 // A hair of lead-in, so the first tab is not welded to whatever the pane's leading
                 // edge happens to be.
@@ -69,8 +80,22 @@ internal sealed record TabStrip : Widget
                     },
                 ],
             },
-        ],
-    };
+        });
+
+        return new Box
+        {
+            Height = Height,
+            Background = Background,
+            Children =
+            [
+                new Row
+                {
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children = children.ToArray(),
+                },
+            ],
+        };
+    }
 }
 
 /// <summary>
@@ -96,6 +121,10 @@ internal sealed record TabChrome : Widget
     public required Prop<string?> Label { get; init; }
     public required Func<bool> IsActive { get; init; }
     public required Action OnActivate { get; init; }
+
+    /// <summary>The label's font family. Unset leaves it in the UI font; the file browser hands it
+    /// the italic face for a tab the reader is only previewing.</summary>
+    public Prop<string> LabelFontFamily { get; init; }
 
     /// <summary>
     /// The background of the surface this strip sits over — the grid for the terminal, the details
@@ -145,6 +174,7 @@ internal sealed record TabChrome : Widget
         var label = new Text
         {
             Value = Label,
+            FontFamily = LabelFontFamily,
             FontSize = FontSize.Body,
             VAlign = TextAlignment.Center,
             Overflow = TextOverflow.Ellipsis,

@@ -1,3 +1,5 @@
+using GitBench.Controls;
+
 namespace GitBench.Features.Markdown.Rendering;
 
 /// <summary>
@@ -8,5 +10,5 @@ namespace GitBench.Features.Markdown.Rendering;
 /// </summary>
 internal static class MarkdownFonts
 {
-    public const string ItalicFamily = "inter-italic";
+    public const string ItalicFamily = UiFonts.Italic;
 }
