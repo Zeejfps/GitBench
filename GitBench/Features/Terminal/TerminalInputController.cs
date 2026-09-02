@@ -849,10 +849,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     /// is one nobody can build a habit on. The hints come from the same gestures the keyboard
     /// dispatches, so a chord can never be printed here without working.
     /// </para>
-    /// <para>
-    /// Text-only, because the icon font is subset to the glyphs already in use and carries no paste
-    /// or select-all mark; one icon among three blanks reads worse than none.
-    /// </para>
     /// </remarks>
     bool ShowContextMenu(PointF point)
     {
@@ -864,17 +860,20 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
             new RepoBarContextMenu.Item(
                 strings.CommonCopy,
                 Copy,
+                LucideIcons.Copy,
                 Enabled: _terminal.SelectionText().Length > 0,
                 Shortcut: CopyChord.Display),
             new RepoBarContextMenu.Item(
                 strings.CommonPaste,
                 Paste,
+                LucideIcons.ClipboardPaste,
                 Enabled: _terminal.IsAcceptingInput && _clipboard.GetText() is { Length: > 0 },
                 Shortcut: PasteChord.Display),
             RepoBarContextMenu.Separator,
             new RepoBarContextMenu.Item(
                 strings.CommonSelectAll,
                 SelectAll,
+                LucideIcons.BoxSelect,
                 Enabled: _terminal.HasScreen,
                 Shortcut: SelectAllChord.Display),
         };

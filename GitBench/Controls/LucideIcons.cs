@@ -36,6 +36,8 @@ internal static class LucideIcons
     public const string FolderInput = "";  // folder-input
     public const string X = "";             // x
     public const string Copy = "";          // copy
+    public const string ClipboardPaste = "";// clipboard-paste
+    public const string BoxSelect = "";     // box-select (select all)
     public const string Image = "\uE0F6";         // image
     public const string Undo = "";    // undo-2 (revert commit)
     public const string Search = ""; // search
