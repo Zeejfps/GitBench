@@ -1,4 +1,7 @@
 using GitBench.App;
+using GitBench.Controls;
+using GitBench.Features.Repos;
+using GitBench.Localization;
 using GitBench.Platform;
 using GitBench.Terminal.Vt;
 using GitBench.Widgets;
@@ -65,6 +68,9 @@ internal interface ITerminalInput
     TerminalSpan? Selection { get; }
 
     bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity);
+
+    /// <summary>Highlights the whole buffer, scrollback included. Returns whether it changed.</summary>
+    bool SelectAll();
 
     bool ClearSelection();
 
@@ -141,8 +147,29 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     const InputModifiers CommandLike =
         InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
 
-    const InputModifiers RelevantMask =
-        InputModifiers.Shift | InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
+    /// <summary>
+    /// The pane's own chords: Cmd on macOS, Ctrl+Shift elsewhere.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Ctrl+Shift rather than Ctrl, because Ctrl+C is the interrupt and a terminal that swallowed it
+    /// would be broken. Shift is already the modifier this pane takes back from the shell for the
+    /// wheel and the page keys, so it is one convention rather than three.
+    /// </para>
+    /// <para>
+    /// Held as gestures rather than as a comparison, because the context menu prints them beside the
+    /// items they run, and a hint that disagreed with the key would be worse than no hint.
+    /// </para>
+    /// </remarks>
+    static readonly KeyGesture CopyChord = PaneChord(KeyboardKey.C);
+    static readonly KeyGesture PasteChord = PaneChord(KeyboardKey.V);
+    static readonly KeyGesture SelectAllChord = PaneChord(KeyboardKey.A);
+
+    static KeyGesture PaneChord(KeyboardKey key) => new(
+        key,
+        OperatingSystem.IsMacOS()
+            ? InputModifiers.Super
+            : InputModifiers.Control | InputModifiers.Shift);
 
     readonly View _view;
     readonly InputSystem _input;
@@ -150,6 +177,8 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     readonly ITerminalCellGeometry _cells;
     readonly IClipboard? _clipboard;
     readonly IPlatformShell? _shell;
+    readonly Context? _ctx;
+    readonly ILocalizationService? _localization;
 
     float _wheelRemainder;
     (int Column, int Row)? _reportedCell;
@@ -166,7 +195,9 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         ITerminalInput terminal,
         ITerminalCellGeometry cells,
         IClipboard? clipboard = null,
-        IPlatformShell? shell = null)
+        IPlatformShell? shell = null,
+        Context? ctx = null,
+        ILocalizationService? localization = null)
     {
         _view = view;
         _input = input;
@@ -174,6 +205,8 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         _cells = cells;
         _clipboard = clipboard;
         _shell = shell;
+        _ctx = ctx;
+        _localization = localization;
     }
 
     /// <summary>
@@ -216,20 +249,27 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         if (e.State != InputState.Pressed) return;
         if (!HasTheKeyboard()) return;
 
-        // Before the application's reserved chords, which is the whole carve-out: on macOS the copy
-        // and paste chords are Super, and every Super chord is otherwise handed straight back.
+        // Before the application's reserved chords, which is the whole carve-out: on macOS the
+        // pane's chords are Super, and every Super chord is otherwise handed straight back.
         // Copy is claimed whether or not anything is highlighted, so that the chord means one thing;
         // Ctrl+C on its own carries no Shift and is still the shell's interrupt.
-        if (IsClipboardChord(e.Key, e.Modifiers, KeyboardKey.C))
+        if (CopyChord.Matches(e.Key, e.Modifiers))
         {
             Copy();
             e.Consume();
             return;
         }
 
-        if (IsClipboardChord(e.Key, e.Modifiers, KeyboardKey.V))
+        if (PasteChord.Matches(e.Key, e.Modifiers))
         {
             Paste();
+            e.Consume();
+            return;
+        }
+
+        if (SelectAllChord.Matches(e.Key, e.Modifiers))
+        {
+            SelectAll();
             e.Consume();
             return;
         }
@@ -349,6 +389,18 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         if (e.State == InputState.Pressed && e.Button == MouseButton.Left && WantsToSelect(e.Modifiers))
         {
             BeginSelection(e.Mouse.Point);
+            return;
+        }
+
+        // On exactly the terms the selection is taken: the pane's whenever no program is reading the
+        // mouse, and Shift takes it back when one is. A right-click is real input to vim and tmux,
+        // and a menu that appeared over them instead would be the pane breaking the program it runs.
+        if (e.State == InputState.Pressed
+            && e.Button == MouseButton.Right
+            && WantsToSelect(e.Modifiers)
+            && ShowContextMenu(e.Mouse.Point))
+        {
+            e.Consume();
             return;
         }
 
@@ -767,25 +819,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         }
     }
 
-    /// <summary>
-    /// The clipboard chord for <paramref name="expected"/>: Cmd on macOS, Ctrl+Shift elsewhere.
-    /// </summary>
-    /// <remarks>
-    /// Ctrl+Shift rather than Ctrl, because Ctrl+C is the interrupt and a terminal that swallowed it
-    /// would be broken. Shift is already the modifier this pane takes back from the shell for the
-    /// wheel and the page keys, so it is one convention rather than three.
-    /// </remarks>
-    static bool IsClipboardChord(KeyboardKey key, InputModifiers modifiers, KeyboardKey expected)
-    {
-        if (key != expected) return false;
-
-        var held = modifiers & RelevantMask;
-
-        return OperatingSystem.IsMacOS()
-            ? held == InputModifiers.Super
-            : held == (InputModifiers.Control | InputModifiers.Shift);
-    }
-
     void Copy()
     {
         if (_clipboard is null) return;
@@ -802,6 +835,51 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         if (_clipboard?.GetText() is not { Length: > 0 } text) return;
 
         _terminal.Paste(text);
+    }
+
+    void SelectAll() => _terminal.SelectAll();
+
+    /// <summary>
+    /// Opens the pane's clipboard menu at <paramref name="point"/>. Returns whether it opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every row is always present and disabled when it cannot run, rather than the menu changing
+    /// shape with the selection: a menu whose items move under the pointer between two right-clicks
+    /// is one nobody can build a habit on. The hints come from the same gestures the keyboard
+    /// dispatches, so a chord can never be printed here without working.
+    /// </para>
+    /// <para>
+    /// Text-only, because the icon font is subset to the glyphs already in use and carries no paste
+    /// or select-all mark; one icon among three blanks reads worse than none.
+    /// </para>
+    /// </remarks>
+    bool ShowContextMenu(PointF point)
+    {
+        if (_ctx is null || _localization is null || _clipboard is null) return false;
+
+        var strings = _localization.Strings.Value;
+        var items = new[]
+        {
+            new RepoBarContextMenu.Item(
+                strings.CommonCopy,
+                Copy,
+                Enabled: _terminal.SelectionText().Length > 0,
+                Shortcut: CopyChord.Display),
+            new RepoBarContextMenu.Item(
+                strings.CommonPaste,
+                Paste,
+                Enabled: _terminal.IsAcceptingInput && _clipboard.GetText() is { Length: > 0 },
+                Shortcut: PasteChord.Display),
+            RepoBarContextMenu.Separator,
+            new RepoBarContextMenu.Item(
+                strings.CommonSelectAll,
+                SelectAll,
+                Enabled: _terminal.HasScreen,
+                Shortcut: SelectAllChord.Display),
+        };
+
+        return RepoBarContextMenu.Show(_ctx, point, items) is not null;
     }
 
     static bool IsReservedForTheApplication(KeyboardKey key, InputModifiers modifiers) =>

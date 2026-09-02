@@ -491,6 +491,8 @@ public class TerminalGridViewTests
 
         public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) => false;
 
+        public bool SelectAll() => false;
+
         public bool ClearSelection() => false;
 
         public string SelectionText() => string.Empty;

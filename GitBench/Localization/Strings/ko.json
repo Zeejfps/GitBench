@@ -44,6 +44,8 @@
   "common.skip": "건너뛰기",
   "common.ok": "확인",
   "common.copy": "복사",
+  "common.paste": "붙여넣기",
+  "common.select_all": "모두 선택",
   "common.close": "닫기",
   "common.add": "추가",
   "common.save": "저장",

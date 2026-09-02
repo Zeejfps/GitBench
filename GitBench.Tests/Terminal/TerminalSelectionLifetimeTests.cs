@@ -44,6 +44,38 @@ public class TerminalSelectionLifetimeTests
         Assert.Equal(selected, run.Vm.SelectionText());
     }
 
+    /// <remarks>
+    /// The reason to select everything is to take away what a command printed, and by the time it
+    /// has finished printing most of that has usually left the visible screen.
+    /// </remarks>
+    [Fact]
+    public void SelectingEverything_TakesTheHistoryAndNotJustTheVisibleScreen()
+    {
+        using var run = TerminalRun.Started();
+        FillScreen(run);
+        var oldest = run.RowText(0);
+        Emit(run, "tail1\r\ntail2\r\ntail3\r\n", () => Shows(run, "tail3"));
+
+        Assert.True(run.Vm.SelectAll());
+
+        // The first row of the history rather than the first row of the screen, whatever depth the
+        // history has reached by now.
+        Assert.Equal(-run.Session!.Grid.ScrollbackRows, run.Vm.Selection?.Start.Row);
+        Assert.Equal(0, run.Vm.Selection?.Start.Column);
+        Assert.Contains(oldest, run.Vm.SelectionText());
+        Assert.Contains("tail3", run.Vm.SelectionText());
+    }
+
+    [Fact]
+    public void SelectingEverythingTwice_ChangesNothingTheSecondTime()
+    {
+        using var run = TerminalRun.Started();
+        FillScreen(run);
+
+        Assert.True(run.Vm.SelectAll());
+        Assert.False(run.Vm.SelectAll());
+    }
+
     [Fact]
     public void ASelectionScrolledOutOfTheHistory_IsDropped()
     {

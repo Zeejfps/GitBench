@@ -1760,6 +1760,12 @@ internal sealed class SeamTerminal : ITerminalInput
         return true;
     }
 
+    public bool SelectAll()
+    {
+        Selection = TerminalSpan.Between(new GridPoint(0, -1000), new GridPoint(79, 23), new GridBounds(80, 24, 1000));
+        return true;
+    }
+
     public bool ClearSelection()
     {
         if (Selection is null) return false;
@@ -1801,6 +1807,8 @@ internal sealed class LiveTerminal : ITerminalInput
 
     public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
         _session.Select(anchor, focus, granularity);
+
+    public bool SelectAll() => _session.SelectAll();
 
     public bool ClearSelection() => _session.ClearSelection();
 

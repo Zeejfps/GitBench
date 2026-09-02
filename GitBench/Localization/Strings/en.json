@@ -44,6 +44,8 @@
   "common.skip": "Skip",
   "common.ok": "OK",
   "common.copy": "Copy",
+  "common.paste": "Paste",
+  "common.select_all": "Select All",
   "common.close": "Close",
   "common.add": "Add",
   "common.save": "Save",

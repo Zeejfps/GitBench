@@ -203,6 +203,25 @@ internal sealed class TerminalSession : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Highlights the whole buffer, scrollback included. Returns whether the selection changed.
+    /// </summary>
+    /// <remarks>
+    /// The history and not just the visible screen, because the reason to select everything is to
+    /// take away what a command printed, and by the time it has finished printing most of it has
+    /// usually scrolled off the top.
+    /// </remarks>
+    public bool SelectAll()
+    {
+        if (_disposed) return false;
+
+        var bounds = GridBounds.Of(Grid);
+        return Select(
+            new GridPoint(0, bounds.FirstRow),
+            new GridPoint(bounds.LastColumn, bounds.LastRow),
+            SelectionGranularity.Character);
+    }
+
     public bool ClearSelection()
     {
         if (_selection is null) return false;

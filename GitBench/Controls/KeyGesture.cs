@@ -19,7 +19,7 @@ public readonly record struct KeyGesture(KeyboardKey Key, InputModifiers Modifie
     public bool Matches(KeyboardKey key, InputModifiers modifiers) =>
         key == Key && (modifiers & RelevantMask) == Modifiers;
 
-    /// <summary>Menu hint text, e.g. "C", "Ctrl+C", "Enter", "Del".</summary>
+    /// <summary>Menu hint text, e.g. "C", "Ctrl+C", "Enter", "Del"; Super reads as the command glyph on macOS.</summary>
     public string Display
     {
         get
@@ -31,7 +31,7 @@ public readonly record struct KeyGesture(KeyboardKey Key, InputModifiers Modifie
             if ((Modifiers & InputModifiers.Control) != 0) sb.Append("Ctrl+");
             if ((Modifiers & InputModifiers.Alt) != 0) sb.Append("Alt+");
             if ((Modifiers & InputModifiers.Shift) != 0) sb.Append("Shift+");
-            if ((Modifiers & InputModifiers.Super) != 0) sb.Append("Super+");
+            if ((Modifiers & InputModifiers.Super) != 0) sb.Append(OperatingSystem.IsMacOS() ? "⌘" : "Super+");
             sb.Append(key);
             return sb.ToString();
         }

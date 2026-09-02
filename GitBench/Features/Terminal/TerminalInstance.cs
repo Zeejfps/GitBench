@@ -231,6 +231,8 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
     public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
         Moved(Screen?.Select(anchor, focus, granularity));
 
+    public bool SelectAll() => Moved(Screen?.SelectAll());
+
     public bool ClearSelection() => Moved(Screen?.ClearSelection());
 
     public string SelectionText() => Screen?.SelectionText() ?? string.Empty;

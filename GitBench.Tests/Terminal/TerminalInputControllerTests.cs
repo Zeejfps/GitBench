@@ -975,6 +975,8 @@ internal sealed class TestTerminal : ITerminalInput, IDisposable
     public bool Select(GridPoint anchor, GridPoint focus, SelectionGranularity granularity) =>
         _session?.Select(anchor, focus, granularity) ?? false;
 
+    public bool SelectAll() => _session?.SelectAll() ?? false;
+
     public bool ClearSelection() => _session?.ClearSelection() ?? false;
 
     public string SelectionText() => _session?.SelectionText() ?? string.Empty;

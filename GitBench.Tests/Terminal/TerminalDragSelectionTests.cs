@@ -206,18 +206,24 @@ internal sealed class DragPane : IDisposable
         GuiTestHarness harness,
         ScriptedCells cells,
         TerminalInputController controller,
-        RecordingShell shell)
+        RecordingShell shell,
+        FakeClipboard clipboard)
     {
         Terminal = terminal;
         _harness = harness;
         _cells = cells;
         _controller = controller;
         Shell = shell;
+        Clipboard = clipboard;
     }
 
     public SeamTerminal Terminal { get; }
 
     public RecordingShell Shell { get; }
+
+    public FakeClipboard Clipboard { get; }
+
+    public GuiTestHarness Harness => _harness;
 
     public ScriptedCells Cells => _cells;
 
@@ -237,6 +243,7 @@ internal sealed class DragPane : IDisposable
     {
         var cells = new ScriptedCells();
         var shell = new RecordingShell();
+        var clipboard = new FakeClipboard();
         TerminalInputController? controller = null;
 
         var harness = GuiTestHarness.Create(
@@ -244,7 +251,9 @@ internal sealed class DragPane : IDisposable
             {
                 var input = ctx.Require<InputSystem>();
                 var view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                controller = new TerminalInputController(view, input, terminal, cells, clipboard: null, shell: shell);
+                controller = new TerminalInputController(
+                    view, input, terminal, cells, clipboard, shell,
+                    ctx, ctx.Require<ILocalizationService>());
                 input.RegisterController(view, controller);
                 return view;
             },
@@ -257,7 +266,7 @@ internal sealed class DragPane : IDisposable
             });
 
         harness.Input.StealFocus(controller!);
-        return new DragPane(terminal, harness, cells, controller!, shell);
+        return new DragPane(terminal, harness, cells, controller!, shell, clipboard);
     }
 
     const float CellSize = 10f;
@@ -267,6 +276,12 @@ internal sealed class DragPane : IDisposable
     {
         _cells.At(column, row);
         Send(InputState.Pressed, At(column, row), modifiers);
+    }
+
+    public void RightPressAt(int column, int row, InputModifiers modifiers = InputModifiers.None)
+    {
+        _cells.At(column, row);
+        Send(InputState.Pressed, At(column, row), modifiers, MouseButton.Right);
     }
 
     public void ReleaseAt(int column, int row, InputModifiers modifiers = InputModifiers.None)
@@ -296,18 +311,24 @@ internal sealed class DragPane : IDisposable
         _harness.MoveTo(point.X, point.Y);
     }
 
-    void Send(InputState state, PointF point, InputModifiers modifiers)
+    void Send(
+        InputState state,
+        PointF point,
+        InputModifiers modifiers,
+        MouseButton? button = null)
     {
+        var pressed = button ?? MouseButton.Left;
+
         _harness.MoveTo(point.X, point.Y);
         _mouse.Point = point;
 
-        if (state == InputState.Pressed) _mouse.Press(MouseButton.Left);
-        else _mouse.Release(MouseButton.Left);
+        if (state == InputState.Pressed) _mouse.Press(pressed);
+        else _mouse.Release(pressed);
 
         var e = new MouseButtonEvent
         {
             Mouse = _mouse,
-            Button = MouseButton.Left,
+            Button = pressed,
             State = state,
             Modifiers = modifiers,
             Phase = EventPhase.Capturing,

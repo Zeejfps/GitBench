@@ -220,6 +220,32 @@ public class TerminalClipboardChordTests
     }
 
     [Fact]
+    public void TheSelectAllChord_HighlightsTheWholeScreen()
+    {
+        using var pane = ClipboardPane.Focused("hello world");
+
+        var claim = pane.Press(KeyboardKey.A, Clipboard);
+
+        Assert.Equal(KeyClaim.Command, claim);
+        Assert.Contains("hello world", pane.Terminal.SelectionText());
+    }
+
+    /// <remarks>
+    /// Ctrl+A is readline's start-of-line and tmux's own prefix on some setups. It carries no Shift,
+    /// so it belongs to the shell for the same reason Ctrl+C does.
+    /// </remarks>
+    [Fact]
+    public void CtrlA_IsStillTheShellsRatherThanASelectAll()
+    {
+        using var pane = ClipboardPane.Focused("hello world");
+
+        pane.Press(KeyboardKey.A, InputModifiers.Control);
+
+        Assert.Equal("\u0001", pane.Terminal.Text);
+        Assert.Equal(string.Empty, pane.Terminal.SelectionText());
+    }
+
+    [Fact]
     public void ThePasteChord_SendsTheClipboardToTheShell()
     {
         using var pane = ClipboardPane.Focused("prompt");

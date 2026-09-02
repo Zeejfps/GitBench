@@ -79,6 +79,8 @@
   "common.skip": "Пропустить",
   "common.ok": "ОК",
   "common.copy": "Копировать",
+  "common.paste": "Вставить",
+  "common.select_all": "Выделить всё",
   "common.close": "Закрыть",
   "common.add": "Добавить",
   "common.save": "Сохранить",

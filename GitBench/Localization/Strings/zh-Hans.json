@@ -44,6 +44,8 @@
   "common.skip": "跳过",
   "common.ok": "确定",
   "common.copy": "复制",
+  "common.paste": "粘贴",
+  "common.select_all": "全选",
   "common.close": "关闭",
   "common.add": "添加",
   "common.save": "保存",

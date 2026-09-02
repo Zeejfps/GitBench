@@ -1152,6 +1152,12 @@ public class TerminalInputControllerEdgeTests
             return true;
         }
 
+        public bool SelectAll()
+        {
+            Selection = TerminalSpan.Between(new GridPoint(0, 0), new GridPoint(79, 23), new GridBounds(80, 24, 0));
+            return true;
+        }
+
         public bool ClearSelection()
         {
             if (Selection is null) return false;

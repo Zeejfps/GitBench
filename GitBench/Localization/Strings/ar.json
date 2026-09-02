@@ -86,6 +86,8 @@
   "common.skip": "تخطّي",
   "common.ok": "موافق",
   "common.copy": "نسخ",
+  "common.paste": "لصق",
+  "common.select_all": "تحديد الكل",
   "common.close": "إغلاق",
   "common.add": "إضافة",
   "common.save": "حفظ",

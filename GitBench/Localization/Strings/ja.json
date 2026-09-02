@@ -44,6 +44,8 @@
   "common.skip": "スキップ",
   "common.ok": "OK",
   "common.copy": "コピー",
+  "common.paste": "貼り付け",
+  "common.select_all": "すべて選択",
   "common.close": "閉じる",
   "common.add": "追加",
   "common.save": "保存",

@@ -128,7 +128,8 @@ internal sealed record TerminalScreen : Widget
         grid.Bind(loc.Strings, s => grid.StartingMessage = s.TerminalStarting);
         grid.Bind(instance.Render, grid.SetRenderState);
         grid.Use(() => new TerminalRepaintLink(instance, grid));
-        grid.UseController(input, () => new TerminalInputController(grid, input, instance, grid, ctx.Get<IClipboard>(), ctx.Get<IPlatformShell>()));
+        grid.UseController(input, () => new TerminalInputController(
+            grid, input, instance, grid, ctx.Get<IClipboard>(), ctx.Get<IPlatformShell>(), ctx, loc));
         grid.Use(() => new TerminalKeyboardHandover(instance, grid, input));
 
         return new Stack
