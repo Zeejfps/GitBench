@@ -3820,31 +3820,35 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
     public bool IsPathTracked(Repo repo, string relativePath) => IsTracked(repo.Path, relativePath);
 
-    // `check-ignore -q` exits 0 when a rule matches and 1 when none does. `--no-index` is what
-    // makes the answer the rules' own: without it git short-circuits on tracked paths and reports
-    // "not ignored" for a file whose rule says otherwise.
-    public bool IsPathIgnored(Repo repo, string relativePath)
-    {
-        var result = _runner.Run(
-            repo.Path,
-            new[] { "check-ignore", "--no-index", "-q", "--", relativePath });
-        return result.Ok;
-    }
+    public bool IsPathIgnored(Repo repo, string relativePath) =>
+        IsPathIgnored(repo, [relativePath]).Count > 0;
 
+    // `--no-index` makes the answer the rules' own: without it git short-circuits on tracked paths
+    // and reports "not ignored" for a file whose rule says otherwise. `-v` costs three fields per
+    // match and buys the pattern behind it, which is what separates a real rule from a stray one: a
+    // .gitignore saved with CRLF endings leaves a carriage return on every blank line, and git
+    // reports that as a match against every directory in the file's scope. A negated pattern is
+    // reported the same way and means the opposite, so it drops out here too.
     public IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths)
     {
         if (relativePaths.Count == 0) return NoIgnoredPaths;
 
         var result = _runner.Run(
             repo.Path,
-            new[] { "check-ignore", "--no-index", "--stdin", "-z" },
+            new[] { "check-ignore", "--no-index", "--stdin", "-z", "-v" },
             stdin: string.Concat(relativePaths.Select(path => path + '\0')));
 
         if (!result.Started || result.ExitCode > 1) return NoIgnoredPaths;
 
+        // source, line number, pattern, path — four NUL-terminated fields per match.
+        var fields = result.Stdout.Split('\0');
         var matched = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var path in result.Stdout.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-            matched.Add(path);
+        for (var i = 0; i + 3 < fields.Length; i += 4)
+        {
+            var pattern = fields[i + 2];
+            if (string.IsNullOrWhiteSpace(pattern) || pattern[0] == '!') continue;
+            matched.Add(fields[i + 3]);
+        }
         return matched;
     }
 

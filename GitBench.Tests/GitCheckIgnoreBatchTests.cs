@@ -85,6 +85,26 @@ public sealed class GitCheckIgnoreBatchTests : IDisposable
     }
 
     [Fact]
+    public void ABlankLineInACrlfIgnoreFileIsNotARule()
+    {
+        File.WriteAllText(Path.Combine(_root, ".gitignore"), "build/\r\n\r\nsrc/nested/\r\n");
+
+        var ignored = _git.IsPathIgnored(_repo, ["src/", "build/", "app.log"]);
+
+        Assert.Equal(["build/"], ignored.ToArray());
+    }
+
+    [Fact]
+    public void APathTheRulesReAdmitIsNotIgnored()
+    {
+        File.WriteAllText(Path.Combine(_root, ".gitignore"), "*.log\n!keep.log\n");
+
+        var ignored = _git.IsPathIgnored(_repo, ["app.log", "keep.log"]);
+
+        Assert.Equal(["app.log"], ignored.ToArray());
+    }
+
+    [Fact]
     public void AnEmptyBatchIsAnsweredWithoutAskingGit()
     {
         Assert.Empty(_git.IsPathIgnored(_repo, []));
