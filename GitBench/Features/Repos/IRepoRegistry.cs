@@ -20,8 +20,8 @@ public interface IRepoRegistry
     ObservableList<Group> Groups { get; }
     State<Repo?> Active { get; }
     State<Guid?> RenamingGroupId { get; }
-    // The primary repo whose name is being edited inline in the RepoBar, or null. Only primaries
-    // are renamable — a worktree/submodule name tracks its folder and is re-derived on every sync.
+    // The repo whose name is being edited inline in the RepoBar, or null. Primaries and worktrees
+    // are renamable; a submodule's name is its path within the parent and is re-derived on sync.
     State<Guid?> RenamingRepoId { get; }
     // Bumped whenever the set of children (worktrees OR submodules) attached to a primary
     // changes, or a primary's branch is recorded. Watched by BranchesViewModel to refresh the
@@ -56,9 +56,13 @@ public interface IRepoRegistry
     void RemoveRepo(Guid repoId);
     void BeginRenameGroup(Guid id);
     void EndRenameGroup();
-    // Overrides a primary repo's display name, decoupling it from its folder name. No-op for
-    // worktrees/submodules and for a blank name (the current name is kept).
+    // Overrides a repo's display name, decoupling it from its folder name. A worktree keeps the
+    // typed name in CustomName so worktree discovery can't overwrite it; naming a worktree after
+    // its own folder clears the override instead of pinning one. No-op for submodules (their name
+    // is their path within the parent) and for a blank name (the current name is kept).
     void RenameRepo(Guid id, string newName);
+    // Drops a custom name, returning the row to tracking its folder. No-op without one.
+    void ResetRepoName(Guid id);
     // Sets or clears the image used for a primary repo in both forms of the repository sidebar.
     void SetCustomIcon(Guid id, string? iconPath);
     void BeginRenameRepo(Guid id);

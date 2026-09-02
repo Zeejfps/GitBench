@@ -448,6 +448,8 @@
   "repos.repo_remove_title": "移除仓库",
   "repos.repo_remove_body": "从 {app} 中移除“{name}”？这只会将其从侧边栏移除，仓库文件仍保留在磁盘上。",
   "repos.repo_rename": "重命名仓库",
+  "repos.worktree_rename": "重命名工作树",
+  "repos.repo_reset_name": "恢复为文件夹名称",
   "repos.repo_set_custom_icon": "设置自定义图标…",
   "repos.repo_remove_custom_icon": "移除自定义图标",
   "repos.picker_choose_custom_icon": "选择仓库图标",

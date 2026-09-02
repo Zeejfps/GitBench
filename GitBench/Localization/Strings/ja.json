@@ -448,6 +448,8 @@
   "repos.repo_remove_title": "リポジトリを削除",
   "repos.repo_remove_body": "「{name}」を {app} から削除しますか？ サイドバーから削除されるだけで、リポジトリのファイルはディスクに残ります。",
   "repos.repo_rename": "リポジトリ名を変更",
+  "repos.worktree_rename": "ワークツリー名を変更",
+  "repos.repo_reset_name": "名前をフォルダ名に戻す",
   "repos.repo_set_custom_icon": "カスタムアイコンを設定…",
   "repos.repo_remove_custom_icon": "カスタムアイコンを削除",
   "repos.picker_choose_custom_icon": "リポジトリアイコンを選択",

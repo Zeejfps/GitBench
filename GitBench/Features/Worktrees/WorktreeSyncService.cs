@@ -126,10 +126,9 @@ internal sealed class WorktreeSyncService : IHostedService, IDisposable
                     continue;
                 }
 
-                // Display label: prefer branch name, else last path segment.
-                var display = !string.IsNullOrEmpty(info.Branch)
-                    ? info.Branch!
-                    : Path.GetFileName(normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                // Display label: the worktree's own folder, like a primary repo's row. A custom
+                // name typed over it lives on the row (Repo.CustomName) and wins in the registry.
+                var display = Path.GetFileName(normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 descriptors.Add(new WorktreeDescriptor(normalized, display, info.Branch));
             }
 

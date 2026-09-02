@@ -418,7 +418,13 @@ internal sealed class RepoNodeViewModel : IDisposable
         var items = new List<RepoBarContextMenu.Item>
         {
             new(s.ReposWorktreeSwitchTo, () => _registry.SetActive(worktree.Id), LucideIcons.Branch),
+            new(s.ReposWorktreeRename, () => _registry.BeginRenameRepo(worktree.Id), LucideIcons.PencilLine),
         };
+
+        // Only worth offering once there is an override to drop — same shape as the primary row's
+        // "Remove custom icon".
+        if (worktree.CustomName is not null)
+            items.Add(new RepoBarContextMenu.Item(s.ReposRepoResetName, () => _registry.ResetRepoName(worktree.Id), LucideIcons.X));
 
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));

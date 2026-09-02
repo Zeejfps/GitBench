@@ -526,6 +526,8 @@
   "repos.repo_remove_title": "إزالة المستودع",
   "repos.repo_remove_body": "هل تريد إزالة ”{name}“ من {app}؟ ستتم إزالته من الشريط الجانبي فقط، وتبقى ملفات المستودع على القرص.",
   "repos.repo_rename": "إعادة تسمية المستودع",
+  "repos.worktree_rename": "إعادة تسمية شجرة العمل",
+  "repos.repo_reset_name": "إعادة الاسم إلى اسم المجلد",
   "repos.repo_set_custom_icon": "تعيين أيقونة مخصصة…",
   "repos.repo_remove_custom_icon": "إزالة الأيقونة المخصصة",
   "repos.picker_choose_custom_icon": "اختيار أيقونة للمستودع",

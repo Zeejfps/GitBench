@@ -29,6 +29,11 @@ public sealed record Repo(
     // glyph / generated initials. Child rows keep their kind glyphs and never carry this value.
     public string? CustomIconPath { get; init; }
 
+    // A name the user typed over a worktree's folder-derived one, or null while the row still
+    // tracks its folder. Kept apart from DisplayName because worktree discovery rewrites
+    // DisplayName on every sync — this is what survives that and is re-applied afterwards.
+    public string? CustomName { get; init; }
+
     // Persisted so the registry can tell at load time whether a child row is a worktree
     // or a submodule. Old state files (pre-submodule) have no field — see RepoStateStore.Load,
     // which migrates by treating any pre-existing child (ParentRepoId set) as a worktree.

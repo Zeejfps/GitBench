@@ -448,6 +448,8 @@
   "repos.repo_remove_title": "저장소 제거",
   "repos.repo_remove_body": "“{name}”을(를) {app}에서 제거할까요? 사이드바에서만 제거되며 저장소 파일은 디스크에 그대로 남습니다.",
   "repos.repo_rename": "저장소 이름 변경",
+  "repos.worktree_rename": "워크트리 이름 변경",
+  "repos.repo_reset_name": "이름을 폴더 이름으로 되돌리기",
   "repos.repo_set_custom_icon": "사용자 지정 아이콘 설정…",
   "repos.repo_remove_custom_icon": "사용자 지정 아이콘 제거",
   "repos.picker_choose_custom_icon": "저장소 아이콘 선택",

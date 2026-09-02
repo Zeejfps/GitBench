@@ -342,12 +342,52 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         {
             var r = Repos[i];
             if (r.Id != id) continue;
-            // A worktree/submodule name mirrors its folder and would be overwritten on the next
-            // sync, so only primaries carry a persisted custom name.
-            if (!r.IsPrimary || r.DisplayName == trimmed) return;
-            Repos.Replace(i, r with { DisplayName = trimmed });
+            // A submodule's name is its path within the parent, which is git's to say, not the
+            // user's. Primaries hold the typed name in DisplayName outright; a worktree also
+            // records it in CustomName, since discovery rewrites DisplayName on every sync.
+            if (r.IsSubmodule) return;
+            if (r.IsWorktree)
+            {
+                // Typing the folder name back is how a worktree goes back to tracking its folder,
+                // rather than pinning an override that happens to agree with it today.
+                var custom = trimmed == FolderName(r.Path) ? null : trimmed;
+                if (r.CustomName == custom && r.DisplayName == trimmed) return;
+                Repos.Replace(i, r with { DisplayName = trimmed, CustomName = custom });
+            }
+            else
+            {
+                if (r.DisplayName == trimmed) return;
+                Repos.Replace(i, r with { DisplayName = trimmed });
+            }
             Save();
             return;
+        }
+    }
+
+    public void ResetRepoName(Guid id)
+    {
+        for (var i = 0; i < Repos.Count; i++)
+        {
+            var r = Repos[i];
+            if (r.Id != id) continue;
+            if (r.CustomName is null) return;
+            Repos.Replace(i, r with { DisplayName = FolderName(r.Path), CustomName = null });
+            Save();
+            return;
+        }
+    }
+
+    // The name a row falls back to when nothing is pinned over it: its own folder.
+    private static string FolderName(string path)
+    {
+        try
+        {
+            var full = Path.GetFullPath(path);
+            return Path.GetFileName(full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        }
+        catch
+        {
+            return path;
         }
     }
 
@@ -560,7 +600,11 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
             seenPaths.Add(normalized);
             if (desiredByPath.TryGetValue(normalized, out var d))
             {
-                var newDisplay = d.DisplayName ?? Path.GetFileName(normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                // A user-typed name outranks whatever discovery derived; without this the next
+                // sync would quietly rewrite the row back to its folder name.
+                var newDisplay = r.CustomName
+                    ?? d.DisplayName
+                    ?? Path.GetFileName(normalized.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
                 if (r.DisplayName != newDisplay || r.Branch != d.Branch || r.IsMissing)
                 {
                     Repos.Replace(i, r with { DisplayName = newDisplay, Branch = d.Branch, IsMissing = false });
