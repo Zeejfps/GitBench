@@ -9,7 +9,8 @@ namespace GitBench.Features.Worktrees;
 
 internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
 {
-    public State<string> Path { get; } = new(string.Empty);
+    public State<string> ParentDir { get; } = new(string.Empty);
+    public State<string> FolderName { get; } = new(string.Empty);
     public State<string> StartPoint { get; } = new("HEAD");
     public State<string> NewBranchName { get; } = new(string.Empty);
     public State<bool> Force { get; } = new(false);
@@ -24,9 +25,9 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
 
     public event Action? CloseRequested;
 
-    // The path we last derived ourselves, so a manual edit sticks: the branch name only rewrites
+    // The name we last derived ourselves, so a manual edit sticks: the branch name only rewrites
     // the field while it still holds exactly what we put there. Mirrors CloneRepoDialogViewModel.
-    private string _lastAutoPath = string.Empty;
+    private string _lastAutoName = string.Empty;
     private string? _warning;
 
     public CreateWorktreeDialogViewModel(
@@ -40,12 +41,14 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
         var primaryId = request.Primary.Id;
         var exists = directoryExists ?? Directory.Exists;
 
+        ParentDir.Value = WorktreePathDefaults.ParentDirectoryFor(request.Primary.Path);
+
         NewBranchName.Subscribe(branch =>
         {
-            if (Path.Value != _lastAutoPath) return; // user took over the field
-            var derived = WorktreePathDefaults.For(request.Primary.Path, branch, exists);
-            Path.Value = derived;
-            _lastAutoPath = derived;
+            if (FolderName.Value != _lastAutoName) return; // user took over the field
+            var derived = WorktreePathDefaults.FolderNameFor(request.Primary.Path, ParentDir.Value, branch, exists);
+            FolderName.Value = derived;
+            _lastAutoName = derived;
         });
 
         // New branch is optional, so blank is valid (RefNameRules treats empty as neutral);
@@ -56,14 +59,15 @@ internal sealed class CreateWorktreeDialogViewModel : IDialogViewModel
             return RefNameRules.Validate(NewBranchName.Value.Trim(), s, s.RefnameNounBranch);
         });
         var gate = new Derived<bool>(() =>
-            Path.Value.Trim().Length > 0 && StartPoint.Value.Trim().Length > 0
+            ParentDir.Value.Trim().Length > 0 && FolderName.Value.Trim().Length > 0
+            && StartPoint.Value.Trim().Length > 0
             && RefNameRules.IsValid(NewBranchName.Value.Trim()));
 
         Create = AsyncCommand.ForOutcome(
             dispatcher,
             work: () =>
             {
-                var path = Path.Value.Trim();
+                var path = Path.Combine(ParentDir.Value.Trim(), FolderName.Value.Trim());
                 var startPoint = StartPoint.Value.Trim();
                 var newBranch = NewBranchName.Value.Trim();
                 var force = Force.Value;

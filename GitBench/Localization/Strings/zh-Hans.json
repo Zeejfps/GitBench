@@ -587,7 +587,9 @@
   "submodules.update_note": "合并/变基策略在冲突时可能使子模块停留在合并中途 — 操作横幅将提供中止选项。",
 
   "worktrees.create_title": "新建工作树",
-  "worktrees.create_path_label": "工作树路径",
+  "worktrees.create_parent_dir_label": "创建到",
+  "worktrees.create_parent_dir_hint": "父文件夹。工作树将创建在此处的一个新子文件夹中。",
+  "worktrees.create_folder_name_label": "文件夹名称",
   "worktrees.create_start_point_label": "起点",
   "worktrees.create_start_point_hint": "分支、标签或提交 SHA。",
   "worktrees.create_new_branch_label": "新建分支 (可选)",

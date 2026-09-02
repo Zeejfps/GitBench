@@ -587,7 +587,9 @@
   "submodules.update_note": "병합/리베이스 방식은 충돌 시 서브모듈을 병합 도중 상태로 남길 수 있습니다 — 작업 배너에 중단이 표시됩니다.",
 
   "worktrees.create_title": "새 작업 트리",
-  "worktrees.create_path_label": "작업 트리 경로",
+  "worktrees.create_parent_dir_label": "생성 위치",
+  "worktrees.create_parent_dir_hint": "상위 폴더. 워크트리는 이 안의 새 하위 폴더에 생성됩니다.",
+  "worktrees.create_folder_name_label": "폴더 이름",
   "worktrees.create_start_point_label": "시작점",
   "worktrees.create_start_point_hint": "브랜치, 태그 또는 커밋 SHA.",
   "worktrees.create_new_branch_label": "새 브랜치 (선택 사항)",

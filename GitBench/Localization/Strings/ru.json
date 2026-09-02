@@ -669,7 +669,9 @@
   "submodules.update_note": "Стратегии слияния и перебазирования могут оставить подмодуль в середине слияния при конфликте — в баннере операции появится кнопка «Прервать».",
 
   "worktrees.create_title": "Новое рабочее дерево",
-  "worktrees.create_path_label": "Путь рабочего дерева",
+  "worktrees.create_parent_dir_label": "Создать в",
+  "worktrees.create_parent_dir_hint": "Родительская папка. Рабочее дерево создаётся в новой вложенной папке здесь.",
+  "worktrees.create_folder_name_label": "Имя папки",
   "worktrees.create_start_point_label": "Начальная точка",
   "worktrees.create_start_point_hint": "Ветка, тег или SHA коммита.",
   "worktrees.create_new_branch_label": "Новая ветка (необязательно)",

@@ -587,7 +587,9 @@
   "submodules.update_note": "Merge/rebase strategies may leave the submodule mid-merge on conflict — the Operation banner will offer Abort.",
 
   "worktrees.create_title": "New worktree",
-  "worktrees.create_path_label": "Worktree path",
+  "worktrees.create_parent_dir_label": "Create in",
+  "worktrees.create_parent_dir_hint": "Parent folder. The worktree is created in a new subfolder here.",
+  "worktrees.create_folder_name_label": "Folder name",
   "worktrees.create_start_point_label": "Start point",
   "worktrees.create_start_point_hint": "Branch, tag, or commit SHA.",
   "worktrees.create_new_branch_label": "New branch (optional)",

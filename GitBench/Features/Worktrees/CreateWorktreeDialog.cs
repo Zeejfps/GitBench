@@ -12,10 +12,11 @@ using ZGF.Observable;
 namespace GitBench.Features.Worktrees;
 
 /// <summary>
-/// Modal shown from a primary RepoRow's "New worktree…" menu. Collects the three
-/// fields `git worktree add` needs (path, start point, optional new branch name) plus
-/// a force toggle for re-using an existing dirty path and the submodule toggles the
-/// post-add `git submodule update` runs under. The path opens pre-filled beside the repo.
+/// Modal shown from a primary RepoRow's "New worktree…" menu. Collects what `git worktree add`
+/// needs — where the worktree goes (a parent folder plus the subfolder to create, as in the clone
+/// dialog), a start point, an optional new branch name — plus a force toggle for re-using an
+/// existing dirty path and the submodule toggles the post-add `git submodule update` runs under.
+/// The location opens pre-filled beside the repo.
 /// </summary>
 internal sealed record CreateWorktreeDialog : Widget
 {
@@ -50,9 +51,15 @@ internal sealed record CreateWorktreeDialog : Widget
             [
                 new LabeledInput
                 {
-                    Label = s.WorktreesCreatePathLabel,
-                    Value = vm.Path,
+                    Label = s.WorktreesCreateParentDirLabel,
+                    Value = vm.ParentDir,
+                    Hint = s.WorktreesCreateParentDirHint,
                     Accessory = browseButton,
+                },
+                new LabeledInput
+                {
+                    Label = s.WorktreesCreateFolderNameLabel,
+                    Value = vm.FolderName,
                 },
                 new LabeledInput
                 {
@@ -94,7 +101,7 @@ internal sealed record CreateWorktreeDialog : Widget
         var picker = ctx.Get<IFilePicker>();
         picker?.PickFolder(
             ctx.Localization().Strings.Value.WorktreesCreatePickerTitle,
-            WorktreePathDefaults.NearestExistingDirectory(vm.Path.Value, Directory.Exists),
-            picked => vm.Path.Value = picked);
+            WorktreePathDefaults.NearestExistingDirectory(vm.ParentDir.Value, Directory.Exists),
+            picked => vm.ParentDir.Value = picked);
     }
 }

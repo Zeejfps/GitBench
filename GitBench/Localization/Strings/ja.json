@@ -587,7 +587,9 @@
   "submodules.update_note": "マージ/リベース方法では、コンフリクト時にサブモジュールがマージ途中のままになることがあります — 操作バナーに中止が表示されます。",
 
   "worktrees.create_title": "新規ワークツリー",
-  "worktrees.create_path_label": "ワークツリーのパス",
+  "worktrees.create_parent_dir_label": "作成先",
+  "worktrees.create_parent_dir_hint": "親フォルダ。ワークツリーはこの中の新しいサブフォルダに作成されます。",
+  "worktrees.create_folder_name_label": "フォルダ名",
   "worktrees.create_start_point_label": "起点",
   "worktrees.create_start_point_hint": "ブランチ、タグ、またはコミットSHA。",
   "worktrees.create_new_branch_label": "新規ブランチ（任意）",

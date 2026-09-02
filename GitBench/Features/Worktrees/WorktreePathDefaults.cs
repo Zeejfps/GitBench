@@ -1,38 +1,43 @@
 namespace GitBench.Features.Worktrees;
 
 /// <summary>
-/// Derives the path a new worktree defaults to: a sibling of the repository directory, named
-/// after the repo plus the branch being created, so the dialog opens on a path that is one
-/// keystroke from correct instead of empty. Suffixed with a counter while the directory is
+/// Derives where a new worktree defaults to living: beside the repository directory, in a folder
+/// named after the repo plus the branch being created, so the dialog opens on a location that is
+/// one keystroke from correct instead of empty. The name gets a counter while the folder is
 /// already taken, since `git worktree add` refuses a non-empty path.
 /// </summary>
 internal static class WorktreePathDefaults
 {
     private const int MaxCandidates = 100;
 
-    public static string For(string repoPath, string branchName, Func<string, bool> directoryExists)
-    {
-        string root;
-        try { root = Path.GetFullPath(repoPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)); }
-        catch { return string.Empty; }
+    /// <summary>The folder the worktree's own directory is created in: the repository's parent.</summary>
+    public static string ParentDirectoryFor(string repoPath)
+        => Path.GetDirectoryName(Root(repoPath)) ?? string.Empty;
 
-        var parent = Path.GetDirectoryName(root);
-        var repoName = Path.GetFileName(root);
-        if (string.IsNullOrEmpty(parent) || repoName.Length == 0) return string.Empty;
+    /// <summary>
+    /// The subfolder of <paramref name="parentDir"/> to create, named for the repo and the branch.
+    /// <paramref name="parentDir"/> only decides which names are already taken; pass it empty to
+    /// skip that check.
+    /// </summary>
+    public static string FolderNameFor(string repoPath, string parentDir, string branchName, Func<string, bool> directoryExists)
+    {
+        var repoName = Path.GetFileName(Root(repoPath));
+        if (repoName.Length == 0) return string.Empty;
 
         var slug = Slug(branchName);
         var baseName = slug.Length > 0 ? $"{repoName}-{slug}" : $"{repoName}-worktree";
+        if (parentDir.Trim().Length == 0) return baseName;
 
-        var candidate = Path.Combine(parent, baseName);
-        for (var n = 2; n < MaxCandidates && directoryExists(candidate); n++)
-            candidate = Path.Combine(parent, $"{baseName}-{n}");
+        var candidate = baseName;
+        for (var n = 2; n < MaxCandidates && Taken(parentDir, candidate, directoryExists); n++)
+            candidate = $"{baseName}-{n}";
         return candidate;
     }
 
     /// <summary>
     /// The closest folder that actually exists at or above <paramref name="path"/> — where the
-    /// folder picker should open when the field holds a worktree path whose own directory is,
-    /// by design, not created yet. Null when nothing on the chain exists.
+    /// folder picker should open when the field holds a folder that has not been created yet.
+    /// Null when nothing on the chain exists.
     /// </summary>
     public static string? NearestExistingDirectory(string path, Func<string, bool> directoryExists)
     {
@@ -49,6 +54,18 @@ internal static class WorktreePathDefaults
             if (string.IsNullOrEmpty(parent) || parent == current) return null;
             current = parent;
         }
+    }
+
+    private static bool Taken(string parentDir, string name, Func<string, bool> directoryExists)
+    {
+        try { return directoryExists(Path.Combine(parentDir.Trim(), name)); }
+        catch { return false; }
+    }
+
+    private static string Root(string repoPath)
+    {
+        try { return Path.GetFullPath(repoPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)); }
+        catch { return string.Empty; }
     }
 
     // A branch name is a legal refname, not a legal path segment: `feature/foo` would otherwise

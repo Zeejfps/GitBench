@@ -587,7 +587,9 @@
   "submodules.update_note": "Las estrategias de fusión/rebase pueden dejar el submódulo a medio fusionar si hay conflictos — el banner de Operación ofrecerá Cancelar.",
 
   "worktrees.create_title": "Nuevo árbol de trabajo",
-  "worktrees.create_path_label": "Ruta del árbol de trabajo",
+  "worktrees.create_parent_dir_label": "Crear en",
+  "worktrees.create_parent_dir_hint": "Carpeta principal. El árbol de trabajo se crea en una nueva subcarpeta aquí.",
+  "worktrees.create_folder_name_label": "Nombre de la carpeta",
   "worktrees.create_start_point_label": "Punto de partida",
   "worktrees.create_start_point_hint": "Rama, etiqueta o SHA de commit.",
   "worktrees.create_new_branch_label": "Nueva rama (opcional)",

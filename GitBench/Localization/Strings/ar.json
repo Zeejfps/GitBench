@@ -700,7 +700,9 @@
   "submodules.update_note": "قد تترك إستراتيجيات الدمج/إعادة التأسيس الوحدة الفرعية في منتصف الدمج عند التعارض — سيوفّر شريط العملية خيار الإحباط.",
 
   "worktrees.create_title": "شجرة عمل جديدة",
-  "worktrees.create_path_label": "مسار شجرة العمل",
+  "worktrees.create_parent_dir_label": "الإنشاء في",
+  "worktrees.create_parent_dir_hint": "المجلد الأصل. تُنشأ شجرة العمل في مجلد فرعي جديد هنا.",
+  "worktrees.create_folder_name_label": "اسم المجلد",
   "worktrees.create_start_point_label": "نقطة البداية",
   "worktrees.create_start_point_hint": "فرع أو وسم أو معرّف SHA.",
   "worktrees.create_new_branch_label": "فرع جديد (اختياري)",

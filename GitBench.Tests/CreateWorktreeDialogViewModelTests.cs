@@ -26,36 +26,53 @@ public sealed class CreateWorktreeDialogViewModelTests
         => new(new CreateWorktreeRequest(_primary), _git, _dispatcher, _bus, _loc,
             p => existingDirectories.Contains(p));
 
-    private static string Sibling(string name) => Path.Combine(Root, "repos", name);
+    private static readonly string Parent = Path.Combine(Root, "repos");
+
+    private static string Sibling(string name) => Path.Combine(Parent, name);
 
     [Fact]
-    public void PathDefaultsToASiblingOfTheRepository()
+    public void TheParentFolderDefaultsToTheRepositorysOwn()
     {
-        Assert.Equal(Sibling("app-worktree"), Vm().Path.Value);
+        var vm = Vm();
+        Assert.Equal(Parent, vm.ParentDir.Value);
+        Assert.Equal("app-worktree", vm.FolderName.Value);
     }
 
     [Fact]
-    public void TypingABranchNameNamesTheSiblingAfterIt()
+    public void TypingABranchNameNamesTheFolderAfterIt()
     {
         var vm = Vm();
         vm.NewBranchName.Value = "feature/login";
-        Assert.Equal(Sibling("app-feature-login"), vm.Path.Value);
+        Assert.Equal("app-feature-login", vm.FolderName.Value);
+        Assert.Equal(Parent, vm.ParentDir.Value);
     }
 
     [Fact]
-    public void AManuallyEditedPathIsNotOverwritten()
+    public void AManuallyEditedFolderNameIsNotOverwritten()
     {
         var vm = Vm();
-        vm.Path.Value = Sibling("somewhere-else");
+        vm.FolderName.Value = "somewhere-else";
         vm.NewBranchName.Value = "feature";
-        Assert.Equal(Sibling("somewhere-else"), vm.Path.Value);
+        Assert.Equal("somewhere-else", vm.FolderName.Value);
     }
 
     [Fact]
-    public void AnOccupiedSiblingGetsACounter()
+    public void AnOccupiedFolderNameGetsACounter()
     {
         var vm = Vm(Sibling("app-worktree"), Sibling("app-worktree-2"));
-        Assert.Equal(Sibling("app-worktree-3"), vm.Path.Value);
+        Assert.Equal("app-worktree-3", vm.FolderName.Value);
+    }
+
+    // The two fields are one path by the time git sees them.
+    [Fact]
+    public void TheParentAndFolderNameCombineIntoTheWorktreePath()
+    {
+        var vm = Vm();
+        vm.NewBranchName.Value = "feature";
+
+        Run(vm);
+
+        Assert.Equal(Sibling("app-feature"), _git.Request!.Path);
     }
 
     // Browse opens where the field points, and the field points at a directory that does not
@@ -63,10 +80,9 @@ public sealed class CreateWorktreeDialogViewModelTests
     [Fact]
     public void BrowseOpensAtTheClosestExistingFolderAboveTheTypedPath()
     {
-        var parent = Path.Combine(Root, "repos");
         var typed = Sibling("app-feature");
 
-        Assert.Equal(parent, WorktreePathDefaults.NearestExistingDirectory(typed, p => p == parent));
+        Assert.Equal(Parent, WorktreePathDefaults.NearestExistingDirectory(typed, p => p == Parent));
         Assert.Equal(typed, WorktreePathDefaults.NearestExistingDirectory(typed, p => p == typed));
         Assert.Null(WorktreePathDefaults.NearestExistingDirectory(typed, _ => false));
         Assert.Null(WorktreePathDefaults.NearestExistingDirectory("  ", _ => true));
