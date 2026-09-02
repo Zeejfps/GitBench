@@ -9,7 +9,7 @@ namespace GitBench.Features.Repos;
 
 public static class RepoStateStore
 {
-    private const int CurrentSchemaVersion = 8;
+    private const int CurrentSchemaVersion = 9;
     private const string DefaultGroupName = "Ungrouped";
     // Pre-v5 default group name; renamed on load so it no longer duplicates the sidebar's panel title.
     private const string LegacyDefaultGroupName = "Repositories";

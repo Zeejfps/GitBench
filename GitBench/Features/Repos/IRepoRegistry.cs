@@ -59,6 +59,8 @@ public interface IRepoRegistry
     // Overrides a primary repo's display name, decoupling it from its folder name. No-op for
     // worktrees/submodules and for a blank name (the current name is kept).
     void RenameRepo(Guid id, string newName);
+    // Sets or clears the image used for a primary repo in both forms of the repository sidebar.
+    void SetCustomIcon(Guid id, string? iconPath);
     void BeginRenameRepo(Guid id);
     void EndRenameRepo();
     BranchesUiState GetBranchesUi(Guid repoId);

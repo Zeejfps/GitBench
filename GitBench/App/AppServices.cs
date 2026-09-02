@@ -124,6 +124,7 @@ internal static class AppServices
             ctx.Get<IPlatformShell>(),
             ctx.Require<ILocalizationService>(),
             ctx.Get<IClipboard>(),
+            ctx.Get<IFilePicker>(),
             ctx.Require<IUiDispatcher>()));
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<OperationViewModel>();

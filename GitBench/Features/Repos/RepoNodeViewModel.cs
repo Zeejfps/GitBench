@@ -8,6 +8,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
 namespace GitBench.Features.Repos;
@@ -42,10 +43,12 @@ internal sealed class RepoNodeViewModel : IDisposable
     private readonly IPlatformShell? _shell;
     private readonly ILocalizationService _loc;
     private readonly IClipboard? _clipboard;
+    private readonly IFilePicker? _filePicker;
     private readonly IUiDispatcher _dispatcher;
 
     private readonly Derived<Repo?> _currentRepo;
     private readonly Derived<string> _displayName;
+    private readonly Derived<string?> _customIconPath;
     private readonly Derived<bool> _isMissing;
     private readonly Derived<bool> _isActive;
     private readonly Derived<RepoRowBadge> _badge;
@@ -66,6 +69,7 @@ internal sealed class RepoNodeViewModel : IDisposable
     public Repo Repo => _currentRepo.Value ?? _initial;
 
     public IReadable<string> DisplayName => _displayName;
+    public IReadable<string?> CustomIconPath => _customIconPath;
     // True while this primary row's name is being edited inline. Always false for worktree/submodule
     // rows, which aren't renamable.
     public IReadable<bool> IsRenaming => _isRenaming;
@@ -104,6 +108,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         IPlatformShell? shell,
         ILocalizationService loc,
         IClipboard? clipboard,
+        IFilePicker? filePicker,
         IUiDispatcher dispatcher,
         RepoNodeFactory factory)
     {
@@ -118,12 +123,15 @@ internal sealed class RepoNodeViewModel : IDisposable
         _shell = shell;
         _loc = loc;
         _clipboard = clipboard;
+        _filePicker = filePicker;
         _dispatcher = dispatcher;
 
         IsExpanded = registry.WatchWorktreeExpanded(repo.Id);
 
         _currentRepo = new Derived<Repo?>(() => FindRepo(RepoId));
         _displayName = new Derived<string>(() => _currentRepo.Value?.DisplayName ?? _initial.DisplayName);
+        _customIconPath = new Derived<string?>(() =>
+            _currentRepo.Value?.CustomIconPath ?? _initial.CustomIconPath);
         _isMissing = new Derived<bool>(() => _currentRepo.Value?.IsMissing ?? _initial.IsMissing);
         _isActive = new Derived<bool>(() => _registry.Active.Value?.Id == RepoId);
         _badge = new Derived<RepoRowBadge>(() =>
@@ -252,6 +260,46 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(repo.Path), LucideIcons.FolderOpen));
         AddOpenRemoteItem(items, s, repo);
+
+        if (_filePicker is not null)
+        {
+            items.Add(new RepoBarContextMenu.Item(
+                s.ReposRepoSetCustomIcon,
+                () => PickCustomIcon(repo),
+                LucideIcons.Image));
+            if (repo.CustomIconPath is not null)
+                items.Add(new RepoBarContextMenu.Item(
+                    s.ReposRepoRemoveCustomIcon,
+                    () => _registry.SetCustomIcon(repo.Id, null),
+                    LucideIcons.X));
+        }
+    }
+
+    private void PickCustomIcon(Repo repo)
+    {
+        var picker = _filePicker;
+        if (picker is null) return;
+
+        var s = _loc.Strings.Value;
+        var initialDirectory = repo.CustomIconPath is { } current
+            ? Path.GetDirectoryName(current) ?? repo.Path
+            : repo.Path;
+        picker.PickFile(
+            s.ReposPickerChooseCustomIcon,
+            initialDirectory,
+            [new FileFilter(s.ReposPickerChooseCustomIcon, ["*.png", "*.jpg", "*.jpeg", "*.ico"])],
+            picked =>
+            {
+                if (!RepoIconImage.CanLoad(picked))
+                {
+                    var strings = _loc.Strings.Value;
+                    _bus.Broadcast(new ShowOperationErrorMessage(
+                        strings.ReposErrorCustomIconFailed,
+                        strings.ReposErrorCustomIconInvalid));
+                    return;
+                }
+                _registry.SetCustomIcon(repo.Id, picked);
+            });
     }
 
     private void AddHotkeyMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
@@ -428,6 +476,7 @@ internal sealed class RepoNodeViewModel : IDisposable
         _badge.Dispose();
         _isActive.Dispose();
         _isMissing.Dispose();
+        _customIconPath.Dispose();
         _displayName.Dispose();
         _currentRepo.Dispose();
     }

@@ -25,6 +25,7 @@ internal sealed record RepoRowShell : Widget
     public required float RowHeight { get; init; }
     public required float GlyphSize { get; init; }
     public required IReadable<bool> Hovered { get; init; }
+    public IWidget? GlyphSlot { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -62,6 +63,7 @@ internal sealed record RepoRowShell : Widget
             GlyphSize = GlyphSize,
             Chevron = new WorktreeChevron().WithController<KbmController>(),
             Glyph = Glyph,
+            GlyphSlot = GlyphSlot,
             IconColor = Theme.Color(s => s.RepoBarRow.Icon(vm.Kind, vm.IsActive.Value, vm.IsMissing.Value)),
             // A pinned primary shows its slot inline after the name, e.g. "web-frontend (2)", in a
             // smaller muted tone so it reads as a hint, not part of the name. Unpinned/nested rows fall

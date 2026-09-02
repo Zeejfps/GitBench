@@ -351,6 +351,30 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         }
     }
 
+    public void SetCustomIcon(Guid id, string? iconPath)
+    {
+        string? normalized = null;
+        if (!string.IsNullOrWhiteSpace(iconPath))
+        {
+            try { normalized = Path.GetFullPath(iconPath); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return;
+            }
+        }
+
+        for (var i = 0; i < Repos.Count; i++)
+        {
+            var repo = Repos[i];
+            if (repo.Id != id) continue;
+            if (!repo.IsPrimary ||
+                string.Equals(repo.CustomIconPath, normalized, StringComparison.Ordinal)) return;
+            Repos.Replace(i, repo with { CustomIconPath = normalized });
+            Save();
+            return;
+        }
+    }
+
     public void BeginRenameRepo(Guid id)
     {
         RenamingRepoId.Value = id;
