@@ -120,8 +120,8 @@
   },
   "terminal.paste_confirm_body": "Este shell no ha solicitado el pegado entre corchetes, por lo que ejecutará cada línea como un comando en cuanto llegue.",
   "terminal.paste_confirm_first_line": "Primera línea: {line}",
-  "terminal.paste_confirm_run": "Ejecutar todas las líneas",
-  "terminal.paste_confirm_flatten": "Pegar como una sola línea",
+  "terminal.paste_confirm_run": "Ejecutar todo",
+  "terminal.paste_confirm_flatten": "Pegar en una línea",
 
   "file_browser.no_repo": "Abre un repositorio para explorar sus archivos.",
   "file_browser.show_hidden": "Mostrar archivos ignorados y ocultos",

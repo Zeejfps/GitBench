@@ -27,6 +27,14 @@ namespace GitBench.Features.Terminal;
 /// </remarks>
 internal sealed record ConfirmPasteDialog : Widget
 {
+    /// <summary>
+    /// Wide rather than compact: this footer carries three buttons instead of the usual two, and
+    /// three labels do not fit a narrower dialog once they are translated.
+    /// </summary>
+    /// <remarks>Named so the layout test measures against the width this actually uses rather
+    /// than a constant of its own, which would go on passing after someone narrowed it.</remarks>
+    public const float FrameWidth = DialogFrame.WidthWide;
+
     public required int Lines { get; init; }
 
     public required string FirstLine { get; init; }
@@ -47,7 +55,7 @@ internal sealed record ConfirmPasteDialog : Widget
         {
             Title = s.TerminalPasteConfirmTitle(Lines),
             OnClose = OnClose,
-            Width = DialogFrame.WidthCompact,
+            Width = FrameWidth,
             // The safe answer is the primary one: it is the only branch that cannot run anything the
             // sender has not read first.
             Action = (s.TerminalPasteConfirmFlatten, DialogButtonRole.Primary, () =>
@@ -58,16 +66,25 @@ internal sealed record ConfirmPasteDialog : Widget
             ConfirmKeys = true,
             // Left of the cancel, the way a "Don't Save" sits apart from Cancel and Save: it is the
             // answer that acts rather than the one that retreats, and it is the dangerous one.
-            FooterLead = new SecondaryDialogButton
+            // Wrapped in a row because the footer's lead slot grows to fill, and a button handed that
+            // slot directly stretches across it instead of leaving the gap that does the separating.
+            FooterLead = new Row
             {
-                Label = s.TerminalPasteConfirmRun,
-                Height = DialogFrame.DefaultButtonHeight,
-                Command = new Command(() =>
-                {
-                    OnClose();
-                    OnRun();
-                }),
-            }.WithController<KbmController>(),
+                Children =
+                [
+                    new SecondaryDialogButton
+                    {
+                        Label = s.TerminalPasteConfirmRun,
+                        Height = DialogFrame.DefaultButtonHeight,
+                        MinWidth = DialogFrame.DefaultButtonMinWidth,
+                        Command = new Command(() =>
+                        {
+                            OnClose();
+                            OnRun();
+                        }),
+                    }.WithController<KbmController>(),
+                ],
+            },
             Body =
             [
                 new Text
