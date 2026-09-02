@@ -58,6 +58,20 @@ public sealed class CreateWorktreeDialogViewModelTests
         Assert.Equal(Sibling("app-worktree-3"), vm.Path.Value);
     }
 
+    // Browse opens where the field points, and the field points at a directory that does not
+    // exist yet by design — so the picker has to climb to the closest one that does.
+    [Fact]
+    public void BrowseOpensAtTheClosestExistingFolderAboveTheTypedPath()
+    {
+        var parent = Path.Combine(Root, "repos");
+        var typed = Sibling("app-feature");
+
+        Assert.Equal(parent, WorktreePathDefaults.NearestExistingDirectory(typed, p => p == parent));
+        Assert.Equal(typed, WorktreePathDefaults.NearestExistingDirectory(typed, p => p == typed));
+        Assert.Null(WorktreePathDefaults.NearestExistingDirectory(typed, _ => false));
+        Assert.Null(WorktreePathDefaults.NearestExistingDirectory("  ", _ => true));
+    }
+
     [Fact]
     public void SubmodulesInitializeRecursivelyByDefault()
     {

@@ -23,7 +23,7 @@ internal static class AddRepoMenu
     public static void OpenFromFolder(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
-        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerOpenRepository, path =>
+        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerOpenRepository, null, path =>
         {
             if (ctx.Get<IRepoRegistry>()?.Open(path, groupId) == OpenRepoOutcome.NotAGitRepo)
             {
@@ -39,7 +39,7 @@ internal static class AddRepoMenu
     public static void InitNewRepo(Context ctx, Guid? groupId = null)
     {
         var s = ctx.Localization().Strings.Value;
-        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerNewRepository, path =>
+        ctx.Get<IFilePicker>()?.PickFolder(s.ReposPickerNewRepository, null, path =>
         {
             if (ctx.Get<IGitRepositoryLifecycle>()?.Init(path) is GitOutcome.Failed failed)
             {

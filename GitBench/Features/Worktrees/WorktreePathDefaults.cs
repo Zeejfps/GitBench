@@ -29,6 +29,28 @@ internal static class WorktreePathDefaults
         return candidate;
     }
 
+    /// <summary>
+    /// The closest folder that actually exists at or above <paramref name="path"/> — where the
+    /// folder picker should open when the field holds a worktree path whose own directory is,
+    /// by design, not created yet. Null when nothing on the chain exists.
+    /// </summary>
+    public static string? NearestExistingDirectory(string path, Func<string, bool> directoryExists)
+    {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+
+        string current;
+        try { current = Path.GetFullPath(path.Trim()); }
+        catch { return null; }
+
+        while (true)
+        {
+            if (directoryExists(current)) return current;
+            var parent = Path.GetDirectoryName(current);
+            if (string.IsNullOrEmpty(parent) || parent == current) return null;
+            current = parent;
+        }
+    }
+
     // A branch name is a legal refname, not a legal path segment: `feature/foo` would otherwise
     // nest the worktree a directory deeper than the sibling this is meant to produce.
     private static string Slug(string branchName)
