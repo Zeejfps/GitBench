@@ -164,6 +164,16 @@
   "terminal.rename_tab_title": "Переименование терминала",
   "terminal.rename_tab_label": "Имя",
   "terminal.rename_tab_hint": "Оставьте пустым, чтобы имя следовало за запущенной программой.",
+  "terminal.paste_confirm_title": {
+    "few": "Вставить {count} строки?",
+    "many": "Вставить {count} строк?",
+    "one": "Вставить {count} строку?",
+    "other": "Вставить {count} строк?"
+  },
+  "terminal.paste_confirm_body": "Эта оболочка не запросила скобочную вставку, поэтому она выполнит каждую строку как команду сразу по её поступлении.",
+  "terminal.paste_confirm_first_line": "Первая строка: {line}",
+  "terminal.paste_confirm_run": "Выполнить все строки",
+  "terminal.paste_confirm_flatten": "Вставить одной строкой",
 
   "file_browser.no_repo": "Откройте репозиторий, чтобы просмотреть его файлы.",
   "file_browser.show_hidden": "Показывать игнорируемые и скрытые файлы",

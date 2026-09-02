@@ -2,6 +2,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Platform;
 using GitBench.Terminal.Vt;
 using GitBench.Widgets;
@@ -11,6 +12,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
+using ZGF.Observable;
 
 namespace GitBench.Features.Terminal;
 
@@ -834,7 +836,37 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         if (!_terminal.IsAcceptingInput) return;
         if (_clipboard?.GetText() is not { Length: > 0 } text) return;
 
+        var lines = TerminalPasteEncoder.LinesToRun(text, _terminal.Modes.BracketedPaste);
+        if (lines > 1 && AskAboutPaste(text, lines)) return;
+
         _terminal.Paste(text);
+    }
+
+    /// <summary>
+    /// Puts a multi-line paste to the user before it runs. Returns whether the question was asked —
+    /// false means it could not be, and the paste is the caller's to send as it stands.
+    /// </summary>
+    /// <remarks>
+    /// Posted rather than shown here, for the reason the quit prompt is: this runs inside input
+    /// dispatch, and a modal wants a settled view tree. The tick that drains the queue is the next
+    /// thing the run loop does, so the prompt still lands in the frame the paste was asked for.
+    /// </remarks>
+    bool AskAboutPaste(string text, int lines)
+    {
+        if (_ctx is null) return false;
+        if (_ctx.Get<IMessageBus>() is not { } bus) return false;
+        if (_ctx.Get<IUiDispatcher>() is not { } dispatcher) return false;
+
+        dispatcher.Post(() => bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmPasteDialog
+        {
+            Lines = lines,
+            FirstLine = TerminalPasteEncoder.FirstLine(text),
+            OnClose = onClose,
+            OnRun = () => _terminal.Paste(text),
+            OnFlatten = () => _terminal.Paste(TerminalPasteEncoder.Flatten(text)),
+        })));
+
+        return true;
     }
 
     void SelectAll() => _terminal.SelectAll();

@@ -114,6 +114,14 @@
   "terminal.rename_tab_title": "Rename terminal",
   "terminal.rename_tab_label": "Name",
   "terminal.rename_tab_hint": "Leave blank to follow whatever is running in it.",
+  "terminal.paste_confirm_title": {
+    "one": "Paste one line?",
+    "other": "Paste {count} lines?"
+  },
+  "terminal.paste_confirm_body": "This shell has not asked for bracketed paste, so it will run every line as a command the moment it arrives.",
+  "terminal.paste_confirm_first_line": "First line: {line}",
+  "terminal.paste_confirm_run": "Run Every Line",
+  "terminal.paste_confirm_flatten": "Paste as One Line",
 
   "file_browser.no_repo": "Open a repository to browse its files.",
   "file_browser.show_hidden": "Show ignored and hidden files",

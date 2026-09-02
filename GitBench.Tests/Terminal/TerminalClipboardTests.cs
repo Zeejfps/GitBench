@@ -50,6 +50,53 @@ public class TerminalPasteEncoderTests
         Assert.Equal("a\rb\rc", Encoded("a\r\nb\r\nc", bracketed: false));
     }
 
+    [Theory]
+    [InlineData("git status", 1)]
+    [InlineData("git status\n", 1)]
+    [InlineData("git status\r\n", 1)]
+    [InlineData("one\ntwo", 2)]
+    [InlineData("one\ntwo\n", 2)]
+    [InlineData("one\r\ntwo\r\nthree\r\n", 3)]
+    [InlineData("one\rtwo\rthree", 3)]
+    [InlineData("", 0)]
+    public void TheLineCount_IsHowManyCommandsTheShellWouldRun(string text, int expected)
+    {
+        Assert.Equal(expected, TerminalPasteEncoder.LinesToRun(text, bracketed: false));
+    }
+
+    /// <remarks>
+    /// The program has said it will take the text as text, so there is nothing to warn about — the
+    /// line endings inside it are characters rather than presses of Enter.
+    /// </remarks>
+    [Fact]
+    public void UnderBracketedPaste_NothingCountsAsALineToRun()
+    {
+        Assert.Equal(0, TerminalPasteEncoder.LinesToRun("one\ntwo\nthree", bracketed: true));
+    }
+
+    [Theory]
+    [InlineData("one\ntwo\nthree", "one two three")]
+    [InlineData("one\r\ntwo\r\n", "one two")]
+    [InlineData("\n\nleading", "leading")]
+    [InlineData("trailing\n\n", "trailing")]
+    [InlineData("blank\n\n\nlines", "blank lines")]
+    public void Flattening_LeavesOneLineWithNothingThatPressesEnter(string text, string expected)
+    {
+        var flattened = TerminalPasteEncoder.Flatten(text);
+
+        Assert.Equal(expected, flattened);
+        Assert.Equal(1, TerminalPasteEncoder.LinesToRun(flattened, bracketed: false));
+    }
+
+    [Theory]
+    [InlineData("one\ntwo", "one")]
+    [InlineData("one\r\ntwo", "one")]
+    [InlineData("only", "only")]
+    public void TheFirstLine_IsWhatTheConfirmationShows(string text, string expected)
+    {
+        Assert.Equal(expected, TerminalPasteEncoder.FirstLine(text));
+    }
+
     /// <remarks>
     /// The security property of bracketed paste. A clipboard carrying the closing sequence would
     /// otherwise end the bracket early and have everything after it read as typed input — which is

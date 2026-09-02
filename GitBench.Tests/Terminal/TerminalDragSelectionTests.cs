@@ -1,5 +1,6 @@
 using GitBench.Features.Terminal;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Terminal.Vt;
 using GitBench.Theming;
 using ZGF.Geometry;
@@ -207,7 +208,9 @@ internal sealed class DragPane : IDisposable
         ScriptedCells cells,
         TerminalInputController controller,
         RecordingShell shell,
-        FakeClipboard clipboard)
+        FakeClipboard clipboard,
+        QueuedUiDispatcher dispatcher,
+        List<ShowDialogMessage> dialogs)
     {
         Terminal = terminal;
         _harness = harness;
@@ -215,7 +218,17 @@ internal sealed class DragPane : IDisposable
         _controller = controller;
         Shell = shell;
         Clipboard = clipboard;
+        _dispatcher = dispatcher;
+        Dialogs = dialogs;
     }
+
+    readonly QueuedUiDispatcher _dispatcher;
+
+    /// <summary>Dialogs the pane has asked for, in order. Drained by <see cref="Settle"/>.</summary>
+    public List<ShowDialogMessage> Dialogs { get; }
+
+    /// <summary>Runs whatever the pane posted for the next frame, which is where a modal is asked for.</summary>
+    public void Settle() => _dispatcher.Drain();
 
     public SeamTerminal Terminal { get; }
 
@@ -239,11 +252,22 @@ internal sealed class DragPane : IDisposable
     public static DragPane NoScreen() =>
         Build(new SeamTerminal { IsAcceptingInput = false, HasScreen = false });
 
-    static DragPane Build(SeamTerminal terminal)
+    /// <summary>A pane whose program has asked for bracketed paste.</summary>
+    public static DragPane Bracketing() =>
+        Build(new SeamTerminal { Modes = Modes(MouseTracking.Off, bracketedPaste: true) });
+
+    /// <summary>A pane with no message bus or dispatcher, as a host that registered neither.</summary>
+    public static DragPane Unhosted() => Build(new SeamTerminal(), hosted: false);
+
+    static DragPane Build(SeamTerminal terminal, bool hosted = true)
     {
         var cells = new ScriptedCells();
         var shell = new RecordingShell();
         var clipboard = new FakeClipboard();
+        var dispatcher = new QueuedUiDispatcher();
+        var bus = new MessageBus();
+        var dialogs = new List<ShowDialogMessage>();
+        bus.Subscribe<ShowDialogMessage>(dialogs.Add);
         TerminalInputController? controller = null;
 
         var harness = GuiTestHarness.Create(
@@ -263,10 +287,14 @@ internal sealed class DragPane : IDisposable
                     new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                if (!hosted) return;
+
+                ctx.AddService<IMessageBus>(bus);
+                ctx.AddService<IUiDispatcher>(dispatcher);
             });
 
         harness.Input.StealFocus(controller!);
-        return new DragPane(terminal, harness, cells, controller!, shell, clipboard);
+        return new DragPane(terminal, harness, cells, controller!, shell, clipboard, dispatcher, dialogs);
     }
 
     const float CellSize = 10f;
@@ -336,13 +364,13 @@ internal sealed class DragPane : IDisposable
         _harness.Input.SendMouseButtonEvent(ref e);
     }
 
-    static TerminalModes Modes(MouseTracking tracking) => new(
+    static TerminalModes Modes(MouseTracking tracking, bool bracketedPaste = false) => new(
         ApplicationCursorKeys: false,
         ApplicationKeypad: false,
         AutoWrap: true,
         AlternateScreen: true,
         AlternateScroll: false,
-        BracketedPaste: false,
+        BracketedPaste: bracketedPaste,
         FocusReporting: false,
         SynchronizedOutput: false,
         MouseTracking: tracking,

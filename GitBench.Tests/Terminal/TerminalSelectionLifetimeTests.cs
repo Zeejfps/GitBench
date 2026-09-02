@@ -66,6 +66,32 @@ public class TerminalSelectionLifetimeTests
         Assert.Contains("tail3", run.Vm.SelectionText());
     }
 
+    /// <remarks>
+    /// The rows below the prompt are part of the screen but not part of anything anyone means by
+    /// "all". A shell sitting idle near the top of a tall pane would otherwise put a screen's worth
+    /// of blank lines on the clipboard, and pasting those is a screen's worth of pressing Enter.
+    /// </remarks>
+    [Fact]
+    public void SelectingEverything_StopsAtTheLastRowHoldingAnything()
+    {
+        using var run = TerminalRun.Started();
+        Emit(run, "one\r\ntwo\r\nthree", () => Shows(run, "three"));
+
+        run.Vm.SelectAll();
+
+        Assert.Equal("one\ntwo\nthree", run.Vm.SelectionText());
+        Assert.Equal(2, run.Vm.Selection?.End.Row);
+    }
+
+    [Fact]
+    public void SelectingEverything_OnAScreenHoldingNothing_SelectsNothing()
+    {
+        using var run = TerminalRun.Started();
+
+        Assert.False(run.Vm.SelectAll());
+        Assert.Null(run.Vm.Selection);
+    }
+
     [Fact]
     public void SelectingEverythingTwice_ChangesNothingTheSecondTime()
     {

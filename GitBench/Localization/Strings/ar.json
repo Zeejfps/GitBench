@@ -174,6 +174,17 @@
   "terminal.rename_tab_title": "إعادة تسمية الطرفية",
   "terminal.rename_tab_label": "الاسم",
   "terminal.rename_tab_hint": "اتركه فارغًا ليتبع البرنامج قيد التشغيل.",
+  "terminal.paste_confirm_title": {
+    "one": "لصق سطر واحد؟",
+    "two": "لصق سطرين؟",
+    "few": "لصق {count} أسطر؟",
+    "many": "لصق {count} سطراً؟",
+    "other": "لصق {count} سطر؟"
+  },
+  "terminal.paste_confirm_body": "لم تطلب هذه الصدفة اللصق المقوّس، لذا ستنفذ كل سطر كأمر فور وصوله.",
+  "terminal.paste_confirm_first_line": "السطر الأول: {line}",
+  "terminal.paste_confirm_run": "تنفيذ كل الأسطر",
+  "terminal.paste_confirm_flatten": "لصق كسطر واحد",
 
   "file_browser.no_repo": "افتح مستودعًا لتصفح ملفاته.",
   "file_browser.show_hidden": "إظهار الملفات المتجاهلة والمخفية",

@@ -114,6 +114,13 @@
   "terminal.rename_tab_title": "터미널 이름 바꾸기",
   "terminal.rename_tab_label": "이름",
   "terminal.rename_tab_hint": "비워 두면 실행 중인 프로그램 이름을 따릅니다.",
+  "terminal.paste_confirm_title": {
+    "other": "{count}줄을 붙여넣을까요?"
+  },
+  "terminal.paste_confirm_body": "이 셸은 대괄호 붙여넣기를 요청하지 않았으므로 도착하는 즉시 각 줄을 명령으로 실행합니다.",
+  "terminal.paste_confirm_first_line": "첫 줄: {line}",
+  "terminal.paste_confirm_run": "모든 줄 실행",
+  "terminal.paste_confirm_flatten": "한 줄로 붙여넣기",
 
   "file_browser.no_repo": "저장소를 열면 파일을 탐색할 수 있습니다.",
   "file_browser.show_hidden": "무시된 파일과 숨김 파일 표시",

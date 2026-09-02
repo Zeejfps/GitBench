@@ -114,6 +114,13 @@
   "terminal.rename_tab_title": "ターミナルの名前を変更",
   "terminal.rename_tab_label": "名前",
   "terminal.rename_tab_hint": "空欄にすると、実行中のプログラムの名前になります。",
+  "terminal.paste_confirm_title": {
+    "other": "{count}行を貼り付けますか？"
+  },
+  "terminal.paste_confirm_body": "このシェルはブラケットペーストを要求していないため、到着した瞬間に各行をコマンドとして実行します。",
+  "terminal.paste_confirm_first_line": "最初の行：{line}",
+  "terminal.paste_confirm_run": "全行を実行",
+  "terminal.paste_confirm_flatten": "1行にまとめて貼り付け",
 
   "file_browser.no_repo": "リポジトリを開くとファイルを閲覧できます。",
   "file_browser.show_hidden": "無視されたファイルと隠しファイルを表示",

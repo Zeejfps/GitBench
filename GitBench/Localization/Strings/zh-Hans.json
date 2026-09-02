@@ -114,6 +114,13 @@
   "terminal.rename_tab_title": "重命名终端",
   "terminal.rename_tab_label": "名称",
   "terminal.rename_tab_hint": "留空则跟随正在运行的程序。",
+  "terminal.paste_confirm_title": {
+    "other": "粘贴 {count} 行？"
+  },
+  "terminal.paste_confirm_body": "此 shell 未请求括号粘贴，因此它会在每行到达时立即将其作为命令执行。",
+  "terminal.paste_confirm_first_line": "首行：{line}",
+  "terminal.paste_confirm_run": "执行每一行",
+  "terminal.paste_confirm_flatten": "合并为一行粘贴",
 
   "file_browser.no_repo": "打开一个仓库以浏览其文件。",
   "file_browser.show_hidden": "显示被忽略和隐藏的文件",
