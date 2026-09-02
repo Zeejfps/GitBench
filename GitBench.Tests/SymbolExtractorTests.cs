@@ -15,8 +15,6 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
         Assert.IsType<CodeIntelAvailability.Ready>(fixture.Extractor.Availability);
     }
 
-    // Per language, deliberately. A query failure now takes down only its own language, so asking
-    // whether the extractor is Ready would pass with fourteen of fifteen broken.
     [Fact]
     public void EveryBundledQueryCompilesAndEveryCaptureNameValidates()
     {

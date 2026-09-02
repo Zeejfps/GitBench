@@ -189,6 +189,23 @@ public class BundledLanguageOutlineTests(CodeIntelFixture fixture)
              ("test", SymbolKind.Field, 1),
              ("runs-on", SymbolKind.Field, 2)]),
 
+        // A table node spans its header and every pair after it, so the keys nest under it
+        // without the grammar naming any containment.
+        (CodeLanguage.Toml, """
+            edition = "2021"
+
+            [package]
+            name = "gitbench"
+
+            [[bin]]
+            name = "cli"
+            """,
+            [("edition", SymbolKind.Field, 0),
+             ("package", SymbolKind.Type, 0),
+             ("name", SymbolKind.Field, 1),
+             ("bin", SymbolKind.Type, 0),
+             ("name", SymbolKind.Field, 1)]),
+
         (CodeLanguage.Css, """
             .badge { color: red; }
 

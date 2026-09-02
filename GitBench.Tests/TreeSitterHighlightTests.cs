@@ -77,6 +77,12 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
 
         ("html", "<p class=\"a\">hi</p>",
             [("p", TokenColorSlot.Keyword), ("class", TokenColorSlot.Variable)]),
+
+        // The table header is a type and the key under it a property, which is the local edit
+        // to the vendored query: upstream paints both with the same catch-all.
+        ("toml", "[package]\nname = \"gitbench\"\nedition = 2021\n",
+            [("package", TokenColorSlot.Type), ("name", TokenColorSlot.Variable),
+             ("\"gitbench\"", TokenColorSlot.String), ("2021", TokenColorSlot.Number)]),
     ];
 
     /// <summary>
@@ -242,6 +248,7 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
         CodeLanguage.Java => "java",
         CodeLanguage.Bash => "shellscript",
         CodeLanguage.C => "c",
+        CodeLanguage.Toml => "toml",
         _ => null,
     };
 

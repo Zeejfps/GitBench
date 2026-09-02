@@ -10,6 +10,8 @@ public class LanguageRegistryTests
     [InlineData("src/app/Main.cs", "csharp")]
     [InlineData("component.ts", "typescript")]
     [InlineData("component.tsx", "typescriptreact")]
+    [InlineData("bundle.mts", "typescript")]
+    [InlineData("Cargo.toml", "toml")]
     [InlineData("styles.css", "css")]
     [InlineData("App.svelte", "svelte")]
     [InlineData("README.md", "markdown")]

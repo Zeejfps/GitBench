@@ -34,11 +34,6 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         var compiled = new Dictionary<CodeLanguage, CompiledLanguage>();
         string? firstFailure = null;
 
-        // Per language, not all-or-nothing. A grammar pin that renames a node breaks the query
-        // written against it and nothing else, and with fifteen bundled languages one such break
-        // taking code intelligence down for the other fourteen is a far worse failure than the one
-        // it is reporting. The language that failed simply has no outline, which is a state every
-        // caller already handles.
         foreach (var language in CodeLanguages.All)
         {
             try
@@ -65,9 +60,6 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
 
     public CodeIntelAvailability Availability { get; }
 
-    /// <summary>Whether this language's grammar and query both loaded. Availability answers "is
-    /// parsing possible at all"; with fifteen bundled languages one can be broken while the rest
-    /// work, and a test that only asked the former would not notice.</summary>
     internal bool Supports(CodeLanguage language) => _compiled?.ContainsKey(language) == true;
 
     public FileOutline? Extract(string text, CodeLanguage language)

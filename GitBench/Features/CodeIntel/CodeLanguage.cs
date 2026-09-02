@@ -17,6 +17,7 @@ internal enum CodeLanguage
     Java,
     Bash,
     C,
+    Toml,
     MarkdownInline,
 }
 
@@ -68,6 +69,7 @@ internal static class CodeLanguages
         new(CodeLanguage.Bash, "bash", [".sh", ".bash"], None),
         // Only C ships, so a .h is unambiguous here in a way it is not in general.
         new(CodeLanguage.C, "c", [".c", ".h"], None),
+        new(CodeLanguage.Toml, "toml", [".toml"], None),
         // No file is written in it: Markdown's block grammar leaves every span of inline syntax as
         // one node, and this is what gets injected into those.
         new(CodeLanguage.MarkdownInline, "markdown_inline", [], None, InjectedOnly: true),

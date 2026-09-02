@@ -1,20 +1,3 @@
-"""Regenerates GitBench/Assets/Queries/{Highlights,Injections}/*.scm from the grammar submodules.
-
-Syntax highlighting runs each grammar's own highlights.scm rather than a query we write, which is
-what makes sixteen languages affordable. Those files live in the submodules under
-external/cs_tree_sitter/native/vendor, so a pin bump can move them out from under us: this script
-re-copies them and re-applies the handful of local edits, so the edits survive the bump instead of
-being remembered.
-
-Injection queries come from the same place and say which regions of a file are written in another
-language -- a fenced code block, a <script> body, Markdown's inline syntax. A language named by one
-that we bundle no grammar for is left alone at runtime rather than stripped here.
-
-Adding a file to Highlights is the only thing needed to route a language away from TextMate.
-
-Usage: python scripts/vendor-highlight-queries.py
-"""
-
 import os
 import re
 import subprocess
@@ -46,6 +29,7 @@ SOURCES = {
     "java": ["tree-sitter-java"],
     "bash": ["tree-sitter-bash"],
     "c": ["tree-sitter-c"],
+    "toml": ["tree-sitter-toml"],
 }
 
 # The same, for injections.scm. Only the grammars that embed another language have one, and only
@@ -71,6 +55,16 @@ SUBSTITUTIONS = {
         "; LOCAL: file switching engines should not change appearance.\n"
         "(emphasis_delimiter) @text.emphasis\n"
         "(code_span_delimiter) @text.literal",
+    )],
+    "toml": [(
+        """(pair
+  (bare_key)) @property""",
+        "; LOCAL: upstream hangs @property off the pair rather than off its key, so it paints\n"
+        "; LOCAL: the whole `key = value` and then loses the key itself to the catch-all\n"
+        "; LOCAL: `(bare_key) @type` above it, which this host resolves widest-span-first.\n"
+        "; LOCAL: JSON and YAML both paint a mapping key @property, and a TOML key is no more\n"
+        "; LOCAL: a type than those are.\n"
+        "(pair\n  (bare_key) @property)",
     )],
     "rust": [(
         "(integer_literal) @constant.builtin\n(float_literal) @constant.builtin",

@@ -59,6 +59,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         ("java", CodeLanguage.Java),
         ("shellscript", CodeLanguage.Bash),
         ("c", CodeLanguage.C),
+        ("toml", CodeLanguage.Toml),
         ("markdown", CodeLanguage.Markdown),
         ("html", CodeLanguage.Html),
     ];
@@ -80,13 +81,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         var read = queryText ?? ReadEmbeddedQuery;
         var readInjections = injectionQueryText ?? ReadEmbeddedInjectionQuery;
 
-        // Every bundled grammar rather than only the routed ones: markdown_inline is written in no
-        // file and reached only because Markdown injects into it.
-        //
-        // Per language, not all-or-nothing, for the reason the outline extractor gives: a pin bump
-        // that renames a node breaks the query written against it and nothing else, and one broken
-        // language taking colors away from the other fifteen is the worse failure. A language that
-        // fails here simply routes to TextMate, which is where it was already.
         foreach (var language in CodeLanguages.Bundled)
         {
             try

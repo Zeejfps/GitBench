@@ -1,12 +1,5 @@
 namespace GitBench.Features.Diff;
 
-/// <summary>
-/// Maps a file path to the TextMate language id GitBench highlights it as, or null when the
-/// language isn't supported (the diff then renders plain). This is the single place new
-/// languages are registered: add one extension (or exact filename) → language-id row. The
-/// returned id is the one TextMateSharp's <c>RegistryOptions.GetScopeByLanguageId</c>
-/// understands.
-/// </summary>
 internal static class LanguageRegistry
 {
     // Extension (with leading dot) → TextMateSharp language id, covering every grammar the
@@ -237,7 +230,12 @@ internal static class LanguageRegistry
         [".svelte"] = "svelte",
         [".swift"] = "swift",
         [".ts"] = "typescript",
+        [".mts"] = "typescript",
+        [".cts"] = "typescript",
         [".tsx"] = "typescriptreact",
+        // TOML is tree-sitter-only: TextMateSharp bundles no grammar for it, so a .toml file
+        // renders plain in the fallback rather than in regexes.
+        [".toml"] = "toml",
         [".typ"] = "typst",
         [".typc"] = "typst-code",
         [".vb"] = "vb",
