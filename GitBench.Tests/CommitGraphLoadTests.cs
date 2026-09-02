@@ -7,7 +7,7 @@ using Xunit;
 namespace GitBench.Tests;
 
 // Load builds the history view's snapshot out of `git for-each-ref`, `git stash list` and a
-// `git log --topo-order --stdin` walk seeded with every displayed ref. These drive the real
+// `git log --date-order --stdin` walk seeded with every displayed ref. These drive the real
 // GitService against a throwaway repo wired to a throwaway bare "origin", pinning the parts that
 // only the ref scan can get wrong: which tips seed the walk, which badges land on which commit,
 // and how a local branch resolves against its upstream.
@@ -203,6 +203,29 @@ public sealed class CommitGraphLoadTests : IDisposable
         Assert.False(Load(cap: 3).Truncated);
     }
 
+    // A busy side branch must not swallow the whole capped window. `--topo-order` refuses to
+    // intermix lines of history, so it drains the newest tip's entire chain first — in a repo with
+    // hundreds of tips that empties the graph of the branch you actually work on. `--date-order`
+    // keeps the same no-parent-before-its-children guarantee but interleaves by commit date.
+    [Fact]
+    public void A_busy_side_branch_does_not_crowd_the_other_branches_out_of_the_capped_window()
+    {
+        var root = CommitAt("a.txt", "0", "root", "2020-01-01T00:00:00Z");
+        var mainTip = CommitAt("a.txt", "1", "main work", "2020-01-05T00:00:00Z");
+
+        Git("checkout", "-b", "busy", root);
+        CommitAt("b.txt", "1", "busy 1", "2020-01-02T00:00:00Z");
+        CommitAt("b.txt", "2", "busy 2", "2020-01-03T00:00:00Z");
+        CommitAt("b.txt", "3", "busy 3", "2020-01-04T00:00:00Z");
+        var busyTip = CommitAt("b.txt", "4", "busy 4", "2020-01-06T00:00:00Z");
+
+        var shas = Load(cap: 3).Commits.Select(n => n.Sha).ToArray();
+
+        Assert.Equal(3, shas.Length);
+        Assert.Equal(busyTip, shas[0]);
+        Assert.Contains(mainTip, shas);
+    }
+
     [Fact]
     public void A_repo_with_no_commits_loads_empty_rather_than_failing()
     {
@@ -233,9 +256,24 @@ public sealed class CommitGraphLoadTests : IDisposable
         return Git("rev-parse", "HEAD").Trim();
     }
 
+    // The walk orders by committer date, so pinning ordering needs both date env vars.
+    private string CommitAt(string file, string content, string message, string isoDate)
+    {
+        File.WriteAllText(Path.Combine(_work, file), content);
+        Git("add", file);
+        RunGit(_work, new Dictionary<string, string>
+        {
+            ["GIT_AUTHOR_DATE"] = isoDate,
+            ["GIT_COMMITTER_DATE"] = isoDate,
+        }, "commit", "-m", message);
+        return Git("rev-parse", "HEAD").Trim();
+    }
+
     private string Git(params string[] args) => RunGit(_work, args);
 
-    private static string RunGit(string cwd, params string[] args)
+    private static string RunGit(string cwd, params string[] args) => RunGit(cwd, null, args);
+
+    private static string RunGit(string cwd, IReadOnlyDictionary<string, string>? env, params string[] args)
     {
         var psi = new ProcessStartInfo("git")
         {
@@ -247,6 +285,7 @@ public sealed class CommitGraphLoadTests : IDisposable
             CreateNoWindow = true,
         };
         foreach (var a in args) psi.ArgumentList.Add(a);
+        if (env != null) foreach (var (k, v) in env) psi.Environment[k] = v;
 
         using var proc = Process.Start(psi)!;
         proc.StandardInput.Close();

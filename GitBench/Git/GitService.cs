@@ -358,8 +358,11 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
     private const string GraphLogFormat = "%H%x00%s%x00%an%x00%aI%x00%cI%x00%P";
 
     // The tips go in on stdin rather than the command line: a repo with a few hundred branches
-    // would otherwise build an argv near the platform limit. `--topo-order` matches the walk the
-    // graph is drawn against — no parent before its children, commit time breaking ties. Asking
+    // would otherwise build an argv near the platform limit. `--date-order` matches the walk the
+    // graph is drawn against — no parent before its children, commit time deciding the rest.
+    // NOT `--topo-order`, which deliberately does not intermix lines of history: with hundreds of
+    // tips it drains whole branches before moving on, so the capped window can be filled entirely
+    // by one busy branch and leave the checked-out branch's history out of the graph. Asking
     // for one commit past the cap is what tells us the history was truncated.
     private List<GraphCommit> WalkCommits(string repoPath, List<string> refTips, int cap, out bool truncated)
     {
@@ -369,7 +372,7 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
 
         var result = _runner.Run(
             repoPath,
-            new[] { "log", "--topo-order", $"--max-count={cap + 1}", $"--format={GraphLogFormat}", "--stdin" },
+            new[] { "log", "--date-order", $"--max-count={cap + 1}", $"--format={GraphLogFormat}", "--stdin" },
             stdin: string.Join('\n', refTips) + "\n");
         if (!result.Ok) return commits;
 
