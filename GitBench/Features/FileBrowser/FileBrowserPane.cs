@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -123,13 +124,15 @@ internal sealed record FileBrowserPreviewHeader : Widget
 
         var title = new TextView(ctx.Canvas) { TextOverflow = TextOverflow.Ellipsis };
         title.BindThemedTextColor(ctx.Theme(), s => s.FileChangesSection.HeaderText);
-        title.Bind(browser.Preview, preview => title.Text = Title(browser, preview));
+        title.Bind(browser.Preview, preview => title.Text = browser.TitleFor(preview));
 
         // Second, dimmer, and after the path rather than replacing it: the path says which file,
         // and the breadcrumb only ever says where in it.
         var breadcrumb = new TextView(ctx.Canvas) { TextOverflow = TextOverflow.Ellipsis };
         breadcrumb.BindThemedTextColor(ctx.Theme(), s => s.Palette.TextMuted);
         breadcrumb.Bind(browser.Breadcrumb, path => breadcrumb.Text = path is null ? string.Empty : Separator + path);
+
+        var servers = new LanguageServerStatusChip { Model = browser }.BuildView(ctx);
 
         var toggle = new LocalChangesHeaderActionButton
         {
@@ -148,6 +151,7 @@ internal sealed record FileBrowserPreviewHeader : Widget
             {
                 new FlexItem { Shrink = 1, Child = title },
                 new FlexItem { Grow = 1, Shrink = 2, Child = breadcrumb },
+                servers,
                 toggle,
             },
         });
@@ -156,19 +160,6 @@ internal sealed record FileBrowserPreviewHeader : Widget
     // U+203A, not a chevron glyph: the header's text runs are in the UI font, and a lucide glyph
     // here would need its own view just to carry a different family.
     private const string Separator = " › ";
-
-    private static string Title(FileBrowserViewModel browser, FilePreview preview)
-    {
-        var path = preview switch
-        {
-            FilePreview.Loading loading => loading.Path,
-            FilePreview.Text text => text.Path,
-            FilePreview.Image image => image.Path,
-            FilePreview.Unavailable unavailable => unavailable.Path,
-            _ => null,
-        };
-        return path is null ? string.Empty : Path.GetRelativePath(browser.RootPath, path).Replace('\\', '/');
-    }
 }
 
 /// <summary>Widget wrapper so the virtualized tree composes into the rail like any other child.</summary>

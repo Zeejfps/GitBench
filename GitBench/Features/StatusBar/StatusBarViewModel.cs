@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Identity;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -268,6 +269,10 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
                 s.StatusbarEnableUntrackedCache,
                 () => _enableUntrackedCache.Value = !_enableUntrackedCache.Value,
                 Checked: _enableUntrackedCache.Value),
+            new RepoBarContextMenu.Item(
+                s.LanguageServersMenuItem,
+                () => _bus.Broadcast(new ShowDialogMessage(onClose =>
+                    new LanguageServersDialog { OnClose = onClose }))),
         };
     }
 

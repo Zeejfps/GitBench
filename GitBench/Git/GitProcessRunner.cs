@@ -192,7 +192,7 @@ internal sealed class GitProcessRunner
         // the filter-process, credential helpers) via PATH — the GUI app's bare PATH lacks
         // /usr/local/bin & /opt/homebrew/bin, which surfaces as "git-lfs: command not found" +
         // "the remote end hung up unexpectedly" on every status/diff in an LFS repo.
-        foreach (var (key, value) in LoginEnvironment()) psi.Environment[key] = value;
+        foreach (var (key, value) in LoginShellEnvironment.Variables) psi.Environment[key] = value;
         foreach (var key in UninheritedEnvKeys) psi.Environment.Remove(key);
         psi.Environment["GIT_TERMINAL_PROMPT"] = "0";
         // Identity `-c key=value` overrides must come before the subcommand.
@@ -221,13 +221,7 @@ internal sealed class GitProcessRunner
     private static string ResolveGitExecutable()
     {
         if (!OperatingSystem.IsMacOS()) return "git";
-
-        if (LoginEnvironment().TryGetValue("PATH", out var path))
-            foreach (var dir in path.Split(':', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var candidate = Path.Combine(dir, "git");
-                if (File.Exists(candidate)) return candidate;
-            }
+        if (LoginShellEnvironment.Find("git") is { } found) return found;
 
         foreach (var p in new[] { "/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git" })
             if (File.Exists(p)) return p;
@@ -281,95 +275,12 @@ internal sealed class GitProcessRunner
         }
     }
 
-    private const string EnvSnapshotMarker = "@@gitbench-env@@";
-    private const int EnvSnapshotTimeoutMs = 10_000;
-
     private static readonly string[] UninheritedEnvKeys =
     {
         "PWD", "OLDPWD", "SHLVL", "_",
         "GIT_DIR", "GIT_COMMON_DIR", "GIT_WORK_TREE", "GIT_PREFIX", "GIT_INDEX_FILE",
         "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
     };
-
-    private static IReadOnlyDictionary<string, string>? _loginEnvironment;
-    private static readonly object _loginEnvironmentLock = new();
-
-    private static IReadOnlyDictionary<string, string> LoginEnvironment()
-    {
-        if (_loginEnvironment != null) return _loginEnvironment;
-        lock (_loginEnvironmentLock)
-        {
-            return _loginEnvironment ??= ResolveLoginEnvironment();
-        }
-    }
-
-    private static Dictionary<string, string> ResolveLoginEnvironment()
-    {
-        var env = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!OperatingSystem.IsMacOS()) return env;
-
-        try
-        {
-            var shell = Environment.GetEnvironmentVariable("SHELL");
-            if (string.IsNullOrEmpty(shell)) shell = "/bin/zsh";
-            var psi = new ProcessStartInfo
-            {
-                FileName = shell,
-                RedirectStandardInput = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                StandardOutputEncoding = Encoding.UTF8,
-                StandardErrorEncoding = Encoding.UTF8,
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            psi.ArgumentList.Add("-l");
-            psi.ArgumentList.Add("-i");
-            psi.ArgumentList.Add("-c");
-            psi.ArgumentList.Add($"printf '%s' '{EnvSnapshotMarker}'; env -0");
-
-            using var proc = Process.Start(psi);
-            if (proc != null)
-            {
-                proc.StandardInput.Close();
-                var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-                var stderrTask = proc.StandardError.ReadToEndAsync();
-                if (proc.WaitForExit(EnvSnapshotTimeoutMs))
-                {
-                    ParseEnvSnapshot(stdoutTask.GetAwaiter().GetResult(), env);
-                    stderrTask.GetAwaiter().GetResult();
-                }
-                else
-                {
-                    try { proc.Kill(entireProcessTree: true); } catch { }
-                }
-            }
-        }
-        catch { /* fall through to the PATH-only default */ }
-
-        if (!env.ContainsKey("PATH"))
-        {
-            var current = Environment.GetEnvironmentVariable("PATH");
-            var extras = new[] { "/opt/homebrew/bin", "/usr/local/bin" }
-                .Where(p => current == null || !current.Split(':').Contains(p));
-            env["PATH"] = string.Join(':', extras.Prepend(current ?? string.Empty).Where(s => s.Length > 0));
-        }
-
-        return env;
-    }
-
-    private static void ParseEnvSnapshot(string output, Dictionary<string, string> env)
-    {
-        var start = output.LastIndexOf(EnvSnapshotMarker, StringComparison.Ordinal);
-        if (start < 0) return;
-
-        foreach (var entry in output[(start + EnvSnapshotMarker.Length)..].Split('\0'))
-        {
-            var eq = entry.IndexOf('=');
-            if (eq <= 0) continue;
-            env[entry[..eq]] = entry[(eq + 1)..];
-        }
-    }
 
     // ────────── error-text extraction ──────────
 

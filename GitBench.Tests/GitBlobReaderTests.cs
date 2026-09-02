@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 
 using Xunit;
 
@@ -209,7 +210,7 @@ public sealed class GitBlobReaderTests : IDisposable
     public void Dispose()
     {
         _git.Dispose();
-        try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        DirectoryTree.Delete(_root);
     }
 }
 
@@ -310,9 +311,6 @@ public sealed class GitBlobReaderPoolTests : IDisposable
     public void Dispose()
     {
         _reader.Dispose();
-        foreach (var repo in _repos)
-        {
-            try { Directory.Delete(repo, recursive: true); } catch (IOException) { }
-        }
+        foreach (var repo in _repos) DirectoryTree.Delete(repo);
     }
 }

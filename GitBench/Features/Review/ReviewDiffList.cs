@@ -559,8 +559,9 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var gutters = s.RowSet.SingleGutter ? s.GutterWidth : s.GutterWidth * 2;
         // The review window exposes no way to fold, but the column is the row set's fact and not
         // this list's, so the two width calculations stay the same calculation.
-        var width = gutters + DiffRowPainter.FoldColumnWidthOf(s.RowSet.FoldColumn)
-            + DiffRowPainter.GlyphColumnWidth
+        var width = DiffRowPainter.MarkerLaneWidth
+            + gutters + DiffRowPainter.FoldColumnWidthOf(s.RowSet.FoldColumn)
+            + DiffRowPainter.GlyphColumnWidthOf(s.RowSet.GlyphColumn)
             + s.RowSet.MaxRowCells * advance + DiffRowPainter.BannerPaddingX;
         if (width > _naturalWidth) _naturalWidth = width;
     }
@@ -1023,7 +1024,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         if (s.RowSet.Rows[local - 1] is not DiffRow.Line line) return null;
 
         return new DiffTextHit(
-            s.File.Path, new DiffTextPos(local - 1, CharIndexAt(s, line.Text.Expanded, point.X)));
+            s.File.Path, new DiffTextPos(new RowIndex(local - 1), CharIndexAt(s, line.Text.Expanded, point.X)));
     }
 
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
@@ -1038,7 +1039,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         row = Math.Clamp(row, 0, s.RowSet.Rows.Count - 1);
 
         var text = s.RowSet.Rows[row] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
-        return new DiffTextHit(s.File.Path, new DiffTextPos(row, CharIndexAt(s, text, point.X)));
+        return new DiffTextHit(s.File.Path, new DiffTextPos(new RowIndex(row), CharIndexAt(s, text, point.X)));
     }
 
     // A named scope pins the drag to its card however far the pointer strays; an unnamed one is
@@ -1056,7 +1057,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     {
         if (_monoAdvance <= 0) return default;
         var origin = DiffRowPainter.LineTextOriginX(
-            CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter, s.RowSet.FoldColumn);
+            CardLeft() - _scrollX, s.GutterWidth, s.RowSet.SingleGutter, s.RowSet.FoldColumn,
+            s.RowSet.GlyphColumn);
         return new ExpandedColumn(DiffText.CharIndexAtCell(text, (x - origin) / _monoAdvance));
     }
 
@@ -1131,7 +1133,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             var row = s.RowSet.Rows[local - 1];
             DiffRowSelection? selection = null;
             if (row is DiffRow.Line line
-                && _selection.TryRowSpan(s.File.Path, local - 1, line.Text.End, out var span))
+                && _selection.TryRowSpan(s.File.Path, new RowIndex(local - 1), line.Text.End, out var span))
                 selection = span;
 
             _painter.DrawRow(c, row, new DiffRowPaint(
@@ -1144,7 +1146,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
                 Viewport: _list.Position,
                 Z: z,
                 Selection: selection,
-                FoldColumn: s.RowSet.FoldColumn));
+                FoldColumn: s.RowSet.FoldColumn,
+                GlyphColumn: s.RowSet.GlyphColumn));
 
             var hunkIndex = s.RowSet.HunkIndexOf(local - 1);
             if (hunkIndex >= 0 && hunkIndex == _hoveredHunkIndex

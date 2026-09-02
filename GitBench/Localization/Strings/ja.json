@@ -765,5 +765,37 @@
   "assistant.tool_group_failed": {
     "other": "{count}個が失敗"
   },
-  "markdown.copy_code": "コードをコピー"
+  "markdown.copy_code": "コードをコピー",
+
+  "language_servers.title": "言語サーバー",
+  "language_servers.menu_item": "言語サーバー…",
+  "language_servers.description": "言語サーバーはプロジェクト全体を理解し、単一ファイルでは答えられない問いに答えます。GitBench は何もインストールしません。設定ファイルに記載したサーバーを実行するだけです。",
+  "language_servers.config_path": "設定ファイル: {path}",
+  "language_servers.no_config": "設定ファイルがないため、何も実行されません。",
+  "language_servers.reload": "設定を再読み込み",
+  "language_servers.reloaded": "言語サーバー設定を再読み込みしました",
+  "language_servers.reloaded_count": "再読み込み完了 — 設定済み {count} 件",
+  "language_servers.reloaded_with_problems": "再読み込みしましたが、問題があります",
+  "language_servers.create_config": "初期設定を作成",
+  "language_servers.configured_heading": "設定済みのサーバー",
+  "language_servers.none_configured": "設定されたサーバーはありません。",
+  "language_servers.suggestions_heading": "サーバーのない言語",
+  "language_servers.suggestion": "{language} — {command} をインストール",
+  "language_servers.problems_heading": "設定ファイルの問題",
+  "language_servers.problem": "{subject}: {message}",
+  "language_servers.stop": "停止",
+  "language_servers.retry": "起動",
+  "language_servers.copy_snippet": "設定エントリをコピー",
+  "language_servers.snippet_copied": "設定エントリをコピーしました",
+  "language_servers.config_written": "初期設定を作成しました",
+  "language_servers.config_exists": "設定ファイルが既にあるため、変更しませんでした。",
+  "language_servers.status_stopped": "停止中",
+  "language_servers.status_starting": "起動中…",
+  "language_servers.status_indexing": "インデックス作成中…",
+  "language_servers.status_indexing_percent": "インデックス作成中 {percent}%",
+  "language_servers.status_ready": "準備完了",
+  "language_servers.failed_title": "{language} 言語サーバーが失敗しました",
+  "language_servers.status_failed": "失敗",
+  "language_servers.not_configured": "このファイルのサーバーはありません",
+  "language_servers.chip_tooltip": "このファイルの言語サーバー。クリックで設定を開きます。"
 }

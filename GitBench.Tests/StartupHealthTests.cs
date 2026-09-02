@@ -1,4 +1,5 @@
 using GitBench.App;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -11,7 +12,7 @@ public sealed class StartupHealthTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
+        DirectoryTree.Delete(_dir);
     }
 
     [Fact]

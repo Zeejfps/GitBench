@@ -5,6 +5,7 @@ using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -65,7 +66,7 @@ public sealed class AssistantReadToolsTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_sandbox, recursive: true); } catch { /* best effort */ }
+        DirectoryTree.Delete(_sandbox);
     }
 
     private void Git(params string[] args) => Run(args);

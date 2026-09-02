@@ -1,5 +1,0 @@
-- [Known failing tests on macOS](known-failing-tests-macos.md) — pre-existing GitBench.Tests failures + their diagnosed causes; check before blaming your diff
-- [Internals probe technique](technique-internals-probe.md) — build a scratchpad app named GitBench.Tests to drive internals outside xUnit; best tool for proving races
-- [macOS temp symlink path tests](macos-temp-symlink-path-tests.md) — /var vs /private/var breaks any test string-comparing a self-built path against a git-reported one
-- [Thread-pool starvation flakes](threadpool-starvation-flakes.md) — suite-wide "different tests fail each run" = pool starvation; the tell is failures landing exactly on 5s/10s
-- [Test global state hazards](test-global-state-hazards.md) — env vars and DiffOptions statics mutated while parallel collections read them; known, latent, unfixed

@@ -10,6 +10,7 @@ using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Features.Submodules;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -442,7 +443,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
 
     private static void Delete(string path)
     {
-        try { Directory.Delete(path, recursive: true); } catch { /* best effort */ }
+        DirectoryTree.Delete(path);
     }
 
     private static void InitRepo(string path)

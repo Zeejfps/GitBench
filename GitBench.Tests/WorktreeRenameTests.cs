@@ -1,5 +1,6 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -29,7 +30,7 @@ public sealed class WorktreeRenameTests : IDisposable
     public void Dispose()
     {
         _registry.Dispose();
-        try { Directory.Delete(_dir, recursive: true); } catch { /* best effort */ }
+        DirectoryTree.Delete(_dir);
     }
 
     private void Sync(string? branch = "feature/login")

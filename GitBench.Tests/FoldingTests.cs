@@ -114,7 +114,8 @@ public class FoldingTests(CodeIntelFixture fixture)
             .First(r => r.row is DiffRow.Line { Fold.Chip: true }).index;
 
         var text = DiffSelectionModel.BuildCopyText(
-            set.Rows, new DiffTextPos(0, default), new DiffTextPos(chipRow, new ExpandedColumn(5)),
+            set.Rows, new DiffTextPos(default, default),
+            new DiffTextPos(new RowIndex(chipRow), new ExpandedColumn(5)),
             set.HiddenAfter);
 
         Assert.DoesNotContain("Check(user);", text);
@@ -153,5 +154,5 @@ public class FoldingTests(CodeIntelFixture fixture)
     private static string Text(DiffRow row) => row is DiffRow.Line line ? line.Text.Raw : string.Empty;
 
     private static int NumberOf(IReadOnlyList<DiffRow> rows, string text) =>
-        int.Parse(rows.OfType<DiffRow.Line>().Single(r => r.Text.Raw == text).NewNumber);
+        rows.OfType<DiffRow.Line>().Single(r => r.Text.Raw == text).NewNumber.Line!.Value.Value;
 }

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsAotCompatible>true</IsAotCompatible>
+    </PropertyGroup>
+
+    <!-- Deliberately references nothing. The protocol, the config parser and the document
+         bookkeeping know about a byte stream and their own types; the repository, the UI and the
+         process are the app's side of the seam. Adding a reference here is the boundary breaking. -->
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="GitBench.Lsp.Tests" />
+    </ItemGroup>
+
+</Project>

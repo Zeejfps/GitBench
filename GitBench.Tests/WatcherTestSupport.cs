@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Messages;
 using Xunit;
 using ZGF.Observable;
@@ -152,17 +153,6 @@ internal sealed class TempDir : IDisposable
 
     public void Dispose()
     {
-        try { ForceDelete(new DirectoryInfo(Path)); }
-        catch { /* best effort: a leftover temp dir is harmless */ }
-    }
-
-    // git marks loose objects read-only, which trips Directory.Delete on Windows; clear attributes
-    // depth-first before removing.
-    public static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(Path);
     }
 }

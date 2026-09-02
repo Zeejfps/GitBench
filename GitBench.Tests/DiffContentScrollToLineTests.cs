@@ -23,11 +23,10 @@ public class DiffContentScrollToLineTests
         using var harness = Harness(out var view);
         view.SetRenderState(FullFile("src/long.cs"));
 
-        view.RequestScrollToNewLine(100);
+        view.RequestScrollToNewLine(new FileLine(100));
         harness.Render();
 
-        Assert.True(view.TryGetTopVisibleNewLine(out var top));
-        Assert.Equal(97, top);
+        Assert.Equal(new FileLine(97), view.TopVisibleNewLine());
     }
 
     [Fact]
@@ -37,11 +36,10 @@ public class DiffContentScrollToLineTests
         view.SetRenderState(FullFile("src/long.cs"));
         harness.Render();
 
-        view.RequestScrollToNewLine(100);
+        view.RequestScrollToNewLine(new FileLine(100));
         harness.Render();
 
-        Assert.True(view.TryGetTopVisibleNewLine(out var top));
-        Assert.Equal(97, top);
+        Assert.Equal(new FileLine(97), view.TopVisibleNewLine());
     }
 
     // A line number means nothing once the file under it has been swapped, and a jump held for a
@@ -52,12 +50,11 @@ public class DiffContentScrollToLineTests
         using var harness = Harness(out var view);
         view.SetRenderState(FullFile("src/long.cs"));
 
-        view.RequestScrollToNewLine(100);
+        view.RequestScrollToNewLine(new FileLine(100));
         view.SetRenderState(FullFile("src/other.cs"));
         harness.Render();
 
-        Assert.True(view.TryGetTopVisibleNewLine(out var top));
-        Assert.Equal(1, top);
+        Assert.Equal(new FileLine(1), view.TopVisibleNewLine());
     }
 
     // The breadcrumb needs this on every scroll, and can only have it once metrics resolve — so it
@@ -66,21 +63,80 @@ public class DiffContentScrollToLineTests
     public void TheTopVisibleLineIsPublishedWhenItBecomesKnowableAndWhenItMoves()
     {
         using var harness = Harness(out var view);
-        var published = new List<int>();
+        var published = new List<FileLine?>();
         view.TopVisibleLineChanged += published.Add;
 
         view.SetRenderState(FullFile("src/long.cs"));
         harness.Render();
-        Assert.Equal([1], published);
+        Assert.Equal([new FileLine(1)], published);
 
         harness.Render();
-        Assert.Equal([1], published);
+        Assert.Equal([new FileLine(1)], published);
 
-        view.RequestScrollToNewLine(100);
+        view.RequestScrollToNewLine(new FileLine(100));
         harness.Render();
 
-        Assert.Equal([1, 97], published);
+        Assert.Equal([new FileLine(1), new FileLine(97)], published);
     }
+
+    // The same jump against a real diff. The three lead-in rows above the target are the gap's
+    // bar/tear/bar, which stand for no line at all, so the answer can only come from the rows' own
+    // numbers — counting rows would be off by exactly that chrome.
+    [Fact]
+    public void AJumpIntoTheSecondHunkOfADiffLandsOnItsLines()
+    {
+        using var harness = Harness(out var view);
+        view.SetRenderState(TwoHunks());
+        harness.Render();
+
+        view.RequestScrollToNewLine(new FileLine(60));
+        harness.Render();
+
+        Assert.Equal(new FileLine(60), view.TopVisibleNewLine());
+    }
+
+    // Nothing carries a line the gap between the hunks still hides, so the jump lands on the last
+    // line above it. Asked for from further down the file, so a jump that quietly did nothing would
+    // leave the reader where they were instead.
+    [Fact]
+    public void AJumpToALineTheGapStillHidesLandsOnTheLineAboveIt()
+    {
+        using var harness = Harness(out var view);
+        view.SetRenderState(TwoHunks());
+        view.RequestScrollToNewLine(new FileLine(100));
+        harness.Render();
+        Assert.NotEqual(new FileLine(1), view.TopVisibleNewLine());
+
+        view.RequestScrollToNewLine(new FileLine(30));
+        harness.Render();
+
+        Assert.Equal(new FileLine(1), view.TopVisibleNewLine());
+    }
+
+    private static DiffRenderState.Loaded TwoHunks() => new(new DiffResult(
+        RepoId: Guid.Empty,
+        Path: "src/Runner.cs",
+        OldPath: null,
+        Side: DiffSide.Unstaged,
+        IsBinary: false,
+        IsModeOnly: false,
+        OldMode: null,
+        NewMode: null,
+        Hunks:
+        [
+            new DiffHunk(1, 3, 1, 3, null, [
+                new DiffLine(DiffLineKind.Context, 1, 1, "one"),
+                new DiffLine(DiffLineKind.Removed, 2, null, "two-before"),
+                new DiffLine(DiffLineKind.Added, null, 2, "two-after"),
+                new DiffLine(DiffLineKind.Context, 3, 3, "three"),
+            ]),
+            new DiffHunk(60, 50, 60, 50, null, [
+                .. Enumerable.Range(60, 50)
+                    .Select(n => new DiffLine(DiffLineKind.Context, n, n, "// line " + n)),
+            ]),
+        ],
+        Truncated: false,
+        ErrorMessage: null));
 
     private static DiffRenderState.FullFile FullFile(string path) => new(
         path,

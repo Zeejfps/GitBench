@@ -40,7 +40,7 @@ internal interface IDiffSelectionSurface
 
     /// <summary>The text a collapsed fold swallowed after a row of <paramref name="scope"/>, or null
     /// where nothing folds. Surfaces without folding return null and copy exactly as before.</summary>
-    Func<int, string?>? HiddenTextOf(object? scope) => null;
+    Func<RowIndex, string?>? HiddenTextOf(object? scope) => null;
 
     /// <summary>Opens the actions a right-click offers over a live selection, if this surface has
     /// any. False for one that does not, and the press falls through untouched.</summary>

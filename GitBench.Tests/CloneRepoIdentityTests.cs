@@ -1,6 +1,7 @@
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
@@ -126,7 +127,7 @@ public sealed class CloneRepoIdentityTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        DirectoryTree.Delete(_root);
     }
 
     // Captures the identity the clone was asked to run under and lays down a working tree the

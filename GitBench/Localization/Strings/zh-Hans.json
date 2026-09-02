@@ -765,5 +765,37 @@
   "assistant.tool_group_failed": {
     "other": "{count} 个失败"
   },
-  "markdown.copy_code": "复制代码"
+  "markdown.copy_code": "复制代码",
+
+  "language_servers.title": "语言服务器",
+  "language_servers.menu_item": "语言服务器…",
+  "language_servers.description": "语言服务器理解整个项目，能回答单个文件无法回答的问题。GitBench 不会安装任何东西，只运行你在配置文件中列出的服务器。",
+  "language_servers.config_path": "配置文件：{path}",
+  "language_servers.no_config": "尚无配置文件，因此什么都不会运行。",
+  "language_servers.reload": "重新加载配置",
+  "language_servers.reloaded": "已重新加载语言服务器配置",
+  "language_servers.reloaded_count": "已重新加载 — 已配置 {count} 个服务器",
+  "language_servers.reloaded_with_problems": "已重新加载，但存在问题",
+  "language_servers.create_config": "创建初始配置",
+  "language_servers.configured_heading": "已配置的服务器",
+  "language_servers.none_configured": "尚未配置任何服务器。",
+  "language_servers.suggestions_heading": "此仓库中没有服务器的语言",
+  "language_servers.suggestion": "{language} — 安装 {command}",
+  "language_servers.problems_heading": "配置文件中的问题",
+  "language_servers.problem": "{subject}：{message}",
+  "language_servers.stop": "停止",
+  "language_servers.retry": "启动",
+  "language_servers.copy_snippet": "复制配置条目",
+  "language_servers.snippet_copied": "已复制配置条目",
+  "language_servers.config_written": "已创建初始配置",
+  "language_servers.config_exists": "配置文件已存在，未做修改。",
+  "language_servers.status_stopped": "未运行",
+  "language_servers.status_starting": "正在启动…",
+  "language_servers.status_indexing": "正在建立索引…",
+  "language_servers.status_indexing_percent": "正在建立索引 {percent}%",
+  "language_servers.status_ready": "就绪",
+  "language_servers.failed_title": "{language} 语言服务器失败",
+  "language_servers.status_failed": "失败",
+  "language_servers.not_configured": "此文件没有对应的服务器",
+  "language_servers.chip_tooltip": "此文件的语言服务器。点击打开设置。"
 }

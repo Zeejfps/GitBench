@@ -258,6 +258,66 @@ gen_unicode() {                                 # 17-unicode-emoji
   git commit -q -m "Update menu 🍽️" -m "Added daily specials ✨ and fixed a typo"
 }
 
+gen_lsp_diagnostics() {                         # 1d-lsp-diagnostics
+  new_repo 1d-lsp-diagnostics
+  printf '[package]\nname = "diagnostics-demo"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n' \
+    > Cargo.toml
+  mkdir -p src
+  # Deliberately broken, and broken in several ways at once: an unknown name, a
+  # type mismatch, an unused import (a warning, not an error) and a multi-line
+  # expression whose span crosses rows. One of each thing the overlay has to draw.
+  cat > src/main.rs <<'RS'
+use std::collections::HashMap;
+
+fn add(left: i64, right: i64) -> i64 {
+    left + right
+}
+
+fn widths() -> Vec<usize> {
+	vec![undefined_width, 2, 3]
+}
+
+fn main() {
+    let total = add(1, 2);
+    println!("{}", missing_name);
+    let text: i64 = "not a number";
+    let spread = add(
+        total,
+        text,
+    );
+    println!("{} {:?}", spread, widths());
+}
+RS
+  # The same four shapes again in C, because clangd needs no toolchain component
+  # installed and answers in under a second, so the overlay can be checked without
+  # a 30-second index first.
+  mkdir -p c
+  cat > c/main.c <<'CC'
+#include <stdio.h>
+
+int add(int left, int right) {
+    return left + right;
+}
+
+int widths(void) {
+	return undefined_width;
+}
+
+int main(void) {
+    int total = add(1, 2);
+    printf("%d\n", missing_name);
+    char *text = 42;
+    int spread = add(
+        total,
+        text
+    );
+    printf("%d %d\n", spread, widths());
+    return 0;
+}
+CC
+  git add -A; stamp; git commit -q -m "Add sources that do not compile"
+}
+
 gen_line_endings() {                            # 18-line-endings
   new_repo 18-line-endings
   printf 'first\r\nsecond\r\nthird\r\n'  > crlf.txt
@@ -824,6 +884,7 @@ REGISTRY=(
   "1a-intra-line|gen_intra_line|Intra-line emphasis: replace blocks, gate, tab/ws, unbalanced (commit+staged+unstaged)"
   "1b-partial-hunks|gen_partial_hunks|Partially-staged file: 3 WT hunks vs 2 shifted unstaged hunks"
   "1c-stale-lock|gen_stale_lock|Stale index.lock + ref lock: every mutation fails until removed"
+  "1d-lsp-diagnostics|gen_lsp_diagnostics|Rust crate + C file that do not compile: errors, a warning, a tab-indented line and a multi-line span"
   "20-merge-conflict|gen_merge_conflict|MERGE in progress: content + add/add + modify/delete"
   "21-rebase-conflict|gen_rebase_conflict|REBASE stopped mid-conflict"
   "22-cherry-pick-conflict|gen_cherry_pick_conflict|CHERRY-PICK stopped mid-conflict"

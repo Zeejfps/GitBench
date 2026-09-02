@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -42,7 +43,7 @@ public sealed class WorktreeRemoveTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { /* best effort */ }
+        DirectoryTree.Delete(_root);
     }
 
     private static void Git(string cwd, params string[] args)

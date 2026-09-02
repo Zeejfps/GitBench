@@ -1,5 +1,6 @@
 using System.Text;
 using GitBench.Features.Terminal;
+using GitBench.Infrastructure;
 using GitBench.Terminal.Vt;
 using Xunit;
 
@@ -73,6 +74,6 @@ public class TerminalRecordingTests
 
         public string BinPath { get; }
 
-        public void Dispose() => Directory.Delete(_directory, recursive: true);
+        public void Dispose() => DirectoryTree.Delete(_directory);
     }
 }

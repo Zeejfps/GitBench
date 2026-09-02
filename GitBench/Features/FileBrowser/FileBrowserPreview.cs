@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Git;
@@ -7,6 +8,8 @@ using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
+using ZGF.Gui.Desktop.Controllers;
+using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -103,13 +106,55 @@ internal sealed record FileBrowserTextBody : Widget
         hScrollBar.IsRtl = false;
         content.Use(() => new ScrollSyncController(content, vScrollBar, hScrollBar));
 
+        // Showing a file is what starts its language server, not asking it a question. The wait is
+        // tens of seconds on a cold project, and it should be spent while the file is being read.
+        var languageServers = ctx.Get<ILanguageServerStore>();
+
         content.Bind(browser.Preview, preview =>
         {
-            if (preview is FilePreview.Text text) content.SetRenderState(ToRenderState(text));
+            if (preview is not FilePreview.Text text) return;
+            content.SetRenderState(ToRenderState(text));
+            content.SetDiagnostics(DiffDiagnosticOverlay.Empty);
+            languageServers?.FileShown(text.Path);
         });
+
+        if (languageServers is not null)
+            content.Bind(languageServers.Diagnostics, diagnostics => content.SetDiagnostics(
+                browser.Preview.Value is FilePreview.Text shown && diagnostics.IsFor(shown.Path)
+                    ? new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items)
+                    : DiffDiagnosticOverlay.Empty));
         // After the render state, and on its own path: a fold toggle must not run the render-state
         // transition, which would reset horizontal scroll and restore a stale pixel offset.
         content.Bind(browser.Folds, content.SetFoldState);
+
+        // Asking a language server about whatever the pointer rests on. Only here: the diff pane and
+        // the review window show a file as it was at a commit, and a server asked about that would
+        // answer about the file on disk instead.
+        Func<(string Root, string Path)?> document = () => browser.Preview.Value is FilePreview.Text text
+            ? (browser.RootPath, text.Path)
+            : null;
+
+        if (languageServers is { } servers && ctx.Get<HoverPopupService>() is { } hovers)
+        {
+            content.UseController(ctx.Require<InputSystem>(), () => new HoverProbeController(
+                content,
+                servers,
+                hovers,
+                ctx.Require<IUiDispatcher>(),
+                document));
+        }
+
+        if (languageServers is { } definitions)
+        {
+            var input = ctx.Require<InputSystem>();
+            content.UseController(input, () => new DefinitionProbeController(
+                content,
+                definitions,
+                browser,
+                ctx.Require<IUiDispatcher>(),
+                document,
+                () => input.Modifiers), EventPhaseFilter.Capture);
+        }
 
         // Both directions of the header's conversation with the body: a line to reveal on the way
         // in, the line at the top of the viewport on the way back out. Held for the view's mounted
@@ -118,10 +163,13 @@ internal sealed record FileBrowserTextBody : Widget
         content.Use(() =>
         {
             var subscriptions = new SubscriptionGroup();
-            browser.LineRevealRequested += content.RequestScrollToNewLine;
-            subscriptions.Add(() => browser.LineRevealRequested -= content.RequestScrollToNewLine);
-            content.TopVisibleLineChanged += browser.SetTopVisibleLine;
-            subscriptions.Add(() => content.TopVisibleLineChanged -= browser.SetTopVisibleLine);
+            // Where the browser's plain line numbers meet the body's own FileLine axis.
+            Action<int> reveal = line => content.RequestScrollToNewLine(new FileLine(line));
+            Action<FileLine?> publishTop = line => browser.SetTopVisibleLine(line?.Value ?? 0);
+            browser.LineRevealRequested += reveal;
+            subscriptions.Add(() => browser.LineRevealRequested -= reveal);
+            content.TopVisibleLineChanged += publishTop;
+            subscriptions.Add(() => content.TopVisibleLineChanged -= publishTop);
             content.OnToggleFold += browser.ToggleFold;
             subscriptions.Add(() => content.OnToggleFold -= browser.ToggleFold);
             return subscriptions;

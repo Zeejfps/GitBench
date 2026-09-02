@@ -6,6 +6,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;
@@ -102,7 +103,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
 
     public void Dispose()
     {
-        try { TempDir.ForceDelete(new DirectoryInfo(_root)); } catch { /* best effort */ }
+        DirectoryTree.Delete(_root);
     }
 
     private void Write(string path, string text) => File.WriteAllText(Path.Combine(_root, path), text);

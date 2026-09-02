@@ -119,6 +119,25 @@ internal sealed class FileBrowserTree
         Flatten(cancellation);
     }
 
+    public void Reveal(string absolutePath, CancellationToken cancellation = default)
+    {
+        var changed = false;
+        var current = Path.GetDirectoryName(PathKey.Normalize(absolutePath));
+        var ancestors = new List<string>();
+        while (current is { Length: > 0 } && !PathKey.Comparer.Equals(current, RootPath))
+        {
+            ancestors.Add(current);
+            var parent = Path.GetDirectoryName(current);
+            if (parent is null || parent.Length == current.Length) return;
+            current = parent;
+        }
+
+        if (current is not { Length: > 0 }) return;
+
+        foreach (var ancestor in ancestors) changed |= _expanded.Add(ancestor);
+        if (changed) Flatten(cancellation);
+    }
+
     /// <summary>Adopts a persisted set of open directories in one pass, rather than one flatten per
     /// path.</summary>
     public void RestoreExpanded(IEnumerable<string> absolutePaths, CancellationToken cancellation = default)

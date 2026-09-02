@@ -98,6 +98,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- The language-server client: protocol, configuration and document bookkeeping. It
+             references nothing itself, so the dependency runs one way only — the app knows about
+             LSP, and LSP knows nothing about the app. -->
+        <ProjectReference Include="..\GitBench.Lsp\GitBench.Lsp.csproj" />
         <ProjectReference Include="..\external\cs_tree_sitter\TreeSitter\TreeSitter.csproj" />
     </ItemGroup>
 

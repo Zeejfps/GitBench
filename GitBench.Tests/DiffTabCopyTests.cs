@@ -157,9 +157,9 @@ public sealed class DiffTabCopyTests(CodeIntelFixture fixture)
         var rows = FullFileRows("src/app.go", "\treturn nil");
         var line = Line(rows, 0);
         var selection = new DiffSelectionModel();
-        selection.SetRange(null, At(0, 0), new DiffTextPos(0, line.Text.End));
+        selection.SetRange(null, At(0, 0), new DiffTextPos(default, line.Text.End));
 
-        Assert.True(selection.TryRowSpan(null, 0, line.Text.End, out var span));
+        Assert.True(selection.TryRowSpan(null, default, line.Text.End, out var span));
         Assert.Equal(new ExpandedColumn(0), span.StartChar);
         Assert.Equal(new ExpandedColumn("return nil".Length + DiffOptions.TabWidth), span.EndChar);
     }
@@ -208,7 +208,7 @@ public sealed class DiffTabCopyTests(CodeIntelFixture fixture)
 
     private const string FoldPath = "src/AuthService.cs";
 
-    private static DiffTextPos At(int row, int column) => new(row, new ExpandedColumn(column));
+    private static DiffTextPos At(int row, int column) => new(new RowIndex(row), new ExpandedColumn(column));
 
     private static DiffRow.Line Line(IReadOnlyList<DiffRow> rows, int index) =>
         Assert.IsType<DiffRow.Line>(rows[index]);

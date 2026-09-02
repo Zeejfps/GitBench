@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Git;
 using GitBench.Localization;
+using GitBench.Lsp;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Fonts;
@@ -12,8 +13,9 @@ namespace GitBench.Features.Diff;
 /// <summary>
 /// Per-row paint parameters: the row's placement (Left is already horizontal-scroll adjusted,
 /// Width is the full content width), the file's gutter geometry, whether the row's gap bar is
-/// hovered, the list viewport (for clipping the tear pattern to visible segments), and the slice
-/// of the row's text covered by the text selection, if any.
+/// hovered, the list viewport (for clipping the tear pattern to visible segments), the slice
+/// of the row's text covered by the text selection, if any, and the slice a definition link
+/// decorates, if any.
 /// </summary>
 internal readonly record struct DiffRowPaint(
     float Left,
@@ -26,7 +28,10 @@ internal readonly record struct DiffRowPaint(
     int Z,
     DiffRowSelection? Selection = null,
     bool FoldColumn = false,
-    bool FoldHovered = false);
+    bool FoldHovered = false,
+    IReadOnlyList<DiagnosticMark>? Diagnostics = null,
+    bool GlyphColumn = true,
+    CharRange? Link = null);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -46,6 +51,10 @@ internal sealed class DiffRowPainter
     // How far a selection runs past the last glyph on a row whose newline it swallows, so a
     // multi-line selection reads as continuous instead of stopping ragged at each line's end.
     private const float SelectionEolWidth = 0.5f;
+    // Where a link's rule sits under the glyphs, and how heavy it is. Y grows upward here, so the
+    // inset lifts the rule off the row's bottom edge into the descender space.
+    private const float LinkUnderlineInset = 2f;
+    private const float LinkUnderlineThickness = 1f;
 
     // Gap-expander icons on the separator bars: fixed-width clickable cells at the far left of
     // the bar, over the gutter columns. Draw and hit-test share this geometry.
@@ -133,12 +142,27 @@ internal sealed class DiffRowPainter
     /// caret lands where the glyph is drawn.
     /// </summary>
     public static float LineTextOriginX(
-        float left, float gutterWidth, bool singleGutter, bool foldColumn = false)
+        float left, float gutterWidth, bool singleGutter, bool foldColumn = false,
+        bool glyphColumn = true)
     {
         var gutters = singleGutter ? 1 : 2;
-        return left + gutters * (gutterWidth + ColumnGap) + FoldColumnWidthOf(foldColumn)
-            + GlyphColumnWidth + ColumnGap;
+        return left + MarkerLaneWidth + gutters * (gutterWidth + ColumnGap)
+            + FoldColumnWidthOf(foldColumn) + GlyphColumnWidthOf(glyphColumn) + ColumnGap;
     }
+
+    /// <summary>The +/- column's width, reserved for the whole surface or not at all.</summary>
+    public static float GlyphColumnWidthOf(bool glyphColumn) => glyphColumn ? GlyphColumnWidth : 0f;
+
+    /// <summary>
+    /// The strip down the very left of a line row where a diagnostic marks itself. Reserved on
+    /// every diff surface whether or not anything ever marks it, so the code does not step sideways
+    /// the moment a server has something to say about the file already on screen.
+    /// </summary>
+    public const float MarkerWidth = 3f;
+
+    private const float MarkerGap = 3f;
+
+    public const float MarkerLaneWidth = MarkerWidth + MarkerGap;
 
     /// <summary>The chevron column's width, reserved for the whole surface or not at all.</summary>
     public static float FoldColumnWidthOf(bool foldColumn) => foldColumn ? FoldColumnWidth : 0f;
@@ -149,7 +173,7 @@ internal sealed class DiffRowPainter
     public static bool FoldHit(float xFromRowLeft, float gutterWidth, bool singleGutter)
     {
         var gutters = singleGutter ? 1 : 2;
-        var start = gutters * (gutterWidth + ColumnGap);
+        var start = MarkerLaneWidth + gutters * (gutterWidth + ColumnGap);
         return xFromRowLeft >= start && xFromRowLeft < start + FoldColumnWidth;
     }
 
@@ -361,10 +385,22 @@ internal sealed class DiffRowPainter
         if (l.Emphasis is { Count: > 0 } ranges)
             DrawIntraLineEmphasis(c, l, ranges, textLeft, p.Bottom, p.Z);
         // Above the emphasis wash (same layer, drawn after) and below the text, which stays
-        // fully legible through the selection tint.
+        // fully legible through the selection tint. A link's wash goes under a selection's, so
+        // selecting across a link still reads as one continuous selection.
+        if (p.Link is { } link)
+            DrawLinkTint(c, l.Text.Expanded, link, textLeft, p.Bottom, p.Z + 1);
         if (p.Selection is { } selection)
             DrawSelection(c, l.Text.Expanded, selection, textLeft, p.Bottom, p.Z + 1);
         DrawLineText(c, l, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
+
+        if (p.Link is { } underlined)
+            DrawLinkUnderline(c, l.Text.Expanded, underlined, textLeft, p.Bottom, p.Z + 3);
+
+        if (p.Diagnostics is { Count: > 0 } marks)
+        {
+            DrawDiagnosticUnderlines(c, l, marks, textLeft, p.Bottom, p.Viewport, p.Z + 3);
+            DrawDiagnosticStripe(c, WorstOf(marks), p);
+        }
 
         // After the text and outside it: the chip is chrome standing in for the body, not part of
         // the row's characters, so nothing selects it and nothing measures a caret against it.
@@ -416,6 +452,47 @@ internal sealed class DiffRowPainter
         });
     }
 
+    // A symbol a held modifier has turned into a link: a wash behind it and a rule under it. The
+    // word keeps its syntax color — recoloring it would fight the highlighter for the one thing on
+    // the line the reader is already looking at.
+    private void DrawLinkTint(
+        ICanvas c, string text, in CharRange link, float textLeft, float bottom, int z)
+    {
+        var (from, to) = LinkExtent(text, link, textLeft);
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(from, bottom, to - from, LineHeight),
+            Style = SolidBgStyle(Styles.LinkBackground),
+            ZIndex = z,
+        });
+    }
+
+    private void DrawLinkUnderline(
+        ICanvas c, string text, in CharRange link, float textLeft, float bottom, int z)
+    {
+        var (from, to) = LinkExtent(text, link, textLeft);
+        var y = bottom + LinkUnderlineInset;
+        c.DrawLine(new DrawLineInputs
+        {
+            Start = new PointF(from, y),
+            End = new PointF(to, y),
+            Thickness = LinkUnderlineThickness,
+            Color = Styles.LinkUnderline,
+            ZIndex = z,
+        });
+    }
+
+    // Same monospace cell grid the selection and the squiggles measure against, so a link's edges
+    // land on the glyphs the hit-test said it covered.
+    private (float From, float To) LinkExtent(string text, in CharRange link, float textLeft)
+    {
+        var startCell = DiffText.CellsBefore(text, link.Start);
+        var endCell = DiffText.CellsBefore(text, link.Start + link.Length);
+        return (
+            textLeft + startCell * MonoAdvance,
+            textLeft + Math.Max(endCell, startCell + 1) * MonoAdvance);
+    }
+
     private void DrawRowBackground(ICanvas c, DiffRow.Line l, in DiffRowPaint p)
     {
         var bg = l.Kind switch
@@ -443,15 +520,15 @@ internal sealed class DiffRowPainter
             _ => (" ", Styles.LineContextGlyph),
         };
 
-        var x = p.Left;
+        var x = p.Left + MarkerLaneWidth;
         // Full-file mode shows only the new-side gutter; diff mode shows old|new.
         if (!p.SingleGutter)
         {
-            DrawMonoText(c, l.OldNumber, x, p.Bottom, p.GutterWidth,
+            DrawMonoText(c, l.OldNumber.Text, x, p.Bottom, p.GutterWidth,
                 Styles.LineNumberText, TextAlignment.End, p.Z + 2);
             x += p.GutterWidth + ColumnGap;
         }
-        DrawMonoText(c, l.NewNumber, x, p.Bottom, p.GutterWidth,
+        DrawMonoText(c, l.NewNumber.Text, x, p.Bottom, p.GutterWidth,
             Styles.LineNumberText, TextAlignment.End, p.Z + 2);
         x += p.GutterWidth + ColumnGap;
 
@@ -474,9 +551,89 @@ internal sealed class DiffRowPainter
             });
         }
 
-        DrawMonoText(c, glyph, x, p.Bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, p.Z + 2);
-        return LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter, p.FoldColumn);
+        if (p.GlyphColumn)
+            DrawMonoText(c, glyph, x, p.Bottom, GlyphColumnWidth, glyphColor, TextAlignment.Center, p.Z + 2);
+
+        return LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter, p.FoldColumn, p.GlyphColumn);
     }
+
+    private const float DiagnosticWaveHalfPeriod = 3f;
+    private const float DiagnosticWaveAmplitude = 1.5f;
+    private const float DiagnosticWaveThickness = 1.25f;
+    private const float DiagnosticBaselineInset = 2f;
+
+    private void DrawDiagnosticStripe(ICanvas c, DiagnosticSeverity severity, in DiffRowPaint p) =>
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(p.Left, p.Bottom, MarkerWidth, LineHeight),
+            Style = SolidBgStyle(DiagnosticColor(severity)),
+            ZIndex = p.Z + 2,
+        });
+
+    private void DrawDiagnosticUnderlines(
+        ICanvas c,
+        DiffRow.Line l,
+        IReadOnlyList<DiagnosticMark> marks,
+        float textLeft,
+        float bottom,
+        RectF viewport,
+        int z)
+    {
+        var text = l.Text.Expanded;
+        var y = bottom + DiagnosticBaselineInset;
+        foreach (var mark in marks)
+        {
+            var startCell = DiffText.CellsBefore(text, mark.Range.Start);
+            var endCell = DiffText.CellsBefore(text, mark.Range.Start + mark.Range.Length);
+            var from = textLeft + startCell * MonoAdvance;
+            var to = textLeft + Math.Max(endCell, startCell + 1) * MonoAdvance;
+            DrawWave(c, from, to, y, viewport, DiagnosticColor(mark.Severity), z);
+        }
+    }
+
+    private static void DrawWave(
+        ICanvas c, float from, float to, float y, RectF viewport, uint color, int z)
+    {
+        var visibleFrom = Math.Max(from, viewport.Left - DiagnosticWaveHalfPeriod);
+        var visibleTo = Math.Min(to, viewport.Right + DiagnosticWaveHalfPeriod);
+        if (visibleTo <= visibleFrom) return;
+
+        var first = Math.Max(0, (int)((visibleFrom - from) / DiagnosticWaveHalfPeriod));
+        var last = Math.Min(
+            (int)Math.Ceiling((to - from) / DiagnosticWaveHalfPeriod),
+            (int)((visibleTo - from) / DiagnosticWaveHalfPeriod) + 1);
+
+        for (var k = first; k < last; k++)
+        {
+            var startX = from + k * DiagnosticWaveHalfPeriod;
+            var endX = Math.Min(to, startX + DiagnosticWaveHalfPeriod);
+            if (endX <= startX) break;
+            var down = (k & 1) == 0;
+            c.DrawLine(new DrawLineInputs
+            {
+                Start = new PointF(startX, y + (down ? DiagnosticWaveAmplitude : -DiagnosticWaveAmplitude)),
+                End = new PointF(endX, y + (down ? -DiagnosticWaveAmplitude : DiagnosticWaveAmplitude)),
+                Thickness = DiagnosticWaveThickness,
+                Color = color,
+                ZIndex = z,
+            });
+        }
+    }
+
+    private static DiagnosticSeverity WorstOf(IReadOnlyList<DiagnosticMark> marks)
+    {
+        var worst = marks[0].Severity;
+        foreach (var mark in marks)
+            if (mark.Severity < worst) worst = mark.Severity;
+        return worst;
+    }
+
+    private uint DiagnosticColor(DiagnosticSeverity severity) => severity switch
+    {
+        DiagnosticSeverity.Warning => Styles.DiagnosticWarning,
+        DiagnosticSeverity.Information or DiagnosticSeverity.Hint => Styles.DiagnosticInfo,
+        _ => Styles.DiagnosticError,
+    };
 
     // Dim until pointed at, like the gap expanders: a chevron beside every declaration with a body
     // is a lot of chrome to keep at full contrast on a file the reader is only reading.

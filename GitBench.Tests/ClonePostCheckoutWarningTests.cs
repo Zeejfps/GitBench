@@ -1,6 +1,7 @@
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Observable;
@@ -103,7 +104,7 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        DirectoryTree.Delete(_root);
     }
 
     private sealed class WarningClone : IGitRemoteOperations

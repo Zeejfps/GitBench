@@ -15,18 +15,42 @@ public sealed class DiffSelectionQuoteTests
     private static readonly IReadOnlyList<DiffRow> Rows =
     [
         new DiffRow.HunkSeparator("@@ -40,4 +40,4 @@", null),
-        new DiffRow.Line(DiffLineKind.Context, "40", "40", DiffLineText.Of("public void Run()")),
-        new DiffRow.Line(DiffLineKind.Context, "41", "41", DiffLineText.Of("{")),
-        new DiffRow.Line(DiffLineKind.Removed, "42", "", DiffLineText.Of("    Legacy();")),
-        new DiffRow.Line(DiffLineKind.Added, "", "42", DiffLineText.Of("    Modern();")),
-        new DiffRow.Line(DiffLineKind.Context, "43", "43", DiffLineText.Of("}")),
+        new DiffRow.Line(DiffLineKind.Context, Gutter(40), Gutter(40), DiffLineText.Of("public void Run()")),
+        new DiffRow.Line(DiffLineKind.Context, Gutter(41), Gutter(41), DiffLineText.Of("{")),
+        new DiffRow.Line(DiffLineKind.Removed, Gutter(42), DiffGutterNumber.None, DiffLineText.Of("    Legacy();")),
+        new DiffRow.Line(DiffLineKind.Added, DiffGutterNumber.None, Gutter(42), DiffLineText.Of("    Modern();")),
+        new DiffRow.Line(DiffLineKind.Context, Gutter(43), Gutter(43), DiffLineText.Of("}")),
     ];
+
+    // Two hunks of one file with the bar between them: the bar stands for no line, so a drag
+    // across it has to take its range off the code either side.
+    private static readonly IReadOnlyList<DiffRow> AcrossABar =
+    [
+        new DiffRow.Line(DiffLineKind.Context, Gutter(10), Gutter(10), DiffLineText.Of("First();")),
+        new DiffRow.HunkSeparator("@@ -80,1 +80,1 @@", null),
+        new DiffRow.Line(DiffLineKind.Added, DiffGutterNumber.None, Gutter(80), DiffLineText.Of("Second();")),
+    ];
+
+    [Fact]
+    public void ASelectionDraggedAcrossAHunkBarRangesFromTheCodeEitherSideOfIt()
+    {
+        var quote = DiffSelectionQuote.Build(
+            AcrossABar,
+            new DiffTextPos(default, default),
+            new DiffTextPos(new RowIndex(2), new ExpandedColumn(9)),
+            "src/Runner.cs")!;
+
+        Assert.Equal(Line(10), quote.StartLine);
+        Assert.Equal(Line(80), quote.EndLine);
+        Assert.Equal("First();\nSecond();", quote.Text);
+        Assert.Contains("lines 10-80", quote.ToPrompt(null), StringComparison.Ordinal);
+    }
 
     private static DiffSelectionQuote Quote(int fromRow, int toRow, string path = "src/Runner.cs") =>
         DiffSelectionQuote.Build(
             Rows,
-            new DiffTextPos(fromRow, default),
-            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
+            new DiffTextPos(new RowIndex(fromRow), default),
+            new DiffTextPos(new RowIndex(toRow), Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
             path)!;
 
     // A line number tells the model where to look; the declaration tells it what it is looking at.
@@ -63,6 +87,10 @@ public sealed class DiffSelectionQuoteTests
         new FileOutline([Node("Runner", 38, 50, [Node("Run()", 40, 43)])]),
         new FileOutline([Node("Runner", 38, 50, [Node("Legacy()", 40, 43)])]));
 
+    private static DiffGutterNumber Gutter(int line) => DiffGutterNumber.Of(new FileLine(line));
+
+    private static FileLine? Line(int line) => new FileLine(line);
+
     private static OutlineNode Node(string name, int start, int end, IReadOnlyList<OutlineNode>? children = null)
     {
         var open = name.EndsWith("()", StringComparison.Ordinal);
@@ -79,8 +107,8 @@ public sealed class DiffSelectionQuoteTests
     private static DiffSelectionQuote QuoteWith(int fromRow, int toRow, DiffAnnotations annotations) =>
         DiffSelectionQuote.Build(
             Rows,
-            new DiffTextPos(fromRow, default),
-            new DiffTextPos(toRow, Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
+            new DiffTextPos(new RowIndex(fromRow), default),
+            new DiffTextPos(new RowIndex(toRow), Rows[toRow] is DiffRow.Line line ? line.Text.End : default),
             "src/Runner.cs",
             annotations)!;
 
@@ -90,8 +118,8 @@ public sealed class DiffSelectionQuoteTests
         var quote = Quote(4, 4);
 
         Assert.Equal("src/Runner.cs", quote.Path);
-        Assert.Equal(42, quote.StartLine);
-        Assert.Equal(42, quote.EndLine);
+        Assert.Equal(Line(42), quote.StartLine);
+        Assert.Equal(Line(42), quote.EndLine);
         Assert.Equal(DiffQuoteSide.Added, quote.Side);
         Assert.Equal("    Modern();", quote.Text);
     }
@@ -107,7 +135,7 @@ public sealed class DiffSelectionQuoteTests
         Assert.Equal("    Legacy();", quote.Text);
         // A removed line has no after-side number, so the before-side one stands in rather than
         // leaving the range blank.
-        Assert.Equal(42, quote.StartLine);
+        Assert.Equal(Line(42), quote.StartLine);
     }
 
     [Fact]
@@ -122,8 +150,8 @@ public sealed class DiffSelectionQuoteTests
         var quote = Quote(1, 5);
 
         Assert.Equal(DiffQuoteSide.Mixed, quote.Side);
-        Assert.Equal(40, quote.StartLine);
-        Assert.Equal(43, quote.EndLine);
+        Assert.Equal(Line(40), quote.StartLine);
+        Assert.Equal(Line(43), quote.EndLine);
     }
 
     // The clipboard's own extractor, not a second one: the text handed to the model is exactly what
@@ -131,8 +159,8 @@ public sealed class DiffSelectionQuoteTests
     [Fact]
     public void TheText_IsWhatTheCopyPipelineProduces()
     {
-        var start = new DiffTextPos(0, default);
-        var end = new DiffTextPos(5, new ExpandedColumn(1));
+        var start = new DiffTextPos(default, default);
+        var end = new DiffTextPos(new RowIndex(5), new ExpandedColumn(1));
 
         var quote = DiffSelectionQuote.Build(Rows, start, end, "src/Runner.cs")!;
 
@@ -144,7 +172,8 @@ public sealed class DiffSelectionQuoteTests
     [Fact]
     public void ASelectionOverNoCodeLines_IsNoQuestion()
     {
-        Assert.Null(DiffSelectionQuote.Build(Rows, new DiffTextPos(0, default), new DiffTextPos(0, default), "x.cs"));
+        Assert.Null(DiffSelectionQuote.Build(
+            Rows, new DiffTextPos(default, default), new DiffTextPos(default, default), "x.cs"));
     }
 
     [Fact]

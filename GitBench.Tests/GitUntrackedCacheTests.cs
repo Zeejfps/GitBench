@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using ZGF.Observable;
 using Xunit;
 
@@ -245,15 +246,6 @@ public sealed class GitUntrackedCacheTests : IDisposable
 
     public void Dispose()
     {
-        try { ForceDelete(new DirectoryInfo(_root)); }
-        catch { /* best effort: a leftover temp repo is harmless */ }
-    }
-
-    private static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(_root);
     }
 }

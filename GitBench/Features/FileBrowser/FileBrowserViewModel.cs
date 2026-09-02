@@ -23,7 +23,7 @@ namespace GitBench.Features.FileBrowser;
 /// handover rather than sharing.
 /// </para>
 /// </remarks>
-internal sealed class FileBrowserViewModel : IDisposable
+internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 {
     private readonly string _root;
     private readonly IFileSystemReader _files;
@@ -40,7 +40,11 @@ internal sealed class FileBrowserViewModel : IDisposable
     private readonly State<string?> _breadcrumb = new(null);
     private readonly State<FoldState> _folds = new(FoldState.Open(string.Empty));
 
+    private readonly State<bool> _canGoBack = new(false);
+    private readonly NavigationBackStack<FileBrowserPlace> _back = new();
+
     private string[] _expanded = [];
+    private PreviewFocus _focus = PreviewFocus.Nothing;
 
     private FileBrowserTree? _tree;
     private Task _lane = Task.CompletedTask;
@@ -70,7 +74,9 @@ internal sealed class FileBrowserViewModel : IDisposable
 
         _showHidden.Value = restored.ShowHidden;
         _renderMarkdown.Value = restored.RenderMarkdown;
-        _cursor.Value = Restored(restored.Cursor);
+        Focus(Restored(restored.Cursor) is { } restoredCursor
+            ? new PreviewFocus.Row(restoredCursor)
+            : PreviewFocus.Nothing);
 
         var expanded = restored.Expanded.Select(Restored).OfType<string>().ToArray();
         var showHidden = restored.ShowHidden;
@@ -157,6 +163,118 @@ internal sealed class FileBrowserViewModel : IDisposable
         _pendingReveal = _previewPath is { } path ? (path, line) : null;
     }
 
+    public IReadable<bool> CanGoBack => _canGoBack;
+
+    public void NavigateTo(string absolutePath, int line)
+    {
+        if (_disposed) return;
+
+        if (Here() is { } from)
+        {
+            _back.Push(from);
+            _canGoBack.Value = _back.CanGoBack;
+        }
+
+        Travel(absolutePath, rowKey: null, line);
+    }
+
+    public void GoBack()
+    {
+        if (_disposed || !_back.TryPop(out var place)) return;
+        _canGoBack.Value = _back.CanGoBack;
+
+        switch (place)
+        {
+            case FileBrowserPlace.Detached detached:
+                ShowDetached(detached.AbsolutePath);
+                NavigateToLine(detached.Line);
+                break;
+            case FileBrowserPlace.Row row:
+                Travel(PathOf(row.RowKey), row.RowKey, row.Line);
+                break;
+            default:
+                throw new NotSupportedException($"unhandled place {place.GetType().Name}");
+        }
+    }
+
+    public string TitleFor(FilePreview preview)
+    {
+        var path = preview switch
+        {
+            FilePreview.Loading loading => loading.Path,
+            FilePreview.Text text => text.Path,
+            FilePreview.Image image => image.Path,
+            FilePreview.Unavailable unavailable => unavailable.Path,
+            _ => null,
+        };
+
+        if (path is null) return string.Empty;
+        return ToRelative(PathKey.Normalize(path)) ?? path.Replace('\\', '/');
+    }
+
+    private FileBrowserPlace? Here() => _previewPath is null
+        ? null
+        : _focus switch
+        {
+            PreviewFocus.Row row => new FileBrowserPlace.Row(row.RowKey, _topVisibleLine),
+            PreviewFocus.Detached detached =>
+                new FileBrowserPlace.Detached(detached.AbsolutePath, _topVisibleLine),
+            _ => null,
+        };
+
+    private void Travel(string absolutePath, string? rowKey, int line)
+    {
+        var path = PathKey.Normalize(absolutePath);
+        if (ToRelative(path) is null)
+        {
+            ShowDetached(path);
+            NavigateToLine(line);
+            return;
+        }
+
+        Queue(tree => tree.Reveal(path), () => Land(path, rowKey, line));
+    }
+
+    private void Land(string path, string? rowKey, int line)
+    {
+        if (_disposed) return;
+
+        var key = rowKey is not null && HasRow(rowKey) ? rowKey : HasRow(path) ? path : null;
+        if (key is null) ShowDetached(path);
+        else SetCursor(key);
+
+        NavigateToLine(line);
+    }
+
+    private bool HasRow(string rowKey)
+    {
+        foreach (var row in _rows.Value)
+            if (PathKey.Comparer.Equals(row.RowKey, rowKey)) return true;
+        return false;
+    }
+
+    private static string PathOf(string rowKey)
+    {
+        var newline = rowKey.IndexOf('\n');
+        return newline < 0 ? rowKey : rowKey[..newline];
+    }
+
+    private void ShowDetached(string absolutePath)
+    {
+        Focus(new PreviewFocus.Detached(absolutePath));
+        SyncPreview(force: false);
+        Persist();
+    }
+
+    /// <summary>Where the preview is pointed, as one value rather than a cursor and a detached path
+    /// that have to be kept from both being set. <see cref="Cursor"/> is projected from it, so the
+    /// tree cannot disagree with the pane about what is being shown.</summary>
+    private void Focus(PreviewFocus focus)
+    {
+        _focus = focus;
+        _cursor.Value = focus is PreviewFocus.Row row ? row.RowKey : null;
+    }
+
     /// <summary>The tail of the serial lane. Held so a test can wait for the disk work it started
     /// rather than sleeping for it; nothing in the application awaits it.</summary>
     internal Task Pending => _lane;
@@ -186,8 +304,8 @@ internal sealed class FileBrowserViewModel : IDisposable
 
     public void SetCursor(string rowKey)
     {
-        if (_cursor.Value == rowKey) return;
-        _cursor.Value = rowKey;
+        if (_focus is PreviewFocus.Row row && row.RowKey == rowKey) return;
+        Focus(new PreviewFocus.Row(rowKey));
         SyncPreview(force: false);
         Persist();
     }
@@ -305,7 +423,7 @@ internal sealed class FileBrowserViewModel : IDisposable
         return -1;
     }
 
-    private void Queue(Action<FileBrowserTree> work)
+    private void Queue(Action<FileBrowserTree> work, Action? then = null)
     {
         if (_disposed) return;
 
@@ -330,10 +448,15 @@ internal sealed class FileBrowserViewModel : IDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[FileBrowser] Listing failed under {_root}: {ex.Message}");
+                    if (then is not null) _dispatcher.Post(then);
                     return;
                 }
 
-                _dispatcher.Post(() => Publish(rows, expanded, showHidden));
+                _dispatcher.Post(() =>
+                {
+                    Publish(rows, expanded, showHidden);
+                    then?.Invoke();
+                });
             },
             CancellationToken.None,
             TaskContinuationOptions.None,
@@ -387,6 +510,7 @@ internal sealed class FileBrowserViewModel : IDisposable
             FileBrowserRow.Symbol symbol => symbol.FullPath,
             _ => null,
         };
+        if (_focus is PreviewFocus.Detached detached) target = detached.AbsolutePath;
         var samePath = string.Equals(target, _previewPath, StringComparison.Ordinal);
         if (!force && samePath) return;
 
@@ -535,6 +659,7 @@ internal sealed class FileBrowserViewModel : IDisposable
         _showHidden.Dispose();
         _renderMarkdown.Dispose();
         _preview.Dispose();
+        _canGoBack.Dispose();
         _breadcrumb.Dispose();
         _folds.Dispose();
     }

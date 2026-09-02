@@ -2,6 +2,7 @@ using System.Diagnostics;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -300,17 +301,6 @@ public sealed class CommitGraphLoadTests : IDisposable
     public void Dispose()
     {
         _git.Dispose();
-        try { ForceDelete(new DirectoryInfo(Path.GetDirectoryName(_work)!)); }
-        catch { /* best effort: a leftover temp repo is harmless */ }
-    }
-
-    // git marks loose objects read-only, which trips Directory.Delete on Windows; clear attributes
-    // depth-first before removing.
-    private static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(Path.GetDirectoryName(_work)!);
     }
 }

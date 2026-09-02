@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text;
 using GitBench.Features.CodeIntel;
 using GitBench.Git;
@@ -29,8 +28,8 @@ internal enum DiffQuoteSide
 /// what it is looking at, which is what a question is usually about.</param>
 internal sealed record DiffSelectionQuote(
     string Path,
-    int StartLine,
-    int EndLine,
+    FileLine? StartLine,
+    FileLine? EndLine,
     DiffQuoteSide Side,
     string Text,
     string? Declaration = null)
@@ -54,11 +53,11 @@ internal sealed record DiffSelectionQuote(
         var added = false;
         var removed = false;
         var context = false;
-        var first = 0;
-        var last = 0;
+        FileLine? first = null;
+        FileLine? last = null;
 
-        var lastRow = Math.Min(end.Row, rows.Count - 1);
-        for (var row = Math.Max(0, start.Row); row <= lastRow; row++)
+        var lastRow = Math.Min(end.Row.Value, rows.Count - 1);
+        for (var row = Math.Max(0, start.Row.Value); row <= lastRow; row++)
         {
             if (rows[row] is not DiffRow.Line line) continue;
 
@@ -71,10 +70,10 @@ internal sealed record DiffSelectionQuote(
 
             // The after-side number is what a reader cites; a removed line has only the before-side
             // one, so it stands in rather than leaving the range unnumbered.
-            var number = Number(line.NewNumber) ?? Number(line.OldNumber);
-            if (number is not { } value) continue;
-            if (first == 0) first = value;
-            last = value;
+            var number = line.NewNumber.Line ?? line.OldNumber.Line;
+            if (number is null) continue;
+            first ??= number;
+            last = number;
         }
 
         if (!added && !removed && !context) return null;
@@ -90,7 +89,8 @@ internal sealed record DiffSelectionQuote(
         // Which outline names it follows the rule a hunk header follows: a selection of only
         // removed lines exists in the before-side file and nowhere else.
         var outline = removed && !added ? annotations?.OldSide : annotations?.NewSide;
-        return new DiffSelectionQuote(path, first, last, side, text, outline?.DeclarationPathAt(first));
+        var declaration = first is { } firstLine ? outline?.DeclarationPathAt(firstLine.Value) : null;
+        return new DiffSelectionQuote(path, first, last, side, text, declaration);
     }
 
     /// <summary>
@@ -104,12 +104,13 @@ internal sealed record DiffSelectionQuote(
         if (!string.IsNullOrWhiteSpace(ask)) builder.Append(ask).Append("\n\n");
 
         builder.Append("Selected in the diff of `").Append(Path).Append('`');
-        if (StartLine > 0)
+        if (StartLine is { } start)
         {
+            var end = EndLine ?? start;
             builder.Append(", ");
-            builder.Append(StartLine == EndLine
-                ? $"line {StartLine}"
-                : $"lines {StartLine}-{EndLine}");
+            builder.Append(start == end
+                ? $"line {start.Value}"
+                : $"lines {start.Value}-{end.Value}");
         }
 
         if (Declaration is { Length: > 0 } declaration)
@@ -126,9 +127,4 @@ internal sealed record DiffSelectionQuote(
         DiffQuoteSide.Context => "unchanged context lines",
         _ => "a mix of added, removed and context lines",
     };
-
-    private static int? Number(string text) =>
-        int.TryParse(text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
-            ? value
-            : null;
 }

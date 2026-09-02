@@ -5,6 +5,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
+using GitBench.Features.LanguageServers;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
@@ -15,6 +16,7 @@ using GitBench.Features.Terminal;
 using GitBench.Terminal.Vt;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
+using GitBench.Lsp.Lifecycle;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -180,6 +182,11 @@ internal static class AppServices
         context.AddSingleton<IFileSystemReader, FileSystemReader>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
 
+        // Costs nothing until the user writes language-servers.json: with no file there is no
+        // configuration, so no server is ever launched, nothing is asked of one, and no timer runs.
+        // Hosted because it follows the registry, which it can only do once the UI loop exists.
+        context.AddHostedService<ILanguageServerStore, LanguageServerStore>();
+
         // Factory because the snapshot store ingests the active repo's file-list summary into the
         // status store, an interface cast (IRepoStatusIngest) the container can't do by plain
         // injection — the same shape GitIdentityService uses above. IRepoStatusIngest is deliberately
@@ -250,6 +257,10 @@ internal static class AppServices
         context.AddHostedService<IToastService, ToastService>();
 
         context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
+            ctx.Require<IPopupWindowFactory>(),
+            ctx.Require<IWindowCoordinates>()));
+
+        context.AddSingleton(ctx => new HoverPopupService(
             ctx.Require<IPopupWindowFactory>(),
             ctx.Require<IWindowCoordinates>()));
 

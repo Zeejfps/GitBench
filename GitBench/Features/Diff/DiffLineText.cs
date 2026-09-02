@@ -88,6 +88,26 @@ internal sealed record DiffLineText
         return new ExpandedColumn(expanded);
     }
 
+    /// <summary>
+    /// The identifier containing the given column, as a half-open raw range. Null when the column
+    /// is off the line or its character is not part of one. Unlike every other column here this one
+    /// does not clamp: a column off the end names no identifier rather than the last one, which is
+    /// the difference between pointing at a word and pointing at the margin past it.
+    /// </summary>
+    public (RawColumn Start, RawColumn End)? IdentifierAt(RawColumn column)
+    {
+        var at = column.Value;
+        if (at < 0 || at >= Raw.Length || !IsIdentifier(Raw[at])) return null;
+
+        var start = at;
+        while (start > 0 && IsIdentifier(Raw[start - 1])) start--;
+        var end = at + 1;
+        while (end < Raw.Length && IsIdentifier(Raw[end])) end++;
+        return (new RawColumn(start), new RawColumn(end));
+    }
+
+    private static bool IsIdentifier(char c) => char.IsLetterOrDigit(c) || c is '_' or '$';
+
     /// <summary>The raw text under an expanded-column range, widened over any tab the range only
     /// partly covers. Empty when the range covers nothing.</summary>
     public string RawSlice(ExpandedColumn from, ExpandedColumn to)

@@ -6,6 +6,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -159,14 +160,6 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
         _preferences.Dispose();
         _registry.Dispose();
         _loc.Dispose();
-        try { ForceDelete(new DirectoryInfo(_root)); } catch { /* best effort */ }
-    }
-
-    private static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(_root);
     }
 }

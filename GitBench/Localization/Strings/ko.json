@@ -765,5 +765,37 @@
   "assistant.tool_group_failed": {
     "other": "{count}개 실패"
   },
-  "markdown.copy_code": "코드 복사"
+  "markdown.copy_code": "코드 복사",
+
+  "language_servers.title": "언어 서버",
+  "language_servers.menu_item": "언어 서버…",
+  "language_servers.description": "언어 서버는 프로젝트 전체를 이해하고 파일 하나로는 답할 수 없는 질문에 답합니다. GitBench는 아무것도 설치하지 않으며 설정 파일에 적은 서버만 실행합니다.",
+  "language_servers.config_path": "설정 파일: {path}",
+  "language_servers.no_config": "아직 설정 파일이 없어 아무것도 실행되지 않습니다.",
+  "language_servers.reload": "설정 다시 읽기",
+  "language_servers.reloaded": "언어 서버 설정을 다시 불러왔습니다",
+  "language_servers.reloaded_count": "다시 불러옴 — 구성된 서버 {count}개",
+  "language_servers.reloaded_with_problems": "다시 불러왔지만 문제가 있습니다",
+  "language_servers.create_config": "기본 설정 만들기",
+  "language_servers.configured_heading": "설정된 서버",
+  "language_servers.none_configured": "설정된 서버가 없습니다.",
+  "language_servers.suggestions_heading": "서버가 없는 언어",
+  "language_servers.suggestion": "{language} — {command} 설치",
+  "language_servers.problems_heading": "설정 파일의 문제",
+  "language_servers.problem": "{subject}: {message}",
+  "language_servers.stop": "중지",
+  "language_servers.retry": "시작",
+  "language_servers.copy_snippet": "설정 항목 복사",
+  "language_servers.snippet_copied": "설정 항목을 복사했습니다",
+  "language_servers.config_written": "기본 설정을 만들었습니다",
+  "language_servers.config_exists": "설정 파일이 이미 있어 그대로 두었습니다.",
+  "language_servers.status_stopped": "실행 중 아님",
+  "language_servers.status_starting": "시작 중…",
+  "language_servers.status_indexing": "인덱싱 중…",
+  "language_servers.status_indexing_percent": "인덱싱 {percent}%",
+  "language_servers.status_ready": "준비됨",
+  "language_servers.failed_title": "{language} 언어 서버가 실패했습니다",
+  "language_servers.status_failed": "실패",
+  "language_servers.not_configured": "이 파일에 대한 서버 없음",
+  "language_servers.chip_tooltip": "이 파일의 언어 서버입니다. 클릭하면 설정이 열립니다."
 }

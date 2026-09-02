@@ -1,4 +1,5 @@
 using GitBench.App;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -16,7 +17,7 @@ public sealed class AppPathsTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_appData)) Directory.Delete(_appData, recursive: true);
+        DirectoryTree.Delete(_appData);
     }
 
     private static string Resolve(string appData, Func<string, string?>? env = null) =>

@@ -52,6 +52,11 @@ public sealed record DiffContentStyles(
     uint SelectionBackground,
     uint GutterRule,
     uint FoldChipBackground,
+    uint DiagnosticError,
+    uint DiagnosticWarning,
+    uint DiagnosticInfo,
+    uint LinkBackground,
+    uint LinkUnderline,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -123,6 +128,10 @@ public partial record ThemeStyles
     // Text-selection wash over the diff body. Low enough that syntax colors survive it.
     private const byte DiffSelectionAlpha = 0x4D;
 
+    // The wash behind a symbol a held modifier has made clickable. Fainter than a selection: the
+    // underline is what says "link", and the wash only has to find the word for the eye.
+    private const byte DiffLinkAlpha = 0x33;
+
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
@@ -155,6 +164,14 @@ public partial record ThemeStyles
             // folded body. Both are margin furniture: present, never competing with the text.
             GutterRule: p.BorderSubtle,
             FoldChipBackground: p.SurfaceHoverStrong,
+            DiagnosticError: status.Danger,
+            DiagnosticWarning: status.Warning,
+            DiagnosticInfo: status.Info,
+            // A symbol under a held Ctrl/Cmd. The accent, the same hue the selection and the gap
+            // expanders use, so the body keeps one interactive color rather than growing a link
+            // blue of its own.
+            LinkBackground: WithAlpha(p.Accent, DiffLinkAlpha),
+            LinkUnderline: p.Accent,
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

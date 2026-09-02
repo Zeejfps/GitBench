@@ -75,6 +75,27 @@ internal static class DiffText
         return text.Length;
     }
 
+    /// <summary>
+    /// The character offset of the glyph a column falls on — floor rather than nearest, so this
+    /// answers "which glyph is the pointer over" where <see cref="CharIndexAtCell"/> answers "where
+    /// would a caret go". -1 before the first glyph and past the last, which is what makes pointing
+    /// at the margin different from pointing at the line's last character.
+    /// </summary>
+    public static int CharIndexOnCell(string text, float cell)
+    {
+        if (cell < 0f) return -1;
+        var cells = 0;
+        var i = 0;
+        while (i < text.Length)
+        {
+            var start = i;
+            var width = StepCells(text, ref i);
+            if (cell < cells + width) return start;
+            cells += width;
+        }
+        return -1;
+    }
+
     // Cells of the code point at i, advancing i past it (surrogate pairs count as one glyph).
     private static int StepCells(string text, ref int i)
     {

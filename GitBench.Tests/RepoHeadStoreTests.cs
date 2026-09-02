@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui;
@@ -272,18 +273,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         _head.Dispose();
         _registry.Dispose();
         _loc.Dispose();
-        try { ForceDelete(new DirectoryInfo(_root)); }
-        catch { /* best effort: a leftover temp repo is harmless */ }
-    }
-
-    // git marks loose objects read-only, which trips Directory.Delete on Windows; clear attributes
-    // depth-first before removing.
-    private static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(_root);
     }
 
     private sealed class QueuedDispatcher : IUiDispatcher

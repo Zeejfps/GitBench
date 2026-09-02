@@ -1,5 +1,6 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Infrastructure;
 
 using Xunit;
 
@@ -53,7 +54,7 @@ public sealed class GitProcessEnvironmentTests : IDisposable
 
     public void Dispose()
     {
-        try { Directory.Delete(_root, recursive: true); } catch { }
+        DirectoryTree.Delete(_root);
     }
 
     private sealed class NoopActivityTracker : IRepoActivityTracker

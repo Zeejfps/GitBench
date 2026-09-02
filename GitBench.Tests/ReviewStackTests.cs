@@ -3,6 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -304,17 +305,6 @@ public sealed class ReviewStackTests : IDisposable
 
     public void Dispose()
     {
-        try { ForceDelete(new DirectoryInfo(_root)); }
-        catch { /* best effort: a leftover temp repo is harmless */ }
-    }
-
-    // git marks loose objects read-only, which trips Directory.Delete on Windows; clear attributes
-    // depth-first before removing.
-    private static void ForceDelete(DirectoryInfo dir)
-    {
-        if (!dir.Exists) return;
-        foreach (var file in dir.GetFiles("*", SearchOption.AllDirectories))
-            file.Attributes = FileAttributes.Normal;
-        dir.Delete(recursive: true);
+        DirectoryTree.Delete(_root);
     }
 }

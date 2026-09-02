@@ -20,7 +20,7 @@ internal sealed class DiffRowSet
 
     private readonly List<DiffRow> _rows = new();
     private readonly List<HunkRowRange> _hunkRanges = new();
-    private readonly Dictionary<int, string> _hiddenAfter = new();
+    private readonly Dictionary<RowIndex, string> _hiddenAfter = new();
     private int[] _rowToHunk = Array.Empty<int>();
     private ILocalizationService _loc = null!;
 
@@ -45,11 +45,18 @@ internal sealed class DiffRowSet
     /// when it landed would jog every line of text sideways a beat after the file opened.</summary>
     public bool FoldColumn { get; private set; }
 
+    /// <summary>
+    /// Whether rows reserve the +/- glyph column. Diff mode always does. A whole-file preview only
+    /// does when something in it is actually marked as added — otherwise every row would reserve a
+    /// column to draw a space in, holding the code an inch off the gutter for no reason.
+    /// </summary>
+    public bool GlyphColumn { get; private set; } = true;
+
     /// <summary>The raw text a collapsed fold swallowed after the given row, newline-joined, or
     /// null when that row hides nothing. Copying across a fold re-inflates from this — text the
     /// reader could not see is still text they selected.</summary>
-    public string? HiddenAfter(int rowIndex) =>
-        _hiddenAfter.TryGetValue(rowIndex, out var text) ? text : null;
+    public string? HiddenAfter(RowIndex row) =>
+        _hiddenAfter.TryGetValue(row, out var text) ? text : null;
 
     /// <summary>Max line-number digit count across the gutters (at least 1), for gutter width sizing.</summary>
     public int GutterDigits { get; private set; } = 1;
@@ -57,6 +64,48 @@ internal sealed class DiffRowSet
     /// <summary>The hunk owning a flattened row, or -1 for chrome rows (banners, separators, expanded context).</summary>
     public int HunkIndexOf(int rowIndex) =>
         rowIndex >= 0 && rowIndex < _rowToHunk.Length ? _rowToHunk[rowIndex] : -1;
+
+    /// <summary>The after-side file line a row stands for, or null where it stands for none: a
+    /// banner, a separator, a tear, a row past the end of the stream, or a removed line, which
+    /// exists only before the change.</summary>
+    public FileLine? NewLineAt(RowIndex row) => LineAt(row)?.NewNumber.Line;
+
+    /// <summary>The before-side file line a row stands for, or null where it stands for none —
+    /// an added line among them, which exists only after the change.</summary>
+    public FileLine? OldLineAt(RowIndex row) => LineAt(row)?.OldNumber.Line;
+
+    /// <summary>The row standing for an after-side file line, or null when none does: the line is
+    /// behind a collapsed fold, inside a gap nobody expanded, past the end of the file, or was
+    /// removed by the change and so never had an after-side number.</summary>
+    public RowIndex? RowForNewLine(FileLine line)
+    {
+        for (var i = 0; i < _rows.Count; i++)
+            if (_rows[i] is DiffRow.Line l && l.NewNumber.Line == line) return new RowIndex(i);
+        return null;
+    }
+
+    /// <summary>
+    /// Where to scroll for an after-side file line: its own row, or the closest numbered row above
+    /// it when nothing carries it exactly, so a target a fold or an unexpanded gap swallowed still
+    /// lands near where the reader was instead of at the top. Null when no numbered row precedes it
+    /// either.
+    /// </summary>
+    /// <remarks>After-side numbers rise monotonically down the stream in both modes, so one forward
+    /// scan finds the exact row and the fallback together.</remarks>
+    public RowIndex? RowNearestNewLine(FileLine line)
+    {
+        RowIndex? best = null;
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            if (_rows[i] is not DiffRow.Line l || l.NewNumber.Line is not { } n) continue;
+            if (n == line) return new RowIndex(i);
+            if (n < line) best = new RowIndex(i);
+        }
+        return best;
+    }
+
+    private DiffRow.Line? LineAt(RowIndex row) =>
+        row.Value >= 0 && row.Value < _rows.Count ? _rows[row.Value] as DiffRow.Line : null;
 
     /// <summary>
     /// Flattens a render state into rows. <see cref="DiffRenderState.Loaded"/> and
@@ -201,12 +250,7 @@ internal sealed class DiffRowSet
             var spans = highlight?.ForLine(l.Kind, l.OldLineNumber, l.NewLineNumber);
             if (spans != null && spans.Count == 0) spans = null;
             _rows.Add(new DiffRow.Line(
-                l.Kind,
-                l.OldLineNumber?.ToString() ?? string.Empty,
-                l.NewLineNumber?.ToString() ?? string.Empty,
-                text,
-                spans,
-                emphasis?[j]));
+                l.Kind, Gutter(l.OldLineNumber), Gutter(l.NewLineNumber), text, spans, emphasis?[j]));
             var cells = DiffText.VisualCells(text.Expanded);
             if (cells > MaxRowCells) MaxRowCells = cells;
         }
@@ -242,8 +286,8 @@ internal sealed class DiffRowSet
         {
             if (row is DiffRow.Line l)
             {
-                if (l.OldNumber.Length > maxDigits) maxDigits = l.OldNumber.Length;
-                if (l.NewNumber.Length > maxDigits) maxDigits = l.NewNumber.Length;
+                if (l.OldNumber.Text.Length > maxDigits) maxDigits = l.OldNumber.Text.Length;
+                if (l.NewNumber.Text.Length > maxDigits) maxDigits = l.NewNumber.Text.Length;
             }
         }
         GutterDigits = maxDigits;
@@ -288,7 +332,7 @@ internal sealed class DiffRowSet
             var spans = highlight?.ForLine(DiffLineKind.Context, n + oldNewDelta, n);
             if (spans != null && spans.Count == 0) spans = null;
             _rows.Add(new DiffRow.Line(
-                DiffLineKind.Context, (n + oldNewDelta).ToString(), n.ToString(), text, spans));
+                DiffLineKind.Context, Gutter(n + oldNewDelta), Gutter(n), text, spans));
             var cells = DiffText.VisualCells(text.Expanded);
             if (cells > MaxRowCells) MaxRowCells = cells;
         }
@@ -302,6 +346,7 @@ internal sealed class DiffRowSet
     {
         SingleGutter = true;
         FoldColumn = folds != null;
+        GlyphColumn = ff.AddedLineNumbers.Count > 0;
         GutterDigits = Math.Max(1, DigitCount(ff.Lines.Count));
 
         var plan = FoldPlan.Build(ff, folds);
@@ -320,14 +365,15 @@ internal sealed class DiffRowSet
             IReadOnlyList<CharRange>? em = null;
             emphasis?.TryGetValue(lineNumber, out em);
             var mark = plan.MarkAt(lineNumber);
-            _rows.Add(new DiffRow.Line(kind, string.Empty, lineNumber.ToString(), text, spans, em, mark));
+            _rows.Add(new DiffRow.Line(
+                kind, DiffGutterNumber.None, Gutter(lineNumber), text, spans, em, mark));
 
             var cells = DiffText.VisualCells(text.Expanded);
             if (mark is { Chip: true }) cells += DiffText.VisualCells(FoldChipText);
             if (cells > MaxRowCells) MaxRowCells = cells;
 
             if (plan.SwallowedAt(lineNumber) is { } swallowed)
-                _hiddenAfter[_rows.Count - 1] = swallowed;
+                _hiddenAfter[new RowIndex(_rows.Count - 1)] = swallowed;
         }
 
         if (ff.Truncated)
@@ -446,6 +492,11 @@ internal sealed class DiffRowSet
         var cells = DiffText.VisualCells(text);
         if (cells > MaxRowCells) MaxRowCells = cells;
     }
+
+    // The one place a line number crosses out of the git layer's bare ints into the row stream's
+    // own types.
+    private static DiffGutterNumber Gutter(int? lineNumber) =>
+        DiffGutterNumber.Of(lineNumber is int n ? new FileLine(n) : null);
 
     private static int DigitCount(int n)
     {

@@ -13,6 +13,7 @@ using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
+using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -417,7 +418,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
         _store?.Dispose();
         _commitBox.Dispose();
         _loc.Dispose();
-        try { TempDir.ForceDelete(new DirectoryInfo(_root)); } catch { /* best effort */ }
+        DirectoryTree.Delete(_root);
     }
 
     private static string NewDir()
