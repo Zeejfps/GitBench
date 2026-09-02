@@ -43,7 +43,16 @@ internal static class DialogFrame
             {
                 Header(ctx, title, onClose),
                 Separator(ctx),
-                new FlexItem { Grow = 1, Child = new DialogScrollRegion { Content = new Raw { View = body } }.BuildView(ctx) },
+                // Shrink as well as Grow: without it the region holds its content's intrinsic
+                // height when the frame is capped to a short window, overflowing the column and
+                // pushing the footer buttons off-screen. Shrink is what hands the scroll region
+                // less height than it asked for, which is exactly when it starts scrolling.
+                new FlexItem
+                {
+                    Grow = 1,
+                    Shrink = 1,
+                    Child = new DialogScrollRegion { Content = new Raw { View = body } }.BuildView(ctx),
+                },
             },
         };
         if (footer != null)
