@@ -42,6 +42,25 @@ public abstract record WorktreeRemoveOutcome : IOutcome<WorktreeRemoveOutcome>
     public sealed record Failed(string Message) : WorktreeRemoveOutcome;
 }
 
+// Adding a worktree is `git worktree add` plus, optionally, initializing the submodules inside
+// the tree it just created. The second half failing leaves a perfectly usable worktree behind, so
+// it is a warning carried on the success case rather than a failure that would have the dialog
+// stay open over a worktree that already exists.
+public abstract record WorktreeAddOutcome : IOutcome<WorktreeAddOutcome>
+{
+    private WorktreeAddOutcome() { }
+
+    public static readonly WorktreeAddOutcome Ok = new Added();
+
+    public static WorktreeAddOutcome Fail(string message) => new Failed(message);
+
+    public string? FailureMessage => (this as Failed)?.Message;
+
+    public sealed record Added(string? Warning = null) : WorktreeAddOutcome;
+
+    public sealed record Failed(string Message) : WorktreeAddOutcome;
+}
+
 // Operations that can land in a conflicted-but-in-progress state the operation banner
 // takes over from: merge, rebase, cherry-pick, revert, stash apply, submodule update.
 public abstract record MergeLikeOutcome : IOutcome<MergeLikeOutcome>

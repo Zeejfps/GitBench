@@ -14,7 +14,8 @@ namespace GitBench.Features.Worktrees;
 /// <summary>
 /// Modal shown from a primary RepoRow's "New worktree…" menu. Collects the three
 /// fields `git worktree add` needs (path, start point, optional new branch name) plus
-/// a force toggle for re-using an existing dirty path.
+/// a force toggle for re-using an existing dirty path and the submodule toggles the
+/// post-add `git submodule update` runs under. The path opens pre-filled beside the repo.
 /// </summary>
 internal sealed record CreateWorktreeDialog : Widget
 {
@@ -70,6 +71,18 @@ internal sealed record CreateWorktreeDialog : Widget
                 {
                     Label = s.WorktreesCreateForceLabel,
                     Checked = vm.Force,
+                    Height = Sizes.RowHeight,
+                }.WithController<KbmController>(),
+                new CheckboxWidget
+                {
+                    Label = s.WorktreesCreateInitSubmodulesLabel,
+                    Checked = vm.InitSubmodules,
+                    Height = Sizes.RowHeight,
+                }.WithController<KbmController>(),
+                new CheckboxWidget
+                {
+                    Label = s.WorktreesCreateRecurseSubmodulesLabel,
+                    Checked = vm.RecurseSubmodules,
                     Height = Sizes.RowHeight,
                 }.WithController<KbmController>(),
             ],

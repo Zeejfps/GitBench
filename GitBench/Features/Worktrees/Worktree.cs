@@ -15,7 +15,9 @@ public sealed record WorktreeAddRequest(
     string Path,
     string StartPoint,
     string? NewBranchName,
-    bool Force);
+    bool Force,
+    bool InitSubmodules,
+    bool RecurseSubmodules);
 
 
 

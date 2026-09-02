@@ -2927,13 +2927,16 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         return results;
     }
 
-    public GitOutcome AddWorktree(Repo primary, WorktreeAddRequest request)
-        => RunOperation(primary, () =>
+    // `git worktree add` has no submodule option of its own, so an initialized worktree is two
+    // commands: the add, then `git submodule update` run inside the tree it produced. They stay
+    // under one lock so the worktree the caller is told about is the finished one.
+    public WorktreeAddOutcome AddWorktree(Repo primary, WorktreeAddRequest request)
+        => RunLocked<WorktreeAddOutcome>(primary, GitResource.LocalState, () =>
         {
             if (string.IsNullOrWhiteSpace(request.Path))
-                return new GitOutcome.Failed("Worktree path is required.");
+                return new WorktreeAddOutcome.Failed("Worktree path is required.");
             if (string.IsNullOrWhiteSpace(request.StartPoint))
-                return new GitOutcome.Failed("Start point is required.");
+                return new WorktreeAddOutcome.Failed("Start point is required.");
 
             var args = new List<string> { "worktree", "add" };
             if (request.Force) args.Add("--force");
@@ -2944,8 +2947,27 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
             }
             args.Add(request.Path);
             args.Add(request.StartPoint);
-            return ToOutcome(_runner.Run(primary.Path, args), "git worktree add");
-        });
+
+            var added = _runner.Run(primary.Path, args);
+            if (!added.Ok) return new WorktreeAddOutcome.Failed(added.BlockError("git worktree add"));
+            if (!request.InitSubmodules) return WorktreeAddOutcome.Ok;
+
+            var subArgs = new List<string> { "submodule", "update", "--init" };
+            if (request.RecurseSubmodules) subArgs.Add("--recursive");
+            var initialized = _runner.Run(WorktreeFullPath(primary, request.Path), subArgs);
+            return initialized.Ok
+                ? WorktreeAddOutcome.Ok
+                : new WorktreeAddOutcome.Added(initialized.BlockError("git submodule update"));
+        }, static m => new WorktreeAddOutcome.Failed(m));
+
+    // git resolves a relative worktree path against its own working directory, which is the
+    // primary repo — so the submodule step has to resolve it the same way to land in the tree
+    // that was just created.
+    private static string WorktreeFullPath(Repo primary, string path)
+    {
+        try { return Path.GetFullPath(path, primary.Path); }
+        catch { return path; }
+    }
 
     // Git owns the policy here (dirty, untracked, locked, submodules, "that's the main working
     // tree") and the metadata, but not the delete: its recursive removal follows junctions instead
