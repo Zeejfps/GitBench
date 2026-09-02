@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -8,9 +9,9 @@ using ZGF.Gui.Widgets;
 namespace GitBench.Features.Terminal;
 
 /// <summary>
-/// Confirmation modal shown when the application is asked to close while a shell is still running.
-/// Closing kills every shell, and a shell mid-build or mid-deploy is not something to lose to a
-/// mistyped Cmd+Q.
+/// Confirmation modal shown when the application is asked to end while a shell is still running —
+/// a quit, or a restart into a staged update. Either kills every shell, and a shell mid-build or
+/// mid-deploy is not something to lose to a mistyped Cmd+Q or an update banner.
 /// </summary>
 /// <remarks>
 /// Names the repositories rather than only counting them: "3 sessions" tells the reader to stop
@@ -20,6 +21,10 @@ internal sealed record ConfirmQuitDialog : Widget
 {
     public required IReadOnlyList<Guid> RepoIds { get; init; }
     public required Action OnClose { get; init; }
+
+    /// <summary>What agreeing leads to, which decides the wording: the app ending, or ending and
+    /// coming back on the staged update.</summary>
+    public AppExitKind Kind { get; init; } = AppExitKind.Quit;
 
     /// <summary>Runs when the user agrees to close. Kept a callback so this stays a dialog rather
     /// than something that knows how an application ends.</summary>
@@ -36,14 +41,17 @@ internal sealed record ConfirmQuitDialog : Widget
             .Select(repo => repo.DisplayName)
             .ToArray();
         var count = RepoIds.Count;
+        var (title, body, action) = Kind == AppExitKind.UpdateRestart
+            ? (s.TerminalUpdateRestartTitle(count), s.TerminalUpdateRestartBody(count), s.TerminalUpdateRestartAction(count))
+            : (s.TerminalQuitTitle(count), s.TerminalQuitBody(count), s.TerminalQuitAction(count));
 
         return new Dialog
         {
-            Title = s.TerminalQuitTitle(count),
+            Title = title,
             OnClose = OnClose,
             Width = DialogFrame.WidthCompact,
             CancelLabel = s.TerminalQuitCancel,
-            Action = (s.TerminalQuitAction(count), DialogButtonRole.Destructive, () =>
+            Action = (action, DialogButtonRole.Destructive, () =>
             {
                 OnClose();
                 OnConfirm();
@@ -53,7 +61,7 @@ internal sealed record ConfirmQuitDialog : Widget
             [
                 new Text
                 {
-                    Value = s.TerminalQuitBody(count),
+                    Value = body,
                     Wrap = TextWrap.Wrap,
                     Color = Theme.Color(t => t.DialogBody.BodyText),
                 },

@@ -156,6 +156,10 @@ internal static class AppServices
             ctx.Require<ILocalizationService>()));
         context.AddSingleton<UpdateService>();
 
+        // Every exit — the OS close, macOS's Quit, the update banner's restart — resolves here, so
+        // the running-shell warning is asked once rather than per exit route.
+        context.AddSingleton<IAppExitGate, AppExitGate>();
+
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
         // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
         context.AddSingleton<IReviewStackSource, GitReviewStackSource>();

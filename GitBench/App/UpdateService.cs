@@ -18,14 +18,16 @@ namespace GitBench.App;
 public sealed class UpdateService : IDisposable
 {
     private readonly ILocalizationService _loc;
+    private readonly IAppExitGate _exitGate;
     private readonly CancellationTokenSource _autoCheckCts = new();
     private UpdateManager? _manager;
     private UpdateInfo? _update;
     private bool _autoChecksStarted;
 
-    public UpdateService(ILocalizationService loc)
+    public UpdateService(ILocalizationService loc, IAppExitGate exitGate)
     {
         _loc = loc;
+        _exitGate = exitGate;
     }
 
     /// <summary>
@@ -145,13 +147,18 @@ public sealed class UpdateService : IDisposable
     }
 
     /// <summary>
-    /// Terminates and relaunches into the staged update. Must run on the UI thread; Velopack
-    /// exits the process here, so racing it against the render loop can crash on shutdown.
+    /// Terminates and relaunches into the staged update, once <see cref="IAppExitGate"/> is
+    /// satisfied — a restart ends running shells just as a quit does, so it asks before taking them
+    /// down, in the restart's words rather than the quit's.
+    /// Must run on the UI thread; Velopack exits the process here, so racing it against the render
+    /// loop can crash on shutdown.
     /// </summary>
     public void ApplyAndRestart()
     {
         if (_manager is null || _update is null) return;
-        _manager.ApplyUpdatesAndRestart(_update);
+        var manager = _manager;
+        var update = _update;
+        _exitGate.RequestExit(AppExitKind.UpdateRestart, () => manager.ApplyUpdatesAndRestart(update));
     }
 
     public void Dispose()
