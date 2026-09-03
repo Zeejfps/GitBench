@@ -219,18 +219,33 @@ public class FileSearchViewModelTests
     }
 
     [Fact]
-    public void AskingForAnOpenBarAsksTheFieldForTheCaretBack()
+    public void AskingForAnOpenBarAsksTheFieldForTheCaretBackWithTheQuerySelected()
     {
         Show("a.cs", "one");
         var model = Model();
-        var refocused = 0;
-        model.RefocusRequested += () => refocused++;
+        var refocused = new List<bool>();
+        model.RefocusRequested += refocused.Add;
 
         model.Open();
-        Assert.Equal(0, refocused);
+        Assert.Empty(refocused);
 
         model.Open();
-        Assert.Equal(1, refocused);
+        Assert.Equal([true], refocused);
+    }
+
+    // A toggle or a step takes the caret off the field to press it. Handing it back without
+    // selecting anything is what lets a reader flip match-case mid-query and keep typing.
+    [Fact]
+    public void HandingTheCaretBackAfterAControlLeavesTheQueryAlone()
+    {
+        Show("a.cs", "one");
+        var model = Model();
+        var refocused = new List<bool>();
+        model.RefocusRequested += refocused.Add;
+
+        model.FocusField();
+
+        Assert.Equal([false], refocused);
     }
 
     [Fact]

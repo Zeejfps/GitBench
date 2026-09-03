@@ -56,8 +56,17 @@ internal sealed record FileSearchBarPlacement : Widget
 /// </remarks>
 internal sealed record FileSearchBar : Widget
 {
-    private const float FieldWidth = 170f;
-    private const float FieldHeight = 20f;
+    private const float FieldWidth = 168f;
+    private const float FieldHeight = 22f;
+
+    // The tally is right-aligned in a fixed column, so counting up from 1/29 to 29/29 does not walk
+    // the buttons beside it sideways while the reader is aiming at them.
+    private const float TallyWidth = 46f;
+
+    /// <summary>The box every control in the bar draws in, toggles and steps alike.</summary>
+    public const float ControlSize = 20f;
+
+    public const float ControlGlyphSize = 13f;
 
     public required FileSearchViewModel Model { get; init; }
 
@@ -66,7 +75,18 @@ internal sealed record FileSearchBar : Widget
         var model = Model;
         var inputSystem = ctx.Require<InputSystem>();
 
-        var field = DialogFrame.TextInput(ctx);
+        // Built here rather than taken from DialogFrame, because a dialog's field owns its own sunken
+        // surface and inside a card this small that reads as a box drawn inside a box. The card is
+        // the surface; the field contributes text and a caret to it.
+        var field = new TextInputView(ctx.Canvas);
+        field.BindThemed(ctx.Theme(), s =>
+        {
+            field.BackgroundColor = 0u;
+            field.TextColor = s.TextInput.Text;
+            field.CaretColor = s.TextInput.Caret;
+            field.SelectionRectColor = s.TextInput.Selection;
+            field.PlaceholderTextColor = s.TextInput.PlaceholderText;
+        });
         field.Bind(ctx.Localization().Strings, s => field.PlaceholderText = s.FileSearchTitle);
         field.SetText(model.Text.Value);
 
@@ -83,13 +103,13 @@ internal sealed record FileSearchBar : Widget
         // already open.
         field.Use(() =>
         {
-            void Focus()
+            void Focus(bool selectAll)
             {
                 controller.BeginEditing();
-                field.SelectAll();
+                if (selectAll) field.SelectAll();
             }
 
-            Focus();
+            Focus(true);
             var subscriptions = new SubscriptionGroup();
             model.RefocusRequested += Focus;
             subscriptions.Add(() => model.RefocusRequested -= Focus);
@@ -103,12 +123,6 @@ internal sealed record FileSearchBar : Widget
             BorderRadius = BorderRadiusStyle.All(Radius.Md),
             BorderSize = BorderSizeStyle.All(1),
             BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.Border)),
-            Shadow = Theme.Color(s => s.Palette.Shadow).Select(c => new BoxShadowStyle
-            {
-                Color = c,
-                OffsetY = 4f,
-                Blur = 16f,
-            }),
             Children =
             [
                 new Padding
@@ -122,7 +136,7 @@ internal sealed record FileSearchBar : Widget
                         new Row
                         {
                             CrossAxis = CrossAxisAlignment.Center,
-                            Gap = Spacing.Sm,
+                            Gap = Spacing.Xs,
                             Children =
                             [
                                 new Box
@@ -131,27 +145,33 @@ internal sealed record FileSearchBar : Widget
                                     Height = FieldHeight,
                                     Children = [new Raw { View = field }],
                                 },
-                                new Text
+                                new Box
                                 {
-                                    Value = Prop.Bind<string?>(() => Tally(ctx, model)),
-                                    Color = Theme.Color(s => s.Palette.TextMuted),
+                                    Width = TallyWidth,
+                                    Children =
+                                    [
+                                        new Text
+                                        {
+                                            Value = Prop.Bind<string?>(() => Tally(ctx, model)),
+                                            Color = Theme.Color(s => s.Palette.TextMuted),
+                                            HAlign = TextAlignment.End,
+                                        },
+                                    ],
                                 },
-                                new FileSearchOptionToggle
-                                {
-                                    Icon = LucideIcons.CaseSensitive,
-                                    Tooltip = L.T(s => s.FileSearchMatchCase),
-                                    Active = model.MatchCase,
-                                    OnToggle = model.ToggleMatchCase,
-                                },
-                                new FileSearchOptionToggle
-                                {
-                                    Icon = LucideIcons.WholeWord,
-                                    Tooltip = L.T(s => s.FileSearchWholeWord),
-                                    Active = model.WholeWord,
-                                    OnToggle = model.ToggleWholeWord,
-                                },
-                                Step(LucideIcons.ChevronUp, L.T(s => s.FileSearchPrevious), model.Previous),
-                                Step(LucideIcons.ChevronDown, L.T(s => s.FileSearchNext), model.Next),
+                                Toggle(
+                                    LucideIcons.CaseSensitive, L.T(s => s.FileSearchMatchCase),
+                                    model.MatchCase, Then(model, model.ToggleMatchCase)),
+                                Toggle(
+                                    LucideIcons.WholeWord, L.T(s => s.FileSearchWholeWord),
+                                    model.WholeWord, Then(model, model.ToggleWholeWord)),
+                                // Marks where the query ends and moving through its results begins.
+                                new SeparatorSpacer(),
+                                Step(
+                                    LucideIcons.ChevronUp, L.T(s => s.FileSearchPrevious),
+                                    Then(model, model.Previous)),
+                                Step(
+                                    LucideIcons.ChevronDown, L.T(s => s.FileSearchNext),
+                                    Then(model, model.Next)),
                                 Step(LucideIcons.X, L.T(s => s.FileSearchClose), model.Close),
                             ],
                         },
@@ -162,14 +182,32 @@ internal sealed record FileSearchBar : Widget
         .WithController(inputSystem, static () => new SurfacePointerBlocker());
     }
 
+    // Clicking any control in the bar takes the caret off the field, so every one of them hands it
+    // straight back. Close is the exception: it is the one control whose whole point is that the
+    // field is going away.
+    private static Action Then(FileSearchViewModel model, Action run) => () =>
+    {
+        run();
+        model.FocusField();
+    };
+
+    // Like Step, the controller is attached here rather than inside the widget: a Widget<ButtonState>
+    // supplies the state and the parent chooses the input modality, so a toggle that builds its own
+    // chrome and nothing else is inert until someone does this.
+    private static IWidget Toggle(
+        string icon, Prop<string?> tooltip, IReadable<bool> active, Action toggle) =>
+        new FileSearchOptionToggle { Icon = icon, Active = active, OnToggle = toggle }
+            .WithTooltip(tooltip)
+            .WithController<KbmController>();
+
     private static IWidget Step(string icon, Prop<string?> tooltip, Action run) =>
         new StatusBarIconButton
         {
             Icon = icon,
             Command = new Command(run),
-            BoxWidth = 18,
-            BoxHeight = 18,
-            IconSize = 12,
+            BoxWidth = ControlSize,
+            BoxHeight = ControlSize,
+            IconSize = ControlGlyphSize,
         }
         .WithTooltip(tooltip)
         .WithController<KbmController>();
@@ -189,26 +227,47 @@ internal sealed record FileSearchBar : Widget
     }
 }
 
-/// <summary>One of the two switches that change what counts as a hit. Accent-tinted while on, so it
-/// reads as a setting that stays rather than a button that did something.</summary>
-internal sealed record FileSearchOptionToggle : Widget
+/// <summary>
+/// One of the two switches that change what counts as a hit: accent-tinted on its own chip while on,
+/// so it reads as a setting that stays rather than a button that did something.
+/// </summary>
+/// <remarks>
+/// Deliberately the same box and glyph size as the step buttons beside it. A bare glyph next to
+/// chipped ones sits at a different weight and off their baseline, which is most of what makes a row
+/// of small controls look unfinished.
+/// </remarks>
+internal sealed record FileSearchOptionToggle : Widget<ButtonState>
 {
     public required string Icon { get; init; }
-    public required Prop<string?> Tooltip { get; init; }
     public required IReadable<bool> Active { get; init; }
     public required Action OnToggle { get; init; }
 
-    protected override IWidget Build(Context ctx) =>
-        new ButtonWidget
-        {
-            Style = ButtonStyle.Bare(s => Theme.Color(t => Active.Value
-                ? t.CommitsView.FilterToggleActive
-                : s.Enabled.Value && s.Hovered.Value ? t.Palette.TextPrimary : t.Palette.TextMuted)),
-            Command = new Command(OnToggle),
-            Children = [new ButtonIcon { Value = Icon, FontSize = FontSize.Body }],
-        }
-        .WithTooltip(Tooltip)
-        .WithController<KbmController>();
+    protected override ButtonState CreateState(Context ctx) => new(new Command(OnToggle));
+
+    protected override IWidget Build(Context ctx, ButtonState state) => new Box
+    {
+        Width = FileSearchBar.ControlSize,
+        Height = FileSearchBar.ControlSize,
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+        // On, it keeps the wash whether or not the pointer is over it; off, the wash is the hover.
+        Background = Theme.Color(s => Active.Value || state.Hovered.Value
+            ? s.Palette.SurfaceHoverStrong
+            : 0u),
+        Children =
+        [
+            new Text
+            {
+                FontFamily = LucideIcons.FontFamily,
+                FontSize = FileSearchBar.ControlGlyphSize,
+                HAlign = TextAlignment.Center,
+                VAlign = TextAlignment.Center,
+                Value = Icon,
+                Color = Theme.Color(s => Active.Value
+                    ? s.Palette.Accent
+                    : state.Hovered.Value ? s.Palette.TextPrimary : s.Palette.TextMuted),
+            },
+        ],
+    };
 }
 
 /// <summary>

@@ -51,15 +51,22 @@ internal sealed class FileSearchViewModel
 
     public FileSearchQuery Query => new(_text.Value, _matchCase.Value, _wholeWord.Value);
 
-    /// <summary>The bar was asked for while it was already open — the field should take the caret
-    /// back and offer the old query for replacement, the way a second Ctrl+F does in an editor.</summary>
-    public event Action? RefocusRequested;
+    /// <summary>
+    /// The field should take the caret back. True asks it to select the query it is holding, which
+    /// is what a second Ctrl+F does in an editor — the old query stays visible but the next
+    /// keystroke replaces it. False leaves the caret where it was.
+    /// </summary>
+    public event Action<bool>? RefocusRequested;
+
+    /// <summary>Hands the caret back to the field after a control in the bar took it. Without this a
+    /// reader who flips a toggle mid-query finds their next keystrokes going nowhere.</summary>
+    public void FocusField() => RefocusRequested?.Invoke(false);
 
     public void Open()
     {
         if (_isOpen.Value)
         {
-            RefocusRequested?.Invoke();
+            RefocusRequested?.Invoke(true);
             return;
         }
 
