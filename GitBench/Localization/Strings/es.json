@@ -144,6 +144,15 @@
   "file_browser.close_all_tabs": "Cerrar todas las pestañas",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "Buscar en el archivo",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "Sin resultados",
+  "file_search.next": "Coincidencia siguiente",
+  "file_search.previous": "Coincidencia anterior",
+  "file_search.close": "Cerrar la búsqueda",
+  "file_search.match_case": "Distinguir mayúsculas y minúsculas",
+  "file_search.whole_word": "Solo palabras completas",
+
   "toolbar.fetch": "Obtener",
   "toolbar.fetching": "Obteniendo",
   "toolbar.pull": "Extraer",

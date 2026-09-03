@@ -211,6 +211,15 @@
   "file_browser.close_all_tabs": "Закрыть все вкладки",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "Поиск в файле",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "Ничего не найдено",
+  "file_search.next": "Следующее совпадение",
+  "file_search.previous": "Предыдущее совпадение",
+  "file_search.close": "Закрыть поиск",
+  "file_search.match_case": "Учитывать регистр",
+  "file_search.whole_word": "Только слова целиком",
+
   "toolbar.fetch": "Извлечь",
   "toolbar.fetching": "Извлечение",
   "toolbar.pull": "Получить",

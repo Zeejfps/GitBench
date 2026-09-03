@@ -143,6 +143,15 @@
   "file_browser.close_all_tabs": "关闭所有标签页",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "在文件中查找",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "无结果",
+  "file_search.next": "下一个匹配项",
+  "file_search.previous": "上一个匹配项",
+  "file_search.close": "关闭查找",
+  "file_search.match_case": "区分大小写",
+  "file_search.whole_word": "全字匹配",
+
   "toolbar.fetch": "获取",
   "toolbar.fetching": "正在获取",
   "toolbar.pull": "拉取",

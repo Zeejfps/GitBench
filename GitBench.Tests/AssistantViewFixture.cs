@@ -3,6 +3,7 @@ using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
+using GitBench.Features.FileBrowser;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
@@ -181,7 +182,9 @@ internal sealed class AssistantViewFixture : IDisposable
                     new RepoBarCollapseState(Preferences),
                     ctx.Require<ILocalizationService>(),
                     Bus,
-                    Vm);
+                    Vm,
+                    new State<MainViewMode>(MainViewMode.LocalChanges),
+                    new NoFileBrowsers());
             });
 
         store.Start();

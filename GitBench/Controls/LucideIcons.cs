@@ -41,6 +41,8 @@ internal static class LucideIcons
     public const string Image = "\uE0F6";         // image
     public const string Undo = "";    // undo-2 (revert commit)
     public const string Search = ""; // search
+    public const string CaseSensitive = ""; // case-sensitive (find: match case)
+    public const string WholeWord = "";     // whole-word (find: match whole words)
     public const string CloudCheck = "";     // cloud-check (branch tracking a live upstream)
     public const string CloudOff = "";      // cloud-off (upstream configured but remote ref is gone)
     public const string ChevronUp = "";    // chevron-up

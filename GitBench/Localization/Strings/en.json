@@ -144,6 +144,15 @@
   "file_browser.close_all_tabs": "Close all tabs",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "Find in file",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "No results",
+  "file_search.next": "Next match",
+  "file_search.previous": "Previous match",
+  "file_search.close": "Close find",
+  "file_search.match_case": "Match case",
+  "file_search.whole_word": "Match whole words",
+
   "toolbar.fetch": "Fetch",
   "toolbar.fetching": "Fetching",
   "toolbar.pull": "Pull",

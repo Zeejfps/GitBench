@@ -67,6 +67,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private DiffRenderState _renderState = new DiffRenderState.Placeholder("Select a file to view diff.");
     private DiffRowSet _rowSet = DiffRowSet.Empty;
     private DiffDiagnosticOverlay _diagnostics = DiffDiagnosticOverlay.Empty;
+    private DiffSearchOverlay _search = DiffSearchOverlay.Empty;
+    // Whether the hits in hand were found in the file currently rendered. Resolved when either of
+    // those changes rather than per row, and it is the whole of what gates both the wash and the
+    // reveal: the two arrive from separate bindings, so on a file switch one of them is briefly the
+    // other file's, and those line numbers would land on whatever now sits at them.
+    private bool _searchApplies;
     private UsageLensOverlay _usageLens = UsageLensOverlay.Empty;
     private bool _usageLensRows;
     private int _hoveredLensRow = -1;
@@ -115,6 +121,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private float? _pendingScrollY;
     private int _pendingScrollFrames;
     private FileLine? _pendingScrollLine;
+    private FileSearchMatch? _pendingSearchReveal;
     private FileLine? _lastTopLine;
     private bool _topLinePublished;
     private FoldState? _foldState;
@@ -238,6 +245,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // different declaration at line 1.
         if (newPath != prevPath) _topLinePublished = false;
 
+        RefreshSearchScope();
         _list.ItemCount = _rowSet.Rows.Count;
         _list.NotifyItemsChanged();
         ApplyScrollForTransition(state, prevPath, prevWasFullFile, prevTopLine, prevScrollY, prevScrollX);
@@ -360,6 +368,82 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // Scrolls to a new-file line, holding the target until it can be honoured. Row geometry needs
     // metrics, and metrics resolve on the first draw, so a jump asked for while the view is fresh —
     // the file browser's, on the frame it mounts — would otherwise be dropped.
+    /// <summary>The find bar's hits, washed over the text. Held rather than folded into the rows:
+    /// a query changes on every keystroke while the rows under it stand.</summary>
+    public void SetSearch(DiffSearchOverlay search)
+    {
+        _search = search;
+        _pendingSearchReveal = null;
+        RefreshSearchScope();
+        SetDirty();
+    }
+
+    private void RefreshSearchScope() =>
+        _searchApplies = DescribeState(_renderState).Path is { } path && _search.IsFor(path);
+
+    /// <summary>
+    /// Brings a hit into view on both axes, and only as far as it has to: stepping through hits
+    /// that are already on screen must leave the text where the reader is reading it.
+    /// </summary>
+    public void RevealSearchMatch(FileSearchMatch match)
+    {
+        _pendingSearchReveal = match;
+        ApplyPendingSearchReveal();
+        SetDirty();
+    }
+
+    // Held until it can be honoured: row geometry needs measured text, and the hits and the rows
+    // arrive from two separate bindings in an order this view does not set — so a reveal waits for
+    // the rows under it to be the ones its hit was found in.
+    private void ApplyPendingSearchReveal()
+    {
+        if (_pendingSearchReveal is not { } match || _lineHeight <= 0 || !_searchApplies) return;
+        _pendingSearchReveal = null;
+
+        if (_rowSet.RowNearestNewLine(match.Line) is not { } row) return;
+        if (_rowSet.Rows[row.Value] is not DiffRow.Line line) return;
+        ScrollRowIntoView(row);
+        ScrollColumnsIntoView(line.Text, match);
+    }
+
+    // Y grows upward here: a row is fully in view when its top is no higher than the viewport's top
+    // and its bottom no lower than the viewport's bottom.
+    private void ScrollRowIntoView(RowIndex row)
+    {
+        if (!_list.TryGetRowRect(row.Value, out var rect)) return;
+        var view = _list.Position;
+        if (rect.Top <= view.Top && rect.Bottom >= view.Bottom) return;
+
+        var delta = rect.Top > view.Top ? view.Top - rect.Top : view.Bottom - rect.Bottom;
+        SetScrollTarget(_list.ScrollY + delta);
+    }
+
+    // A hit far out on a long line is otherwise jumped to and still not on screen.
+    private void ScrollColumnsIntoView(DiffLineText text, FileSearchMatch match)
+    {
+        if (_monoAdvance <= 0) return;
+
+        var origin = DiffRowPainter.LineTextOriginX(
+            _list.Position.Left, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn,
+            _rowSet.GlyphColumn);
+        var left = origin + DiffText.CellsBefore(text.Expanded, text.ToExpanded(match.Start).Value) * _monoAdvance;
+        var right = origin + DiffText.CellsBefore(text.Expanded, text.ToExpanded(match.End).Value) * _monoAdvance;
+
+        // A few cells of run-up, so a hit brought into view reads as sitting inside a line rather
+        // than as being clipped by the edge it was dragged to.
+        var margin = RevealMarginCells * _monoAdvance;
+        var viewLeft = _list.Position.Left + _scrollX;
+        var viewRight = viewLeft + _list.Position.Width;
+
+        var prev = _scrollX;
+        if (left - margin < viewLeft) _scrollX -= viewLeft - left + margin;
+        else if (right + margin > viewRight) _scrollX += right - viewRight + margin;
+        ClampHorizontalScroll();
+        if (_scrollX != prev) NotifyScrollChanged(viewportFits: false);
+    }
+
+    private const int RevealMarginCells = 4;
+
     public void RequestScrollToNewLine(FileLine line)
     {
         _pendingScrollLine = line;
@@ -497,6 +581,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         EnsureMetrics(c);
         ClampHorizontalScroll();
         ApplyPendingScrollLine();
+        ApplyPendingSearchReveal();
         ReassertPendingScroll();
         NotifyTopVisibleLine();
         _selectionController.Tick();
@@ -572,7 +657,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             GlyphColumn: _rowSet.GlyphColumn,
             Link: LinkOnRow(rowIndex),
             Usages: UsagesOnRow(rowIndex),
-            LensHovered: rowIndex == _hoveredLensRow));
+            LensHovered: rowIndex == _hoveredLensRow,
+            Search: SearchOnRow(rowIndex)));
 
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
@@ -678,6 +764,16 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var left = line.Text.ToExpanded(link.Start);
         var right = line.Text.ToExpanded(link.End);
         return right <= left ? null : new CharRange(left.Value, right.Value - left.Value);
+    }
+
+    private IReadOnlyList<SearchMark>? SearchOnRow(int rowIndex)
+    {
+        if (!_searchApplies) return null;
+        if (_rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (_rowSet.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
+
+        var marks = _search.MarksOn(fileLine, line.Text);
+        return marks.Count == 0 ? null : marks;
     }
 
     private IReadOnlyList<DiagnosticMark>? MarksOnRow(int rowIndex)

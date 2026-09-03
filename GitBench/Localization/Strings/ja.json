@@ -143,6 +143,15 @@
   "file_browser.close_all_tabs": "すべてのタブを閉じる",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "ファイル内を検索",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "結果なし",
+  "file_search.next": "次の一致",
+  "file_search.previous": "前の一致",
+  "file_search.close": "検索を閉じる",
+  "file_search.match_case": "大文字と小文字を区別",
+  "file_search.whole_word": "単語単位で検索",
+
   "toolbar.fetch": "フェッチ",
   "toolbar.fetching": "フェッチ中",
   "toolbar.pull": "プル",

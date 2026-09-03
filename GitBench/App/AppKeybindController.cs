@@ -1,4 +1,5 @@
 using GitBench.Features.Assistant;
+using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Localization;
@@ -6,6 +7,7 @@ using GitBench.Messages;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
+using ZGF.Observable;
 
 namespace GitBench.App;
 
@@ -25,6 +27,8 @@ internal sealed class AppKeybindController : KeyboardMouseController
     private readonly ILocalizationService _loc;
     private readonly IMessageBus _bus;
     private readonly AssistantViewModel _assistant;
+    private readonly State<MainViewMode> _mode;
+    private readonly IFileBrowserStore _browsers;
 
     public AppKeybindController(
         IRepoRegistry registry,
@@ -32,7 +36,9 @@ internal sealed class AppKeybindController : KeyboardMouseController
         RepoBarCollapseState repoBarCollapse,
         ILocalizationService loc,
         IMessageBus bus,
-        AssistantViewModel assistant)
+        AssistantViewModel assistant,
+        State<MainViewMode> mode,
+        IFileBrowserStore browsers)
     {
         _registry = registry;
         _hover = hover;
@@ -40,6 +46,8 @@ internal sealed class AppKeybindController : KeyboardMouseController
         _loc = loc;
         _bus = bus;
         _assistant = assistant;
+        _mode = mode;
+        _browsers = browsers;
     }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
@@ -64,6 +72,19 @@ internal sealed class AppKeybindController : KeyboardMouseController
         {
             _assistant.Toggle.Execute();
             e.Consume();
+            return;
+        }
+
+        // Find in file. Here rather than on the pane, because the chord has to work the moment the
+        // Files mode is on screen, and a controller down there is only sent keys once something
+        // inside it has taken focus.
+        if (e.Key == KeyboardKey.F && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        {
+            if (_mode.Value == MainViewMode.Files && _browsers.Active.Value is { CanSearch: true } browser)
+            {
+                browser.Search.Open();
+                e.Consume();
+            }
             return;
         }
 

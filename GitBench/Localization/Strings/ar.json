@@ -225,6 +225,15 @@
   "file_browser.close_all_tabs": "إغلاق كل علامات التبويب",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "بحث في الملف",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "لا توجد نتائج",
+  "file_search.next": "التطابق التالي",
+  "file_search.previous": "التطابق السابق",
+  "file_search.close": "إغلاق البحث",
+  "file_search.match_case": "مطابقة حالة الأحرف",
+  "file_search.whole_word": "مطابقة الكلمات الكاملة",
+
   "toolbar.fetch": "جلب",
   "toolbar.fetching": "جارٍ الجلب",
   "toolbar.pull": "سحب",

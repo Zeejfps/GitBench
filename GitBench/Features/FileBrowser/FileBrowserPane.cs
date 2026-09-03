@@ -135,6 +135,14 @@ internal sealed record FileBrowserPreviewHeader : Widget
 
         var servers = new LanguageServerStatusChip { Model = browser }.BuildView(ctx);
 
+        var find = new LocalChangesHeaderActionButton
+        {
+            Icon = LucideIcons.Search,
+            Visible = Prop.Bind(() => browser.CanSearch),
+            Tooltip = L.T(s => s.FileSearchTitle),
+            Command = new Command(browser.Search.Open),
+        }.BuildView(ctx);
+
         var toggle = new LocalChangesHeaderActionButton
         {
             Icon = Prop.Bind<string?>(() =>
@@ -153,6 +161,7 @@ internal sealed record FileBrowserPreviewHeader : Widget
                 new FlexItem { Shrink = 1, Child = title },
                 new FlexItem { Grow = 1, Shrink = 2, Child = breadcrumb },
                 servers,
+                find,
                 toggle,
             },
         }, topBorder: false, background: FileBrowserTabStrip.Content);

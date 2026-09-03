@@ -7,6 +7,10 @@ using ZGF.Observable;
 
 namespace GitBench.Features.FileBrowser;
 
+/// <summary>Which body the preview shows. Text is the common case; a picture and a sentence are the
+/// two things a patch view cannot render.</summary>
+internal enum FileBrowserBodyKind { Text, Markdown, Image, Placeholder }
+
 /// <summary>
 /// One repository's file browser: the rows on screen, the cursor, the open tabs, and the operations
 /// that move any of them. Owns a <see cref="FileBrowserTree"/> and is the only thing that touches it.
@@ -46,6 +50,8 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly State<FoldState> _folds = new(FoldState.Open(string.Empty));
 
     private readonly FileBrowserTabs _tabs = new();
+    private readonly FileSearchViewModel _search;
+    private readonly IDisposable _searchRetarget;
 
     private readonly State<bool> _canGoBack = new(false);
     private readonly State<bool> _canGoForward = new(false);
@@ -78,6 +84,9 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _extractor = extractor;
         _dispatcher = dispatcher;
         _persist = persist;
+
+        _search = new FileSearchViewModel(() => _preview.Value, () => _topVisibleLine);
+        _searchRetarget = _preview.Subscribe(_ => _search.Retarget());
 
         _showHidden.Value = restored.ShowHidden;
         _renderMarkdown.Value = restored.RenderMarkdown;
@@ -146,6 +155,25 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         if (_disposed || _previewPath is not { } path) return;
         _folds.Value = (_folds.Value.Path == path ? _folds.Value : FoldState.Open(path)).Toggled(id);
     }
+
+    /// <summary>What the preview draws the open file as. Decided here rather than by the pane, so
+    /// everything that has to know whether there is text on screen agrees on the answer.</summary>
+    public FileBrowserBodyKind BodyKind => _preview.Value switch
+    {
+        FilePreview.Text { Markdown: not null } when _renderMarkdown.Value => FileBrowserBodyKind.Markdown,
+        FilePreview.Text => FileBrowserBodyKind.Text,
+        FilePreview.Image => FileBrowserBodyKind.Image,
+        _ => FileBrowserBodyKind.Placeholder,
+    };
+
+    /// <summary>Whether there is something on screen to find anything in. A picture is not, and
+    /// neither is a rendered markdown document: find highlights a file's lines, and what the reader
+    /// is looking at there is paragraphs.</summary>
+    public bool CanSearch => BodyKind == FileBrowserBodyKind.Text;
+
+    /// <summary>Find-in-file over whatever the preview is showing. Lives here rather than in the
+    /// bar, so a query survives the bar being closed and the pane being switched away from.</summary>
+    public FileSearchViewModel Search => _search;
 
     /// <summary>The declaration the reader is currently inside, as a dotted containment path, or
     /// null when the top of the viewport is inside none. Follows the scroll, which is what makes it
@@ -399,6 +427,9 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     {
         if (_renderMarkdown.Value == render) return;
         _renderMarkdown.Value = render;
+        // The rendered document has no lines to highlight, so the bar would stand there over
+        // nothing until the reader switched back.
+        if (BodyKind == FileBrowserBodyKind.Markdown) _search.Close();
         Persist();
     }
 
@@ -786,6 +817,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _disposed = true;
         _previewCancel?.Cancel();
         _previewCancel?.Dispose();
+        _searchRetarget.Dispose();
         _rows.Dispose();
         _cursor.Dispose();
         _showHidden.Dispose();

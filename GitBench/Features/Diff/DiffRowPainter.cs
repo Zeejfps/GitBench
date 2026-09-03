@@ -33,7 +33,8 @@ internal readonly record struct DiffRowPaint(
     bool GlyphColumn = true,
     CharRange? Link = null,
     UsageLensState? Usages = null,
-    bool LensHovered = false);
+    bool LensHovered = false,
+    IReadOnlyList<SearchMark>? Search = null);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -401,6 +402,8 @@ internal sealed class DiffRowPainter
         // selecting across a link still reads as one continuous selection.
         if (p.Link is { } link)
             DrawLinkTint(c, l.Text.Expanded, link, textLeft, p.Bottom, p.Z + 1);
+        if (p.Search is { Count: > 0 } hits)
+            DrawSearchMarks(c, l.Text.Expanded, hits, textLeft, p.Bottom, p.Z + 1);
         if (p.Selection is { } selection)
             DrawSelection(c, l.Text.Expanded, selection, textLeft, p.Bottom, p.Z + 1);
         DrawLineText(c, l, textLeft, p.Bottom, p.Left + p.Width, p.Z + 2);
@@ -539,6 +542,28 @@ internal sealed class DiffRowPainter
             Style = SolidBgStyle(Styles.SelectionBackground),
             ZIndex = z,
         });
+    }
+
+    // Every hit the find bar has on this row, on the same cell grid the selection uses. The one
+    // under the cursor is washed harder rather than differently, so stepping through a screenful of
+    // hits is a change the eye follows without re-reading the line.
+    private void DrawSearchMarks(
+        ICanvas c, string text, IReadOnlyList<SearchMark> marks, float textLeft, float bottom, int z)
+    {
+        foreach (var mark in marks)
+        {
+            var startCell = DiffText.CellsBefore(text, mark.Range.Start);
+            var endCell = DiffText.CellsBefore(text, mark.Range.Start + mark.Range.Length);
+            var width = (endCell - startCell) * MonoAdvance;
+            if (width <= 0f) continue;
+
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = new RectF(textLeft + startCell * MonoAdvance, bottom, width, LineHeight),
+                Style = SolidBgStyle(mark.Current ? Styles.SearchCurrentBackground : Styles.SearchMatchBackground),
+                ZIndex = z,
+            });
+        }
     }
 
     // A symbol a held modifier has turned into a link: a wash behind it and a rule under it. The

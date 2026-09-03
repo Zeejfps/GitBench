@@ -143,6 +143,15 @@
   "file_browser.close_all_tabs": "모든 탭 닫기",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_search.title": "파일에서 찾기",
+  "file_search.matches": "{index}/{total}",
+  "file_search.no_matches": "결과 없음",
+  "file_search.next": "다음 일치 항목",
+  "file_search.previous": "이전 일치 항목",
+  "file_search.close": "찾기 닫기",
+  "file_search.match_case": "대/소문자 구분",
+  "file_search.whole_word": "단어 단위로 찾기",
+
   "toolbar.fetch": "가져오기",
   "toolbar.fetching": "가져오는 중",
   "toolbar.pull": "풀",

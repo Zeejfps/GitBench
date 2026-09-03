@@ -17,10 +17,6 @@ using ZGF.Observable;
 
 namespace GitBench.Features.FileBrowser;
 
-/// <summary>Which body the preview shows. Text is the common case; a picture and a sentence are the
-/// two things a patch view cannot render.</summary>
-internal enum FileBrowserBodyKind { Text, Markdown, Image, Placeholder }
-
 /// <summary>
 /// The pane beside the tree: the selected file, rendered.
 /// </summary>
@@ -54,14 +50,7 @@ internal sealed record FileBrowserPreview : Widget
             [
                 new Switch<FileBrowserBodyKind>
                 {
-                    Value = new Derived<FileBrowserBodyKind>(() => browser.Preview.Value switch
-                    {
-                        FilePreview.Text { Markdown: not null } when browser.RenderMarkdown.Value =>
-                            FileBrowserBodyKind.Markdown,
-                        FilePreview.Text => FileBrowserBodyKind.Text,
-                        FilePreview.Image => FileBrowserBodyKind.Image,
-                        _ => FileBrowserBodyKind.Placeholder,
-                    }),
+                    Value = new Derived<FileBrowserBodyKind>(() => browser.BodyKind),
                     KeepAlive = true,
                     Case = kind => kind switch
                     {
@@ -124,6 +113,14 @@ internal sealed record FileBrowserTextBody : Widget
                 browser.Preview.Value is FilePreview.Text shown && diagnostics.IsFor(shown.Path)
                     ? new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items)
                     : DiffDiagnosticOverlay.Empty));
+        // The find bar's hits, and the reveal that follows them. One slice carries both the list and
+        // the cursor, so a step and a re-scan arrive here as the same kind of event.
+        content.Bind(browser.Search.Hits, hits =>
+        {
+            content.SetSearch(new DiffSearchOverlay(hits));
+            if (hits.At is { } at) content.RevealSearchMatch(at);
+        });
+
         // After the render state, and on its own path: a fold toggle must not run the render-state
         // transition, which would reset horizontal scroll and restore a stale pixel offset.
         content.Bind(browser.Folds, content.SetFoldState);
@@ -196,7 +193,20 @@ internal sealed record FileBrowserTextBody : Widget
 
         return new BorderLayout
         {
-            Center = new Raw { View = content },
+            // Over the text and not over the scrollbars: the bar floats within the file it is
+            // searching, the way it does in an editor.
+            Center = new Stack
+            {
+                Children =
+                [
+                    new Raw { View = content },
+                    new Show
+                    {
+                        When = browser.Search.IsOpen,
+                        Then = () => new FileSearchBarPlacement { Model = browser.Search },
+                    },
+                ],
+            },
             East = new Raw { View = vScrollBar },
             South = new Raw { View = hScrollBar },
         };

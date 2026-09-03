@@ -594,7 +594,8 @@ public class TerminalKeybindCollisionTests : IDisposable
             _assistant = new AssistantViewModel(new StubAssistantStore(), localization, _bus);
 
             var keybind = new AppKeybindController(
-                _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant);
+                _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
+                new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers());
 
             Harness = GuiTestHarness.Create(
                 ctx =>

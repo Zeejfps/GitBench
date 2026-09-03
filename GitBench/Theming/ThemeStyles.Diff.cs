@@ -50,6 +50,8 @@ public sealed record DiffContentStyles(
     uint ExpanderIcon,
     uint ExpanderHoverBackground,
     uint SelectionBackground,
+    uint SearchMatchBackground,
+    uint SearchCurrentBackground,
     uint GutterRule,
     uint FoldChipBackground,
     uint DiagnosticError,
@@ -134,6 +136,11 @@ public partial record ThemeStyles
     // underline is what says "link", and the wash only has to find the word for the eye.
     private const byte DiffLinkAlpha = 0x33;
 
+    // The find bar's hits. The one under the cursor has to separate from the other twenty on
+    // screen at a glance, so the two differ by weight rather than by hue.
+    private const byte DiffSearchMatchAlpha = 0x4D;
+    private const byte DiffSearchCurrentAlpha = 0xB3;
+
     private static DiffContentStyles BuildDiffContent(ThemePalette p, StatusPalette status, DiffSyntaxPalette syntax) =>
         new(
             Background: p.Surface,
@@ -162,6 +169,11 @@ public partial record ThemeStyles
             // Translucent so the add/remove row tint and the changed-character box stay readable
             // underneath — a selection marks text, it doesn't replace what the row was saying.
             SelectionBackground: WithAlpha(p.Accent, DiffSelectionAlpha),
+            // A hit is something the text turned out to contain rather than something the reader
+            // picked, so it takes the warning hue instead of the accent the selection and the
+            // links share — two washes over one line have to be told apart without being read.
+            SearchMatchBackground: WithAlpha(status.Warning, DiffSearchMatchAlpha),
+            SearchCurrentBackground: WithAlpha(status.Warning, DiffSearchCurrentAlpha),
             // The rule between the line numbers and the code, and the pill standing in for a
             // folded body. Both are margin furniture: present, never competing with the text.
             GutterRule: p.BorderSubtle,
