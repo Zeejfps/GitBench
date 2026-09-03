@@ -7,6 +7,7 @@ using GitBench.Lsp.Documents;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.ContextMenu;
 using ZGF.Gui.Testing;
 using ZGF.Gui.Views;
 using ZGF.Observable;
@@ -100,6 +101,22 @@ public class UsagesPopupTests
 
         Assert.Equal(1, fx.Harness.OpenMenuCount);
         Assert.Contains("Showing 100 of 150", fx.Harness.SnapshotWindows().ToText());
+    }
+
+    // The popup is a window sized from what the menu measures, so a list that scrolls has to
+    // measure as its capped viewport. Measuring the whole list instead opens a window taller than
+    // the rows it can show, and the menu draws in a fraction of it.
+    [Fact]
+    public void ALongListDoesNotMakeATallerPopupThanItsViewport()
+    {
+        using var fx = new Fixture();
+        fx.Servers.Sites = [.. Enumerable.Range(1, 150).Select(n => In("src/lib.rs", n))];
+        fx.Files["/repo/src/lib.rs"] = [.. Enumerable.Range(1, 150).Select(n => $"line {n}")];
+
+        fx.Show();
+
+        var menu = Assert.IsType<ContextMenu>(fx.Harness.TopMenu);
+        Assert.InRange(menu.MeasureHeight(), 1f, 420f);
     }
 
     [Fact]
