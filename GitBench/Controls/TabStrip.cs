@@ -23,10 +23,10 @@ namespace GitBench.Controls;
 /// bound to and what closing one means — not the plane the strip is drawn on, which is the theme's
 /// so that the fill an unselected tab wears can be derived a fixed step behind it.
 /// <para>
-/// There is deliberately no rule along the bottom. The strip is a plane of its own and the active
-/// tab wears the colour of what is underneath it, so the boundary is a change of colour everywhere
-/// except across the active tab — which is what makes that tab read as the surface below rather
-/// than as a chip sitting on top of it. A rule would cut straight through the one place the join
+/// The rule along the bottom is the strip's own and is drawn under the tabs, so the active tab
+/// repaints the pixel it covers in the colour of the surface below. That break is what makes the
+/// tab read as the surface below rather than as a chip sitting on top of it — an unbroken rule,
+/// which is what a border on the surface's own header would be, cuts through the one place the join
 /// has to be invisible.
 /// </para>
 /// </remarks>
@@ -55,7 +55,12 @@ internal sealed record TabStrip : Widget
     protected override IWidget Build(Context ctx)
     {
         var children = new List<IWidget>();
-        if (Leading is { } leading) children.Add(leading);
+        if (Leading is { } leading)
+        {
+            children.Add(leading);
+            children.Add(Divider);
+        }
+
         children.Add(new Grow
         {
             Child = new Padding
@@ -87,14 +92,44 @@ internal sealed record TabStrip : Widget
             Background = Theme.Color(static s => s.TabStrip.Background),
             Children =
             [
-                new Row
+                new Stack
                 {
-                    CrossAxis = CrossAxisAlignment.Stretch,
-                    Children = children.ToArray(),
+                    Children =
+                    [
+                        Rule,
+                        new Row
+                        {
+                            CrossAxis = CrossAxisAlignment.Stretch,
+                            Children = children.ToArray(),
+                        },
+                    ],
                 },
             ],
         };
     }
+
+    /// <summary>
+    /// The join with the surface below, drawn under the tabs so each of them repaints the pixel it
+    /// covers: the line runs the width of the strip and breaks at exactly the active tab, which
+    /// paints that pixel in the colour of the surface the line separates.
+    /// </summary>
+    /// <remarks>
+    /// A layer rather than a border on the surface's own header, because a border there is one
+    /// unbroken line the tab above has no way to cut — and the break is the whole point.
+    /// </remarks>
+    private static IWidget Rule => new Box
+    {
+        BorderSize = new BorderSizeStyle { Bottom = 1 },
+        BorderColor = Theme.BorderColor(static s => new BorderColorStyle { Bottom = s.TabStrip.Separator }),
+    };
+
+    /// <summary>Between the leading slot and the tabs, so the history buttons read as their own
+    /// control rather than as the run's first tab.</summary>
+    private static IWidget Divider => new Box
+    {
+        Width = 1,
+        Background = Theme.Color(static s => s.TabStrip.Separator),
+    };
 }
 
 /// <summary>
@@ -125,6 +160,10 @@ internal sealed record TabChrome : Widget
     // On the trailing edge of every tab, the last one included: the line after it reads as the end
     // of the run rather than as a tab that lost its divider.
     private const int SeparatorWidth = 1;
+
+    // The strip's own rule along the join runs under the tabs, so every tab repaints that pixel:
+    // the others in the rule's colour, the active one in the colour of the surface below.
+    private const int JoinHeight = 1;
 
     public required Prop<string?> Label { get; init; }
     public required Func<bool> IsActive { get; init; }
@@ -202,7 +241,12 @@ internal sealed record TabChrome : Widget
         var pill = new Box
         {
             MaxWidth = MaxTabWidth,
-            BorderSize = new BorderSizeStyle { Top = ActiveBarHeight, Right = SeparatorWidth },
+            BorderSize = new BorderSizeStyle
+            {
+                Top = ActiveBarHeight,
+                Right = SeparatorWidth,
+                Bottom = JoinHeight,
+            },
             BorderColor = Theme.BorderColor(s => new BorderColorStyle
             {
                 // The bar's band is the tab's own fill when it is not the active one: a border the
@@ -210,6 +254,9 @@ internal sealed record TabChrome : Widget
                 // into the top of every other tab.
                 Top = IsActive() ? s.Palette.Accent : Fill(s),
                 Right = s.TabStrip.Separator,
+                // The active tab carries the join across itself in the colour of the surface below,
+                // which is the break that reads as the tab being that surface.
+                Bottom = IsActive() ? ContentBackground(s) : s.TabStrip.Separator,
             }),
             Background = Theme.Color(Fill),
             Children =
