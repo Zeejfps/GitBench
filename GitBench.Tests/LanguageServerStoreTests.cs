@@ -527,6 +527,29 @@ public sealed class LanguageServerStoreTests : IDisposable
         Assert.IsType<ServerState.Stopped>(store.Active.Value.StateFor(File_(_second, "src/main.rs")));
     }
 
+    /// <summary>
+    /// Every question routes through the code that starts a server, which republishes what the
+    /// servers are doing. Nothing about them has changed, so nothing may be told that it has: the
+    /// usages rows watch this value to know when a server knows more than it did, and they re-asked
+    /// themselves in a circle for as long as a question of theirs was outstanding.
+    /// </summary>
+    [Fact]
+    public async Task AskingAServerSomethingIsNotAChangeInWhatTheServersAreDoing()
+    {
+        var store = Store();
+        _registry.SetActive(_first);
+        await Hover(store, File_(_first, "src/main.rs"));
+
+        var changes = 0;
+        using var _ = store.Active.Subscribe(_ => changes++);
+        changes = 0;
+
+        await Hover(store, File_(_first, "src/main.rs"));
+        await Hover(store, File_(_first, "src/main.rs"));
+
+        Assert.Equal(0, changes);
+    }
+
     [Fact]
     public async Task ClosingARepositoryStopsItsServer()
     {

@@ -51,6 +51,9 @@ internal sealed class UsageLensCoordinator : IDisposable
     private readonly Dictionary<string, UsageLensState> _known = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _asks = new(StringComparer.Ordinal);
     private readonly HashSet<string> _inFlight = new(StringComparer.Ordinal);
+    // Answers worth asking about again. They stay published while the question is out: a count
+    // that blinks back to "..." and returns as the same number reads as a fault, not as an update.
+    private readonly HashSet<string> _stale = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _slots = new(AtOnce, AtOnce);
 
     private string? _path;
@@ -112,6 +115,7 @@ internal sealed class UsageLensCoordinator : IDisposable
         {
             _known.Clear();
             _asks.Clear();
+            _stale.Clear();
             _publish(UsageLensOverlay.Empty);
             return;
         }
@@ -135,7 +139,7 @@ internal sealed class UsageLensCoordinator : IDisposable
             foreach (var target in targets)
             {
                 _inFlight.Add(target.Id);
-                _known[target.Id] = new UsageLensState.Asking();
+                _known.TryAdd(target.Id, new UsageLensState.Asking());
             }
 
             Publish();
@@ -191,9 +195,13 @@ internal sealed class UsageLensCoordinator : IDisposable
         {
             if (path != _path) return;
             _inFlight.Remove(target.Id);
+            _stale.Remove(target.Id);
             if (state is null)
             {
-                _known.Remove(target.Id);
+                // Only a row that has never had an answer, which would otherwise sit on "asking"
+                // for as long as the file stayed open. One re-asked keeps the count it was showing.
+                if (_known.TryGetValue(target.Id, out var showing) && showing is UsageLensState.Asking)
+                    _known.Remove(target.Id);
             }
             else
             {
@@ -213,7 +221,9 @@ internal sealed class UsageLensCoordinator : IDisposable
     /// A server's first answer is not always its best one. Asked before it has loaded the project
     /// around a file, a server answers about the one file it has read — which is a plausible number
     /// rather than an obvious failure, and the reader has no way to tell it is short. So a count is
-    /// re-asked when the servers report progress, not held from the first reply.
+    /// re-asked when the servers report progress, not held from the first reply — and the number
+    /// already up stays up until the better answer replaces it, because a count that empties and
+    /// comes back is read as a fault rather than as an update.
     /// </para>
     /// <para>
     /// Bounded, and hung off this rather than off the ordinary refresh, which runs on every scroll:
@@ -226,21 +236,21 @@ internal sealed class UsageLensCoordinator : IDisposable
     {
         if (_disposed != 0) return;
 
-        foreach (var id in _known.Keys.ToArray())
-            if (_asks.GetValueOrDefault(id) < MaxAsks) _known.Remove(id);
+        foreach (var id in _known.Keys)
+            if (_asks.GetValueOrDefault(id) < MaxAsks) _stale.Add(id);
 
         Refresh();
     }
 
-    /// <summary>The declarations on screen that nothing is known about and nothing is out asking
-    /// about.</summary>
+    /// <summary>The declarations on screen worth a question: nothing is known about them, or what
+    /// is known has been marked worth asking again, and nothing is already out asking.</summary>
     private List<UsageLensTarget> Unanswered(IReadOnlyList<UsageLensTarget> targets)
     {
         var asking = new List<UsageLensTarget>();
         foreach (var target in targets)
         {
             if (_inFlight.Contains(target.Id)) continue;
-            if (_known.ContainsKey(target.Id)) continue;
+            if (_known.ContainsKey(target.Id) && !_stale.Contains(target.Id)) continue;
             asking.Add(target);
         }
 
@@ -284,6 +294,7 @@ internal sealed class UsageLensCoordinator : IDisposable
         StopAsking();
         _known.Clear();
         _asks.Clear();
+        _stale.Clear();
         _inFlight.Clear();
         _path = null;
         _publish(UsageLensOverlay.Empty);

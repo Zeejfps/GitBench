@@ -208,6 +208,29 @@ public sealed class UsageLensCoordinatorTests
     }
 
     /// <summary>
+    /// A re-ask leaves the number that is already up alone. Counts are re-asked for as long as the
+    /// servers keep reporting progress, and a lens that emptied to "..." and came back saying the
+    /// same thing each time reads as a fault rather than as an update.
+    /// </summary>
+    [Fact]
+    public async Task ARecheckLeavesTheCountShowingWhileItAsksAgain()
+    {
+        var world = new World();
+        world.OnScreen = [world.Target("Login")];
+        world.Everywhere = world.OnScreen;
+
+        world.Refresh();
+        await world.Settled();
+        await world.AnswerAll(sites: 2);
+
+        world.Coordinator.Recheck();
+        await world.Settled();
+
+        Assert.Equal(["Login", "Login"], world.Asked);
+        Assert.Equal(new UsageLensState.Count(2), world.Published.On(world.LineOf("Login")));
+    }
+
+    /// <summary>
     /// Bounded, so a server that publishes diagnostics every few seconds cannot keep a screenful of
     /// declarations permanently in flight.
     /// </summary>
@@ -327,7 +350,11 @@ public sealed class UsageLensCoordinatorTests
                 () => OnScreen,
                 () => Everywhere,
                 rows => RowsShown = rows,
-                overlay => Published = overlay,
+                overlay =>
+                {
+                    Published = overlay;
+                    Publishes++;
+                },
                 settle: (_, _) => Task.CompletedTask);
         }
 
@@ -342,6 +369,11 @@ public sealed class UsageLensCoordinatorTests
         public IReadOnlyList<UsageLensTarget> Everywhere { get; set; } = [];
 
         public UsageLensOverlay Published { get; private set; } = UsageLensOverlay.Empty;
+
+        /// <summary>How many overlays have been published. What the answer waits on: an answer that
+        /// says what the row already said still publishes, and is otherwise indistinguishable from
+        /// one that has not landed yet.</summary>
+        public int Publishes { get; private set; }
 
         public bool RowsShown { get; private set; }
 
@@ -388,12 +420,13 @@ public sealed class UsageLensCoordinatorTests
 
         private async Task Settling(Action answer)
         {
-            var awaiting = Servers.Outstanding;
+            var awaiting = Servers.Outstanding.Count;
+            var published = Publishes;
             answer();
 
             for (var spin = 0; spin < 10_000; spin++)
             {
-                if (awaiting.All(line => Published.On(line) is not (null or UsageLensState.Asking))) return;
+                if (Publishes - published >= awaiting) return;
                 await Task.Yield();
             }
 
