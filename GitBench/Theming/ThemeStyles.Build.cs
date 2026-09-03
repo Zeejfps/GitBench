@@ -55,5 +55,6 @@ public partial record ThemeStyles
             RowSelection = BuildRowSelection(p),
             Markdown = BuildMarkdown(p),
             Terminal = BuildTerminal(p, ansi),
+            TabStrip = BuildTabStrip(p),
         };
 }

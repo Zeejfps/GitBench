@@ -20,7 +20,8 @@ namespace GitBench.Controls;
 /// right — the width cap and the ellipsis, the close button that does not also activate, the
 /// middle-click, the fills, the overflow pan — is the same decision on both surfaces and a second
 /// copy is the one that silently stops matching. What each caller supplies is what its tabs are
-/// bound to and what closing one means.
+/// bound to and what closing one means — not the plane the strip is drawn on, which is the theme's
+/// so that the fill an unselected tab wears can be derived a fixed step behind it.
 /// <para>
 /// There is deliberately no rule along the bottom. The strip is a plane of its own and the active
 /// tab wears the colour of what is underneath it, so the boundary is a change of colour everywhere
@@ -50,8 +51,6 @@ internal sealed record TabStrip : Widget
     /// goes in <see cref="Tabs"/> instead.
     /// </remarks>
     public IWidget? Leading { get; init; }
-
-    public Prop<uint> Background { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -85,7 +84,7 @@ internal sealed record TabStrip : Widget
         return new Box
         {
             Height = Height,
-            Background = Background,
+            Background = Theme.Color(static s => s.TabStrip.Background),
             Children =
             [
                 new Row
@@ -108,6 +107,11 @@ internal sealed record TabStrip : Widget
 /// the accent bar along its top is what makes that legible when the two planes are only a few values
 /// apart, as they are in this theme. A saturated fill was what this had first, and it put a second
 /// row of the mode switcher's own selected-segment colour directly beneath the mode switcher.
+/// <para>
+/// The others carry a fill of their own, a step behind the strip, and a hairline on the trailing
+/// edge. Left unpainted they were the strip, which said nothing at all where the surface below
+/// happens to be the strip's own colour — the file browser, whose header the active tab joins.
+/// </para>
 /// </remarks>
 internal sealed record TabChrome : Widget
 {
@@ -117,6 +121,10 @@ internal sealed record TabChrome : Widget
     // Reserved on every tab, painted only on the active one, so activating a tab never moves its
     // label — the same trick the working-changes underline tabs use for their rule.
     private const int ActiveBarHeight = 2;
+
+    // On the trailing edge of every tab, the last one included: the line after it reads as the end
+    // of the run rather than as a tab that lost its divider.
+    private const int SeparatorWidth = 1;
 
     public required Prop<string?> Label { get; init; }
     public required Func<bool> IsActive { get; init; }
@@ -186,19 +194,24 @@ internal sealed record TabChrome : Widget
         rowChildren.Add(new Grow { Child = label });
         if (OnClose is { } close) rowChildren.Add(CloseButton(close, Closable));
 
+        uint Fill(ThemeStyles s) =>
+            IsActive() ? ContentBackground(s)
+            : hover.Value ? s.TabStrip.InactiveHoverBackground
+            : s.TabStrip.InactiveBackground;
+
         var pill = new Box
         {
             MaxWidth = MaxTabWidth,
-            BorderSize = new BorderSizeStyle { Top = ActiveBarHeight },
+            BorderSize = new BorderSizeStyle { Top = ActiveBarHeight, Right = SeparatorWidth },
             BorderColor = Theme.BorderColor(s => new BorderColorStyle
             {
-                Top = IsActive() ? s.Palette.Accent : 0u,
+                // The bar's band is the tab's own fill when it is not the active one: a border the
+                // background does not paint under, so left unset it would notch the strip's colour
+                // into the top of every other tab.
+                Top = IsActive() ? s.Palette.Accent : Fill(s),
+                Right = s.TabStrip.Separator,
             }),
-            Background = Theme.Color(s =>
-            {
-                if (IsActive()) return ContentBackground(s);
-                return hover.Value ? s.Palette.SurfaceHover : 0u;
-            }),
+            Background = Theme.Color(Fill),
             Children =
             [
                 new Padding

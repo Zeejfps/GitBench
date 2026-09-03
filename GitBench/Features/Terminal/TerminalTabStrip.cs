@@ -45,9 +45,6 @@ internal sealed record TerminalTabStrip : Widget
         return new TabStrip
         {
             Id = StripId,
-            // A plane above the grid, so the active tab — which wears the grid's own colour —
-            // reads as a notch cut through to it.
-            Background = Theme.Color(s => s.Palette.SurfaceRaised),
             Tabs =
             [
                 Each.Of(tabs.Terminals, new TerminalTab { Tabs = tabs }, axis: Axis.Horizontal)

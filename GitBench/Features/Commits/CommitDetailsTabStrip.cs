@@ -26,9 +26,6 @@ internal sealed record CommitDetailsTabStrip : Widget
 
     protected override IWidget Build(Context ctx) => new TabStrip
     {
-        // A plane of its own, above the panel — the active tab drops back to the panel's own colour,
-        // and that difference is what reads as the tab being the thing below it.
-        Background = Theme.Color(s => s.Palette.SurfaceRaised),
         Tabs =
         [
             new CommitDetailsTab { Vm = Vm },

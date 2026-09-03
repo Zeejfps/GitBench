@@ -27,9 +27,6 @@ internal sealed record FileBrowserTabStrip : Widget
 
     protected override IWidget Build(Context ctx) => new TabStrip
     {
-        // A plane above the file's own header, so the active tab — which wears that header's
-        // colour — reads as a notch cut through to it.
-        Background = Theme.Color(s => s.Palette.SurfaceRaised),
         Leading = new FileBrowserHistoryButtons { Model = Model },
         Tabs =
         [

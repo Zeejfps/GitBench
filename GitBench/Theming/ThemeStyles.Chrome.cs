@@ -61,6 +61,20 @@ public sealed record TooltipStyles(
     uint Text,
     uint Shadow);
 
+/// <summary>
+/// The tab strip and its tabs: the strip's own plane, the fill an unselected tab wears, and the
+/// hairline that separates one tab from the next.
+/// </summary>
+/// <remarks>
+/// The active tab is absent here on purpose — it wears the colour of whatever surface the strip
+/// sits over, which only that surface's own styles know.
+/// </remarks>
+public sealed record TabStripStyles(
+    uint Background,
+    uint InactiveBackground,
+    uint InactiveHoverBackground,
+    uint Separator);
+
 public sealed record ContextMenuStyles(
     uint Background,
     uint Border,
@@ -125,6 +139,16 @@ public partial record ThemeStyles
             Border: tooltip.Border,
             Text: tooltip.Text,
             Shadow: p.Shadow);
+
+    // The unselected tab recedes from the strip by darkening rather than by a palette slot: the
+    // same step reads as "behind" in both themes, where SurfaceSunken is darker than SurfaceRaised
+    // in one and lighter in the other.
+    private static TabStripStyles BuildTabStrip(ThemePalette p) =>
+        new(
+            Background: p.SurfaceRaised,
+            InactiveBackground: Darken(p.SurfaceRaised, 0x08),
+            InactiveHoverBackground: Darken(p.SurfaceRaised, 0x03),
+            Separator: p.BorderStrong);
 
     private static ContextMenuStyles BuildContextMenu(ThemePalette p) =>
         new(

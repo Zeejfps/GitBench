@@ -43,12 +43,24 @@ public sealed partial record ThemeStyles
     public required RowSelectionStyles RowSelection { get; init; }
     public required MarkdownStyles Markdown { get; init; }
     public required TerminalStyles Terminal { get; init; }
+    public required TabStripStyles TabStrip { get; init; }
 
     public static readonly ThemeStyles Dark = BuildDark();
     public static readonly ThemeStyles Light = BuildLight();
 
     private static uint WithAlpha(uint color, byte alpha) =>
         (color & 0x00FFFFFFu) | ((uint)alpha << 24);
+
+    // Dims each RGB channel by delta (clamped), preserving alpha. The mirror of Lighten, for a
+    // fill that has to sit behind its surface in every theme.
+    private static uint Darken(uint argb, uint delta)
+    {
+        var a = (argb >> 24) & 0xFF;
+        var r = Math.Max(delta, (argb >> 16) & 0xFF) - delta;
+        var g = Math.Max(delta, (argb >> 8) & 0xFF) - delta;
+        var b = Math.Max(delta, argb & 0xFF) - delta;
+        return (a << 24) | (r << 16) | (g << 8) | b;
+    }
 
     // Brightens each RGB channel by delta (clamped), preserving alpha. Used to derive a
     // hover shade from a base fill without adding a second color to the palette.
