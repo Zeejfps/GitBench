@@ -88,10 +88,12 @@ public sealed class HandshakeTests
     {
         var capabilities = Read(
             """{"capabilities":{"hoverProvider":""" + advertised +
-            ""","definitionProvider":""" + advertised + "}}");
+            ""","definitionProvider":""" + advertised +
+            ""","referencesProvider":""" + advertised + "}}");
 
         Assert.True(capabilities.SupportsHover);
         Assert.True(capabilities.SupportsDefinition);
+        Assert.True(capabilities.SupportsReferences);
     }
 
     [Fact]
@@ -101,6 +103,38 @@ public sealed class HandshakeTests
 
         Assert.False(capabilities.SupportsHover);
         Assert.False(capabilities.SupportsDefinition);
+        Assert.False(capabilities.SupportsReferences);
+    }
+
+    // One provider announced says nothing about the others: a server that answers definitions but
+    // not references is ordinary, and asking it anyway spends a request on a MethodNotFound.
+    [Fact]
+    public void OneCapabilityDoesNotVouchForAnother()
+    {
+        var capabilities = Read("""{"capabilities":{"definitionProvider":true}}""");
+
+        Assert.True(capabilities.SupportsDefinition);
+        Assert.False(capabilities.SupportsReferences);
+    }
+
+    // The client says what it can take, and a server that registers capabilities dynamically reads
+    // the block's presence rather than its contents.
+    [Fact]
+    public async Task TheOpeningRequestAnnouncesThatThisClientAsksForReferences()
+    {
+        await using var fx = new LspFixture();
+        var sent = fx.Connection.Send(
+            LspHandshake.Initialize(LspFixture.SomeFile, processId: 1234), LspFixture.Budget);
+
+        var asked = await fx.Server.NextRequest();
+
+        Assert.Equal(
+            JsonValueKind.Object,
+            asked.Params.GetProperty("capabilities").GetProperty("textDocument")
+                .GetProperty("references").ValueKind);
+
+        await fx.Server.ReplyOk(asked.Id, Minimal);
+        await sent;
     }
 
     private static ServerCapabilities Read(string json)

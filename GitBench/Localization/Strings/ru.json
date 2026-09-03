@@ -917,5 +917,19 @@
   "language_servers.failed_title": "Языковой сервер {language} завершился с ошибкой",
   "language_servers.status_failed": "Ошибка",
   "language_servers.not_configured": "Для этого файла нет сервера",
-  "language_servers.chip_tooltip": "Языковой сервер для этого файла. Нажмите, чтобы открыть настройки."
+  "language_servers.chip_tooltip": "Языковой сервер для этого файла. Нажмите, чтобы открыть настройки.",
+
+  "usages.filter": "Фильтр использований…",
+  "usages.no_matches": "Нет подходящих использований",
+  "usages.capped": "Показано {shown} из {total}",
+
+  "diff.usages": {
+    "one": "{count} использование",
+    "few": "{count} использования",
+    "many": "{count} использований",
+    "other": "{count} использования"
+  },
+  "diff.usages_none": "нет использований",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "использования недоступны"
 }

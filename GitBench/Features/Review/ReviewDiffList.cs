@@ -427,7 +427,12 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         var local = i - s.StartRow;
         if (local == 0) return HeaderRowHeight;
         if (s.BodyView != null) return BodyViewHeight(s);
-        return s.RowSet.Rows.Count == 0 ? MessageRowHeight : LineHeight();
+        // Through the shared measure, so this list and the single-file pane can never disagree
+        // about how tall a given row draws.
+        var bodyRow = local - 1;
+        return bodyRow >= 0 && bodyRow < s.RowSet.Rows.Count
+            ? DiffRowMetrics.HeightOf(s.RowSet.Rows[bodyRow], LineHeight())
+            : MessageRowHeight;
     }
 
     private float LineHeight() => _lineHeight > 0 ? _lineHeight : AssumedFontSize;

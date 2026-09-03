@@ -805,5 +805,14 @@
   "language_servers.failed_title": "{language} 语言服务器失败",
   "language_servers.status_failed": "失败",
   "language_servers.not_configured": "此文件没有对应的服务器",
-  "language_servers.chip_tooltip": "此文件的语言服务器。点击打开设置。"
+  "language_servers.chip_tooltip": "此文件的语言服务器。点击打开设置。",
+
+  "usages.filter": "筛选用法…",
+  "usages.no_matches": "没有匹配的用法",
+  "usages.capped": "显示 {shown} / {total}",
+
+  "diff.usages": { "other": "{count} 处使用" },
+  "diff.usages_none": "无使用",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "无法获取使用情况"
 }

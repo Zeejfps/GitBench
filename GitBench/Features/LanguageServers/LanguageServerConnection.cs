@@ -101,6 +101,28 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess, ILangua
 
     public bool AnswersDefinitions => _server.Capabilities is not { SupportsDefinition: false };
 
+    public async Task<ReferenceReply> ReferencesAsync(
+        string absolutePath, FileLine line, RawColumn column, CancellationToken cancel)
+    {
+        if (await Handshaked().ConfigureAwait(false) is not null) return ReferenceReply.Unavailable.Instance;
+        if (!AnswersReferences) return ReferenceReply.Unavailable.Instance;
+        if (!await EnsurePreviewedAsync(absolutePath, cancel).ConfigureAwait(false))
+            return ReferenceReply.Unavailable.Instance;
+
+        var at = new LspPosition(LspLine.FromOneBased(line.Value), new LspCharacter(column.Value));
+        // Nowhere is the server's own "nothing uses this" and is an answer. Stale is this file
+        // having left the screen mid-question, and Refused is a server that would not say — and
+        // neither of those is a zero.
+        return await _session.ReferencesAsync(at).ConfigureAwait(false) switch
+        {
+            ReferenceAnswer.Sites sites => new ReferenceReply.Answered(sites.Items),
+            ReferenceAnswer.Nowhere => new ReferenceReply.Answered([]),
+            _ => ReferenceReply.Unavailable.Instance,
+        };
+    }
+
+    public bool AnswersReferences => _server.Capabilities is not { SupportsReferences: false };
+
     public async Task PrepareAsync(string absolutePath, CancellationToken cancel)
     {
         if (await Handshaked().ConfigureAwait(false) is not null) return;
@@ -152,6 +174,33 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess, ILangua
                     item.OriginRange is { } origin ? OptionalRange.Of(origin) : OptionalRange.Absent))
                 .ToArray())
             : DefinitionPayload.Nothing;
+    }
+
+    async Task<IReadOnlyList<Location>?> ILanguageClient.ReferencesAsync(
+        DocumentUri uri, LspPosition position, CancellationToken cancel)
+    {
+        var response = await AskAgain
+            .AskAsync(
+                token => _server.AskAsync(
+                    // The declaration is left out because what the count means to a reader is
+                    // "used from N places", and a declaration is not one of them.
+                    LspRequests.References(uri, position, includeDeclaration: false),
+                    _entry.RequestTimeout,
+                    token),
+                _retry,
+                _wait,
+                cancel)
+            .ConfigureAwait(false);
+
+        // Only an Ok is an answer. A server still starting, or one that has failed, refuses every
+        // question the same way, and a refusal counted as zero would be drawn as "no usages" over
+        // code that is used.
+        return response switch
+        {
+            LspResponse<References>.Ok(References.Sites sites) => sites.Items,
+            LspResponse<References>.Ok => [],
+            _ => null,
+        };
     }
 
     private static RepoBoundary BoundaryOf(string repoRoot) =>

@@ -21,7 +21,7 @@ internal enum StarterConfigOutcome
     NotWritten,
 }
 
-internal interface ILanguageServerStore : IHoverSource, IDefinitionSource
+internal interface ILanguageServerStore : IHoverSource, IDefinitionSource, IReferenceSource
 {
     IReadable<LanguageServerSnapshot> Active { get; }
 
@@ -138,6 +138,24 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
             return DefinitionReply.Nothing;
         return await connection.DefinitionAsync(absolutePath, line, column, cancel).ConfigureAwait(false);
+    }
+
+    public bool CanReference(string absolutePath)
+    {
+        if (_disposed) return false;
+        if (_config.ServerFor(absolutePath) is not { } entry) return false;
+        if (_registry.Active.Value is not { } repo) return false;
+
+        return _supervisor.ProcessFor(new RepositoryId(repo.Id), entry.Language)
+            is not LanguageServerConnection connection || connection.AnswersReferences;
+    }
+
+    public async Task<ReferenceReply> ReferencesAsync(
+        string absolutePath, FileLine line, RawColumn column, CancellationToken cancel)
+    {
+        if (await ConnectionFor(absolutePath).ConfigureAwait(false) is not { } connection)
+            return ReferenceReply.Unavailable.Instance;
+        return await connection.ReferencesAsync(absolutePath, line, column, cancel).ConfigureAwait(false);
     }
 
     public void ReloadConfig()

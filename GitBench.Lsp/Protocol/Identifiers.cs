@@ -49,6 +49,7 @@ public readonly record struct LspMethod(string Name)
     public static readonly LspMethod Progress = new("$/progress");
     public static readonly LspMethod Hover = new("textDocument/hover");
     public static readonly LspMethod Definition = new("textDocument/definition");
+    public static readonly LspMethod References = new("textDocument/references");
     public static readonly LspMethod DidOpen = new("textDocument/didOpen");
     public static readonly LspMethod DidClose = new("textDocument/didClose");
     public static readonly LspMethod PublishDiagnostics = new("textDocument/publishDiagnostics");

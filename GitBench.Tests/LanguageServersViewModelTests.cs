@@ -210,6 +210,12 @@ public sealed class LanguageServersViewModelTests : IDisposable
             string absolutePath, FileLine line, RawColumn column, CancellationToken ct) =>
             Task.FromResult(DefinitionReply.Nothing);
 
+        public bool CanReference(string absolutePath) => false;
+
+        public Task<ReferenceReply> ReferencesAsync(
+            string absolutePath, FileLine line, RawColumn column, CancellationToken ct) =>
+            Task.FromResult<ReferenceReply>(ReferenceReply.Unavailable.Instance);
+
         public void ReloadConfig() => Reloads++;
 
         public void RetryServer(LanguageId language) => Restarted.Add(language);

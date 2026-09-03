@@ -27,7 +27,8 @@ internal sealed class DiffMouseController : KeyboardMouseController
         if (e.Phase != EventPhase.Capturing) return;
         if (e.State != InputState.Pressed) return;
         if (e.Button != MouseButton.Left) return;
-        if (_content.TryClickFold(e.Mouse.Point)
+        if (_content.TryClickLens(e.Mouse.Point)
+            || _content.TryClickFold(e.Mouse.Point)
             || _content.TryClickExpander(e.Mouse.Point, e.Modifiers)
             || _content.TryClickHunkAction(e.Mouse.Point))
             e.Consume();

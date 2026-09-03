@@ -226,7 +226,7 @@ public sealed class LanguageServerStoreTests : IDisposable
         var store = Store();
         _registry.SetActive(_first);
         _launcher.Advertise = new ServerCapabilities(
-            "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: false);
+            "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: false, SupportsReferences: false);
         var file = File_(_first, "src/main.rs");
         store.FileShown(file);
         await Hover(store, file);
@@ -694,7 +694,7 @@ public sealed class LanguageServerStoreTests : IDisposable
         public ServerCapabilities? Capabilities { get; private set; }
 
         public ServerCapabilities Advertises { get; set; } =
-            new("fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: true);
+            new("fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: true, SupportsReferences: true);
 
         public Definition Declares { get; set; } = new Definition.None();
 

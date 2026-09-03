@@ -21,8 +21,6 @@ public class BundledLanguageOutlineTests(CodeIntelFixture fixture)
     public void EveryBundledLanguageIsCoveredHere()
     {
         var covered = Cases.Select(c => c.Language).ToHashSet();
-        // C# and TypeScript/TSX have suites of their own.
-        covered.UnionWith([CodeLanguage.CSharp, CodeLanguage.TypeScript, CodeLanguage.Tsx]);
 
         Assert.Empty(CodeLanguages.All.Where(l => !covered.Contains(l)));
     }
@@ -46,11 +44,66 @@ public class BundledLanguageOutlineTests(CodeIntelFixture fixture)
         Assert.Empty(wrong);
     }
 
+    /// <summary>
+    /// Every language again, checking that each name is written where the outline says it is. Read
+    /// together with the expected names — which pin <c>@name</c> to the identifier rather than to
+    /// the declaration around it — this is what catches a capture that has slid onto a wrapper
+    /// node: a name whose text still looks right, at a position a language server would be asked
+    /// about and would answer.
+    /// </summary>
+    [Fact]
+    public void TheNamePositionPointsAtTheNameInEveryLanguage()
+    {
+        var wrong = new List<string>();
+        foreach (var (language, source, _) in Cases)
+        {
+            foreach (var node in fixture.Outline(source, language).Flatten())
+            {
+                var written = SymbolExtractorTests.NameTextAt(source, node);
+                if (written != node.Name)
+                {
+                    wrong.Add($"{language}: '{node.Name}' is reported at " +
+                              $"{node.NameLine.Value}:{node.NameColumn.Value}, where '{written}' is written");
+                }
+            }
+        }
+
+        Assert.Empty(wrong);
+    }
+
     private static string Describe(IEnumerable<(string Name, SymbolKind Kind, int Depth)> nodes) =>
         string.Join(", ", nodes.Select(n => $"{n.Depth}:{n.Kind} {n.Name}"));
 
     private static readonly (CodeLanguage Language, string Source, (string, SymbolKind, int)[] Expected)[] Cases =
     [
+        // One shape each for the three the app was built around, so this file can say every
+        // bundled language; what they declare is covered exhaustively by their own suites.
+        (CodeLanguage.CSharp, """
+            namespace Acme;
+
+            public sealed class AuthService
+            {
+                public bool Login(string user) => true;
+            }
+            """,
+            [("Acme", SymbolKind.Namespace, 0),
+             ("AuthService", SymbolKind.Class, 1),
+             ("Login", SymbolKind.Method, 2)]),
+
+        (CodeLanguage.TypeScript, """
+            export interface Session { id: string }
+
+            export function login(user: string): boolean { return true; }
+            """,
+            [("Session", SymbolKind.Interface, 0),
+             ("id", SymbolKind.Property, 1),
+             ("login", SymbolKind.Function, 0)]),
+
+        (CodeLanguage.Tsx, """
+            export function Badge(props: { label: string }) { return <span>{props.label}</span>; }
+            """,
+            [("Badge", SymbolKind.Function, 0)]),
+
         (CodeLanguage.JavaScript, """
             export class Auth {
               login(user) { return user; }

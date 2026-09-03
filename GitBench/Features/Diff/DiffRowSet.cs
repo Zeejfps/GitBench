@@ -36,6 +36,12 @@ internal sealed class DiffRowSet
     private const int SeparatorChromeCells = 6;
     private const int ExpanderColumnCells = 4;
 
+    // A lens draws in a smaller proportional font, so its width is not a cell count at all. The
+    // widest thing it says is allowed for in cells here, the same approximation the separator
+    // chrome makes, so a long lens over a short declaration stays reachable at full horizontal
+    // scroll instead of being clipped by the content width.
+    private const int UsageLensCells = 16;
+
     // Full-file mode draws a single (new-side) line-number gutter and no hunk chrome. Diff mode
     // leaves this false and renders the old|new two-gutter layout.
     public bool SingleGutter { get; private set; }
@@ -112,7 +118,11 @@ internal sealed class DiffRowSet
     /// <see cref="DiffRenderState.FullFile"/> produce rows; every other state (and the loaded
     /// error/binary cases, which the hosts draw as centered placeholders) produces an empty set.
     /// </summary>
-    public static DiffRowSet Build(DiffRenderState state, ILocalizationService loc, FoldState? folds = null)
+    /// <param name="usageLens">Whether declarations in a whole-file render carry a usages row.
+    /// Off unless the surface asks: a diff of a commit is a file as it was, and a language server
+    /// only knows the working tree.</param>
+    public static DiffRowSet Build(
+        DiffRenderState state, ILocalizationService loc, FoldState? folds = null, bool usageLens = false)
     {
         var set = new DiffRowSet { _loc = loc };
         switch (state)
@@ -121,7 +131,7 @@ internal sealed class DiffRowSet
                 set.FlattenRows(loaded.Result, loaded.Annotations, loaded.Expansion);
                 break;
             case DiffRenderState.FullFile fullFile:
-                set.FlattenFullFile(fullFile, folds);
+                set.FlattenFullFile(fullFile, folds, usageLens);
                 break;
         }
         return set;
@@ -342,19 +352,26 @@ internal sealed class DiffRowSet
     // AddedLineNumbers render as additions (tinted), the rest as context. Mirrors FlattenRows'
     // per-line formatting (tab expansion + new-side spans) so highlighting aligns identically,
     // but emits a single new-side gutter and no hunk separators.
-    private void FlattenFullFile(DiffRenderState.FullFile ff, FoldState? folds)
+    private void FlattenFullFile(DiffRenderState.FullFile ff, FoldState? folds, bool usageLens)
     {
         SingleGutter = true;
         FoldColumn = folds != null;
         GlyphColumn = ff.AddedLineNumbers.Count > 0;
         GutterDigits = Math.Max(1, DigitCount(ff.Lines.Count));
 
-        var plan = FoldPlan.Build(ff, folds);
+        var plan = FoldPlan.Build(ff, folds, usageLens);
         var emphasis = ff.Emphasis;
         for (var i = 0; i < ff.Lines.Count; i++)
         {
             var lineNumber = i + 1;
             if (plan.IsHidden(lineNumber)) continue;
+
+            if (plan.LensAt(lineNumber) is { } lens)
+            {
+                _rows.Add(lens);
+                var lensCells = lens.Indent + UsageLensCells;
+                if (lensCells > MaxRowCells) MaxRowCells = lensCells;
+            }
 
             var kind = ff.AddedLineNumbers.Contains(lineNumber) ? DiffLineKind.Added : DiffLineKind.Context;
             var text = DiffLineText.Of(ff.Lines[i]);
@@ -386,29 +403,42 @@ internal sealed class DiffRowSet
 
     /// <summary>
     /// What the fold set means for one file's lines: which are hidden, which carry a chevron or a
-    /// chip, and what text each collapsed fold swallowed. Resolved once per flatten so the line
-    /// loop stays a loop over lines.
+    /// chip, what text each collapsed fold swallowed, and — when the surface asks for them — where
+    /// the usages rows go. Resolved once per flatten so the line loop stays a loop over lines.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A collapsed declaration's children are never walked. Their rows are inside its hidden range,
     /// so a mark on one could not be seen and a nested hidden range could not add to the union —
     /// which is what "outermost wins" amounts to in practice.
+    /// </para>
+    /// <para>
+    /// Lenses ride the same walk rather than a second one, which is what makes a folded class hide
+    /// its members' lenses without anything having to say so.
+    /// </para>
     /// </remarks>
     private sealed class FoldPlan
     {
-        private static readonly FoldPlan Nothing = new(0);
+        private static readonly FoldPlan Nothing = new(0, usageLens: false);
 
         private readonly bool[] _hidden;
+        private readonly bool _usageLens;
         private readonly Dictionary<int, FoldMark> _marks = new();
         private readonly Dictionary<int, string> _swallowed = new();
+        private readonly Dictionary<int, DiffRow.Lens> _lenses = new();
 
-        private FoldPlan(int lineCount) => _hidden = new bool[lineCount + 2];
-
-        public static FoldPlan Build(DiffRenderState.FullFile ff, FoldState? folds)
+        private FoldPlan(int lineCount, bool usageLens)
         {
-            if (folds is null || ff.Annotations?.NewSide is not { } outline) return Nothing;
+            _hidden = new bool[lineCount + 2];
+            _usageLens = usageLens;
+        }
 
-            var plan = new FoldPlan(ff.Lines.Count);
+        public static FoldPlan Build(DiffRenderState.FullFile ff, FoldState? folds, bool usageLens)
+        {
+            if (ff.Annotations?.NewSide is not { } outline) return Nothing;
+            if (folds is null && !usageLens) return Nothing;
+
+            var plan = new FoldPlan(ff.Lines.Count, usageLens);
             plan.Walk(outline.Roots, parentPath: null, folds, ff.Lines);
             return plan;
         }
@@ -419,12 +449,33 @@ internal sealed class DiffRowSet
 
         public string? SwallowedAt(int line) => _swallowed.TryGetValue(line, out var text) ? text : null;
 
+        /// <summary>The usages row that goes above a line, or null where none does.</summary>
+        public DiffRow.Lens? LensAt(int line) => _lenses.TryGetValue(line, out var lens) ? lens : null;
+
         private void Walk(
-            IReadOnlyList<OutlineNode> nodes, string? parentPath, FoldState folds, IReadOnlyList<string> lines)
+            IReadOnlyList<OutlineNode> nodes, string? parentPath, FoldState? folds, IReadOnlyList<string> lines)
         {
             foreach (var node in nodes)
             {
                 var path = FileOutline.PathOf(parentPath, node);
+
+                // StartLine already skips attributes, decorators and annotations, so the lens sits
+                // directly above the signature rather than above whatever decorates it.
+                if (_usageLens && HasLens(node.Kind))
+                    _lenses[node.StartLine] = new DiffRow.Lens(
+                        new FileLine(node.StartLine),
+                        path,
+                        IndentOf(lines, node.StartLine),
+                        node.NameLine,
+                        node.NameColumn);
+
+                // With no fold set the walk is here only to place lenses: nothing marks and nothing
+                // hides, so every declaration below is still reached.
+                if (folds is null)
+                {
+                    Walk(node.Children, path, folds, lines);
+                    continue;
+                }
 
                 // §4.1 sets SignatureEndLine to EndLine for anything declared without a body, so this
                 // one comparison rules out expression-bodied members, interface members, abstract
@@ -457,6 +508,34 @@ internal sealed class DiffRowSet
                     _hidden[line] = true;
                 _swallowed[chipLine] = Swallowed(lines, hideFrom, last);
             }
+        }
+
+        // Namespaces, fields and enum members are left out deliberately: a lens above every field
+        // is chrome nobody asked for, and a namespace's usages are not a question about this file.
+        private static bool HasLens(SymbolKind kind) => kind switch
+        {
+            SymbolKind.Class or SymbolKind.Struct or SymbolKind.Interface or SymbolKind.Record
+                or SymbolKind.Enum or SymbolKind.Method or SymbolKind.Constructor
+                or SymbolKind.Property or SymbolKind.Event or SymbolKind.Function
+                or SymbolKind.Type => true,
+            SymbolKind.Namespace or SymbolKind.Field or SymbolKind.EnumMember => false,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unhandled symbol kind."),
+        };
+
+        // The declaration's own indent, in the tab-expanded cells the row grid counts, so the lens
+        // starts where the signature under it does rather than at the margin.
+        private static int IndentOf(IReadOnlyList<string> lines, int line)
+        {
+            if (line < 1 || line > lines.Count) return 0;
+
+            var cells = 0;
+            foreach (var ch in lines[line - 1])
+            {
+                if (ch == '\t') cells += DiffOptions.TabWidth - cells % DiffOptions.TabWidth;
+                else if (ch == ' ') cells++;
+                else break;
+            }
+            return cells;
         }
 
         // A signature and its opening brace share a row in some styles, so the two marks merge

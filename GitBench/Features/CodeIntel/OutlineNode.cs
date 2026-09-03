@@ -1,7 +1,20 @@
 using System.Text;
 
+using GitBench.Features.Diff;
+
 namespace GitBench.Features.CodeIntel;
 
+/// <summary>
+/// One declaration in a file: what it is called, what it contains, and where its own name is
+/// written.
+/// </summary>
+/// <remarks>
+/// The lines a fold and a breadcrumb work in stay bare <see cref="int"/>s, deliberately, while
+/// <see cref="NameLine"/> and <see cref="NameColumn"/> are typed. The name position is the one
+/// value here that crosses out of the app — it is handed to a language server as a position to
+/// answer about — and a UTF-8 byte column arriving where a UTF-16 one was expected is answered, not
+/// rejected, so nothing anywhere reports the mistake.
+/// </remarks>
 internal sealed record OutlineNode(
     string Name,
     SymbolKind Kind,
@@ -9,6 +22,8 @@ internal sealed record OutlineNode(
     int StartLine,
     int EndLine,
     int SignatureEndLine,
+    FileLine NameLine,
+    RawColumn NameColumn,
     IReadOnlyList<OutlineNode> Children);
 
 internal sealed record FileOutline(IReadOnlyList<OutlineNode> Roots)

@@ -15,7 +15,8 @@ public sealed record ServerCapabilities(
     string? ServerName,
     string PositionEncoding,
     bool SupportsHover,
-    bool SupportsDefinition)
+    bool SupportsDefinition,
+    bool SupportsReferences)
 {
     public const string Utf16 = "utf-16";
 
@@ -43,7 +44,8 @@ public sealed record ServerCapabilities(
                         ? encoding.GetString() ?? Utf16
                         : Utf16,
                 SupportsHover: Advertises(capabilities, "hoverProvider"),
-                SupportsDefinition: Advertises(capabilities, "definitionProvider"));
+                SupportsDefinition: Advertises(capabilities, "definitionProvider"),
+                SupportsReferences: Advertises(capabilities, "referencesProvider"));
         }
 
         // A capability is announced either as true or as an options object; both mean yes.
@@ -84,6 +86,10 @@ public static class LspHandshake
             WriteMarkdownCapability(writer, "hover");
             writer.WriteStartObject("definition");
             writer.WriteBoolean("linkSupport", true);
+            writer.WriteEndObject();
+            // Announced with nothing in it. The only thing the protocol lets a client say here is
+            // that it registers for references dynamically, which this one does not.
+            writer.WriteStartObject("references");
             writer.WriteEndObject();
             writer.WriteStartObject("publishDiagnostics");
             writer.WriteBoolean("versionSupport", true);

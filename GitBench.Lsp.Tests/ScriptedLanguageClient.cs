@@ -17,6 +17,8 @@ public sealed class ScriptedLanguageClient : ILanguageClient
 
     public List<Pending<DefinitionPayload>> Definitions { get; } = [];
 
+    public List<Pending<IReadOnlyList<Location>?>> References { get; } = [];
+
     public event Action<PublishedDiagnostics>? DiagnosticsPublished;
 
     public bool Handles(LanguageId language) => Languages.Contains(language.Value);
@@ -37,6 +39,14 @@ public sealed class ScriptedLanguageClient : ILanguageClient
     {
         var pending = new Pending<DefinitionPayload>(uri, cancel);
         Definitions.Add(pending);
+        return pending.Task;
+    }
+
+    public Task<IReadOnlyList<Location>?> ReferencesAsync(
+        DocumentUri uri, LspPosition position, CancellationToken cancel)
+    {
+        var pending = new Pending<IReadOnlyList<Location>?>(uri, cancel);
+        References.Add(pending);
         return pending.Task;
     }
 
@@ -67,5 +77,9 @@ public sealed class ScriptedLanguageClient : ILanguageClient
         public Task<T> Task => _completion.Task;
 
         public void Answer(T value) => _completion.TrySetResult(value);
+
+        /// <summary>Ends the request the way a transport does when the token it was handed has
+        /// been disposed underneath it, rather than with an answer.</summary>
+        public void Fail(Exception error) => _completion.TrySetException(error);
     }
 }

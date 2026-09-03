@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text;
 
+using GitBench.Features.Diff;
+
 using TreeSitter;
 
 namespace GitBench.Features.CodeIntel;
@@ -77,7 +79,9 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         FileOutline? outline;
         try
         {
-            outline = compiled.Pool.Use((compiled, utf8), static (session, s) => Walk(session, s.compiled, s.utf8));
+            outline = compiled.Pool.Use(
+                (compiled, normalized, utf8),
+                static (session, s) => Walk(session, s.compiled, s.normalized, s.utf8));
         }
         catch (Exception error)
         {
@@ -124,12 +128,16 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
     private static string NormalizeNewlines(string text) =>
         text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
 
-    private static FileOutline? Walk(ParseSession session, CompiledLanguage compiled, byte[] utf8)
+    private static FileOutline? Walk(ParseSession session, CompiledLanguage compiled, string text, byte[] utf8)
     {
         using var tree = session.Parser.Parse(utf8);
 
         var found = new List<Pending>();
         var seen = new HashSet<(uint Start, uint End)>();
+
+        // Deferred to the first surviving match: a file with no declarations in it — a page of
+        // prose, a data blob — would otherwise pay to be measured for nothing.
+        Utf8ToUtf16Offsets? offsets = null;
 
         session.Cursor.ForEachMatch(compiled.Query, tree.RootNode, match =>
         {
@@ -150,6 +158,8 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
                 signatureEndLine = Math.Clamp((int)body.StartPoint.Row + 1, startLine, endLine);
             }
 
+            offsets ??= Utf8ToUtf16Offsets.For(text, utf8.Length);
+
             found.Add(new Pending(
                 definition.StartByte,
                 extent.StartByte,
@@ -159,7 +169,9 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
                 ParameterTypesOf(definition),
                 startLine,
                 endLine,
-                signatureEndLine));
+                signatureEndLine,
+                new FileLine((int)name.StartPoint.Row + 1),
+                ColumnOf(name, offsets)));
         });
 
         if (found.Count == 0) return null;
@@ -208,11 +220,24 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
                 draft.Pending.StartLine,
                 draft.Pending.EndLine,
                 draft.Pending.SignatureEndLine,
+                draft.Pending.NameLine,
+                draft.Pending.NameColumn,
                 Freeze(draft.Children));
         }
 
         return nodes;
     }
+
+    /// <summary>
+    /// Where a name begins on its own line, as a language server counts columns. Tree-sitter counts
+    /// a point's column in bytes, so the answer is the distance between two byte offsets converted
+    /// separately rather than the column it reports: the line's own start is
+    /// <c>StartByte - StartPoint.Column</c>, and the difference of the two UTF-16 offsets is the
+    /// number of code units of this line that precede the name.
+    /// </summary>
+    private static RawColumn ColumnOf(Node name, Utf8ToUtf16Offsets offsets) =>
+        new(offsets.Utf16OffsetOf(name.StartByte)
+            - offsets.Utf16OffsetOf(name.StartByte - name.StartPoint.Column));
 
     private static int StartLineOf(Node definition, IReadOnlyList<string> leadingDecorations)
     {
@@ -307,7 +332,9 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         string? ParameterTypes,
         int StartLine,
         int EndLine,
-        int SignatureEndLine);
+        int SignatureEndLine,
+        FileLine NameLine,
+        RawColumn NameColumn);
 
     private sealed class Draft(Pending pending)
     {

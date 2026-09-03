@@ -126,6 +126,33 @@ public abstract record DefinitionAnswer
 }
 
 /// <summary>
+/// The answer a references request produced. The three ways of having no sites to show are
+/// separate cases because they are three different sentences: a symbol nothing uses, a file that
+/// left the screen before the answer arrived, and a server that would not answer the question.
+/// Only the first is a zero.
+/// </summary>
+public abstract record ReferenceAnswer
+{
+    private ReferenceAnswer() { }
+
+    public static readonly ReferenceAnswer Discarded = new Stale();
+
+    public static readonly ReferenceAnswer NotFound = new Nowhere();
+
+    public static readonly ReferenceAnswer NoAnswer = new Refused();
+
+    public sealed record Stale : ReferenceAnswer;
+
+    public sealed record Nowhere : ReferenceAnswer;
+
+    /// <summary>The server was asked and did not answer — starting, failed, or unable at this
+    /// position. Never a count.</summary>
+    public sealed record Refused : ReferenceAnswer;
+
+    public sealed record Sites(IReadOnlyList<DefinitionTarget> Items) : ReferenceAnswer;
+}
+
+/// <summary>
 /// What the session needs from a running server, and nothing more. There is deliberately no way to
 /// send an edit: the pane is read-only, the server reads the file from disk, and a method that
 /// does not exist cannot be called by mistake.
@@ -143,6 +170,19 @@ public interface ILanguageClient
     Task<HoverReply> HoverAsync(DocumentUri uri, LspPosition position, CancellationToken cancel);
 
     Task<DefinitionPayload> DefinitionAsync(DocumentUri uri, LspPosition position, CancellationToken cancel);
+
+    /// <summary>
+    /// Every use of the symbol at a position, the declaration excluded — or null where the server
+    /// did not answer at all.
+    /// </summary>
+    /// <remarks>
+    /// An empty list and a refusal are held apart here, unlike everywhere else in this interface,
+    /// because this answer is shown to a reader as a number. A server that is still starting, or
+    /// has failed, refuses every question; counting those refusals as zero puts "no usages" over
+    /// live code, which reads as a statement that it is dead.
+    /// </remarks>
+    Task<IReadOnlyList<Location>?> ReferencesAsync(
+        DocumentUri uri, LspPosition position, CancellationToken cancel);
 
     /// <summary>Diagnostics are pushed, repeatedly, seconds apart, for as long as a document is
     /// open.</summary>
@@ -219,15 +259,14 @@ public sealed class PreviewSession : IDisposable
 
     public async Task<HoverAnswer> HoverAsync(LspPosition position)
     {
-        if (_state is not DocumentState.Open open) return HoverAnswer.Discarded;
+        if (Asking() is not (var uri, var version, var cancel)) return HoverAnswer.Discarded;
 
-        var (uri, version, cancel) = (open.Uri, open.Version, _requests!.Token);
         HoverReply reply;
         try
         {
             reply = await _client.HoverAsync(uri, position, cancel).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
         {
             return HoverAnswer.Discarded;
         }
@@ -237,15 +276,14 @@ public sealed class PreviewSession : IDisposable
 
     public async Task<DefinitionAnswer> DefinitionAsync(LspPosition position)
     {
-        if (_state is not DocumentState.Open open) return DefinitionAnswer.Discarded;
+        if (Asking() is not (var uri, var version, var cancel)) return DefinitionAnswer.Discarded;
 
-        var (uri, version, cancel) = (open.Uri, open.Version, _requests!.Token);
         DefinitionPayload payload;
         try
         {
             payload = await _client.DefinitionAsync(uri, position, cancel).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
         {
             return DefinitionAnswer.Discarded;
         }
@@ -256,6 +294,28 @@ public sealed class PreviewSession : IDisposable
         return targets.Count == 0
             ? DefinitionAnswer.NotFound
             : new DefinitionAnswer.Targets(targets, DefinitionTargets.OriginOf(payload));
+    }
+
+    public async Task<ReferenceAnswer> ReferencesAsync(LspPosition position)
+    {
+        if (Asking() is not (var uri, var version, var cancel)) return ReferenceAnswer.Discarded;
+
+        IReadOnlyList<Location>? locations;
+        try
+        {
+            locations = await _client.ReferencesAsync(uri, position, cancel).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
+        {
+            return ReferenceAnswer.Discarded;
+        }
+
+        if (!StillShowing(uri, version)) return ReferenceAnswer.Discarded;
+        if (locations is null) return ReferenceAnswer.NoAnswer;
+        if (locations.Count == 0) return ReferenceAnswer.NotFound;
+
+        return new ReferenceAnswer.Sites(
+            locations.Select(site => _boundary.Classify(site.Uri, site.Range.Start)).ToArray());
     }
 
     public void Dispose()
@@ -284,13 +344,42 @@ public sealed class PreviewSession : IDisposable
         StateChanged?.Invoke(state);
     }
 
+    /// <summary>
+    /// What a request is about to be asked about: which file, at which version, and the token that
+    /// ends the wait once it stops being the file on screen. Null when nothing is open.
+    /// </summary>
+    /// <remarks>
+    /// The three are read as one because they are only meaningful together, and the source is read
+    /// before the state deliberately: closing drops the source first, so a file leaving between the
+    /// two reads is caught by the state check rather than by a null on the way to the token. A
+    /// source disposed in the same gap reads as nothing open, which is what it means.
+    /// </remarks>
+    private (DocumentUri Uri, DocumentVersion Version, CancellationToken Cancel)? Asking()
+    {
+        var requests = _requests;
+        if (requests is null || _state is not DocumentState.Open open) return null;
+
+        try
+        {
+            return (open.Uri, open.Version, requests.Token);
+        }
+        catch (ObjectDisposedException)
+        {
+            return null;
+        }
+    }
+
     private void CloseOpenDocument()
     {
-        if (_requests is { } requests)
+        // Dropped before it is cancelled, so a request starting alongside this sees "nothing open"
+        // rather than a source being disposed underneath it. Cancelling runs continuations, which
+        // is not work to do while holding the field every other thread is reading.
+        var requests = _requests;
+        _requests = null;
+        if (requests is not null)
         {
             requests.Cancel();
             requests.Dispose();
-            _requests = null;
         }
         if (_state is DocumentState.Open open) _client.CloseDocument(open.Uri);
         _openText = string.Empty;

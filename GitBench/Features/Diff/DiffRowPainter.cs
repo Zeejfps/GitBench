@@ -31,7 +31,9 @@ internal readonly record struct DiffRowPaint(
     bool FoldHovered = false,
     IReadOnlyList<DiagnosticMark>? Diagnostics = null,
     bool GlyphColumn = true,
-    CharRange? Link = null);
+    CharRange? Link = null,
+    UsageLensState? Usages = null,
+    bool LensHovered = false);
 
 /// <summary>
 /// Paints individual <see cref="DiffRow"/>s — banners, hunk separators, tears, and code lines
@@ -101,6 +103,13 @@ internal sealed class DiffRowPainter
         VerticalAlignment = TextAlignment.Center,
         BaseDirection = BidiDirection.Ltr,
     };
+    // Smaller than the code it annotates and proportional rather than monospace, so a usages row
+    // reads as a note about the declaration below it instead of as another line of the file.
+    private static readonly TextStyle LensStyle = new()
+    {
+        FontSize = FontSize.Body * DiffRowMetrics.LensHeightRatio,
+        VerticalAlignment = TextAlignment.Center,
+    };
     private static readonly TextStyle ExpanderIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
@@ -132,6 +141,9 @@ internal sealed class DiffRowPainter
                 break;
             case DiffRow.Line l:
                 DrawLineRow(c, l, p);
+                break;
+            case DiffRow.Lens lens:
+                DrawLensRow(c, lens, p);
                 break;
         }
     }
@@ -407,6 +419,83 @@ internal sealed class DiffRowPainter
         if (l.Fold is { Chip: true })
             DrawFoldChip(c, l, textLeft, p);
     }
+
+    // Text and nothing else. A usages row has no line of its own in the file, so a number in the
+    // gutter, a fold chevron, a +/- glyph or a diagnostic stripe on it would each be claiming
+    // something about a line that isn't there.
+    private void DrawLensRow(ICanvas c, DiffRow.Lens lens, in DiffRowPaint p)
+    {
+        var height = DiffRowMetrics.HeightOf(lens, LineHeight);
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = new RectF(p.Left, p.Bottom, p.Width, height),
+            Style = SolidBgStyle(Styles.Background),
+            ZIndex = p.Z,
+        });
+
+        if (p.Usages is not { } usages) return;
+        var label = LensLabel(usages);
+        var (x, width) = LensBounds(lens, MeasureLens(c, label), TextOriginOf(p));
+
+        LensStyle.TextColor = p.LensHovered ? Styles.UsageLensHoverText : Styles.UsageLensText;
+        c.DrawText(new DrawTextInputs
+        {
+            Position = new RectF(x, p.Bottom, width, height),
+            Text = label,
+            Style = LensStyle,
+            ZIndex = p.Z + 1,
+        });
+
+        // The same rule the definition link draws, for the same reason: it is the underline that
+        // says "clickable", and the body keeps one interactive treatment rather than two.
+        if (!p.LensHovered) return;
+        var y = p.Bottom + LinkUnderlineInset;
+        c.DrawLine(new DrawLineInputs
+        {
+            Start = new PointF(x, y),
+            End = new PointF(x + width, y),
+            Thickness = LinkUnderlineThickness,
+            Color = Styles.LinkUnderline,
+            ZIndex = p.Z + 2,
+        });
+    }
+
+    /// <summary>What one declaration's lens says, in the reader's language. "No usages" is its own
+    /// phrasing rather than the plural's zero form: English never selects one.</summary>
+    public string LensLabel(UsageLensState state)
+    {
+        var s = _loc.Strings.Value;
+        return state switch
+        {
+            UsageLensState.Asking => s.DiffUsagesPending,
+            UsageLensState.Count { Value: <= 0 } => s.DiffUsagesNone,
+            UsageLensState.Count count => s.DiffUsages(count.Value),
+            UsageLensState.Unsupported => s.DiffUsagesUnsupported,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "Unhandled usage lens state."),
+        };
+    }
+
+    // Lens labels are proportional text, so their width is measured rather than counted in cells.
+    // Cached by the string itself — a handful of labels repeat down a file and across frames, and
+    // the hit-test, which has no canvas to measure with, reads back exactly what the draw wrote.
+    private readonly Dictionary<string, float> _lensWidths = new(StringComparer.Ordinal);
+
+    private float MeasureLens(ICanvas c, string label)
+    {
+        if (_lensWidths.TryGetValue(label, out var width)) return width;
+        return _lensWidths[label] = c.MeasureTextWidth(label, LensStyle);
+    }
+
+    /// <summary>Where a lens's text sits on its row: at the declaration's own indent, and only as
+    /// wide as what it says, so the click target is the words and not the whole row.</summary>
+    public (float X, float Width) LensBounds(DiffRow.Lens lens, string label, float textLeft) =>
+        LensBounds(lens, _lensWidths.TryGetValue(label, out var width) ? width : 0f, textLeft);
+
+    private (float X, float Width) LensBounds(DiffRow.Lens lens, float width, float textLeft) =>
+        (textLeft + lens.Indent * MonoAdvance, width);
+
+    private static float TextOriginOf(in DiffRowPaint p) =>
+        LineTextOriginX(p.Left, p.GutterWidth, p.SingleGutter, p.FoldColumn, p.GlyphColumn);
 
     private void DrawFoldChip(ICanvas c, DiffRow.Line l, float textLeft, in DiffRowPaint p)
     {

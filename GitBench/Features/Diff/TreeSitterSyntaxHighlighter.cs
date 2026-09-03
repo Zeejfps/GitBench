@@ -321,15 +321,13 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
             return a.PatternIndex.CompareTo(b.PatternIndex);
         });
 
-        // Byte offsets index characters directly in the overwhelmingly common all-ASCII file; only
-        // a file with multi-byte characters pays for the map.
-        var charOfByte = byteCount == text.Length ? null : ByteToCharMap(text, byteCount);
+        var offsets = Utf8ToUtf16Offsets.For(text, byteCount);
         var slots = new byte[text.Length];
 
         foreach (var capture in captures)
         {
-            var start = charOfByte is null ? (int)capture.StartByte : charOfByte[capture.StartByte];
-            var end = Math.Min(charOfByte is null ? (int)capture.EndByte : charOfByte[capture.EndByte], text.Length);
+            var start = offsets.Utf16OffsetOf(capture.StartByte);
+            var end = Math.Min(offsets.Utf16OffsetOf(capture.EndByte), text.Length);
             for (var i = start; i < end; i++) slots[i] = (byte)capture.Slot;
         }
 
@@ -373,28 +371,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
             if (slot == (byte)TokenColorSlot.Default || to <= from) return;
             (spans ??= []).Add(new TokenSpan(from, to - from, (TokenColorSlot)slot));
         }
-    }
-
-    private static int[] ByteToCharMap(string text, int byteCount)
-    {
-        var map = new int[byteCount + 1];
-        var bi = 0;
-        var ci = 0;
-
-        while (ci < text.Length && bi < byteCount)
-        {
-            var wide = char.IsHighSurrogate(text[ci]) && ci + 1 < text.Length && char.IsLowSurrogate(text[ci + 1]);
-            var codepoint = wide ? char.ConvertToUtf32(text[ci], text[ci + 1]) : text[ci];
-            var width = codepoint < 0x80 ? 1 : codepoint < 0x800 ? 2 : codepoint < 0x10000 ? 3 : 4;
-
-            for (var k = 0; k < width && bi + k < byteCount; k++) map[bi + k] = ci;
-
-            bi += width;
-            ci += wide ? 2 : 1;
-        }
-
-        map[byteCount] = text.Length;
-        return map;
     }
 
     private void LogOnce(ref int flag, string message)

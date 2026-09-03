@@ -958,5 +958,20 @@
   "language_servers.failed_title": "فشل خادم لغة {language}",
   "language_servers.status_failed": "فشل",
   "language_servers.not_configured": "لا يوجد خادم لهذا الملف",
-  "language_servers.chip_tooltip": "خادم اللغة لهذا الملف. انقر لفتح الإعدادات."
+  "language_servers.chip_tooltip": "خادم اللغة لهذا الملف. انقر لفتح الإعدادات.",
+
+  "usages.filter": "تصفية الاستخدامات…",
+  "usages.no_matches": "لا توجد استخدامات مطابقة",
+  "usages.capped": "عرض {shown} من {total}",
+
+  "diff.usages": {
+    "one": "استخدام واحد",
+    "two": "استخدامان",
+    "few": "{count} استخدامات",
+    "many": "{count} استخدامًا",
+    "other": "{count} استخدام"
+  },
+  "diff.usages_none": "لا توجد استخدامات",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "الاستخدامات غير متاحة"
 }

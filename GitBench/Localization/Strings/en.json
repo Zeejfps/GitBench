@@ -808,5 +808,14 @@
   "language_servers.failed_title": "{language} language server failed",
   "language_servers.status_failed": "Failed",
   "language_servers.not_configured": "No server for this file",
-  "language_servers.chip_tooltip": "Language server for this file. Click to open settings."
+  "language_servers.chip_tooltip": "Language server for this file. Click to open settings.",
+
+  "usages.filter": "Filter usages…",
+  "usages.no_matches": "No matching usages",
+  "usages.capped": "Showing {shown} of {total}",
+
+  "diff.usages": { "one": "{count} usage", "other": "{count} usages" },
+  "diff.usages_none": "no usages",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "usages unavailable"
 }

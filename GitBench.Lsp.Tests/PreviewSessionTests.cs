@@ -304,6 +304,62 @@ public sealed class PreviewSessionTests : IDisposable
         Assert.IsType<DefinitionAnswer.Stale>(await definition);
     }
 
+    [Fact]
+    public async Task ASymbolNothingUsesIsFoundNowhereRatherThanAnEmptyList()
+    {
+        _session.Preview(Rust(_a, "one"));
+        var references = _session.ReferencesAsync(Somewhere);
+
+        _client.References.Single().Answer([]);
+
+        Assert.IsType<ReferenceAnswer.Nowhere>(await references);
+    }
+
+    [Fact]
+    public async Task UsagesForTheFileStillOnScreenAreClassifiedAgainstTheRepository()
+    {
+        _session.Preview(Rust(_a, "one"));
+        var references = _session.ReferencesAsync(Somewhere);
+
+        _client.References.Single().Answer(
+        [
+            new Location(_b, new LspRange(Somewhere, Somewhere)),
+            new Location(_a, new LspRange(Somewhere, Somewhere)),
+        ]);
+
+        var sites = Assert.IsType<ReferenceAnswer.Sites>(await references);
+        Assert.Equal(
+            new[] { "src/lib.rs", "src/main.rs" },
+            sites.Items.Cast<DefinitionTarget.InRepo>().Select(site => site.RelativePath));
+    }
+
+    // A count drawn above a declaration in the file that is no longer open is a count of something
+    // else entirely.
+    [Fact]
+    public async Task UsagesThatArriveAfterTheSelectionMovedAreDiscarded()
+    {
+        _session.Preview(Rust(_a, "one"));
+        var references = _session.ReferencesAsync(Somewhere);
+
+        _session.Preview(Rust(_b, "two"));
+        _client.References.Single().Answer([new Location(_a, new LspRange(Somewhere, Somewhere))]);
+
+        Assert.IsType<ReferenceAnswer.Stale>(await references);
+    }
+
+    // The same file, edited underneath: a version the answer no longer describes.
+    [Fact]
+    public async Task UsagesThatArriveAfterTheFileChangedOnDiskAreDiscarded()
+    {
+        _session.Preview(Rust(_a, "one"));
+        var references = _session.ReferencesAsync(Somewhere);
+
+        _session.Preview(Rust(_a, "two"));
+        _client.References.Single().Answer([new Location(_a, new LspRange(Somewhere, Somewhere))]);
+
+        Assert.IsType<ReferenceAnswer.Stale>(await references);
+    }
+
     // Two requests outstanding at once: the one for the file on screen still counts.
     [Fact]
     public async Task AnOutstandingRequestForAnOldFileDoesNotSpoilTheAnswerForTheNewOne()
@@ -338,6 +394,53 @@ public sealed class PreviewSessionTests : IDisposable
     {
         Assert.IsType<HoverAnswer.Stale>(await _session.HoverAsync(Somewhere));
         Assert.IsType<DefinitionAnswer.Stale>(await _session.DefinitionAsync(Somewhere));
+        Assert.IsType<ReferenceAnswer.Stale>(await _session.ReferencesAsync(Somewhere));
         Assert.Empty(_client.Hovers);
+    }
+
+    /// <summary>
+    /// A server that would not answer is not a server saying "nothing uses this". The distinction
+    /// only matters here — a hover that fails shows no card and a definition that fails goes
+    /// nowhere, but a usage count is a sentence about the code, and "no usages" over live code
+    /// reads as a claim that it is dead.
+    /// </summary>
+    [Fact]
+    public async Task AServerRefusingToAnswerIsNotAnAnswerOfZero()
+    {
+        _session.Preview(Rust(_a, "fn main() {}"));
+
+        var refused = _session.ReferencesAsync(Somewhere);
+        _client.References.Single().Answer(null);
+        Assert.IsType<ReferenceAnswer.Refused>(await refused);
+
+        _client.References.Clear();
+        var answered = _session.ReferencesAsync(Somewhere);
+        _client.References.Single().Answer([]);
+        Assert.IsType<ReferenceAnswer.Nowhere>(await answered);
+    }
+
+    /// <summary>
+    /// Closing a file cancels its requests and disposes the source they were waiting on, and a
+    /// request already on its way to the transport can reach it after that — where registering on
+    /// the token it was handed throws rather than reporting cancellation. It means what a
+    /// cancellation means, so it reads as one. One request at a time made this rare; a screenful
+    /// of usage counts asked at once makes it ordinary.
+    /// </summary>
+    [Fact]
+    public async Task ARequestThatOutlivesTheSourceItWasHandedIsDiscardedRatherThanThrowing()
+    {
+        _session.Preview(Rust(_a, "one"));
+        var hover = _session.HoverAsync(Somewhere);
+        var definition = _session.DefinitionAsync(Somewhere);
+        var references = _session.ReferencesAsync(Somewhere);
+
+        _session.Clear();
+        _client.Hovers.Single().Fail(new ObjectDisposedException(nameof(CancellationTokenSource)));
+        _client.Definitions.Single().Fail(new ObjectDisposedException(nameof(CancellationTokenSource)));
+        _client.References.Single().Fail(new ObjectDisposedException(nameof(CancellationTokenSource)));
+
+        Assert.IsType<HoverAnswer.Stale>(await hover);
+        Assert.IsType<DefinitionAnswer.Stale>(await definition);
+        Assert.IsType<ReferenceAnswer.Stale>(await references);
     }
 }

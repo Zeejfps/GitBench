@@ -51,6 +51,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// <summary>A declaration's fold chevron was clicked, by the id its <see cref="FoldMark"/>
     /// carries. The owner decides what that means and hands back a new <see cref="FoldState"/>.</summary>
     public event Action<string>? OnToggleFold;
+
+    /// <summary>A declaration's usages row was clicked. The answer — a list, a jump, a panel — is
+    /// the owner's; this says which declaration was asked about, and where under the lens whatever
+    /// answers should hang.</summary>
+    public event Action<UsageLensTarget, PointF>? UsageLensActivated;
     public event Action<float>? HorizontalScrollPositionChanged;
 
     public float VerticalScale { get; private set; } = 1f;
@@ -62,6 +67,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private DiffRenderState _renderState = new DiffRenderState.Placeholder("Select a file to view diff.");
     private DiffRowSet _rowSet = DiffRowSet.Empty;
     private DiffDiagnosticOverlay _diagnostics = DiffDiagnosticOverlay.Empty;
+    private UsageLensOverlay _usageLens = UsageLensOverlay.Empty;
+    private bool _usageLensRows;
+    private int _hoveredLensRow = -1;
     private FileSpan? _definitionLink;
     private readonly DiffRowPainter _painter;
     private float _gutterWidth;
@@ -134,6 +142,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _list = new VirtualRowListView
         {
             RowHeight = AssumedFontSize, // placeholder until canvas-derived metrics resolve
+            RowHeightAt = RowHeightAt,
             ItemBuilder = DrawDiffRowAt,
             ScrollWheelStep = Scrolling.WheelStep,
             CursorAt = CursorAt,
@@ -199,13 +208,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _hoveredButton = HunkAction.None;
         _hoveredExpanderRow = -1;
         _hoveredFoldRow = -1;
+        _hoveredLensRow = -1;
         _hunksPatchable = false;
         _diffSide = DiffSide.Unstaged;
         // Metrics depend only on font, not content, but content width depends on metrics;
         // a fresh model forces a recompute on next draw.
         _metricsResolved = false;
 
-        _rowSet = DiffRowSet.Build(state, _loc, FoldsFor(state));
+        _rowSet = DiffRowSet.Build(state, _loc, FoldsFor(state), _usageLensRows);
         if (state is DiffRenderState.Loaded loaded)
         {
             _diffSide = loaded.Result.Side;
@@ -251,9 +261,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_renderState is not DiffRenderState.FullFile) { SetDirty(); return; }
 
         var topLine = TopVisibleNewLine();
-        _rowSet = DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState));
+        _rowSet = DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState), _usageLensRows);
         _selection.Clear();
         _hoveredFoldRow = -1;
+        _hoveredLensRow = -1;
         _list.ItemCount = _rowSet.Rows.Count;
         _list.NotifyItemsChanged();
         if (topLine is { } line) ScrollToNewLine(line, leadIn: 0);
@@ -340,7 +351,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         var count = _rowSet.Rows.Count;
         if (_lineHeight <= 0 || count == 0) return null;
-        var topIndex = Math.Clamp((int)(_list.ScrollY / _lineHeight), 0, count - 1);
+        var topIndex = Math.Clamp(_list.VisibleRange().First, 0, count - 1);
         for (var i = topIndex; i < count; i++)
             if (_rowSet.NewLineAt(new RowIndex(i)) is { } line) return line;
         return null;
@@ -369,13 +380,26 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_lineHeight <= 0) return;
         if (_rowSet.RowNearestNewLine(line) is not { } row) return;
-        SetScrollTarget(Math.Max(0, row.Value - leadIn) * _lineHeight);
+        SetScrollTarget(ContentOffsetOf(Math.Max(0, row.Value - leadIn)));
+    }
+
+    // A row's distance from the top of the content. Rows are not all one height, so this comes off
+    // the widget's own offset table rather than a product: it places a row's top at
+    // Position.Top + ScrollY − offset, and the offset is what that leaves behind.
+    private float ContentOffsetOf(int rowIndex) =>
+        _list.TryGetRowRect(rowIndex, out var rect) ? _list.Position.Top + _list.ScrollY - rect.Top : 0f;
+
+    private float RowHeightAt(int rowIndex)
+    {
+        var height = _lineHeight > 0 ? _lineHeight : AssumedFontSize;
+        var rows = _rowSet.Rows;
+        return rowIndex >= 0 && rowIndex < rows.Count ? DiffRowMetrics.HeightOf(rows[rowIndex], height) : height;
     }
 
     private float ContentHeight()
     {
         if (_lineHeight <= 0) return 0f;
-        return _rowSet.Rows.Count * _lineHeight;
+        return _list.ContentHeight;
     }
 
     private float ContentWidth()
@@ -423,11 +447,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _painter.MonoAdvance = _monoAdvance;
         _metricsResolved = true;
 
-        // Resolved row height feeds the widget; it'll re-clamp its scroll on next draw.
+        // Resolved row height feeds the widget's offset table; it'll re-clamp its scroll on next
+        // draw. Heights are per-row, so the table has to be discarded, not just the base height.
         if (Math.Abs(_list.RowHeight - _lineHeight) > 0.0001f)
         {
             _list.RowHeight = _lineHeight;
-            _list.NotifyItemsChanged();
+            _list.InvalidateRowHeights();
         }
     }
 
@@ -504,7 +529,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private float ClampScrollTarget(float y)
     {
-        var max = Math.Max(0f, _rowSet.Rows.Count * _lineHeight - _list.Position.Height);
+        var max = Math.Max(0f, _list.ContentHeight - _list.Position.Height);
         return Math.Clamp(y, 0f, max);
     }
 
@@ -545,7 +570,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             FoldHovered: rowIndex == _hoveredFoldRow,
             Diagnostics: MarksOnRow(rowIndex),
             GlyphColumn: _rowSet.GlyphColumn,
-            Link: LinkOnRow(rowIndex)));
+            Link: LinkOnRow(rowIndex),
+            Usages: UsagesOnRow(rowIndex),
+            LensHovered: rowIndex == _hoveredLensRow));
 
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
@@ -572,6 +599,71 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     }
 
     public IReadOnlyList<Lsp.Diagnostic> DiagnosticsOn(FileLine line) => _diagnostics.On(line);
+
+    /// <summary>
+    /// Replaces what is known about the file's usages. Deliberately not through
+    /// <see cref="SetRenderState"/>, for the same reason <see cref="SetDiagnostics"/> is not:
+    /// counts trickle in for as long as a file is open, and re-flattening on each would shuffle
+    /// the file under the reader dozens of times while they were trying to read it.
+    /// </summary>
+    public void SetUsageLens(UsageLensOverlay usages)
+    {
+        if (ReferenceEquals(_usageLens, usages)) return;
+        _usageLens = usages;
+        SetDirty();
+    }
+
+    /// <summary>
+    /// Whether declarations in a whole-file render carry a usages row. Off by default: nothing
+    /// answers the question yet, and a row that stays blank forever is worse than no row. Flipping
+    /// it re-flattens, so it is a setting rather than something that must be set first.
+    /// </summary>
+    public bool UsageLensRows
+    {
+        get => _usageLensRows;
+        set
+        {
+            if (_usageLensRows == value) return;
+            _usageLensRows = value;
+            SetRenderState(_renderState);
+        }
+    }
+
+    // What a lens row has to say, or null on every other row and on a declaration nothing has been
+    // asked about yet.
+    private UsageLensState? UsagesOnRow(int rowIndex) =>
+        _rowSet.Rows[rowIndex] is DiffRow.Lens lens ? _usageLens.On(lens.At) : null;
+
+    /// <summary>Every declaration carrying a usages row in the current render, in row order.
+    /// Empty whenever the rows are off, and for a diff, which never grows them.</summary>
+    public IReadOnlyList<UsageLensTarget> UsageLensTargets() => TargetsIn(0, _rowSet.Rows.Count - 1);
+
+    /// <summary>
+    /// The declarations whose usages rows are on screen. What decides which questions are worth
+    /// asking: a file has more declarations than a reader can see, and a server answers about a
+    /// symbol far more slowly than they can scroll past it.
+    /// </summary>
+    public IReadOnlyList<UsageLensTarget> VisibleUsageLensTargets()
+    {
+        var (first, last) = _list.VisibleRange();
+        return TargetsIn(first, last);
+    }
+
+    private IReadOnlyList<UsageLensTarget> TargetsIn(int firstRow, int lastRow)
+    {
+        var rows = _rowSet.Rows;
+        var from = Math.Max(0, firstRow);
+        var to = Math.Min(rows.Count - 1, lastRow);
+        if (to < from) return [];
+
+        var targets = new List<UsageLensTarget>();
+        for (var i = from; i <= to; i++)
+            if (rows[i] is DiffRow.Lens lens) targets.Add(TargetOf(lens));
+        return targets;
+    }
+
+    private static UsageLensTarget TargetOf(DiffRow.Lens lens) =>
+        new(lens.Id, lens.At, lens.NameLine, lens.NameColumn);
 
     /// <summary>The marked identifier as this row's painter counts columns, or null when the mark
     /// is on another line. Raw columns become expanded ones here, the same conversion the squiggles
@@ -670,6 +762,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // Expander hover is independent of hunk buttons: it applies to read-only sides too.
         SetExpanderHover(HitTestExpander(point)?.Row ?? -1);
         SetFoldHover(HitTestFold(point)?.Row ?? -1);
+        SetLensHover(HitTestLens(point)?.Row ?? -1);
 
         if (!HasHunkButtons()) { SetHunkHover(-1, HunkAction.None); return; }
 
@@ -688,6 +781,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         SetExpanderHover(-1);
         SetFoldHover(-1);
+        SetLensHover(-1);
         SetHunkHover(-1, HunkAction.None);
     }
 
@@ -741,6 +835,47 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
+    public bool TryClickLens(PointF point)
+    {
+        if (HitTestLens(point) is not { } hit) return false;
+        UsageLensActivated?.Invoke(hit.Target, hit.Anchor);
+        return true;
+    }
+
+    // Only the words are the target, not the whole row: a lens row spans the file's full width and
+    // clicking the empty margin beside one should still start a selection.
+    private (int Row, UsageLensTarget Target, PointF Anchor)? HitTestLens(PointF point)
+    {
+        if (_lineHeight <= 0 || _usageLens.IsEmpty) return null;
+        if (!_list.Position.ContainsPoint(point)) return null;
+
+        var rowIndex = HitTestListRow(point);
+        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Lens lens) return null;
+        if (_usageLens.On(lens.At) is not { } state) return null;
+
+        var (x, width) = _painter.LensBounds(lens, _painter.LensLabel(state), LineTextOriginX());
+        if (width <= 0f || point.X < x || point.X > x + width) return null;
+
+        // Anchored to the words rather than to the pixel clicked, so what opens hangs off the lens
+        // the way it does off a menu, wherever in it the reader happened to click.
+        var anchor = _list.TryGetRowRect(rowIndex, out var rect)
+            ? new PointF(x, rect.Bottom)
+            : point;
+        return (rowIndex, TargetOf(lens), anchor);
+    }
+
+    private void SetLensHover(int rowIndex)
+    {
+        if (_hoveredLensRow == rowIndex) return;
+        _hoveredLensRow = rowIndex;
+        SetDirty();
+    }
+
+    // Where a row's text starts, in the same content space every hit-test measures against.
+    private float LineTextOriginX() => DiffRowPainter.LineTextOriginX(
+        _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn,
+        _rowSet.GlyphColumn);
+
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
     {
         if (_lineHeight <= 0) return null;
@@ -791,20 +926,21 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
-    private int HitTestListRow(PointF point)
-    {
-        if (_lineHeight <= 0) return -1;
-        var idx = RawRowIndex(point);
-        if (idx < 0 || idx >= _rowSet.Rows.Count) return -1;
-        return idx;
-    }
+    private int HitTestListRow(PointF point) => _lineHeight <= 0 ? -1 : _list.RowIndexAt(point);
 
-    // The row a point falls on, unbounded: negative above the first row, past the count below the
-    // last. Clamping it is how a drag that runs off either end keeps extending to the extremes.
-    private int RawRowIndex(PointF point)
+    // The row a drag that has wandered off the rows should keep extending to. The widget answers
+    // only for points actually over a row, so the pointer is pulled onto the nearest edge of the
+    // viewport first and the ends are named outright — including the empty band below a file
+    // shorter than the viewport. A drag held past an edge then travels further under the drag
+    // auto-scroll rather than by naming a row that isn't on screen.
+    private int DragRowIndexAt(PointF point)
     {
-        var distFromTop = _list.Position.Top - point.Y;
-        return (int)MathF.Floor((distFromTop + _list.ScrollY) / _lineHeight);
+        var pos = _list.Position;
+        var index = _list.RowIndexAt(new PointF(
+            Math.Clamp(point.X, pos.Left, pos.Right),
+            Math.Clamp(point.Y, pos.Bottom, pos.Top)));
+        if (index >= 0) return index;
+        return _list.TryGetRowRect(0, out var first) && point.Y > first.Top ? 0 : _rowSet.Rows.Count - 1;
     }
 
     // ---- text selection ----
@@ -840,6 +976,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (HitTestExpander(point) != null) return true;
         if (HitTestFold(point) != null) return true;
+        if (HitTestLens(point) != null) return true;
         if (!HasHunkButtons()) return false;
         var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
         return hunkIndex >= 0 && HitTestButton(point, hunkIndex) != HunkAction.None;
@@ -906,7 +1043,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
     {
         if (_lineHeight <= 0 || _rowSet.Rows.Count == 0) return null;
-        var rowIndex = Math.Clamp(RawRowIndex(point), 0, _rowSet.Rows.Count - 1);
+        var rowIndex = DragRowIndexAt(point);
         // A drag crossing a banner or a hunk bar keeps extending through it; those rows carry no
         // selectable text, so they contribute nothing to the copy.
         var text = _rowSet.Rows[rowIndex] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
@@ -950,9 +1087,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         var buttonRowIndex = ButtonRowFor(hunkIndex);
         if (buttonRowIndex < 0) return HunkAction.None;
-        var listPos = _list.Position;
-        var rowTop = listPos.Top + _list.ScrollY - buttonRowIndex * _lineHeight;
-        return _buttonBar.HitTest(point, listPos.Right, rowTop, ActionsForHunk(hunkIndex));
+        if (!_list.TryGetRowRect(buttonRowIndex, out var rowRect)) return HunkAction.None;
+        return _buttonBar.HitTest(point, _list.Position.Right, rowRect.Top, ActionsForHunk(hunkIndex));
     }
 
     private void NotifyScrollChanged(bool viewportFits)

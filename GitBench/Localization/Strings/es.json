@@ -809,5 +809,14 @@
   "language_servers.failed_title": "El servidor de lenguaje {language} falló",
   "language_servers.status_failed": "Falló",
   "language_servers.not_configured": "Ningún servidor para este archivo",
-  "language_servers.chip_tooltip": "Servidor de lenguaje para este archivo. Haz clic para abrir la configuración."
+  "language_servers.chip_tooltip": "Servidor de lenguaje para este archivo. Haz clic para abrir la configuración.",
+
+  "usages.filter": "Filtrar usos…",
+  "usages.no_matches": "No hay usos coincidentes",
+  "usages.capped": "Mostrando {shown} de {total}",
+
+  "diff.usages": { "one": "{count} uso", "other": "{count} usos" },
+  "diff.usages_none": "sin usos",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "usos no disponibles"
 }

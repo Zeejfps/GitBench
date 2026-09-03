@@ -197,6 +197,46 @@ public abstract record Definition
     }
 }
 
+/// <summary>
+/// Everywhere a symbol is used. One wire shape — an array of plain locations, never the link form —
+/// plus nothing, which servers spell as null and as an empty array interchangeably. Order is the
+/// server's and is preserved.
+/// </summary>
+public abstract record References
+{
+    private References() { }
+
+    public sealed record None : References;
+
+    public sealed record Sites(IReadOnlyList<Documents.Location> Items) : References;
+
+    public static readonly ILspResultReader<References> Reader = new ReferencesReader();
+
+    private sealed class ReferencesReader : ILspResultReader<References>
+    {
+        public References Read(JsonElement result)
+        {
+            if (result.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null) return new None();
+
+            if (result.ValueKind != JsonValueKind.Array)
+                throw new LspParseException($"references must be an array or null, was {result.ValueKind}");
+
+            var sites = new List<Documents.Location>();
+            foreach (var element in result.EnumerateArray()) sites.Add(ReadOne(element));
+            return sites.Count == 0 ? new None() : new Sites(sites);
+        }
+
+        private static Documents.Location ReadOne(JsonElement element)
+        {
+            if (element.ValueKind != JsonValueKind.Object)
+                throw new LspParseException($"a reference must be an object, was {element.ValueKind}");
+
+            return new Documents.Location(
+                Json.ReadUri(element, "uri"), Json.ReadRange(element.Require("range")));
+        }
+    }
+}
+
 /// <summary>The requests this client knows how to ask, params written by hand.</summary>
 public static class LspRequests
 {
@@ -206,13 +246,29 @@ public static class LspRequests
     public static LspRequest<Definition> Definition(DocumentUri uri, LspPosition at) =>
         new(LspMethod.Definition, writer => WriteTextDocumentPosition(writer, uri, at), Lsp.Definition.Reader);
 
-    private static void WriteTextDocumentPosition(Utf8JsonWriter writer, DocumentUri uri, LspPosition at)
+    /// <summary>
+    /// Everywhere a symbol is used. <paramref name="includeDeclaration"/> is not a detail: the count
+    /// a reader is shown above a declaration is of its usages, so counting the declaration itself
+    /// makes every unused symbol read as used once.
+    /// </summary>
+    public static LspRequest<References> References(
+        DocumentUri uri, LspPosition at, bool includeDeclaration) =>
+        new(LspMethod.References, writer => WriteTextDocumentPosition(writer, uri, at, more =>
+        {
+            more.WriteStartObject("context");
+            more.WriteBoolean("includeDeclaration", includeDeclaration);
+            more.WriteEndObject();
+        }), Lsp.References.Reader);
+
+    private static void WriteTextDocumentPosition(
+        Utf8JsonWriter writer, DocumentUri uri, LspPosition at, WriteJson? more = null)
     {
         writer.WriteStartObject();
         writer.WriteStartObject("textDocument");
         writer.WriteString("uri", uri.Value);
         writer.WriteEndObject();
         Json.WritePosition(writer, "position", at);
+        more?.Invoke(writer);
         writer.WriteEndObject();
     }
 }

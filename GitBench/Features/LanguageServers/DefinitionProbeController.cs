@@ -24,6 +24,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     private readonly Func<(string Root, string Path)?> _document;
     private readonly Func<InputModifiers> _modifiers;
     private readonly Func<TimeSpan, CancellationToken, Task> _dwell;
+    private readonly IUsagesPresenter? _usages;
 
     private CancellationTokenSource? _pending;
     private CancellationTokenSource? _probing;
@@ -44,7 +45,8 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         IUiDispatcher dispatcher,
         Func<(string Root, string Path)?> document,
         Func<InputModifiers> modifiers,
-        Func<TimeSpan, CancellationToken, Task>? dwell = null)
+        Func<TimeSpan, CancellationToken, Task>? dwell = null,
+        IUsagesPresenter? usages = null)
     {
         _surface = surface;
         _servers = servers;
@@ -53,6 +55,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         _document = document;
         _modifiers = modifiers;
         _dwell = dwell ?? Task.Delay;
+        _usages = usages;
     }
 
     public override void OnMouseMoved(ref MouseMoveEvent e) => MovedTo(e.Mouse.Point);
@@ -246,6 +249,8 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     {
         switch (key)
         {
+            case KeyboardKey.F12 when (modifiers & InputModifiers.Shift) != 0:
+                return ShowUsages(_pointer);
             case KeyboardKey.F12:
                 return Ask(_pointer);
             case KeyboardKey.LeftBracket when IsCommand(modifiers):
@@ -257,6 +262,19 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
             default:
                 return false;
         }
+    }
+
+    /// <summary>Asks where the identifier under a pixel is used, at the same position a click
+    /// would ask where it is declared. The answer is the presenter's to show or to keep to
+    /// itself — one usage is a jump and none is nothing at all — so this only hands the question
+    /// over.</summary>
+    private bool ShowUsages(PointF point)
+    {
+        if (_usages is null) return false;
+        if (PositionToAsk(point) is not { } at) return false;
+
+        _usages.ShowUsagesOf(point, at.Line, at.Column);
+        return true;
     }
 
     /// <summary>

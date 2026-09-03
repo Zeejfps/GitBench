@@ -445,7 +445,7 @@ public sealed class LanguageServerConnectionTests : IDisposable
     public async Task AServerThatCannotGoToDefinitionIsNeverAsked()
     {
         _server.Capabilities = new ServerCapabilities(
-            "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: false);
+            "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: false, SupportsReferences: false);
         using var connection = Connect();
 
         Assert.Empty(await Define(connection));
@@ -550,7 +550,7 @@ public sealed class LanguageServerConnectionTests : IDisposable
         public string? HandshakeFailure { get; set; }
 
         public ServerCapabilities? Capabilities { get; set; } =
-            new(ServerName: "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: true);
+            new(ServerName: "fake", ServerCapabilities.Utf16, SupportsHover: true, SupportsDefinition: true, SupportsReferences: true);
         public int Handshakes { get; private set; }
         public int Asks { get; private set; }
         public int ShutdownRequests { get; private set; }

@@ -57,6 +57,8 @@ public sealed record DiffContentStyles(
     uint DiagnosticInfo,
     uint LinkBackground,
     uint LinkUnderline,
+    uint UsageLensText,
+    uint UsageLensHoverText,
     DiffSyntaxStyles Syntax);
 
 // Resolved per-theme foreground colors for each non-default TokenColorSlot. TokenColorSlot is
@@ -172,6 +174,11 @@ public partial record ThemeStyles
             // blue of its own.
             LinkBackground: WithAlpha(p.Accent, DiffLinkAlpha),
             LinkUnderline: p.Accent,
+            // The usages row: margin furniture until it is pointed at, then the same accent as
+            // every other clickable thing in the body — one interactive color, not a link blue of
+            // its own.
+            UsageLensText: p.TextDim,
+            UsageLensHoverText: p.Accent,
             Syntax: new DiffSyntaxStyles(
                 Keyword: syntax.Keyword,
                 String: syntax.String,

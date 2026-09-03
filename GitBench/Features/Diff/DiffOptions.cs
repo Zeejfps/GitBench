@@ -22,4 +22,9 @@ internal static class DiffOptions
     // names. Off means every hunk falls back to git's own xfuncname header — exactly what shipped
     // before the parser existed.
     public static bool StructureEnabled = true;
+
+    // The "N usages" row above each declaration in the whole-file viewer. The rows appear only for
+    // files a language server is actually answering about, so with no server configured this costs
+    // a parse the outline was doing anyway and shows nothing.
+    public static bool UsageLensEnabled = true;
 }

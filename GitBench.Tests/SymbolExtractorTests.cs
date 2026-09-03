@@ -1,6 +1,7 @@
 using System.Text;
 
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 
 using Xunit;
 
@@ -396,6 +397,74 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
         Assert.Equal(5, resize.EndLine);
     }
 
+    [Theory]
+    [InlineData("class Widget { }", "Widget")]
+    [InlineData("public static partial class Widget { }", "Widget")]
+    [InlineData("class Pair<TKey, TValue> { }", "Pair")]
+    [InlineData("class W\n{\n    public static async Task<T> Login<T>(T user) => default!;\n}", "Login")]
+    [InlineData("[Obsolete]\n[Serializable]\nsealed class Widget { }", "Widget")]
+    [InlineData("class W\n{\n    [Obsolete]\n    void Resize() { }\n}", "Resize")]
+    [InlineData("class W\n{\n    int _width;\n}", "_width")]
+    [InlineData("namespace Acme.Widgets;\n\nclass W { }", "Acme.Widgets")]
+    public void TheNamePositionLandsOnTheFirstCharacterOfTheName(string source, string name)
+    {
+        Assert.Equal(name, NameTextAt(source, Find(fixture.Outline(source), name)));
+    }
+
+    /// <summary>
+    /// The regression the whole conversion exists for. Tree-sitter counts both a node's offset and
+    /// a point's column in UTF-8 bytes: a declaration written after an emoji on its own line lands
+    /// units too far right, and one written below a CJK comment lands nowhere at all, unless both
+    /// ends of the subtraction are converted first. A language server answers about whatever is at
+    /// the column it is handed rather than reporting the mistake.
+    /// </summary>
+    [Fact]
+    public void TheNamePositionIsAUtf16ColumnAfterMultiByteCharacters()
+    {
+        var source =
+            """
+            // 日本語のコメント — three UTF-8 bytes per character, one UTF-16 unit each.
+            class Widget
+            {
+                string _label = "絵文字 🎉";
+
+                void Resize(int width) { }
+            }
+
+            class 幅 { string s = "🎉🎉"; int width; }
+            """;
+
+        var outline = fixture.Outline(source);
+
+        foreach (var name in new[] { "Widget", "_label", "Resize", "幅", "width" })
+        {
+            var node = Find(outline, name);
+            var line = source.ReplaceLineEndings("\n").Split('\n')[node.NameLine.Value - 1];
+
+            // IndexOf counts UTF-16 units by construction, which is the independent answer.
+            Assert.Equal(line.IndexOf(name, StringComparison.Ordinal), node.NameColumn.Value);
+        }
+
+        // Spelled out for the one declaration written after two emoji and a CJK identifier on its
+        // own line: 33 UTF-16 units in, and 39 bytes in, which is what an unconverted column says.
+        Assert.Equal(new FileLine(9), Find(outline, "width").NameLine);
+        Assert.Equal(new RawColumn(33), Find(outline, "width").NameColumn);
+    }
+
+    /// <summary>
+    /// The all-ASCII file skips the byte-to-character map entirely, so the two paths have to be
+    /// shown to agree on a file the map does cover — here by appending a comment below everything,
+    /// which shifts no byte any declaration sits at.
+    /// </summary>
+    [Fact]
+    public void TheAsciiFastPathAgreesWithTheMappedPath()
+    {
+        var ascii = CodeIntelSamples.Sample;
+        var multiByte = ascii + "\n\n// ✅ 追記: nothing above this line can see it.\n";
+
+        Assert.Equal(NamePositions(fixture.Outline(ascii)), NamePositions(fixture.Outline(multiByte)));
+    }
+
     [Fact]
     public void TheFixtureFileProducesTheCheckedInOutline()
     {
@@ -422,4 +491,22 @@ public class SymbolExtractorTests(CodeIntelFixture fixture)
 
     internal static OutlineNode Find(FileOutline outline, string name) =>
         outline.Flatten().First(n => n.Name == name);
+
+    /// <summary>
+    /// What is actually written at a node's reported name position. Comparing that with the name
+    /// the node carries checks the position against the file rather than against a column a test
+    /// computed the same way the code under test did.
+    /// </summary>
+    internal static string NameTextAt(string source, OutlineNode node)
+    {
+        var lines = source.ReplaceLineEndings("\n").Split('\n');
+        if (node.NameLine.Value < 1 || node.NameLine.Value > lines.Length) return $"<line {node.NameLine.Value}>";
+
+        var line = lines[node.NameLine.Value - 1];
+        var start = Math.Clamp(node.NameColumn.Value, 0, line.Length);
+        return line[start..Math.Min(start + node.Name.Length, line.Length)];
+    }
+
+    private static (string Name, int Line, int Column)[] NamePositions(FileOutline outline) =>
+        outline.Flatten().Select(n => (n.Name, n.NameLine.Value, n.NameColumn.Value)).ToArray();
 }

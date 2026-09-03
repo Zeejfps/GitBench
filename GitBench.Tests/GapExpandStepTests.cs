@@ -76,5 +76,14 @@ public class GapExpandStepTests
     private static FileOutline Outline(params OutlineNode[] roots) => new(roots);
 
     private static OutlineNode Method(int start, int end) =>
-        new("Login", SymbolKind.Method, "string", start, end, SignatureEndLine: start, Children: []);
+        new(
+            "Login",
+            SymbolKind.Method,
+            "string",
+            start,
+            end,
+            SignatureEndLine: start,
+            NameLine: new FileLine(start),
+            NameColumn: new RawColumn(0),
+            Children: []);
 }

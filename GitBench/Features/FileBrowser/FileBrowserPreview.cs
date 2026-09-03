@@ -6,6 +6,7 @@ using GitBench.Features.Markdown.Parsing;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
+using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
 using ZGF.Gui.Desktop.Controllers;
@@ -147,13 +148,31 @@ internal sealed record FileBrowserTextBody : Widget
         if (languageServers is { } definitions)
         {
             var input = ctx.Require<InputSystem>();
+            var usages = new UsagesPopup(
+                ctx, definitions, browser, ctx.Require<IUiDispatcher>(), document);
+            content.Use(() => usages);
+
             content.UseController(input, () => new DefinitionProbeController(
                 content,
                 definitions,
                 browser,
                 ctx.Require<IUiDispatcher>(),
                 document,
-                () => input.Modifiers), EventPhaseFilter.Capture);
+                () => input.Modifiers,
+                usages: usages), EventPhaseFilter.Capture);
+
+            // A lens click asks the same question Shift+F12 does, about the declaration's own name.
+            content.Use(() =>
+            {
+                var subscriptions = new SubscriptionGroup();
+                Action<UsageLensTarget, PointF> activated = (target, anchor) =>
+                    usages.ShowUsagesOf(anchor, target.NameLine, target.NameColumn);
+                content.UsageLensActivated += activated;
+                subscriptions.Add(() => content.UsageLensActivated -= activated);
+                return subscriptions;
+            });
+
+            if (DiffOptions.UsageLensEnabled) KeepUsageCountsFilledIn(ctx, content, browser, definitions);
         }
 
         // Both directions of the header's conversation with the body: a line to reveal on the way
@@ -182,6 +201,44 @@ internal sealed record FileBrowserTextBody : Widget
             South = new Raw { View = hScrollBar },
         };
     }
+
+    /// <summary>
+    /// Keeps the usages rows answered for as long as this body is mounted. The coordinator is asked
+    /// to reconsider on a new file, a scroll and a fold alike: all three change which declarations
+    /// are on screen, and which are on screen is the whole of what decides what is worth asking.
+    /// </summary>
+    /// <remarks>
+    /// This is the one surface the rows appear on. The diff pane and the review window show a file
+    /// as it was at a commit, and a server asked about that answers about the file on disk.
+    /// </remarks>
+    private static void KeepUsageCountsFilledIn(
+        Context ctx, DiffContentView content, FileBrowserViewModel browser, ILanguageServerStore servers) =>
+        content.Use(() =>
+        {
+            var counts = new UsageLensCoordinator(
+                servers,
+                ctx.Require<IUiDispatcher>(),
+                () => (browser.Preview.Value as FilePreview.Text)?.Path,
+                content.VisibleUsageLensTargets,
+                content.UsageLensTargets,
+                rows => content.UsageLensRows = rows,
+                content.SetUsageLens);
+
+            var subscriptions = new SubscriptionGroup();
+            Action<float> scrolled = _ => counts.Refresh();
+            content.VerticalScrollPositionChanged += scrolled;
+            subscriptions.Add(() => content.VerticalScrollPositionChanged -= scrolled);
+            subscriptions.Add(browser.Preview.Subscribe(_ => counts.Refresh()));
+            subscriptions.Add(browser.Folds.Subscribe(_ => counts.Refresh()));
+            // The two things a server does that mean it now knows more about this file than it did
+            // when it last answered: it changed state (started, finished loading, failed), or it
+            // published a fresh wave of diagnostics, which it only does once it has analysed the
+            // project the file sits in. Both are worth asking again on; Recheck bounds how often.
+            subscriptions.Add(servers.Active.Subscribe(_ => counts.Recheck()));
+            subscriptions.Add(servers.Diagnostics.Subscribe(_ => counts.Recheck()));
+            subscriptions.Add(counts);
+            return subscriptions;
+        });
 
     private static DiffRenderState.FullFile ToRenderState(FilePreview.Text text) =>
         new(

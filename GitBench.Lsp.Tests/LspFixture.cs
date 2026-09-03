@@ -31,6 +31,10 @@ internal sealed class LspFixture : IAsyncDisposable
     public Task<LspResponse<Definition>> AskDefinition() =>
         Connection.Send(LspRequests.Definition(SomeFile, LspPosition.At(3, 7)), Budget);
 
+    public Task<LspResponse<References>> AskReferences() =>
+        Connection.Send(
+            LspRequests.References(SomeFile, LspPosition.At(3, 7), includeDeclaration: false), Budget);
+
     /// <summary>One hover per line, all in flight at once.</summary>
     public IReadOnlyList<Task<LspResponse<Hover>>> AskHoversAtLines(int count) =>
         Enumerable.Range(0, count).Select(line => AskHoverAtLine(line)).ToArray();

@@ -805,5 +805,14 @@
   "language_servers.failed_title": "{language} 言語サーバーが失敗しました",
   "language_servers.status_failed": "失敗",
   "language_servers.not_configured": "このファイルのサーバーはありません",
-  "language_servers.chip_tooltip": "このファイルの言語サーバー。クリックで設定を開きます。"
+  "language_servers.chip_tooltip": "このファイルの言語サーバー。クリックで設定を開きます。",
+
+  "usages.filter": "使用箇所を絞り込む…",
+  "usages.no_matches": "一致する使用箇所はありません",
+  "usages.capped": "{total} 件中 {shown} 件を表示",
+
+  "diff.usages": { "other": "{count} 件の使用" },
+  "diff.usages_none": "使用なし",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "使用状況を取得できません"
 }

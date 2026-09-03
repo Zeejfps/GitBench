@@ -805,5 +805,14 @@
   "language_servers.failed_title": "{language} 언어 서버가 실패했습니다",
   "language_servers.status_failed": "실패",
   "language_servers.not_configured": "이 파일에 대한 서버 없음",
-  "language_servers.chip_tooltip": "이 파일의 언어 서버입니다. 클릭하면 설정이 열립니다."
+  "language_servers.chip_tooltip": "이 파일의 언어 서버입니다. 클릭하면 설정이 열립니다.",
+
+  "usages.filter": "사용처 필터…",
+  "usages.no_matches": "일치하는 사용처가 없습니다",
+  "usages.capped": "{total}개 중 {shown}개 표시",
+
+  "diff.usages": { "other": "사용 {count}회" },
+  "diff.usages_none": "사용 없음",
+  "diff.usages_pending": "…",
+  "diff.usages_unsupported": "사용 정보를 사용할 수 없음"
 }

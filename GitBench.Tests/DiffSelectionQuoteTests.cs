@@ -101,7 +101,9 @@ public sealed class DiffSelectionQuoteTests
             start,
             end,
             SignatureEndLine: start,
-            children ?? []);
+            NameLine: new FileLine(start),
+            NameColumn: new RawColumn(0),
+            Children: children ?? []);
     }
 
     private static DiffSelectionQuote QuoteWith(int fromRow, int toRow, DiffAnnotations annotations) =>

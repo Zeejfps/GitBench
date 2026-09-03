@@ -320,6 +320,73 @@ public class DiffSelectionViewTests
         }
     }
 
+    // A drag is allowed to leave the rows in either direction and keep extending to the end it ran
+    // off. Rows are not all one height any more, so which row that is no longer falls out of a
+    // division — it comes from the list's own geometry.
+    [Fact]
+    public void ADragRunningOffTheBottomSelectsThroughTheLastRow()
+    {
+        var (h, view, clipboard) = Create();
+        using (h)
+        {
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            h.Render();
+
+            h.MoveTo(XOfColumn(0), RowCenterY(1));
+            h.Press();
+            h.MoveTo(XOfColumn(0), RowCenterY(3));
+            // The file is far shorter than the viewport, so this is inside the widget and past the
+            // last row at the same time; past its right edge too, so the last line comes whole.
+            h.MoveTo(XOfColumn(40), 20f);
+            h.Release();
+            h.PressKey(KeyboardKey.C, InputModifiers.Control);
+
+            Assert.Equal(
+                string.Join('\n',
+                    "var alpha = 1;",
+                    "var beta = 2;",
+                    "var gamma = 3;",
+                    "return alpha;",
+                    "int x = 0;",
+                    "old();",
+                    "fresh();",
+                    "return x;"),
+                clipboard.Text);
+        }
+    }
+
+    [Fact]
+    public void ADragRunningOffTheTopSelectsBackThroughTheFirstRow()
+    {
+        var (h, view, clipboard) = Create();
+        using (h)
+        {
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            h.Render();
+
+            h.MoveTo(XOfColumn(8), RowCenterY(8)); // the end of "fresh();"
+            h.Press();
+            h.MoveTo(XOfColumn(8), RowCenterY(6));
+            h.MoveTo(XOfColumn(8), 700f); // above the widget entirely
+            h.Release();
+            // Copy is hover-scoped, and the drag ended off the view, so the pointer comes back
+            // before the keystroke.
+            h.MoveTo(XOfColumn(2), RowCenterY(3));
+            h.PressKey(KeyboardKey.C, InputModifiers.Control);
+
+            Assert.Equal(
+                string.Join('\n',
+                    "var alpha = 1;",
+                    "var beta = 2;",
+                    "var gamma = 3;",
+                    "return alpha;",
+                    "int x = 0;",
+                    "old();",
+                    "fresh();"),
+                clipboard.Text);
+        }
+    }
+
     [Fact]
     public void EscapeClearsTheSelection()
     {

@@ -4,9 +4,9 @@ using GitBench.Theming;
 namespace GitBench.Features.Diff;
 
 /// <summary>
-/// Flat row stream the virtualized content view walks. Banners (rename/mode/truncated),
-/// hunk separators, and individual diff lines all share a uniform row height so visible-range
-/// math is trivial (floor/ceil on scrollY÷rowHeight).
+/// Flat row stream the virtualized content view walks: banners (rename/mode/truncated), hunk
+/// separators, individual diff lines, and the code-vision rows annotating declarations.
+/// <see cref="DiffRowMetrics"/> is what says how tall each one draws.
 /// </summary>
 /// <summary>
 /// Expander state for the gap a separator bar bridges: which expander icons it shows and how
@@ -45,4 +45,22 @@ internal abstract record DiffRow
         IReadOnlyList<TokenSpan>? Spans = null,
         IReadOnlyList<CharRange>? Emphasis = null,
         FoldMark? Fold = null) : DiffRow;
+    /// <summary>
+    /// The usages row above a declaration. It carries no text: the rows are flattened the moment
+    /// the file is parsed, and the counts arrive one declaration at a time long afterwards, so what
+    /// it says comes from <see cref="UsageLensOverlay"/> at draw time. What is fixed at flatten
+    /// time is where it points and where it sits — the declaration's first line (past any
+    /// attribute or decorator), the containment path folds key on so both features name a
+    /// declaration the same way, and its indent in tab-expanded cells, so the lens lines up with
+    /// the signature under it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="NameLine"/> and <see cref="NameColumn"/> are where the declaration's own name is
+    /// written, which is a different place from <see cref="At"/> — a server answers about the
+    /// identifier, and asking at the start of the line lands on <c>public static async</c>. Carried
+    /// here rather than looked up again, so nothing downstream needs the outline to ask the
+    /// question, and there is no id that could fail to resolve back to a declaration.
+    /// </remarks>
+    public sealed record Lens(
+        FileLine At, string Id, int Indent, FileLine NameLine, RawColumn NameColumn) : DiffRow;
 }

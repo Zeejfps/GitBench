@@ -63,3 +63,41 @@ internal interface IDefinitionSource
     Task<DefinitionReply> DefineAsync(
         string absolutePath, FileLine line, RawColumn column, CancellationToken ct);
 }
+
+/// <summary>
+/// Where a symbol is used, the declaration itself excluded — so the number of sites is the number
+/// a reader is shown.
+/// </summary>
+/// <remarks>
+/// A symbol nothing uses and a question that could not be put are held apart, rather than both
+/// arriving as an empty list, because the count is shown as a sentence about the code: "no usages"
+/// over a symbol whose server never started says the code is dead, which is the one thing this
+/// feature must never say by accident. <see cref="Answered"/> with an empty list is the real zero.
+/// </remarks>
+internal abstract record ReferenceReply
+{
+    private ReferenceReply() { }
+
+    /// <summary>Nobody could be asked: no server for the file, a server that does not answer the
+    /// question, one that never finished starting, or a file it could not be shown.</summary>
+    public sealed record Unavailable : ReferenceReply
+    {
+        public static readonly Unavailable Instance = new();
+    }
+
+    public sealed record Answered(IReadOnlyList<DefinitionTarget> Sites) : ReferenceReply;
+}
+
+internal interface IReferenceSource
+{
+    /// <summary>
+    /// Whether a usage count for this file is worth asking for. Optimistic while the server for it
+    /// has yet to launch: the answer is wanted synchronously, before the row that would carry the
+    /// count is built, and a "no" that turns into a "yes" a second later inserts rows into text
+    /// somebody is already reading.
+    /// </summary>
+    bool CanReference(string absolutePath);
+
+    Task<ReferenceReply> ReferencesAsync(
+        string absolutePath, FileLine line, RawColumn column, CancellationToken ct);
+}
