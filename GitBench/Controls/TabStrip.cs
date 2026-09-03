@@ -66,8 +66,9 @@ internal sealed record TabStrip : Widget
             Child = new Padding
             {
                 // A hair of lead-in, so the first tab is not welded to whatever the pane's leading
-                // edge happens to be.
-                Amount = new PaddingStyle { Left = Spacing.Xs },
+                // edge happens to be. None of it behind a leading slot: there the divider is the
+                // edge, and a gap either side of it strands it between two things it is joining.
+                Amount = new PaddingStyle { Left = Leading is null ? Spacing.Xs : 0 },
                 Children =
                 [
                     // Reuses the Actions toolbar's scrollbar-less horizontal scroller: once the tabs
@@ -143,9 +144,9 @@ internal sealed record TabStrip : Widget
 /// apart, as they are in this theme. A saturated fill was what this had first, and it put a second
 /// row of the mode switcher's own selected-segment colour directly beneath the mode switcher.
 /// <para>
-/// The others carry a fill of their own, a step behind the strip, and a hairline on the trailing
-/// edge. Left unpainted they were the strip, which said nothing at all where the surface below
-/// happens to be the strip's own colour — the file browser, whose header the active tab joins.
+/// The others are the strip, with a hairline on the trailing edge and the strip's rule under them.
+/// Giving them a fill a step behind it was tried and read as the run being recessed rather than as
+/// the active one being lifted out of it.
 /// </para>
 /// </remarks>
 internal sealed record TabChrome : Widget
@@ -236,7 +237,7 @@ internal sealed record TabChrome : Widget
         uint Fill(ThemeStyles s) =>
             IsActive() ? ContentBackground(s)
             : hover.Value ? s.TabStrip.InactiveHoverBackground
-            : s.TabStrip.InactiveBackground;
+            : s.TabStrip.Background;
 
         var pill = new Box
         {

@@ -155,7 +155,7 @@ internal sealed record FileBrowserPreviewHeader : Widget
                 servers,
                 toggle,
             },
-        }, topBorder: false);
+        }, topBorder: false, background: FileBrowserTabStrip.Content);
     }
 
     // U+203A, not a chevron glyph: the header's text runs are in the UI font, and a lucide glyph

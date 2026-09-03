@@ -35,8 +35,11 @@ internal sealed record FileBrowserTabStrip : Widget
         ],
     };
 
-    /// <summary>What the active tab wears: the header bar directly below the strip.</summary>
-    internal static uint Content(ThemeStyles s) => s.FileChangesSection.HeaderBackground;
+    /// <summary>
+    /// What the active tab wears, and what the path bar below it is painted with: the preview's own
+    /// surface, so tab, path bar and file are one plane the strip is cut out of.
+    /// </summary>
+    internal static uint Content(ThemeStyles s) => s.DiffView.PanelBackground;
 }
 
 /// <summary>Back and forward, in that order and pinned before the tabs.</summary>
@@ -53,10 +56,12 @@ internal sealed record FileBrowserHistoryButtons : Widget
 
     protected override IWidget Build(Context ctx) => new Padding
     {
+        // Even on both sides, so the buttons sit centred in the segment the strip's divider closes
+        // rather than pushed against it.
         Amount = new PaddingStyle
         {
             Left = Spacing.Sm,
-            Right = Spacing.Xs,
+            Right = Spacing.Sm,
             Top = Inset,
             Bottom = Inset,
         },

@@ -102,9 +102,15 @@ internal static class FileChangesUI
     }
 
     /// <param name="topBorder">Whether the bar rules its own top edge. Dropped when a tab strip sits
-    /// directly above it: the active tab wears this bar's colour so it reads as a notch cut through
-    /// to it, and a rule would cut straight across the one join that has to be invisible.</param>
-    public static RectView CreateHeaderBar(Context ctx, View content, bool topBorder = true)
+    /// directly above it, which draws that rule itself so the active tab can break it.</param>
+    /// <param name="background">The bar's fill. Defaults to the section header's own; a bar that
+    /// heads a surface rather than a list — the file browser's path bar — passes that surface, so
+    /// the bar reads as its top edge and the tab above it has something to join.</param>
+    public static RectView CreateHeaderBar(
+        Context ctx,
+        View content,
+        bool topBorder = true,
+        Func<ThemeStyles, uint>? background = null)
     {
         var theme = ctx.Theme();
         var view = new RectView
@@ -125,7 +131,7 @@ internal static class FileChangesUI
                 },
             },
         };
-        view.BindThemedBackgroundColor(theme, s => s.FileChangesSection.HeaderBackground);
+        view.BindThemedBackgroundColor(theme, background ?? (static s => s.FileChangesSection.HeaderBackground));
         view.BindThemedBorderColor(theme, s => new BorderColorStyle
         {
             Top = topBorder ? s.FileChangesSection.HeaderBorder : 0u,
