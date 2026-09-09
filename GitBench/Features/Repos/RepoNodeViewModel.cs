@@ -244,7 +244,6 @@ internal sealed class RepoNodeViewModel : IDisposable
         AddHotkeyMenu(items, s, repo);
         AddWorktreeMenu(items, s, repo);
         AddSubmoduleMenu(items, s, repo);
-        AddMoveToGroupMenu(items, s, repo);
         return items;
     }
 
@@ -353,25 +352,6 @@ internal sealed class RepoNodeViewModel : IDisposable
             LucideIcons.Pull));
     }
 
-    // "Move to <group>" last, in its own section — this list grows and shrinks with the group set,
-    // so keeping it at the bottom leaves the fixed actions above it stable.
-    private void AddMoveToGroupMenu(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
-    {
-        var sourceGroup = _registry.FindGroupContaining(repo.Id);
-        var moveTargets = _registry.Groups.Where(g => sourceGroup == null || g.Id != sourceGroup.Id).ToList();
-        if (moveTargets.Count == 0) return;
-
-        items.Add(RepoBarContextMenu.Separator);
-        foreach (var group in moveTargets)
-        {
-            var captured = group;
-            items.Add(new RepoBarContextMenu.Item(
-                s.ReposRepoMoveToGroup(captured.Name.Value),
-                () => _registry.MoveRepo(repo.Id, captured.Id, captured.RepoIds.Count),
-                LucideIcons.FolderInput));
-        }
-    }
-
     private void AddOpenRemoteItem(List<RepoBarContextMenu.Item> items, Strings s, Repo repo)
     {
         if (_shell is null) return;
@@ -426,6 +406,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (worktree.CustomName is not null)
             items.Add(new RepoBarContextMenu.Item(s.ReposRepoResetName, () => _registry.ResetRepoName(worktree.Id), LucideIcons.X));
 
+        if (_clipboard is not null)
+            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(worktree.Path), LucideIcons.Copy));
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(worktree.Path), LucideIcons.FolderOpen));
         AddOpenRemoteItem(items, s, worktree);
@@ -450,6 +432,8 @@ internal sealed class RepoNodeViewModel : IDisposable
         if (!submodule.IsMissing)
             items.Add(new RepoBarContextMenu.Item(s.ReposSubmoduleSwitchTo, () => _registry.SetActive(submodule.Id), LucideIcons.Package));
 
+        if (_clipboard is not null)
+            items.Add(new RepoBarContextMenu.Item(s.ReposRepoCopyPath, () => CopyPath(submodule.Path), LucideIcons.Copy));
         if (_shell is not null)
             items.Add(new RepoBarContextMenu.Item(s.CommonOpenFolder, () => _shell.OpenFolder(submodule.Path), LucideIcons.FolderOpen));
         if (!submodule.IsMissing)

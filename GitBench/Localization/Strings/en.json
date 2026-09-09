@@ -489,7 +489,6 @@
   "repos.repo_prune_worktrees": "Prune worktrees",
   "repos.repo_add_submodule": "Add submodule…",
   "repos.repo_update_all_submodules": "Update all submodules…",
-  "repos.repo_move_to_group": "Move to: {name}",
   "repos.repo_remove": "Remove repo",
   "repos.repo_remove_title": "Remove repository",
   "repos.repo_remove_body": "Remove “{name}” from {app}? This only removes it from the sidebar — the repository's files stay on disk.",

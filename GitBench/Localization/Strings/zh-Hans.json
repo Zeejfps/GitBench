@@ -488,7 +488,6 @@
   "repos.repo_prune_worktrees": "清理工作树",
   "repos.repo_add_submodule": "添加子模块…",
   "repos.repo_update_all_submodules": "更新所有子模块…",
-  "repos.repo_move_to_group": "移动到: {name}",
   "repos.repo_remove": "移除仓库",
   "repos.repo_remove_title": "移除仓库",
   "repos.repo_remove_body": "从 {app} 中移除“{name}”？这只会将其从侧边栏移除，仓库文件仍保留在磁盘上。",

@@ -489,7 +489,6 @@
   "repos.repo_prune_worktrees": "Podar árboles de trabajo",
   "repos.repo_add_submodule": "Añadir submódulo…",
   "repos.repo_update_all_submodules": "Actualizar todos los submódulos…",
-  "repos.repo_move_to_group": "Mover a: {name}",
   "repos.repo_remove": "Quitar repositorio",
   "repos.repo_remove_title": "Quitar repositorio",
   "repos.repo_remove_body": "¿Quitar «{name}» de {app}? Solo se quita de la barra lateral; los archivos del repositorio permanecen en el disco.",

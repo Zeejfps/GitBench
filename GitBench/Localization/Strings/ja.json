@@ -488,7 +488,6 @@
   "repos.repo_prune_worktrees": "ワークツリーを整理",
   "repos.repo_add_submodule": "サブモジュールを追加…",
   "repos.repo_update_all_submodules": "すべてのサブモジュールを更新…",
-  "repos.repo_move_to_group": "移動先: {name}",
   "repos.repo_remove": "リポジトリを削除",
   "repos.repo_remove_title": "リポジトリを削除",
   "repos.repo_remove_body": "「{name}」を {app} から削除しますか？ サイドバーから削除されるだけで、リポジトリのファイルはディスクに残ります。",

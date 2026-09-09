@@ -571,7 +571,6 @@
   "repos.repo_prune_worktrees": "Очистить рабочие деревья",
   "repos.repo_add_submodule": "Добавить подмодуль…",
   "repos.repo_update_all_submodules": "Обновить все подмодули…",
-  "repos.repo_move_to_group": "Переместить в: {name}",
   "repos.repo_remove": "Убрать репозиторий",
   "repos.repo_remove_title": "Убрать репозиторий",
   "repos.repo_remove_body": "Убрать «{name}» из {app}? Он будет убран только из боковой панели — файлы репозитория останутся на диске.",
