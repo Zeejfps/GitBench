@@ -78,6 +78,14 @@ internal sealed class GrowingDescriptionField : ContainerView
         set => _inputController.OnShiftTab = value;
     }
 
+    /// <summary>The owner's Ctrl/Cmd+Enter submit action. Independent of <see cref="OnSubmit"/>:
+    /// a field can take the chord without giving up plain Enter's newline.</summary>
+    public Action? OnSubmitChord
+    {
+        get => _inputController.OnSubmitChord;
+        set => _inputController.OnSubmitChord = value;
+    }
+
     public void Clear() => _input.Clear();
 
     public void SetText(ReadOnlySpan<char> text) => _input.SetText(text);

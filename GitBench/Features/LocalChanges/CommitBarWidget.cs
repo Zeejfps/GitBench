@@ -151,11 +151,13 @@ internal sealed record CommitBarWidget : Widget
                 canFocus: () => Active.Value);
             titleController.OnTab = () => FocusRing.Next(titleStop);
             titleController.OnShiftTab = () => FocusRing.Previous(titleStop);
+            titleController.OnSubmitChord = CommitFromField;
 
             var descriptionStop = FocusRing.Add(descriptionField.BeginEditing, descriptionField.EndEditing,
                 canFocus: () => Active.Value);
             descriptionField.OnTab = () => FocusRing.Next(descriptionStop);
             descriptionField.OnShiftTab = () => FocusRing.Previous(descriptionStop);
+            descriptionField.OnSubmitChord = CommitFromField;
 
             var commitStop = FocusRing.Add(
                 () => input.StealFocus(commitController),
@@ -163,6 +165,14 @@ internal sealed record CommitBarWidget : Widget
                 canFocus: () => Active.Value && commitWidget.State.Enabled.Value);
             commitController.OnTab = () => FocusRing.Next(commitStop);
             commitController.OnShiftTab = () => FocusRing.Previous(commitStop);
+        }
+
+        // Ctrl/Cmd+Enter from either editable field. Commit() only guards against a double
+        // submit, so the enabled check the button gets from its Command is applied here too.
+        void CommitFromField()
+        {
+            if (!vm.CommitEnabled.Value) return;
+            vm.Commit();
         }
     }
 
