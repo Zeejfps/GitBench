@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
@@ -169,7 +170,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             headerContent = _headerText;
         }
 
-        var headerBar = FileChangesUI.CreateHeaderBar(ctx, headerContent);
+        var headerBar = FileChangesUI.CreateHeaderBar(
+            ctx, headerContent, topBorder: false, background: RepoContentTabs.Content);
 
         // Parks itself when settled so it adds no idle repaints. EaseOutCubic = quick start,
         // gentle landing.

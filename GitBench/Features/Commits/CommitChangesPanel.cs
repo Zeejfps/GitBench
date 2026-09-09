@@ -76,6 +76,13 @@ internal sealed record CommitChangesPanel : IWidget
     /// <summary>Overrides the view shown when the list is empty; null keeps the section's default text.</summary>
     public Func<Context, View>? EmptyState { get; init; }
 
+    /// <summary>
+    /// Whether this panel is the top of the content panel rather than a column inside one. When it
+    /// is, the header drops its own top rule and wears the panel's fill, so the tab strip's join —
+    /// the one the active tab breaks — is the only line there.
+    /// </summary>
+    public bool HeadsContentPanel { get; init; }
+
     public View BuildView(Context ctx) => new CommitChangesPanelView(this, ctx, ctx.Require<CommitDetailsViewModel>());
 }
 
@@ -128,7 +135,8 @@ internal sealed class CommitChangesPanelView : ContainerView
             {
                 vm.SetCursorFolder(folderPath);
                 _arrowController.TakeFocus();
-            });
+            },
+            headsContentPanel: props.HeadsContentPanel);
         AddChildToSelf(_changesSection);
 
         // Up/Down arrow navigation over the rows, mirroring the local-changes panels: folder rows are

@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.StatusBar;
@@ -69,7 +70,7 @@ internal sealed record CommitSearchBarView : Widget
         {
             Height = BarHeight,
             BorderSize = new BorderSizeStyle { Bottom = 1 },
-            Background = Theme.Color(s => s.CommitsView.HeaderBackground),
+            Background = Theme.Color(RepoContentTabs.Content),
             BorderColor = Theme.BorderColor(s => new BorderColorStyle { Bottom = s.CommitsView.HeaderBorderBottom }),
             Children =
             [

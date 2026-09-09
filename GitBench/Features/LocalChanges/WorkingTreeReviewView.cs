@@ -85,9 +85,10 @@ internal sealed record WorkingTreeReviewView : Widget
                     {
                         Value = model.IsLoading,
                         Case = loading => loading
-                            ? new FadeIn { Bloom = true, Child = new ReviewTreeSkeleton() }
+                            ? new FadeIn { Bloom = true, Child = new ReviewTreeSkeleton { HeadsContentPanel = true } }
                             : new CommitChangesPanel
                             {
+                                HeadsContentPanel = true,
                                 EmptyState = c => FileChangesUI.CreateEmptyState(
                                     c,
                                     LucideIcons.CircleCheck,
@@ -146,10 +147,7 @@ internal sealed record WorkingTreeReviewView : Widget
                     MinResizeWidth = 220f,
                     MaxResizeWidth = 560f,
                 },
-                // The sidebar's file-list header carries its own top border, but the stacked diff
-                // surface has no header — without this the rule under the toolbar would die at the
-                // sidebar's edge. In the review *window* the header bar spans both columns instead.
-                Center = TopRuled(new Stack
+                Center = new Stack
                 {
                     Children =
                     [
@@ -165,17 +163,9 @@ internal sealed record WorkingTreeReviewView : Widget
                             Then = () => Centered(L.T(s => s.ReviewNoLocalChanges)),
                         },
                     ],
-                }),
+                },
             },
         ],
-    };
-
-    // A 1px rule along the top edge, in the file-list header's border color so it continues that line.
-    private static IWidget TopRuled(IWidget child) => new Box
-    {
-        BorderSize = new BorderSizeStyle { Top = 1 },
-        BorderColor = Theme.BorderColor(s => new BorderColorStyle { Top = s.FileChangesSection.HeaderBorder }),
-        Children = [child],
     };
 
     private static IWidget Centered(Prop<string?> text) => new Center

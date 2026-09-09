@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
@@ -137,6 +138,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     public float VerticalScale { get; private set; } = 1f;
     public float HorizontalScale { get; private set; } = 1f;
 
+    /// <param name="headsContentPanel">Whether this section is the top of the content panel rather
+    /// than a section inside one. When it is, the header bar drops its own top rule and wears the
+    /// panel's fill, so the tab strip's join — the one the active tab breaks — is the only line
+    /// there.</param>
     internal FileChangesSection(
         Context ctx,
         string title,
@@ -150,7 +155,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         Action<PointF>? onEmptyContextMenu = null,
         View? emptyView = null,
         Action<string>? onToggleFolder = null,
-        Action<string>? onFolderClicked = null)
+        Action<string>? onFolderClicked = null,
+        bool headsContentPanel = false)
     {
         _title = title;
         _canvas = ctx.Canvas;
@@ -223,7 +229,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
         AddChildToSelf(new BorderLayoutView
         {
-            North = FileChangesUI.CreateHeaderBar(ctx, headerContent),
+            North = headsContentPanel
+                ? FileChangesUI.CreateHeaderBar(
+                    ctx, headerContent, topBorder: false, background: RepoContentTabs.Content)
+                : FileChangesUI.CreateHeaderBar(ctx, headerContent),
             Center = _bodyContainer,
             East = _scrollBar,
             South = _hScrollBar,

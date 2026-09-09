@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Widgets;
@@ -17,6 +18,13 @@ namespace GitBench.Features.Review;
 /// </summary>
 internal sealed record ReviewTreeSkeleton : Widget
 {
+    /// <summary>
+    /// Whether the tree it stands in for is the top of the content panel rather than a column inside
+    /// one — matching <c>CommitChangesPanel.HeadsContentPanel</c>, so the header the skeleton is
+    /// wearing is the one the real panel will.
+    /// </summary>
+    public bool HeadsContentPanel { get; init; }
+
     private const float RowHeight = FileChangesUI.RowHeight;
     private const float BadgeSize = FileChangesUI.BadgeSize;
     private const int FileRowCount = 12;
@@ -72,7 +80,9 @@ internal sealed record ReviewTreeSkeleton : Widget
         // The section header bar (real chrome, skeleton title), mirroring the "Changes" header.
         var header = new Box
         {
-            Background = Prop.Bind(() => theme.Styles.Value.FileChangesSection.HeaderBackground),
+            Background = Prop.Bind(() => HeadsContentPanel
+                ? RepoContentTabs.Content(theme.Styles.Value)
+                : theme.Styles.Value.FileChangesSection.HeaderBackground),
             BorderSize = new BorderSizeStyle { Bottom = 1 },
             BorderColor = Prop.Bind(() => new BorderColorStyle
             {
