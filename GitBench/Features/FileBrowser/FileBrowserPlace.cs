@@ -10,3 +10,12 @@ namespace GitBench.Features.FileBrowser;
 /// back to a file whose parse has moved on still lands on the file.
 /// </remarks>
 internal sealed record FileBrowserPlace(string AbsolutePath, string? RowKey, int Line);
+
+/// <summary>
+/// A move of the browser's preview, as the content panel's trail needs to hear it.
+/// </summary>
+/// <param name="From">Where the browser was, or null when it was showing nothing — which is not a
+/// place, and not something to come back to.</param>
+/// <param name="IsMove">False when the file asked for is the one already on screen. The panel may
+/// still have to swing over to it from another tab, but there is nothing new to come back from.</param>
+internal readonly record struct FileBrowserMove(FileBrowserPlace? From, bool IsMove);

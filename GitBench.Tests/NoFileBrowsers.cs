@@ -8,4 +8,8 @@ namespace GitBench.Tests;
 internal sealed class NoFileBrowsers : IFileBrowserStore
 {
     public IReadable<FileBrowserViewModel?> Active { get; } = new State<FileBrowserViewModel?>(null);
+
+    public event Action<FileBrowserMove>? FileShown { add { } remove { } }
+
+    public event Action? AllFilesClosed { add { } remove { } }
 }

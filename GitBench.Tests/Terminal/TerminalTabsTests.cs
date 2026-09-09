@@ -20,112 +20,88 @@ public class TerminalTabsTests
     readonly List<TabsLaunch> _launches = new();
 
     [Fact]
-    public void ARepository_StartsWithOneTerminalAndItIsTheActiveOne()
+    public void ARepository_StartsWithNoTerminals()
     {
-        // Not zero: a terminal pane with no terminal in it is a state the pane would have to draw
-        // something for and the reader would have no way out of.
+        // Not one waiting to be started: a terminal exists because someone pressed for one, so a
+        // repository nobody has asked has nothing in its strip and nothing on screen.
         using var tabs = Tabs();
 
-        Assert.Single(tabs.Terminals);
-        Assert.Same(tabs.Terminals[0], tabs.Active.Value);
+        Assert.Empty(tabs.Terminals);
+        Assert.Null(tabs.Active.Value);
     }
 
     [Fact]
-    public void OpeningATab_AddsItAndPutsItOnScreen()
+    public void StartingATerminal_AddsItPutsItOnScreenAndAsksForAShell()
     {
         using var tabs = Tabs();
-        var first = tabs.Active.Value;
 
-        var opened = tabs.Open();
+        var opened = tabs.StartNew();
 
-        Assert.Equal(2, tabs.Terminals.Count);
+        Assert.Equal(new[] { opened }, tabs.Terminals.ToArray());
         Assert.Same(opened, tabs.Active.Value);
-        Assert.NotSame(first, opened);
+        Assert.IsType<TerminalRenderState.Starting>(opened.Render.Value);
     }
 
     [Fact]
-    public void OpeningATab_StartsNothing()
+    public void StartingASecondTerminal_LeavesTheFirstAndTakesTheScreen()
     {
-        // Making a terminal is not starting a shell — only a click is.
         using var tabs = Tabs();
+        var first = tabs.StartNew();
 
-        var opened = tabs.Open();
+        var second = tabs.StartNew();
 
-        Assert.IsType<TerminalRenderState.Idle>(opened.Render.Value);
-        Assert.DoesNotContain(_launches, l => l.Started);
+        Assert.Equal(new[] { first, second }, tabs.Terminals.ToArray());
+        Assert.Same(second, tabs.Active.Value);
     }
 
     [Fact]
-    public void ARepositoryWhoseTerminalHasNeverRun_HasNothingStarted()
+    public void TheSpawn_WaitsForTheGridToSayHowBigItIs()
     {
-        // What the pane reads to decide there is no strip to draw yet: the offer to start a shell
-        // stands on its own, with no tab naming one that does not exist.
+        // A shell has to be told its size, so asking for one is not yet running one — the grid
+        // reporting a viewport is what finishes the gesture.
         using var tabs = Tabs();
 
-        Assert.False(tabs.AnyStarted);
+        var terminal = tabs.StartNew();
+
+        Assert.False(_launches[0].Started);
+        terminal.ReportViewport(Viewport);
+        Pump.WaitFor(
+            _dispatcher, () => terminal.Render.Value is TerminalRenderState.Running, "the shell");
+        Assert.True(_launches[0].Started);
     }
 
     [Fact]
-    public void OnceATerminalHasRun_SomethingIsStarted()
+    public void ClosingTheLastTab_LeavesTheRepositoryWithNone()
     {
+        // An empty strip, not a fresh unstarted terminal: there is nothing left to be on screen,
+        // and the panel goes back to whatever it was showing before.
         using var tabs = Tabs();
-
-        StartShell(tabs.Active.Value);
-
-        Assert.True(tabs.AnyStarted);
-    }
-
-    [Fact]
-    public void AShellThatHasExited_StillCountsAsStarted()
-    {
-        // The screen it left is still readable, and the tab is how it stays reachable.
-        using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
-
-        _launches[0].Pty!.ShellExits();
-        Pump.WaitFor(_dispatcher, () => terminal.Render.Value is TerminalRenderState.Exited, "the exit");
-
-        Assert.True(tabs.AnyStarted);
-    }
-
-    [Fact]
-    public void ClosingTheLastTab_LeavesAFreshIdleTerminalInItsPlace()
-    {
-        // Not an empty strip: the repository goes back to the state it was activated in, which is
-        // the offer to start a shell with no strip over it.
-        using var tabs = Tabs();
-        var only = tabs.Active.Value;
-        StartShell(only);
+        var only = StartShell(tabs);
 
         tabs.Close(only);
 
-        var replacement = Assert.Single(tabs.Terminals);
-        Assert.NotSame(only, replacement);
-        Assert.Same(replacement, tabs.Active.Value);
-        Assert.IsType<TerminalRenderState.Idle>(replacement.Render.Value);
+        Assert.Empty(tabs.Terminals);
+        Assert.Null(tabs.Active.Value);
     }
 
     [Fact]
-    public void ClosingTheLastTab_EndsItsShellAndTakesTheStripWithIt()
+    public void ClosingTheLastTab_EndsItsShell()
     {
         using var tabs = Tabs();
-        var only = tabs.Active.Value;
-        StartShell(only);
+        var only = StartShell(tabs);
 
         tabs.Close(only);
 
         Assert.True(_launches[0].Pty!.IsDisposed, "Closing the last tab left its shell running.");
         Assert.False(tabs.HasLiveShell);
-        Assert.False(tabs.AnyStarted);
     }
 
     [Fact]
     public void ClosingTheActiveTab_LeavesTheNeighbourOnScreen()
     {
         using var tabs = Tabs();
-        var first = tabs.Active.Value;
-        var second = tabs.Open();
+        var first = tabs.StartNew();
+        var second = tabs.StartNew();
 
         tabs.Close(second);
 
@@ -137,8 +113,8 @@ public class TerminalTabsTests
     public void ClosingATabThatIsNotOnScreen_LeavesTheActiveOneAlone()
     {
         using var tabs = Tabs();
-        var first = tabs.Terminals[0];
-        var second = tabs.Open();
+        var first = tabs.StartNew();
+        var second = tabs.StartNew();
 
         tabs.Close(first);
 
@@ -150,9 +126,8 @@ public class TerminalTabsTests
     public void ClosingATab_EndsItsShell()
     {
         using var tabs = Tabs();
-        tabs.Open();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
+        tabs.StartNew();
+        var terminal = StartShell(tabs);
 
         tabs.Close(terminal);
 
@@ -165,8 +140,9 @@ public class TerminalTabsTests
         // The confirmation is modal to the window and this list is not frozen while it is up: a
         // repository can close and a shell can exit between the middle click and the answer.
         using var tabs = Tabs();
-        var second = tabs.Open();
-        var third = tabs.Open();
+        tabs.StartNew();
+        var second = tabs.StartNew();
+        var third = tabs.StartNew();
         tabs.Close(second);
 
         tabs.Close(second);
@@ -181,18 +157,18 @@ public class TerminalTabsTests
         // The quit confirmation reads this, and a shell it cannot see is exactly the one it must not
         // forget to name.
         using var tabs = Tabs();
-        StartShell(tabs.Active.Value);
-        tabs.Open();
+        var hidden = StartShell(tabs);
+        tabs.StartNew();
 
-        Assert.False(tabs.Active.Value.HasLiveShell);
+        Assert.NotSame(hidden, tabs.Active.Value);
+        Assert.True(hidden.HasLiveShell);
         Assert.True(tabs.HasLiveShell);
     }
 
     [Fact]
-    public void WithNothingStarted_NothingIsHoldingAShell()
+    public void ARepositoryWithNoTerminals_IsHoldingNoShell()
     {
         using var tabs = Tabs();
-        tabs.Open();
 
         Assert.False(tabs.HasLiveShell);
     }
@@ -202,7 +178,7 @@ public class TerminalTabsTests
     {
         using var tabs = Tabs();
         using var other = new TerminalInstance(NewLaunch(), _dispatcher);
-        var active = tabs.Active.Value;
+        var active = tabs.StartNew();
 
         tabs.Activate(other);
 
@@ -213,8 +189,8 @@ public class TerminalTabsTests
     public void DisposingTheTabs_EndsEveryShell()
     {
         var tabs = Tabs();
-        StartShell(tabs.Active.Value);
-        StartShell(tabs.Open());
+        StartShell(tabs);
+        StartShell(tabs);
 
         tabs.Dispose();
 
@@ -226,15 +202,14 @@ public class TerminalTabsTests
     {
         using var tabs = Tabs();
 
-        Assert.Equal("shell", TerminalTabLabels.NameOf(tabs.Active.Value));
+        Assert.Equal("shell", TerminalTabLabels.NameOf(tabs.StartNew()));
     }
 
     [Fact]
     public void ATerminalWhoseProgramSetATitle_IsCalledThat()
     {
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
+        var terminal = StartShell(tabs);
 
         _launches[0].Pty!.Emit("\u001b]2;vim README.md\u0007");
         Pump.WaitFor(_dispatcher, () => terminal.Title.Value == "vim README.md", "the title");
@@ -246,7 +221,7 @@ public class TerminalTabsTests
     public void ATerminalTheUserNamed_IsCalledThat()
     {
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
+        var terminal = tabs.StartNew();
 
         terminal.Rename("build");
 
@@ -258,8 +233,7 @@ public class TerminalTabsTests
     {
         // A tab is renamed precisely so it stops following the running command.
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
+        var terminal = StartShell(tabs);
         terminal.Rename("build");
 
         _launches[0].Pty!.Emit("\u001b]2;vim README.md\u0007");
@@ -273,8 +247,7 @@ public class TerminalTabsTests
     {
         // Not to the title it had when the rename happened: the name is given back, not restored.
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
+        var terminal = StartShell(tabs);
         terminal.Rename("build");
 
         _launches[0].Pty!.Emit("\u001b]2;vim README.md\u0007");
@@ -291,7 +264,7 @@ public class TerminalTabsTests
         // An emptied field reads as asking for the name the tab had before it was touched, and
         // whitespace is not something a strip could show.
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
+        var terminal = tabs.StartNew();
         terminal.Rename("build");
 
         terminal.Rename("   ");
@@ -304,7 +277,7 @@ public class TerminalTabsTests
     public void AGivenName_IsTrimmed()
     {
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
+        var terminal = tabs.StartNew();
 
         terminal.Rename("  build  ");
 
@@ -316,8 +289,8 @@ public class TerminalTabsTests
     {
         // The dialog is answered later, and the tab it was opened from can be closed in between.
         using var tabs = Tabs();
-        tabs.Open();
-        var terminal = tabs.Active.Value;
+        tabs.StartNew();
+        var terminal = tabs.StartNew();
         tabs.Close(terminal);
 
         terminal.Rename("build");
@@ -329,8 +302,8 @@ public class TerminalTabsTests
     public void TabsTheUserNamedTheSame_AreNumbered()
     {
         using var tabs = Tabs();
-        var first = tabs.Active.Value;
-        var second = tabs.Open();
+        var first = tabs.StartNew();
+        var second = tabs.StartNew();
         first.Rename("build");
         second.Rename("build");
 
@@ -344,8 +317,9 @@ public class TerminalTabsTests
     public void TabsThatWouldReadTheSame_AreNumbered()
     {
         using var tabs = Tabs();
-        tabs.Open();
-        tabs.Open();
+        tabs.StartNew();
+        tabs.StartNew();
+        tabs.StartNew();
 
         var labels = tabs.Terminals.Select(t => TerminalTabLabels.For(tabs.Terminals, t)).ToArray();
 
@@ -357,9 +331,8 @@ public class TerminalTabsTests
     public void ATabWhoseNameNothingElseShares_IsNotNumbered()
     {
         using var tabs = Tabs();
-        var terminal = tabs.Active.Value;
-        StartShell(terminal);
-        tabs.Open();
+        var terminal = StartShell(tabs);
+        tabs.StartNew();
 
         _launches[0].Pty!.Emit("\u001b]2;claude\u0007");
         Pump.WaitFor(_dispatcher, () => terminal.Title.Value == "claude", "the title");
@@ -377,14 +350,17 @@ public class TerminalTabsTests
         return launch;
     }
 
-    void StartShell(TerminalInstance terminal)
+    /// <summary>Asks for a terminal and lets its grid report a size, which is what the spawn waits
+    /// on. Returns the terminal it made.</summary>
+    TerminalInstance StartShell(TerminalTabs tabs)
     {
+        var terminal = tabs.StartNew();
         terminal.ReportViewport(Viewport);
-        terminal.Start();
         Pump.WaitFor(
             _dispatcher,
             () => terminal.Render.Value is TerminalRenderState.Running,
             "the shell to be adopted");
+        return terminal;
     }
 
     /// <summary>One terminal's launch, holding the pseudo-terminal it started so a test can drive it.</summary>

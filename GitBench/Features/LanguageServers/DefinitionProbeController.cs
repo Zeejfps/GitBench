@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Lsp.Documents;
@@ -20,6 +21,10 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     private readonly IDefinitionSurface _surface;
     private readonly IDefinitionSource _servers;
     private readonly IFileNavigator _navigator;
+
+    // Back and forward walk the whole content panel, not only the files this controller jumps
+    // between, so they are asked of the panel rather than of the browser.
+    private readonly IContentNavigator _history;
     private readonly IUiDispatcher _dispatcher;
     private readonly Func<(string Root, string Path)?> _document;
     private readonly Func<InputModifiers> _modifiers;
@@ -42,6 +47,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         IDefinitionSurface surface,
         IDefinitionSource servers,
         IFileNavigator navigator,
+        IContentNavigator history,
         IUiDispatcher dispatcher,
         Func<(string Root, string Path)?> document,
         Func<InputModifiers> modifiers,
@@ -51,6 +57,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         _surface = surface;
         _servers = servers;
         _navigator = navigator;
+        _history = history;
         _dispatcher = dispatcher;
         _document = document;
         _modifiers = modifiers;
@@ -254,10 +261,10 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
             case KeyboardKey.F12:
                 return Ask(_pointer);
             case KeyboardKey.LeftBracket when IsCommand(modifiers):
-                _navigator.GoBack();
+                _history.GoBack();
                 return true;
             case KeyboardKey.RightBracket when IsCommand(modifiers):
-                _navigator.GoForward();
+                _history.GoForward();
                 return true;
             default:
                 return false;

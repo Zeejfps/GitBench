@@ -13,35 +13,27 @@ namespace GitBench.Features.Terminal;
 /// would be sitting in a directory that may have been pruned.
 /// </para>
 /// <para>
-/// There is always at least one, which is why <see cref="Active"/> is not nullable: a repository
-/// with a terminal pane and no terminal in it is a state the pane would have to draw something for
-/// and the user would have no way back out of. Closing the last tab therefore does not empty the
-/// list — it puts a fresh idle terminal in its place, which is the state the repository opened in,
-/// so the strip goes away and the offer to start a shell comes back.
+/// There may be none. A repository is not handed a terminal it never asked for: a terminal exists
+/// because someone pressed for one, and pressing for one starts a shell. So there is no such thing
+/// here as an idle terminal waiting to be started — <see cref="Active"/> is null while the list is
+/// empty, and closing the last tab leaves it that way rather than putting an unstarted one back.
 /// </para>
 /// </remarks>
 internal sealed class TerminalTabs : IDisposable
 {
     readonly Func<TerminalInstance> _create;
     readonly ObservableList<TerminalInstance> _terminals = new();
-    readonly State<TerminalInstance> _active;
+    readonly State<TerminalInstance?> _active = new(null);
 
     bool _disposed;
 
-    public TerminalTabs(Func<TerminalInstance> create)
-    {
-        _create = create;
-
-        var first = _create();
-        _terminals.Add(first);
-        _active = new State<TerminalInstance>(first);
-    }
+    public TerminalTabs(Func<TerminalInstance> create) => _create = create;
 
     /// <summary>The tabs, in strip order. Mutated only through this class.</summary>
     public ObservableList<TerminalInstance> Terminals => _terminals;
 
-    /// <summary>The terminal the pane draws.</summary>
-    public IReadable<TerminalInstance> Active => _active;
+    /// <summary>The terminal the pane draws, or null while this repository has none.</summary>
+    public IReadable<TerminalInstance?> Active => _active;
 
     /// <summary>Whether any of these terminals is holding a shell process.</summary>
     /// <remarks>
@@ -59,31 +51,22 @@ internal sealed class TerminalTabs : IDisposable
     }
 
     /// <summary>
-    /// Whether any of these terminals has been asked for a shell — including one whose shell has
-    /// since exited or failed, since what it left is still on screen.
+    /// The whole of what asking for a terminal means: one is made, put on screen, and its shell
+    /// started. There is no step between — a terminal nobody has started is a tab naming a shell
+    /// that does not exist.
     /// </summary>
     /// <remarks>
-    /// A repository nobody has started a terminal in has nothing worth naming, which is what the
-    /// pane reads to decide whether there is a strip to draw at all.
+    /// The spawn itself still waits for the new grid to report a viewport, since a shell has to be
+    /// told how big it is. That is the only window in which one of these is not yet running.
     /// </remarks>
-    public bool AnyStarted
-    {
-        get
-        {
-            foreach (var terminal in _terminals)
-                if (terminal.Render.Value is not TerminalRenderState.Idle) return true;
-            return false;
-        }
-    }
-
-    /// <summary>Adds a terminal and puts it on screen. Idle: making one starts no shell.</summary>
-    public TerminalInstance Open()
+    public TerminalInstance StartNew()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var terminal = _create();
         _terminals.Add(terminal);
         _active.Value = terminal;
+        terminal.Start();
         return terminal;
     }
 
@@ -97,7 +80,7 @@ internal sealed class TerminalTabs : IDisposable
 
     /// <summary>
     /// Ends a terminal and takes its tab off the strip. The neighbour takes its place when it was
-    /// the one on screen; closing the last one leaves a fresh idle terminal instead of nothing.
+    /// the one on screen; closing the last one leaves the repository with none.
     /// </summary>
     /// <remarks>
     /// By identity rather than by index, because a close is asked for and answered at two different
@@ -114,14 +97,9 @@ internal sealed class TerminalTabs : IDisposable
 
         _terminals.RemoveAt(index);
 
-        // Never empty: the repository keeps a terminal, unstarted, exactly as it was handed one when
-        // it was first activated. Nothing here knows that this makes the strip disappear — that
-        // follows from AnyStarted, which is the same question asked of the same list.
-        if (_terminals.Count == 0) _terminals.Add(_create());
-
         // Reassigned before disposal so nothing is left drawing a screen whose session has gone.
         if (ReferenceEquals(_active.Value, terminal))
-            _active.Value = _terminals[Math.Min(index, _terminals.Count - 1)];
+            _active.Value = _terminals.Count == 0 ? null : _terminals[Math.Min(index, _terminals.Count - 1)];
 
         terminal.Dispose();
     }

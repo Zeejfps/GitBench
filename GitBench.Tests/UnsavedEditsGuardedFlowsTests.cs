@@ -194,6 +194,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
             _dispatcher,
             _bus,
             new State<MainViewMode>(MainViewMode.LocalChanges),
+            new FakeContentNavigator(),
             new IdleSnapshotStore(),
             new IdleStatusStore(),
             new IdleOperations(),

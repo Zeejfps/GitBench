@@ -85,8 +85,6 @@
 
   "app.mode.changes": "변경 사항",
   "app.mode.history": "히스토리",
-  "app.mode.terminal": "터미널",
-  "app.mode.files": "파일",
   "app.update.restart": "재시작",
   "app.update.restart_tooltip": "재시작하여 업데이트 완료",
   "app.update.up_to_date": "최신 버전을 사용 중입니다",
@@ -94,7 +92,6 @@
   "app.update.ready_message": "버전 {version} 준비 완료 — 재시작을 클릭하여 업데이트하세요.",
 
   "terminal.starting": "쉘을 시작하는 중…",
-  "terminal.start_session": "세션 시작",
   "terminal.restart_session": "새 세션 시작",
   "terminal.session_ended": "셸이 종료되었습니다.",
   "terminal.no_repo": "터미널을 사용하려면 저장소를 열어주세요.",
@@ -177,7 +174,6 @@
   "toolbar.branch": "브랜치",
   "toolbar.review": "리뷰",
   "toolbar.open_folder_tooltip": "파일 탐색기에서 열기",
-  "toolbar.open_terminal_tooltip": "터미널에서 열기",
 
   "statusbar.toggle_theme_tooltip": "테마 전환",
   "statusbar.check_updates_tooltip": "업데이트 확인",
@@ -223,6 +219,8 @@
   "branches.header_at": "커밋",
   "branches.header_switching_to": "전환 중:",
   "branches.header_detached": "(분리된 HEAD)",
+  "branches.show_files": "파일 표시",
+  "branches.show_branches": "브랜치 표시",
   "branches.context_new_branch": "새 브랜치…",
   "branches.context_clean": "정리…",
   "branches.clean_title": "브랜치 정리",
@@ -710,7 +708,6 @@
   "statusbar.error_pin_identity": "ID 고정",
 
   "toolbar.error_open_folder_failed": "폴더를 열지 못했습니다",
-  "toolbar.error_open_terminal_failed": "터미널을 열지 못했습니다",
 
   "repos.clone_action": "복제",
   "repos.picker_choose_clone": "복제 위치 선택",

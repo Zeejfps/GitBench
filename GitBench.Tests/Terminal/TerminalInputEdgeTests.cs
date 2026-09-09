@@ -1221,7 +1221,7 @@ public class TerminalInstanceInputEdgeTests
     [Fact]
     public void DisposingTwice_IsNotAnError()
     {
-        // The pane is kept alive by the mode switcher and disposed by the window; both ends can run.
+        // The pane is kept alive by the content panel and disposed by the window; both ends can run.
         var vm = new TerminalInstance(new NeverStarts(), new ImmediateDispatcher());
 
         vm.Dispose();

@@ -40,7 +40,7 @@ internal sealed class FileBrowserContextMenu
     private readonly IClipboard? _clipboard;
     private readonly IMessageBus? _bus;
     private readonly ITerminalSessionStore? _terminals;
-    private readonly State<MainViewMode>? _mode;
+    private readonly IContentNavigator? _navigator;
 
     public FileBrowserContextMenu(Context ctx)
     {
@@ -49,7 +49,7 @@ internal sealed class FileBrowserContextMenu
         _clipboard = ctx.Get<IClipboard>();
         _bus = ctx.Get<IMessageBus>();
         _terminals = ctx.Get<ITerminalSessionStore>();
-        _mode = ctx.Get<State<MainViewMode>>();
+        _navigator = ctx.Get<IContentNavigator>();
     }
 
     public IReadOnlyList<RepoBarContextMenu.Item> Build(FileBrowserViewModel browser, FileBrowserRow? row)
@@ -111,7 +111,7 @@ internal sealed class FileBrowserContextMenu
             && ShellPathQuoting.ChangeDirectoryCommand(directory, ShellCommand.Family) is { } command)
         {
             instance.SendInput(System.Text.Encoding.UTF8.GetBytes(command + "\r"));
-            if (_mode is not null) _mode.Value = MainViewMode.Terminal;
+            _navigator?.Show(new ContentPlace.Shell(instance));
             return;
         }
 

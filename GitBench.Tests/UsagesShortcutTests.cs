@@ -115,6 +115,7 @@ public class UsagesShortcutTests
                     view,
                     new NoDefinitions(),
                     new NoNavigation(),
+                    new FakeContentNavigator(),
                     new ImmediateDispatcher(),
                     () => (Root, File),
                     () => input.Modifiers,
@@ -173,10 +174,6 @@ public class UsagesShortcutTests
     private sealed class NoNavigation : IFileNavigator
     {
         public void NavigateTo(string absolutePath, int line) { }
-
-        public void GoBack() { }
-
-        public void GoForward() { }
     }
 
     private sealed class ImmediateDispatcher : IUiDispatcher

@@ -1,6 +1,8 @@
-﻿using GitBench.Features.CodeIntel;
+﻿using GitBench.App;
+using GitBench.Features.CodeIntel;
 using GitBench.Features.FileBrowser;
 using GitBench.Git;
+using ZGF.Observable;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -13,8 +15,19 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
     private readonly QueuedDispatcher _dispatcher = new();
     private readonly List<FileBrowserUiState> _persisted = [];
 
+    // Files, so that opening the first one is not itself a step away from the changes tab: these
+    // are tests about the trail between files, not about the panel swinging onto them.
+    private readonly State<MainViewMode> _mode = new(MainViewMode.Files);
+    private OneBrowser? _store;
+    private ContentNavigator? _navigator;
+
+    /// <summary>The arrows, which walk the content panel's trail rather than the browser's.</summary>
+    private ContentNavigator Nav => _navigator!;
+
     public void Dispose()
     {
+        _navigator?.Dispose();
+        _store?.Dispose();
         _dir.Dispose();
         _elsewhere.Dispose();
     }
@@ -146,8 +159,8 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         Write("Auth.cs", "class AuthService", "{", "}");
         using var browser = Show("Auth.cs");
 
-        Assert.False(browser.CanGoBack.Value);
-        browser.GoBack();
+        Assert.False(Nav.CanGoBack.Value);
+        Nav.GoBack();
         Settle(browser);
 
         Assert.Equal(At("Auth.cs"), browser.Cursor.Value);
@@ -164,7 +177,7 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         browser.SetCursor(At("Other.cs"));
         Settle(browser);
 
-        Assert.True(browser.CanGoBack.Value);
+        Assert.True(Nav.CanGoBack.Value);
     }
 
     // A directory opens nothing, so it is not a place — the file beside it is still on screen.
@@ -178,7 +191,7 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         browser.SetCursor(At("src"));
         Settle(browser);
 
-        Assert.False(browser.CanGoBack.Value);
+        Assert.False(Nav.CanGoBack.Value);
         Assert.Equal(At("Auth.cs"), (browser.Preview.Value as FilePreview.Text)?.Path);
     }
 
@@ -191,13 +204,13 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
 
         browser.NavigateTo(At("src/deep/Token.cs"), 7);
         Settle(browser, () => browser.Cursor.Value == At("src/deep/Token.cs"));
-        Assert.True(browser.CanGoBack.Value);
+        Assert.True(Nav.CanGoBack.Value);
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => browser.Cursor.Value == At("Auth.cs"));
 
         Assert.Equal(At("Auth.cs"), browser.Cursor.Value);
-        Assert.False(browser.CanGoBack.Value);
+        Assert.False(Nav.CanGoBack.Value);
     }
 
     [Fact]
@@ -214,7 +227,7 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
 
         var revealed = new List<int>();
         browser.LineRevealRequested += revealed.Add;
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => revealed.Count > 0);
 
         Assert.Equal([6], revealed);
@@ -230,7 +243,7 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         browser.NavigateTo(outside, 1);
         Settle(browser, () => browser.Preview.Value is FilePreview.Text { Path: var p } && p == outside);
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => browser.Preview.Value is FilePreview.Text { Path: var p } && p == At("Auth.cs"));
 
         Assert.Equal(At("Auth.cs"), browser.Cursor.Value);
@@ -250,14 +263,14 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         browser.NavigateTo(At("src/Store.cs"), 2);
         Settle(browser, () => browser.Cursor.Value == At("src/Store.cs"));
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => browser.Cursor.Value == At("src/deep/Token.cs"));
         Assert.Equal(At("src/deep/Token.cs"), browser.Cursor.Value);
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => browser.Cursor.Value == At("Auth.cs"));
         Assert.Equal(At("Auth.cs"), browser.Cursor.Value);
-        Assert.False(browser.CanGoBack.Value);
+        Assert.False(Nav.CanGoBack.Value);
     }
 
     [Fact]
@@ -273,7 +286,7 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         Settle(browser, () => revealed.Count > 0);
         Assert.Equal([7], revealed);
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => revealed.Count > 1);
 
         Assert.Equal([7, 2], revealed);
@@ -347,6 +360,12 @@ public sealed class FileBrowserJumpTests(CodeIntelFixture fixture) : IDisposable
         Settle(browser, () => browser.Rows.Value.Count > 0);
         browser.SetCursor(At(relative));
         Settle(browser, () => browser.Preview.Value is FilePreview.Text);
+
+        // After the first file is open, so the trail these tests walk starts empty: a panel handed
+        // a repository with nothing open drops off the files tab, which would be a step of its own.
+        _store = new OneBrowser(browser);
+        _navigator = new ContentNavigator(_store, new NoTerminals(), _mode);
+        _navigator.Start();
         return browser;
     }
 

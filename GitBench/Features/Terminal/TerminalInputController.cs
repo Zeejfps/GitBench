@@ -807,7 +807,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
 
     /// <summary>
     /// Whether the pane this types into is actually showing. A mounted grid is not a visible one:
-    /// the mode switcher keeps the pane alive behind whichever mode is on screen.
+    /// the content panel keeps the pane alive behind whichever tab is on screen.
     /// </summary>
     public bool IsOnScreen
     {

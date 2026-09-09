@@ -85,8 +85,6 @@
 
   "app.mode.changes": "変更",
   "app.mode.history": "履歴",
-  "app.mode.terminal": "ターミナル",
-  "app.mode.files": "ファイル",
   "app.update.restart": "再起動",
   "app.update.restart_tooltip": "再起動してアップデートを完了",
   "app.update.up_to_date": "最新バージョンを使用中です",
@@ -94,7 +92,6 @@
   "app.update.ready_message": "バージョン{version}の準備ができました — 再起動で更新します。",
 
   "terminal.starting": "シェルを起動中…",
-  "terminal.start_session": "セッションを開始",
   "terminal.restart_session": "新しいセッションを開始",
   "terminal.session_ended": "シェルが終了しました。",
   "terminal.no_repo": "ターミナルを使うにはリポジトリを開いてください。",
@@ -177,7 +174,6 @@
   "toolbar.branch": "ブランチ",
   "toolbar.review": "レビュー",
   "toolbar.open_folder_tooltip": "ファイルマネージャで開く",
-  "toolbar.open_terminal_tooltip": "ターミナルで開く",
 
   "statusbar.toggle_theme_tooltip": "テーマを切り替え",
   "statusbar.check_updates_tooltip": "アップデートを確認",
@@ -223,6 +219,8 @@
   "branches.header_at": "コミット",
   "branches.header_switching_to": "切り替え中:",
   "branches.header_detached": "（HEAD切り離し）",
+  "branches.show_files": "ファイルを表示",
+  "branches.show_branches": "ブランチを表示",
   "branches.context_new_branch": "新規ブランチ…",
   "branches.context_clean": "クリーンアップ…",
   "branches.clean_title": "ブランチのクリーンアップ",
@@ -710,7 +708,6 @@
   "statusbar.error_pin_identity": "アイデンティティの固定",
 
   "toolbar.error_open_folder_failed": "フォルダを開けませんでした",
-  "toolbar.error_open_terminal_failed": "ターミナルを開けませんでした",
 
   "repos.clone_action": "クローン",
   "repos.picker_choose_clone": "クローン先を選択",

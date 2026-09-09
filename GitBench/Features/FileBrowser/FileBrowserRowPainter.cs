@@ -74,7 +74,7 @@ internal static class FileBrowserRowPainter
         // its glyph in the wrong one, and a size derived from the current value would compound.
         var (glyph, family) = Glyph(row);
         iconStyle.FontFamily = family;
-        iconStyle.FontSize = family == SetiIcons.FontFamily ? SetiIconSize : IconSize;
+        iconStyle.FontSize = FileGlyph.SizeOf(family);
         iconStyle.HorizontalAlignment = TextAlignment.Center;
         iconStyle.TextColor = Tint(
             isDirectory ? colors.DirectoryIcon
@@ -183,8 +183,7 @@ internal static class FileBrowserRowPainter
         FileBrowserRow.Directory => (LucideIcons.Folder, LucideIcons.FontFamily),
         FileBrowserRow.Symbol symbol => (SymbolGlyph(symbol.Kind), LucideIcons.FontFamily),
         _ when row.IsLink => (LucideIcons.FileSymlink, LucideIcons.FontFamily),
-        _ when LanguageMark(row.Name) is { } mark => (mark, SetiIcons.FontFamily),
-        _ => (LucideIcons.File, LucideIcons.FontFamily),
+        _ => FileGlyph.For(row.Name),
     };
 
     /// <summary>
@@ -193,17 +192,6 @@ internal static class FileBrowserRowPainter
     /// advance instead would move the text by however much the glyph was scaled.
     /// </summary>
     private const float IconColumnWidth = 16f;
-
-    /// <summary>
-    /// Seti's glyphs sit smaller within their em than Lucide's — 0.77 against 0.93, measured off the
-    /// two fonts — and being detailed marks rather than line icons they need a little more than
-    /// parity to read at a glance. Tune this one number if they look off.
-    /// </summary>
-    private const float IconSize = FontSize.Body;
-    private const float SetiIconSize = 17f;
-
-    private static string? LanguageMark(string name) =>
-        CodeLanguages.Detect(name) is { } language ? SetiIcons.For(language) : null;
 
     // Four categories, not fourteen: a reader scanning an outline is separating what runs from what
     // holds a value from what contains either, and a glyph per SymbolKind would be a legend.

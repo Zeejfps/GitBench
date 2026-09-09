@@ -552,7 +552,7 @@ public class TerminalInputControllerTests
     [Fact]
     public void AHiddenPane_GivesTheKeyboardBack()
     {
-        // The mode switcher keeps the pane alive and hides its view, so this is what "the user
+        // The content panel keeps the pane alive and hides its view, so this is what "the user
         // switched to History" looks like from here.
         using var pane = Pane.Focused();
         pane.View.IsVisible = false;

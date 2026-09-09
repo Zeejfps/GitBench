@@ -14,13 +14,13 @@ using ZGF.Observable;
 namespace GitBench.Features.Terminal;
 
 /// <summary>
-/// The Terminal mode: the active repository's terminals, as a strip of tabs over one cell grid.
+/// The content panel's terminal tab: whichever of the active repository's terminals is on screen.
 /// </summary>
 /// <remarks>
-/// One pane, and several terminals per repository behind it. The pane follows
-/// <see cref="ITerminalSessionStore.Tabs"/> rather than reading the registry itself, so switching
-/// repositories swaps the whole strip while the shells it leaves keep running — the terminals are
-/// the store's, and the pane is only ever looking at one of them.
+/// One pane, and several terminals per repository behind it — named by tabs in the panel's own
+/// strip, not by one of their own. The pane follows <see cref="ITerminalSessionStore.Tabs"/> rather
+/// than reading the registry itself, so switching repositories swaps which shell is drawn while the
+/// ones it leaves keep running.
 /// </remarks>
 internal sealed record TerminalPane : Widget
 {
@@ -43,51 +43,29 @@ internal sealed record TerminalPane : Widget
             Value = ctx.Require<ITerminalSessionStore>().Tabs,
             Case = tabs => tabs is null
                 ? new TerminalNotice { Message = L.T(s => s.TerminalNoRepo) }
-                : new TerminalTabsPane { Tabs = tabs },
+                : new TerminalActiveScreen { Tabs = tabs },
         };
     }
 }
 
-/// <summary>
-/// One repository's terminals: the strip naming them, and the grid of whichever is active.
-/// </summary>
-/// <remarks>
-/// The strip appears with the first shell. Until then the pane is one screen offering to start one,
-/// and a tab strip over it would be naming a terminal that has not run anything.
-/// </remarks>
-internal sealed record TerminalTabsPane : Widget
+/// <summary>The grid of whichever of one repository's terminals is on screen. Nothing at all when
+/// it has none — the strip has no terminal tab to be on, so this is never what is showing.</summary>
+internal sealed record TerminalActiveScreen : Widget
 {
     public required TerminalTabs Tabs { get; init; }
 
-    protected override IWidget Build(Context ctx)
+    protected override IWidget Build(Context ctx) => new Switch<TerminalInstance?>
     {
-        var tabs = Tabs;
-
-        return new Column
-        {
-            CrossAxis = CrossAxisAlignment.Stretch,
-            Children =
-            [
-                new TerminalTabStrip
-                {
-                    Tabs = tabs,
-                    Visible = Prop.Bind(() => tabs.AnyStarted),
-                },
-                new Grow
-                {
-                    Child = new Switch<TerminalInstance>
-                    {
-                        Value = tabs.Active,
-                        Case = instance => new TerminalScreen { Instance = instance },
-                    },
-                },
-            ],
-        };
-    }
+        Value = Tabs.Active,
+        Case = instance => instance is null
+            ? Empty.Widget
+            : new TerminalScreen { Instance = instance },
+    };
 }
 
 /// <summary>
-/// One terminal on screen: its grid, its keyboard, and the offer to start a shell when it has none.
+/// One terminal on screen: its grid, its keyboard, and the offer to start another shell when the
+/// one it had has ended.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -97,10 +75,9 @@ internal sealed record TerminalTabsPane : Widget
 /// switch would otherwise leave the instance holding a dead grid view per switch.
 /// </para>
 /// <para>
-/// The grid stays mounted in every state, including the states where a gate is covering it. It is
-/// the only thing that can measure a cell against the canvas, so it is the only thing that can say
-/// how big a shell should start — and the gate needs that answer to already exist by the time it is
-/// clicked.
+/// The grid stays mounted in every state, including the one where the restart offer covers it. It
+/// is the only thing that can measure a cell against the canvas, so it is the only thing that can
+/// say how big a shell should start.
 /// </para>
 /// </remarks>
 internal sealed record TerminalScreen : Widget
@@ -137,10 +114,10 @@ internal sealed record TerminalScreen : Widget
             Children =
             [
                 new Raw { View = grid },
-                new TerminalStartGate
+                new TerminalRestartGate
                 {
                     Instance = instance,
-                    OnStart = () =>
+                    OnRestart = () =>
                     {
                         instance.Start();
 
@@ -219,20 +196,23 @@ internal sealed record TerminalNotice : Widget
 }
 
 /// <summary>
-/// The offer to start a shell, over the screen of the one that finished.
+/// The offer to start another shell, over the screen of the one that finished.
 /// </summary>
 /// <remarks>
-/// Shown for every state that has no shell running, which is what makes "start" and "start again"
-/// one control rather than two. Nothing here is hit-testable except the button, so the wheel over an
-/// exited screen still reaches the grid underneath it and scrolls its history.
+/// Only for a shell that has ended. A terminal exists because someone asked for one and asking for
+/// one starts a shell, so there is no state here where nothing has ever run — and the moment between
+/// a terminal being made and its grid reporting a viewport is not one either: that shell is on its
+/// way, and offering to start it would be offering what is already happening. Nothing here is
+/// hit-testable except the button, so the wheel over an exited screen still reaches the grid
+/// underneath it and scrolls its history.
 /// </remarks>
-internal sealed record TerminalStartGate : Widget
+internal sealed record TerminalRestartGate : Widget
 {
     /// <summary>The button's id, so a test can press the thing a user presses.</summary>
-    public const string StartButtonId = "terminal-start-session";
+    public const string RestartButtonId = "terminal-restart-session";
 
     public required TerminalInstance Instance { get; init; }
-    public required Action OnStart { get; init; }
+    public required Action OnRestart { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
@@ -241,8 +221,7 @@ internal sealed record TerminalStartGate : Widget
 
         return new Center
         {
-            Visible = Prop.Bind(() => instance.Render.Value is not
-                (TerminalRenderState.Running or TerminalRenderState.Starting)),
+            Visible = Prop.Bind(() => Reason(loc.Strings.Value, instance.Render.Value) is not null),
             Child = new Column
             {
                 Gap = Spacing.Md,
@@ -257,16 +236,13 @@ internal sealed record TerminalStartGate : Widget
                     },
                     new ButtonWidget
                     {
-                        Id = StartButtonId,
+                        Id = RestartButtonId,
                         Style = ButtonStyle.Filled(static s => s.Palette.Accent),
-                        Command = new Command(OnStart),
+                        Command = new Command(OnRestart),
                         Children =
                         [
                             new ButtonIcon { Value = LucideIcons.SquareTerminal },
-                            new ButtonLabel
-                            {
-                                Value = Prop.Bind(() => Label(loc.Strings.Value, instance.Render.Value)),
-                            },
+                            new ButtonLabel { Value = L.T(s => s.TerminalRestartSession) },
                         ],
                     }.WithController<KbmController>(),
                 ],
@@ -274,7 +250,8 @@ internal sealed record TerminalStartGate : Widget
         };
     }
 
-    /// <summary>Why there is no shell — nothing at all for a terminal that has not had one yet.</summary>
+    /// <summary>How this terminal's shell ended, and null while it has not — which is also what
+    /// decides whether there is anything to offer.</summary>
     static string? Reason(Strings strings, TerminalRenderState render) => render switch
     {
         TerminalRenderState.Exited => strings.TerminalSessionEnded,
@@ -282,11 +259,6 @@ internal sealed record TerminalStartGate : Widget
         TerminalRenderState.Failed failed => failed.Message,
         _ => null,
     };
-
-    static string Label(Strings strings, TerminalRenderState render) =>
-        render is TerminalRenderState.Idle
-            ? strings.TerminalStartSession
-            : strings.TerminalRestartSession;
 }
 
 /// <summary>
@@ -300,13 +272,13 @@ internal sealed record TerminalStartGate : Widget
 /// </para>
 /// <para>
 /// It waits for the render state rather than taking the keyboard when the view mounts, because the
-/// strip's <c>+</c> activates a tab before it starts it: that grid is mounted while its terminal is
-/// still idle. An idle terminal is left alone for the same reason a click on one is — it is showing
-/// the offer to start a shell, and the application's own chords have to survive over it.
+/// spawn waits for this grid to report a viewport: the tab is on screen before its shell exists. A
+/// terminal with no shell to type into is left alone, because one holding the keyboard declines
+/// every key it is given and the application's own chords have to survive over it.
 /// </para>
 /// <para>
-/// Only while the pane is showing, and only once. The mode switcher keeps this view mounted behind
-/// whichever mode is on screen, so a repository switched from another mode would otherwise hand the
+/// Only while the pane is showing, and only once. The content panel keeps this view mounted behind
+/// whichever tab is on screen, so a repository switched from another tab would otherwise hand the
 /// keyboard to a terminal nobody can see; and a shell exiting long afterwards would pull it back
 /// from wherever the reader had moved on to.
 /// </para>

@@ -1,3 +1,4 @@
+using GitBench.Infrastructure;
 using GitBench.Terminal.Vt;
 using ZGF.Gui;
 using ZGF.Observable;
@@ -79,6 +80,10 @@ internal sealed class TerminalInstance : IDisposable, ITerminalInput
         _launch = launch;
         _dispatcher = dispatcher;
     }
+
+    /// <summary>Where this terminal falls in the run the content panel shows — every kind of tab in
+    /// it, not only the shells. Rewritten when the reader drags the run into a new arrangement.</summary>
+    public long OpenedAt { get; internal set; } = OpenOrder.Next();
 
     public IReadable<TerminalRenderState> Render => _render;
 

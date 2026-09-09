@@ -85,8 +85,6 @@
 
   "app.mode.changes": "更改",
   "app.mode.history": "历史",
-  "app.mode.terminal": "终端",
-  "app.mode.files": "文件",
   "app.update.restart": "重启",
   "app.update.restart_tooltip": "重启以完成更新",
   "app.update.up_to_date": "您使用的是最新版本",
@@ -94,7 +92,6 @@
   "app.update.ready_message": "版本 {version} 已就绪 — 点击重启以更新。",
 
   "terminal.starting": "正在启动 shell…",
-  "terminal.start_session": "启动会话",
   "terminal.restart_session": "启动新会话",
   "terminal.session_ended": "Shell 已退出。",
   "terminal.no_repo": "打开一个仓库以使用终端。",
@@ -177,7 +174,6 @@
   "toolbar.branch": "分支",
   "toolbar.review": "审阅",
   "toolbar.open_folder_tooltip": "在文件资源管理器中打开",
-  "toolbar.open_terminal_tooltip": "在终端中打开",
 
   "statusbar.toggle_theme_tooltip": "切换主题",
   "statusbar.check_updates_tooltip": "检查更新",
@@ -223,6 +219,8 @@
   "branches.header_at": "位于",
   "branches.header_switching_to": "正在切换到",
   "branches.header_detached": "(分离 HEAD)",
+  "branches.show_files": "显示文件",
+  "branches.show_branches": "显示分支",
   "branches.context_new_branch": "新建分支…",
   "branches.context_clean": "清理…",
   "branches.clean_title": "清理分支",
@@ -710,7 +708,6 @@
   "statusbar.error_pin_identity": "固定身份",
 
   "toolbar.error_open_folder_failed": "打开文件夹失败",
-  "toolbar.error_open_terminal_failed": "打开终端失败",
 
   "repos.clone_action": "克隆",
   "repos.picker_choose_clone": "选择克隆位置",

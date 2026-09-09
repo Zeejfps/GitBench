@@ -6,6 +6,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
+using ZGF.KeyboardModule;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
 
@@ -13,7 +14,7 @@ namespace GitBench.Controls;
 
 /// <summary>
 /// A row of tabs across the top of a region: the tabs themselves in a scroller that pans once they
-/// overflow, and an optional trailing control pinned outside it.
+/// overflow, with optional controls pinned outside it on either edge.
 /// </summary>
 /// <remarks>
 /// Shared by the commit-details strip and the terminal's, because everything a tab strip has to get
@@ -52,6 +53,16 @@ internal sealed record TabStrip : Widget
     /// </remarks>
     public IWidget? Leading { get; init; }
 
+    /// <summary>
+    /// A control on the trailing edge, outside the scroller — the content panel's "new terminal".
+    /// </summary>
+    /// <remarks>
+    /// Pinned for the opposite reason to <see cref="Leading"/>: it makes something the strip does not
+    /// yet have. A control that panned away with the twentieth tab would be one you have to scroll
+    /// past the tabs to reach in order to add another.
+    /// </remarks>
+    public IWidget? Trailing { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var children = new List<IWidget>();
@@ -86,6 +97,12 @@ internal sealed record TabStrip : Widget
                 ],
             },
         });
+
+        if (Trailing is { } trailing)
+        {
+            children.Add(Divider);
+            children.Add(trailing);
+        }
 
         return new Box
         {
@@ -142,7 +159,7 @@ internal sealed record TabStrip : Widget
 /// whatever the strip sits over, so it reads as a notch cut out of the strip onto the surface below;
 /// the accent bar along its top is what makes that legible when the two planes are only a few values
 /// apart, as they are in this theme. A saturated fill was what this had first, and it put a second
-/// row of the mode switcher's own selected-segment colour directly beneath the mode switcher.
+/// row of the working-changes layout switcher's own selected-segment colour directly beneath it.
 /// <para>
 /// The others are the strip, with a hairline on the trailing edge and the strip's rule under them.
 /// Giving them a fill a step behind it was tried and read as the run being recessed rather than as
@@ -204,15 +221,26 @@ internal sealed record TabChrome : Widget
     /// </summary>
     public IWidget? Leading { get; init; }
 
+    /// <summary>
+    /// How this tab is dragged to a new place in its run. Null for a strip whose order is not the
+    /// reader's to change — the commit details' file tabs, whose order is the diff's.
+    /// </summary>
+    public ITabDrag? Drag { get; init; }
+
+    /// <summary>
+    /// An optional widget after the label, before the close button — the file strip's unsaved dot.
+    /// </summary>
+    /// <remarks>
+    /// Its own slot rather than sharing the leading one, so a tab says what it is and what state it
+    /// is in at the same time instead of trading one for the other. Laid out whether or not it
+    /// paints, for the same reason the close button is: a mark that appeared would resize the tab.
+    /// </remarks>
+    public IWidget? Mark { get; init; }
+
     protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
         var hover = new State<bool>(false);
-
-        // The close button is laid out on every tab and painted on the one being looked at, so a
-        // strip of four does not carry four X's — and so that hovering a tab does not resize it,
-        // which is what hiding the button outright would do.
-        bool Closable() => IsActive() || hover.Value;
 
         // The label grows so it ellipsizes into whatever width the (capped) tab leaves it. A flex
         // container measures its intrinsic width from children's *unclamped* natural widths but lays
@@ -232,7 +260,8 @@ internal sealed record TabChrome : Widget
         var rowChildren = new List<IWidget>();
         if (Leading is { } leading) rowChildren.Add(leading);
         rowChildren.Add(new Grow { Child = label });
-        if (OnClose is { } close) rowChildren.Add(CloseButton(close, Closable));
+        if (Mark is { } mark) rowChildren.Add(mark);
+        if (OnClose is { } close) rowChildren.Add(CloseButton(close));
 
         uint Fill(ThemeStyles s) =>
             IsActive() ? ContentBackground(s)
@@ -278,18 +307,18 @@ internal sealed record TabChrome : Widget
             ],
         };
 
-        return pill.WithController(input, () => new TabClickController(hover, OnActivate, OnClose, OnContextMenu));
+        return pill.WithController(input, view =>
+            new TabClickController(hover, OnActivate, OnClose, OnContextMenu, Drag, view, input));
     }
 
-    // Transparent rather than hidden when the tab is neither active nor hovered: an unpainted button
-    // still holds its place, so tabs keep their width as the pointer crosses them. It is only
-    // reachable while it is painted anyway — the pointer has to be on the tab to get to it.
-    private static IWidget CloseButton(Action onClose, Func<bool> shown) => new ButtonWidget
+    // Painted on every closable tab rather than only the one being looked at. The space is reserved
+    // either way — a button that appeared under the pointer would resize the tab — so hiding it only
+    // made the strip harder to read for nothing: what closes was something you had to hover to find
+    // out.
+    private static IWidget CloseButton(Action onClose) => new ButtonWidget
     {
         Style = ButtonStyle.Bare(state => Theme.Color(t =>
-            !shown() ? 0u
-            : state.Hovered.Value ? t.Palette.TextPrimary
-            : t.Palette.TextMuted)),
+            state.Hovered.Value ? t.Palette.TextPrimary : t.Palette.TextMuted)),
         Command = new Command(onClose),
         Children = [new ButtonIcon { Value = LucideIcons.X, FontSize = FontSize.Caption }],
     }.WithTooltip(L.T(s => s.CommonClose)).WithController<KbmController>();
@@ -298,29 +327,92 @@ internal sealed record TabChrome : Widget
 // Hover tracking + left-click activation for a tab pill, plus middle-click to close (closable tabs
 // only) and right-click for the tab's own menu. The close button consumes its own press first
 // (bubbling), so pressing it closes the tab without also arming it here. Activation fires on release,
-// but only when the press armed on this tab with the same button.
-internal sealed class TabClickController : KeyboardMouseController
+// but only when the press armed on this tab with the same button — and only when the press did not
+// turn into a drag, since dragging a tab somewhere is not asking to look at it.
+internal sealed class TabClickController : KeyboardMouseController, IDisposable
 {
+    // Far enough that a click with a shaky hand is still a click, and near enough that a drag feels
+    // like it started when the pointer moved. The repo bar's rows use the same number.
+    private const float DragThresholdSq = 6f * 6f;
+
     private readonly State<bool> _hover;
     private readonly Action _onClick;
     private readonly Action? _onClose;
     private readonly Action<PointF>? _onContextMenu;
-    private MouseButton? _armed;
+    private readonly ITabDrag? _drag;
+    private readonly View? _view;
+    private readonly InputSystem? _input;
 
-    public TabClickController(State<bool> hover, Action onClick, Action? onClose, Action<PointF>? onContextMenu = null)
+    private MouseButton? _armed;
+    private bool _dragging;
+    private PointF _pressed;
+
+    public TabClickController(
+        State<bool> hover,
+        Action onClick,
+        Action? onClose,
+        Action<PointF>? onContextMenu = null,
+        ITabDrag? drag = null,
+        View? view = null,
+        InputSystem? input = null)
     {
         _hover = hover;
         _onClick = onClick;
         _onClose = onClose;
         _onContextMenu = onContextMenu;
+        _drag = drag;
+        _view = view;
+        _input = input;
+
+        // The strip resolves a drop from where the tabs actually ended up, so each of them has to
+        // say which view it is.
+        if (_drag is not null && _view is not null) _drag.Register(_view);
     }
 
-    public override void OnMouseEnter(ref MouseEnterEvent e) => _hover.Value = true;
+    public void Dispose()
+    {
+        if (_drag is null || _view is null) return;
+        _drag.Unregister(_view);
+    }
+
+    public override void OnMouseEnter(ref MouseEnterEvent e)
+    {
+        if (_dragging) return;
+        _hover.Value = true;
+    }
 
     public override void OnMouseExit(ref MouseExitEvent e)
     {
+        // A drag is meant to leave the tab: the pointer is out over the strip looking for a slot,
+        // and forgetting the press there would drop the tab the moment it started moving.
+        if (_dragging) return;
         _hover.Value = false;
         _armed = null;
+    }
+
+    public override void OnMouseMoved(ref MouseMoveEvent e)
+    {
+        if (_drag is null || _armed != MouseButton.Left) return;
+
+        if (!_dragging)
+        {
+            var dx = e.Mouse.Point.X - _pressed.X;
+            var dy = e.Mouse.Point.Y - _pressed.Y;
+            if (dx * dx + dy * dy < DragThresholdSq) return;
+
+            _dragging = true;
+            _hover.Value = false;
+            // The keyboard is taken only once the drag is real. A plain click on a tab has to leave
+            // it wherever it was — in the terminal, in the editor — and taking it on every press
+            // would pull it out from under the reader for a gesture they did not make.
+            _input?.StealFocus(this);
+            _drag.Start(e.Mouse.Point);
+            e.Consume();
+            return;
+        }
+
+        _drag.Update(e.Mouse.Point);
+        e.Consume();
     }
 
     public override void OnMouseButtonStateChanged(ref MouseButtonEvent e)
@@ -331,7 +423,7 @@ internal sealed class TabClickController : KeyboardMouseController
         // asking a tab what it can do is not asking to look at it.
         if (e.Button == MouseButton.Right)
         {
-            if (_onContextMenu == null || e.State != InputState.Pressed) return;
+            if (_onContextMenu == null || e.State != InputState.Pressed || _dragging) return;
 
             _onContextMenu(e.Mouse.Point);
             e.Consume();
@@ -343,14 +435,46 @@ internal sealed class TabClickController : KeyboardMouseController
         if (e.State == InputState.Pressed)
         {
             _armed = e.Button;
+            _dragging = false;
+            _pressed = e.Mouse.Point;
             e.Consume();
             return;
         }
 
         if (e.State != InputState.Released || _armed != e.Button) return;
         _armed = null;
-        if (e.Button == MouseButton.Left) _onClick();
+
+        if (_dragging)
+        {
+            _dragging = false;
+            _drag?.Complete();
+            _input?.Blur(this);
+        }
+        else if (e.Button == MouseButton.Left) _onClick();
         else _onClose!();
+
         e.Consume();
+    }
+
+    public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
+    {
+        if (!_dragging || e.State != InputState.Pressed || e.Key != KeyboardKey.Escape) return;
+
+        Abandon();
+        e.Consume();
+    }
+
+    public override void OnFocusLost()
+    {
+        if (_dragging) Abandon();
+        _armed = null;
+    }
+
+    private void Abandon()
+    {
+        _dragging = false;
+        _armed = null;
+        _drag?.Cancel();
+        _input?.Blur(this);
     }
 }

@@ -1,3 +1,4 @@
+using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.Editor;
@@ -158,6 +159,7 @@ internal sealed record FileBrowserTextBody : Widget
                 content,
                 definitions,
                 browser,
+                ctx.Require<IContentNavigator>(),
                 ctx.Require<IUiDispatcher>(),
                 document,
                 () => input.Modifiers,

@@ -42,6 +42,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly IGitStashOperations _gitStash;
     private readonly IMessageBus _bus;
     private readonly State<MainViewMode> _mode;
+    private readonly IContentNavigator _navigator;
     private readonly ILocalizationService _loc;
     private readonly IRepoOperationsStore _ops;
     private readonly IRepoHeadStore _head;
@@ -109,6 +110,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IUiDispatcher dispatcher,
         IMessageBus bus,
         State<MainViewMode> mode,
+        IContentNavigator navigator,
         IRepoSnapshotStore store,
         IRepoStatusStore status,
         IRepoOperationsStore ops,
@@ -124,6 +126,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         _gitStash = gitStash;
         _bus = bus;
         _mode = mode;
+        _navigator = navigator;
         _loc = loc;
         _ops = ops;
         _head = head;
@@ -538,7 +541,9 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private void SwitchToHistory()
     {
         if (_mode.Value == MainViewMode.History) return;
-        _mode.Value = MainViewMode.History;
+        // Through the panel rather than at the mode directly: picking a branch is a move the back
+        // arrow has to be able to undo, the same as pressing the History tab would be.
+        _navigator.Show(new ContentPlace.View(MainViewMode.History));
     }
 
     // ---- activation (double-click) ----

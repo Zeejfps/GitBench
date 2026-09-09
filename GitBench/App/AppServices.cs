@@ -45,6 +45,9 @@ internal static class AppServices
 
         context.AddSingleton<IMessageBus, MessageBus>();
         context.AddService(new State<MainViewMode>(MainViewMode.LocalChanges));
+        // Which of the sidebar's two lists is on screen. App-wide rather than per-repo: it is how
+        // you are navigating, not something a repository is.
+        context.AddService(new State<SidebarPane>(SidebarPane.Branches));
 
         // How the Changes tab presents the working tree. Shared: the toolbar toggles it, the pane
         // switches on it, and the commit bar shows staging progress only in the Diff layout.
@@ -204,6 +207,12 @@ internal static class AppServices
             ctx.Require<TreeSitterSymbolExtractor>()));
         context.AddSingleton<IUnsavedEditsGuard, UnsavedEditsGuard>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
+        // Registered after the browsers and terminals it follows: it points the content panel at
+        // what was opened and keeps the trail the back and forward arrows walk.
+        context.AddHostedService<IContentNavigator, ContentNavigator>();
+        // Reordering the content panel's tabs. One for the application so its drop line can be
+        // drawn at the top of the window; the mounted strip binds its own run in.
+        context.AddSingleton<TabDrag>();
 
         // What a language server is told a file holds: the buffer being typed into where there is
         // one, so a hover answers about what the reader is looking at rather than what was saved.

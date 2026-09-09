@@ -58,25 +58,28 @@ public class TerminalSessionStoreTests : IDisposable
     }
 
     [Fact]
-    public void ActivatingARepo_PublishesATerminalThatHasStartedNothing()
+    public void ActivatingARepo_StartsNothing()
     {
+        // A repository is not handed a terminal it never asked for. Activating one publishes its
+        // (empty) tabs, and nothing runs until something presses for a shell.
         using var store = Store();
 
         _registry.SetActive(_first);
 
-        var terminal = Assert.IsType<TerminalInstance>(ActiveTerminal(store));
-        Assert.IsType<TerminalRenderState.Idle>(terminal.Render.Value);
+        Assert.NotNull(store.Tabs.Value);
+        Assert.Null(ActiveTerminal(store));
         Assert.Empty(_ptys);
     }
 
     [Fact]
-    public void EachRepo_GetsItsOwnTerminal()
+    public void EachRepo_GetsItsOwnTerminals()
     {
         using var store = Store();
 
         _registry.SetActive(_first);
-        var first = ActiveTerminal(store);
+        var first = StartShell(store);
         _registry.SetActive(_second);
+        StartShell(store);
 
         Assert.NotSame(first, ActiveTerminal(store));
     }
@@ -86,8 +89,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = ActiveTerminal(store)!;
-        StartShell(terminal);
+        var terminal = StartShell(store);
 
         _registry.SetActive(_second);
         _registry.SetActive(_first);
@@ -102,9 +104,9 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
         _registry.SetActive(_second);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
 
         Assert.False(_ptys[_first].IsDisposed);
         Assert.False(_ptys[_second].IsDisposed);
@@ -117,8 +119,7 @@ public class TerminalSessionStoreTests : IDisposable
         // touched, and a shell whose working directory has gone has nowhere to be.
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = ActiveTerminal(store)!;
-        StartShell(terminal);
+        var terminal = StartShell(store);
 
         _registry.RemoveRepo(_first);
 
@@ -131,8 +132,9 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
         _registry.SetActive(_second);
+        StartShell(store);
 
         _registry.RemoveRepo(_first);
 
@@ -147,9 +149,9 @@ public class TerminalSessionStoreTests : IDisposable
         // the application does.
         var store = Store();
         _registry.SetActive(_first);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
         _registry.SetActive(_second);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
 
         store.Dispose();
 
@@ -165,7 +167,8 @@ public class TerminalSessionStoreTests : IDisposable
         _registry.SetActive(_first);
         _registry.SetActive(_second);
 
-        // Both terminals exist — activating a repository makes one — and neither has a process.
+        // Both repositories have tabs — activating one makes them — and neither has a terminal in
+        // them, let alone a process.
         Assert.Empty(store.ReposWithLiveShells());
         Assert.False(store.HasLiveShell(_first));
     }
@@ -175,7 +178,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
         _registry.SetActive(_second);
 
         Assert.Equal(new[] { _first }, store.ReposWithLiveShells());
@@ -188,9 +191,9 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
         _registry.SetActive(_second);
-        StartShell(ActiveTerminal(store)!);
+        StartShell(store);
 
         Assert.Equal(
             new HashSet<Guid> { _first, _second },
@@ -202,8 +205,7 @@ public class TerminalSessionStoreTests : IDisposable
     {
         using var store = Store();
         _registry.SetActive(_first);
-        var terminal = ActiveTerminal(store)!;
-        StartShell(terminal);
+        var terminal = StartShell(store);
 
         _ptys[_first].ShellExits();
         Pump.WaitFor(
@@ -227,7 +229,8 @@ public class TerminalSessionStoreTests : IDisposable
         using var store = Store();
         _registry.SetActive(_first);
         var tabs = store.Tabs.Value!;
-        var second = tabs.Open();
+        StartShell(store);
+        var second = StartShell(store);
 
         _registry.SetActive(_second);
         _registry.SetActive(_first);
@@ -244,9 +247,8 @@ public class TerminalSessionStoreTests : IDisposable
         // behind the one on screen is still something closing would end.
         using var store = Store();
         _registry.SetActive(_first);
-        var tabs = store.Tabs.Value!;
-        StartShell(tabs.Active.Value);
-        tabs.Open();
+        StartShell(store);
+        store.Tabs.Value!.StartNew();
 
         Assert.True(store.HasLiveShell(_first));
         Assert.Equal(new[] { _first }, store.ReposWithLiveShells());
@@ -258,22 +260,14 @@ public class TerminalSessionStoreTests : IDisposable
         using var store = Store();
         _registry.SetActive(_first);
         var tabs = store.Tabs.Value!;
-        StartShell(tabs.Active.Value);
-        StartedTab(tabs);
+        StartShell(store);
+        StartShell(store);
 
         _registry.RemoveRepo(_first);
 
         Assert.All(_allPtys, pty => Assert.True(pty.IsDisposed, "A removed repository left a shell running."));
         Assert.False(tabs.HasLiveShell);
         Assert.NotSame(tabs, store.Tabs.Value);
-    }
-
-    /// <summary>Opens a tab and starts its shell, returning the terminal it made.</summary>
-    TerminalInstance StartedTab(TerminalTabs tabs)
-    {
-        var terminal = tabs.Open();
-        StartShell(terminal);
-        return terminal;
     }
 
     /// <summary>The terminal the pane would be drawing: the active repository's active tab.</summary>
@@ -301,14 +295,17 @@ public class TerminalSessionStoreTests : IDisposable
         return pty;
     }
 
-    void StartShell(TerminalInstance terminal)
+    /// <summary>Asks the active repository for a terminal and lets its grid report a size, which is
+    /// what the spawn is waiting on. Returns the terminal it made.</summary>
+    TerminalInstance StartShell(TerminalSessionStore store)
     {
+        var terminal = store.Tabs.Value!.StartNew();
         terminal.ReportViewport(Viewport);
-        terminal.Start();
         Pump.WaitFor(
             _dispatcher,
             () => terminal.Render.Value is TerminalRenderState.Running,
             "the shell to be adopted");
+        return terminal;
     }
 
     Guid OpenRepo(string name)

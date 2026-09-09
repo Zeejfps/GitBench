@@ -127,8 +127,6 @@
 
   "app.mode.changes": "التغييرات",
   "app.mode.history": "السجل",
-  "app.mode.terminal": "الطرفية",
-  "app.mode.files": "الملفات",
   "app.update.restart": "إعادة التشغيل",
   "app.update.restart_tooltip": "أعد التشغيل لإكمال التحديث",
   "app.update.up_to_date": "أنت تستخدم أحدث إصدار",
@@ -136,7 +134,6 @@
   "app.update.ready_message": "الإصدار {version} جاهز — انقر على إعادة التشغيل للتحديث.",
 
   "terminal.starting": "جارٍ بدء الصدفة…",
-  "terminal.start_session": "بدء جلسة",
   "terminal.restart_session": "بدء جلسة جديدة",
   "terminal.session_ended": "انتهت الصدفة.",
   "terminal.no_repo": "افتح مستودعًا لاستخدام الطرفية.",
@@ -259,7 +256,6 @@
   "toolbar.branch": "فرع",
   "toolbar.review": "مراجعة",
   "toolbar.open_folder_tooltip": "فتح في مستكشف الملفات",
-  "toolbar.open_terminal_tooltip": "فتح في الطرفية",
 
   "statusbar.toggle_theme_tooltip": "تبديل السمة",
   "statusbar.check_updates_tooltip": "التحقق من التحديثات",
@@ -305,6 +301,8 @@
   "branches.header_at": "عند",
   "branches.header_switching_to": "يتم التبديل إلى",
   "branches.header_detached": "(HEAD منفصل)",
+  "branches.show_files": "إظهار الملفات",
+  "branches.show_branches": "إظهار الفروع",
   "branches.context_new_branch": "فرع جديد…",
   "branches.context_clean": "تنظيف…",
   "branches.clean_title": "تنظيف الفروع",
@@ -845,7 +843,6 @@
   "statusbar.error_pin_identity": "تثبيت الهوية",
 
   "toolbar.error_open_folder_failed": "فشل فتح المجلد",
-  "toolbar.error_open_terminal_failed": "فشل فتح الطرفية",
 
   "repos.clone_action": "استنساخ",
   "repos.picker_choose_clone": "اختر مكان الاستنساخ",

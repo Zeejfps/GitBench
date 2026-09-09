@@ -1,4 +1,7 @@
+using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.FileBrowser;
+using GitBench.Features.LocalChanges;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -8,6 +11,10 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Branches;
 
+/// <summary>
+/// The rail's header: which branch the repository is on, and the toggle that decides which of the
+/// two lists below says where you are — the branches, or the files.
+/// </summary>
 internal sealed record BranchesHeader : Widget
 {
     private const float HeaderHeight = 44f;
@@ -17,6 +24,10 @@ internal sealed record BranchesHeader : Widget
     {
         var vm = ctx.Require<BranchesHeaderViewModel>();
         var theme = ctx.Theme();
+        var pane = ctx.Require<State<SidebarPane>>();
+        var browsers = ctx.Require<IFileBrowserStore>();
+
+        bool OnFiles() => pane.Value == SidebarPane.Files;
 
         return new Box
         {
@@ -33,6 +44,7 @@ internal sealed record BranchesHeader : Widget
                     [
                         new Row
                         {
+                            Gap = Spacing.Xs,
                             CrossAxis = CrossAxisAlignment.Center,
                             Children =
                             [
@@ -42,6 +54,27 @@ internal sealed record BranchesHeader : Widget
                                     IsDetached = vm.IsDetached,
                                     IsSwitching = vm.IsSwitching,
                                     SwitchRotation = vm.SwitchRotation,
+                                },
+                                new Spacer(),
+                                new LocalChangesHeaderActionButton
+                                {
+                                    Icon = LucideIcons.ListFilter,
+                                    Visible = Prop.Bind(OnFiles),
+                                    Tooltip = L.T(s => s.FileBrowserShowHidden),
+                                    Command = new Command(() =>
+                                    {
+                                        if (browsers.Active.Value is { } browser)
+                                            browser.SetShowHidden(!browser.ShowHidden.Value);
+                                    }),
+                                },
+                                new LocalChangesHeaderActionButton
+                                {
+                                    Icon = Prop.Bind<string?>(() =>
+                                        OnFiles() ? LucideIcons.Branch : LucideIcons.Files),
+                                    Tooltip = L.T(s =>
+                                        OnFiles() ? s.BranchesShowBranches : s.BranchesShowFiles),
+                                    Command = new Command(() => pane.Value =
+                                        OnFiles() ? SidebarPane.Branches : SidebarPane.Files),
                                 },
                             ],
                         },

@@ -17,12 +17,18 @@ internal sealed class FileBrowserTab : IDisposable
 {
     private readonly State<bool> _transient;
 
-    public FileBrowserTab(string path, bool transient)
+    public FileBrowserTab(string path, bool transient, long? openedAt = null)
     {
         Path = path;
         Name = System.IO.Path.GetFileName(path);
+        OpenedAt = openedAt ?? OpenOrder.Next();
         _transient = new State<bool>(transient);
     }
+
+    /// <summary>Where this tab falls in the run the content panel shows — every kind of tab in it,
+    /// not only the files. A tab that took a transient one's place inherits its place in the order
+    /// along with its slot, and dragging the run into a new arrangement rewrites it.</summary>
+    public long OpenedAt { get; internal set; }
 
     /// <summary>The file, absolute and normalized. A tab's identity: one tab per file.</summary>
     public string Path { get; }
@@ -78,22 +84,26 @@ internal sealed class FileBrowserTabs : IDisposable
             return existing;
         }
 
-        var tab = new FileBrowserTab(path, transient: !pinned);
         var replacing = pinned ? -1 : IndexOfTransient();
         if (replacing < 0)
         {
+            var tab = new FileBrowserTab(path, transient: !pinned);
             _tabs.Add(tab);
-        }
-        else
-        {
-            var old = _tabs[replacing];
-            _tabs.RemoveAt(replacing);
-            _tabs.Insert(replacing, tab);
-            old.Dispose();
+            _active.Value = tab;
+            return tab;
         }
 
-        _active.Value = tab;
-        return tab;
+        var old = _tabs[replacing];
+        // Same slot and the same place in the run: a transient open is the reader still looking at
+        // one thing, and a tab that jumped to the end of the strip on every arrow key would be the
+        // shuffling this replacement exists to avoid.
+        var taking = new FileBrowserTab(path, transient: !pinned, openedAt: old.OpenedAt);
+        _tabs.RemoveAt(replacing);
+        _tabs.Insert(replacing, taking);
+        old.Dispose();
+
+        _active.Value = taking;
+        return taking;
     }
 
     /// <summary>Closes one tab, handing the surface to its neighbour — the one that took its place

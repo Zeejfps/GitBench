@@ -85,8 +85,6 @@
 
   "app.mode.changes": "Changes",
   "app.mode.history": "History",
-  "app.mode.terminal": "Terminal",
-  "app.mode.files": "Files",
   "app.update.restart": "Restart",
   "app.update.restart_tooltip": "Restart to finish updating",
   "app.update.up_to_date": "You're on the latest version",
@@ -94,7 +92,6 @@
   "app.update.ready_message": "Version {version} is ready — click Restart to update.",
 
   "terminal.starting": "Starting shell…",
-  "terminal.start_session": "Start session",
   "terminal.restart_session": "Start new session",
   "terminal.session_ended": "The shell exited.",
   "terminal.no_repo": "Open a repository to use the terminal.",
@@ -178,7 +175,6 @@
   "toolbar.branch": "Branch",
   "toolbar.review": "Review",
   "toolbar.open_folder_tooltip": "Open in file explorer",
-  "toolbar.open_terminal_tooltip": "Open in terminal",
 
   "statusbar.toggle_theme_tooltip": "Toggle theme",
   "statusbar.check_updates_tooltip": "Check for updates",
@@ -224,6 +220,8 @@
   "branches.header_at": "at",
   "branches.header_switching_to": "switching to",
   "branches.header_detached": "(detached HEAD)",
+  "branches.show_files": "Show files",
+  "branches.show_branches": "Show branches",
   "branches.context_new_branch": "New branch…",
   "branches.context_clean": "Clean…",
   "branches.clean_title": "Clean up branches",
@@ -710,7 +708,6 @@
   "statusbar.error_pin_identity": "Pin identity",
 
   "toolbar.error_open_folder_failed": "Open folder failed",
-  "toolbar.error_open_terminal_failed": "Open terminal failed",
 
   "repos.clone_action": "Clone",
   "repos.picker_choose_clone": "Choose where to clone",

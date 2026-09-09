@@ -36,7 +36,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     public Command Stash { get; }
     public Command DiscardAll { get; }
     public Command OpenFolder { get; }
-    public Command OpenTerminal { get; }
 
     public IReadable<int?> PushBadge { get; }
     public IReadable<int?> PullBadge { get; }
@@ -86,7 +85,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         Stash = new Command(DoStash, Slice(s => s.HasActiveRepo && s.Status.IsDirty));
         DiscardAll = new Command(DoDiscardAll, Slice(s => s.HasUnstaged));
         OpenFolder = new Command(DoOpenFolder, repoActionsEnabled);
-        OpenTerminal = new Command(DoOpenTerminal, repoActionsEnabled);
 
         PushBadge = Slice(ComputePushBadge);
         PullBadge = Slice(ComputePullBadge);
@@ -185,14 +183,6 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         if (repo == null) return;
         try { _shell.OpenFolder(repo.Path); }
         catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.ToolbarErrorOpenFolderFailed, ex.Message)); }
-    }
-
-    private void DoOpenTerminal()
-    {
-        var repo = _registry.Active.Value;
-        if (repo == null) return;
-        try { _shell.OpenTerminal(repo.Path); }
-        catch (Exception ex) { _bus.Broadcast(new ShowOperationErrorMessage(_loc.Strings.Value.ToolbarErrorOpenTerminalFailed, ex.Message)); }
     }
 
     private void DoBranch()

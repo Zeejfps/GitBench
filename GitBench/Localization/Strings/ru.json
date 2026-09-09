@@ -120,8 +120,6 @@
 
   "app.mode.changes": "Изменения",
   "app.mode.history": "История",
-  "app.mode.terminal": "Терминал",
-  "app.mode.files": "Файлы",
   "app.update.restart": "Перезапустить",
   "app.update.restart_tooltip": "Перезапустите, чтобы завершить обновление",
   "app.update.up_to_date": "У вас последняя версия",
@@ -129,7 +127,6 @@
   "app.update.ready_message": "Версия {version} готова — нажмите «Перезапустить», чтобы обновиться.",
 
   "terminal.starting": "Запуск оболочки…",
-  "terminal.start_session": "Запустить сеанс",
   "terminal.restart_session": "Запустить новый сеанс",
   "terminal.session_ended": "Оболочка завершила работу.",
   "terminal.no_repo": "Откройте репозиторий, чтобы использовать терминал.",
@@ -245,7 +242,6 @@
   "toolbar.branch": "Ветка",
   "toolbar.review": "Обзор",
   "toolbar.open_folder_tooltip": "Открыть в проводнике",
-  "toolbar.open_terminal_tooltip": "Открыть в терминале",
 
   "statusbar.toggle_theme_tooltip": "Переключить тему",
   "statusbar.check_updates_tooltip": "Проверить обновления",
@@ -291,6 +287,8 @@
   "branches.header_at": "в",
   "branches.header_switching_to": "переключение на",
   "branches.header_detached": "(отсоединённый HEAD)",
+  "branches.show_files": "Показать файлы",
+  "branches.show_branches": "Показать ветки",
   "branches.context_new_branch": "Новая ветка…",
   "branches.context_clean": "Очистить…",
   "branches.clean_title": "Очистка веток",
@@ -809,7 +807,6 @@
   "statusbar.error_pin_identity": "Не удалось закрепить профиль",
 
   "toolbar.error_open_folder_failed": "Не удалось открыть папку",
-  "toolbar.error_open_terminal_failed": "Не удалось открыть терминал",
 
   "repos.clone_action": "Клонировать",
   "repos.picker_choose_clone": "Выберите, куда клонировать",

@@ -1,5 +1,7 @@
-﻿using GitBench.Features.FileBrowser;
+﻿using GitBench.App;
+using GitBench.Features.FileBrowser;
 using GitBench.Git;
+using ZGF.Observable;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -11,7 +13,21 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
     private readonly QueuedDispatcher _dispatcher = new();
     private readonly List<FileBrowserUiState> _persisted = [];
 
-    public void Dispose() => _dir.Dispose();
+    // Files, so that opening the first one is not itself a step away from the changes tab: these
+    // are tests about the trail between files, not about the panel swinging onto them.
+    private readonly State<MainViewMode> _mode = new(MainViewMode.Files);
+    private OneBrowser? _store;
+    private ContentNavigator? _navigator;
+
+    /// <summary>The arrows, which walk the content panel's trail rather than the browser's.</summary>
+    private ContentNavigator Nav => _navigator!;
+
+    public void Dispose()
+    {
+        _navigator?.Dispose();
+        _store?.Dispose();
+        _dir.Dispose();
+    }
 
     [Fact]
     public void LookingAtAFileOpensItInATabTheNextFileTakesBack()
@@ -131,22 +147,22 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         Write("Auth.cs", "class AuthService", "{", "}");
         Write("Other.cs", "class Other", "{", "}");
         using var browser = Show("Auth.cs");
-        Assert.False(browser.CanGoBack.Value);
+        Assert.False(Nav.CanGoBack.Value);
 
         browser.SetCursor(At("Other.cs"));
         Settle(browser, () => Preview(browser) == At("Other.cs"));
-        Assert.True(browser.CanGoBack.Value);
-        Assert.False(browser.CanGoForward.Value);
+        Assert.True(Nav.CanGoBack.Value);
+        Assert.False(Nav.CanGoForward.Value);
 
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => Preview(browser) == At("Auth.cs"));
-        Assert.True(browser.CanGoForward.Value);
+        Assert.True(Nav.CanGoForward.Value);
 
-        browser.GoForward();
+        Nav.GoForward();
         Settle(browser, () => Preview(browser) == At("Other.cs"));
 
         Assert.Equal(At("Other.cs"), browser.Cursor.Value);
-        Assert.False(browser.CanGoForward.Value);
+        Assert.False(Nav.CanGoForward.Value);
     }
 
     [Fact]
@@ -159,14 +175,14 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
 
         browser.SetCursor(At("Other.cs"));
         Settle(browser, () => Preview(browser) == At("Other.cs"));
-        browser.GoBack();
+        Nav.GoBack();
         Settle(browser, () => Preview(browser) == At("Auth.cs"));
-        Assert.True(browser.CanGoForward.Value);
+        Assert.True(Nav.CanGoForward.Value);
 
         browser.SetCursor(At("Third.cs"));
         Settle(browser, () => Preview(browser) == At("Third.cs"));
 
-        Assert.False(browser.CanGoForward.Value);
+        Assert.False(Nav.CanGoForward.Value);
     }
 
     [Fact]
@@ -247,6 +263,12 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         Settle(browser, () => browser.Rows.Value.Count > 0);
         browser.SetCursor(At(relative));
         Settle(browser, () => Preview(browser) == At(relative));
+
+        // After the first file is open, so the trail these tests walk starts empty: a panel handed
+        // a repository with nothing open drops off the files tab, which would be a step of its own.
+        _store = new OneBrowser(browser);
+        _navigator = new ContentNavigator(_store, new NoTerminals(), _mode);
+        _navigator.Start();
         return browser;
     }
 

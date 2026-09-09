@@ -85,8 +85,6 @@
 
   "app.mode.changes": "Cambios",
   "app.mode.history": "Historial",
-  "app.mode.terminal": "Terminal",
-  "app.mode.files": "Archivos",
   "app.update.restart": "Reiniciar",
   "app.update.restart_tooltip": "Reiniciar para finalizar la actualización",
   "app.update.up_to_date": "Tienes la última versión",
@@ -94,7 +92,6 @@
   "app.update.ready_message": "La versión {version} está lista — haz clic en Reiniciar para actualizar.",
 
   "terminal.starting": "Iniciando la shell…",
-  "terminal.start_session": "Iniciar terminal",
   "terminal.restart_session": "Iniciar nueva terminal",
   "terminal.session_ended": "La shell terminó.",
   "terminal.no_repo": "Abre un repositorio para usar la terminal.",
@@ -178,7 +175,6 @@
   "toolbar.branch": "Rama",
   "toolbar.review": "Revisar",
   "toolbar.open_folder_tooltip": "Abrir en el explorador de archivos",
-  "toolbar.open_terminal_tooltip": "Abrir en el terminal",
 
   "statusbar.toggle_theme_tooltip": "Alternar tema",
   "statusbar.check_updates_tooltip": "Buscar actualizaciones",
@@ -224,6 +220,8 @@
   "branches.header_at": "en",
   "branches.header_switching_to": "cambiando a",
   "branches.header_detached": "(HEAD desacoplada)",
+  "branches.show_files": "Mostrar archivos",
+  "branches.show_branches": "Mostrar ramas",
   "branches.context_new_branch": "Nueva rama…",
   "branches.context_clean": "Limpiar…",
   "branches.clean_title": "Limpiar ramas",
@@ -711,7 +709,6 @@
   "statusbar.error_pin_identity": "Fijar identidad",
 
   "toolbar.error_open_folder_failed": "Error al abrir la carpeta",
-  "toolbar.error_open_terminal_failed": "Error al abrir la terminal",
 
   "repos.clone_action": "Clonar",
   "repos.picker_choose_clone": "Elige dónde clonar",

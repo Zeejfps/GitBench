@@ -54,8 +54,6 @@ internal sealed record ActionsToolbar : Widget
 
     private static IWidget[] BuildActions(ActionsToolbarViewModel vm) =>
     [
-        new ModeSwitcherView(),
-        new SeparatorSpacer(),
         new ToolbarSyncButton
         {
             Command = vm.Fetch,
@@ -96,12 +94,6 @@ internal sealed record ActionsToolbar : Widget
             Command = vm.OpenFolder,
             Icon = LucideIcons.FolderOpen,
             Tooltip = L.T(s => s.ToolbarOpenFolderTooltip),
-        },
-        new ToolbarIconButton
-        {
-            Command = vm.OpenTerminal,
-            Icon = LucideIcons.SquareTerminal,
-            Tooltip = L.T(s => s.ToolbarOpenTerminalTooltip),
         },
         new AssistantToolbarButton(),
     ];

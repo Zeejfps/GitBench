@@ -70,15 +70,12 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly FileSearchViewModel _search;
     private readonly IDisposable _searchRetarget;
 
-    private readonly State<bool> _canGoBack = new(false);
-    private readonly State<bool> _canGoForward = new(false);
-    private readonly NavigationHistory<FileBrowserPlace> _history = new();
-
     private string[] _expanded = [];
 
     private FileBrowserTree? _tree;
     private Task _lane = Task.CompletedTask;
     private bool _disposed;
+    private bool _restoring;
 
     private CancellationTokenSource? _previewCancel;
     private int _previewGeneration;
@@ -129,13 +126,21 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// somewhere they have navigated: a fresh session's history starts empty.</summary>
     private void Restore(FileBrowserUiState state)
     {
-        foreach (var relative in state.Tabs)
-            if (Restored(relative) is { } path) _tabs.Open(path, pinned: true);
+        _restoring = true;
+        try
+        {
+            foreach (var relative in state.Tabs)
+                if (Restored(relative) is { } path) _tabs.Open(path, pinned: true);
 
-        var cursor = Restored(state.Cursor);
-        var active = Restored(state.ActiveTab) ?? cursor;
-        if (active is not null) Show(active, pinned: true, line: null, record: false);
-        if (cursor is not null) _cursor.Value = cursor;
+            var cursor = Restored(state.Cursor);
+            var active = Restored(state.ActiveTab) ?? cursor;
+            if (active is not null) Show(active, pinned: true, line: null);
+            if (cursor is not null) _cursor.Value = cursor;
+        }
+        finally
+        {
+            _restoring = false;
+        }
     }
 
     /// <summary>The working tree this browser is rooted at.</summary>
@@ -168,6 +173,13 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
     /// <summary>The tab the preview is showing, or null when nothing is open.</summary>
     public IReadable<FileBrowserTab?> ActiveTab => _tabs.Active;
+
+    /// <summary>A file became the one this browser is showing. Silent while the session's tabs are
+    /// being reopened: restoring what the reader left is not them going anywhere.</summary>
+    public event Action<FileBrowserMove>? FileShown;
+
+    /// <summary>The last open file was closed, so this browser is showing nothing.</summary>
+    public event Action? AllFilesClosed;
 
     /// <summary>This repository's files open for editing.</summary>
     public IRepoDocuments Documents => _documents;
@@ -247,35 +259,21 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _pendingReveal = _previewPath is { } path ? (path, line) : null;
     }
 
-    public IReadable<bool> CanGoBack => _canGoBack;
-
-    public IReadable<bool> CanGoForward => _canGoForward;
-
     /// <summary>Opens a file the reader asked for by name rather than by pointing at it — a
     /// definition jump. Pinned, because the trail of files a jump left behind is the thing the back
     /// button is for.</summary>
     public void NavigateTo(string absolutePath, int line)
     {
         if (_disposed) return;
-        Travel(absolutePath, rowKey: null, line, pinned: true, record: true);
+        Travel(absolutePath, rowKey: null, line, pinned: true);
     }
 
-    public void GoBack()
+    /// <summary>Puts the browser back on a place the content panel's trail kept — the file, the row
+    /// the tree was on inside it, and the line that was being read.</summary>
+    public void Restore(FileBrowserPlace place)
     {
-        if (_disposed || !_history.TryGoBack(Here(), out var place)) return;
-        Return(place);
-    }
-
-    public void GoForward()
-    {
-        if (_disposed || !_history.TryGoForward(Here(), out var place)) return;
-        Return(place);
-    }
-
-    private void Return(FileBrowserPlace place)
-    {
-        UpdateHistory();
-        Travel(place.AbsolutePath, place.RowKey, place.Line, pinned: false, record: false);
+        if (_disposed) return;
+        Travel(place.AbsolutePath, place.RowKey, place.Line, pinned: false);
     }
 
     /// <summary>Shows a tab's file. Idempotent, so the strip can hand back the tab already on
@@ -283,7 +281,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     public void ActivateTab(FileBrowserTab tab)
     {
         if (_disposed || _tabs.Items.IndexOf(tab) < 0) return;
-        Travel(tab.Path, rowKey: null, line: null, pinned: false, record: true);
+        Travel(tab.Path, rowKey: null, line: null, pinned: false);
     }
 
     public void CloseTab(FileBrowserTab tab)
@@ -367,8 +365,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         return path is null ? string.Empty : PathLabel(path);
     }
 
-    /// <summary>Where the reader is, for the history to come back to. Null when nothing is open,
-    /// which is not a place: there is nothing to return to.</summary>
+    /// <summary>Where the reader is, for the content panel's trail to come back to. Null when
+    /// nothing is open, which is not a place: there is nothing to return to.</summary>
+    public FileBrowserPlace? Place => Here();
+
     private FileBrowserPlace? Here()
     {
         if (_tabs.Active.Value is not { } tab) return null;
@@ -388,10 +388,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// missed. The cursor does wait — moving it to a row that is not there yet would move it
     /// somewhere else.
     /// </remarks>
-    private void Travel(string absolutePath, string? rowKey, int? line, bool pinned, bool record)
+    private void Travel(string absolutePath, string? rowKey, int? line, bool pinned)
     {
         var path = PathKey.Normalize(absolutePath);
-        Show(path, pinned, line, record);
+        Show(path, pinned, line);
 
         if (ToRelative(path) is null)
         {
@@ -413,12 +413,11 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     }
 
     /// <summary>
-    /// Points the tabs — and through them the preview — at a file, remembering where the reader was
-    /// before it. The one place a move is recorded, so nothing can move the preview without the
-    /// back button knowing about it. Answers whether the strip now shows something else, which is
-    /// what has to be written down.
+    /// Points the tabs — and through them the preview — at a file. The one place the preview moves
+    /// from, so nothing can move it without the content panel's trail hearing about it. Answers
+    /// whether the strip now shows something else.
     /// </summary>
-    private bool Show(string path, bool pinned, int? line, bool record)
+    private bool Show(string path, bool pinned, int? line)
     {
         var leaving = Here();
         var previous = _tabs.Active.Value;
@@ -426,16 +425,15 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         var tab = _tabs.Open(path, pinned);
         var switched = !ReferenceEquals(previous, tab);
 
-        if (record && leaving is not null && (switched || (line is { } asked && asked != leaving.Line)))
-        {
-            _history.Push(leaving);
-            UpdateHistory();
-        }
-
         SyncPreview(PreviewSync.Follow);
 
         if (line is { } target) NavigateToLine(target);
         else if (switched && tab.TopLine > 0) NavigateToLine(tab.TopLine);
+
+        // Asking again for the file already on screen is not somewhere new, even though the panel
+        // may still have to swing over to it from another tab.
+        var moved = switched || (line is { } asked && leaving is not null && asked != leaving.Line);
+        if (!_restoring) FileShown?.Invoke(new FileBrowserMove(leaving, moved));
 
         return switched || _tabs.Items.Count != openCount;
     }
@@ -445,15 +443,14 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private void FollowActiveTab()
     {
         SyncPreview(PreviewSync.Follow);
-        if (_tabs.Active.Value is not { } tab) return;
+        if (_tabs.Active.Value is not { } tab)
+        {
+            AllFilesClosed?.Invoke();
+            return;
+        }
+
         if (HasRow(tab.Path)) _cursor.Value = tab.Path;
         if (tab.TopLine > 0) NavigateToLine(tab.TopLine);
-    }
-
-    private void UpdateHistory()
-    {
-        _canGoBack.Value = _history.CanGoBack;
-        _canGoForward.Value = _history.CanGoForward;
     }
 
     private bool HasRow(string rowKey)
@@ -563,7 +560,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     {
         if (_disposed) return;
 
-        var opened = FileOf(rowKey) is { } file && Show(file, pinned: false, line: null, record: true);
+        var opened = FileOf(rowKey) is { } file && Show(file, pinned: false, line: null);
         if (_cursor.Value == rowKey && !opened) return;
 
         _cursor.Value = rowKey;
@@ -603,7 +600,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     {
         if (_disposed) return;
 
-        var opened = Show(row.FullPath, pinned: false, line: row.StartLine, record: true);
+        var opened = Show(row.FullPath, pinned: false, line: row.StartLine);
         if (_cursor.Value == row.RowKey && !opened) return;
 
         _cursor.Value = row.RowKey;
@@ -930,8 +927,6 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _showHidden.Dispose();
         _renderMarkdown.Dispose();
         _preview.Dispose();
-        _canGoBack.Dispose();
-        _canGoForward.Dispose();
         _breadcrumb.Dispose();
         _folds.Dispose();
         _tabs.Dispose();

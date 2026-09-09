@@ -264,10 +264,6 @@ public class UsagesPopupTests
         public List<(string Path, int Line)> Went { get; } = [];
 
         public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
-
-        public void GoBack() { }
-
-        public void GoForward() { }
     }
 
     private sealed class QueuedDispatcher : IUiDispatcher

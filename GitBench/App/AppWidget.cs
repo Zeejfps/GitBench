@@ -28,6 +28,7 @@ internal sealed record AppWidget : Widget
                 new AppContentWidget(),
                 new AssistantOverlay(),
                 new DragOverlay(),
+                new TabDropIndicator(),
                 new DialogSurface(),
                 new DiffWindowsView(),
                 new ReviewWindowsView(),

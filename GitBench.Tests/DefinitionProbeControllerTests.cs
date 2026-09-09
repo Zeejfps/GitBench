@@ -263,7 +263,7 @@ public sealed class DefinitionProbeControllerTests
 
         Assert.True(fx.Key(KeyboardKey.LeftBracket, Command));
 
-        Assert.Equal(1, fx.Navigator.Backs);
+        Assert.Equal(1, fx.History.Backs);
     }
 
     [Fact]
@@ -273,7 +273,7 @@ public sealed class DefinitionProbeControllerTests
 
         Assert.True(fx.Key(KeyboardKey.RightBracket, Command));
 
-        Assert.Equal(1, fx.Navigator.Forwards);
+        Assert.Equal(1, fx.History.Forwards);
     }
 
     [Fact]
@@ -283,7 +283,7 @@ public sealed class DefinitionProbeControllerTests
 
         Assert.False(fx.Key(KeyboardKey.LeftBracket, InputModifiers.None));
 
-        Assert.Equal(0, fx.Navigator.Backs);
+        Assert.Equal(0, fx.History.Backs);
     }
 
     [Fact]
@@ -528,6 +528,7 @@ public sealed class DefinitionProbeControllerTests
                 Surface,
                 Source,
                 Navigator,
+                History,
                 queued ? Queue : new ImmediateDispatcher(),
                 () => Document,
                 () => Held,
@@ -547,6 +548,8 @@ public sealed class DefinitionProbeControllerTests
         public FakeSource Source { get; } = new();
 
         public FakeNavigator Navigator { get; } = new();
+
+        public FakeContentNavigator History { get; } = new();
 
         public QueuedDispatcher Queue { get; } = new();
 
@@ -659,15 +662,7 @@ public sealed class DefinitionProbeControllerTests
     {
         public List<(string Path, int Line)> Went { get; } = [];
 
-        public int Backs { get; private set; }
-
-        public int Forwards { get; private set; }
-
         public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
-
-        public void GoBack() => Backs++;
-
-        public void GoForward() => Forwards++;
     }
 
     private sealed class ImmediateDispatcher : IUiDispatcher

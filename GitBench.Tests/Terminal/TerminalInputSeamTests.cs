@@ -14,6 +14,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Testing;
+using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.KeyboardModule;
 using ZGF.Observable;
@@ -27,7 +28,7 @@ namespace GitBench.Tests.Terminal;
 // (TerminalInputControllerTests) - this file is about the joins.
 //
 //   * the collision with AppKeybindController, asserted on that controller's real effects
-//   * the mode switcher's keep-alive swap: hidden but mounted, and what that costs the keyboard
+//   * the content panel's keep-alive swap: hidden but mounted, and what that costs the keyboard
 //   * focus arbitration against other focus takers
 //   * session lifecycle against input: before adopt, after the shell dies, after Dispose
 //   * terminal modes read live from the engine rather than captured at construction
@@ -48,15 +49,18 @@ public class TerminalPaneWiringTests : IDisposable
     public void Dispose() => _dir.Dispose();
 
     [Fact]
-    public void BuildingThePane_AttachesAKeyboardToTheGrid()
+    public void OpeningATerminal_AttachesAKeyboardToItsGrid()
     {
         using var pane = new PaneUnderTest(_dir.Path);
+        pane.Harness.Render();
+
+        pane.Start();
 
         Assert.IsType<TerminalInputController>(pane.Harness.Input.GetController(pane.Grid));
     }
 
     [Fact]
-    public void BeforeItIsAskedFor_NoShellIsStarted()
+    public void BeforeItIsAskedFor_ThereIsNoTerminalAtAll()
     {
         // Drawing is what used to start one. The pane is rendered here precisely because that is the
         // path that must no longer spawn anything - the fake spawn throws if it is reached.
@@ -64,29 +68,18 @@ public class TerminalPaneWiringTests : IDisposable
 
         pane.Harness.Render();
 
-        Assert.IsType<TerminalRenderState.Idle>(pane.Terminal.Render.Value);
+        Assert.Empty(pane.Tabs.Terminals);
+        Assert.Null(pane.Tabs.Active.Value);
     }
 
     [Fact]
-    public void AnIdleTerminal_DoesNotTakeTheKeyboardOnAClick()
-    {
-        // A pane with no shell that holds focus declines every key it is then given, which eats the
-        // application's own chords with nothing on screen saying why.
-        using var pane = new PaneUnderTest(_dir.Path);
-        pane.Harness.Render();
-
-        pane.Harness.Click(400f, 120f);
-
-        Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
-    }
-
-    [Fact]
-    public void ClickingStartSession_StartsAShellAndLeavesTheKeyboardInIt()
+    public void PressingNewTerminal_StartsAShellAndLeavesTheKeyboardInIt()
     {
         using var pane = new PaneUnderTest(_dir.Path);
         pane.Harness.Render();
 
-        pane.Harness.ClickOn(TerminalStartGate.StartButtonId);
+        pane.Harness.ClickOn(NewTerminalButton.NewTabButtonId);
+        pane.Harness.Render();
 
         Pump.WaitFor(
             pane.Dispatcher,
@@ -109,30 +102,6 @@ public class TerminalPaneWiringTests : IDisposable
     }
 
     [Fact]
-    public void BeforeAnythingHasBeenStarted_ThereIsNoTabStrip()
-    {
-        // A repository is given a terminal it never asked for, so a strip naming it before it has
-        // run anything would be chrome over the offer to start one.
-        using var pane = new PaneUnderTest(_dir.Path);
-
-        pane.Harness.Render();
-
-        Assert.False(pane.Harness.Get(TerminalTabStrip.StripId).IsVisible);
-    }
-
-    [Fact]
-    public void OnceAShellIsRunning_TheStripIsThere()
-    {
-        using var pane = new PaneUnderTest(_dir.Path);
-        pane.Harness.Render();
-
-        pane.Start();
-        pane.Harness.Render();
-
-        Assert.True(pane.Harness.Get(TerminalTabStrip.StripId).IsVisible);
-    }
-
-    [Fact]
     public void PressingNewTab_StartsASecondShellAndLeavesTheFirstRunning()
     {
         // One gesture, not two: asking for another terminal is asking for another shell.
@@ -142,7 +111,7 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Harness.Render();
         var first = pane.Terminal;
 
-        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.ClickOn(NewTerminalButton.NewTabButtonId);
         pane.Harness.Render();
 
         Assert.Equal(2, pane.Tabs.Terminals.Count);
@@ -162,7 +131,7 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Start();
         pane.Harness.Render();
         var first = pane.Terminal;
-        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.ClickOn(NewTerminalButton.NewTabButtonId);
         pane.Harness.Render();
 
         pane.Tabs.Activate(first);
@@ -181,7 +150,7 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Start();
         pane.Harness.Render();
 
-        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.ClickOn(NewTerminalButton.NewTabButtonId);
         pane.Harness.Render();
 
         Assert.Same(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
@@ -195,7 +164,7 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Start();
         pane.Harness.Render();
         var first = pane.Terminal;
-        pane.Harness.ClickOn(TerminalTabStrip.NewTabButtonId);
+        pane.Harness.ClickOn(NewTerminalButton.NewTabButtonId);
         pane.Harness.Render();
         pane.Harness.Input.Blur(pane.Harness.Input.FocusedComponent!);
 
@@ -219,23 +188,26 @@ public class TerminalPaneWiringTests : IDisposable
     }
 
     [Fact]
-    public void SwitchingToARepositoryWithNoShell_LeavesTheKeyboardAlone()
+    public void SwitchingToARepositoryWithNoTerminal_LeavesNothingHoldingTheKeyboard()
     {
-        // That pane is showing the offer to start one. A terminal holding the keyboard there
-        // declines every key it is given, which eats the application's own chords.
+        // That repository has no terminal at all, so there is no grid to type into. A controller
+        // left holding the keyboard from the repository behind would decline every key it is given,
+        // which eats the application's own chords.
         using var pane = new PaneUnderTest(_dir.Path);
         pane.Harness.Render();
         pane.Start();
+        var grid = pane.Harness.Input.GetController(pane.Grid);
 
         pane.Activate(pane.SecondRepo);
 
-        Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
+        Assert.Empty(pane.Tabs.Terminals);
+        Assert.NotSame(grid, pane.Harness.Input.FocusedComponent);
     }
 
     [Fact]
     public void APaneThatIsNotShowing_DoesNotTakeTheKeyboard()
     {
-        // The mode switcher keeps this view mounted behind whichever mode is on screen, so a
+        // The content panel keeps this view mounted behind whichever tab is on screen, so a
         // repository switched from another mode must not hand the keyboard to a hidden terminal.
         using var pane = new PaneUnderTest(_dir.Path);
         pane.Harness.Render();
@@ -244,6 +216,7 @@ public class TerminalPaneWiringTests : IDisposable
         pane.Harness.Root.IsVisible = false;
 
         pane.Activate(pane.FirstRepo);
+        pane.Harness.Render();
 
         Assert.NotSame(pane.Harness.Input.GetController(pane.Grid), pane.Harness.Input.FocusedComponent);
     }
@@ -257,9 +230,10 @@ public class TerminalPaneWiringTests : IDisposable
         var first = pane.Terminal;
 
         pane.Activate(pane.SecondRepo);
+        pane.Start();
 
         Assert.NotSame(first, pane.Terminal);
-        Assert.IsType<TerminalRenderState.Idle>(pane.Terminal.Render.Value);
+        Assert.IsType<TerminalRenderState.Running>(pane.Terminal.Render.Value);
         Assert.IsType<TerminalRenderState.Running>(first.Render.Value);
     }
 
@@ -286,9 +260,19 @@ public class TerminalPaneWiringTests : IDisposable
             _store.Start();
 
             Harness = GuiTestHarness.Create(
-                // Wrapped so a test can hide the pane the way the mode switcher does. The pane's own
-                // root is a swap region, which owns its IsVisible and sets it back on every swap.
-                ctx => new Box { Children = [new TerminalPane()] }.BuildView(ctx),
+                // The pane under the one control that makes a terminal, which lives on the content
+                // panel's strip rather than in the pane. Wrapped so a test can hide the pane the way
+                // the panel does. The pane's own root is a swap region, which owns its IsVisible and
+                // sets it back on every swap.
+                ctx => new Column
+                {
+                    CrossAxis = CrossAxisAlignment.Stretch,
+                    Children =
+                    [
+                        new NewTerminalButton { OnShow = _ => { } },
+                        new Grow { Child = new Box { Children = [new TerminalPane()] } },
+                    ],
+                }.BuildView(ctx),
                 width: 800,
                 height: 600,
                 configure: ctx =>
@@ -313,13 +297,16 @@ public class TerminalPaneWiringTests : IDisposable
 
         public TerminalTabs Tabs => _store.Tabs.Value!;
 
-        public TerminalInstance Terminal => Tabs.Active.Value;
+        public TerminalInstance Terminal => Tabs.Active.Value!;
 
         public View Grid => Harness.Get(TerminalScreen.GridId);
 
+        /// <summary>Presses the one control that makes a terminal, and waits for the shell it asked
+        /// for. The pane has nothing in it until this is called.</summary>
         public void Start()
         {
-            Harness.ClickOn(TerminalStartGate.StartButtonId);
+            Harness.ClickOn(NewTerminalButton.NewTabButtonId);
+            Harness.Render();
             Pump.WaitFor(
                 Dispatcher,
                 () => Terminal.Render.Value is TerminalRenderState.Running,
@@ -702,7 +689,7 @@ public class TerminalKeybindCollisionTests : IDisposable
 }
 
 /// <summary>
-/// The mode switcher's keep-alive swap against the terminal's keyboard: the pane stays mounted and
+/// The content panel's keep-alive swap against the terminal's keyboard: the pane stays mounted and
 /// its shell keeps running when the user switches to History, so the keyboard has to be given up by
 /// the pane itself - nothing unmounts it and nothing blurs it.
 /// </summary>
@@ -835,7 +822,7 @@ public class TerminalModeSwitchSeamTests
     }
 
     /// <summary>
-    /// A mode switcher with a live terminal branch: the real switch in keep-alive mode, the real
+    /// A content panel with a live terminal branch: the real switch in keep-alive mode, the real
     /// input system, and a stand-in for the application's keybind layer above it.
     /// </summary>
     private sealed class SwitchedApp : IDisposable
