@@ -222,6 +222,7 @@
   "file_browser.changed_on_disk_cancel": "Сохранить мои правки",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_finder.title": "Найти файл",
   "file_search.title": "Поиск в файле",
   "file_search.matches": "{index}/{total}",
   "file_search.no_matches": "Ничего не найдено",

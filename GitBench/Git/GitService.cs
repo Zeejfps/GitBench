@@ -3852,11 +3852,19 @@ public sealed class GitService : IGitService, IGitRawConfigReader, IDisposable
         return matched;
     }
 
-    // `--cached -z` lists index entries, so an unmerged path arrives once per stage; the set
-    // collapses those back to one path.
-    public IReadOnlyList<string> ListTrackedFiles(Repo repo)
+    public IReadOnlyList<string> ListTrackedFiles(Repo repo) =>
+        ListFiles(repo, "ls-files", "--cached", "-z");
+
+    // `--others --exclude-standard` adds the untracked files the ignore rules leave alone, so a file
+    // written a minute ago can be found by name and a build directory still cannot.
+    public IReadOnlyList<string> ListWorkingTreeFiles(Repo repo) =>
+        ListFiles(repo, "ls-files", "--cached", "--others", "--exclude-standard", "-z");
+
+    // `-z` lists index entries, so an unmerged path arrives once per stage; the set collapses those
+    // back to one path.
+    private IReadOnlyList<string> ListFiles(Repo repo, params string[] args)
     {
-        var output = RunGit(repo.Path, out _, "ls-files", "--cached", "-z");
+        var output = RunGit(repo.Path, out _, args);
         if (output == null) return [];
 
         var seen = new HashSet<string>(StringComparer.Ordinal);

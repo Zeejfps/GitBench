@@ -1,18 +1,18 @@
-namespace GitBench.Features.Assistant.Tools;
+namespace GitBench.Infrastructure;
 
 /// <summary>One path the query reached, and how well.</summary>
 internal readonly record struct PathMatch(string Path, int Score);
 
 /// <summary>
-/// Ranks repo-relative paths against what the model asked for.
+/// Ranks repo-relative paths against a name, a fragment, a glob or a near-miss of one.
 /// </summary>
 /// <remarks>
-/// The query is rarely a path. It is a bare file name whose directory the model never saw, a path
+/// The query is rarely a path. It is a bare file name whose directory the asker never saw, a path
 /// remembered one segment wrong, a name with two letters swapped, or a glob. So the ladder below
 /// walks from "this is the path" down to "these letters appear in this order", and every rung
 /// carries a score, because the caller needs an order and a floor — a suggestion worth printing has
 /// to be distinguishable from the least-bad row of a thousand.
-/// Matching is case-insensitive: a model that mis-cases a path is as common as one that mis-spells
+/// Matching is case-insensitive: a query that mis-cases a path is as common as one that mis-spells
 /// it, and no repository is worth showing nothing over that.
 /// </remarks>
 internal static class PathSearch

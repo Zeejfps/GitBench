@@ -248,6 +248,7 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         new Repo(Guid.NewGuid(), _dir.Path, "repo"),
         new FileSystemReader(),
         NoIgnoreOracle.Instance,
+        EmptyFileCatalog.Instance,
         fixture.Extractor,
         _dispatcher,
         restored ?? new FileBrowserUiState(),

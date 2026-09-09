@@ -183,6 +183,7 @@ public sealed class ContentNavigatorTests(CodeIntelFixture fixture) : IDisposabl
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
             NoIgnoreOracle.Instance,
+            EmptyFileCatalog.Instance,
             fixture.Extractor,
             _dispatcher,
             new FileBrowserUiState(),

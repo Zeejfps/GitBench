@@ -69,8 +69,14 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly FileBrowserTabs _tabs;
     private readonly FileSearchViewModel _search;
     private readonly IDisposable _searchRetarget;
+    private readonly FileFinderViewModel _finder;
 
     private string[] _expanded = [];
+
+    /// <summary>The tree's own rows, kept while the rail is showing something else. What
+    /// <see cref="Rows"/> holds is these or the finder's results; what the tree knows is only ever
+    /// these.</summary>
+    private IReadOnlyList<FileBrowserRow> _treeRows = [];
 
     private FileBrowserTree? _tree;
     private Task _lane = Task.CompletedTask;
@@ -87,6 +93,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         Repo repo,
         IFileSystemReader files,
         IIgnoreOracle ignore,
+        IFileCatalog catalog,
         ISymbolExtractor extractor,
         IUiDispatcher dispatcher,
         FileBrowserUiState restored,
@@ -108,6 +115,9 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
         _search = new FileSearchViewModel(() => _preview.Value, () => _topVisibleLine);
         _searchRetarget = _preview.Subscribe(_ => _search.Retarget());
+
+        _finder = new FileFinderViewModel(catalog, dispatcher);
+        _finder.Changed += PublishRows;
 
         _showHidden.Value = restored.ShowHidden;
         _renderMarkdown.Value = restored.RenderMarkdown;
@@ -213,6 +223,16 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// <summary>Find-in-file over whatever the preview is showing. Lives here rather than in the
     /// bar, so a query survives the bar being closed and the pane being switched away from.</summary>
     public FileSearchViewModel Search => _search;
+
+    /// <summary>Find-a-file over the whole working tree. While it is answering something,
+    /// <see cref="Rows"/> is its results rather than the tree — the rail shows one list, and the
+    /// keyboard, the cursor and the preview follow whichever it is.</summary>
+    public FileFinderViewModel Finder => _finder;
+
+    /// <summary>Which of the two lists <see cref="Rows"/> is. A result is a taller row than a tree
+    /// entry — it carries the directory it was found in under the name — so whoever draws the rows
+    /// has to be told, rather than guessing it from one of them.</summary>
+    public bool IsShowingResults => _finder.IsFiltering;
 
     /// <summary>The declaration the reader is currently inside, as a dotted containment path, or
     /// null when the top of the viewport is inside none. Follows the scroll, which is what makes it
@@ -613,12 +633,43 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// menu item, never a gesture.</summary>
     public void Activate(FileBrowserRow row)
     {
+        if (_finder.IsFiltering)
+        {
+            OpenFound(row.FullPath);
+            return;
+        }
+
         switch (row)
         {
             case FileBrowserRow.Directory directory: Toggle(directory); break;
             case FileBrowserRow.Symbol symbol: SelectSymbol(symbol); Pin(symbol.FullPath); break;
             default: SetCursor(row.RowKey); Pin(row.FullPath); break;
         }
+    }
+
+    /// <summary>
+    /// Enter in the find field: opens the result the cursor is on, or the best one when the reader
+    /// typed and pressed Enter without ever leaving the field.
+    /// </summary>
+    public void ActivateBestMatch()
+    {
+        if (_disposed || !_finder.IsFiltering) return;
+
+        var rows = _rows.Value;
+        if (rows.Count == 0) return;
+
+        var index = IndexOfCursor(rows);
+        OpenFound(rows[index < 0 ? 0 : index].FullPath);
+    }
+
+    /// <summary>
+    /// Takes the reader to a file they found by name: the search is over, and the tree opens onto
+    /// where the file lives so that closing the finder leaves them somewhere rather than nowhere.
+    /// </summary>
+    private void OpenFound(string absolutePath)
+    {
+        _finder.Close();
+        Travel(absolutePath, rowKey: null, line: null, pinned: true);
     }
 
     private void Pin(string path)
@@ -736,11 +787,47 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private void Publish(IReadOnlyList<FileBrowserRow> rows, string[] expanded, bool showHidden)
     {
         if (_disposed) return;
-        _rows.Value = rows;
+        _treeRows = rows;
         _showHidden.Value = showHidden;
         _expanded = expanded;
+        PublishRows();
         SyncPreview(PreviewSync.Follow);
         Persist();
+    }
+
+    /// <summary>Puts on the rail whichever list it should be showing. The one place that decides,
+    /// so a listing landing mid-search cannot push the tree back over the results.</summary>
+    private void PublishRows()
+    {
+        if (_disposed) return;
+        _rows.Value = _finder.IsFiltering ? Found(_finder.Results.Value.Paths) : _treeRows;
+    }
+
+    /// <summary>
+    /// The finder's paths as rows the rail can draw: flat, unindented, and each carrying the
+    /// directory it came from as its dimmed second half — which is the whole reason a result row
+    /// cannot be a tree row, since two files named the same are otherwise the same row twice.
+    /// </summary>
+    private IReadOnlyList<FileBrowserRow> Found(IReadOnlyList<string> relativePaths)
+    {
+        var rows = new List<FileBrowserRow>(relativePaths.Count);
+        foreach (var relative in relativePaths)
+        {
+            var slash = relative.LastIndexOf('/');
+            rows.Add(new FileBrowserRow.File(
+                PathKey.Normalize(Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar))),
+                slash < 0 ? relative : relative[(slash + 1)..],
+                Depth: 0,
+                IsIgnored: false,
+                IsHidden: false,
+                IsLink: false,
+                Guides: default)
+            {
+                Detail = slash < 0 ? null : relative[..slash],
+            });
+        }
+
+        return rows;
     }
 
     private void Persist()
@@ -922,6 +1009,8 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _previewCancel?.Cancel();
         _previewCancel?.Dispose();
         _searchRetarget.Dispose();
+        _finder.Changed -= PublishRows;
+        _finder.Dispose();
         _rows.Dispose();
         _cursor.Dispose();
         _showHidden.Dispose();

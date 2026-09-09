@@ -142,6 +142,7 @@ internal sealed class ScriptedRemoteGitService(IGitService inner) : IGitService
     public bool IsPathIgnored(Repo repo, string relativePath) => inner.IsPathIgnored(repo, relativePath);
     public IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths) => inner.IsPathIgnored(repo, relativePaths);
     public IReadOnlyList<string> ListTrackedFiles(Repo repo) => inner.ListTrackedFiles(repo);
+    public IReadOnlyList<string> ListWorkingTreeFiles(Repo repo) => inner.ListWorkingTreeFiles(repo);
     public RepoOperationState GetOperationState(Repo repo) => inner.GetOperationState(repo);
     public RepoOperation? GetOperation(Repo repo) => inner.GetOperation(repo);
     public bool HasUnmergedPaths(Repo repo) => inner.HasUnmergedPaths(repo);

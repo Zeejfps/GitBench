@@ -34,6 +34,10 @@ internal abstract record FileBrowserRow(
     /// <summary>What the cursor holds. A path for anything on disk.</summary>
     public virtual string RowKey => FullPath;
 
+    /// <summary>A dimmed second half for the label — the directory a found file sits in. Null on a
+    /// row whose place in the tree already says where it is, which is every row the tree emits.</summary>
+    public string? Detail { get; init; }
+
     public sealed record Directory(
         string FullPath,
         string Name,

@@ -123,8 +123,30 @@ internal sealed record FileBrowserTreePane : Widget
                 Value = ctx.Require<IFileBrowserStore>().Active,
                 Case = browser => browser is null
                     ? new FileBrowserNotice { Message = L.T(s => s.FileBrowserNoRepo) }
-                    : new FileBrowserTreeRail { Model = browser },
+                    : new FileBrowserTreeColumn { Model = browser },
             },
+        ],
+    };
+}
+
+/// <summary>The rail's list, with the find field over it while there is one.</summary>
+internal sealed record FileBrowserTreeColumn : Widget
+{
+    public required FileBrowserViewModel Model { get; init; }
+
+    protected override IWidget Build(Context ctx) => new Column
+    {
+        CrossAxis = CrossAxisAlignment.Stretch,
+        Children =
+        [
+            // Mounted rather than merely shown, so opening the finder is what gives the field the
+            // caret and closing it hands the caret back to the tree.
+            new Show
+            {
+                When = Model.Finder.IsOpen,
+                Then = () => new FileFinderField { Model = Model },
+            },
+            new Grow { Child = new FileBrowserTreeRail { Model = Model } },
         ],
     };
 }

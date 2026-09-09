@@ -13,4 +13,8 @@ public interface IGitRepositoryReader
     // Every repo-relative path git tracks (`git ls-files --cached`), sorted and deduplicated.
     // Backs the assistant's file search, so a path it half-remembers can be resolved to a real one.
     IReadOnlyList<string> ListTrackedFiles(Repo repo);
+    // Every repo-relative path in the working tree the ignore rules leave alone: the tracked files
+    // plus the untracked ones (`git ls-files --cached --others --exclude-standard`). Backs the file
+    // browser's find-a-file, which is looking for a file that is there rather than one git knows.
+    IReadOnlyList<string> ListWorkingTreeFiles(Repo repo);
 }

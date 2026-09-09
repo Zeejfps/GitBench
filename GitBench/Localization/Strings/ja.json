@@ -154,6 +154,7 @@
   "file_browser.changed_on_disk_cancel": "編集内容を保持",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_finder.title": "ファイルを検索",
   "file_search.title": "ファイル内を検索",
   "file_search.matches": "{index}/{total}",
   "file_search.no_matches": "結果なし",

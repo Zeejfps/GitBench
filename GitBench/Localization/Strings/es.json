@@ -155,6 +155,7 @@
   "file_browser.changed_on_disk_cancel": "Conservar mis cambios",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_finder.title": "Buscar archivo",
   "file_search.title": "Buscar en el archivo",
   "file_search.matches": "{index}/{total}",
   "file_search.no_matches": "Sin resultados",

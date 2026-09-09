@@ -154,6 +154,7 @@
   "file_browser.changed_on_disk_cancel": "保留我的编辑",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_finder.title": "查找文件",
   "file_search.title": "在文件中查找",
   "file_search.matches": "{index}/{total}",
   "file_search.no_matches": "无结果",

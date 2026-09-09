@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GitBench.Git;
+using GitBench.Infrastructure;
 
 namespace GitBench.Features.Assistant.Tools;
 

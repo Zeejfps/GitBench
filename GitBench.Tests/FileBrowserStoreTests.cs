@@ -83,6 +83,7 @@ public class FileBrowserStoreTests : IDisposable
         public IReadOnlySet<string> IsPathIgnored(Repo repo, IReadOnlyList<string> relativePaths) =>
             new HashSet<string>(StringComparer.Ordinal);
         public IReadOnlyList<string> ListTrackedFiles(Repo repo) => [];
+        public IReadOnlyList<string> ListWorkingTreeFiles(Repo repo) => [];
     }
 
     private FileBrowserStore Store()

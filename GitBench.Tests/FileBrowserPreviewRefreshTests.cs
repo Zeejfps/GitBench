@@ -250,6 +250,7 @@ public class FileBrowserPreviewRefreshTests : IDisposable
             new Repo(Guid.NewGuid(), _dir.Path, "repo"),
             new FileSystemReader(),
             NoIgnoreOracle.Instance,
+            EmptyFileCatalog.Instance,
             new UnparsedFiles(),
             _dispatcher,
             new FileBrowserUiState(),

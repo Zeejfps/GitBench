@@ -58,6 +58,17 @@ internal sealed record BranchesHeader : Widget
                                 new Spacer(),
                                 new LocalChangesHeaderActionButton
                                 {
+                                    Icon = LucideIcons.Search,
+                                    Visible = Prop.Bind(OnFiles),
+                                    Tooltip = L.T(s => s.FileFinderTitle),
+                                    Command = new Command(() =>
+                                    {
+                                        if (browsers.Active.Value is { } browser)
+                                            browser.Finder.Open();
+                                    }),
+                                },
+                                new LocalChangesHeaderActionButton
+                                {
                                     Icon = LucideIcons.ListFilter,
                                     Visible = Prop.Bind(OnFiles),
                                     Tooltip = L.T(s => s.FileBrowserShowHidden),

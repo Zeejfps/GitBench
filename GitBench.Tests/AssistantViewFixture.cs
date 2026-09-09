@@ -185,7 +185,8 @@ internal sealed class AssistantViewFixture : IDisposable
                     Bus,
                     Vm,
                     new State<MainViewMode>(MainViewMode.LocalChanges),
-                    new NoFileBrowsers());
+                    new NoFileBrowsers(),
+                    new State<SidebarPane>(SidebarPane.Branches));
             });
 
         store.Start();

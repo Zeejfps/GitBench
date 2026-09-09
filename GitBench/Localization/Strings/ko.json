@@ -154,6 +154,7 @@
   "file_browser.changed_on_disk_cancel": "내 편집 유지",
   "file_browser.tab_qualified": "{name} ({path})",
 
+  "file_finder.title": "파일 찾기",
   "file_search.title": "파일에서 찾기",
   "file_search.matches": "{index}/{total}",
   "file_search.no_matches": "결과 없음",

@@ -131,6 +131,9 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
     private void SetRows(IReadOnlyList<FileBrowserRow> rows)
     {
         _rows = rows;
+        _list.RowHeight = _vm.IsShowingResults
+            ? FileBrowserRowPainter.FoundRowHeight
+            : FileBrowserRowPainter.RowHeight;
         _list.ItemCount = rows.Count;
         _list.NotifyItemsChanged();
         EnsureCursorVisible();
@@ -231,7 +234,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
 
     public void SetVerticalNormalizedScrollPosition(float normalized)
     {
-        var range = _rows.Count * FileBrowserRowPainter.RowHeight - _list.Position.Height;
+        var range = _list.ContentHeight - _list.Position.Height;
         _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
     }
 
@@ -239,7 +242,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
 
     private void NotifyScrollChanged()
     {
-        var contentHeight = _rows.Count * FileBrowserRowPainter.RowHeight;
+        var contentHeight = _list.ContentHeight;
         var bodyHeight = _list.Position.Height;
 
         float scale, normalizedY;

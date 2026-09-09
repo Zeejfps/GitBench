@@ -19,6 +19,9 @@ namespace GitBench.Features.FileBrowser;
 internal static class FileBrowserRowPainter
 {
     public const float RowHeight = 22f;
+
+    /// <summary>What a search result takes, which is a name over the directory it was found in.</summary>
+    public const float FoundRowHeight = 34f;
     public const float RowPaddingLeft = TreeMetrics.BaseIndent;
     public const float RowPaddingRight = 14f;
     public const float ChevronWidth = TreeMetrics.ChevronWidth;
@@ -84,7 +87,11 @@ internal static class FileBrowserRowPainter
             dim);
         canvas.DrawText(new DrawTextInputs
         {
-            Position = Place(rowRect, left, IconColumnWidth, isRtl),
+            // A two-line row centres its icon on the name rather than on the row: centred on the
+            // row it lands in the gap between the two lines, belonging to neither.
+            Position = row.Detail is null
+                ? Place(rowRect, left, IconColumnWidth, isRtl)
+                : Place(rowRect, left, IconColumnWidth, isRtl, NameLine(rowRect), rowRect.Height * 0.5f),
             Text = glyph,
             Style = iconStyle,
             ZIndex = z + 2,
@@ -104,6 +111,13 @@ internal static class FileBrowserRowPainter
         style.TextColor = Tint(
             isSelected ? selection.Text : isDirectory ? colors.DirectoryText : colors.FileText,
             dim);
+
+        if (row.Detail is { } directory)
+        {
+            DrawFound(canvas, rowRect, row.Name, directory, left, textWidth, style, z + 3, isRtl);
+            return;
+        }
+
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, left, textWidth, isRtl),
@@ -111,6 +125,69 @@ internal static class FileBrowserRowPainter
             Style = style,
             ZIndex = z + 3,
         });
+    }
+
+    /// <summary>
+    /// A found file over the directory it was found in, one line each.
+    /// </summary>
+    /// <remarks>
+    /// Two lines rather than two columns because the rail is two hundred pixels wide: side by side,
+    /// one of the two is always an ellipsis — and the pair of them is the whole point, since which
+    /// directory it is in is what tells one <c>Row.cs</c> from the next.
+    /// </remarks>
+    private static void DrawFound(
+        ICanvas canvas,
+        in RectF rowRect,
+        string name,
+        string directory,
+        float left,
+        float available,
+        TextStyle style,
+        int z,
+        bool isRtl)
+    {
+        var half = rowRect.Height * 0.5f;
+        canvas.DrawText(new DrawTextInputs
+        {
+            Position = Place(rowRect, left, available, isRtl, NameLine(rowRect), half),
+            Text = TextEllipsis.Truncate(canvas, name, style, available),
+            Style = style,
+            ZIndex = z,
+        });
+
+        var directoryStyle = style;
+        directoryStyle.FontSize = FontSize.Caption;
+        directoryStyle.TextColor = Tint(style.TextColor, dim: true);
+        canvas.DrawText(new DrawTextInputs
+        {
+            Position = Place(rowRect, left, available, isRtl, rowRect.Bottom, half),
+            Text = PathTail(canvas, directory, directoryStyle, available),
+            Style = directoryStyle,
+            ZIndex = z,
+        });
+    }
+
+    /// <summary>
+    /// As much of a directory chain as fits, counted from its end. The directory a file sits in is
+    /// what tells one match from another, and it is the last segment — <c>…/FileBrowser</c> says
+    /// which of two files this is where <c>GitBench/Fea…</c> says nothing. Cut on separators rather
+    /// than characters: a path is a chain of names, and half a name is not one. Empty when not even
+    /// the last segment fits, which in a rail this narrow is a common answer.
+    /// </summary>
+    private static string PathTail(ICanvas canvas, string path, TextStyle style, float available)
+    {
+        if (canvas.MeasureTextWidth(path, style) <= available) return path;
+
+        var start = 0;
+        while (true)
+        {
+            var slash = path.IndexOf('/', start);
+            if (slash < 0) return string.Empty;
+
+            start = slash + 1;
+            var tail = "…/" + path[start..];
+            if (canvas.MeasureTextWidth(tail, style) <= available) return tail;
+        }
     }
 
     /// <summary>A declaration's name, then its parameter list dimmed behind it, so the name is what
@@ -207,8 +284,16 @@ internal static class FileBrowserRowPainter
     private static uint Tint(uint color, bool dim) =>
         dim ? (color & 0x00FFFFFFu) | (0x80u << 24) : color;
 
+    /// <summary>The bottom of the upper of a two-line row, where the name goes. Y grows upwards, so
+    /// the upper line is the one starting half a row above the bottom.</summary>
+    private static float NameLine(in RectF rowRect) => rowRect.Bottom + rowRect.Height * 0.5f;
+
     private static RectF Place(in RectF rowRect, float left, float width, bool isRtl) =>
+        Place(rowRect, left, width, isRtl, rowRect.Bottom, rowRect.Height);
+
+    private static RectF Place(
+        in RectF rowRect, float left, float width, bool isRtl, float bottom, float height) =>
         isRtl
-            ? new RectF(rowRect.Left + rowRect.Right - left - width, rowRect.Bottom, width, RowHeight)
-            : new RectF(left, rowRect.Bottom, width, RowHeight);
+            ? new RectF(rowRect.Left + rowRect.Right - left - width, bottom, width, height)
+            : new RectF(left, bottom, width, height);
 }

@@ -29,6 +29,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
     private readonly AssistantViewModel _assistant;
     private readonly State<MainViewMode> _mode;
     private readonly IFileBrowserStore _browsers;
+    private readonly State<SidebarPane> _sidebar;
 
     public AppKeybindController(
         IRepoRegistry registry,
@@ -38,8 +39,10 @@ internal sealed class AppKeybindController : KeyboardMouseController
         IMessageBus bus,
         AssistantViewModel assistant,
         State<MainViewMode> mode,
-        IFileBrowserStore browsers)
+        IFileBrowserStore browsers,
+        State<SidebarPane> sidebar)
     {
+        _sidebar = sidebar;
         _registry = registry;
         _hover = hover;
         _repoBarCollapse = repoBarCollapse;
@@ -83,6 +86,19 @@ internal sealed class AppKeybindController : KeyboardMouseController
             if (_mode.Value == MainViewMode.Files && _browsers.Active.Value is { CanSearch: true } browser)
             {
                 browser.Search.Open();
+                e.Consume();
+            }
+            return;
+        }
+
+        // Find a file by name. Swings the rail over to the files first: the chord means "take me to
+        // a file", and refusing it because the branches happened to be showing would be a riddle.
+        if (e.Key == KeyboardKey.P && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        {
+            if (_browsers.Active.Value is { } files)
+            {
+                _sidebar.Value = SidebarPane.Files;
+                files.Finder.Open();
                 e.Consume();
             }
             return;
