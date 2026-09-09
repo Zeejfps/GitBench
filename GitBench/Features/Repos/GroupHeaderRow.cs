@@ -96,7 +96,7 @@ internal sealed record GroupHeaderRow : Widget
         },
     };
 
-    private static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Context ctx, GroupHeaderRowViewModel vm)
+    internal static IReadOnlyList<RepoBarContextMenu.Item> BuildMenuItems(Context ctx, GroupHeaderRowViewModel vm)
     {
         var s = ctx.Localization().Strings.Value;
         var items = new List<RepoBarContextMenu.Item>

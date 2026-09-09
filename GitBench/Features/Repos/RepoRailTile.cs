@@ -14,10 +14,11 @@ namespace GitBench.Features.Repos;
 internal sealed record RepoRailTile : Widget<RepoRowState>
 {
     internal const int TileSize = 36;
-    private const int RingThickness = 2;
-    private const int RingGap = 2;
+    internal const int RingThickness = 2;
+    internal const int RingGap = 2;
+    internal const int RingInset = RingThickness + RingGap;
 
-    private static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
+    internal static readonly IReadable<bool> AlwaysEnabled = new State<bool>(true);
     private static readonly char[] NameSeparators = [' ', '-', '_', '.'];
 
     protected override RepoRowState CreateState(Context ctx) => new(ctx.Require<RepoNodeViewModel>());
@@ -25,7 +26,7 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
     protected override IWidget Build(Context ctx, RepoRowState state)
     {
         var vm = ctx.Require<RepoNodeViewModel>();
-        var identityColor = CategoricalPalette.Avatar(Hash(vm.RepoId));
+        var identityColor = IdentityColor(vm.RepoId);
 
         var tile = new Box
         {
@@ -54,23 +55,7 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
             ],
         };
 
-        var ring = new Box
-        {
-            BorderSize = BorderSizeStyle.All(RingThickness),
-            BorderRadius = BorderRadiusStyle.All(Radius.Lg + RingThickness + RingGap),
-            BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
-                vm.IsActive.Value ? s.RowSelection.AccentBar
-                : state.Hovered.Value ? s.Palette.BorderStrong
-                : 0u)),
-            Children =
-            [
-                new Padding
-                {
-                    Amount = PaddingStyle.All(RingGap),
-                    Children = [tile],
-                },
-            ],
-        };
+        var ring = Ring(tile, vm.IsActive, state.Hovered);
 
         var hotkeyBadge = new Box
         {
@@ -94,50 +79,74 @@ internal sealed record RepoRailTile : Widget<RepoRowState>
             ],
         };
 
-        var statusDot = new Box
-        {
-            Width = 8,
-            Height = 8,
-            BorderRadius = BorderRadiusStyle.All(Radius.Sm),
-            Background = Theme.Color(s => vm.Badge.Value == RepoRowBadge.Error
-                ? s.RepoBarRow.BadgeError
-                : s.RepoBarRow.BadgeDirty),
-            Visible = Prop.Bind(() => vm.Badge.Value != RepoRowBadge.None),
-        };
+        var statusDot = StatusDot(() => vm.Badge.Value);
 
         // The tooltip wants a nullable text readable; the widget owns the Derived, Use ties both
         // to the view's lifetime.
         var tooltipText = new Derived<string?>(() => vm.DisplayName.Value);
 
-        return new Stack
-        {
-            Children =
-            [
-                ring,
-                new Padding
-                {
-                    Amount = PaddingStyle.All(RingThickness),
-                    Children =
-                    [
-                        new Column
-                        {
-                            MainAxis = MainAxisAlignment.Start,
-                            CrossAxis = CrossAxisAlignment.End,
-                            Children = [statusDot],
-                        },
-                    ],
-                },
-                new Column
-                {
-                    MainAxis = MainAxisAlignment.End,
-                    CrossAxis = CrossAxisAlignment.End,
-                    Children = [hotkeyBadge],
-                },
-            ],
-        }
+        return Compose(ring, statusDot, hotkeyBadge)
             .Use(_ => tooltipText)
             .Use(view => new Tooltip(view, ctx, tooltipText, state.Hovered, AlwaysEnabled));
     }
+
+    internal static IWidget Ring(IWidget face, IReadable<bool> isActive, IReadable<bool> isHovered) => new Box
+    {
+        BorderSize = BorderSizeStyle.All(RingThickness),
+        BorderRadius = BorderRadiusStyle.All(Radius.Lg + RingInset),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(
+            isActive.Value ? s.RowSelection.AccentBar
+            : isHovered.Value ? s.Palette.BorderStrong
+            : 0u)),
+        Children =
+        [
+            new Padding
+            {
+                Amount = PaddingStyle.All(RingGap),
+                Children = [face],
+            },
+        ],
+    };
+
+    internal static IWidget StatusDot(Func<RepoRowBadge> badge) => new Box
+    {
+        Width = 8,
+        Height = 8,
+        BorderRadius = BorderRadiusStyle.All(Radius.Sm),
+        Background = Theme.Color(s => badge() == RepoRowBadge.Error
+            ? s.RepoBarRow.BadgeError
+            : s.RepoBarRow.BadgeDirty),
+        Visible = Prop.Bind(() => badge() != RepoRowBadge.None),
+    };
+
+    internal static IWidget Compose(IWidget ring, IWidget statusDot, IWidget? cornerBadge = null) => new Stack
+    {
+        Children =
+        [
+            ring,
+            new Padding
+            {
+                Amount = PaddingStyle.All(RingThickness),
+                Children =
+                [
+                    new Column
+                    {
+                        MainAxis = MainAxisAlignment.Start,
+                        CrossAxis = CrossAxisAlignment.End,
+                        Children = [statusDot],
+                    },
+                ],
+            },
+            new Column
+            {
+                MainAxis = MainAxisAlignment.End,
+                CrossAxis = CrossAxisAlignment.End,
+                Children = [cornerBadge ?? Empty.Widget],
+            },
+        ],
+    };
+
+    internal static uint IdentityColor(Guid id) => CategoricalPalette.Avatar(Hash(id));
 
     // "web-frontend" → "WF", "GitBench" → "Gi": two word initials when the name splits, else the
     // first two characters so single-word names don't shout a double capital.

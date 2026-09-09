@@ -21,9 +21,14 @@ public sealed class RepoBarCollapseState
 
     public IReadable<bool> IsCollapsed => _collapsed;
 
-    public void Toggle()
+    public void Toggle() => Set(!_collapsed.Value);
+
+    public void Expand() => Set(false);
+
+    private void Set(bool collapsed)
     {
-        _collapsed.Value = !_collapsed.Value;
-        _preferences.SetRepoBarCollapsed(_collapsed.Value);
+        if (_collapsed.Value == collapsed) return;
+        _collapsed.Value = collapsed;
+        _preferences.SetRepoBarCollapsed(collapsed);
     }
 }

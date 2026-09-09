@@ -39,7 +39,7 @@ internal sealed record RepoRail : Widget
                     Items = vm.Sections,
                     Template = new RailSection(),
                     Gap = Spacing.Md,
-                    CrossAxis = CrossAxisAlignment.Stretch,
+                    CrossAxis = CrossAxisAlignment.Center,
                 },
             ],
         }.BuildView(ctx));
@@ -170,32 +170,48 @@ internal sealed record RepoRail : Widget
     };
 }
 
-// One group's tiles in the rail; non-leading sections draw a divider where their group header
-// would be.
+// One group in the rail, drawn Discord-folder style: a wash of the group's identity color
+// wrapping the folder tile and, while the group is expanded, its repo tiles beneath.
 internal sealed record RailSection : Widget
 {
+    internal const int Width = RepoRailTile.TileSize + 2 * RepoRailTile.RingInset;
+
     protected override IWidget Build(Context ctx)
     {
         var vm = ctx.Require<RailSectionViewModel>();
-        return new Column
+        var identity = RepoRailTile.IdentityColor(vm.Group.Id);
+        return new Box
         {
-            Gap = Spacing.Sm,
-            CrossAxis = CrossAxisAlignment.Center,
+            Width = Width,
+            BorderRadius = BorderRadiusStyle.All(Radius.Lg + RepoRailTile.RingInset),
+            Background = Theme.Color(s => s.RepoBar.FolderTint(identity)),
             Children =
             [
-                new Box
+                new Column
                 {
-                    Width = 28,
-                    Height = 1,
-                    Background = Theme.Color(s => s.RepoBar.RightBorder),
-                    Visible = Prop.Bind(() => !vm.IsFirst.Value),
-                },
-                new Each<RepoNodeViewModel>
-                {
-                    Items = vm.Primaries,
-                    Template = new RepoRailTile().WithController<NavigableRowController>(),
-                    Gap = Spacing.Xs,
                     CrossAxis = CrossAxisAlignment.Center,
+                    Children =
+                    [
+                        new RepoRailFolderTile().WithController<NavigableRowController>(),
+                        new Show
+                        {
+                            When = vm.IsExpanded,
+                            Then = () => new Padding
+                            {
+                                Amount = new PaddingStyle { Top = Spacing.Xs },
+                                Children =
+                                [
+                                    new Each<RepoNodeViewModel>
+                                    {
+                                        Items = vm.Primaries,
+                                        Template = new RepoRailTile().WithController<NavigableRowController>(),
+                                        Gap = Spacing.Xs,
+                                        CrossAxis = CrossAxisAlignment.Center,
+                                    },
+                                ],
+                            },
+                        },
+                    ],
                 },
             ],
         };

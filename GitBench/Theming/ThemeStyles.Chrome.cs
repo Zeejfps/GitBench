@@ -15,7 +15,12 @@ public sealed record HeaderActionButtonStyles(
 
 public sealed record RepoBarStyles(
     uint Background,
-    uint RightBorder);
+    uint RightBorder)
+{
+    private const byte FolderTintAlpha = 0x30;
+
+    internal uint FolderTint(uint identity) => (identity & 0x00FFFFFFu) | ((uint)FolderTintAlpha << 24);
+}
 
 public sealed record StatusBarStyles(
     uint Background,

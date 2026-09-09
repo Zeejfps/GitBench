@@ -25,7 +25,7 @@ internal sealed class GroupHeaderRowViewModel : IDisposable
     // with a single group the header's own chevron already does the job.
     public bool HasMultipleGroups => _registry.Groups.Count > 1;
 
-    public GroupHeaderRowViewModel(Group group, IRepoRegistry registry, IMessageBus bus, Command newGroup)
+    public GroupHeaderRowViewModel(Group group, IRepoRegistry registry, IMessageBus bus, Command newGroup, Action? beforeRename = null)
     {
         _group = group;
         _registry = registry;
@@ -34,7 +34,11 @@ internal sealed class GroupHeaderRowViewModel : IDisposable
         _isRenaming = new Derived<bool>(() => _registry.RenamingGroupId.Value == _group.Id);
 
         ToggleCollapsed = new Command(() => _registry.ToggleGroupCollapsed(_group.Id));
-        BeginRename = new Command(() => _registry.BeginRenameGroup(_group.Id));
+        BeginRename = new Command(() =>
+        {
+            beforeRename?.Invoke();
+            _registry.BeginRenameGroup(_group.Id);
+        });
         Delete = new Command(() => _bus.Broadcast(
             new ShowDialogMessage(onClose => new DeleteGroupDialog { Group = _group, OnClose = onClose })));
         ExpandAllGroups = new Command(() => _registry.SetAllGroupsCollapsed(false));

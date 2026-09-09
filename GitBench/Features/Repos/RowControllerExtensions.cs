@@ -22,4 +22,8 @@ internal static class RowControllerExtensions
     public static IWidget WithController<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TController>(this RepoRailTile tile)
         where TController : class, IKeyboardMouseController =>
         tile.WithController<TController, INavigableRow>();
+
+    public static IWidget WithController<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TController>(this RepoRailFolderTile tile)
+        where TController : class, IKeyboardMouseController =>
+        tile.WithController<TController, INavigableRow>();
 }
