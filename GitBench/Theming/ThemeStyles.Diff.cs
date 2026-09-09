@@ -35,6 +35,7 @@ public sealed record DiffContentStyles(
     uint PlaceholderText,
     uint ErrorText,
     uint LineText,
+    uint Caret,
     uint LineNumberText,
     uint LineAddedBackground,
     uint LineAddedEmphasisBackground,
@@ -147,6 +148,7 @@ public partial record ThemeStyles
             PlaceholderText: p.TextMuted,
             ErrorText: status.DiffError,
             LineText: p.TextPrimary,
+            Caret: p.TextPrimary,
             LineNumberText: p.TextDim,
             // Dial the add/remove row tints back to ~50% so syntax-highlighted code reads
             // clearly through them; the full-strength +/- glyphs still signal the line kind.

@@ -1,3 +1,4 @@
+using GitBench.Features.Editor;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -74,6 +75,7 @@ internal sealed class RepoHeadStore : IRepoHeadStore, IRepoHeadConfirm, IDisposa
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IUnsavedEditsGuard _guard;
     private bool _disposed;
 
     // Per-repo source of truth, created lazily on first touch. UI-thread only — no locking needed.
@@ -94,12 +96,18 @@ internal sealed class RepoHeadStore : IRepoHeadStore, IRepoHeadConfirm, IDisposa
         public string? Landed;
     }
 
-    public RepoHeadStore(IGitBranchOperations git, IMessageBus bus, ILocalizationService loc, IUiDispatcher dispatcher)
+    public RepoHeadStore(
+        IGitBranchOperations git,
+        IMessageBus bus,
+        ILocalizationService loc,
+        IUiDispatcher dispatcher,
+        IUnsavedEditsGuard guard)
     {
         _git = git;
         _bus = bus;
         _loc = loc;
         _dispatcher = dispatcher;
+        _guard = guard;
     }
 
     public RepoHead For(Guid repoId) => Get(repoId).Value;
@@ -144,17 +152,18 @@ internal sealed class RepoHeadStore : IRepoHeadStore, IRepoHeadConfirm, IDisposa
     }
 
     public void RunMove(Repo repo, string branchName, Func<GitOutcome> work, string? failureTitle = null)
-    {
-        var settle = BeginMove(repo, branchName);
-        var dispatcher = _dispatcher;
-        Task.Run(() =>
+        => _guard.Guard(new OverwriteScope.WorkingTree(repo.Id), () =>
         {
-            GitOutcome outcome;
-            try { outcome = work(); }
-            catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
-            dispatcher.Post(() => Complete(repo, outcome, settle, failureTitle));
+            var settle = BeginMove(repo, branchName);
+            var dispatcher = _dispatcher;
+            Task.Run(() =>
+            {
+                GitOutcome outcome;
+                try { outcome = work(); }
+                catch (Exception ex) { outcome = new GitOutcome.Failed(ex.Message); }
+                dispatcher.Post(() => Complete(repo, outcome, settle, failureTitle));
+            });
         });
-    }
 
     // Keyed on the captured repo, so the result lands on that repo's slot no matter which repo is
     // active when it finishes — and owned here rather than by the caller so that settling never

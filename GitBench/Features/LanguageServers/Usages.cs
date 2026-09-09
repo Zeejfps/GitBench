@@ -1,3 +1,4 @@
+using GitBench.Infrastructure;
 using GitBench.Lsp.Documents;
 
 namespace GitBench.Features.LanguageServers;
@@ -61,16 +62,11 @@ internal static class Usages
         _ => throw new NotSupportedException($"unhandled usage list {usages.GetType().Name}"),
     };
 
-    /// <summary>
-    /// The rows for a set of sites, with the source line each one sits on read from
-    /// <paramref name="readLines"/> — which answers null for a file there is nothing to read from.
-    /// Sites are ordered by file and then by line, so the files open one after another and each is
-    /// read exactly once however many usages it holds.
-    /// </summary>
-    public static UsageList From(
+    public static async Task<UsageList> From(
         string repoRoot,
         IReadOnlyList<DefinitionTarget> sites,
-        Func<string, IReadOnlyList<string>?> readLines)
+        IFileTextSource files,
+        CancellationToken cancel)
     {
         if (sites.Count == 0) return UsageList.None;
 
@@ -94,7 +90,7 @@ internal static class Usages
             if (open != at.AbsolutePath)
             {
                 open = at.AbsolutePath;
-                lines = readLines(at.AbsolutePath);
+                lines = LinesOf(await files.ReadAsync(at.AbsolutePath, cancel).ConfigureAwait(false));
             }
 
             rows.Add(new UsageSite(at.AbsolutePath, at.Line, at.ShownPath, TextOn(lines, at.Line)));
@@ -102,6 +98,15 @@ internal static class Usages
 
         return located.Count > Limit ? new UsageList.Capped(rows, located.Count) : new UsageList.All(rows);
     }
+
+    /// <summary>The lines a row can quote, or null where there are none to quote.</summary>
+    private static IReadOnlyList<string>? LinesOf(CurrentText text) => text switch
+    {
+        CurrentText.Complete complete => TextLines.Split(complete.Text),
+        CurrentText.CutShort => null,
+        CurrentText.Unavailable => null,
+        _ => throw new NotSupportedException($"unhandled file text {text.GetType().Name}"),
+    };
 
     /// <summary>
     /// What the line says, with its indentation dropped so a deeply nested usage reads beside a

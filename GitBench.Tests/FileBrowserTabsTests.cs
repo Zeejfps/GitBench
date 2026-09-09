@@ -1,4 +1,4 @@
-using GitBench.Features.FileBrowser;
+﻿using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using Xunit;
 
@@ -235,7 +235,10 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         fixture.Extractor,
         _dispatcher,
         restored ?? new FileBrowserUiState(),
-        _persisted.Add);
+        _persisted.Add,
+        TestDocuments.ForOneRepo(),
+        TestDocuments.Discard,
+            TestDocuments.KeepEdits);
 
     private FileBrowserViewModel Show(string relative)
     {

@@ -334,28 +334,70 @@ public sealed class UsageLensCoordinatorTests
         Assert.Empty(world.Asked);
     }
 
+    /// <summary>
+    /// The wait before asking finishes on whichever thread the timer ran on, and everything the
+    /// decision that follows reads — which declarations are on screen, and which have already been
+    /// asked about — belongs to the thread that built them. Deciding there instead threw on every
+    /// refresh of a file the reader can type in, and the throw was swallowed into a log line, so
+    /// the counts simply never appeared.
+    /// </summary>
+    [Fact]
+    public async Task WhatIsOnScreenIsReadOnTheThreadThatOwnsIt()
+    {
+        var world = new World(settleOffThread: true);
+        world.OnScreen = [world.Target("Login")];
+        world.Everywhere = world.OnScreen;
+
+        world.Refresh();
+        await world.Pumped();
+
+        Assert.Equal(["Login"], world.Asked);
+        Assert.Equal(0, world.ReadsOutsideTheLoop);
+    }
+
     /// <summary>The world the coordinator runs in: a server that parks every question until the
     /// test answers it, and a view whose visible rows the test decides.</summary>
     private sealed class World
     {
         private readonly Dictionary<string, UsageLensTarget> _targets = [];
         private readonly Dictionary<FileLine, string> _idOfLine = [];
+        private readonly QueueingDispatcher? _queued;
 
-        public World()
+        private int _readsOutsideTheLoop;
+
+        /// <param name="settleOffThread">
+        /// Makes the wait before asking finish somewhere other than here, and the dispatcher
+        /// marshal, the way both behave in the running app. Off by default: every other test here
+        /// is about what gets asked, and a real hand-off would only make them slower.
+        /// </param>
+        public World(bool settleOffThread = false)
         {
+            _queued = settleOffThread ? new QueueingDispatcher() : null;
+
             Coordinator = new UsageLensCoordinator(
                 Servers,
-                new ImmediateDispatcher(),
+                (IUiDispatcher?)_queued ?? new ImmediateDispatcher(),
                 () => Path,
-                () => OnScreen,
-                () => Everywhere,
+                () => Read(OnScreen),
+                () => Read(Everywhere),
                 rows => RowsShown = rows,
                 overlay =>
                 {
                     Published = overlay;
                     Publishes++;
                 },
-                settle: (_, _) => Task.CompletedTask);
+                settle: settleOffThread
+                    ? (_, _) => Task.Delay(1)
+                    : (_, _) => Task.CompletedTask);
+        }
+
+        /// <summary>Reads the rows the way the view hands them over, noting any read that did not
+        /// happen inside work the loop was running: the projection they come out of belongs to the
+        /// thread that drains it, and refuses every other one.</summary>
+        private IReadOnlyList<UsageLensTarget> Read(IReadOnlyList<UsageLensTarget> rows)
+        {
+            if (_queued is { Draining: false }) _readsOutsideTheLoop++;
+            return rows;
         }
 
         public UsageLensCoordinator Coordinator { get; }
@@ -376,6 +418,10 @@ public sealed class UsageLensCoordinatorTests
         public int Publishes { get; private set; }
 
         public bool RowsShown { get; private set; }
+
+        /// <summary>How many times the view's rows were read outside the work the loop was
+        /// running. Anything but zero is a read the real projection would have refused.</summary>
+        public int ReadsOutsideTheLoop => _readsOutsideTheLoop;
 
         /// <summary>The declarations the server was asked about, in order, named the way the test
         /// names them.</summary>
@@ -407,6 +453,20 @@ public sealed class UsageLensCoordinatorTests
         {
             await Task.Yield();
             await Task.Yield();
+        }
+
+        /// <summary>Runs the queued UI work until the questions are out, the way the app's loop
+        /// would. Only for a world built to marshal.</summary>
+        public async Task Pumped()
+        {
+            for (var spin = 0; spin < 2_000; spin++)
+            {
+                _queued!.Drain();
+                if (Servers.Outstanding.Count > 0) return;
+                await Task.Delay(1);
+            }
+
+            throw new TimeoutException("the questions were never put");
         }
 
         /// <summary>
@@ -479,5 +539,31 @@ public sealed class UsageLensCoordinatorTests
     private sealed class ImmediateDispatcher : IUiDispatcher
     {
         public void Post(Action action) => action();
+    }
+
+    /// <summary>The dispatcher as the app has it: work handed to it runs on the thread that drains
+    /// it, not on whichever thread handed it over.</summary>
+    private sealed class QueueingDispatcher : IUiDispatcher
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _queued = new();
+
+        /// <summary>Whether the loop is running queued work right now. What the fixture's guard on
+        /// the view's rows is measured against.</summary>
+        public bool Draining { get; private set; }
+
+        public void Post(Action action) => _queued.Enqueue(action);
+
+        public void Drain()
+        {
+            Draining = true;
+            try
+            {
+                while (_queued.TryDequeue(out var action)) action();
+            }
+            finally
+            {
+                Draining = false;
+            }
+        }
     }
 }

@@ -301,6 +301,13 @@ internal sealed class ResolveConflictTool : IAssistantTool
         if (refusal is not null) return ToolInvocation.Error(refusal);
 
         var found = target!.Value;
+        if (await BeingEditedAsync(found.FullPath, ct).ConfigureAwait(false))
+            return ToolInvocation.Error(
+                $"'{found.RelativePath}' is open in the editor with changes that are not on disk, "
+                + "and every resolution here rewrites the file. Ask the user to save or discard "
+                + "what they have typed, then try again — writing over it would lose their work "
+                + "with nothing to undo it from.");
+
         if (Apply(found, resolution, content) is GitOutcome.Failed failed)
             return ToolInvocation.Error(failed.Message);
 
@@ -316,6 +323,20 @@ internal sealed class ResolveConflictTool : IAssistantTool
             writer.WriteString("resolution", resolution);
             writer.WriteNumber("conflicts_remaining", remaining);
         }));
+    }
+
+    private Task<bool> BeingEditedAsync(string fullPath, CancellationToken ct)
+    {
+        var normalized = PathKey.Normalize(fullPath);
+        return _surface.OnUiThreadAsync(
+            () =>
+            {
+                foreach (var unsaved in _surface.Documents.Unsaved())
+                    if (unsaved.RepoId == _repo.Id && PathKey.Comparer.Equals(unsaved.Path, normalized))
+                        return true;
+                return false;
+            },
+            ct);
     }
 
     private GitOutcome Apply(ConflictTools.ConflictTarget target, string resolution, string? content)

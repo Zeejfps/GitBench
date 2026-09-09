@@ -265,29 +265,32 @@ public sealed class RepoRegistry : IRepoRegistry, IIdentityOverrides, IDisposabl
         Save();
     }
 
-    public void RemoveRepo(Guid repoId)
+    public IReadOnlyList<Repo> RemovalCascade(Guid repoId)
     {
-        var repoIndex = -1;
-        for (var i = 0; i < Repos.Count; i++)
+        Repo? target = null;
+        foreach (var r in Repos)
         {
-            if (Repos[i].Id != repoId) continue;
-            repoIndex = i;
+            if (r.Id != repoId) continue;
+            target = r;
             break;
         }
-        if (repoIndex < 0) return;
+        if (target is null) return [];
 
-        var target = Repos[repoIndex];
-
-        // Removing a primary cascades to its child rows (worktrees + submodules) — they
-        // have no meaning without a parent registry entry.
-        var idsToRemove = new HashSet<Guid> { repoId };
+        var cascade = new List<Repo> { target };
         if (target.IsPrimary)
         {
             foreach (var r in Repos)
             {
-                if (r.ParentRepoId == repoId) idsToRemove.Add(r.Id);
+                if (r.ParentRepoId == repoId) cascade.Add(r);
             }
         }
+        return cascade;
+    }
+
+    public void RemoveRepo(Guid repoId)
+    {
+        var idsToRemove = RemovalCascade(repoId).Select(r => r.Id).ToHashSet();
+        if (idsToRemove.Count == 0) return;
 
         foreach (var group in Groups)
         {

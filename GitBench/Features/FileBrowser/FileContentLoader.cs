@@ -1,4 +1,4 @@
-using System.Text;
+using GitBench.Infrastructure;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown;
@@ -32,15 +32,19 @@ internal abstract record FilePreview
 
     public sealed record Loading(string Path) : FilePreview;
 
-    /// <summary>Truncated when the file ran past the text cap: the reader is seeing the first part
-    /// of it, and the viewer says so.</summary>
     public sealed record Text(
         string Path,
-        IReadOnlyList<string> Lines,
-        bool Truncated,
+        FileText Lines,
+        FileWriteBack WriteBack,
         DiffHighlight? Highlight,
         FileOutline? Outline = null,
-        MarkdownRender? Markdown = null) : FilePreview;
+        MarkdownRender? Markdown = null) : FilePreview
+    {
+        /// <summary>The file ran past the text cap: the reader is seeing the first part of it, and
+        /// the viewer says so.</summary>
+        public bool Truncated =>
+            WriteBack is FileWriteBack.Refused { Reason: WriteBackRefusal.Truncated };
+    }
 
     public sealed record Image(string Path, ImagePreview Preview) : FilePreview;
 
@@ -84,12 +88,11 @@ internal static class FileContentLoader
 
             if (IsBinary(bytes)) return new FilePreview.Unavailable(absolutePath, FilePreviewRefusal.Binary);
 
-            var text = Decode(bytes);
-            var lines = SplitLines(text, dropLastPartialLine: truncated);
+            var (text, writeBack) = FileTextDecoder.Decode(bytes, truncated);
             return new FilePreview.Text(
                 absolutePath,
-                lines,
-                truncated,
+                new FileText(text, dropLastPartialLine: truncated),
+                writeBack,
                 Highlight(absolutePath, text, truncated),
                 Outline(absolutePath, text, extractor),
                 Markdown(absolutePath, text, truncated));
@@ -128,48 +131,16 @@ internal static class FileContentLoader
         return captured.ToArray();
     }
 
+    /// <summary>Whether a file's bytes are something we refuse to read as text. A byte order mark
+    /// outranks the NUL sniff, which would otherwise call every UTF-16 file binary.</summary>
     private static bool IsBinary(byte[] bytes)
     {
+        if (!FileTextDecoder.CharsetOf(bytes).Preamble().IsEmpty) return false;
+
         var limit = Math.Min(bytes.Length, SniffBytes);
         for (var i = 0; i < limit; i++)
             if (bytes[i] == 0) return true;
         return false;
-    }
-
-    private static string Decode(byte[] bytes)
-    {
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            return Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-            return Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
-        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-            return Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
-        return Encoding.UTF8.GetString(bytes);
-    }
-
-    private static IReadOnlyList<string> SplitLines(string text, bool dropLastPartialLine)
-    {
-        if (text.Length == 0) return [];
-
-        var lines = new List<string>();
-        var start = 0;
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] != '\n') continue;
-            var end = i > start && text[i - 1] == '\r' ? i - 1 : i;
-            lines.Add(text[start..end]);
-            start = i + 1;
-        }
-
-        if (start < text.Length)
-        {
-            if (dropLastPartialLine) return lines;
-            var end = text.Length;
-            if (end > start && text[end - 1] == '\r') end--;
-            lines.Add(text[start..end]);
-        }
-
-        return lines;
     }
 
     /// <summary>The declarations in a file, without building a preview of it. For the tree, which
@@ -186,7 +157,7 @@ internal static class FileContentLoader
             if (!info.Exists || info.Length > MaxTextBytes) return null;
 
             var bytes = ReadCapped(absolutePath, MaxTextBytes, cancellation);
-            return IsBinary(bytes) ? null : extractor.Extract(Decode(bytes), language);
+            return IsBinary(bytes) ? null : extractor.Extract(FileTextDecoder.DecodeText(bytes), language);
         }
         catch (OperationCanceledException)
         {

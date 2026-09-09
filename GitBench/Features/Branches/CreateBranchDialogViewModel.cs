@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -41,7 +42,8 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
         IUiDispatcher dispatcher,
         IMessageBus bus,
         IRepoHeadStore head,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        IUnsavedEditsGuard? guard = null)
     {
         _seedRef = startPoint;
         _seedLabel = startPointLabel;
@@ -68,7 +70,14 @@ internal sealed class CreateBranchDialogViewModel : IDialogViewModel
             gate: gate,
             // With "check out after create" on, this moves HEAD onto the new branch — declare it so
             // the rest of the app knows the name it holds is about to be stale.
-            onStart: () => Checkout.Value ? head.BeginMove(repo, Name.Value) : null);
+            onStart: () => Checkout.Value ? head.BeginMove(repo, Name.Value) : null,
+            ask: guard is null
+                ? null
+                : run =>
+                {
+                    if (!Checkout.Value || ResolveStartPoint() == GitRef.Head) { run(); return; }
+                    guard.Guard(new OverwriteScope.WorkingTree(repoId), run);
+                });
     }
 
     // Untouched field → the ref the dialog was opened with, so a label reading "main" still sends

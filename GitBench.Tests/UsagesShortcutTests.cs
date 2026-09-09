@@ -131,7 +131,7 @@ public class UsagesShortcutTests
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
             });
-        view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+        view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
         harness.Render(); // resolve font metrics
         presenter = asked;
         return harness;

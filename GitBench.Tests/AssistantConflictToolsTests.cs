@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
+using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
@@ -24,6 +25,7 @@ public sealed class AssistantConflictToolsTests : IDisposable
     private readonly QueuedDispatcher _dispatcher = new();
     private readonly MessageBus _bus = new();
     private readonly TempDir _state = new("gitbench-conflict-state-");
+    private readonly TestDocuments.Empty _documents = new();
     private readonly AssistantToolset _toolset;
 
     public AssistantConflictToolsTests()
@@ -45,7 +47,8 @@ public sealed class AssistantConflictToolsTests : IDisposable
             _bus,
             new RepoRegistry(RepoStateStore.Load(statePath), statePath),
             new SilentCommitEditor(),
-            new IdleRemoteOperations());
+            new IdleRemoteOperations(),
+            _documents);
         return AssistantToolset.Create(
             ConflictTools.CreateAll(_git, repo, surface),
             ["get_conflict", "get_conflicts", "resolve_conflict"]);
@@ -431,6 +434,19 @@ public sealed class AssistantConflictToolsTests : IDisposable
         Pump.WaitFor(_dispatcher, () => task.IsCompleted, "the resolve_conflict tool to finish");
 
         Assert.Equal(1, told);
+    }
+
+    [Fact]
+    public void ResolvingAFileBeingTypedIntoIsRefused()
+    {
+        _documents.UnsavedFiles.Add(
+            new UnsavedFile(_merge.Repo.Id, Path.Combine(_merge.Repo.Path, "a.txt")));
+
+        var invocation = Invoke("resolve_conflict", """{"path":"a.txt","resolution":"ours"}""");
+
+        Assert.True(invocation.IsError);
+        Assert.Contains("not on disk", invocation.Content);
+        Assert.Contains(_git.GetConflictedPaths(_merge.Repo), p => p.Path == "a.txt");
     }
 
     private ToolInvocation Invoke(string tool, string args) => Invoke(_toolset, tool, args);

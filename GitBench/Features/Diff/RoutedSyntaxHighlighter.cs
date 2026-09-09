@@ -63,5 +63,10 @@ internal sealed class RoutedSyntaxHighlighter : ISyntaxHighlighter, IDisposable
     /// <summary>Whether a language would be colored by the parser rather than by regexes.</summary>
     public bool RoutesToTreeSitter(string languageId) => _treeSitter.Supports(languageId);
 
+    /// <summary>The parser-backed engine behind this one, for the callers that keep a tree between
+    /// edits rather than handing over a whole file each time. TextMate has no such path — a
+    /// re-highlight there is the whole file at a tenth the speed — so this is the parser only.</summary>
+    public TreeSitterSyntaxHighlighter TreeSitter => _treeSitter;
+
     public void Dispose() => _treeSitter.Dispose();
 }

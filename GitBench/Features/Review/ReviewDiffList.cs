@@ -504,13 +504,11 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private void OnSectionRender(Section s, DiffRenderState state)
     {
         var oldHeight = BodyHeight(s);
-        var oldRowCount = s.RowSet.Rows.Count;
+        var before = s.RowSet;
         s.Render = state;
         s.RowSet = DiffRowSet.Build(state, _loc);
         SyncBodyView(s);
-        // Row indices moved under a selection in this file (a gap expanded, the diff arrived). A
-        // same-shape re-emit — the syntax highlight attaching — leaves them valid.
-        if (s.RowSet.Rows.Count != oldRowCount) ClearSelectionIn(s.File.Path);
+        RemapSelectionIn(s.File.Path, before, s.RowSet);
         s.GutterWidth = ComputeGutterWidth(s);
         RecomputeNaturalWidth();
         var newHeight = BodyHeight(s);
@@ -655,15 +653,22 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         if (s.Folded == folded) return;
         var oldHeight = BodyHeight(s);
         s.Folded = folded;
-        ClearSelectionIn(s.File.Path);
         ReindexWithAnchor(s, oldHeight, BodyHeight(s));
     }
 
-    // Drops a text selection that belonged to a file whose rows just moved or vanished.
-    private void ClearSelectionIn(string path)
+    private void RemapSelectionIn(string path, IDiffRowSource before, IDiffRowSource after)
     {
         if (!Equals(_selection.Scope, path)) return;
-        _selection.Clear();
+
+        var at = _selection.Anchor;
+        var anchor = before.AnchorAt(at.Row);
+        var focus = before.AnchorAt(_selection.Focus.Row);
+        Func<DiffTextPos, DiffTextPos?> remap = pos =>
+            (pos == at ? anchor : focus) is { } named && after.RowAt(named) is { } row
+                ? new DiffTextPos(row, pos.Char)
+                : null;
+
+        if (_selection.Remap(remap)) SetDirty();
     }
 
     private HashSet<string> CurrentViewedSet()

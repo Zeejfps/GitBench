@@ -90,7 +90,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
         _vm = new LocalChangesViewModel(
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), new MessageBus(),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
-            _preferences, _store, _loc);
+            _preferences, _store, _loc, new NoUnsavedEdits());
     }
 
     [Fact]

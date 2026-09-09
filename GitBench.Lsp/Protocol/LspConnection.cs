@@ -22,6 +22,7 @@ public sealed class LspConnection : IAsyncDisposable
     private readonly LspChannel _channel;
     private readonly ILspServerMessages _handler;
     private readonly TimeProvider _clock;
+    private readonly ILspTrace _trace;
     private readonly LspFrameReader _reader;
     private readonly LspFrameWriter _writer;
     private readonly CancellationTokenSource _stop = new();
@@ -32,21 +33,31 @@ public sealed class LspConnection : IAsyncDisposable
     private long _nextId;
     private int _closed;
 
-    private LspConnection(LspChannel channel, ILspServerMessages handler, TimeProvider clock, LspFrameLimits? limits)
+    private LspConnection(
+        LspChannel channel,
+        ILspServerMessages handler,
+        TimeProvider clock,
+        LspFrameLimits? limits,
+        ILspTrace? trace)
     {
         _channel = channel;
         _handler = handler;
         _clock = clock;
+        _trace = trace ?? NoLspTrace.Instance;
         _reader = new LspFrameReader(channel.Incoming, limits);
         _writer = new LspFrameWriter(channel.Outgoing);
         _loop = Task.Run(ReadLoop);
     }
 
+    /// <param name="trace">Where the traffic is written down. Nowhere, unless a trace was asked
+    /// for: this is the one place every message on both halves of the conversation passes through,
+    /// so it is the only place a complete trace can be taken.</param>
     public static LspConnection Start(
         LspChannel channel,
         ILspServerMessages handler,
         TimeProvider clock,
-        LspFrameLimits? limits = null) => new(channel, handler, clock, limits);
+        LspFrameLimits? limits = null,
+        ILspTrace? trace = null) => new(channel, handler, clock, limits, trace);
 
     /// <summary>Asks the server a question. Never throws for a protocol or transport outcome.</summary>
     public async Task<LspResponse<T>> Send<T>(LspRequest<T> request, TimeSpan timeout, CancellationToken ct = default)
@@ -120,6 +131,7 @@ public sealed class LspConnection : IAsyncDisposable
             writer.WriteEndObject();
         }
 
+        _trace.Message(LspTraffic.ToServer, buffer.WrittenMemory);
         return _writer.WriteAsync(buffer.WrittenMemory, ct);
     }
 
@@ -198,6 +210,8 @@ public sealed class LspConnection : IAsyncDisposable
 
     private void Dispatch(byte[] payload)
     {
+        _trace.Message(LspTraffic.FromServer, payload);
+
         JsonDocument document;
         try
         {
@@ -358,6 +372,8 @@ public sealed class LspConnection : IAsyncDisposable
 
     private void Report(LspFault fault)
     {
+        _trace.Note($"fault: {fault}");
+
         try
         {
             _handler.OnFault(fault);

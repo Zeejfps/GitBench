@@ -1,5 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.Markdown;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -10,6 +11,19 @@ namespace GitBench.Features.FileBrowser;
 /// <summary>Which body the preview shows. Text is the common case; a picture and a sentence are the
 /// two things a patch view cannot render.</summary>
 internal enum FileBrowserBodyKind { Text, Markdown, Image, Placeholder }
+
+/// <summary>Why the preview is being pointed at a file, which decides how much work it can skip.</summary>
+internal enum PreviewSync
+{
+    /// <summary>Follow the tabs. A file already on screen needs nothing.</summary>
+    Follow,
+
+    /// <summary>Read the file again, and publish only if it moved.</summary>
+    Reread,
+
+    /// <summary>Read the file again and publish whatever comes back.</summary>
+    Rebuild,
+}
 
 /// <summary>
 /// One repository's file browser: the rows on screen, the cursor, the open tabs, and the operations
@@ -40,6 +54,9 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly ISymbolExtractor _extractor;
     private readonly IUiDispatcher _dispatcher;
     private readonly Action<FileBrowserUiState> _persist;
+    private readonly IRepoDocuments _documents;
+    private readonly Action<IReadOnlyList<string>, Action> _confirmDiscard;
+    private readonly Action<IReadOnlyList<string>, Action> _confirmReload;
 
     private readonly State<IReadOnlyList<FileBrowserRow>> _rows = new([]);
     private readonly State<string?> _cursor = new(null);
@@ -49,7 +66,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private readonly State<string?> _breadcrumb = new(null);
     private readonly State<FoldState> _folds = new(FoldState.Open(string.Empty));
 
-    private readonly FileBrowserTabs _tabs = new();
+    private readonly FileBrowserTabs _tabs;
     private readonly FileSearchViewModel _search;
     private readonly IDisposable _searchRetarget;
 
@@ -76,7 +93,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         ISymbolExtractor extractor,
         IUiDispatcher dispatcher,
         FileBrowserUiState restored,
-        Action<FileBrowserUiState> persist)
+        Action<FileBrowserUiState> persist,
+        IRepoDocuments documents,
+        Action<IReadOnlyList<string>, Action> confirmDiscard,
+        Action<IReadOnlyList<string>, Action> confirmReload)
     {
         _root = PathKey.Normalize(repo.Path);
         _files = files;
@@ -84,6 +104,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _extractor = extractor;
         _dispatcher = dispatcher;
         _persist = persist;
+        _documents = documents;
+        _confirmDiscard = confirmDiscard;
+        _confirmReload = confirmReload;
+        _tabs = new FileBrowserTabs(documents.HasUnsavedEdits);
 
         _search = new FileSearchViewModel(() => _preview.Value, () => _topVisibleLine);
         _searchRetarget = _preview.Subscribe(_ => _search.Retarget());
@@ -144,6 +168,9 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
     /// <summary>The tab the preview is showing, or null when nothing is open.</summary>
     public IReadable<FileBrowserTab?> ActiveTab => _tabs.Active;
+
+    /// <summary>This repository's files open for editing.</summary>
+    public IRepoDocuments Documents => _documents;
 
     /// <summary>Which declarations are folded shut in the previewed file. Per file, UI thread only,
     /// and deliberately not persisted — a fold is a reading position, not a preference.</summary>
@@ -262,27 +289,61 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     public void CloseTab(FileBrowserTab tab)
     {
         if (_disposed) return;
-        var wasActive = ReferenceEquals(_tabs.Active.Value, tab);
-        _tabs.Close(tab);
-        if (wasActive) FollowActiveTab();
-        Persist();
+        Closing([tab], () =>
+        {
+            var wasActive = ReferenceEquals(_tabs.Active.Value, tab);
+            Release(tab);
+            _tabs.Close(tab);
+            if (wasActive) FollowActiveTab();
+            Persist();
+        });
     }
 
     public void CloseOtherTabs(FileBrowserTab keep)
     {
         if (_disposed) return;
-        _tabs.CloseOthers(keep);
-        FollowActiveTab();
-        Persist();
+        var closing = _tabs.Items.Where(tab => !ReferenceEquals(tab, keep)).ToArray();
+        Closing(closing, () =>
+        {
+            foreach (var tab in closing) Release(tab);
+            _tabs.CloseOthers(keep);
+            FollowActiveTab();
+            Persist();
+        });
     }
 
     public void CloseAllTabs()
     {
         if (_disposed) return;
-        _tabs.CloseAll();
-        FollowActiveTab();
-        Persist();
+        var closing = _tabs.Items.ToArray();
+        Closing(closing, () =>
+        {
+            foreach (var tab in closing) Release(tab);
+            _tabs.CloseAll();
+            FollowActiveTab();
+            Persist();
+        });
     }
+
+    /// <summary>Runs <paramref name="close"/>, first asking once about whatever it would
+    /// lose.</summary>
+    private void Closing(IReadOnlyList<FileBrowserTab> closing, Action close)
+    {
+        var unsaved = closing
+            .Where(tab => _documents.HasUnsavedEdits(tab.Path))
+            .Select(tab => PathLabel(tab.Path))
+            .ToArray();
+
+        if (unsaved.Length == 0)
+        {
+            close();
+            return;
+        }
+
+        _confirmDiscard(unsaved, () => { if (!_disposed) close(); });
+    }
+
+    private void Release(FileBrowserTab tab) => _documents.Close(tab.Path);
 
     /// <summary>How a file is named in this browser: repo-relative inside the working tree, its
     /// whole path outside it.</summary>
@@ -371,7 +432,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
             UpdateHistory();
         }
 
-        SyncPreview(force: false);
+        SyncPreview(PreviewSync.Follow);
 
         if (line is { } target) NavigateToLine(target);
         else if (switched && tab.TopLine > 0) NavigateToLine(tab.TopLine);
@@ -383,7 +444,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// close, which is the one thing that moves the preview without the reader naming where to.</summary>
     private void FollowActiveTab()
     {
-        SyncPreview(force: false);
+        SyncPreview(PreviewSync.Follow);
         if (_tabs.Active.Value is not { } tab) return;
         if (HasRow(tab.Path)) _cursor.Value = tab.Path;
         if (tab.TopLine > 0) NavigateToLine(tab.TopLine);
@@ -446,7 +507,53 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     public void Invalidate()
     {
         Queue(tree => tree.Refresh());
-        SyncPreview(force: true);
+        SyncPreview(PreviewSync.Reread);
+        Reconcile();
+    }
+
+    /// <summary>Looks at the file behind every open document and asks about the ones that moved
+    /// under unsaved edits.</summary>
+    private void Reconcile()
+    {
+        var open = _documents.OpenDocuments();
+        if (open.Count == 0) return;
+
+        var dispatcher = _dispatcher;
+        Task.Run(() =>
+        {
+            var looked = new (string Path, FileStamp? Expected, FileStamp? Found)[open.Count];
+            for (var i = 0; i < open.Count; i++)
+                looked[i] = (open[i].Path, open[i].KnownOnDisk, FileStamp.Of(open[i].Path));
+
+            dispatcher.Post(() => Settle(looked));
+        });
+    }
+
+    private void Settle(IReadOnlyList<(string Path, FileStamp? Expected, FileStamp? Found)> looked)
+    {
+        if (_disposed) return;
+
+        var diverged = new List<string>();
+        foreach (var (path, expected, found) in looked)
+            if (_documents.Reconcile(path, expected, found) == DocumentReconciliation.Diverged)
+                diverged.Add(path);
+
+        if (diverged.Count == 0) return;
+        _confirmReload(diverged.Select(PathLabel).ToArray(), () => Reload(diverged));
+    }
+
+    private void Reload(IReadOnlyList<string> paths)
+    {
+        if (_disposed) return;
+
+        var showing = false;
+        foreach (var path in paths)
+        {
+            _documents.Close(path);
+            showing |= PathKey.Comparer.Equals(path, _previewPath);
+        }
+
+        if (showing) SyncPreview(PreviewSync.Rebuild);
     }
 
     /// <summary>Moves the cursor, and opens the file it landed on. Transiently: a cursor sweeping
@@ -635,7 +742,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         _rows.Value = rows;
         _showHidden.Value = showHidden;
         _expanded = expanded;
-        SyncPreview(force: false);
+        SyncPreview(PreviewSync.Follow);
         Persist();
     }
 
@@ -669,13 +776,13 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     /// that rebuilds loses the reader's place in it; passing through <c>Loading</c> on the way
     /// empties the body first, which zeroes the scroll offset outright.
     /// </remarks>
-    private void SyncPreview(bool force)
+    private void SyncPreview(PreviewSync sync)
     {
         if (_disposed) return;
 
         var target = _tabs.ActivePath;
         var samePath = string.Equals(target, _previewPath, StringComparison.Ordinal);
-        if (!force && samePath) return;
+        if (sync == PreviewSync.Follow && samePath) return;
 
         if (!samePath)
         {
@@ -723,7 +830,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
             // Compared here rather than on the UI thread: both sides are immutable and the loading
             // thread already holds them, so an unchanged file costs the UI thread nothing at all.
-            if (samePath && SaysTheSameThing(shown, result)) return;
+            if (sync != PreviewSync.Rebuild && samePath && SaysTheSameThing(shown, result)) return;
 
             dispatcher.Post(() =>
             {
@@ -788,7 +895,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
     private static bool SaysTheSameThing(FilePreview shown, FilePreview loaded) => (shown, loaded) switch
     {
         (FilePreview.Text a, FilePreview.Text b) =>
-            a.Path == b.Path && a.Truncated == b.Truncated && a.Lines.SequenceEqual(b.Lines),
+            a.Path == b.Path && a.WriteBack == b.WriteBack && a.Lines.SequenceEqual(b.Lines),
         (FilePreview.Image a, FilePreview.Image b) =>
             a.Path == b.Path && a.Preview.ContentHash == b.Preview.ContentHash,
         (FilePreview.Unavailable a, FilePreview.Unavailable b) => a == b,

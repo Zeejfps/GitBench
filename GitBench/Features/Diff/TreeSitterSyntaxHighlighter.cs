@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 
 using GitBench.Features.CodeIntel;
@@ -16,10 +15,6 @@ namespace GitBench.Features.Diff;
 /// A region a grammar hands to another language — a fenced code block, a <c>&lt;script&gt;</c>
 /// body, Markdown's inline syntax — is parsed again with that language and painted over the top,
 /// which is what a file made of several languages needs and what regexes approximate.
-///
-/// Returns null — "I cannot color this" — for a language it holds no query for, an over-cap file,
-/// a blown budget or any failure, which is what lets <see cref="RoutedSyntaxHighlighter"/> hand
-/// the file back to TextMate rather than dropping it to plain.
 /// </summary>
 /// <remarks>
 /// Safe to call concurrently, and worth calling concurrently: a parser is per-worker by
@@ -32,11 +27,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     public const int MaxFileBytes = TreeSitterSymbolExtractor.MaxFileBytes;
 
     private const string GrammarLibrary = "tree-sitter-grammars";
-
-    // A ceiling, not a working limit — the whole corpus this was measured over runs three orders
-    // of magnitude under it. It exists so a pathological file cannot hold a lane open, the same
-    // job the extractor's budget does.
-    private static readonly TimeSpan WholeFileBudget = TimeSpan.FromMilliseconds(750);
 
     private const int MaxInjectionDepth = 3;
 
@@ -67,7 +57,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     private readonly Dictionary<CodeLanguage, CompiledHighlights> _compiled = [];
     private readonly Action<string>? _log;
     private int _failureLogged;
-    private int _budgetLogged;
 
     public TreeSitterSyntaxHighlighter(
         Action<string>? log = null,
@@ -106,32 +95,70 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         ArgumentNullException.ThrowIfNull(fileText);
 
         if (LanguageOf(languageId) is not { } language) return null;
-        if (!_compiled.TryGetValue(language, out var compiled)) return null;
+        if (!_compiled.ContainsKey(language)) return null;
         if (fileText.Length > MaxFileBytes) return null;
 
         var normalized = NormalizeNewlines(fileText);
         if (Encoding.UTF8.GetByteCount(normalized) > MaxFileBytes) return null;
         var utf8 = Encoding.UTF8.GetBytes(normalized);
 
-        var watch = Stopwatch.StartNew();
-        IReadOnlyList<IReadOnlyList<TokenSpan>> lines;
         try
         {
-            lines = Paint(language, normalized, utf8);
+            var captures = new List<Capture>();
+            Collect(language, utf8, [new Region(0, utf8.Length)], depth: 0, captures);
+            return Coalesce(normalized, utf8.Length, captures);
         }
         catch (Exception error)
         {
             LogOnce(ref _failureLogged, $"Tree-sitter highlighting failed on a {language} file: {error}");
             return null;
         }
+    }
 
-        if (watch.Elapsed <= WholeFileBudget) return lines;
+    /// <summary>A tree this engine will keep across one open file's edits, or null for a language it
+    /// does not color.</summary>
+    /// <remarks>
+    /// The tree comes back bound to this language's parser pool, so it can only ever be re-parsed by
+    /// a parser on the grammar it was built with.
+    /// </remarks>
+    public MaintainedTree? Track(string languageId) =>
+        LanguageOf(languageId) is { } language && _compiled.TryGetValue(language, out var compiled)
+            ? new MaintainedTree(compiled.Pool)
+            : null;
 
-        LogOnce(
-            ref _budgetLogged,
-            $"Tree-sitter highlighting exceeded its {WholeFileBudget.TotalMilliseconds:F0} ms budget " +
-            $"on a {utf8.Length} byte {language} file ({watch.ElapsedMilliseconds} ms).");
-        return null;
+    /// <summary>
+    /// Colors a file from a tree already parsed for it — the incremental path, where the tree is
+    /// maintained across edits rather than built per call.
+    /// </summary>
+    /// <remarks>
+    /// Injections are re-derived from <paramref name="root"/> rather than carried, which is what the
+    /// whole-file path does too: an incremental parse is defined to produce the tree a parse from
+    /// scratch would, so what a fresh root says about its injected regions is what a fresh parse
+    /// would have said.
+    /// </remarks>
+    /// <param name="normalized">The file with its line endings already normalized — the text
+    /// <paramref name="utf8"/> encodes.</param>
+    public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(
+        string languageId, string normalized, byte[] utf8, SyntaxTree root)
+    {
+        ArgumentNullException.ThrowIfNull(normalized);
+        ArgumentNullException.ThrowIfNull(root);
+
+        if (LanguageOf(languageId) is not { } language) return null;
+        if (!_compiled.TryGetValue(language, out var compiled)) return null;
+        if (utf8.Length > MaxFileBytes) return null;
+
+        try
+        {
+            var captures = new List<Capture>();
+            CollectRoot(compiled, utf8, root, captures);
+            return Coalesce(normalized, utf8.Length, captures);
+        }
+        catch (Exception error)
+        {
+            LogOnce(ref _failureLogged, $"Tree-sitter highlighting failed on a {language} file: {error}");
+            return null;
+        }
     }
 
     public void Dispose()
@@ -172,13 +199,6 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     private static string NormalizeNewlines(string text) =>
         text.Contains('\r') ? text.Replace("\r\n", "\n").Replace('\r', '\n') : text;
 
-    private IReadOnlyList<IReadOnlyList<TokenSpan>> Paint(CodeLanguage language, string text, byte[] utf8)
-    {
-        var captures = new List<Capture>();
-        Collect(language, utf8, [new Region(0, utf8.Length)], depth: 0, captures);
-        return Coalesce(text, utf8.Length, captures);
-    }
-
     // Recursion runs after the session is returned: nesting Use on a pool of one would wait on a
     // slot this caller is holding.
     private void Collect(CodeLanguage language, byte[] utf8, List<Region> regions, int depth, List<Capture> captures)
@@ -198,6 +218,28 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
                 return found;
             });
 
+        Follow(injected, utf8, depth, captures);
+    }
+
+    // The root region, read off a tree this engine did not parse here and does not own.
+    private void CollectRoot(CompiledHighlights compiled, byte[] utf8, SyntaxTree tree, List<Capture> captures)
+    {
+        var injected = compiled.Pool.Use(
+            (compiled, tree, captures, region: new Region(0, utf8.Length)),
+            static (session, s) =>
+            {
+                List<Injection>? found = null;
+                ScanTree(
+                    session, s.compiled, s.tree.RootNode, s.region,
+                    depth: 0, s.captures, followInjections: true, ref found);
+                return found;
+            });
+
+        Follow(injected, utf8, depth: 0, captures);
+    }
+
+    private void Follow(List<Injection>? injected, byte[] utf8, int depth, List<Capture> captures)
+    {
         if (injected is null) return;
 
         foreach (var group in injected.GroupBy(i => i.Language))
@@ -218,9 +260,21 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
     {
         if (region.Length <= 0) return;
 
-        var origin = region.Start;
         using var tree = session.Parser.Parse(utf8.AsSpan(region.Start, region.Length));
-        var root = tree.RootNode;
+        ScanTree(session, compiled, tree.RootNode, region, depth, captures, followInjections, ref injected);
+    }
+
+    private static void ScanTree(
+        ParseSession session,
+        CompiledHighlights compiled,
+        Node root,
+        Region region,
+        int depth,
+        List<Capture> captures,
+        bool followInjections,
+        ref List<Injection>? injected)
+    {
+        var origin = region.Start;
 
         session.Cursor.ForEachMatch(compiled.Query, root, match =>
         {

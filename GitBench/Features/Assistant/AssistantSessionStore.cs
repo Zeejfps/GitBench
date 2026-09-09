@@ -5,6 +5,7 @@ using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Features.Editor;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -118,6 +119,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         ICommitEditor commitEditor,
         IReviewProgressStore reviewProgress,
         IRepoOperationsStore operations,
+        IDocumentStore documents,
         AssistantBackendFactory backendFactory)
     {
         _registry = registry;
@@ -128,7 +130,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         _loc = loc;
         _dispatcher = dispatcher;
         _reviewProgress = reviewProgress;
-        _writes = new AssistantWriteSurface(dispatcher, bus, registry, commitEditor, operations);
+        _writes = new AssistantWriteSurface(dispatcher, bus, registry, commitEditor, operations, documents);
         _connection = settings.Value.Connect(null);
         _catalog = AgentCatalog.LoadEmbedded();
         _agent = _catalog.Get(AgentCatalog.GeneralAgent);

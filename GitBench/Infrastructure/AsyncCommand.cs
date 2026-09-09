@@ -20,6 +20,7 @@ internal sealed class AsyncCommand : ICommand
     private readonly Action _onSuccess;
     private readonly Action<string>? _onError;
     private readonly Func<Action<bool>?>? _onStart;
+    private readonly Action<Action>? _ask;
     private readonly State<bool> _isRunning = new(false);
     private readonly State<string?> _error = new(null);
 
@@ -47,19 +48,23 @@ internal sealed class AsyncCommand : ICommand
     /// whether the work succeeded. For state the rest of the app must see for exactly the command's
     /// lifetime, such as declaring where HEAD is about to move: waiting for the result would leave
     /// the window this exists to close. Return null to declare nothing for this execution.</param>
+    /// <param name="ask">Invoked on the UI thread in place of running, with the continuation that
+    /// runs it. Never calling the continuation is the refusal.</param>
     public AsyncCommand(
         IUiDispatcher dispatcher,
         Func<string?> work,
         Action onSuccess,
         IReadable<bool>? gate = null,
         Action<string>? onError = null,
-        Func<Action<bool>?>? onStart = null)
+        Func<Action<bool>?>? onStart = null,
+        Action<Action>? ask = null)
     {
         _dispatcher = dispatcher;
         _work = work;
         _onSuccess = onSuccess;
         _onError = onError;
         _onStart = onStart;
+        _ask = ask;
 
         CanExecute = gate is null
             ? new Derived<bool>(() => !_isRunning.Value)
@@ -77,11 +82,19 @@ internal sealed class AsyncCommand : ICommand
         Action onSuccess,
         IReadable<bool>? gate = null,
         Action<string>? onError = null,
-        Func<Action<bool>?>? onStart = null)
+        Func<Action<bool>?>? onStart = null,
+        Action<Action>? ask = null)
         where T : IOutcome<T>
-        => new(dispatcher, () => work().FailureMessage, onSuccess, gate, onError, onStart);
+        => new(dispatcher, () => work().FailureMessage, onSuccess, gate, onError, onStart, ask);
 
     public void Execute()
+    {
+        if (!CanExecute.Value) return;
+        if (_ask is { } ask) { ask(Run); return; }
+        Run();
+    }
+
+    private void Run()
     {
         if (!CanExecute.Value) return;
         _error.Value = null;

@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace GitBench.Features.Diff;
 
 /// <summary>
@@ -51,6 +53,12 @@ internal static class DiffText
         var i = 0;
         var dropped = 0;
         while (i < text.Length && dropped < drop) dropped += StepCells(text, ref i);
+        while (i < text.Length)
+        {
+            var next = i;
+            if (StepCells(text, ref next) != 0) break;
+            i = next;
+        }
         return text[i..];
     }
 
@@ -69,6 +77,7 @@ internal static class DiffText
         {
             var start = i;
             var width = StepCells(text, ref i);
+            if (width == 0) continue;
             if (cell < cells + width / 2f) return start;
             cells += width;
         }
@@ -90,13 +99,13 @@ internal static class DiffText
         {
             var start = i;
             var width = StepCells(text, ref i);
+            if (width == 0) continue;
             if (cell < cells + width) return start;
             cells += width;
         }
         return -1;
     }
 
-    // Cells of the code point at i, advancing i past it (surrogate pairs count as one glyph).
     private static int StepCells(string text, ref int i)
     {
         var c = text[i];
@@ -111,8 +120,14 @@ internal static class DiffText
             cp = c;
             i++;
         }
+        if (cp < 0x0300) return 1;
+        if (IsZeroWidthCodePoint(cp)) return 0;
         return IsWideCodePoint(cp) ? 2 : 1;
     }
+
+    private static bool IsZeroWidthCodePoint(int cp) =>
+        CharUnicodeInfo.GetUnicodeCategory(cp)
+            is UnicodeCategory.NonSpacingMark or UnicodeCategory.EnclosingMark;
 
     private static bool IsWideCodePoint(int cp) =>
         (cp >= 0x1100 && cp <= 0x115F) ||   // Hangul Jamo

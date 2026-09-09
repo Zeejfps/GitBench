@@ -48,7 +48,7 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), new MessageBus(),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json")),
-            _store, _loc);
+            _store, _loc, new NoUnsavedEdits());
 
         Push();
     }

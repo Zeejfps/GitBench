@@ -79,12 +79,31 @@ internal sealed class DiffSelectionModel
         return true;
     }
 
+    public bool Collapse()
+    {
+        if (!IsActive || Anchor == Focus) return false;
+        Anchor = Focus;
+        return true;
+    }
+
     public bool Clear()
     {
         if (!IsActive) return false;
         IsActive = false;
         Scope = null;
         Anchor = Focus = default;
+        return true;
+    }
+
+    /// <summary>Rewrites both ends through a mapping, for when the rows the selection was taken
+    /// against are rebuilt under it.</summary>
+    public bool Remap(Func<DiffTextPos, DiffTextPos?> map)
+    {
+        if (!IsActive) return false;
+        if (map(Anchor) is not { } anchor || map(Focus) is not { } focus) return Clear();
+        if (anchor == Anchor && focus == Focus) return false;
+        Anchor = anchor;
+        Focus = focus;
         return true;
     }
 

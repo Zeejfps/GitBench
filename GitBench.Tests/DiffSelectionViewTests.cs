@@ -121,7 +121,7 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render(); // resolve font metrics
 
             Drag(h, fromRow: 1, fromCol: 4, toRow: 1, toCol: 9); // "alpha" in "var alpha = 1;"
@@ -139,7 +139,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, fromRow: 1, fromCol: 4, toRow: 1, toCol: 9);
@@ -157,7 +157,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             h.Click(XOfColumn(4), RowCenterY(1));
@@ -174,7 +174,7 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, 1, 0, 1, 5);
@@ -193,7 +193,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, fromRow: 1, fromCol: 0, toRow: 3, toCol: 14);
@@ -211,7 +211,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             // Row 4 is hunk 0's last line, row 5 the bar, row 6 hunk 1's first line.
@@ -230,7 +230,7 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, fromRow: 4, fromCol: 0, toRow: 6, toCol: 3);
@@ -244,7 +244,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, fromRow: 3, fromCol: 3, toRow: 1, toCol: 4);
@@ -260,7 +260,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             var x = XOfColumn(6); // inside "alpha"
@@ -279,7 +279,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             var x = XOfColumn(6);
@@ -299,7 +299,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             h.MoveTo(XOfColumn(2), RowCenterY(1));
@@ -329,7 +329,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             h.MoveTo(XOfColumn(0), RowCenterY(1));
@@ -361,7 +361,7 @@ public class DiffSelectionViewTests
         var (h, view, clipboard) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             h.MoveTo(XOfColumn(8), RowCenterY(8)); // the end of "fresh();"
@@ -393,7 +393,7 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, 1, 0, 3, 5);
@@ -413,7 +413,7 @@ public class DiffSelectionViewTests
         {
             var expanded = 0;
             view.OnExpandGap = (_, _) => expanded++;
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             // Row 5's bar bridges the 3-line gap; the whole bar is its click target.
@@ -434,12 +434,12 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
             Drag(h, 1, 0, 1, 5);
             Assert.NotEmpty(SelectionRects(h.Render()));
 
-            view.SetRenderState(new DiffRenderState.Loaded(Diff() with { Path = "other.cs" }));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff() with { Path = "other.cs" }), document: null);
             Assert.Empty(SelectionRects(h.Render()));
         }
     }
@@ -452,7 +452,7 @@ public class DiffSelectionViewTests
         var (h, view, _) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+            view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
             h.Render();
 
             Drag(h, fromRow: 1, fromCol: 0, toRow: 3, toCol: 3);

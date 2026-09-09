@@ -53,6 +53,9 @@ internal sealed class FileBrowserTabs : IDisposable
 {
     private readonly ObservableList<FileBrowserTab> _tabs = new();
     private readonly State<FileBrowserTab?> _active = new(null);
+    private readonly Func<string, bool> _hasUnsavedEdits;
+
+    public FileBrowserTabs(Func<string, bool> hasUnsavedEdits) => _hasUnsavedEdits = hasUnsavedEdits;
 
     public ObservableList<FileBrowserTab> Items => _tabs;
 
@@ -124,10 +127,17 @@ internal sealed class FileBrowserTabs : IDisposable
         return null;
     }
 
+    /// <summary>The tab a transient open takes the place of, or -1 when there is none to take. A
+    /// tab holding unsaved edits is pinned here instead of being taken.</summary>
     private int IndexOfTransient()
     {
         for (var i = 0; i < _tabs.Count; i++)
-            if (_tabs[i].Transient.Value) return i;
+        {
+            var tab = _tabs[i];
+            if (!tab.Transient.Value) continue;
+            if (_hasUnsavedEdits(tab.Path)) { tab.Pin(); continue; }
+            return i;
+        }
         return -1;
     }
 

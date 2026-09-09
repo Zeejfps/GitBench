@@ -1,7 +1,10 @@
+﻿using GitBench.Features.Editor;
+using GitBench.Localization;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
+using ZGF.Observable;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -84,7 +87,9 @@ public class FileBrowserStoreTests : IDisposable
 
     private FileBrowserStore Store()
     {
-        var store = new FileBrowserStore(_registry, new NoIgnores(), _files, new UnparsedFiles(), _bus, _dispatcher);
+        var documents = new DocumentStore(_registry, new LocalizationService(new State<Locale>(Locale.En)));
+        var store = new FileBrowserStore(
+            _registry, new NoIgnores(), _files, new UnparsedFiles(), _bus, _dispatcher, documents);
         store.Start();
         return store;
     }

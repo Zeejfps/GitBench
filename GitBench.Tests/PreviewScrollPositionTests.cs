@@ -63,7 +63,7 @@ public class PreviewScrollPositionTests
     public void TheWholeFileViewerHoldsItsHorizontalPlaceAcrossAReload()
     {
         using var harness = DiffHarness(out var view);
-        view.SetRenderState(FullFile("src/wide.cs"));
+        view.SetRenderState(FullFile("src/wide.cs"), document: null);
         harness.Render();
         var unscrolled = CodeLeftEdge(harness);
 
@@ -72,7 +72,7 @@ public class PreviewScrollPositionTests
         var scrolled = CodeLeftEdge(harness);
         Assert.True(scrolled < unscrolled - 1f, "the fixture must be wide enough to scroll");
 
-        view.SetRenderState(FullFile("src/wide.cs"));
+        view.SetRenderState(FullFile("src/wide.cs"), document: null);
         harness.Render();
 
         Assert.Equal(scrolled, CodeLeftEdge(harness), 1);
@@ -84,7 +84,7 @@ public class PreviewScrollPositionTests
     public void ADifferentFileStartsAtTheLeftEdge()
     {
         using var harness = DiffHarness(out var view);
-        view.SetRenderState(FullFile("src/wide.cs"));
+        view.SetRenderState(FullFile("src/wide.cs"), document: null);
         harness.Render();
         var unscrolled = CodeLeftEdge(harness);
 
@@ -92,7 +92,7 @@ public class PreviewScrollPositionTests
         harness.Render();
         Assert.True(CodeLeftEdge(harness) < unscrolled - 1f);
 
-        view.SetRenderState(FullFile("src/other.cs"));
+        view.SetRenderState(FullFile("src/other.cs"), document: null);
         harness.Render();
 
         Assert.Equal(unscrolled, CodeLeftEdge(harness), 1);

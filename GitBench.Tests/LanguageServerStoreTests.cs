@@ -77,21 +77,97 @@ public sealed class LanguageServerStoreTests : IDisposable
     private string File_(Guid repo, string relative) =>
         Path.Combine(Path.GetFullPath(_registry.Repos.Single(r => r.Id == repo).Path), relative);
 
-    private LanguageServerStore Store(string? config = ConfigJson)
+    private LanguageServerStore Store(string? config = ConfigJson, IFileTextSource? fileText = null)
     {
         if (config is not null) File.WriteAllText(_configPath, config);
+        // Both arguments take the one source, the way the store's own launcher takes the one it was
+        // built with.
+        var files = fileText ?? FilesOnDisk.Instance;
         var store = new LanguageServerStore(
             _registry,
             _files,
             _dispatcher,
             _bus,
             _loc,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5)),
+            files,
+            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), files),
             clock: null,
             configPath: _configPath);
         store.Start();
         _store = store;
         return store;
+    }
+
+    // The seam shipped once registered nowhere, which read at runtime exactly like a deliberate
+    // decision to answer about the file on disk. It is a required constructor argument now, so the
+    // container refuses to build the store rather than quietly handing it the disk.
+    [Fact]
+    public void TheStoreCannotBeBuiltWithoutSomewhereToReadFileTextFrom()
+    {
+        var context = Context();
+
+        var failure = Record.Exception(() => context.Require<ILanguageServerStore>());
+
+        Assert.Contains(nameof(IFileTextSource), Assert.IsType<InvalidOperationException>(failure).Message);
+    }
+
+    [Fact]
+    public void OneRegistrationOfTheFileTextSourceIsEnoughToBuildTheStore()
+    {
+        var context = Context();
+        context.AddService<IFileTextSource>(new RecordingText());
+
+        var store = Assert.IsType<LanguageServerStore>(context.Require<ILanguageServerStore>());
+
+        Assert.EndsWith(LanguageServerStore.ConfigFileName, store.ConfigPath, StringComparison.Ordinal);
+    }
+
+    // The store hands its source to the launcher, which hands it to the connection every hover then
+    // reads through: what the reader is looking at, not what is on disk.
+    [Fact]
+    public async Task AHoverReadsTheStoresFileTextSourceRatherThanTheDisk()
+    {
+        var files = new RecordingText { Text = "fn main() { typed(); }" };
+        var store = Store(fileText: files);
+        _registry.SetActive(_first);
+        var file = File_(_first, "src/main.rs");
+        store.FileShown(file);
+
+        await Hover(store, file);
+
+        Assert.Equal([file], files.Reads);
+        Assert.Equal(["fn main() { typed(); }"], _launcher.Started.Single().Opened);
+    }
+
+    private Context Context()
+    {
+        var context = new Context();
+        context.AddService<IRepoRegistry>(_registry);
+        context.AddService<IFileSystemReader>(_files);
+        context.AddService<IUiDispatcher>(_dispatcher);
+        context.AddService<IMessageBus>(_bus);
+        context.AddService<ILocalizationService>(_loc);
+        context.AddHostedService<ILanguageServerStore, LanguageServerStore>();
+        return context;
+    }
+
+    private sealed class RecordingText : IFileTextSource
+    {
+        public List<string> Reads { get; } = [];
+
+        public string? Text { get; init; }
+
+        public event Action<string>? Changed
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<CurrentText> ReadAsync(string absolutePath, CancellationToken cancel)
+        {
+            Reads.Add(absolutePath);
+            return Task.FromResult(Text is null ? CurrentText.Nothing : CurrentText.Whole(Text));
+        }
     }
 
     private static Task<HoverText?> Hover(LanguageServerStore store, string path) =>
@@ -354,7 +430,8 @@ public sealed class LanguageServerStoreTests : IDisposable
             dispatcher,
             _bus,
             _loc,
-            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5)),
+            FilesOnDisk.Instance,
+            new LanguageServerLauncher(_launcher, TimeSpan.FromSeconds(5), FilesOnDisk.Instance),
             clock: null,
             configPath: _configPath);
         store.Start();
@@ -731,9 +808,14 @@ public sealed class LanguageServerStoreTests : IDisposable
             return Task.FromResult<string?>(null);
         }
 
+        public List<string> Opened { get; } = [];
+
         public Task OpenAsync(
-            DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel) =>
-            Task.CompletedTask;
+            DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel)
+        {
+            Opened.Add(text);
+            return Task.CompletedTask;
+        }
 
         public Task<LspResponse<T>> AskAsync<T>(LspRequest<T> request, TimeSpan timeout, CancellationToken cancel)
         {

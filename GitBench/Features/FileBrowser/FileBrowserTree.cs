@@ -373,12 +373,15 @@ internal sealed class FileBrowserTree
     {
         var ordered = new List<FileSystemEntry>(entries.Count);
         foreach (var entry in entries)
-            if (!IsGitDirectory(entry.Name))
+            if (!IsGitDirectory(entry.Name) && !IsStagingFile(entry))
                 ordered.Add(entry);
 
         ordered.Sort(Compare);
         return ordered;
     }
+
+    private static bool IsStagingFile(FileSystemEntry entry) =>
+        !entry.IsDirectory && AtomicFile.IsStagingPath(entry.Name);
 
     private static int Compare(FileSystemEntry a, FileSystemEntry b)
     {

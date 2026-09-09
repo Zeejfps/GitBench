@@ -260,4 +260,22 @@ public sealed class PositionMappingTests
 
         Assert.Equal(new[] { Span(0, 0, 1) }, doc.ToScreenSpans(new LspRange(At(0, 0), At(1, 0))));
     }
+
+    [Theory]
+    [InlineData("a\nb\nc")]
+    [InlineData("a\r\nb\r\nc")]
+    [InlineData("a\rb\rc")]
+    public void EveryLineBreakSplitsTheSameWay(string text)
+    {
+        var file = FileText.Of(text);
+
+        Assert.Equal(3, file.LineCount);
+        Assert.Equal("b", file.Line(new LspLine(1)).Raw);
+    }
+
+    [Fact]
+    public void ALoneCarriageReturnAtTheEndOpensNoLastLine()
+    {
+        Assert.Equal(1, FileText.Of("a\r").LineCount);
+    }
 }

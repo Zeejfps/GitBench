@@ -14,7 +14,7 @@ internal sealed record HunkRowRange(int HunkIndex, int FirstRow, int LastRow);
 /// <see cref="DiffContentView"/> (the single-file pane) and the review window's stacked list,
 /// so both flatten a diff identically.
 /// </summary>
-internal sealed class DiffRowSet
+internal sealed class DiffRowSet : IDiffRowSource, IDiffHunkRows
 {
     public static readonly DiffRowSet Empty = new();
 
@@ -36,11 +36,7 @@ internal sealed class DiffRowSet
     private const int SeparatorChromeCells = 6;
     private const int ExpanderColumnCells = 4;
 
-    // A lens draws in a smaller proportional font, so its width is not a cell count at all. The
-    // widest thing it says is allowed for in cells here, the same approximation the separator
-    // chrome makes, so a long lens over a short declaration stays reachable at full horizontal
-    // scroll instead of being clipped by the content width.
-    private const int UsageLensCells = 16;
+    public const int UsageLensCells = 16;
 
     // Full-file mode draws a single (new-side) line-number gutter and no hunk chrome. Diff mode
     // leaves this false and renders the old|new two-gutter layout.
@@ -64,6 +60,12 @@ internal sealed class DiffRowSet
     public string? HiddenAfter(RowIndex row) =>
         _hiddenAfter.TryGetValue(row, out var text) ? text : null;
 
+    Func<RowIndex, string?>? IDiffRowSource.HiddenText => FoldColumn ? HiddenAfter : null;
+
+    IDiffHunkRows? IDiffRowSource.Hunks => this;
+
+    IReadOnlyList<HunkRowRange> IDiffHunkRows.Ranges => _hunkRanges;
+
     /// <summary>Max line-number digit count across the gutters (at least 1), for gutter width sizing.</summary>
     public int GutterDigits { get; private set; } = 1;
 
@@ -83,10 +85,47 @@ internal sealed class DiffRowSet
     /// <summary>The row standing for an after-side file line, or null when none does: the line is
     /// behind a collapsed fold, inside a gap nobody expanded, past the end of the file, or was
     /// removed by the change and so never had an after-side number.</summary>
-    public RowIndex? RowForNewLine(FileLine line)
+    public RowIndex? RowForNewLine(FileLine line) => RowFor(DiffRowKey.NewSide(line));
+
+    public RowIndex? RowFor(DiffRowKey key)
     {
         for (var i = 0; i < _rows.Count; i++)
-            if (_rows[i] is DiffRow.Line l && l.NewNumber.Line == line) return new RowIndex(i);
+            if (KeyAt(i) == key) return new RowIndex(i);
+        return null;
+    }
+
+    /// <summary>Where a row sits, in terms that survive this stream being rebuilt.</summary>
+    public DiffRowAnchor? AnchorAt(RowIndex row)
+    {
+        if (row.Value < 0 || row.Value >= _rows.Count) return null;
+        for (var i = row.Value; i >= 0; i--)
+            if (KeyAt(i) is { } key) return new DiffRowAnchor(key, row.Value - i);
+        return new DiffRowAnchor(null, row.Value + 1);
+    }
+
+    /// <summary>The row an anchor names here, or null when this stream does not have it.</summary>
+    public RowIndex? RowAt(DiffRowAnchor anchor)
+    {
+        if (_rows.Count == 0) return null;
+
+        var line = -1;
+        if (anchor.Line is { } key)
+        {
+            if (RowFor(key) is not { } row) return null;
+            if (anchor.RowsBelow == 0) return row;
+            line = row.Value;
+        }
+
+        var run = 0;
+        while (line + 1 + run < _rows.Count && KeyAt(line + 1 + run) is null) run++;
+        return new RowIndex(Math.Max(0, line + Math.Min(anchor.RowsBelow, run)));
+    }
+
+    private DiffRowKey? KeyAt(int index)
+    {
+        if (_rows[index] is not DiffRow.Line line) return null;
+        if (line.NewNumber.Line is { } after) return DiffRowKey.NewSide(after);
+        if (line.OldNumber.Line is { } before) return DiffRowKey.OldSide(before);
         return null;
     }
 
@@ -359,7 +398,7 @@ internal sealed class DiffRowSet
         GlyphColumn = ff.AddedLineNumbers.Count > 0;
         GutterDigits = Math.Max(1, DigitCount(ff.Lines.Count));
 
-        var plan = FoldPlan.Build(ff, folds, usageLens);
+        var plan = FoldPlan.Build(ff.Annotations?.NewSide, folds, usageLens, ff.Lines);
         var emphasis = ff.Emphasis;
         for (var i = 0; i < ff.Lines.Count; i++)
         {
@@ -400,170 +439,6 @@ internal sealed class DiffRowSet
     /// <summary>What a collapsed fold leaves behind, appended to the declaration's own last line —
     /// the whole body including its braces, so a folded declaration reads as one line.</summary>
     public const string FoldChipText = "{...}";
-
-    /// <summary>
-    /// What the fold set means for one file's lines: which are hidden, which carry a chevron or a
-    /// chip, what text each collapsed fold swallowed, and — when the surface asks for them — where
-    /// the usages rows go. Resolved once per flatten so the line loop stays a loop over lines.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// A collapsed declaration's children are never walked. Their rows are inside its hidden range,
-    /// so a mark on one could not be seen and a nested hidden range could not add to the union —
-    /// which is what "outermost wins" amounts to in practice.
-    /// </para>
-    /// <para>
-    /// Lenses ride the same walk rather than a second one, which is what makes a folded class hide
-    /// its members' lenses without anything having to say so.
-    /// </para>
-    /// </remarks>
-    private sealed class FoldPlan
-    {
-        private static readonly FoldPlan Nothing = new(0, usageLens: false);
-
-        private readonly bool[] _hidden;
-        private readonly bool _usageLens;
-        private readonly Dictionary<int, FoldMark> _marks = new();
-        private readonly Dictionary<int, string> _swallowed = new();
-        private readonly Dictionary<int, DiffRow.Lens> _lenses = new();
-
-        private FoldPlan(int lineCount, bool usageLens)
-        {
-            _hidden = new bool[lineCount + 2];
-            _usageLens = usageLens;
-        }
-
-        public static FoldPlan Build(DiffRenderState.FullFile ff, FoldState? folds, bool usageLens)
-        {
-            if (ff.Annotations?.NewSide is not { } outline) return Nothing;
-            if (folds is null && !usageLens) return Nothing;
-
-            var plan = new FoldPlan(ff.Lines.Count, usageLens);
-            plan.Walk(outline.Roots, parentPath: null, folds, ff.Lines);
-            return plan;
-        }
-
-        public bool IsHidden(int line) => line >= 0 && line < _hidden.Length && _hidden[line];
-
-        public FoldMark? MarkAt(int line) => _marks.TryGetValue(line, out var mark) ? mark : null;
-
-        public string? SwallowedAt(int line) => _swallowed.TryGetValue(line, out var text) ? text : null;
-
-        /// <summary>The usages row that goes above a line, or null where none does.</summary>
-        public DiffRow.Lens? LensAt(int line) => _lenses.TryGetValue(line, out var lens) ? lens : null;
-
-        private void Walk(
-            IReadOnlyList<OutlineNode> nodes, string? parentPath, FoldState? folds, IReadOnlyList<string> lines)
-        {
-            foreach (var node in nodes)
-            {
-                var path = FileOutline.PathOf(parentPath, node);
-
-                // StartLine already skips attributes, decorators and annotations, so the lens sits
-                // directly above the signature rather than above whatever decorates it.
-                if (_usageLens && HasLens(node.Kind))
-                    _lenses[node.StartLine] = new DiffRow.Lens(
-                        new FileLine(node.StartLine),
-                        path,
-                        IndentOf(lines, node.StartLine),
-                        node.NameLine,
-                        node.NameColumn);
-
-                // With no fold set the walk is here only to place lenses: nothing marks and nothing
-                // hides, so every declaration below is still reached.
-                if (folds is null)
-                {
-                    Walk(node.Children, path, folds, lines);
-                    continue;
-                }
-
-                // §4.1 sets SignatureEndLine to EndLine for anything declared without a body, so this
-                // one comparison rules out expression-bodied members, interface members, abstract
-                // methods, positional records, delegates and enum members alike.
-                if (node.SignatureEndLine >= node.EndLine)
-                {
-                    Walk(node.Children, path, folds, lines);
-                    continue;
-                }
-
-                var collapsed = folds.IsCollapsed(path);
-                Mark(node.StartLine, path, collapsed, chevron: true, chip: false);
-                if (!collapsed)
-                {
-                    Walk(node.Children, path, folds, lines);
-                    continue;
-                }
-
-                // The body's opening brace goes with the body, so the chip lands on the last line
-                // of the signature and the declaration collapses onto one row. Never onto the row
-                // carrying the chevron's own start, which is what the Max guards: a signature and
-                // its brace sometimes share a line.
-                var hideFrom = Math.Max(node.StartLine + 1, node.SignatureEndLine);
-                var chipLine = hideFrom - 1;
-                var last = Math.Min(node.EndLine, lines.Count);
-                if (last < hideFrom) continue;
-
-                Mark(chipLine, path, collapsed: true, chevron: false, chip: true);
-                for (var line = hideFrom; line <= last; line++)
-                    _hidden[line] = true;
-                _swallowed[chipLine] = Swallowed(lines, hideFrom, last);
-            }
-        }
-
-        // Namespaces, fields and enum members are left out deliberately: a lens above every field
-        // is chrome nobody asked for, and a namespace's usages are not a question about this file.
-        private static bool HasLens(SymbolKind kind) => kind switch
-        {
-            SymbolKind.Class or SymbolKind.Struct or SymbolKind.Interface or SymbolKind.Record
-                or SymbolKind.Enum or SymbolKind.Method or SymbolKind.Constructor
-                or SymbolKind.Property or SymbolKind.Event or SymbolKind.Function
-                or SymbolKind.Type => true,
-            SymbolKind.Namespace or SymbolKind.Field or SymbolKind.EnumMember => false,
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unhandled symbol kind."),
-        };
-
-        // The declaration's own indent, in the tab-expanded cells the row grid counts, so the lens
-        // starts where the signature under it does rather than at the margin.
-        private static int IndentOf(IReadOnlyList<string> lines, int line)
-        {
-            if (line < 1 || line > lines.Count) return 0;
-
-            var cells = 0;
-            foreach (var ch in lines[line - 1])
-            {
-                if (ch == '\t') cells += DiffOptions.TabWidth - cells % DiffOptions.TabWidth;
-                else if (ch == ' ') cells++;
-                else break;
-            }
-            return cells;
-        }
-
-        // A signature and its opening brace share a row in some styles, so the two marks merge
-        // rather than one overwriting the other.
-        private void Mark(int line, string path, bool collapsed, bool chevron, bool chip)
-        {
-            var existing = _marks.TryGetValue(line, out var m) ? m : new FoldMark(path, collapsed, false, false);
-            _marks[line] = existing with
-            {
-                Id = path,
-                Collapsed = collapsed,
-                Chevron = existing.Chevron || chevron,
-                Chip = existing.Chip || chip,
-            };
-        }
-
-        // Raw, like the visible rows' own raw text: this is only ever re-inflated into a copy.
-        private static string Swallowed(IReadOnlyList<string> lines, int from, int to)
-        {
-            var text = new System.Text.StringBuilder();
-            for (var line = from; line <= to; line++)
-            {
-                if (text.Length > 0) text.Append('\n');
-                text.Append(lines[line - 1]);
-            }
-            return text.ToString();
-        }
-    }
 
     private void AddBanner(string text)
     {

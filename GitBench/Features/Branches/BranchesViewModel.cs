@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Features.Editor;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
 using GitBench.Features.Stash;
@@ -99,6 +100,7 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
     private readonly Derived<string?> _placeholderText;
     private readonly Derived<BranchesContentKind> _contentKind;
     private readonly Derived<string?> _pendingHead;
+    private readonly IUnsavedEditsGuard _unsavedEdits;
 
     public BranchesViewModel(
         IRepoRegistry registry,
@@ -112,10 +114,12 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         IRepoOperationsStore ops,
         IRepoHeadStore head,
         IFrameTicker ticker,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        IUnsavedEditsGuard unsavedEdits)
         : base(dispatcher, BranchesState.Initial)
     {
         _registry = registry;
+        _unsavedEdits = unsavedEdits;
         _gitBranches = gitBranches;
         _gitStash = gitStash;
         _bus = bus;
@@ -583,14 +587,15 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         }
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new CheckoutBranchDialog
-        {
-            Repo = repo,
-            RemoteName = remoteName,
-            RemoteBranchName = fullPath,
-            SuggestedLocalName = fullPath,
-            OnClose = onClose,
-        }));
+        _unsavedEdits.Guard(new OverwriteScope.WorkingTree(repo.Id), () =>
+            _bus.Broadcast(new ShowDialogMessage(onClose => new CheckoutBranchDialog
+            {
+                Repo = repo,
+                RemoteName = remoteName,
+                RemoteBranchName = fullPath,
+                SuggestedLocalName = fullPath,
+                OnClose = onClose,
+            })));
     }
 
     // Double-click applies with pop semantics: on a clean apply, prompt to drop the stash.
@@ -606,6 +611,11 @@ internal sealed class BranchesViewModel : ViewModelBase<BranchesState>
         var repo = _registry.Active.Value;
         if (repo == null) return;
 
+        _unsavedEdits.Guard(new OverwriteScope.WorkingTree(repo.Id), () => ApplyStashNow(repo, index, label, subject, offerDrop));
+    }
+
+    private void ApplyStashNow(Repo repo, int index, string label, string subject, bool offerDrop)
+    {
         TryRunOutcome(
             _stashGen,
             work: () => _gitStash.ApplyStash(repo, index),

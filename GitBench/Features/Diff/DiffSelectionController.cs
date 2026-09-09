@@ -38,6 +38,9 @@ internal interface IDiffSelectionSurface
     /// <summary>The rows of a scope, for building clipboard text and Select All spans.</summary>
     IReadOnlyList<DiffRow>? RowsOf(object? scope);
 
+    /// <summary>Whether this surface is the one the keyboard is talking to.</summary>
+    void FocusChanged(bool focused) { }
+
     /// <summary>The text a collapsed fold swallowed after a row of <paramref name="scope"/>, or null
     /// where nothing folds. Surfaces without folding return null and copy exactly as before.</summary>
     Func<RowIndex, string?>? HiddenTextOf(object? scope) => null;
@@ -74,6 +77,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     private readonly IDiffSelectionSurface _surface;
     private readonly InputSystem _input;
     private readonly IClipboard? _clipboard;
+    private readonly Features.Editor.EditorController? _editor;
 
     private bool _pointerInside;
     // A press landed on text; a selection starts if the pointer travels before release.
@@ -88,12 +92,21 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     private PointF _lastClickPoint;
     private bool _hasLastClick;
 
-    public DiffSelectionController(IDiffSelectionSurface surface, InputSystem input, IClipboard? clipboard)
+    public DiffSelectionController(
+        IDiffSelectionSurface surface,
+        InputSystem input,
+        IClipboard? clipboard,
+        Features.Editor.EditorController? editor = null)
     {
         _surface = surface;
         _input = input;
         _clipboard = clipboard;
+        _editor = editor;
     }
+
+    /// <summary>The caret's keyboard on an editable body, or null where the body is a viewer.</summary>
+    private Features.Editor.EditorController? EditorKeys =>
+        _editor is { IsEditing: true } editor ? editor : null;
 
     // Read only while this controller captures the pointer, i.e. mid-drag. Hover cursors come
     // from the row list's own CursorAt hook.
@@ -131,10 +144,14 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
         if (e.Phase == EventPhase.Capturing) _pointerInside = false;
     }
 
+    public override void OnFocusGained() => _surface.FocusChanged(true);
+
     public override void OnFocusLost()
     {
         _armed = false;
         _dragging = false;
+        _surface.FocusChanged(false);
+        if (EditorKeys != null) return;
         if (_surface.Selection.Clear()) _surface.RequestRedraw();
     }
 
@@ -176,6 +193,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     private void OnPress(ref MouseButtonEvent e)
     {
         var point = e.Mouse.Point;
+        EditorKeys?.CancelComposition();
         if (_surface.IsInteractiveAt(point))
         {
             _hasLastClick = false;
@@ -264,6 +282,13 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.State != InputState.Pressed) return;
+
+        if (EditorKeys is { } editor)
+        {
+            editor.OnKey(ref e);
+            if (e.IsConsumed) return;
+        }
+
         // Hover-scoped, like the diff's F hotkey: keys pass through to whatever the pointer is
         // actually over, even while this controller holds focus.
         if (!_pointerInside && !_dragging) return;
@@ -278,16 +303,33 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
                 if (SelectAll()) e.Consume();
                 return;
             case KeyboardKey.Escape:
-                if (_surface.Selection.Clear())
+            {
+                var dropped = EditorKeys != null
+                    ? _surface.Selection.Collapse()
+                    : _surface.Selection.Clear();
+                if (dropped)
                 {
                     _surface.RequestRedraw();
                     e.Consume();
                 }
                 return;
+            }
         }
     }
 
-    private bool Copy()
+    public override void OnTextInput(ref TextInputEvent e)
+    {
+        if (e.Phase != EventPhase.Bubbling) return;
+        EditorKeys?.OnText(ref e);
+    }
+
+    public override void OnComposition(ref CompositionEvent e)
+    {
+        if (e.Phase != EventPhase.Bubbling) return;
+        EditorKeys?.OnComposition(ref e);
+    }
+
+    public bool Copy()
     {
         var selection = _surface.Selection;
         if (!selection.HasRange || _clipboard == null) return false;
@@ -300,9 +342,7 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
         return true;
     }
 
-    // Selects the whole file under the pointer — or the one already selected, so Ctrl+A after a
-    // drag that ended in a gutter still widens to the file it was selecting in.
-    private bool SelectAll()
+    public bool SelectAll()
     {
         var selection = _surface.Selection;
         var scope = selection.IsActive ? selection.Scope : _surface.ClampToScope(_lastPoint, null)?.Scope;

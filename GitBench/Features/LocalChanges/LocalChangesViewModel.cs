@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Commits;
+using GitBench.Features.Editor;
 using GitBench.Features.Diff;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
@@ -108,6 +109,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // post-mutation snapshot can land afterwards). Mirrors DiffViewModel's defer for the file lists.
     private bool _deferStoreReloadUntilWorkingTreeChange;
 
+    private readonly IUnsavedEditsGuard _unsavedEdits;
+
     public LocalChangesViewModel(
         IRepoRegistry registry,
         IGitStatusReader gitStatus,
@@ -123,10 +126,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         IClipboard clipboard,
         PreferencesService preferences,
         IRepoSnapshotStore store,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        IUnsavedEditsGuard unsavedEdits)
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
+        _unsavedEdits = unsavedEdits;
         _gitStatus = gitStatus;
         _gitWorkingTree = gitWorkingTree;
         _gitConflicts = gitConflicts;
@@ -750,7 +755,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         if (paths.Count == 0) return;
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog { Repo = repo, Paths = paths, OnClose = onClose }));
+        var absolute = paths.Select(p => Path.Combine(repo.Path, p)).ToArray();
+        _unsavedEdits.Guard(new OverwriteScope.Files(repo.Id, absolute), () =>
+            _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog { Repo = repo, Paths = paths, OnClose = onClose })));
     }
 
     // Stashes the working-tree changes for the given paths (git's default "WIP on…"

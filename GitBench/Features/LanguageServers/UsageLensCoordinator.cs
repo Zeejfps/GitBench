@@ -126,6 +126,15 @@ internal sealed class UsageLensCoordinator : IDisposable
         _ = SettleThenAskAsync(path, settling.Token, _asking.Token);
     }
 
+    /// <summary>
+    /// Waits for the view to stop moving, then goes back to the UI thread to decide what to ask.
+    /// </summary>
+    /// <remarks>
+    /// The hand-back is load-bearing. The wait resumes on whichever pool thread the timer finished
+    /// on, and everything the decision reads — which rows are on screen, and the bookkeeping of
+    /// what has already been asked — belongs to the thread that built them. Deciding here instead
+    /// threw on every refresh of an editable file, which is every refresh of the pane this runs in.
+    /// </remarks>
     private async Task SettleThenAskAsync(string path, CancellationToken settling, CancellationToken asking)
     {
         try
@@ -133,17 +142,7 @@ internal sealed class UsageLensCoordinator : IDisposable
             await _settle(TimeSpan.FromMilliseconds(SettleMs), settling).ConfigureAwait(false);
             if (settling.IsCancellationRequested || asking.IsCancellationRequested) return;
 
-            var targets = Unanswered(_onScreen());
-            if (targets.Count == 0) return;
-
-            foreach (var target in targets)
-            {
-                _inFlight.Add(target.Id);
-                _known.TryAdd(target.Id, new UsageLensState.Asking());
-            }
-
-            Publish();
-            foreach (var target in targets) _ = AskOneAsync(path, target, asking);
+            _dispatcher.Post(() => AskAboutWhatIsOnScreen(path, settling, asking));
         }
         catch (OperationCanceledException)
         {
@@ -152,6 +151,28 @@ internal sealed class UsageLensCoordinator : IDisposable
         {
             Console.WriteLine($"[LanguageServers] usage lens refresh failed: {ex.Message}");
         }
+    }
+
+    /// <summary>Puts a question out for every declaration on screen that is worth one. On the UI
+    /// thread, always: see <see cref="SettleThenAskAsync"/>.</summary>
+    private void AskAboutWhatIsOnScreen(string path, CancellationToken settling, CancellationToken asking)
+    {
+        // The wait was abandoned, the file left, or this was disposed while the hand-back was
+        // queued — all three mean the question is about a screen that has moved on.
+        if (_disposed != 0 || settling.IsCancellationRequested || asking.IsCancellationRequested) return;
+        if (path != _path) return;
+
+        var targets = Unanswered(_onScreen());
+        if (targets.Count == 0) return;
+
+        foreach (var target in targets)
+        {
+            _inFlight.Add(target.Id);
+            _known.TryAdd(target.Id, new UsageLensState.Asking());
+        }
+
+        Publish();
+        foreach (var target in targets) _ = AskOneAsync(path, target, asking);
     }
 
     private async Task AskOneAsync(string path, UsageLensTarget target, CancellationToken cancel)

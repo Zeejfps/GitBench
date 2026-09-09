@@ -116,7 +116,7 @@ public class DiffContextExpansionViewTests
         var (h, view) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()), document: null);
             var canvas = h.Render();
 
             Assert.True(HasText(canvas, "@@ -10,3 +10,5 @@"));
@@ -150,7 +150,7 @@ public class DiffContextExpansionViewTests
         var (h, view) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(diff));
+            view.SetRenderState(new DiffRenderState.Loaded(diff), document: null);
             var canvas = h.Render();
 
             // Three bars only — the trailing EOF bar is gone.
@@ -166,7 +166,7 @@ public class DiffContextExpansionViewTests
         {
             var calls = new List<(int Gap, GapExpandDirection Dir)>();
             view.OnExpandGap = (gap, dir) => calls.Add((gap, dir));
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()), document: null);
             h.Render(); // resolve font metrics so hit-testing has row geometry
 
             // Rows: [0] bar 0, [1..5] hunk 0, [6] split gap top bar, [7] tear, [8] split gap
@@ -201,7 +201,7 @@ public class DiffContextExpansionViewTests
             var declared = new List<(int Gap, GapExpandDirection Dir)>();
             view.OnExpandGap = (gap, dir) => stepped.Add((gap, dir));
             view.OnExpandGapToDeclaration = (gap, dir) => declared.Add((gap, dir));
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()), document: null);
             h.Render();
 
             view.TryClickExpander(new PointF(15f, RowCenterY(6)), InputModifiers.Alt);
@@ -221,7 +221,7 @@ public class DiffContextExpansionViewTests
         {
             var calls = new List<(int Gap, GapExpandDirection Dir)>();
             view.OnExpandGap = (gap, dir) => calls.Add((gap, dir));
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff()), document: null);
             h.Render();
 
             // Same bars as ClickingExpanderIconsReportsGapAndDirection, but clicked far to the
@@ -250,7 +250,7 @@ public class DiffContextExpansionViewTests
         using (h)
         {
             // Gap 0 expanded upward by 4: lines 6..9 revealed below the bar, 5 still hidden.
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((0, 0, 4))));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((0, 0, 4))), document: null);
             var canvas = h.Render();
 
             Assert.True(HasText(canvas, "line 6"));
@@ -278,7 +278,7 @@ public class DiffContextExpansionViewTests
         using (h)
         {
             // The whole 47-line middle gap revealed; the 80-line file leaves 15 below hunk 1.
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((1, 47, 0))));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((1, 47, 0))), document: null);
 
             var canvas = h.Render();
             Assert.True(HasText(canvas, "line 15")); // reads on from hunk 0 with no bar between
@@ -299,7 +299,7 @@ public class DiffContextExpansionViewTests
         var (h, view) = Create();
         using (h)
         {
-            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((0, 0, 4))));
+            view.SetRenderState(new DiffRenderState.Loaded(TwoHunkDiff(), Expansion: Expansion((0, 0, 4))), document: null);
             h.Render();
 
             // Rows: [0] bar 0, [1..4] expanded 6..9, [5..9] hunk 0 lines. Hovering an expanded

@@ -18,12 +18,16 @@ namespace GitBench.Lsp.Lifecycle;
 /// server reports progress on whatever thread the runtime chooses, and the supervisor holds no lock.
 /// </para>
 /// </remarks>
+/// <param name="trace">Where each server's conversation is written down. Nowhere by default.</param>
 public sealed class ProcessLanguageServerLauncher(
     IServerEnvironment environment,
     Action<Action> post,
-    TimeProvider? time = null) : ILanguageServerLauncher
+    TimeProvider? time = null,
+    ILspTraceSource? trace = null) : ILanguageServerLauncher
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
+
+    private readonly ILspTraceSource _trace = trace ?? NoLspTrace.Instance;
 
     public LaunchResult Launch(ServerLaunchRequest request)
     {
@@ -31,6 +35,7 @@ public sealed class ProcessLanguageServerLauncher(
         if (environment.ResolveCommand(entry.Command) is not { } executable)
             return new LaunchResult.Failed($"'{entry.Command}' was not found.");
 
+        var trace = _trace.Open(entry.Language.Value);
         var start = new ProcessStartInfo(executable)
         {
             WorkingDirectory = request.ProjectRoot,
@@ -47,6 +52,9 @@ public sealed class ProcessLanguageServerLauncher(
         foreach (var (key, value) in environment.Variables) start.Environment[key] = value;
         foreach (var (key, value) in entry.Environment) start.Environment[key] = value;
 
+        trace.Note($"launching {executable} {string.Join(' ', entry.Args)}");
+        trace.Note($"project root {request.ProjectRoot}");
+
         Process process;
         try
         {
@@ -54,10 +62,12 @@ public sealed class ProcessLanguageServerLauncher(
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
+            trace.Note($"could not start: {ex.Message}");
+            trace.Dispose();
             return new LaunchResult.Failed($"'{entry.Command}' could not be started: {ex.Message}");
         }
 
-        return new LaunchResult.Started(new ProcessLanguageServer(process, request, post, _time));
+        return new LaunchResult.Started(new ProcessLanguageServer(process, request, post, _time, trace));
     }
 }
 
@@ -71,21 +81,28 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
     private readonly Queue<string> _complaints = new();
     private readonly object _complaintGate = new();
     private readonly Task _complaintsRead;
+    private readonly ILspTrace _trace;
 
     private ServerReadiness _readiness = new ServerReadiness.Handshaked();
     private int _disposed;
 
     internal ProcessLanguageServer(
-        Process process, ServerLaunchRequest request, Action<Action> post, TimeProvider time)
+        Process process,
+        ServerLaunchRequest request,
+        Action<Action> post,
+        TimeProvider time,
+        ILspTrace? trace = null)
     {
         _process = process;
         _post = post;
+        _trace = trace ?? NoLspTrace.Instance;
         Request = request;
 
         _connection = LspConnection.Start(
             new LspChannel(process.StandardOutput.BaseStream, process.StandardInput.BaseStream),
             this,
-            time);
+            time,
+            trace: _trace);
 
         _complaintsRead = ReadComplaintsAsync();
 
@@ -272,6 +289,7 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
         Kill();
         _closing.Dispose();
         _process.Dispose();
+        _trace.Dispose();
     }
 
     /// <summary>
@@ -349,6 +367,7 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
         var code = SafeExitCode();
         await Task.WhenAny(_complaintsRead, Task.Delay(ComplaintGrace)).ConfigureAwait(false);
         var detail = LastComplaint();
+        _trace.Note($"exited with code {code?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}");
         Raise(() => Exited?.Invoke(new ServerExit(code, detail)));
     }
 
@@ -374,6 +393,11 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
             while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
             {
                 if (line.Trim() is not { Length: > 0 } trimmed) continue;
+
+                // Traced whole. The cap below is what a one-line failure message can show a
+                // reader; a trace is read in an editor and the tail is often the part that names
+                // the project that would not load.
+                _trace.Note($"stderr: {trimmed}");
                 if (trimmed.Length > ComplaintLineCap) trimmed = trimmed[..ComplaintLineCap];
 
                 lock (_complaintGate)

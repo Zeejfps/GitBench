@@ -70,7 +70,7 @@ public class FileSearchViewTests
     {
         using var harness = Harness(out var view);
         var file = File(2, 4, 6);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
         harness.Render();
 
         view.SetSearch(new DiffSearchOverlay(Hits(file, "hit", current: 1)));
@@ -90,7 +90,7 @@ public class FileSearchViewTests
     {
         using var harness = Harness(out var view);
         var file = File(2, 120);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
         harness.Render();
 
         var elsewhere = FileSearch.In(
@@ -109,7 +109,7 @@ public class FileSearchViewTests
     {
         using var harness = Harness(out var view);
         var file = File(2, 5);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
         harness.Render();
 
         Reveal(view, Hits(file, "hit", current: 1));
@@ -127,7 +127,7 @@ public class FileSearchViewTests
     {
         using var harness = Harness(out var view);
         var file = File(120);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
         harness.Render();
 
         Reveal(view, Hits(file, "hit", current: 0));
@@ -142,7 +142,7 @@ public class FileSearchViewTests
     {
         using var harness = Harness(out var view);
         var file = File(120);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
 
         Reveal(view, Hits(file, "hit", current: 0));
         harness.Render();
@@ -161,7 +161,7 @@ public class FileSearchViewTests
             AddedLineNumbers: new HashSet<int>(),
             Side: DiffSide.WorkingTree,
             Truncated: false);
-        view.SetRenderState(file);
+        view.SetRenderState(file, document: null);
         harness.Render();
 
         Assert.Empty(Cursor(harness.Render()));

@@ -76,6 +76,7 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
         IUiDispatcher dispatcher,
         IMessageBus bus,
         ILocalizationService loc,
+        IFileTextSource fileText,
         ILanguageServerLauncher? launcher = null,
         IClock? clock = null,
         string? configPath = null)
@@ -90,8 +91,10 @@ internal sealed class LanguageServerStore : ILanguageServerStore, IHostedService
             launcher ?? new LanguageServerLauncher(
                 new ProcessLanguageServerLauncher(
                     new MapServerEnvironment(LoginShellEnvironment.ForChildProcess),
-                    dispatcher.Post),
+                    dispatcher.Post,
+                    trace: LspTracing.Source()),
                 HandshakeTimeout,
+                fileText,
                 dispatcher.Post),
             clock ?? SystemClock.Instance);
         _supervisor.StatusChanged += OnStatusChanged;
@@ -485,7 +488,10 @@ internal sealed class SystemClock : IClock
 }
 
 internal sealed class LanguageServerLauncher(
-    ILanguageServerLauncher processes, TimeSpan handshakeTimeout, Action<Action>? post = null)
+    ILanguageServerLauncher processes,
+    TimeSpan handshakeTimeout,
+    IFileTextSource files,
+    Action<Action>? post = null)
     : ILanguageServerLauncher
 {
     public LaunchResult Launch(ServerLaunchRequest request)
@@ -493,7 +499,7 @@ internal sealed class LanguageServerLauncher(
         var launched = processes.Launch(request);
         return launched is LaunchResult.Started { Process: ILanguageServerSession session }
             ? new LaunchResult.Started(new LanguageServerConnection(
-                session, request, handshakeTimeout, post: post))
+                session, request, handshakeTimeout, post: post, files: files))
             : launched;
     }
 }

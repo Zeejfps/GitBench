@@ -115,18 +115,24 @@ public sealed class FileText
 
     private FileText(LineText[] lines) => _lines = lines;
 
+    /// <summary>Breaks on LF, CRLF or a lone CR — must stay in step with the app's
+    /// GitBench.Infrastructure.TextLines.Split, which this project cannot reference.</summary>
     public static FileText Of(string text)
     {
-        var parts = text.Split('\n');
-        var count = parts.Length > 1 && parts[^1].Length == 0 ? parts.Length - 1 : parts.Length;
-        var lines = new LineText[count];
-        for (var i = 0; i < count; i++)
+        var lines = new List<LineText>();
+        var start = 0;
+        for (var i = 0; i < text.Length; i++)
         {
-            var raw = parts[i];
-            if (raw.EndsWith('\r')) raw = raw[..^1];
-            lines[i] = LineText.Of(raw);
+            if (text[i] != '\n' && text[i] != '\r') continue;
+
+            lines.Add(LineText.Of(text[start..i]));
+            if (text[i] == '\r' && i + 1 < text.Length && text[i + 1] == '\n') i++;
+            start = i + 1;
         }
-        return new FileText(lines);
+
+        if (start < text.Length) lines.Add(LineText.Of(text[start..]));
+        if (lines.Count == 0) lines.Add(LineText.Of(string.Empty));
+        return new FileText(lines.ToArray());
     }
 
     public int LineCount => _lines.Length;

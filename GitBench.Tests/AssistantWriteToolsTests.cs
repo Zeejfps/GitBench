@@ -70,7 +70,8 @@ public sealed class AssistantWriteToolsTests : IDisposable
             new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
-            new LocalizationService(new State<Locale>(Locale.En)));
+            new LocalizationService(new State<Locale>(Locale.En)),
+            new NoUnsavedEdits());
 
         _toolset = ToolsetFor(_repo);
     }
@@ -82,7 +83,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
             new UnparsedFiles(),
             AgentCatalog.LoadEmbedded().Get(AgentCatalog.GeneralAgent),
             new ReviewProgressStore(),
-            new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations()));
+            new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations(), new TestDocuments.Empty()));
 
     public void Dispose()
     {

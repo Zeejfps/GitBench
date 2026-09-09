@@ -60,7 +60,7 @@ public class DiffDefinitionLinkViewTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
             });
-        view.SetRenderState(new DiffRenderState.Loaded(Diff()));
+        view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
         harness.Render(); // resolve font metrics
         return (harness, view);
     }

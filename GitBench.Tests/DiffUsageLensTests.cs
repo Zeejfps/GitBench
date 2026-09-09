@@ -231,7 +231,7 @@ public sealed class DiffUsageLensTests(CodeIntelFixture fixture)
     {
         using var harness = Harness(out var view);
         view.UsageLensRows = true;
-        view.SetRenderState(Generated());
+        view.SetRenderState(Generated(), document: null);
         harness.Render();
 
         // Method 8 declares on line 35; three rows above it is method 7's "Use();" on line 33.
@@ -306,7 +306,7 @@ public sealed class DiffUsageLensTests(CodeIntelFixture fixture)
     {
         var harness = Harness(out var view);
         view.UsageLensRows = true;
-        view.SetRenderState(FullFile());
+        view.SetRenderState(FullFile(), document: null);
         harness.Render(); // resolve font metrics
         return (harness, view, Rows(usageLens: true));
     }

@@ -101,6 +101,7 @@ internal sealed class AssistantViewFixture : IDisposable
             CommitBox,
             new ReviewProgressStore(),
             new IdleRemoteOperations(),
+            new TestDocuments.Empty(),
             _ => backend);
         _store = store;
 

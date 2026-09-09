@@ -53,6 +53,9 @@ public interface IRepoRegistry
     void DeleteGroup(Guid id);
     void MoveRepo(Guid repoId, Guid targetGroupId, int insertIndex);
     void MoveGroup(Guid groupId, int insertIndex);
+    // Every row RemoveRepo would take with this one: the repo plus a primary's worktree and
+    // submodule children.
+    IReadOnlyList<Repo> RemovalCascade(Guid repoId);
     void RemoveRepo(Guid repoId);
     void BeginRenameGroup(Guid id);
     void EndRenameGroup();

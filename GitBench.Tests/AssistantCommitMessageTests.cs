@@ -70,7 +70,8 @@ public sealed class AssistantCommitMessageTests : IDisposable
             new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
-            _loc);
+            _loc,
+            new NoUnsavedEdits());
 
         _bus.Subscribe<ShowOperationErrorMessage>(_errorDialogs.Add);
     }
@@ -378,7 +379,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     }
 
     private AssistantWriteSurface WriteSurface() =>
-        new(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations());
+        new(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations(), new TestDocuments.Empty());
 
     private AssistantViewModel Start(
         FakeAssistantBackend backend,
@@ -398,6 +399,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             _commitBox,
             new ReviewProgressStore(),
             new IdleRemoteOperations(),
+            new TestDocuments.Empty(),
             _ => backend);
         _store.Start();
 

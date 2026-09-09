@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Infrastructure;
 using GitBench.Git;
 
 namespace GitBench.Features.Diff;
@@ -69,7 +70,7 @@ internal sealed class DiffPreviewLoader(
     public List<string>? NewSideLines(Repo repo, DiffTarget target)
     {
         var text = git.GetFileText(repo, target.Path, target.Side, oldSide: false, target.CommitSha, target.BaseSha);
-        return text == null ? null : SplitLines(text);
+        return text == null ? null : TextLines.Split(text);
     }
 
     // Reads and decodes the blob behind a binary image file, or returns null to leave the diff
@@ -111,7 +112,7 @@ internal sealed class DiffPreviewLoader(
         var text = git.GetFileText(repo, target.Path, target.Side, oldSide: false, target.CommitSha, target.BaseSha);
         if (text == null) return new DiffRenderState.Placeholder(request.NoCurrentVersionText);
 
-        var lines = SplitLines(text);
+        var lines = TextLines.Split(text);
         var truncated = false;
         if (lines.Count > DiffOptions.TruncationLineCap)
         {
@@ -146,15 +147,5 @@ internal sealed class DiffPreviewLoader(
         return new DiffRenderState.FullFile(
             target.Path, lines, added, target.Side, truncated, emphasis,
             DiffAnnotationCoordinator.ComputeNewSide(extractor, diff, text));
-    }
-
-    // Splits file text into display lines, normalizing CRLF/CR to LF and dropping the single empty
-    // element a trailing newline produces (so a file ending in "\n" doesn't show a phantom row).
-    private static List<string> SplitLines(string text)
-    {
-        var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-        var lines = new List<string>(normalized.Split('\n'));
-        if (lines.Count > 0 && lines[^1].Length == 0) lines.RemoveAt(lines.Count - 1);
-        return lines;
     }
 }

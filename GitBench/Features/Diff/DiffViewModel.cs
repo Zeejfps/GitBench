@@ -238,6 +238,8 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         }
     }
 
+    public Repo? Repo => ResolveRepo();
+
     // The repo this pane operates on: the pinned repo (resolved by id) when set, else the active repo.
     private Repo? ResolveRepo()
     {

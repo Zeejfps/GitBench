@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Branches;
+using GitBench.Features.Editor;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
@@ -17,6 +18,7 @@ namespace GitBench.Features.Toolbar;
 internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarState>
 {
     private readonly IRepoRegistry _registry;
+    private readonly IUnsavedEditsGuard _unsavedEdits;
     private readonly IPlatformShell _shell;
     private readonly IMessageBus _bus;
     private readonly IRepoOperationsStore _ops;
@@ -55,10 +57,12 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         IRepoStatusStore status,
         IRepoOperationsStore ops,
         IRepoSnapshotStore snapshots,
-        ILocalizationService loc)
+        ILocalizationService loc,
+        IUnsavedEditsGuard unsavedEdits)
         : base(dispatcher, ActionsToolbarState.Initial)
     {
         _registry = registry;
+        _unsavedEdits = unsavedEdits;
         _shell = shell;
         _bus = bus;
         _ops = ops;
@@ -236,13 +240,13 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        // Empty Paths makes the dialog pre-check every unstaged file; it loads the list itself.
-        _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog
-        {
-            Repo = repo,
-            Paths = [],
-            OnClose = onClose,
-        }));
+        _unsavedEdits.Guard(new OverwriteScope.WorkingTree(repo.Id), () =>
+            _bus.Broadcast(new ShowDialogMessage(onClose => new DiscardChangesDialog
+            {
+                Repo = repo,
+                Paths = [],
+                OnClose = onClose,
+            })));
     }
 
     private void DoPush()

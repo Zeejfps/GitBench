@@ -36,7 +36,7 @@ public sealed class RepoHeadStoreTests : IDisposable
 
         var statePath = Path.Combine(_root, "repos.json");
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
-        _head = new RepoHeadStore(_gitService, _bus, _loc, _dispatcher);
+        _head = new RepoHeadStore(_gitService, _bus, _loc, _dispatcher, new NoUnsavedEdits());
         _status = new RepoStatusStore(
             new IdleOperations(), _registry, _gitService, _bus, _gate, _dispatcher, _head, _head);
     }

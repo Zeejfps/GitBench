@@ -1,5 +1,6 @@
 using GitBench.App;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Editor;
 using GitBench.Features.Terminal;
 using GitBench.Git;
 using GitBench.Localization;
@@ -28,6 +29,8 @@ internal sealed record RemoveRepoDialog : Widget
         // shell running here dies with it. Said before the fact rather than discovered after.
         var terminals = ctx.Require<ITerminalSessionStore>();
         var endsAShell = terminals.HasLiveShell(Repo.Id);
+
+        var losing = RepoRemoval.UnsavedFiles(registry, ctx.Require<IDocumentStore>(), Repo.Id);
 
         return new Dialog
         {
@@ -59,7 +62,35 @@ internal sealed record RemoveRepoDialog : Widget
                         },
                     ]
                     : Array.Empty<IWidget>(),
+                .. losing.Count > 0
+                    ?
+                    [
+                        new Text
+                        {
+                            Value = s.ReposRepoRemoveUnsavedWarning(string.Join(", ", losing)),
+                            Wrap = TextWrap.Wrap,
+                            Color = Theme.Color(t => t.DialogFrame.WarningText),
+                        },
+                    ]
+                    : Array.Empty<IWidget>(),
             ],
         };
+    }
+}
+
+/// <summary>What removing a repository row costs that is written down nowhere else.</summary>
+internal static class RepoRemoval
+{
+    public static IReadOnlyList<string> UnsavedFiles(
+        IRepoRegistry registry, IDocumentStore documents, Guid repoId)
+    {
+        var cascade = registry.RemovalCascade(repoId);
+        if (cascade.Count == 0) return [];
+
+        var ids = cascade.Select(r => r.Id).ToHashSet();
+        return documents.Unsaved()
+            .Where(f => ids.Contains(f.RepoId))
+            .Select(f => UnsavedFileName.Of(registry, f))
+            .ToArray();
     }
 }

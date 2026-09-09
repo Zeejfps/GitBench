@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
@@ -103,15 +104,18 @@ internal sealed record FileBrowserTextBody : Widget
         content.Bind(browser.Preview, preview =>
         {
             if (preview is not FilePreview.Text text) return;
-            content.SetRenderState(ToRenderState(text));
-            content.SetDiagnostics(DiffDiagnosticOverlay.Empty);
+            content.SetRenderState(ToRenderState(text), Editable(browser, text));
+            // Recomputed rather than emptied. Saving a file re-reads it, which lands here for the
+            // file already on screen, and a server only speaks when it has something new to say —
+            // so blanking here drops what it already said until it happens to say it again.
+            content.SetDiagnostics(OverlayFor(languageServers, text.Path));
             languageServers?.FileShown(text.Path);
         });
 
         if (languageServers is not null)
-            content.Bind(languageServers.Diagnostics, diagnostics => content.SetDiagnostics(
-                browser.Preview.Value is FilePreview.Text shown && diagnostics.IsFor(shown.Path)
-                    ? new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items)
+            content.Bind(languageServers.Diagnostics, _ => content.SetDiagnostics(
+                browser.Preview.Value is FilePreview.Text shown
+                    ? OverlayFor(languageServers, shown.Path)
                     : DiffDiagnosticOverlay.Empty));
         // The find bar's hits, and the reveal that follows them. One slice carries both the list and
         // the cursor, so a step and a re-scan arrive here as the same kind of event.
@@ -146,7 +150,8 @@ internal sealed record FileBrowserTextBody : Widget
         {
             var input = ctx.Require<InputSystem>();
             var usages = new UsagesPopup(
-                ctx, definitions, browser, ctx.Require<IUiDispatcher>(), document);
+                ctx, definitions, browser, ctx.Require<IUiDispatcher>(), document,
+                ctx.Require<IFileTextSource>());
             content.Use(() => usages);
 
             content.UseController(input, () => new DefinitionProbeController(
@@ -249,6 +254,20 @@ internal sealed record FileBrowserTextBody : Widget
             subscriptions.Add(counts);
             return subscriptions;
         });
+
+    /// <summary>What the servers currently say about one path, or nothing where they are talking
+    /// about a different file — or where there are no servers at all.</summary>
+    private static DiffDiagnosticOverlay OverlayFor(ILanguageServerStore? servers, string path)
+    {
+        if (servers?.Diagnostics.Value is not { } diagnostics || !diagnostics.IsFor(path))
+            return DiffDiagnosticOverlay.Empty;
+        return new DiffDiagnosticOverlay(diagnostics.Path, diagnostics.Items);
+    }
+
+    /// <summary>The same file as something the reader can put a caret in, or null where it must
+    /// stay a viewer.</summary>
+    private static EditorBuffer? Editable(FileBrowserViewModel browser, FilePreview.Text text) =>
+        browser.Documents.Open(text.Path, text.Lines, text.WriteBack, text.Highlight);
 
     private static DiffRenderState.FullFile ToRenderState(FilePreview.Text text) =>
         new(

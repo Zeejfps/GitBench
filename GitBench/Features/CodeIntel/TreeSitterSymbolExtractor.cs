@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 
 using GitBench.Features.Diff;
@@ -9,7 +8,9 @@ namespace GitBench.Features.CodeIntel;
 
 internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
 {
-    public const int MaxFileBytes = 1024 * 1024;
+    /// <summary>Matches <c>FileContentLoader.MaxTextBytes</c>: every file the editor will open is
+    /// also parsed.</summary>
+    public const int MaxFileBytes = 2 * 1024 * 1024;
 
     private const string GrammarLibrary = "tree-sitter-grammars";
     private const string DefinitionCapturePrefix = "def.";
@@ -17,12 +18,9 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
     private const string BodyCapture = "body";
     private const string ExtentCapture = "extent";
 
-    private static readonly TimeSpan WholeFileBudget = TimeSpan.FromMilliseconds(750);
-
     private readonly Dictionary<CodeLanguage, CompiledLanguage>? _compiled;
     private readonly Action<string>? _log;
     private int _parseFailureLogged;
-    private int _budgetLogged;
 
     public TreeSitterSymbolExtractor(
         Action<string>? log = null,
@@ -75,11 +73,9 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         if (Encoding.UTF8.GetByteCount(normalized) > MaxFileBytes) return null;
         var utf8 = Encoding.UTF8.GetBytes(normalized);
 
-        var watch = Stopwatch.StartNew();
-        FileOutline? outline;
         try
         {
-            outline = compiled.Pool.Use(
+            return compiled.Pool.Use(
                 (compiled, normalized, utf8),
                 static (session, s) => Walk(session, s.compiled, s.normalized, s.utf8));
         }
@@ -88,14 +84,38 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
             LogOnce(ref _parseFailureLogged, $"Code intelligence failed to parse a {language} file: {error}");
             return null;
         }
+    }
 
-        if (watch.Elapsed <= WholeFileBudget) return outline;
+    /// <summary>A tree this extractor will keep across one open file's edits, or null for a language
+    /// it holds no query for.</summary>
+    internal MaintainedTree? Track(CodeLanguage language) =>
+        _compiled is not null && _compiled.TryGetValue(language, out var compiled)
+            ? new MaintainedTree(compiled.Pool)
+            : null;
 
-        LogOnce(
-            ref _budgetLogged,
-            $"Code intelligence exceeded its {WholeFileBudget.TotalMilliseconds:F0} ms budget " +
-            $"on a {utf8.Length} byte {language} file ({watch.ElapsedMilliseconds} ms).");
-        return null;
+    /// <summary>What a file declares, read off a tree already parsed for it — the incremental path,
+    /// where the tree is maintained across edits rather than built per call.</summary>
+    /// <param name="normalized">The file with its line endings already normalized — the text
+    /// <paramref name="utf8"/> encodes.</param>
+    internal FileOutline? Extract(CodeLanguage language, string normalized, byte[] utf8, SyntaxTree root)
+    {
+        ArgumentNullException.ThrowIfNull(normalized);
+        ArgumentNullException.ThrowIfNull(root);
+
+        if (_compiled is null || !_compiled.TryGetValue(language, out var compiled)) return null;
+        if (utf8.Length > MaxFileBytes) return null;
+
+        try
+        {
+            return compiled.Pool.Use(
+                (compiled, normalized, byteCount: utf8.Length, root),
+                static (session, s) => WalkTree(session, s.compiled, s.normalized, s.byteCount, s.root.RootNode));
+        }
+        catch (Exception error)
+        {
+            LogOnce(ref _parseFailureLogged, $"Code intelligence failed to parse a {language} file: {error}");
+            return null;
+        }
     }
 
     public void Dispose()
@@ -131,7 +151,12 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
     private static FileOutline? Walk(ParseSession session, CompiledLanguage compiled, string text, byte[] utf8)
     {
         using var tree = session.Parser.Parse(utf8);
+        return WalkTree(session, compiled, text, utf8.Length, tree.RootNode);
+    }
 
+    private static FileOutline? WalkTree(
+        ParseSession session, CompiledLanguage compiled, string text, int byteCount, Node root)
+    {
         var found = new List<Pending>();
         var seen = new HashSet<(uint Start, uint End)>();
 
@@ -139,7 +164,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
         // prose, a data blob — would otherwise pay to be measured for nothing.
         Utf8ToUtf16Offsets? offsets = null;
 
-        session.Cursor.ForEachMatch(compiled.Query, tree.RootNode, match =>
+        session.Cursor.ForEachMatch(compiled.Query, root, match =>
         {
             if (!compiled.TryReadDefinition(match, out var definition, out var kind)) return;
             if (!match.TryGetNode(compiled.NameCaptureId, out var name)) return;
@@ -158,7 +183,7 @@ internal sealed class TreeSitterSymbolExtractor : ISymbolExtractor, IDisposable
                 signatureEndLine = Math.Clamp((int)body.StartPoint.Row + 1, startLine, endLine);
             }
 
-            offsets ??= Utf8ToUtf16Offsets.For(text, utf8.Length);
+            offsets ??= Utf8ToUtf16Offsets.For(text, byteCount);
 
             found.Add(new Pending(
                 definition.StartByte,

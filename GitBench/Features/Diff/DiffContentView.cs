@@ -15,18 +15,67 @@ using ZGF.Gui.Desktop.Input;
 
 namespace GitBench.Features.Diff;
 
-/// <summary>
-/// Virtualized diff body. Vertical scroll, hit-test boilerplate, and visible-row culling
-/// live in a child <see cref="VirtualRowListView"/>; row flattening and per-row drawing live
-/// in the shared <see cref="DiffRowSet"/> / <see cref="DiffRowPainter"/>; this view keeps
-/// horizontal scroll (the widget is vertical-only), font-metric resolution, and the hunk
-/// hover chrome (outline + Stage/Unstage/Discard buttons). Emits normalized scroll-position
-/// and scale updates on both axes so an external scrollbar sync controller can drive the
-/// scrollbars.
-/// </summary>
 internal enum HunkAction { None, Stage, Unstage, Discard }
 
+/// <summary>What <see cref="DiffContentView"/> needs from whatever produced its rows.</summary>
+internal interface IDiffRowSource
+{
+    IReadOnlyList<DiffRow> Rows { get; }
+
+    /// <summary>The widest row in monospace cells, which the horizontal extent is sized from.</summary>
+    int MaxRowCells { get; }
+
+    /// <summary>Max line-number digit count across the gutters, for gutter width sizing.</summary>
+    int GutterDigits { get; }
+
+    /// <summary>One line-number gutter rather than the diff's old|new pair.</summary>
+    bool SingleGutter { get; }
+
+    /// <summary>Whether rows reserve the fold chevron column.</summary>
+    bool FoldColumn { get; }
+
+    /// <summary>Whether rows reserve the +/- glyph column.</summary>
+    bool GlyphColumn { get; }
+
+    /// <summary>The after-side file line a row stands for, or null where it stands for none.</summary>
+    FileLine? NewLineAt(RowIndex row);
+
+    /// <summary>Where to scroll for an after-side file line — its own row, or the closest numbered
+    /// one above it. Null when nothing precedes it either.</summary>
+    RowIndex? RowNearestNewLine(FileLine line);
+
+    /// <summary>Where a row sits, in terms that survive this stream being rebuilt.</summary>
+    DiffRowAnchor? AnchorAt(RowIndex row);
+
+    /// <summary>The row an anchor names here, or null when this stream does not have it.</summary>
+    RowIndex? RowAt(DiffRowAnchor anchor);
+
+    /// <summary>The text a collapsed fold swallowed after a row, or null on a stream that does not fold.</summary>
+    Func<RowIndex, string?>? HiddenText { get; }
+
+    /// <summary>The hunks these rows are grouped into, or null for a stream that has none.</summary>
+    IDiffHunkRows? Hunks { get; }
+}
+
+/// <summary>What a diff body is showing rows out of: a flattened render, or a document being edited.</summary>
+internal abstract record DiffBody(IDiffRowSource Rows)
+{
+    public sealed record Viewer(DiffRowSet Set) : DiffBody(Set);
+
+    public sealed record Edited(Features.Editor.EditorBuffer Buffer) : DiffBody(Buffer.Rows);
+}
+
+/// <summary>The hunk chrome a diff row stream carries: which hunk owns a row, and each hunk's row span.</summary>
+internal interface IDiffHunkRows
+{
+    IReadOnlyList<HunkRowRange> Ranges { get; }
+
+    /// <summary>The hunk owning a flattened row, or -1 for chrome rows.</summary>
+    int HunkIndexOf(int rowIndex);
+}
+
 internal sealed class DiffContentView : View, IScrollableContent, IDiffSelectionSurface,
+    IScrollScope, Features.Editor.IEditorSurface,
     Features.LanguageServers.IHoverSurface, Features.LanguageServers.IDefinitionSurface
 {
     private const float AssumedFontSize = FontSize.Body;
@@ -65,7 +114,15 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private DiffHunkButtonStyles _buttonStyles = ThemeStyles.Dark.DiffHunkButton;
 
     private DiffRenderState _renderState = new DiffRenderState.Placeholder("Select a file to view diff.");
-    private DiffRowSet _rowSet = DiffRowSet.Empty;
+    private DiffBody _body = new DiffBody.Viewer(DiffRowSet.Empty);
+
+    private IDiffRowSource RowSource => _body.Rows;
+
+    private Features.Editor.EditorBuffer? Document =>
+        _body is DiffBody.Edited edited ? edited.Buffer : null;
+    private float _caretPhase;
+    private bool _focused;
+    private DiffTextPos _lastCaret;
     private DiffDiagnosticOverlay _diagnostics = DiffDiagnosticOverlay.Empty;
     private DiffSearchOverlay _search = DiffSearchOverlay.Empty;
     // Whether the hits in hand were found in the file currently rendered. Resolved when either of
@@ -106,6 +163,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private readonly IMessageBus? _bus;
     private readonly DiffSelectionModel _selection = new();
     private readonly DiffSelectionController _selectionController;
+    private readonly Features.Editor.EditorController _editorController;
+    private readonly IClipboard? _clipboard;
+    private readonly Features.Editor.DocumentSaves? _saves;
 
     /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
     /// window's diff sets it: the assistant overlay is a child of that window, so an answer asked
@@ -159,11 +219,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
         AddChildToSelf(_list);
         _list.UseController(input, () => new VirtualRowListController(_list));
-        // Ordered: the hunk controller claims expander and button presses first, in the same
-        // capture pass, so a click on either never starts a text selection.
         this.UseController(input, () => new DiffMouseController(this), EventPhaseFilter.Capture);
-        _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
+        _clipboard = ctx.Get<IClipboard>();
+        _saves = Features.Editor.DocumentSaves.From(ctx);
+        _editorController = new Features.Editor.EditorController(this, input);
+        _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController);
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
+
+        if (ctx.Get<IFrameTicker>() is { } ticker) UseCaretBlink(ticker);
 
         this.BindThemed(theme, s =>
         {
@@ -199,7 +262,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         SetDirty();
     }
 
-    public void SetRenderState(DiffRenderState state)
+    public void SetRenderState(DiffRenderState state, Features.Editor.EditorBuffer? document)
     {
         // Capture the outgoing view's identity and position before rebuilding rows, so we can
         // preserve the reading position across a mode toggle and hold it across the async
@@ -208,7 +271,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var prevTopLine = TopVisibleNewLine();
         var prevScrollY = _list.ScrollY;
         var prevScrollX = _scrollX;
-        var prevRowCount = _rowSet.Rows.Count;
+        var remap = SelectionRemap();
 
         _renderState = state;
         _hoveredHunkIndex = -1;
@@ -222,7 +285,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         // a fresh model forces a recompute on next draw.
         _metricsResolved = false;
 
-        _rowSet = DiffRowSet.Build(state, _loc, FoldsFor(state), _usageLensRows);
+        _body = document is null
+            ? new DiffBody.Viewer(DiffRowSet.Build(state, _loc, FoldsFor(state), _usageLensRows))
+            : Opened(document, state);
         if (state is DiffRenderState.Loaded loaded)
         {
             _diffSide = loaded.Result.Side;
@@ -232,24 +297,37 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         {
             _diffSide = fullFile.Side;
         }
-        _gutterWidth = _rowSet.GutterDigits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
+        _gutterWidth = RowSource.GutterDigits * AssumedFontSize * FallbackMonoAdvanceRatio + 8f;
 
-        // Selection positions are row indices into the old row stream. A different file or a
-        // different row count (a gap expanded, the mode toggled) invalidates them. A same-shape
-        // re-emit — the async syntax highlight attaching — leaves them meaning what they meant.
         var (newPath, _) = DescribeState(state);
-        if (newPath != prevPath || _rowSet.Rows.Count != prevRowCount)
-            _selection.Clear();
+        if (newPath != prevPath) _selection.Clear();
+        else _selection.Remap(remap);
         if (newPath != prevPath) _pendingScrollLine = null;
         // A different file republishes its top line even when the number is unchanged: it is a
         // different declaration at line 1.
         if (newPath != prevPath) _topLinePublished = false;
 
         RefreshSearchScope();
-        _list.ItemCount = _rowSet.Rows.Count;
+        _list.ItemCount = RowSource.Rows.Count;
         _list.NotifyItemsChanged();
         ApplyScrollForTransition(state, prevPath, prevWasFullFile, prevTopLine, prevScrollY, prevScrollX);
+        _editorController.SyncIme();
         SetDirty();
+    }
+
+    private DiffBody Opened(Features.Editor.EditorBuffer document, DiffRenderState state)
+    {
+        var annotations = AnnotationsOf(state);
+        document.FoldExpanded = path => OnToggleFold?.Invoke(path);
+        // Through ApplyRead, not Apply: this render state was built from a read of the file on
+        // disk, so it describes whatever revision that read found — which is the revision the
+        // buffer was opened at only until someone types. Stamping it with the opening revision
+        // regardless refuses a re-read that is in fact current, and would overwrite a parse of the
+        // buffer with a parse of the file.
+        document.ApplyRead(new Features.Editor.EditorAnnotations(annotations?.Highlight, annotations?.NewSide));
+        document.SetFolds(FoldsFor(state));
+        document.UsageLensRows = _usageLensRows;
+        return new DiffBody.Edited(document);
     }
 
     /// <summary>
@@ -258,25 +336,38 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     /// above the viewport would silently move the reader onto a different line. This one re-anchors
     /// on the line they were reading instead.
     /// </summary>
-    /// <remarks>
-    /// The selection is cleared rather than remapped. <c>DiffTextPos</c> is a row index into the
-    /// current stream, so an anchor at row 40 means a different line the moment rows disappear
-    /// above it, and remapping anchors through the fold model is more work than folding.
-    /// </remarks>
     public void SetFoldState(FoldState folds)
     {
         _foldState = folds;
         if (_renderState is not DiffRenderState.FullFile) { SetDirty(); return; }
 
         var topLine = TopVisibleNewLine();
-        _rowSet = DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState), _usageLensRows);
-        _selection.Clear();
+        var remap = SelectionRemap();
+        if (Document is { } document) document.SetFolds(FoldsFor(_renderState));
+        else _body = new DiffBody.Viewer(
+            DiffRowSet.Build(_renderState, _loc, FoldsFor(_renderState), _usageLensRows));
+        _selection.Remap(remap);
         _hoveredFoldRow = -1;
         _hoveredLensRow = -1;
-        _list.ItemCount = _rowSet.Rows.Count;
+        _list.ItemCount = RowSource.Rows.Count;
         _list.NotifyItemsChanged();
         if (topLine is { } line) ScrollToNewLine(line, leadIn: 0);
+        _editorController.SyncIme();
         SetDirty();
+    }
+
+    /// <summary>How the selection's endpoints read once the rows are rebuilt. Named before anything
+    /// reshapes them: an editable projection folds and reparses in place.</summary>
+    private Func<DiffTextPos, DiffTextPos?> SelectionRemap()
+    {
+        var outgoing = RowSource;
+        var at = _selection.Anchor;
+        var anchor = outgoing.AnchorAt(at.Row);
+        var focus = outgoing.AnchorAt(_selection.Focus.Row);
+
+        return pos => (pos == at ? anchor : focus) is { } named && RowSource.RowAt(named) is { } row
+            ? new DiffTextPos(row, pos.Char)
+            : null;
     }
 
     // A fold set belongs to one file. Holding it past a change of path would fold line ranges the
@@ -357,11 +448,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // before metrics resolve or when no row from there down stands for a new-side line.
     public FileLine? TopVisibleNewLine()
     {
-        var count = _rowSet.Rows.Count;
+        var count = RowSource.Rows.Count;
         if (_lineHeight <= 0 || count == 0) return null;
         var topIndex = Math.Clamp(_list.VisibleRange().First, 0, count - 1);
         for (var i = topIndex; i < count; i++)
-            if (_rowSet.NewLineAt(new RowIndex(i)) is { } line) return line;
+            if (RowSource.NewLineAt(new RowIndex(i)) is { } line) return line;
         return null;
     }
 
@@ -381,6 +472,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private void RefreshSearchScope() =>
         _searchApplies = DescribeState(_renderState).Path is { } path && _search.IsFor(path);
 
+    /// <summary>Whether what was computed from the file as it was read still describes what is on
+    /// screen — the find bar's hits, and the server's diagnostics.</summary>
+    private bool ReadStillDescribesTheDocument => Document is not { ReadIsCurrent: false };
+
     /// <summary>
     /// Brings a hit into view on both axes, and only as far as it has to: stepping through hits
     /// that are already on screen must leave the text where the reader is reading it.
@@ -397,49 +492,27 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // the rows under it to be the ones its hit was found in.
     private void ApplyPendingSearchReveal()
     {
-        if (_pendingSearchReveal is not { } match || _lineHeight <= 0 || !_searchApplies) return;
+        if (_pendingSearchReveal is not { } match) return;
+        // Dropped rather than held: a hit found in text the document has since moved past names a
+        // line that has moved with it, and holding it reveals that line whenever editing stops.
+        if (!_searchApplies || !ReadStillDescribesTheDocument) { _pendingSearchReveal = null; return; }
+        if (_lineHeight <= 0) return;
         _pendingSearchReveal = null;
 
-        if (_rowSet.RowNearestNewLine(match.Line) is not { } row) return;
-        if (_rowSet.Rows[row.Value] is not DiffRow.Line line) return;
-        ScrollRowIntoView(row);
-        ScrollColumnsIntoView(line.Text, match);
+        if (RowSource.RowNearestNewLine(match.Line) is not { } row) return;
+        if (RowSource.Rows[row.Value] is not DiffRow.Line line) return;
+        if (!_list.TryGetRowRect(row.Value, out var rowRect)) return;
+        EnsureVisible(SpanRect(line.Text, match, rowRect));
     }
 
-    // Y grows upward here: a row is fully in view when its top is no higher than the viewport's top
-    // and its bottom no lower than the viewport's bottom.
-    private void ScrollRowIntoView(RowIndex row)
+    private RectF SpanRect(DiffLineText text, FileSearchMatch match, RectF rowRect)
     {
-        if (!_list.TryGetRowRect(row.Value, out var rect)) return;
-        var view = _list.Position;
-        if (rect.Top <= view.Top && rect.Bottom >= view.Bottom) return;
-
-        var delta = rect.Top > view.Top ? view.Top - rect.Top : view.Bottom - rect.Bottom;
-        SetScrollTarget(_list.ScrollY + delta);
-    }
-
-    // A hit far out on a long line is otherwise jumped to and still not on screen.
-    private void ScrollColumnsIntoView(DiffLineText text, FileSearchMatch match)
-    {
-        if (_monoAdvance <= 0) return;
-
         var origin = DiffRowPainter.LineTextOriginX(
-            _list.Position.Left, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn,
-            _rowSet.GlyphColumn);
+            _list.Position.Left - _scrollX, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn,
+            RowSource.GlyphColumn);
         var left = origin + DiffText.CellsBefore(text.Expanded, text.ToExpanded(match.Start).Value) * _monoAdvance;
         var right = origin + DiffText.CellsBefore(text.Expanded, text.ToExpanded(match.End).Value) * _monoAdvance;
-
-        // A few cells of run-up, so a hit brought into view reads as sitting inside a line rather
-        // than as being clipped by the edge it was dragged to.
-        var margin = RevealMarginCells * _monoAdvance;
-        var viewLeft = _list.Position.Left + _scrollX;
-        var viewRight = viewLeft + _list.Position.Width;
-
-        var prev = _scrollX;
-        if (left - margin < viewLeft) _scrollX -= viewLeft - left + margin;
-        else if (right + margin > viewRight) _scrollX += right - viewRight + margin;
-        ClampHorizontalScroll();
-        if (_scrollX != prev) NotifyScrollChanged(viewportFits: false);
+        return new RectF(left, rowRect.Bottom, Math.Max(0f, right - left), rowRect.Height);
     }
 
     private const int RevealMarginCells = 4;
@@ -463,7 +536,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public void ScrollToNewLine(FileLine line, int leadIn)
     {
         if (_lineHeight <= 0) return;
-        if (_rowSet.RowNearestNewLine(line) is not { } row) return;
+        if (RowSource.RowNearestNewLine(line) is not { } row) return;
         SetScrollTarget(ContentOffsetOf(Math.Max(0, row.Value - leadIn)));
     }
 
@@ -476,7 +549,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private float RowHeightAt(int rowIndex)
     {
         var height = _lineHeight > 0 ? _lineHeight : AssumedFontSize;
-        var rows = _rowSet.Rows;
+        var rows = RowSource.Rows;
         return rowIndex >= 0 && rowIndex < rows.Count ? DiffRowMetrics.HeightOf(rows[rowIndex], height) : height;
     }
 
@@ -499,12 +572,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_monoAdvance <= 0) return 0f;
         // Worst case across row kinds: line rows go gutter|gutter|glyph|text (one gutter in
         // full-file mode); banner rows are flush-left with horizontal padding. Take the max.
-        var gutters = _rowSet.SingleGutter ? _gutterWidth : _gutterWidth + _gutterWidth;
+        var gutters = RowSource.SingleGutter ? _gutterWidth : _gutterWidth + _gutterWidth;
         var lineWidth = DiffRowPainter.MarkerLaneWidth
-            + gutters + DiffRowPainter.FoldColumnWidthOf(_rowSet.FoldColumn)
-            + DiffRowPainter.GlyphColumnWidthOf(_rowSet.GlyphColumn)
-            + _rowSet.MaxRowCells * _monoAdvance + DiffRowPainter.BannerPaddingX;
-        var bannerWidth = DiffRowPainter.BannerPaddingX * 2 + _rowSet.MaxRowCells * _monoAdvance;
+            + gutters + DiffRowPainter.FoldColumnWidthOf(RowSource.FoldColumn)
+            + DiffRowPainter.GlyphColumnWidthOf(RowSource.GlyphColumn)
+            + RowSource.MaxRowCells * _monoAdvance + DiffRowPainter.BannerPaddingX;
+        var bannerWidth = DiffRowPainter.BannerPaddingX * 2 + RowSource.MaxRowCells * _monoAdvance;
         return Math.Max(lineWidth, bannerWidth);
     }
 
@@ -526,7 +599,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var measured = c.MeasureTextWidth("0", DiffRowPainter.MonoMetricsStyle);
         _monoAdvance = measured > 0 ? measured : AssumedFontSize * FallbackMonoAdvanceRatio;
         // Recompute gutter width from the real advance so it lines up with actual digits.
-        _gutterWidth = _rowSet.GutterDigits * _monoAdvance + 8f;
+        _gutterWidth = RowSource.GutterDigits * _monoAdvance + 8f;
         _painter.LineHeight = _lineHeight;
         _painter.MonoAdvance = _monoAdvance;
         _metricsResolved = true;
@@ -572,7 +645,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
                 DrawPlaceholder(c, pos, _loc.Strings.Value.DiffBinaryNotShown, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
-            case DiffRenderState.Loaded when _rowSet.Rows.Count == 0:
+            case DiffRenderState.Loaded when RowSource.Rows.Count == 0:
                 DrawPlaceholder(c, pos, _loc.Strings.Value.DiffNoChanges, _styles.PlaceholderText, z + 1);
                 NotifyScrollChanged(viewportFits: true);
                 return;
@@ -585,6 +658,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         ReassertPendingScroll();
         NotifyTopVisibleLine();
         _selectionController.Tick();
+        NoteCaretMoved();
+        // After the geometry above and before the child list draws its rows.
+        _editorController.SyncIme();
         NotifyScrollChanged(viewportFits: false);
     }
 
@@ -628,7 +704,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private void DrawDiffRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
     {
-        var rows = _rowSet.Rows;
+        var rows = RowSource.Rows;
         if (rowIndex < 0 || rowIndex >= rows.Count) return;
 
         // Apply horizontal scroll inside the widget's row rect. Vertical position comes
@@ -636,29 +712,42 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var rowLeft = rowRect.Left - _scrollX;
         var rowWidth = ContentWidth();
 
-        var hunkIndex = _rowSet.HunkIndexOf(rowIndex);
+        var hunkIndex = HunkIndexOf(rowIndex);
         var isHoveredHunk = hunkIndex >= 0 && hunkIndex == _hoveredHunkIndex;
         var showButtons = isHoveredHunk && rowIndex == ButtonRowFor(hunkIndex) && HasHunkButtons();
 
-        DiffRowSelection? selection = null;
-        if (rows[rowIndex] is DiffRow.Line line
-            && _selection.TryRowSpan(null, new RowIndex(rowIndex), line.Text.End, out var span))
-            selection = span;
+        var composing = ComposedOn(rowIndex);
+        var drawn = composing?.Line ?? rows[rowIndex];
 
-        _painter.DrawRow(c, rows[rowIndex], new DiffRowPaint(
-            rowLeft, rowRect.Bottom, rowWidth, _gutterWidth, _rowSet.SingleGutter,
+        DiffRowSelection? selection = null;
+        if (drawn is DiffRow.Line line
+            && _selection.TryRowSpan(null, new RowIndex(rowIndex), line.Text.End, out var span))
+            selection = composing is { } shift ? Shifted(span, shift) : span;
+
+        _painter.DrawRow(c, drawn, new DiffRowPaint(
+            rowLeft, rowRect.Bottom, rowWidth, _gutterWidth, RowSource.SingleGutter,
             ExpanderHovered: rowIndex == _hoveredExpanderRow,
             Viewport: _list.Position,
             Z: z,
             Selection: selection,
-            FoldColumn: _rowSet.FoldColumn,
+            FoldColumn: RowSource.FoldColumn,
             FoldHovered: rowIndex == _hoveredFoldRow,
-            Diagnostics: MarksOnRow(rowIndex),
-            GlyphColumn: _rowSet.GlyphColumn,
-            Link: LinkOnRow(rowIndex),
+            Diagnostics: composing is null ? MarksOnRow(rowIndex) : null,
+            GlyphColumn: RowSource.GlyphColumn,
+            Link: composing is null ? LinkOnRow(rowIndex) : null,
             Usages: UsagesOnRow(rowIndex),
             LensHovered: rowIndex == _hoveredLensRow,
-            Search: SearchOnRow(rowIndex)));
+            Search: composing is null ? SearchOnRow(rowIndex) : null));
+
+        if (composing is { } preedit) DrawPreeditUnderlines(c, preedit, rowLeft, rowRect, z + 3);
+
+        if (CaretRectOn(rowIndex, rowLeft, rowRect) is { } caret)
+            c.DrawRect(new DrawRectInputs
+            {
+                Position = caret,
+                Style = new RectStyle { BackgroundColor = _styles.Caret },
+                ZIndex = z + 7,
+            });
 
         if (isHoveredHunk)
             DrawHunkOutlineForRow(c, rowRect, rowIndex, hunkIndex, z + 5);
@@ -711,18 +800,24 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         {
             if (_usageLensRows == value) return;
             _usageLensRows = value;
-            SetRenderState(_renderState);
+            if (Document is not { } document) { SetRenderState(_renderState, null); return; }
+
+            var remap = SelectionRemap();
+            document.UsageLensRows = value;
+            _selection.Remap(remap);
+            _hoveredLensRow = -1;
+            ReconcileRows();
         }
     }
 
     // What a lens row has to say, or null on every other row and on a declaration nothing has been
     // asked about yet.
     private UsageLensState? UsagesOnRow(int rowIndex) =>
-        _rowSet.Rows[rowIndex] is DiffRow.Lens lens ? _usageLens.On(lens.At) : null;
+        RowSource.Rows[rowIndex] is DiffRow.Lens lens ? _usageLens.On(lens.At) : null;
 
     /// <summary>Every declaration carrying a usages row in the current render, in row order.
     /// Empty whenever the rows are off, and for a diff, which never grows them.</summary>
-    public IReadOnlyList<UsageLensTarget> UsageLensTargets() => TargetsIn(0, _rowSet.Rows.Count - 1);
+    public IReadOnlyList<UsageLensTarget> UsageLensTargets() => TargetsIn(0, RowSource.Rows.Count - 1);
 
     /// <summary>
     /// The declarations whose usages rows are on screen. What decides which questions are worth
@@ -737,7 +832,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private IReadOnlyList<UsageLensTarget> TargetsIn(int firstRow, int lastRow)
     {
-        var rows = _rowSet.Rows;
+        var rows = RowSource.Rows;
         var from = Math.Max(0, firstRow);
         var to = Math.Min(rows.Count - 1, lastRow);
         if (to < from) return [];
@@ -757,8 +852,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private CharRange? LinkOnRow(int rowIndex)
     {
         if (_definitionLink is not { } link) return null;
-        if (_rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
-        if (_rowSet.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine || fileLine != link.Line)
+        if (RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine || fileLine != link.Line)
             return null;
 
         var left = line.Text.ToExpanded(link.Start);
@@ -768,9 +863,9 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private IReadOnlyList<SearchMark>? SearchOnRow(int rowIndex)
     {
-        if (!_searchApplies) return null;
-        if (_rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
-        if (_rowSet.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
+        if (!_searchApplies || !ReadStillDescribesTheDocument) return null;
+        if (RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
 
         var marks = _search.MarksOn(fileLine, line.Text);
         return marks.Count == 0 ? null : marks;
@@ -778,18 +873,22 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private IReadOnlyList<DiagnosticMark>? MarksOnRow(int rowIndex)
     {
-        if (_diagnostics.IsEmpty) return null;
-        if (_rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
-        if (_rowSet.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
+        if (_diagnostics.IsEmpty || !ReadStillDescribesTheDocument) return null;
+        if (RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
 
         var marks = _diagnostics.MarksOn(fileLine, line.Text);
         return marks.Count == 0 ? null : marks;
     }
 
+    private int HunkIndexOf(int rowIndex) => RowSource.Hunks?.HunkIndexOf(rowIndex) ?? -1;
+
+    private IReadOnlyList<HunkRowRange>? HunkRanges => RowSource.Hunks?.Ranges;
+
     private int ButtonRowFor(int hunkIndex)
     {
-        if (hunkIndex < 0 || hunkIndex >= _rowSet.HunkRanges.Count) return -1;
-        return HunkButtonBar.ButtonRowFor(_rowSet.HunkRanges[hunkIndex]);
+        if (HunkRanges is not { } ranges || hunkIndex < 0 || hunkIndex >= ranges.Count) return -1;
+        return HunkButtonBar.ButtonRowFor(ranges[hunkIndex]);
     }
 
     private bool HasHunkButtons()
@@ -801,8 +900,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     private void DrawHunkOutlineForRow(ICanvas c, RectF rowRect, int rowIndex, int hunkIndex, int z)
     {
-        if (hunkIndex < 0 || hunkIndex >= _rowSet.HunkRanges.Count) return;
-        var range = _rowSet.HunkRanges[hunkIndex];
+        if (HunkRanges is not { } ranges || hunkIndex < 0 || hunkIndex >= ranges.Count) return;
+        var range = ranges[hunkIndex];
 
         // Left + right edges on every row of the hunk.
         var left = rowRect.Left;
@@ -866,7 +965,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (!listPos.ContainsPoint(point)) { SetHunkHover(-1, HunkAction.None); return; }
 
         var rowIndex = HitTestListRow(point);
-        var hunkIndex = _rowSet.HunkIndexOf(rowIndex);
+        var hunkIndex = HunkIndexOf(rowIndex);
         var button = HunkAction.None;
         if (hunkIndex >= 0)
             button = HitTestButton(point, hunkIndex);
@@ -904,22 +1003,22 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     // it swallowed — which is the one a reader reaches for, because it is the thing they can see.
     private (int Row, string Id)? HitTestFold(PointF point)
     {
-        if (!_rowSet.FoldColumn || _lineHeight <= 0) return null;
+        if (!RowSource.FoldColumn || _lineHeight <= 0) return null;
         var listPos = _list.Position;
         if (!listPos.ContainsPoint(point)) return null;
 
         var rowIndex = HitTestListRow(point);
         if (rowIndex < 0) return null;
-        if (_rowSet.Rows[rowIndex] is not DiffRow.Line { Fold: { } fold } line) return null;
+        if (RowSource.Rows[rowIndex] is not DiffRow.Line { Fold: { } fold } line) return null;
 
         var contentLeft = listPos.Left - _scrollX;
         if (fold.Chevron
-            && DiffRowPainter.FoldHit(point.X - contentLeft, _gutterWidth, _rowSet.SingleGutter))
+            && DiffRowPainter.FoldHit(point.X - contentLeft, _gutterWidth, RowSource.SingleGutter))
             return (rowIndex, fold.Id);
 
         if (!fold.Chip) return null;
         var textLeft = DiffRowPainter.LineTextOriginX(
-            contentLeft, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn, _rowSet.GlyphColumn);
+            contentLeft, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn, RowSource.GlyphColumn);
         var (chipX, chipWidth) = _painter.FoldChipBounds(line, textLeft);
         return point.X >= chipX && point.X <= chipX + chipWidth ? (rowIndex, fold.Id) : null;
     }
@@ -946,7 +1045,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (!_list.Position.ContainsPoint(point)) return null;
 
         var rowIndex = HitTestListRow(point);
-        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Lens lens) return null;
+        if (rowIndex < 0 || RowSource.Rows[rowIndex] is not DiffRow.Lens lens) return null;
         if (_usageLens.On(lens.At) is not { } state) return null;
 
         var (x, width) = _painter.LensBounds(lens, _painter.LensLabel(state), LineTextOriginX());
@@ -969,8 +1068,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     // Where a row's text starts, in the same content space every hit-test measures against.
     private float LineTextOriginX() => DiffRowPainter.LineTextOriginX(
-        _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn,
-        _rowSet.GlyphColumn);
+        _list.Position.Left - _scrollX, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn,
+        RowSource.GlyphColumn);
 
     private (int Row, int GapIndex, GapExpandDirection Dir)? HitTestExpander(PointF point)
     {
@@ -978,7 +1077,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var listPos = _list.Position;
         if (!listPos.ContainsPoint(point)) return null;
         var rowIndex = HitTestListRow(point);
-        if (rowIndex < 0 || DiffRowPainter.GapBarOf(_rowSet.Rows[rowIndex]) is not { } gap) return null;
+        if (rowIndex < 0 || DiffRowPainter.GapBarOf(RowSource.Rows[rowIndex]) is not { } gap) return null;
 
         var contentLeft = listPos.Left - _scrollX;
         if (DiffRowPainter.ExpanderHit(gap, point.X - contentLeft) is not { } dir) return null;
@@ -999,7 +1098,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (!listPos.ContainsPoint(point)) return false;
 
         var rowIndex = HitTestListRow(point);
-        var hunkIndex = _rowSet.HunkIndexOf(rowIndex);
+        var hunkIndex = HunkIndexOf(rowIndex);
         if (hunkIndex < 0) return false;
 
         var button = HitTestButton(point, hunkIndex);
@@ -1036,26 +1135,305 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             Math.Clamp(point.X, pos.Left, pos.Right),
             Math.Clamp(point.Y, pos.Bottom, pos.Top)));
         if (index >= 0) return index;
-        return _list.TryGetRowRect(0, out var first) && point.Y > first.Top ? 0 : _rowSet.Rows.Count - 1;
+        return _list.TryGetRowRect(0, out var first) && point.Y > first.Top ? 0 : RowSource.Rows.Count - 1;
+    }
+
+    // ---- caret ----
+
+    private const float CaretWidth = 2f;
+
+    private const float CaretBlinkSeconds = 1.06f;
+
+    private bool HasCaret =>
+        Document != null && _focused && _selection.IsActive && _monoAdvance > 0;
+
+    private bool CaretDrawn => HasCaret && _caretPhase < CaretBlinkSeconds / 2f;
+
+    Features.Editor.EditorBuffer? Features.Editor.IEditorSurface.Editor => Document;
+    DiffSelectionModel Features.Editor.IEditorSurface.Selection => _selection;
+    object? Features.Editor.IEditorSurface.SelectionScope => null;
+    void Features.Editor.IEditorSurface.RequestRedraw() => SetDirty();
+    bool Features.Editor.IEditorSurface.CopySelection() => _selectionController.Copy();
+    bool Features.Editor.IEditorSurface.SelectAllText() => _selectionController.SelectAll();
+    string? Features.Editor.IEditorSurface.ClipboardText() => _clipboard?.GetText();
+
+    void Features.Editor.IEditorSurface.RequestSave()
+    {
+        if (Document is { } editor) _saves?.Save(editor.Path, editor.Document, editor.Encoding);
+    }
+
+    void Features.Editor.IEditorSurface.RowsChanged() => ReconcileRows();
+
+    Features.Editor.ImeCaret Features.Editor.IEditorSurface.Caret =>
+        HasCaret
+            ? new Features.Editor.ImeCaret.At(_selection.Focus, CaretRect())
+            : Features.Editor.ImeCaret.Nowhere;
+
+    private void ReconcileRows()
+    {
+        if (RowSource.Rows.Count != _list.ItemCount)
+        {
+            _list.ItemCount = RowSource.Rows.Count;
+            _list.NotifyItemsChanged();
+        }
+
+        var advance = _monoAdvance > 0 ? _monoAdvance : AssumedFontSize * FallbackMonoAdvanceRatio;
+        _gutterWidth = RowSource.GutterDigits * advance + 8f;
+        SetDirty();
+    }
+
+    int Features.Editor.IEditorSurface.PageRows =>
+        _lineHeight <= 0 ? 1 : Math.Max(1, (int)(_list.Position.Height / _lineHeight) - 1);
+
+    void Features.Editor.IEditorSurface.RevealCaret()
+    {
+        // Before the rect is measured: a caret steered into a collapsed declaration opens it.
+        ReconcileRows();
+        if (CaretRect() is { } rect) EnsureVisible(rect);
+    }
+
+    /// <summary>Brings a rect of the drawn content into view on both axes, and only as far as it
+    /// has to, in the coordinates the rect was drawn in.</summary>
+    public void EnsureVisible(RectF rect)
+    {
+        var view = _list.Position;
+        if (_lineHeight > 0 && view.Height > 0)
+        {
+            if (rect.Top > view.Top) SetScrollTarget(_list.ScrollY + view.Top - rect.Top);
+            else if (rect.Bottom < view.Bottom) SetScrollTarget(_list.ScrollY + view.Bottom - rect.Bottom);
+        }
+
+        if (_monoAdvance <= 0 || view.Width <= 0) return;
+
+        var margin = RevealMarginCells * _monoAdvance;
+        var prev = _scrollX;
+        if (rect.Left - margin < view.Left) _scrollX -= view.Left - rect.Left + margin;
+        else if (rect.Right + margin > view.Right) _scrollX += rect.Right - view.Right + margin;
+        ClampHorizontalScroll();
+        if (_scrollX == prev) return;
+        SetDirty();
+        NotifyScrollChanged(viewportFits: false);
+    }
+
+    private RectF? CaretRectOn(int rowIndex, float rowLeft, RectF rowRect) =>
+        CaretDrawn && _selection.Focus.Row.Value == rowIndex
+            ? CaretRectAt(rowIndex, rowLeft, rowRect)
+            : null;
+
+    private RectF? CaretRect()
+    {
+        if (!HasCaret) return null;
+        var row = _selection.Focus.Row.Value;
+        return _list.TryGetRowRect(row, out var rowRect)
+            ? CaretRectAt(row, _list.Position.Left - _scrollX, rowRect)
+            : null;
+    }
+
+    private RectF? CaretRectAt(int rowIndex, float rowLeft, RectF rowRect)
+    {
+        if (rowIndex < 0 || rowIndex >= RowSource.Rows.Count) return null;
+        var composing = ComposedOn(rowIndex);
+        if ((composing?.Line ?? RowSource.Rows[rowIndex]) is not DiffRow.Line line) return null;
+
+        var column = composing?.Caret ?? _selection.Focus.Char;
+        var origin = DiffRowPainter.LineTextOriginX(
+            rowLeft, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn, RowSource.GlyphColumn);
+        var cells = DiffText.CellsBefore(line.Text.Expanded, column.Value);
+        return new RectF(origin + cells * _monoAdvance, rowRect.Bottom, CaretWidth, rowRect.Height);
+    }
+
+    // ---- composition ----
+
+    private const float PreeditUnderlineInset = 1f;
+    private const float PreeditUnderlineThickness = 1f;
+    private const float PreeditFocusedUnderlineThickness = 2f;
+
+    /// <summary>The caret's row with the in-flight composition spliced into it, and the columns
+    /// everything that measures it needs.</summary>
+    private sealed record ComposedRow(
+        int Row,
+        DiffLineText Source,
+        Features.Editor.ImeComposition Of,
+        DiffRow.Line Line,
+        ExpandedColumn Start,
+        ExpandedColumn End,
+        ExpandedColumn Caret,
+        int RawStart);
+
+    private ComposedRow? _composed;
+
+    private ComposedRow? ComposedOn(int rowIndex) =>
+        Composed() is { } composed && composed.Row == rowIndex ? composed : null;
+
+    private ComposedRow? Composed()
+    {
+        if (_editorController.Composition is not { } composition)
+        {
+            _composed = null;
+            return null;
+        }
+
+        var rows = RowSource.Rows;
+        var row = composition.At.Row.Value;
+        if (row < 0 || row >= rows.Count || rows[row] is not DiffRow.Line line) return null;
+
+        if (_composed is { } cached
+            && cached.Row == row
+            && ReferenceEquals(cached.Source, line.Text)
+            && cached.Of == composition)
+            return cached;
+
+        return _composed = Splice(row, line, composition);
+    }
+
+    private static ComposedRow Splice(int row, DiffRow.Line line, Features.Editor.ImeComposition composition)
+    {
+        var preedit = composition.Preedit.Text;
+        var raw = line.Text.Raw;
+        var at = Math.Clamp(line.Text.ToRaw(composition.At.Char, TabEdge.Before).Value, 0, raw.Length);
+        var text = DiffLineText.Of(string.Concat(raw.AsSpan(0, at), preedit, raw.AsSpan(at)));
+
+        var start = text.ToExpanded(new RawColumn(at));
+        var end = text.ToExpanded(new RawColumn(at + preedit.Length));
+        var caret = text.ToExpanded(
+            new RawColumn(at + Math.Clamp(composition.Preedit.Caret, 0, preedit.Length)));
+
+        return new ComposedRow(
+            row, line.Text, composition,
+            line with { Text = text, Spans = Shifted(line.Spans, start.Value, end.Value - start.Value) },
+            start, end, caret, at);
+    }
+
+    private static IReadOnlyList<TokenSpan>? Shifted(IReadOnlyList<TokenSpan>? spans, int at, int width)
+    {
+        if (spans is not { Count: > 0 } || width <= 0) return spans;
+
+        var shifted = new TokenSpan[spans.Count];
+        for (var i = 0; i < spans.Count; i++)
+        {
+            var span = spans[i];
+            var start = span.Start >= at ? span.Start + width : span.Start;
+            var stop = span.Start + span.Length > at ? span.Start + span.Length + width : span.Start + span.Length;
+            shifted[i] = span with { Start = start, Length = Math.Max(0, stop - start) };
+        }
+        return shifted;
+    }
+
+    private static DiffRowSelection Shifted(in DiffRowSelection span, ComposedRow composing)
+    {
+        var at = composing.Start.Value;
+        var width = composing.End.Value - at;
+        return span with
+        {
+            StartChar = new ExpandedColumn(
+                span.StartChar.Value >= at ? span.StartChar.Value + width : span.StartChar.Value),
+            EndChar = new ExpandedColumn(
+                span.EndChar.Value > at ? span.EndChar.Value + width : span.EndChar.Value),
+        };
+    }
+
+    private void DrawPreeditUnderlines(ICanvas c, ComposedRow composing, float rowLeft, RectF rowRect, int z)
+    {
+        var expanded = composing.Line.Text.Expanded;
+        var origin = DiffRowPainter.LineTextOriginX(
+            rowLeft, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn, RowSource.GlyphColumn);
+        var y = rowRect.Bottom + PreeditUnderlineInset;
+
+        var blocks = composing.Of.Preedit.Blocks;
+        if (blocks.Count == 0)
+        {
+            DrawPreeditRule(c, expanded, origin, y, composing.Start, composing.End,
+                PreeditUnderlineThickness, z);
+            return;
+        }
+
+        for (var i = 0; i < blocks.Count; i++)
+        {
+            var block = blocks[i];
+            var text = composing.Line.Text;
+            var from = text.ToExpanded(new RawColumn(composing.RawStart + block.Start));
+            var to = text.ToExpanded(new RawColumn(composing.RawStart + block.Start + block.Length));
+            DrawPreeditRule(c, expanded, origin, y, from, to,
+                i == composing.Of.Preedit.FocusedBlock
+                    ? PreeditFocusedUnderlineThickness
+                    : PreeditUnderlineThickness,
+                z);
+        }
+    }
+
+    private void DrawPreeditRule(
+        ICanvas c, string expanded, float origin, float y,
+        ExpandedColumn from, ExpandedColumn to, float thickness, int z)
+    {
+        var left = origin + DiffText.CellsBefore(expanded, from.Value) * _monoAdvance;
+        var right = origin + DiffText.CellsBefore(expanded, to.Value) * _monoAdvance;
+        if (right <= left) return;
+
+        c.DrawLine(new DrawLineInputs
+        {
+            Start = new PointF(left, y),
+            End = new PointF(right, y),
+            Thickness = thickness,
+            Color = _styles.LineText,
+            ZIndex = z,
+        });
+    }
+
+    private void NoteCaretMoved()
+    {
+        if (!HasCaret) { _caretPhase = 0f; return; }
+        if (_selection.Focus == _lastCaret) return;
+        _lastCaret = _selection.Focus;
+        _caretPhase = 0f;
+    }
+
+    private void UseCaretBlink(IFrameTicker ticker)
+    {
+        var tick = new Action<float>(AdvanceCaretBlink);
+        this.Use(() =>
+        {
+            ticker.Add(tick);
+            var subscriptions = new SubscriptionGroup();
+            subscriptions.Add(() => ticker.Remove(tick));
+            return subscriptions;
+        });
+    }
+
+    private void AdvanceCaretBlink(float dt)
+    {
+        if (!HasCaret) return;
+        var wasDrawn = CaretDrawn;
+        _caretPhase = (_caretPhase + dt) % CaretBlinkSeconds;
+        if (CaretDrawn != wasDrawn) SetDirty();
     }
 
     // ---- text selection ----
 
     // One file, so every position shares the single implicit scope: null.
     DiffSelectionModel IDiffSelectionSurface.Selection => _selection;
+
     RectF IDiffSelectionSurface.SelectionViewport => _list.Position;
-    IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) => _rowSet.Rows;
+    IReadOnlyList<DiffRow>? IDiffSelectionSurface.RowsOf(object? scope) => RowSource.Rows;
     Func<RowIndex, string?>? IDiffSelectionSurface.HiddenTextOf(object? scope) =>
-        _rowSet.FoldColumn ? _rowSet.HiddenAfter : null;
+        RowSource.HiddenText;
     void IDiffSelectionSurface.ScrollBy(float dy) => _list.SetScrollY(_list.ScrollY + dy);
     void IDiffSelectionSurface.RequestRedraw() => SetDirty();
+
+    void IDiffSelectionSurface.FocusChanged(bool focused)
+    {
+        if (_focused == focused) return;
+        _focused = focused;
+        _caretPhase = 0f;
+        _editorController.SyncIme();
+        if (Document != null) SetDirty();
+    }
 
     bool IDiffSelectionSurface.ShowSelectionMenu(PointF point)
     {
         if (!AssistantActions || _bus is null) return false;
         if (DescribeState(_renderState).Path is not { } path) return false;
         if (DiffSelectionQuote.Build(
-                _rowSet.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
+                RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
             return false;
 
         return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, _bus, quote)) != null;
@@ -1074,7 +1452,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (HitTestFold(point) != null) return true;
         if (HitTestLens(point) != null) return true;
         if (!HasHunkButtons()) return false;
-        var hunkIndex = _rowSet.HunkIndexOf(HitTestListRow(point));
+        var hunkIndex = HunkIndexOf(HitTestListRow(point));
         return hunkIndex >= 0 && HitTestButton(point, hunkIndex) != HunkAction.None;
     }
 
@@ -1082,10 +1460,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_lineHeight <= 0 || !_list.Position.ContainsPoint(point)) return null;
         var rowIndex = HitTestListRow(point);
-        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (rowIndex < 0 || RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
         return new DiffTextHit(
-            null, new DiffTextPos(new RowIndex(rowIndex), CharIndexAt(line.Text.Expanded, point.X)));
+            null, SnapToCaret(new DiffTextPos(new RowIndex(rowIndex), CharIndexAt(line.Text.Expanded, point.X))));
     }
+
+    private DiffTextPos SnapToCaret(DiffTextPos pos) => Document?.Snap(pos) ?? pos;
 
     /// <summary>
     /// The place in the file under a pixel: a line as the file counts them, and an offset into that
@@ -1129,8 +1509,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_lineHeight <= 0 || !_list.Position.ContainsPoint(point)) return null;
 
         var rowIndex = HitTestListRow(point);
-        if (rowIndex < 0 || _rowSet.Rows[rowIndex] is not DiffRow.Line line) return null;
-        if (_rowSet.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
+        if (rowIndex < 0 || RowSource.Rows[rowIndex] is not DiffRow.Line line) return null;
+        if (RowSource.NewLineAt(new RowIndex(rowIndex)) is not { } fileLine) return null;
 
         var column = line.Text.ToRaw(CharIndexAt(line.Text.Expanded, point.X), TabEdge.Before);
         return (line.Text, new FilePositionHit(fileLine, column));
@@ -1138,12 +1518,13 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     DiffTextHit? IDiffSelectionSurface.ClampToScope(PointF point, object? scope)
     {
-        if (_lineHeight <= 0 || _rowSet.Rows.Count == 0) return null;
+        if (_lineHeight <= 0 || RowSource.Rows.Count == 0) return null;
         var rowIndex = DragRowIndexAt(point);
         // A drag crossing a banner or a hunk bar keeps extending through it; those rows carry no
         // selectable text, so they contribute nothing to the copy.
-        var text = _rowSet.Rows[rowIndex] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
-        return new DiffTextHit(null, new DiffTextPos(new RowIndex(rowIndex), CharIndexAt(text, point.X)));
+        var text = RowSource.Rows[rowIndex] is DiffRow.Line line ? line.Text.Expanded : string.Empty;
+        return new DiffTextHit(
+            null, SnapToCaret(new DiffTextPos(new RowIndex(rowIndex), CharIndexAt(text, point.X))));
     }
 
     private ExpandedColumn CharIndexAt(string text, float x) =>
@@ -1155,8 +1536,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     {
         if (_monoAdvance <= 0) return 0f;
         var origin = DiffRowPainter.LineTextOriginX(
-            _list.Position.Left - _scrollX, _gutterWidth, _rowSet.SingleGutter, _rowSet.FoldColumn,
-            _rowSet.GlyphColumn);
+            _list.Position.Left - _scrollX, _gutterWidth, RowSource.SingleGutter, RowSource.FoldColumn,
+            RowSource.GlyphColumn);
         return (x - origin) / _monoAdvance;
     }
 

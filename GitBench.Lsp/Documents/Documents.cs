@@ -152,11 +152,7 @@ public abstract record ReferenceAnswer
     public sealed record Sites(IReadOnlyList<DefinitionTarget> Items) : ReferenceAnswer;
 }
 
-/// <summary>
-/// What the session needs from a running server, and nothing more. There is deliberately no way to
-/// send an edit: the pane is read-only, the server reads the file from disk, and a method that
-/// does not exist cannot be called by mistake.
-/// </summary>
+/// <summary>What the session needs from a running server, and nothing more.</summary>
 public interface ILanguageClient
 {
     /// <summary>Whether any configured server claims this language. False is the whole cost of the

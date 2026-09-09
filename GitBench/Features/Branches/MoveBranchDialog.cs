@@ -3,7 +3,6 @@ using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
-using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
@@ -31,9 +30,8 @@ internal sealed record MoveBranchDialog : Widget
         var vm = new MoveBranchDialogViewModel(
             new MoveBranchRequest(Repo, BranchName, Sha),
             ctx.Require<IGitBranchOperations>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<IRepoHeadStore>());
+            ctx.Require<IRepoHeadStore>(),
+            ctx.Localization());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
@@ -42,8 +40,7 @@ internal sealed record MoveBranchDialog : Widget
             OnClose = OnClose,
             ViewModel = vm,
             Width = DialogFrame.WidthWide,
-            Action = (s.BranchesMoveAction, DialogButtonRole.Destructive),
-            Command = vm.Move,
+            Action = (s.BranchesMoveAction, DialogButtonRole.Destructive, vm.Move),
             ConfirmKeys = true,
             Body =
             [

@@ -1,5 +1,4 @@
 using GitBench.Features.Diff;
-using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using GitBench.Lsp;
 using GitBench.Lsp.Configuration;
@@ -10,19 +9,26 @@ namespace GitBench.Features.LanguageServers;
 
 internal sealed class LanguageServerConnection : ILanguageServerProcess, ILanguageClient
 {
+    /// <summary>How long the text has to sit still before the server is told about it again.</summary>
+    private static readonly TimeSpan ResyncDelay = TimeSpan.FromMilliseconds(500);
+
     private readonly ILanguageServerSession _server;
     private readonly LanguageServerEntry _entry;
     private readonly AskAgainPolicy _retry;
     private readonly Func<TimeSpan, CancellationToken, Task> _wait;
     private readonly Action<Action> _post;
+    private readonly IFileTextSource _files;
     private readonly PreviewSession _session;
     private readonly CancellationTokenSource _closing = new();
     private readonly Task<string?> _handshake;
     private readonly object _gate = new();
+    private readonly SemaphoreSlim _previewing = new(1, 1);
 
     private Action<ServerExit>? _exited;
     private ServerExit? _ending;
     private int _disposed;
+    private int _stale;
+    private int _resyncs;
 
     public LanguageServerConnection(
         ILanguageServerSession server,
@@ -30,17 +36,20 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess, ILangua
         TimeSpan handshakeTimeout,
         AskAgainPolicy? retry = null,
         Func<TimeSpan, CancellationToken, Task>? wait = null,
-        Action<Action>? post = null)
+        Action<Action>? post = null,
+        IFileTextSource? files = null)
     {
         _server = server;
         _entry = request.Entry;
         _retry = retry ?? AskAgainPolicy.Default;
         _wait = wait ?? Task.Delay;
         _post = post ?? (action => action());
+        _files = files ?? FilesOnDisk.Instance;
 
         server.ReadinessChanged += OnReadinessChanged;
         server.Exited += OnExited;
         server.DiagnosticsPublished += OnDiagnosticsPublished;
+        _files.Changed += OnFileTextChanged;
         _session = new PreviewSession(this, BoundaryOf(request.RepoRoot));
         _session.StateChanged += state => DocumentChanged?.Invoke(state);
         _handshake = HandshakeAsync(handshakeTimeout);
@@ -228,6 +237,7 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess, ILangua
         _server.ReadinessChanged -= OnReadinessChanged;
         _server.Exited -= OnExited;
         _server.DiagnosticsPublished -= OnDiagnosticsPublished;
+        _files.Changed -= OnFileTextChanged;
         lock (_gate) _exited = null;
         DocumentChanged = null;
         _closing.Cancel();
@@ -261,30 +271,66 @@ internal sealed class LanguageServerConnection : ILanguageServerProcess, ILangua
         return failure;
     }
 
+    /// <summary>
+    /// Puts the file in front of the server before it is asked about it, and keeps what the server
+    /// holds equal to what the reader is looking at.
+    /// </summary>
     private async Task<bool> EnsurePreviewedAsync(string absolutePath, CancellationToken cancel)
     {
         var uri = DocumentUri.OfFile(absolutePath);
-        if (_session.State is DocumentState.Open open && open.Uri == uri) return true;
+        if (Showing(uri) && Volatile.Read(ref _stale) == 0) return true;
 
-        string text;
+        await _previewing.WaitAsync(cancel).ConfigureAwait(false);
         try
         {
-            var info = new FileInfo(absolutePath);
-            if (!info.Exists) return false;
-            if (info.Length > FileContentLoader.MaxTextBytes)
+            Volatile.Write(ref _stale, 0);
+            var showing = Showing(uri);
+            switch (await _files.ReadAsync(absolutePath, cancel).ConfigureAwait(false))
             {
-                _session.Preview(new PreviewFile(uri, _entry.Language, PreviewContent.Truncated));
-                return false;
+                case CurrentText.Complete complete:
+                    _session.Preview(
+                        new PreviewFile(uri, _entry.Language, PreviewContent.Whole(complete.Text)));
+                    return _session.State is DocumentState.Open;
+                case CurrentText.CutShort:
+                    _session.Preview(new PreviewFile(uri, _entry.Language, PreviewContent.Truncated));
+                    return false;
+                case CurrentText.Unavailable:
+                    return showing;
+                case var other:
+                    throw new NotSupportedException($"unhandled file text {other.GetType().Name}");
             }
-            text = await File.ReadAllTextAsync(absolutePath, cancel).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        finally
         {
-            return false;
+            _previewing.Release();
         }
+    }
 
-        _session.Preview(new PreviewFile(uri, _entry.Language, PreviewContent.Whole(text)));
-        return _session.State is DocumentState.Open;
+    private bool Showing(DocumentUri uri) =>
+        _session.State is DocumentState.Open open && open.Uri == uri;
+
+    private void OnFileTextChanged(string absolutePath)
+    {
+        var uri = DocumentUri.OfFile(absolutePath);
+        if (!Showing(uri)) return;
+
+        Volatile.Write(ref _stale, 1);
+        var generation = Interlocked.Increment(ref _resyncs);
+        _ = ResyncAsync(absolutePath, generation);
+    }
+
+    /// <summary>Reopens the document against the text as it now stands, once the edits stop.</summary>
+    private async Task ResyncAsync(string absolutePath, int generation)
+    {
+        try
+        {
+            await _wait(ResyncDelay, _closing.Token).ConfigureAwait(false);
+            if (Volatile.Read(ref _resyncs) != generation) return;
+            await EnsurePreviewedAsync(absolutePath, _closing.Token).ConfigureAwait(false);
+        }
+        catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException)
+        {
+        }
     }
 
     private void OnDiagnosticsPublished(PublishedDiagnostics published) =>

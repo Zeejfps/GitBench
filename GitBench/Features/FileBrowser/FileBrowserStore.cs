@@ -1,4 +1,5 @@
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Messages;
@@ -41,6 +42,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
     private readonly ISymbolExtractor _extractor;
     private readonly IMessageBus _bus;
     private readonly IUiDispatcher _dispatcher;
+    private readonly IDocumentStore _documents;
 
     private readonly Dictionary<Guid, FileBrowserViewModel> _browsers = new();
     private readonly State<FileBrowserViewModel?> _active = new(null);
@@ -57,7 +59,8 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         IFileSystemReader files,
         ISymbolExtractor extractor,
         IMessageBus bus,
-        IUiDispatcher dispatcher)
+        IUiDispatcher dispatcher,
+        IDocumentStore documents)
     {
         _registry = registry;
         _git = git;
@@ -65,6 +68,7 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
         _extractor = extractor;
         _bus = bus;
         _dispatcher = dispatcher;
+        _documents = documents;
     }
 
     public IReadable<FileBrowserViewModel?> Active => _active;
@@ -104,10 +108,34 @@ internal sealed class FileBrowserStore : IFileBrowserStore, IHostedService, IDis
             _extractor,
             _dispatcher,
             _registry.GetFileBrowserUi(repoId),
-            state => _registry.SetFileBrowserUi(repoId, state));
+            state => _registry.SetFileBrowserUi(repoId, state),
+            _documents.For(repoId),
+            AskBeforeDiscarding,
+            AskBeforeReloading);
         _browsers[repo.Id] = browser;
         return browser;
     }
+
+    /// <summary>Puts the "these edits are not on disk" question on screen, and runs the close only
+    /// if it is answered.</summary>
+    private void AskBeforeDiscarding(IReadOnlyList<string> files, Action close) =>
+        _bus.Broadcast(new ShowDialogMessage(onClose => new UnsavedChangesDialog
+        {
+            Files = files,
+            OnClose = onClose,
+            OnConfirm = close,
+        }));
+
+    /// <summary>Puts the "these files moved on disk under what you typed" question on screen, and
+    /// runs the reload only if it is chosen.</summary>
+    private void AskBeforeReloading(IReadOnlyList<string> files, Action reload) =>
+        _bus.Broadcast(new ShowDialogMessage(onClose => new UnsavedChangesDialog
+        {
+            Files = files,
+            OnClose = onClose,
+            OnConfirm = reload,
+            Kind = UnsavedChangesKind.ChangedOnDisk,
+        }));
 
     private void DropClosedRepos()
     {

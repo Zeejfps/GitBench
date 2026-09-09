@@ -1,4 +1,4 @@
-using GitBench.Features.FileBrowser;
+﻿using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using Xunit;
 
@@ -51,7 +51,10 @@ public class FileBrowserRenderMarkdownTests : IDisposable
         new UnparsedFiles(),
         _dispatcher,
         restored,
-        _persisted.Add);
+        _persisted.Add,
+        TestDocuments.ForOneRepo(),
+        TestDocuments.Discard,
+            TestDocuments.KeepEdits);
 
     private sealed class EmptyFileSystem : IFileSystemReader
     {

@@ -12,8 +12,8 @@ internal sealed class LspFixture : IAsyncDisposable
     public static readonly TimeSpan Budget = TimeSpan.FromSeconds(5);
     public static readonly DocumentUri SomeFile = DocumentUri.Parse("file:///repo/src/main.rs");
 
-    public LspFixture(LspFrameLimits? limits = null) =>
-        Connection = LspConnection.Start(Server.ClientChannel, Client, Clock, limits);
+    public LspFixture(LspFrameLimits? limits = null, ILspTrace? trace = null) =>
+        Connection = LspConnection.Start(Server.ClientChannel, Client, Clock, limits, trace);
 
     public ScriptedLspServer Server { get; } = new();
 

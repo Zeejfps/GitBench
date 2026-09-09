@@ -4,8 +4,8 @@ using GitBench.Lsp.Documents;
 namespace GitBench.Lsp.Lifecycle;
 
 /// <summary>
-/// What a caller may ask a server that is already running: the opening exchange, a document to read
-/// from disk, and a question about a position in it.
+/// What a caller may ask a server that is already running: the opening exchange, a document to
+/// hold, and a question about a position in it.
 /// </summary>
 /// <remarks>
 /// Separate from <see cref="ILanguageServerProcess"/>, which is all the supervisor needs, because
@@ -21,7 +21,6 @@ public interface ILanguageServerQuestions
 
     ServerCapabilities? Capabilities { get; }
 
-    /// <summary>Tells the server about a file, at the text on disk.</summary>
     Task OpenAsync(
         DocumentUri uri, LanguageId language, DocumentVersion version, string text, CancellationToken cancel);
 

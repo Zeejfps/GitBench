@@ -51,7 +51,7 @@ public sealed class AssistantRemoteToolsTests : IDisposable
     }
 
     private AssistantWriteSurface Surface() =>
-        new(_dispatcher, _bus, _registry, new SilentCommitEditor(), _operations);
+        new(_dispatcher, _bus, _registry, new SilentCommitEditor(), _operations, new TestDocuments.Empty());
 
     public void Dispose()
     {

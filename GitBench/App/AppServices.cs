@@ -3,6 +3,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
+using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Features.LanguageServers;
@@ -69,8 +70,11 @@ internal static class AppServices
         context.AddService(enableUntrackedCache);
 
         var crashLogPath = AppPaths.AppDataPath("crash.log");
-        context.AddSingleton<ISymbolExtractor>(_ =>
+        // Registered under its own type as well as the interface: the document annotator keeps a
+        // parse tree between edits, which is a seam only the parser-backed extractor has.
+        context.AddSingleton(_ =>
             new TreeSitterSymbolExtractor(reason => CrashLog.Note(crashLogPath, reason)));
+        context.AddSingleton<ISymbolExtractor>(ctx => ctx.Require<TreeSitterSymbolExtractor>());
 
         context.AddPlatformServices();
 
@@ -156,9 +160,15 @@ internal static class AppServices
             ctx.Require<ILocalizationService>()));
         context.AddSingleton<UpdateService>();
 
-        // Every exit — the OS close, macOS's Quit, the update banner's restart — resolves here, so
-        // the running-shell warning is asked once rather than per exit route.
-        context.AddSingleton<IAppExitGate, AppExitGate>();
+        context.AddSingleton<IAppExitGate>(ctx => new UnsavedDocumentsExitGate(
+            new AppExitGate(
+                ctx.Require<ITerminalSessionStore>(),
+                ctx.Require<IUiDispatcher>(),
+                ctx.Require<IMessageBus>()),
+            ctx.Require<IDocumentStore>(),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>()));
 
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
         // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
@@ -184,7 +194,22 @@ internal static class AppServices
         context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>();
 
         context.AddSingleton<IFileSystemReader, FileSystemReader>();
+        context.AddHostedService<IDocumentStore, DocumentStore>();
+        // What keeps the colouring and the fold chevrons describing the buffer rather than the file
+        // it was read from: one parse tree per open document, followed into by each edit.
+        context.AddHostedService(ctx => new DocumentAnnotations(
+            ctx.Require<IDocumentStore>(),
+            ctx.Require<IUiDispatcher>(),
+            Features.Diff.RoutedSyntaxHighlighter.Shared.TreeSitter,
+            ctx.Require<TreeSitterSymbolExtractor>()));
+        context.AddSingleton<IUnsavedEditsGuard, UnsavedEditsGuard>();
         context.AddHostedService<IFileBrowserStore, FileBrowserStore>();
+
+        // What a language server is told a file holds: the buffer being typed into where there is
+        // one, so a hover answers about what the reader is looking at rather than what was saved.
+        context.AddSingleton<IFileTextSource>(ctx => new DocumentBackedText(
+            ctx.Require<IDocumentStore>(),
+            ctx.Require<IUiDispatcher>()));
 
         // Costs nothing until the user writes language-servers.json: with no file there is no
         // configuration, so no server is ever launched, nothing is asked of one, and no timer runs.
@@ -254,6 +279,7 @@ internal static class AppServices
             ctx.Require<LocalChangesViewModel>(),
             ctx.Require<IReviewProgressStore>(),
             ctx.Require<IRepoOperationsStore>(),
+            ctx.Require<IDocumentStore>(),
             connection => new AssistantBackendRouter(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AssistantViewModel>();

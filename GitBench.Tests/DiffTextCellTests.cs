@@ -84,4 +84,42 @@ public class DiffTextCellTests
         var cell = DiffText.CellsBefore(expanded, charIndex);
         Assert.Equal(charIndex, DiffText.CharIndexAtCell(expanded, cell));
     }
+
+    [Fact]
+    public void ACombiningMarkOccupiesNoCellOfItsOwn()
+    {
+        const string composed = "éx";
+
+        Assert.Equal(2, DiffText.VisualCells(composed));
+        Assert.Equal(1, DiffText.CellsBefore(composed, 2));
+        Assert.Equal(2, DiffText.CellsBefore(composed, 3));
+    }
+
+    [Fact]
+    public void ACaretNeverLandsBetweenACharacterAndItsCombiningMark()
+    {
+        const string composed = "éx";
+
+        Assert.Equal(0, DiffText.CharIndexAtCell(composed, 0.2f));
+        Assert.Equal(2, DiffText.CharIndexAtCell(composed, 0.6f));
+        Assert.Equal(2, DiffText.CharIndexAtCell(composed, 1.2f));
+        Assert.Equal(3, DiffText.CharIndexAtCell(composed, 2f));
+    }
+
+    [Fact]
+    public void TheGlyphUnderAColumnIsTheClusterBaseNotTheMark()
+    {
+        const string composed = "éx";
+
+        Assert.Equal(0, DiffText.CharIndexOnCell(composed, 0f));
+        Assert.Equal(0, DiffText.CharIndexOnCell(composed, 0.9f));
+        Assert.Equal(2, DiffText.CharIndexOnCell(composed, 1.5f));
+        Assert.Equal(-1, DiffText.CharIndexOnCell(composed, 2f));
+    }
+
+    [Fact]
+    public void ASuffixNeverOpensOnAMarkWhoseBaseWasCutAway()
+    {
+        Assert.Equal("yz", DiffText.SuffixWithin("éyz", 2));
+    }
 }

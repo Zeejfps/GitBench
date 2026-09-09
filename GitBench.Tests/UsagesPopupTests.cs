@@ -175,9 +175,7 @@ public class UsagesPopupTests
                 Navigator,
                 Dispatcher,
                 () => Document,
-                path => Files.TryGetValue(path.Replace('/', Path.DirectorySeparatorChar), out var lines)
-                    ? lines
-                    : null);
+                Files);
         }
 
         public GuiTestHarness Harness { get; }
@@ -216,16 +214,26 @@ public class UsagesPopupTests
     }
 
     // Files keyed by native path, so the popup's own Path.Combine is what finds them.
-    private sealed class FileSet
+    private sealed class FileSet : IFileTextSource
     {
-        private readonly Dictionary<string, string[]> _files = new();
+        private readonly Dictionary<string, string> _files = new();
+
+        public event Action<string>? Changed
+        {
+            add { }
+            remove { }
+        }
 
         public string[] this[string path]
         {
-            set => _files[path.Replace('/', Path.DirectorySeparatorChar)] = value;
+            set => _files[path.Replace('/', Path.DirectorySeparatorChar)] = string.Join('\n', value);
         }
 
-        public bool TryGetValue(string path, out string[] lines) => _files.TryGetValue(path, out lines!);
+        public Task<CurrentText> ReadAsync(string absolutePath, CancellationToken cancel) =>
+            Task.FromResult(
+                _files.TryGetValue(absolutePath.Replace('/', Path.DirectorySeparatorChar), out var text)
+                    ? CurrentText.Whole(text)
+                    : CurrentText.Nothing);
     }
 
     private sealed class FakeReferences : IReferenceSource

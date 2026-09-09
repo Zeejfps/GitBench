@@ -106,6 +106,7 @@ internal sealed record FileBrowserTabButton : Widget
 
         return new TabChrome
         {
+            Leading = new FileBrowserTabUnsavedMark { Model = browser, Tab = tab },
             // Tracked: the qualifier follows whichever tabs currently share this file's name, and
             // the label is in whatever language is current.
             Label = Prop.Bind<string?>(() =>
@@ -132,4 +133,23 @@ internal sealed record FileBrowserTabButton : Widget
             Enabled: browser.Tabs.Count > 1),
         new(s.FileBrowserCloseAllTabs, browser.CloseAllTabs),
     ];
+}
+
+/// <summary>The dot a tab wears while its file has edits that are not on disk. Laid out on every
+/// tab and painted only where there are edits, so the tab never changes width.</summary>
+internal sealed record FileBrowserTabUnsavedMark : Widget
+{
+    private const float Size = 6f;
+
+    public required FileBrowserViewModel Model { get; init; }
+    public required FileBrowserTab Tab { get; init; }
+
+    protected override IWidget Build(Context ctx) => new Box
+    {
+        Width = Size,
+        Height = Size,
+        BorderRadius = BorderRadiusStyle.All(Size / 2f),
+        Background = Theme.Color(s =>
+            Model.Documents.HasUnsavedEdits(Tab.Path) ? s.Palette.TextPrimary : 0u),
+    };
 }

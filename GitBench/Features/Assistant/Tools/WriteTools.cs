@@ -2,6 +2,7 @@ using System.Text.Json;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
+using GitBench.Features.Editor;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Messages;
@@ -9,17 +10,13 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Assistant.Tools;
 
-/// <summary>
-/// The app a write tool acts through, beyond git itself: the commit box it types into, the bus that
-/// tells the rest of the app what changed, the registry that says which repository is on screen, the
-/// store the remote operations run through, and the dispatcher those touches run on.
-/// </summary>
 internal sealed record AssistantWriteSurface(
     IUiDispatcher Dispatcher,
     IMessageBus Bus,
     IRepoRegistry Registry,
     ICommitEditor CommitEditor,
-    IRepoOperationsStore Operations)
+    IRepoOperationsStore Operations,
+    IDocumentStore Documents)
 {
     public bool IsActive(Repo repo) => Registry.Active.Value?.Id == repo.Id;
 

@@ -28,7 +28,7 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
     private readonly IFileNavigator _navigator;
     private readonly IUiDispatcher _dispatcher;
     private readonly Func<(string Root, string Path)?> _document;
-    private readonly Func<string, IReadOnlyList<string>?> _readLines;
+    private readonly IFileTextSource _files;
 
     private CancellationTokenSource? _pending;
 
@@ -38,14 +38,14 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
         IFileNavigator navigator,
         IUiDispatcher dispatcher,
         Func<(string Root, string Path)?> document,
-        Func<string, IReadOnlyList<string>?>? readLines = null)
+        IFileTextSource files)
     {
         _context = context;
         _servers = servers;
         _navigator = navigator;
         _dispatcher = dispatcher;
         _document = document;
-        _readLines = readLines ?? ReadLines;
+        _files = files;
     }
 
     public void ShowUsagesOf(PointF anchor, FileLine line, RawColumn column)
@@ -72,7 +72,9 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
 
                 // Off the UI thread on purpose: this opens up to a hundred files, and the answer is
                 // already late enough that a frozen frame while it lands would be the visible part.
-                var usages = Usages.From(document.Root, answered.Sites, _readLines);
+                var usages = await Usages
+                    .From(document.Root, answered.Sites, _files, token)
+                    .ConfigureAwait(false);
 
                 _dispatcher.Post(() =>
                 {
@@ -150,22 +152,6 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
         UsageText.Unreadable => string.Empty,
         _ => throw new NotSupportedException($"unhandled usage text {text.GetType().Name}"),
     };
-
-    /// <summary>The lines of a file, or null when there are none to be had.</summary>
-    private static IReadOnlyList<string>? ReadLines(string absolutePath)
-    {
-        try
-        {
-            return File.ReadAllLines(absolutePath);
-        }
-        catch (Exception)
-        {
-            // Every failure here means the same thing to the row that wanted the text — deleted
-            // since the server indexed it, locked, or not readable by this process — and none of
-            // them makes the location any less true, so the row survives without its source line.
-            return null;
-        }
-    }
 
     private void Cancel()
     {

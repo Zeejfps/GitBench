@@ -34,7 +34,7 @@ public sealed class CreateBranchStartPointTests : IDisposable
         Directory.CreateDirectory(_root);
         var statePath = Path.Combine(_root, "repos.json");
         _registry = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
-        _head = new RepoHeadStore(_git, _bus, _loc, _dispatcher);
+        _head = new RepoHeadStore(_git, _bus, _loc, _dispatcher, new NoUnsavedEdits());
 
         // main holds one commit; feature branches off it and adds a second, so "which branch did this
         // start from" is answerable by comparing SHAs.

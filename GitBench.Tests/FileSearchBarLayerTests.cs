@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
+using GitBench.Infrastructure;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -30,13 +31,13 @@ public class FileSearchBarLayerTests
     public void TheBarCompositesAboveTheCodeItFloatsOver()
     {
         var model = new FileSearchViewModel(
-            () => new FilePreview.Text(Path, Lines, Truncated: false, Highlight: null),
+            () => new FilePreview.Text(Path, FilePreviewFixture.Of(Lines), WriteBack: FilePreviewFixture.Reversible, Highlight: null),
             () => 1);
 
         using var harness = Harness(model, out var view);
         view.SetRenderState(new DiffRenderState.FullFile(
             Path, Lines, AddedLineNumbers: new HashSet<int>(),
-            Side: DiffSide.WorkingTree, Truncated: false));
+            Side: DiffSide.WorkingTree, Truncated: false), document: null);
 
         var underneath = TopLayer(harness.Render());
 

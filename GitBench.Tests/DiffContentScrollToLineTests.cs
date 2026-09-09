@@ -21,7 +21,7 @@ public class DiffContentScrollToLineTests
     public void AJumpAskedForBeforeTheFirstDrawStillLands()
     {
         using var harness = Harness(out var view);
-        view.SetRenderState(FullFile("src/long.cs"));
+        view.SetRenderState(FullFile("src/long.cs"), document: null);
 
         view.RequestScrollToNewLine(new FileLine(100));
         harness.Render();
@@ -33,7 +33,7 @@ public class DiffContentScrollToLineTests
     public void AJumpAskedForAfterTheFirstDrawLandsToo()
     {
         using var harness = Harness(out var view);
-        view.SetRenderState(FullFile("src/long.cs"));
+        view.SetRenderState(FullFile("src/long.cs"), document: null);
         harness.Render();
 
         view.RequestScrollToNewLine(new FileLine(100));
@@ -48,10 +48,10 @@ public class DiffContentScrollToLineTests
     public void AJumpIsDroppedWhenAnotherFileArrivesFirst()
     {
         using var harness = Harness(out var view);
-        view.SetRenderState(FullFile("src/long.cs"));
+        view.SetRenderState(FullFile("src/long.cs"), document: null);
 
         view.RequestScrollToNewLine(new FileLine(100));
-        view.SetRenderState(FullFile("src/other.cs"));
+        view.SetRenderState(FullFile("src/other.cs"), document: null);
         harness.Render();
 
         Assert.Equal(new FileLine(1), view.TopVisibleNewLine());
@@ -66,7 +66,7 @@ public class DiffContentScrollToLineTests
         var published = new List<FileLine?>();
         view.TopVisibleLineChanged += published.Add;
 
-        view.SetRenderState(FullFile("src/long.cs"));
+        view.SetRenderState(FullFile("src/long.cs"), document: null);
         harness.Render();
         Assert.Equal([new FileLine(1)], published);
 
@@ -86,7 +86,7 @@ public class DiffContentScrollToLineTests
     public void AJumpIntoTheSecondHunkOfADiffLandsOnItsLines()
     {
         using var harness = Harness(out var view);
-        view.SetRenderState(TwoHunks());
+        view.SetRenderState(TwoHunks(), document: null);
         harness.Render();
 
         view.RequestScrollToNewLine(new FileLine(60));
@@ -102,7 +102,7 @@ public class DiffContentScrollToLineTests
     public void AJumpToALineTheGapStillHidesLandsOnTheLineAboveIt()
     {
         using var harness = Harness(out var view);
-        view.SetRenderState(TwoHunks());
+        view.SetRenderState(TwoHunks(), document: null);
         view.RequestScrollToNewLine(new FileLine(100));
         harness.Render();
         Assert.NotEqual(new FileLine(1), view.TopVisibleNewLine());

@@ -1,40 +1,37 @@
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
-using GitBench.Messages;
-using ZGF.Observable;
+using GitBench.Localization;
 
 namespace GitBench.Features.Branches;
 
 internal sealed class MoveBranchDialogViewModel : IDialogViewModel
 {
-    public AsyncCommand Move { get; }
+    private bool _fired;
+
+    /// <summary>Force-moves the branch here and lands HEAD on it, then closes.</summary>
+    public Action Move { get; }
 
     public event Action? CloseRequested;
 
     public MoveBranchDialogViewModel(
         MoveBranchRequest request,
         IGitBranchOperations gitService,
-        IUiDispatcher dispatcher,
-        IMessageBus bus,
-        IRepoHeadStore head)
+        IRepoHeadStore head,
+        ILocalizationService loc)
     {
-        Move = AsyncCommand.ForOutcome(
-            dispatcher,
-            work: () =>
-            {
-                var outcome = gitService.MoveBranch(request.Repo, request.BranchName, request.Sha, checkout: true);
-                return outcome;
-            },
-            onSuccess: () =>
-            {
-                bus.Broadcast(new RefsChangedMessage(request.Repo.Id));
-                bus.Broadcast(new WorkingTreeChangedMessage(request.Repo.Id));
-                CloseRequested?.Invoke();
-            },
-            // `checkout -B` lands HEAD on the branch it just moved — a detached HEAD becomes an
-            // attached one, which every reader of "current branch" needs to know is coming.
-            onStart: () => head.BeginMove(request.Repo, request.BranchName));
+        Move = () =>
+        {
+            if (_fired) return;
+            _fired = true;
+            // Must close before RunMove: RunMove stacks a dialog a later Close() would dismiss instead.
+            CloseRequested?.Invoke();
+            head.RunMove(
+                request.Repo,
+                request.BranchName,
+                () => gitService.MoveBranch(request.Repo, request.BranchName, request.Sha, checkout: true),
+                loc.Strings.Value.BranchesMoveTitle);
+        };
     }
 
     public void Dispose() { }

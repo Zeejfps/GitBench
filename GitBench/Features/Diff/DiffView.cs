@@ -55,7 +55,7 @@ internal sealed record DiffView : Widget
         content.Bind(vm.RenderState, state =>
         {
             if (state is not (DiffRenderState.Conflict or DiffRenderState.Image or DiffRenderState.Markdown))
-                content.SetRenderState(state);
+                content.SetRenderState(state, document: null);
         });
         content.Bind(vm.WorkingTreeHunkStates, content.SetWorkingTreeHunkStates);
 

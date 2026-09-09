@@ -1,5 +1,6 @@
-using GitBench.Features.Diff;
+﻿using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
+using GitBench.Infrastructure;
 using GitBench.Git;
 using Xunit;
 
@@ -110,7 +111,7 @@ public class FileSearchViewModelTests
     private FileSearchViewModel Model() => new(() => _shown, () => _topLine);
 
     private void Show(string path, params string[] lines) =>
-        _shown = new FilePreview.Text(path, lines, Truncated: false, Highlight: null);
+        _shown = new FilePreview.Text(path, FilePreviewFixture.Of(lines), WriteBack: FilePreviewFixture.Reversible, Highlight: null);
 
     [Fact]
     public void OpeningScansWhatIsOnScreen()
@@ -335,7 +336,10 @@ public class FileSearchPreviewTests : IDisposable
             new UnparsedFiles(),
             _dispatcher,
             new FileBrowserUiState(),
-            _ => { });
+            _ => { },
+            TestDocuments.ForOneRepo(),
+            TestDocuments.Discard,
+            TestDocuments.KeepEdits);
 
         browser.Invalidate();
         WaitFor(browser, () => browser.Rows.Value.Count > 0);

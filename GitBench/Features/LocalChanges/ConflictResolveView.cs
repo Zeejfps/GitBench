@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
+using GitBench.Features.Editor;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -66,8 +67,6 @@ internal sealed record ConflictResolveView : Widget
 
     private static IWidget BuildPanel(Context ctx, DiffViewModel vm, string path, ConflictContext conflict)
     {
-        var loc = ctx.Localization();
-
         // The two sides' selection state, shared between each card and its checkbox so clicking
         // either toggles the same flag. Theirs is the incoming side (left), ours the current (right).
         var theirsChecked = new State<bool>(false);
@@ -129,7 +128,9 @@ internal sealed record ConflictResolveView : Widget
                             CrossAxis = CrossAxisAlignment.Stretch,
                             Children =
                             [
-                                MergeButton(loc, vm, conflict, theirsChecked, oursChecked, canMerge),
+                                MergeButton(
+                                    ctx.Require<IUnsavedEditsGuard>(), vm, conflict, path,
+                                    theirsChecked, oursChecked, canMerge),
                                 new SecondaryDialogButton
                                 {
                                     Label = L.T(s => s.LocalchangesConflictMergeInEditor),
@@ -157,7 +158,7 @@ internal sealed record ConflictResolveView : Widget
     // The button names the action it will take, so the pick is confirmable before clicking:
     // "Choose <branch>" for one side, "Merge both" for both, "Merge" (disabled) when neither.
     private static IWidget MergeButton(
-        ILocalizationService loc, DiffViewModel vm, ConflictContext conflict,
+        IUnsavedEditsGuard unsavedEdits, DiffViewModel vm, ConflictContext conflict, string path,
         State<bool> theirsChecked, State<bool> oursChecked, IReadable<bool> canMerge) =>
         new ActionDialogButton
         {
@@ -173,9 +174,17 @@ internal sealed record ConflictResolveView : Widget
             {
                 var t = theirsChecked.Value;
                 var o = oursChecked.Value;
-                if (t && o) vm.ResolveTakeBoth();
-                else if (t) vm.ResolveTakeTheirs();
-                else if (o) vm.ResolveTakeOurs();
+                void Resolve()
+                {
+                    if (t && o) vm.ResolveTakeBoth();
+                    else if (t) vm.ResolveTakeTheirs();
+                    else if (o) vm.ResolveTakeOurs();
+                }
+
+                // No repository is no documents to lose, so it resolves rather than doing nothing.
+                if (vm.Repo is not { } repo) { Resolve(); return; }
+                unsavedEdits.Guard(
+                    new OverwriteScope.Files(repo.Id, [Path.Combine(repo.Path, path)]), Resolve);
             }, canMerge),
             Height = ButtonHeight,
         }.WithController<KbmController>();

@@ -1,4 +1,5 @@
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Editor;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Localization;
@@ -47,7 +48,8 @@ internal sealed record CreateBranchDialog : Widget
             ctx.Require<IUiDispatcher>(),
             ctx.Require<IMessageBus>(),
             ctx.Require<IRepoHeadStore>(),
-            ctx.Require<ILocalizationService>());
+            ctx.Require<ILocalizationService>(),
+            ctx.Get<IUnsavedEditsGuard>());
 
         var s = ctx.Localization().Strings.Value;
         return new Dialog
