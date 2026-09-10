@@ -107,7 +107,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                     {
                         Gap = Spacing.Xs,
                         CrossAxis = CrossAxisAlignment.Center,
-                        Children = keys.Select(KeyCap).ToArray(),
+                        Children = keys.Select(IWidget (key) => new KeyCap { Value = key }).ToArray(),
                     },
                 ],
             },
@@ -120,33 +120,6 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                     Color = Theme.Color(s => s.Palette.TextSecondary),
                     VAlign = TextAlignment.Center,
                 },
-            },
-        ],
-    };
-
-    // A "kbd" cap: a small sunken, bordered pill around the key glyph.
-    private static IWidget KeyCap(string key) => new Box
-    {
-        Background = Theme.Color(s => s.Palette.SurfaceSunken),
-        BorderSize = BorderSizeStyle.All(1),
-        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Palette.BorderSubtle)),
-        BorderRadius = BorderRadiusStyle.All(4f),
-        Children =
-        [
-            new Padding
-            {
-                Amount = new PaddingStyle { Left = Spacing.Sm, Right = Spacing.Sm, Top = 2, Bottom = 2 },
-                Children =
-                [
-                    new Text
-                    {
-                        Value = key,
-                        FontSize = FontSize.Caption,
-                        Color = Theme.Color(s => s.Palette.TextSecondary),
-                        VAlign = TextAlignment.Center,
-                        HAlign = TextAlignment.Center,
-                    },
-                ],
             },
         ],
     };

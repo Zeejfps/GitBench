@@ -21,6 +21,7 @@ internal sealed record SettingsDialog : Widget<DialogState>
     public const string UiScalePickerId = "settings-ui-scale";
     public const string UntrackedCacheId = "settings-untracked-cache";
     public const string LanguageServersId = "settings-language-servers";
+    public const string KeyboardShortcutsId = "settings-keyboard-shortcuts";
 
     private const float ControlWidth = 160f;
 
@@ -132,6 +133,17 @@ internal sealed record SettingsDialog : Widget<DialogState>
                                         Command = new Command(() => OpenLanguageServers(ctx)),
                                         Height = Sizes.ControlHeight,
                                     }.WithController<KbmController>()),
+                                SectionHeader(L.T(s => s.SettingsKeyboard)),
+                                SettingRow(
+                                    L.T(s => s.ShortcutsTitle),
+                                    L.T(s => s.SettingsKeyboardShortcutsDesc),
+                                    new SecondaryDialogButton
+                                    {
+                                        Id = KeyboardShortcutsId,
+                                        Label = L.T(s => s.SettingsView),
+                                        Command = new Command(() => OpenKeyboardShortcuts(ctx)),
+                                        Height = Sizes.ControlHeight,
+                                    }.WithController<KbmController>()),
                             ],
                         },
                     ],
@@ -147,6 +159,15 @@ internal sealed record SettingsDialog : Widget<DialogState>
         OnClose();
         bus.Broadcast(new ShowDialogMessage(onClose =>
             new LanguageServersDialog { OnClose = onClose }));
+    }
+
+    private void OpenKeyboardShortcuts(Context ctx)
+    {
+        var bus = ctx.Get<IMessageBus>();
+        if (bus is null) return;
+        OnClose();
+        bus.Broadcast(new ShowDialogMessage(onClose =>
+            new KeyboardShortcutsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
     }
 
     private static IWidget SectionHeader(Prop<string?> value) => new Text
