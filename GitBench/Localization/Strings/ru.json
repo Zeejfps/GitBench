@@ -19,6 +19,8 @@
   "toast.copied_file_name": "Имя файла скопировано",
   "toast.file_deleted": "Файл удалён",
   "toast.folder_deleted": "Папка удалена",
+  "toast.file_trashed": "Файл перемещён в корзину",
+  "toast.folder_trashed": "Папка перемещена в корзину",
 
   "files.stage": {
     "one": "Индексировать {count} файл",
@@ -218,6 +220,11 @@
   "file_browser.delete_folder_title": "Удалить папку?",
   "file_browser.delete_file_body": "«{name}» удаляется с диска, а не перемещается в корзину. Если файл отслеживается git, его вернёт отмена изменений.",
   "file_browser.delete_folder_body": "«{name}» и всё её содержимое удаляются с диска, а не перемещаются в корзину. Отслеживаемое git вернёт отмена изменений.",
+  "file_browser.trash_action": "Переместить в корзину",
+  "file_browser.trash_file_title": "Переместить файл в корзину?",
+  "file_browser.trash_folder_title": "Переместить папку в корзину?",
+  "file_browser.trash_file_body": "«{name}» перемещается в корзину, откуда его можно вернуть.",
+  "file_browser.trash_folder_body": "«{name}» и всё её содержимое перемещаются в корзину, откуда их можно вернуть.",
   "file_browser.back": "Назад",
   "file_browser.forward": "Вперёд",
   "file_browser.close_other_tabs": "Закрыть другие вкладки",

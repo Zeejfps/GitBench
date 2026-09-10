@@ -2,6 +2,7 @@ using GitBench.Features.FileBrowser;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
+using GitBench.Platform;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -172,6 +173,26 @@ public class FileBrowserFileOpsTests(CodeIntelFixture fixture) : IDisposable
         _dispatcher.Drain();
 
         Assert.Equal(kept, browser.ActiveTab.Value?.Path);
+    }
+
+    // The delete dialog asks the shell before it decides what it is promising the reader — a move
+    // they can undo, or a file that is gone — so a shell that implements neither member has to
+    // answer "no trash", and has to fail loudly rather than quietly doing nothing if asked anyway.
+    [Fact]
+    public void APlatformThatSaysNothingHasNoTrash()
+    {
+        IPlatformShell shell = new SilentShell();
+
+        Assert.False(shell.CanMoveToTrash);
+        Assert.Throws<NotSupportedException>(() => shell.MoveToTrash("/tmp/whatever"));
+    }
+
+    private sealed class SilentShell : IPlatformShell
+    {
+        public void OpenFolder(string path) { }
+        public void OpenTerminal(string path) { }
+        public void OpenFile(string path) { }
+        public void OpenUrl(string url) { }
     }
 
     private static Strings Strings() => GitBench.Localization.Strings.For(Locale.En);

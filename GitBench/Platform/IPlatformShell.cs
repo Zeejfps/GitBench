@@ -11,6 +11,25 @@ public interface IPlatformShell
     void OpenUrl(string url);
 
     /// <summary>
+    /// Whether this platform can put a path in the OS's trash rather than unlinking it. Asked
+    /// before the deletion is offered, because it decides what the reader is agreeing to: a move
+    /// they can undo from the Finder, or a file that is gone.
+    /// </summary>
+    bool CanMoveToTrash => false;
+
+    /// <summary>
+    /// Moves a path to the OS's trash, throwing with the OS's own words when it cannot.
+    /// </summary>
+    /// <remarks>
+    /// Throws rather than reporting best-effort like the rest of this interface, and the difference
+    /// is the point: every other member here hands something to another application, and its failure
+    /// costs the reader a window that did not open. This one is the operation itself, and a
+    /// deletion that quietly did nothing is worse than one that says why.
+    /// </remarks>
+    void MoveToTrash(string path) =>
+        throw new NotSupportedException("This platform has no trash to move a file to.");
+
+    /// <summary>
     /// Shows a path in the OS file manager with the entry itself selected, rather than opening it.
     /// </summary>
     /// <remarks>

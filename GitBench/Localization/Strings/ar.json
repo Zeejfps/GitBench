@@ -19,6 +19,8 @@
   "toast.copied_file_name": "تم نسخ اسم الملف",
   "toast.file_deleted": "تم حذف الملف",
   "toast.folder_deleted": "تم حذف المجلد",
+  "toast.file_trashed": "نُقل الملف إلى سلة المهملات",
+  "toast.folder_trashed": "نُقل المجلد إلى سلة المهملات",
 
   "files.stage": {
     "one": "تجهيز",
@@ -232,6 +234,11 @@
   "file_browser.delete_folder_title": "حذف المجلد؟",
   "file_browser.delete_file_body": "يُحذف «{name}» من القرص ولا يُنقل إلى سلة المهملات. وإذا كان git يتتبعه، فإن تجاهل التغيير يعيده.",
   "file_browser.delete_folder_body": "يُحذف «{name}» وكل ما بداخله من القرص ولا يُنقل إلى سلة المهملات. وما يتتبعه git يعود بتجاهل التغيير.",
+  "file_browser.trash_action": "النقل إلى سلة المهملات",
+  "file_browser.trash_file_title": "نقل الملف إلى سلة المهملات؟",
+  "file_browser.trash_folder_title": "نقل المجلد إلى سلة المهملات؟",
+  "file_browser.trash_file_body": "يُنقل «{name}» إلى سلة المهملات، ويمكنك استعادته منها.",
+  "file_browser.trash_folder_body": "يُنقل «{name}» وكل ما بداخله إلى سلة المهملات، ويمكنك استعادتها منها.",
   "file_browser.back": "رجوع",
   "file_browser.forward": "تقدم",
   "file_browser.close_other_tabs": "إغلاق علامات التبويب الأخرى",

@@ -35,6 +35,10 @@ public sealed class WindowsPlatformShell : IPlatformShell
         }
     }
 
+    public bool CanMoveToTrash => true;
+
+    public void MoveToTrash(string path) => WindowsTrash.Move(path);
+
     public void RevealFile(string path)
     {
         var psi = new ProcessStartInfo("explorer.exe")
