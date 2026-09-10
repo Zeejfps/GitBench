@@ -113,6 +113,7 @@ public static class RepoBarContextMenu
         var menu = new ContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(Radius.Md),
             Padding = PaddingStyle.All(Spacing.Xs),
         };
         menu.BindThemed(theme, s =>
@@ -338,6 +339,7 @@ public static class RepoBarContextMenu
         var menu = new ContextMenu
         {
             BorderSize = BorderSizeStyle.All(1),
+            BorderRadius = BorderRadiusStyle.All(Radius.Md),
             Padding = PaddingStyle.All(Spacing.Xs),
             MinWidth = minWidth,
         };

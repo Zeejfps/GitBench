@@ -95,6 +95,7 @@ internal sealed record HoverCard : Widget
         Width = WidthPx,
         MaxHeight = MaxHeightPx,
         Background = Theme.Color(s => s.Tooltip.Background),
+        BorderRadius = BorderRadiusStyle.All(Radius.Md),
         BorderSize = BorderSizeStyle.All(1),
         BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Tooltip.Border)),
         Children =

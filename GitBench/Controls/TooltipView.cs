@@ -15,6 +15,9 @@ public sealed record TooltipView : Widget
     protected override IWidget Build(Context ctx) => new Box
     {
         Background = Theme.Color(s => s.Tooltip.Background),
+        BorderRadius = BorderRadiusStyle.All(Radius.Md),
+        BorderSize = BorderSizeStyle.All(1),
+        BorderColor = Theme.BorderColor(s => BorderColorStyle.All(s.Tooltip.Border)),
         Children =
         [
             new Padding
