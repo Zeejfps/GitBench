@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using GitBench.Features.LocalChanges;
 using GitBench.Infrastructure;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 
@@ -64,6 +65,8 @@ public static class PreferencesStore
         // Null (the default) means "never moved" — the panel rests in the top trailing corner.
         public float? AssistantPanelX { get; set; }
         public float? AssistantPanelY { get; set; }
+
+        public List<KeyBindingShape>? KeyBindings { get; set; }
     }
 
     internal sealed class AssistantProviderShape
@@ -71,6 +74,14 @@ public static class PreferencesStore
         public string? Id { get; set; }
         public string? Model { get; set; }
         public string? BaseUrl { get; set; }
+    }
+
+    // Both as free text: a command or key this version no longer knows drops that one entry, not
+    // the whole file.
+    internal sealed class KeyBindingShape
+    {
+        public string? Command { get; set; }
+        public List<string>? Keys { get; set; }
     }
 
     public static Preferences Load(string path)
@@ -115,6 +126,7 @@ public static class PreferencesStore
                 AssistantPanelHeight = file.AssistantPanelHeight is > 0 ? file.AssistantPanelHeight.Value : defaults.AssistantPanelHeight,
                 AssistantPanelX = file.AssistantPanelX,
                 AssistantPanelY = file.AssistantPanelY,
+                KeyBindings = ReadKeyBindings(file),
             };
         }
         catch (Exception ex)
@@ -158,9 +170,36 @@ public static class PreferencesStore
             AssistantPanelHeight = preferences.AssistantPanelHeight,
             AssistantPanelX = preferences.AssistantPanelX,
             AssistantPanelY = preferences.AssistantPanelY,
+            KeyBindings = preferences.KeyBindings
+                .Select(b => new KeyBindingShape
+                {
+                    Command = b.Command.ToString(),
+                    Keys = b.Gestures.Select(g => g.Serialize()).ToList(),
+                })
+                .ToList(),
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);
+    }
+
+    // An entry survives only whole: a known command with at least one readable key. A command that
+    // is known but whose keys are not falls back to its defaults rather than to no key at all.
+    private static IReadOnlyList<KeyBinding> ReadKeyBindings(FileShape file)
+    {
+        var bindings = new List<KeyBinding>();
+        foreach (var entry in file.KeyBindings ?? [])
+        {
+            if (!Enum.TryParse<KeyCommand>(entry.Command, ignoreCase: true, out var command) || !Enum.IsDefined(command))
+                continue;
+            var gestures = new List<KeyGesture>();
+            foreach (var text in entry.Keys ?? [])
+                if (KeyGesture.TryParse(text, out var gesture))
+                    gestures.Add(gesture);
+            if (gestures.Count > 0)
+                bindings.Add(new KeyBinding(command, gestures));
+        }
+
+        return bindings;
     }
 
     // Before this list existed the model and endpoint were kept flat, for whichever provider was

@@ -143,9 +143,14 @@
   "settings.view": "عرض…",
 
   "shortcuts.title": "اختصارات لوحة المفاتيح",
-  "shortcuts.description": "تعمل كل مجموعة عندما يكون التركيز داخل واجهتها.",
+  "shortcuts.description": "تعمل كل مجموعة عندما يكون التركيز داخل واجهتها. انقر على اختصار لتغييره.",
   "shortcuts.search_placeholder": "البحث حسب الأمر أو المفتاح",
   "shortcuts.no_matches": "لا توجد اختصارات مطابقة.",
+  "shortcuts.record_prompt": "اضغط الاختصار الجديد…",
+  "shortcuts.change_tooltip": "انقر للتغيير",
+  "shortcuts.reset_tooltip": "إعادة التعيين إلى الافتراضي",
+  "shortcuts.reset_all": "إعادة تعيين الكل",
+  "shortcuts.conflict": "يستخدمه أيضًا {commands}",
 
   "shortcuts.section.application": "التطبيق",
   "shortcuts.section.lists": "القوائم",

@@ -4,25 +4,45 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Settings;
 
-/// <summary>One command as the shortcuts list shows it: its name and every distinct cap that runs it.</summary>
-internal sealed record ShortcutRow(KeyCommand Command, string Label, IReadOnlyList<string> Caps);
+/// <summary>
+/// One command as the shortcuts list shows it: its name, every distinct cap that runs it, whether
+/// those are still the built-in ones, and the names of any commands the same keys also fire.
+/// </summary>
+internal sealed record ShortcutRow(
+    KeyCommand Command,
+    string Label,
+    IReadOnlyList<string> Caps,
+    bool IsDefault,
+    IReadOnlyList<string> ConflictsWith);
 
 /// <summary>A titled group of shortcut rows.</summary>
 internal sealed record ShortcutSection(KeyCommandSection Section, string Title, IReadOnlyList<ShortcutRow> Rows);
 
 /// <summary>
-/// The whole key map as a list to read: every command, grouped by the surface it belongs to, with
-/// the caps the active <see cref="IKeyMap"/> binds it to. Follows the locale, so the names re-read
-/// in the new language, and narrows to what <see cref="Query"/> matches — a command's name, one of
-/// its caps, or the group it sits in.
+/// The whole key map as a list to read and edit: every command, grouped by the surface it belongs
+/// to, with the caps the <see cref="IKeyBindingsStore"/> binds it to. Follows the locale, so the
+/// names re-read in the new language; narrows to what <see cref="Query"/> matches — a command's
+/// name, one of its caps, or the group it sits in; and re-reads after every rebind. One command at
+/// a time can be <see cref="Recording"/> a new gesture.
 /// </summary>
 internal sealed class KeyboardShortcutsViewModel
 {
-    public KeyboardShortcutsViewModel(IKeyMap keys, ILocalizationService localization)
+    private readonly IKeyBindingsStore _keys;
+
+    public KeyboardShortcutsViewModel(IKeyBindingsStore keys, ILocalizationService localization)
     {
-        Sections = new Derived<IReadOnlyList<ShortcutSection>>(
-            () => Filter(Build(keys, localization.Strings.Value), Query.Value.Trim()));
+        _keys = keys;
+        Sections = new Derived<IReadOnlyList<ShortcutSection>>(() =>
+        {
+            _ = keys.Version.Value;
+            return Filter(Build(keys, localization.Strings.Value), Query.Value.Trim());
+        });
         NoMatches = new Derived<bool>(() => Sections.Value.Count == 0);
+        HasOverrides = new Derived<bool>(() =>
+        {
+            _ = keys.Version.Value;
+            return keys.Overrides.Count > 0;
+        });
     }
 
     /// <summary>What the search box holds. Empty shows everything.</summary>
@@ -34,7 +54,29 @@ internal sealed class KeyboardShortcutsViewModel
     /// <summary>True when a query rules every command out.</summary>
     public IReadable<bool> NoMatches { get; }
 
-    private static IReadOnlyList<ShortcutSection> Build(IKeyMap keys, Strings s)
+    /// <summary>True while any command is off its built-in gestures.</summary>
+    public IReadable<bool> HasOverrides { get; }
+
+    /// <summary>The command waiting for its next gesture, or null while none is.</summary>
+    public State<KeyCommand?> Recording { get; } = new(null);
+
+    public void BeginRecording(KeyCommand command) => Recording.Value = command;
+
+    public void CancelRecording() => Recording.Value = null;
+
+    /// <summary>Binds the recording command to the gesture and ends the recording; a no-op with none recording.</summary>
+    public void CommitRecording(KeyGesture gesture)
+    {
+        if (Recording.Value is not { } command) return;
+        Recording.Value = null;
+        _keys.Rebind(command, gesture);
+    }
+
+    public void Reset(KeyCommand command) => _keys.Reset(command);
+
+    public void ResetAll() => _keys.ResetAll();
+
+    private static IReadOnlyList<ShortcutSection> Build(IKeyBindingsStore keys, Strings s)
     {
         var sections = new List<ShortcutSection>(KeyCommandSections.All.Count);
         foreach (var section in KeyCommandSections.All)
@@ -42,7 +84,15 @@ internal sealed class KeyboardShortcutsViewModel
             var commands = KeyCommandSections.CommandsIn(section);
             var rows = new List<ShortcutRow>(commands.Count);
             foreach (var command in commands)
-                rows.Add(new ShortcutRow(command, Label(s, command), Caps(keys, command)));
+            {
+                rows.Add(new ShortcutRow(
+                    command,
+                    Label(s, command),
+                    Caps(keys, command),
+                    keys.IsDefault(command),
+                    Conflicts(keys, s, command)));
+            }
+
             sections.Add(new ShortcutSection(section, SectionTitle(s, section), rows));
         }
 
@@ -93,6 +143,22 @@ internal sealed class KeyboardShortcutsViewModel
             if (!caps.Contains(gesture.Display))
                 caps.Add(gesture.Display);
         return caps;
+    }
+
+    private static IReadOnlyList<string> Conflicts(IKeyBindingsStore keys, Strings s, KeyCommand command)
+    {
+        var labels = new List<string>();
+        foreach (var gesture in keys.GesturesFor(command))
+        {
+            foreach (var other in keys.ConflictsWith(command, gesture))
+            {
+                var label = Label(s, other);
+                if (!labels.Contains(label))
+                    labels.Add(label);
+            }
+        }
+
+        return labels;
     }
 
     public static string SectionTitle(Strings s, KeyCommandSection section) => section switch

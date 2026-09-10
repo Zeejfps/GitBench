@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 
@@ -96,6 +97,9 @@ public sealed class PreferencesService : IDisposable
             AssistantPanelHeight = height,
         });
     }
+
+    /// <summary>Records every shortcut the user has changed from the built-in table.</summary>
+    public void SetKeyBindings(IReadOnlyList<KeyBinding> bindings) => Mutate(p => p with { KeyBindings = bindings });
 
     private void Mutate(Func<Preferences, Preferences> mutator)
     {

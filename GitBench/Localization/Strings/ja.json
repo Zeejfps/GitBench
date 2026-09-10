@@ -101,9 +101,14 @@
   "settings.view": "表示…",
 
   "shortcuts.title": "キーボードショートカット",
-  "shortcuts.description": "各グループは、その画面にフォーカスがあるときに有効です。",
+  "shortcuts.description": "各グループは、その画面にフォーカスがあるときに有効です。ショートカットをクリックすると変更できます。",
   "shortcuts.search_placeholder": "コマンドまたはキーで検索",
   "shortcuts.no_matches": "一致するショートカットはありません。",
+  "shortcuts.record_prompt": "新しいショートカットを押してください…",
+  "shortcuts.change_tooltip": "クリックして変更",
+  "shortcuts.reset_tooltip": "既定に戻す",
+  "shortcuts.reset_all": "すべて既定に戻す",
+  "shortcuts.conflict": "{commands} でも使用",
 
   "shortcuts.section.application": "アプリケーション",
   "shortcuts.section.lists": "リスト",

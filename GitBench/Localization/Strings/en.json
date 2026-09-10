@@ -101,9 +101,14 @@
   "settings.view": "View…",
 
   "shortcuts.title": "Keyboard shortcuts",
-  "shortcuts.description": "Each group applies while its surface has the focus.",
+  "shortcuts.description": "Each group applies while its surface has the focus. Click a shortcut to change it.",
   "shortcuts.search_placeholder": "Search by command or key",
   "shortcuts.no_matches": "No shortcuts match.",
+  "shortcuts.record_prompt": "Press the new shortcut…",
+  "shortcuts.change_tooltip": "Click to change",
+  "shortcuts.reset_tooltip": "Reset to default",
+  "shortcuts.reset_all": "Reset all",
+  "shortcuts.conflict": "Also used by {commands}",
 
   "shortcuts.section.application": "Application",
   "shortcuts.section.lists": "Lists",

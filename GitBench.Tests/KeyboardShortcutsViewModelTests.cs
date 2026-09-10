@@ -1,6 +1,8 @@
 using GitBench.Features.Settings;
 using GitBench.Input;
 using GitBench.Localization;
+using ZGF.Gui.Desktop.Input;
+using ZGF.KeyboardModule;
 using ZGF.Observable;
 using Xunit;
 
@@ -132,6 +134,70 @@ public class KeyboardShortcutsViewModelTests
         vm.Query.Value = "   ";
 
         Assert.Equal(Enum.GetValues<KeyCommand>().Order(), Rows(vm).Select(r => r.Command).Order());
+    }
+
+    [Fact]
+    public void CommittingARecording_RebindsTheCommandAndTheRowFollows()
+    {
+        var keys = new KeyMap();
+        var vm = new KeyboardShortcutsViewModel(keys, new LocalizationService(new State<Locale>(Locale.En)));
+        var gesture = new KeyGesture(KeyboardKey.R, InputModifiers.Control | InputModifiers.Shift);
+
+        vm.BeginRecording(KeyCommand.Refresh);
+        Assert.Equal(KeyCommand.Refresh, vm.Recording.Value);
+        vm.CommitRecording(gesture);
+
+        Assert.Null(vm.Recording.Value);
+        Assert.Equal([gesture], keys.GesturesFor(KeyCommand.Refresh));
+        var row = Rows(vm).Single(r => r.Command == KeyCommand.Refresh);
+        Assert.Equal(["Ctrl+Shift+R"], row.Caps);
+        Assert.False(row.IsDefault);
+        Assert.True(vm.HasOverrides.Value);
+    }
+
+    [Fact]
+    public void CancellingARecording_ChangesNothing()
+    {
+        var keys = new KeyMap();
+        var vm = new KeyboardShortcutsViewModel(keys, new LocalizationService(new State<Locale>(Locale.En)));
+
+        vm.BeginRecording(KeyCommand.Refresh);
+        vm.CancelRecording();
+        vm.CommitRecording(new KeyGesture(KeyboardKey.F6));
+
+        Assert.Null(vm.Recording.Value);
+        Assert.True(keys.IsDefault(KeyCommand.Refresh));
+        Assert.False(vm.HasOverrides.Value);
+    }
+
+    [Fact]
+    public void ResettingARow_PutsItsDefaultBack()
+    {
+        var keys = new KeyMap();
+        var vm = new KeyboardShortcutsViewModel(keys, new LocalizationService(new State<Locale>(Locale.En)));
+        vm.BeginRecording(KeyCommand.Refresh);
+        vm.CommitRecording(new KeyGesture(KeyboardKey.F6));
+
+        vm.Reset(KeyCommand.Refresh);
+
+        var row = Rows(vm).Single(r => r.Command == KeyCommand.Refresh);
+        Assert.Equal(["F5"], row.Caps);
+        Assert.True(row.IsDefault);
+        Assert.False(vm.HasOverrides.Value);
+    }
+
+    [Fact]
+    public void ARowNamesTheCommandsItsKeysAlsoFire()
+    {
+        var keys = new KeyMap();
+        var vm = new KeyboardShortcutsViewModel(keys, new LocalizationService(new State<Locale>(Locale.En)));
+
+        vm.BeginRecording(KeyCommand.SaveFile);
+        vm.CommitRecording(new KeyGesture(KeyboardKey.F5));
+
+        Assert.Equal(["Refresh"], Rows(vm).Single(r => r.Command == KeyCommand.SaveFile).ConflictsWith);
+        Assert.Equal(["Save file"], Rows(vm).Single(r => r.Command == KeyCommand.Refresh).ConflictsWith);
+        Assert.Empty(Rows(vm).Single(r => r.Command == KeyCommand.FindFile).ConflictsWith);
     }
 
     [Fact]

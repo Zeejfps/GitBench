@@ -136,9 +136,14 @@
   "settings.view": "Показать…",
 
   "shortcuts.title": "Сочетания клавиш",
-  "shortcuts.description": "Каждая группа действует, пока фокус находится в её области.",
+  "shortcuts.description": "Каждая группа действует, пока фокус находится в её области. Нажмите на сочетание, чтобы изменить его.",
   "shortcuts.search_placeholder": "Поиск по команде или клавише",
   "shortcuts.no_matches": "Нет подходящих сочетаний.",
+  "shortcuts.record_prompt": "Нажмите новое сочетание…",
+  "shortcuts.change_tooltip": "Нажмите, чтобы изменить",
+  "shortcuts.reset_tooltip": "Сбросить к значению по умолчанию",
+  "shortcuts.reset_all": "Сбросить всё",
+  "shortcuts.conflict": "Также используется: {commands}",
 
   "shortcuts.section.application": "Приложение",
   "shortcuts.section.lists": "Списки",

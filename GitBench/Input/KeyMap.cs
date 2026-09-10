@@ -1,22 +1,35 @@
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
+using ZGF.Observable;
 
 namespace GitBench.Input;
 
-/// <summary>The default bindings for every <see cref="KeyCommand"/>.</summary>
-public sealed class KeyMap : IKeyMap
+/// <summary>
+/// The bindings for every <see cref="KeyCommand"/>: the built-in table, with whatever the user has
+/// rebound laid over it.
+/// </summary>
+public sealed class KeyMap : IKeyBindingsStore
 {
-    /// <summary>The shared default table.</summary>
-    public static KeyMap Defaults { get; } = new();
+    /// <summary>The built-in table, shared and never edited: it carries no editing surface at all.</summary>
+    public static IKeyMap Defaults { get; } = new ReadOnly(new KeyMap());
 
-    private readonly Dictionary<KeyCommand, KeyGesture[]> _bindings;
+    private readonly Dictionary<KeyCommand, KeyGesture[]> _bindings = new();
+    private readonly State<int> _version = new(0);
 
-    public KeyMap()
+    public KeyMap() : this([]) { }
+
+    /// <summary>Starts from the built-in table with these overrides applied; an override with no
+    /// gestures leaves its command on the defaults.</summary>
+    public KeyMap(IEnumerable<KeyBinding> overrides)
     {
-        _bindings = new Dictionary<KeyCommand, KeyGesture[]>();
         foreach (var command in Enum.GetValues<KeyCommand>())
             _bindings[command] = DefaultGestures(command);
+        foreach (var binding in overrides)
+            if (binding.Gestures.Count > 0)
+                _bindings[binding.Command] = binding.Gestures.ToArray();
     }
+
+    public IReadable<int> Version => _version;
 
     public IReadOnlyList<KeyGesture> GesturesFor(KeyCommand command) => _bindings[command];
 
@@ -29,6 +42,72 @@ public sealed class KeyMap : IKeyMap
     }
 
     public string Display(KeyCommand command) => _bindings[command][0].Display;
+
+    public IReadOnlyList<KeyGesture> DefaultsFor(KeyCommand command) => DefaultGestures(command);
+
+    public bool IsDefault(KeyCommand command) => _bindings[command].AsSpan().SequenceEqual(DefaultGestures(command));
+
+    public void Rebind(KeyCommand command, KeyGesture gesture)
+    {
+        if (_bindings[command] is [var only] && only == gesture) return;
+        _bindings[command] = [gesture];
+        _version.Value++;
+    }
+
+    public void Reset(KeyCommand command)
+    {
+        if (IsDefault(command)) return;
+        _bindings[command] = DefaultGestures(command);
+        _version.Value++;
+    }
+
+    public void ResetAll()
+    {
+        var changed = false;
+        foreach (var command in Enum.GetValues<KeyCommand>())
+        {
+            if (IsDefault(command)) continue;
+            _bindings[command] = DefaultGestures(command);
+            changed = true;
+        }
+
+        if (changed) _version.Value++;
+    }
+
+    public IReadOnlyList<KeyBinding> Overrides
+    {
+        get
+        {
+            var overrides = new List<KeyBinding>();
+            foreach (var command in Enum.GetValues<KeyCommand>())
+                if (!IsDefault(command))
+                    overrides.Add(new KeyBinding(command, _bindings[command]));
+            return overrides;
+        }
+    }
+
+    public IReadOnlyList<KeyCommand> ConflictsWith(KeyCommand command, KeyGesture gesture)
+    {
+        var section = KeyCommandSections.Of(command);
+        var conflicts = new List<KeyCommand>();
+        foreach (var other in Enum.GetValues<KeyCommand>())
+        {
+            if (other == command) continue;
+            var otherSection = KeyCommandSections.Of(other);
+            var sharesPath = otherSection == section
+                || otherSection == KeyCommandSection.Application
+                || section == KeyCommandSection.Application;
+            if (!sharesPath) continue;
+            foreach (var bound in _bindings[other])
+            {
+                if (bound != gesture) continue;
+                conflicts.Add(other);
+                break;
+            }
+        }
+
+        return conflicts;
+    }
 
     private static KeyGesture[] DefaultGestures(KeyCommand command) => command switch
     {
@@ -86,6 +165,16 @@ public sealed class KeyMap : IKeyMap
 
         _ => throw new ArgumentOutOfRangeException(nameof(command), command, "No default binding."),
     };
+
+    private sealed class ReadOnly(KeyMap inner) : IKeyMap
+    {
+        public IReadOnlyList<KeyGesture> GesturesFor(KeyCommand command) => inner.GesturesFor(command);
+
+        public bool Matches(KeyCommand command, KeyboardKey key, InputModifiers modifiers) =>
+            inner.Matches(command, key, modifiers);
+
+        public string Display(KeyCommand command) => inner.Display(command);
+    }
 
     private static KeyGesture[] RepoHotkey(KeyboardKey digit, KeyboardKey numpad) =>
         [KeyGesture.WithPrimary(digit), KeyGesture.WithPrimary(numpad)];

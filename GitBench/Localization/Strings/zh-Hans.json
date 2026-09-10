@@ -101,9 +101,14 @@
   "settings.view": "查看…",
 
   "shortcuts.title": "键盘快捷键",
-  "shortcuts.description": "每组快捷键在其界面获得焦点时生效。",
+  "shortcuts.description": "每组快捷键在其界面获得焦点时生效。点击快捷键即可更改。",
   "shortcuts.search_placeholder": "按命令或按键搜索",
   "shortcuts.no_matches": "没有匹配的快捷键。",
+  "shortcuts.record_prompt": "请按下新的快捷键…",
+  "shortcuts.change_tooltip": "点击以更改",
+  "shortcuts.reset_tooltip": "恢复默认",
+  "shortcuts.reset_all": "全部恢复默认",
+  "shortcuts.conflict": "{commands} 也在使用",
 
   "shortcuts.section.application": "应用程序",
   "shortcuts.section.lists": "列表",

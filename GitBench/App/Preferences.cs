@@ -1,4 +1,5 @@
 using GitBench.Features.LocalChanges;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 
@@ -55,6 +56,10 @@ public sealed record Preferences
     /// has been moved once, which reads as the resting spot in the top trailing corner.</summary>
     public float? AssistantPanelX { get; init; }
     public float? AssistantPanelY { get; init; }
+
+    /// <summary>The shortcuts the user has changed from the built-in table; every other command
+    /// runs on its default.</summary>
+    public IReadOnlyList<KeyBinding> KeyBindings { get; init; } = [];
 
     public static Preferences Default { get; } = new();
 }

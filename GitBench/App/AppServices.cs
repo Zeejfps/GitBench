@@ -42,7 +42,11 @@ internal static class AppServices
         context.AddService(preferences);
         // Which keys run which commands. Every handler matches through it and every shortcut hint
         // reads from it, so a binding is decided in one table.
-        context.AddService<IKeyMap>(new KeyMap());
+        var keyMap = new KeyMap(preferences.Current.KeyBindings);
+        // Lives as long as the app, like the map it follows.
+        _ = keyMap.Version.Subscribe(_ => preferences.SetKeyBindings(keyMap.Overrides));
+        context.AddService<IKeyMap>(keyMap);
+        context.AddService<IKeyBindingsStore>(keyMap);
 
         var profilesPath = AppPaths.AppDataPath("identity-profiles.json");
         context.AddSingleton(_ => new IdentityProfileService(
