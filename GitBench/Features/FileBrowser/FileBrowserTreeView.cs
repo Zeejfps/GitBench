@@ -79,6 +79,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
     {
         _vm = vm;
         _canvas = ctx.Canvas;
+        var ops = new FileBrowserFileOps(ctx);
         var input = ctx.Require<InputSystem>();
 
         _list = new VirtualRowListView
@@ -112,7 +113,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
             onMove: (delta, _) => _vm.MoveCursor(delta),
             onExpand: open => { if (open) _vm.ExpandOrDescend(); else _vm.CollapseOrAscend(); },
             onActivate: ActivateCursor,
-            onDelete: () => { });
+            onDelete: () => ops.Delete(_vm, CursorRow()));
         this.UseController(input, _arrows);
 
         this.Bind(vm.Rows, SetRows);
@@ -149,8 +150,13 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
 
     private void ActivateCursor()
     {
+        if (CursorRow() is { } row) _vm.Activate(row);
+    }
+
+    private FileBrowserRow? CursorRow()
+    {
         var index = _vm.IndexOfCursor(_rows);
-        if (index >= 0) _vm.Activate(_rows[index]);
+        return index >= 0 ? _rows[index] : null;
     }
 
     private void OnRowClicked(int rowIndex, InputModifiers modifiers, PointF point)

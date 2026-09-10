@@ -103,6 +103,7 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         Action<IReadOnlyList<string>, Action> confirmReload)
     {
         _root = PathKey.Normalize(repo.Path);
+        RepoId = repo.Id;
         _files = files;
         _ignore = ignore;
         _extractor = extractor;
@@ -155,6 +156,10 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
     /// <summary>The working tree this browser is rooted at.</summary>
     public string RootPath => _root;
+
+    /// <summary>Which repository's working tree that is — for the callers that have to say what
+    /// moved when they write to it.</summary>
+    public Guid RepoId { get; }
 
     public IReadable<IReadOnlyList<FileBrowserRow>> Rows => _rows;
 
@@ -516,6 +521,71 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         if (_showHidden.Value == show) return;
         _showHidden.Value = show;
         Queue(tree => tree.SetShowHidden(show));
+    }
+
+    /// <summary>
+    /// Puts a path that has just been created on screen: the listing is re-read, the directories
+    /// above it are opened, and the cursor lands on it. A new file is opened too — creating one is
+    /// asking to write in it — while a new directory is only expanded, since there is nothing in it
+    /// to read.
+    /// </summary>
+    public void Created(string absolutePath, bool isDirectory)
+    {
+        if (_disposed) return;
+
+        var path = PathKey.Normalize(absolutePath);
+        if (ToRelative(path) is null) return;
+
+        Queue(
+            tree =>
+            {
+                tree.Refresh();
+                tree.Reveal(path);
+                if (isDirectory) tree.Expand(path);
+            },
+            () =>
+            {
+                if (_disposed) return;
+                if (!isDirectory) Show(path, pinned: true, line: null);
+                Land(path, rowKey: null);
+            });
+    }
+
+    /// <summary>
+    /// Drops a path that is no longer on disk: whatever it had open is closed — without asking about
+    /// unsaved edits, because there is nothing left to save them into — and the listing is re-read.
+    /// A directory takes everything under it with it.
+    /// </summary>
+    public void Deleted(string absolutePath)
+    {
+        if (_disposed) return;
+
+        var path = PathKey.Normalize(absolutePath);
+        var closing = _tabs.Items.Where(tab => IsAtOrUnder(tab.Path, path)).ToArray();
+        if (closing.Length > 0)
+        {
+            var wasActive = _tabs.Active.Value is { } active && IsAtOrUnder(active.Path, path);
+            foreach (var tab in closing)
+            {
+                Release(tab);
+                _tabs.Close(tab);
+            }
+            if (wasActive) FollowActiveTab();
+        }
+
+        if (_cursor.Value is { } cursor && IsAtOrUnder(cursor.Split('\n')[0], path)) _cursor.Value = null;
+
+        Queue(tree => tree.Refresh());
+        Persist();
+    }
+
+    /// <summary>Whether a path is the given one or sits beneath it.</summary>
+    private static bool IsAtOrUnder(string path, string root)
+    {
+        if (PathKey.Comparer.Equals(path, root)) return true;
+        var prefix = root + Path.DirectorySeparatorChar;
+        return path.Length > prefix.Length
+            && PathKey.Comparer.Equals(path[..prefix.Length], prefix);
     }
 
     /// <summary>Re-lists what is open and re-reads the previewed file. Bounded by what the reader

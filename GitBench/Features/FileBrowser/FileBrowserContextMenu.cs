@@ -41,9 +41,16 @@ internal sealed class FileBrowserContextMenu
     private readonly IMessageBus? _bus;
     private readonly ITerminalSessionStore? _terminals;
     private readonly IContentNavigator? _navigator;
+    private readonly FileBrowserFileOps _ops;
+
+    /// <summary>The key the tree's own list controller deletes on, as the menu says it. Literal for
+    /// the same reason the Changes list's is: the list controller dispatches on the key itself, not
+    /// through a gesture that could be asked what it is called.</summary>
+    private const string DeleteShortcut = "Delete";
 
     public FileBrowserContextMenu(Context ctx)
     {
+        _ops = new FileBrowserFileOps(ctx);
         _loc = ctx.Localization();
         _shell = ctx.Get<IPlatformShell>();
         _clipboard = ctx.Get<IClipboard>();
@@ -54,16 +61,19 @@ internal sealed class FileBrowserContextMenu
 
     public IReadOnlyList<RepoBarContextMenu.Item> Build(FileBrowserViewModel browser, FileBrowserRow? row)
     {
-        if (row is null) return [];
-
         var s = _loc.Strings.Value;
+
+        // Right-clicking past the last row is still a gesture on a directory — the working tree
+        // itself — and it is the only one that reaches the root, which has no row of its own.
+        if (row is null) return CreateItems(browser, browser.RootPath);
+
         var full = FullPath(row.FullPath);
         if (full is null) return [];
 
         var directory = row is FileBrowserRow.Directory ? full : Path.GetDirectoryName(full) ?? full;
         var relative = Path.GetRelativePath(browser.RootPath, full).Replace('\\', '/');
 
-        return
+        List<RepoBarContextMenu.Item> items =
         [
             new RepoBarContextMenu.Item(
                 s.FileBrowserOpen,
@@ -94,6 +104,39 @@ internal sealed class FileBrowserContextMenu
                 s.FileBrowserCopyRelativePath,
                 () => Copy(relative, s.ToastCopiedPath),
                 LucideIcons.Copy),
+            RepoBarContextMenu.Separator,
+            .. CreateItems(browser, directory),
+        ];
+
+        if (FileBrowserFileOps.CanDelete(row))
+        {
+            items.Add(RepoBarContextMenu.Separator);
+            items.Add(new RepoBarContextMenu.Item(
+                s.CommonDelete,
+                () => _ops.Delete(browser, row),
+                LucideIcons.Trash,
+                Shortcut: DeleteShortcut));
+        }
+
+        return items;
+    }
+
+    /// <summary>Make a file, make a directory — both inside <paramref name="directory"/>, which on a
+    /// file's own menu is the directory holding it, so "new file" beside a file means beside it.
+    /// </summary>
+    private RepoBarContextMenu.Item[] CreateItems(FileBrowserViewModel browser, string directory)
+    {
+        var s = _loc.Strings.Value;
+        return
+        [
+            new RepoBarContextMenu.Item(
+                s.FileBrowserNewFile,
+                () => _ops.New(browser, directory, NewEntryKind.File),
+                LucideIcons.FilePlus),
+            new RepoBarContextMenu.Item(
+                s.FileBrowserNewFolder,
+                () => _ops.New(browser, directory, NewEntryKind.Folder),
+                LucideIcons.FolderPlus),
         ];
     }
 
