@@ -32,23 +32,23 @@ public sealed class PopupTooltipService : ITooltipService
             _currentOwner = null;
         }
 
-        var anchorScreen = _coordinates.ToScreenPoints(anchorRectCanvas);
+        var anchorScreen = _coordinates.ToScreenPoints(CanvasRect.From(anchorRectCanvas));
 
         _currentOwner = owner;
         _currentPopup = _factory.Acquire(new PopupRequest
         {
             BuildRoot = ctx => Direction.Wrap(new TooltipView { Text = text }).BuildView(ctx),
-            Place = (width, height) =>
+            Place = size =>
             {
                 var centerX = anchorScreen.X + anchorScreen.Width / 2;
-                var preferred = new RectI(
-                    X: centerX - width / 2,
+                var preferred = new ScreenRect(
+                    X: centerX - size.Width / 2,
                     Y: anchorScreen.Y + anchorScreen.Height + Gap,
-                    Width: width, Height: height);
-                var flipped = new RectI(
-                    X: centerX - width / 2,
-                    Y: anchorScreen.Y - Gap - height,
-                    Width: width, Height: height);
+                    Width: size.Width, Height: size.Height);
+                var flipped = new ScreenRect(
+                    X: centerX - size.Width / 2,
+                    Y: anchorScreen.Y - Gap - size.Height,
+                    Width: size.Width, Height: size.Height);
                 return (preferred, flipped);
             },
             MousePassThrough = true,

@@ -87,7 +87,7 @@ internal sealed record BranchListRow : Widget<BranchRowState>
             // Section headers (LOCAL / REMOTES / STASHES) match the repo bar's group headers: caption
             // sized, indented to the group-header indent (Hair, outdented from content), with a
             // between-section gap above all but the first (LOCAL is always first).
-            NameSize = IsSectionHeader(row) ? FontSize.Caption : default,
+            NameSize = IsSectionHeader(row) ? FontSize.Caption : default(Prop<float>),
             IndentOverride = IsSectionHeader(row) ? Spacing.Hair : null,
             SpacingBefore = row is RemotesHeaderRow or StashesHeaderRow ? Spacing.Lg : 0,
             Background = Prop.Bind(() =>

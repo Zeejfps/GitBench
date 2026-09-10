@@ -88,6 +88,8 @@
   "settings.theme_light": "Claro",
   "settings.language": "Idioma",
   "settings.language_desc": "El idioma en el que se muestra el texto de la aplicación.",
+  "settings.ui_scale": "Escala de la interfaz",
+  "settings.ui_scale_desc": "El tamaño con el que se dibujan el texto y los controles de la aplicación.",
   "settings.repository": "Repositorio",
   "settings.untracked_cache": "Caché de archivos sin seguimiento",
   "settings.untracked_cache_desc": "Acelera la búsqueda de archivos nuevos en repositorios grandes.",

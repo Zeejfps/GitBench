@@ -88,6 +88,8 @@
   "settings.theme_light": "ライト",
   "settings.language": "言語",
   "settings.language_desc": "アプリの表示に使用する言語です。",
+  "settings.ui_scale": "UI の拡大率",
+  "settings.ui_scale_desc": "アプリのテキストとコントロールを描画する大きさです。",
   "settings.repository": "リポジトリ",
   "settings.untracked_cache": "追跡外ファイルのキャッシュ",
   "settings.untracked_cache_desc": "大きなリポジトリで新しいファイルの検出を高速化します。",

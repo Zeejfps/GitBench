@@ -88,6 +88,8 @@
   "settings.theme_light": "라이트",
   "settings.language": "언어",
   "settings.language_desc": "앱 텍스트를 표시할 언어입니다.",
+  "settings.ui_scale": "UI 배율",
+  "settings.ui_scale_desc": "앱의 텍스트와 컨트롤이 그려지는 크기입니다.",
   "settings.repository": "저장소",
   "settings.untracked_cache": "추적되지 않은 파일 캐시",
   "settings.untracked_cache_desc": "큰 저장소에서 새 파일 검사 속도를 높입니다.",
