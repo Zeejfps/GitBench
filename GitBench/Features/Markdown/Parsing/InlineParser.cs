@@ -7,8 +7,8 @@ namespace GitBench.Features.Markdown.Parsing;
 /// and produces the flat, pre-resolved <see cref="InlineRun"/> list the renderer consumes.
 /// Covers the scoped subset (docs/plans/markdown-renderer.md): emphasis (<c>*</c>/<c>**</c>/
 /// <c>***</c>/<c>_</c>), inline code (backtick runs, code wins over emphasis), strikethrough,
-/// links (with optional titles and balanced parens in the destination), images (rendered as
-/// their alt text linked to the image), angle and bare-URL autolinks, backslash escapes, and line
+/// links (with optional titles and balanced parens in the destination), images (one run carrying
+/// the alt text and <c>ImageSrc</c>), angle and bare-URL autolinks, backslash escapes, and line
 /// breaks — a hard break (trailing spaces or a trailing backslash) becomes a dedicated "\n" run,
 /// a soft break collapses to a space. Nesting resolves into style flags on flat runs; adjacent
 /// runs with identical styling merge; unmatched delimiters degrade to literal text. Never throws.
@@ -247,6 +247,20 @@ internal static class InlineParser
         // with delimiters outside the brackets.
         ResolveEmphasis(nodes, oi + 1);
         var inner = Flatten(nodes, oi + 1);
+
+        if (opener.IsImage)
+        {
+            // An image's content is its alt text: styling is meaningless there, so the inner runs
+            // collapse to plain text (a hard break becomes a space). An image is not a link, so
+            // enclosing '[' openers stay active and "[![alt](img)](url)" still forms a link.
+            var alt = new StringBuilder();
+            foreach (var run in inner) alt.Append(IsHardBreak(run) ? " " : run.Text);
+            nodes.RemoveRange(oi, nodes.Count - oi);
+            nodes.Add(new AtomNode(new[] { new InlineRun(alt.ToString(), ImageSrc: url) }));
+            i = close + 1;
+            return true;
+        }
+
         var linked = new List<InlineRun>(inner.Count);
         foreach (var run in inner)
         {
@@ -259,15 +273,10 @@ internal static class InlineParser
         nodes.RemoveRange(oi, nodes.Count - oi);
         nodes.Add(new AtomNode(linked));
         // No nested links — the inner link wins: forming this one spends every enclosing '[',
-        // so an outer pair can never become a link and its brackets stay literal. An image is
-        // not a link, so an enclosing "[![alt](img)](url)" still forms and its URL replaces the
-        // image's.
-        if (!opener.IsImage)
+        // so an outer pair can never become a link and its brackets stay literal.
+        foreach (var node in nodes)
         {
-            foreach (var node in nodes)
-            {
-                if (node is BracketNode remaining) remaining.Active = false;
-            }
+            if (node is BracketNode remaining) remaining.Active = false;
         }
         i = close + 1;
         return true;
@@ -510,12 +519,13 @@ internal static class InlineParser
         var bold = 0;
         var italic = 0;
         var strike = 0;
-        var lastIsBreak = false;
+        // Set after a run nothing may merge into: a hard break or an image.
+        var lastIsOpaque = false;
 
         void Emit(string t, bool b, bool it, bool code, bool st, string? url)
         {
             if (t.Length == 0) return;
-            if (!lastIsBreak && runs.Count > 0)
+            if (!lastIsOpaque && runs.Count > 0)
             {
                 var last = runs[^1];
                 if (last.Bold == b && last.Italic == it && last.Code == code
@@ -526,7 +536,7 @@ internal static class InlineParser
                 }
             }
             runs.Add(new InlineRun(t, b, it, code, st, url));
-            lastIsBreak = false;
+            lastIsOpaque = false;
         }
 
         for (var idx = from; idx < nodes.Count; idx++)
@@ -540,10 +550,12 @@ internal static class InlineParser
                 case AtomNode atom:
                     foreach (var r in atom.Runs)
                     {
-                        if (IsHardBreak(r))
+                        if (IsHardBreak(r) || r.ImageSrc != null)
                         {
+                            // Hard breaks and images pass through whole; surrounding emphasis
+                            // has nothing to style on either.
                             runs.Add(r);
-                            lastIsBreak = true;
+                            lastIsOpaque = true;
                         }
                         else
                         {
@@ -557,7 +569,7 @@ internal static class InlineParser
                 case BreakNode:
                     // The pinned hard-break shape: a lone "\n" run, never styled, never merged.
                     runs.Add(new InlineRun("\n"));
-                    lastIsBreak = true;
+                    lastIsOpaque = true;
                     break;
 
                 case BracketNode bracket:
@@ -597,7 +609,7 @@ internal static class InlineParser
         => c is (>= '!' and <= '/') or (>= ':' and <= '@') or (>= '[' and <= '`') or (>= '{' and <= '~');
 
     private static bool IsHardBreak(InlineRun r)
-        => r is { Text: "\n", Bold: false, Italic: false, Code: false, Strikethrough: false, LinkUrl: null };
+        => r is { Text: "\n", Bold: false, Italic: false, Code: false, Strikethrough: false, LinkUrl: null, ImageSrc: null };
 
     // -------------------------------------------------------------------- nodes
 

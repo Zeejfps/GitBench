@@ -115,7 +115,10 @@ internal enum ColumnAlignment
 /// One flat, pre-resolved styled run — the AST's entire inline model. The parser flattens any
 /// emphasis nesting; the renderer never sees a tree. A hard line break is a dedicated run whose
 /// <paramref name="Text"/> is exactly "\n", always unstyled and never merged into neighbors; no
-/// other run's text ever contains a '\n', so the renderer can treat one as a forced break.
+/// other run's text ever contains a '\n', so the renderer can treat one as a forced break. An
+/// image is a run whose <paramref name="ImageSrc"/> is set: <paramref name="Text"/> is its alt
+/// text (possibly empty), <paramref name="LinkUrl"/> the link wrapping it, if any; image runs
+/// never merge with their neighbors.
 /// </summary>
 internal sealed record InlineRun(
     string Text,
@@ -123,7 +126,8 @@ internal sealed record InlineRun(
     bool Italic = false,
     bool Code = false,
     bool Strikethrough = false,
-    string? LinkUrl = null);
+    string? LinkUrl = null,
+    string? ImageSrc = null);
 
 /// <summary>
 /// Sequence equality/hash for the AST's list-typed properties. Record equality compares the

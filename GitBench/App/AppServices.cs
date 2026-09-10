@@ -8,6 +8,7 @@ using GitBench.Features.FileBrowser;
 using GitBench.Features.Identity;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.LocalChanges;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Features.Notifications;
 using GitBench.Features.Operations;
 using GitBench.Features.Repos;
@@ -64,6 +65,8 @@ internal static class AppServices
         locale.Changed += preferences.SetLanguage;
         context.AddService(locale);
         context.AddSingleton<ILocalizationService, LocalizationService>();
+        // One loader so decoded markdown images are shared across every surface that shows them.
+        context.AddSingleton<IMarkdownImageLoader>(ctx => new MarkdownImageLoader(ctx.Require<IUiDispatcher>()));
 
         // The one source of truth for the opt-in core.untrackedCache setting: the status-bar
         // settings toggle writes it and GitUntrackedCacheService reads it, so the two can't

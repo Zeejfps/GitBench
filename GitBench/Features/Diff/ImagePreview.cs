@@ -364,6 +364,10 @@ internal static class ImagePreviewDecoder
     private static bool IsWithinPixelBudget(int width, int height) =>
         width > 0 && height > 0 && (long)width * height <= MaxPixels;
 
+    /// <summary>The content hash <see cref="ImagePreview.ContentHash"/> carries, for callers that
+    /// key a cache on the bytes before deciding whether to decode them.</summary>
+    public static ulong ContentHash(ReadOnlySpan<byte> bytes) => Fnv1A64(bytes);
+
     private static ulong Fnv1A64(ReadOnlySpan<byte> data)
     {
         var hash = 14695981039346656037ul;

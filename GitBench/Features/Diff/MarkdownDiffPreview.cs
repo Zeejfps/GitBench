@@ -1,7 +1,25 @@
 using GitBench.Features.Markdown;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Git;
 
 namespace GitBench.Features.Diff;
+
+/// <summary>
+/// Relative images of a markdown file shown from a diff, read from the same side of the same
+/// diff as the text was — the blob at the commit, the index, or the working tree.
+/// </summary>
+internal sealed record GitBlobImageSource(
+    IGitDiffReader Git,
+    Repo Repo,
+    string BaseDir,
+    DiffSide Side,
+    bool OldSide,
+    string? CommitSha,
+    string? BaseSha) : IMarkdownImageSource
+{
+    public byte[]? Read(string path, int maxBytes) =>
+        Git.GetFileBytes(Repo, path, Side, OldSide, maxBytes, CommitSha, BaseSha);
+}
 
 internal static class MarkdownDiffPreview
 {
@@ -20,6 +38,8 @@ internal static class MarkdownDiffPreview
         if (text == null) return null;
 
         var render = MarkdownFile.Render(text);
-        return new DiffRenderState.Markdown(path, render.Document, side, isOldSide, render.Truncated);
+        var images = new GitBlobImageSource(
+            git, repo, MarkdownImagePath.DirectoryOf(path), side, isOldSide, commitSha, baseSha);
+        return new DiffRenderState.Markdown(path, render.Document, side, isOldSide, render.Truncated, images);
     }
 }

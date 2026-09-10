@@ -1,5 +1,6 @@
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
 using ZGF.Gui;
 using ZGF.Gui.Widgets;
@@ -16,6 +17,7 @@ internal sealed record MarkdownPreviewView : Widget
             Document = props.Document,
             TopNotice = props.TopNotice,
             BottomNotice = props.BottomNotice,
+            ImageSource = props.ImageSource,
         };
     }
 }
@@ -30,12 +32,16 @@ internal sealed record MarkdownPreviewBody : Widget
             Document = props.Document,
             TopNotice = props.TopNotice,
             BottomNotice = props.BottomNotice,
+            ImageSource = props.ImageSource,
         };
     }
 }
 
 file sealed record MarkdownPreviewProps(
-    Prop<MarkdownDocument?> Document, Prop<string?> TopNotice, Prop<string?> BottomNotice)
+    Prop<MarkdownDocument?> Document,
+    Prop<string?> TopNotice,
+    Prop<string?> BottomNotice,
+    Prop<IMarkdownImageSource?> ImageSource)
 {
     public static MarkdownPreviewProps From(Context ctx)
     {
@@ -51,6 +57,7 @@ file sealed record MarkdownPreviewProps(
             Prop.Bind<string?>(() =>
                 Current() is { Truncated: true }
                     ? loc.Strings.Value.DiffFileTruncated(DiffOptions.TruncationLineCap)
-                    : null));
+                    : null),
+            Prop.Bind<IMarkdownImageSource?>(() => Current()?.ImageSource));
     }
 }

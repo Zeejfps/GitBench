@@ -32,8 +32,9 @@ namespace GitBench.Tests.Markdown;
 /// first whitespace or unbalanced ')' (balanced parens stay in), is never styled, and may be
 /// followed by a quoted title that is discarded; no nested links — the inner link wins and the
 /// outer brackets stay literal.</item>
-/// <item>Images: ![alt](url) becomes the alt text linked to the image URL; an image is not a
-/// link, so a link wrapping one still forms and its URL wins.</item>
+/// <item>Images: ![alt](url) is one run with ImageSrc = url and Text = the alt as plain text
+/// (styles inside collapse, possibly to ""); it never merges with neighbors. An image is not a
+/// link, so a link wrapping one still forms and lands in the image run's LinkUrl.</item>
 /// <item>Autolinks: lowercase "http://" or "https://" with at least one character after "://",
 /// terminated by whitespace or end of input. Trailing characters from the set .,;:!?) are
 /// trimmed repeatedly (plus '&gt;'), a ')' only while the URL has unbalanced closers. "&lt;url&gt;" takes the
@@ -77,10 +78,11 @@ public class InlineParserTests
     // style-identical neighbor.
     private static void AssertWellFormed(IReadOnlyList<InlineRun> runs)
     {
-        Assert.All(runs, r => Assert.NotEqual(string.Empty, r.Text));
+        Assert.All(runs, r => Assert.True(r.Text.Length > 0 || r.ImageSrc != null));
         for (var i = 1; i < runs.Count; i++)
         {
             if (runs[i].Text == "\n" || runs[i - 1].Text == "\n") continue;
+            if (runs[i].ImageSrc != null || runs[i - 1].ImageSrc != null) continue;
             var a = runs[i - 1];
             var b = runs[i];
             var same = a.Bold == b.Bold && a.Italic == b.Italic && a.Code == b.Code
@@ -376,33 +378,60 @@ public class InlineParserTests
     // ------------------------------------------------------------------ images
 
     [Fact]
-    public void ImageBecomesAltTextLinkedToTheImage()
+    public void ImageIsOneRunCarryingAltAndSource()
     {
         Assert.Equal(
-            new[] { new InlineRun("alt", LinkUrl: "https://x.com/a.png") },
+            new[] { new InlineRun("alt", ImageSrc: "https://x.com/a.png") },
             Parse("![alt](https://x.com/a.png)"));
     }
 
     [Fact]
-    public void ImageAltTextKeepsInlineStyles()
+    public void ImageAltTextCollapsesToPlainText()
     {
         Assert.Equal(
-            new[] { new InlineRun("a", Italic: true, LinkUrl: "u") },
-            Parse("![*a*](u)"));
+            new[] { new InlineRun("a b c", ImageSrc: "u") },
+            Parse("![*a* `b`  \nc](u)"));
     }
 
     [Fact]
-    public void LinkWrappingAnImageFormsAndItsUrlWins()
+    public void LinkWrappingAnImageLandsInTheImageRun()
     {
         Assert.Equal(
-            new[] { new InlineRun("badge tail", LinkUrl: "https://x.com") },
+            new[]
+            {
+                new InlineRun("badge", LinkUrl: "https://x.com", ImageSrc: "https://img/b.svg"),
+                new InlineRun(" tail", LinkUrl: "https://x.com"),
+            },
             Parse("[![badge](https://img/b.svg) tail](https://x.com)"));
     }
 
     [Fact]
-    public void ImageWithEmptyAltRendersNothing()
+    public void ImageWithEmptyAltKeepsAnEmptyTextRun()
     {
-        Assert.Empty(Parse("![](u)"));
+        Assert.Equal(new[] { new InlineRun("", ImageSrc: "u") }, Parse("![](u)"));
+    }
+
+    [Fact]
+    public void ImagesNeverMergeWithNeighbors()
+    {
+        var runs = Parse("a ![x](u) b ![y](v)![z](w)");
+        AssertWellFormed(runs);
+        Assert.Equal(
+            new[]
+            {
+                new InlineRun("a "),
+                new InlineRun("x", ImageSrc: "u"),
+                new InlineRun(" b "),
+                new InlineRun("y", ImageSrc: "v"),
+                new InlineRun("z", ImageSrc: "w"),
+            },
+            runs);
+    }
+
+    [Fact]
+    public void EmphasisAroundAnImageDoesNotStyleIt()
+    {
+        Assert.Equal(new[] { new InlineRun("x", ImageSrc: "u") }, Parse("**![x](u)**"));
     }
 
     [Theory]

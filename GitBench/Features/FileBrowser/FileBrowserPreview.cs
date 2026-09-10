@@ -5,6 +5,7 @@ using GitBench.Features.Editor;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Widgets;
@@ -301,7 +302,45 @@ internal sealed record FileBrowserMarkdownBody : Widget
             BottomNotice = Prop.Bind<string?>(() => browser.MarkdownPreview is { Truncated: true }
                 ? loc.Strings.Value.DiffFileTruncated(DiffOptions.TruncationLineCap)
                 : null),
+            ImageSource = Prop.Bind<IMarkdownImageSource?>(() =>
+                browser.Preview.Value is FilePreview.Text { Markdown: not null } text
+                    ? WorkingTreeImageSource.For(browser.RootPath, text.Path)
+                    : null),
         };
+    }
+}
+
+/// <summary>
+/// Relative images of a markdown file in the file browser, read from the working tree under the
+/// browser's root. <see cref="For"/> yields null when the file is not under that root, so its
+/// relative paths have nothing to resolve against.
+/// </summary>
+internal sealed record WorkingTreeImageSource(string Root, string BaseDir) : IMarkdownImageSource
+{
+    public static WorkingTreeImageSource? For(string root, string absoluteFilePath)
+    {
+        var relative = Path.GetRelativePath(root, absoluteFilePath);
+        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar))
+            return null;
+        return new WorkingTreeImageSource(root, MarkdownImagePath.DirectoryOf(relative));
+    }
+
+    public byte[]? Read(string path, int maxBytes)
+    {
+        try
+        {
+            var full = Path.GetFullPath(Path.Combine(Root, path.Replace('/', Path.DirectorySeparatorChar)));
+            var root = Path.GetFullPath(Root);
+            if (!full.StartsWith(root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                return null;
+            var info = new FileInfo(full);
+            if (!info.Exists || info.Length <= 0 || info.Length > maxBytes) return null;
+            return File.ReadAllBytes(full);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return null;
+        }
     }
 }
 

@@ -42,6 +42,33 @@ public class InlineRunBuilderTests
 
     private static RichTextRun Single(InlineRun run) => Assert.Single(Build(run));
 
+    // ---------- images ----------
+
+    [Fact]
+    public void ImageRunBecomesItsAltTextLinkedToTheImage()
+    {
+        var run = Single(new InlineRun("alt", ImageSrc: "https://x.com/a.png"));
+        Assert.Equal("alt", run.Text);
+        Assert.Equal("https://x.com/a.png", run.LinkUrl);
+        Assert.True(run.Underline);
+        Assert.Equal(Styles.Link, run.Style.TextColor.Value);
+    }
+
+    [Fact]
+    public void WrappingLinkWinsOverTheImageSource()
+    {
+        var run = Single(new InlineRun("alt", LinkUrl: "https://x.com", ImageSrc: "a.png"));
+        Assert.Equal("https://x.com", run.LinkUrl);
+    }
+
+    [Fact]
+    public void EmptyAltFallsBackToTheImageSource()
+    {
+        var run = Single(new InlineRun("", ImageSrc: "docs/a.png"));
+        Assert.Equal("docs/a.png", run.Text);
+        Assert.Equal("docs/a.png", run.LinkUrl);
+    }
+
     // ---------- shape: 1:1, order, text passthrough ----------
 
     [Fact]

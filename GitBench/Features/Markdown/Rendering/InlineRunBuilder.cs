@@ -19,7 +19,10 @@ namespace GitBench.Features.Markdown.Rendering;
 /// code → <c>IsCode</c> + mono family (<c>MonoFonts.Regular</c>) +
 /// <see cref="MarkdownStyles.CodeChipText"/>; link → <c>LinkUrl</c> + <c>Underline</c> +
 /// <see cref="MarkdownStyles.Link"/>; strikethrough → <c>Strikethrough</c>, which composes with
-/// every other flag (a struck link keeps its underline and link color).
+/// every other flag (a struck link keeps its underline and link color); image → its alt text as
+/// a link to the wrapping link's URL or, failing that, the image itself (the src stands in for an
+/// empty alt) — the text fallback for an image that sits inside a text paragraph, where
+/// <see cref="MarkdownImage"/> does not apply.
 /// </para>
 /// </summary>
 internal static class InlineRunBuilder
@@ -44,7 +47,9 @@ internal static class InlineRunBuilder
         for (var i = 0; i < runs.Count; i++)
         {
             var run = runs[i];
-            var isLink = run.LinkUrl != null;
+            var link = run.LinkUrl ?? run.ImageSrc;
+            var isLink = link != null;
+            var text = run.Text.Length == 0 && run.ImageSrc is { } src ? src : run.Text;
 
             // Each run gets its own TextStyle instance — the view hands styles to the canvas per
             // segment, so a shared mutated instance would alias (see RichTextRun's doc).
@@ -61,12 +66,12 @@ internal static class InlineRunBuilder
                 style.FontFamily = MarkdownFonts.ItalicFamily;
 
             result[i] = new RichTextRun(
-                run.Text,
+                text,
                 style,
                 IsCode: run.Code,
                 Underline: isLink,
                 Strikethrough: run.Strikethrough,
-                LinkUrl: run.LinkUrl);
+                LinkUrl: link);
         }
 
         return result;

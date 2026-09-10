@@ -18,7 +18,9 @@ namespace GitBench.Features.Markdown.Rendering;
 /// headings → bold <see cref="RichText"/> on the fixed FontSize ladder
 /// (H1 = Title 22, H2 = Heading 16, H3 = Default 14, H4–H6 = Body 13), heading text in
 /// <c>Palette.TextStrong</c>; paragraphs → <see cref="RichText"/> at Body 13 in
-/// <c>Palette.TextBody</c>, inline styling via <see cref="InlineRunBuilder"/>; lists → marker
+/// <c>Palette.TextBody</c>, inline styling via <see cref="InlineRunBuilder"/>, except a paragraph
+/// of nothing but images, which draws them as pictures (<see cref="MarkdownImage"/>, one row per
+/// hard-break-separated line); lists → marker
 /// gutter ("•" bullets, "n." numbers honoring <c>Start</c>, display-only Lucide
 /// square/check-square glyphs for task items) plus nested, indented children; blockquotes →
 /// themed accent bar + inset children, nesting stacks bars/insets; thematic break → thin themed
@@ -79,7 +81,9 @@ internal sealed record MarkdownWidget : Widget
         block switch
         {
             HeadingBlock heading => Heading(heading),
-            ParagraphBlock paragraph => InlineText(paragraph.Runs, FontSize.Body, bold: false, bodyColor),
+            ParagraphBlock paragraph => MarkdownImageParagraph.IsImageOnly(paragraph.Runs)
+                ? Images(paragraph.Runs, bodyColor)
+                : InlineText(paragraph.Runs, FontSize.Body, bold: false, bodyColor),
             CodeBlock code => new CodeBlockWidget { Block = code },
             ListBlock list => List(list, bodyColor),
             QuoteBlock quote => Quote(quote),
@@ -102,10 +106,28 @@ internal sealed record MarkdownWidget : Widget
         _ => FontSize.Body,
     };
 
+    // An image-only paragraph: each line's images side by side, lines stacked. A single image
+    // is just itself, stretched to the column so it can shrink to the content width.
+    private static IWidget Images(IReadOnlyList<InlineRun> runs, Func<ThemeStyles, uint> bodyColor)
+    {
+        var lines = MarkdownImageParagraph.Lines(runs);
+        var rows = new IWidget[lines.Count];
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var images = lines[i].Select(IWidget (run) => new MarkdownImage { Run = run, BodyColor = bodyColor }).ToArray();
+            rows[i] = images.Length == 1
+                ? images[0]
+                : new Row { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.End, Children = images };
+        }
+        return rows.Length == 1
+            ? rows[0]
+            : new Column { Gap = Spacing.Sm, CrossAxis = CrossAxisAlignment.Stretch, Children = rows };
+    }
+
     /// <summary>One block's inline content as a <see cref="RichText"/>: runs are rebuilt from the
     /// live theme styles (so a theme flip restyles them), chip/hover colors come from the same
     /// slot set.</summary>
-    private static IWidget InlineText(
+    internal static IWidget InlineText(
         IReadOnlyList<InlineRun> runs, float fontSize, bool bold, Func<ThemeStyles, uint> textColor) =>
         new RichText
         {

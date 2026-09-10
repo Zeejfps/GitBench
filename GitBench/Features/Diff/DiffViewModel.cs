@@ -1,6 +1,7 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Markdown.Parsing;
+using GitBench.Features.Markdown.Rendering;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -77,12 +78,15 @@ internal abstract record DiffRenderState
         DiffSide Side,
         bool IsOldSide,
         bool IsLfs) : DiffRenderState;
+    // ImageSource reads the document's relative images from the same blob source as the text,
+    // so a README at a commit shows that commit's screenshots.
     public sealed record Markdown(
         string Path,
         MarkdownDocument Document,
         DiffSide Side,
         bool IsOldSide,
-        bool Truncated) : DiffRenderState;
+        bool Truncated,
+        IMarkdownImageSource? ImageSource = null) : DiffRenderState;
 }
 
 // Badge shown in the diff header for binary files: whether the blob lives in Git LFS or is

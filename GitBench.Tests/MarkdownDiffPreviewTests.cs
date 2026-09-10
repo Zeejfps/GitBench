@@ -27,10 +27,16 @@ public class MarkdownDiffPreviewTests
             return oldSide ? OldSide : NewSide;
         }
 
+        public readonly List<(string Path, DiffSide Side, bool OldSide, string? Sha, string? Base)> ByteReads = new();
+        public byte[]? Bytes;
+
         public byte[]? GetFileBytes(
             Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null,
             string? baseSha = null)
-            => null;
+        {
+            ByteReads.Add((path, side, oldSide, commitSha, baseSha));
+            return Bytes;
+        }
     }
 
     private static readonly Repo Repo = new(Guid.NewGuid(), "/tmp/repo", "repo");
@@ -47,6 +53,34 @@ public class MarkdownDiffPreviewTests
     [InlineData("md", false)]
     public void IsPreviewablePath_matches_markdown_extensions_only(string path, bool expected)
         => Assert.Equal(expected, MarkdownDiffPreview.IsPreviewablePath(path));
+
+    [Fact]
+    public void Build_reads_relative_images_from_the_same_side_and_directory()
+    {
+        var git = new FakeDiffReader { NewSide = "![shot](img/a.png)\n", Bytes = new byte[] { 1, 2, 3 } };
+
+        var state = Assert.IsType<DiffRenderState.Markdown>(
+            MarkdownDiffPreview.Build(git, Repo, "docs/README.md", DiffSide.Commit, "abc123", null));
+
+        var source = Assert.IsType<GitBlobImageSource>(state.ImageSource);
+        Assert.Equal("docs", source.BaseDir);
+        Assert.Equal(new byte[] { 1, 2, 3 }, source.Read("docs/img/a.png", 100));
+        var read = Assert.Single(git.ByteReads);
+        Assert.Equal(("docs/img/a.png", DiffSide.Commit, false, "abc123", (string?)null), read);
+    }
+
+    [Fact]
+    public void Build_reads_old_side_images_when_showing_the_old_side()
+    {
+        var git = new FakeDiffReader { OldSide = "text\n" };
+
+        var state = Assert.IsType<DiffRenderState.Markdown>(
+            MarkdownDiffPreview.Build(git, Repo, "README.md", DiffSide.Staged, null, null));
+
+        var source = Assert.IsType<GitBlobImageSource>(state.ImageSource);
+        Assert.True(source.OldSide);
+        Assert.Equal(string.Empty, source.BaseDir);
+    }
 
     [Fact]
     public void Build_parses_the_new_side_text()

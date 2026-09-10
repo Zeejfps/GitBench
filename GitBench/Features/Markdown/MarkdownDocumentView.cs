@@ -21,6 +21,10 @@ internal sealed record MarkdownDocumentView : Widget
 
     public Prop<string?> BottomNotice { get; init; }
 
+    /// <summary>Where the document's relative image paths read from; unset when it has none, in
+    /// which case only remote images show.</summary>
+    public Prop<IMarkdownImageSource?> ImageSource { get; init; }
+
     protected override View CreateView(Context ctx)
     {
         var pane = new VerticalScrollPane { FillParent = true, StretchContent = true };
@@ -50,6 +54,7 @@ internal sealed record MarkdownDocumentView : Widget
         Document = Document,
         TopNotice = TopNotice,
         BottomNotice = BottomNotice,
+        ImageSource = ImageSource,
     };
 }
 
@@ -58,9 +63,13 @@ internal sealed record MarkdownDocumentBody : Widget
     public required Prop<MarkdownDocument?> Document { get; init; }
     public Prop<string?> TopNotice { get; init; }
     public Prop<string?> BottomNotice { get; init; }
+    public Prop<IMarkdownImageSource?> ImageSource { get; init; }
 
-    protected override IWidget Build(Context ctx) => new Box
+    protected override IWidget Build(Context ctx)
     {
+        var imageSource = ImageSource.ToReadable(ctx);
+        return new Box
+        {
         Background = Theme.Color(s => s.DiffView.PanelBackground),
         Children =
         [
@@ -83,9 +92,12 @@ internal sealed record MarkdownDocumentBody : Widget
                             new Switch<MarkdownDocument?>
                             {
                                 Value = Held(Document.ToReadable(ctx)),
+                                // The image source is read when the document swaps in: it is
+                                // part of the same surface state, so it changes when the
+                                // document does.
                                 Case = doc => doc is null
                                     ? Empty.Widget
-                                    : new MarkdownWidget { Document = doc },
+                                    : WithImageSource(new MarkdownWidget { Document = doc }, imageSource.Value),
                             },
                             Notice(BottomNotice),
                         ],
@@ -93,7 +105,11 @@ internal sealed record MarkdownDocumentBody : Widget
                 ],
             },
         ],
-    };
+        };
+    }
+
+    private static IWidget WithImageSource(IWidget document, IMarkdownImageSource? source) =>
+        source is null ? document : new Provide<IMarkdownImageSource> { Value = source, Child = document };
 
     /// <summary>
     /// The document to draw, which is the last one there was until there is another.
