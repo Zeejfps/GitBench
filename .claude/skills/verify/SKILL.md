@@ -60,4 +60,6 @@ Gotchas:
   The unstaged list's first row is near the top of its rect (y ≈ rect.y + height − 15,
   rows ~23px apart going down).
 - `gui_screenshot` returns PNG image content; decode the base64 to a file and Read it.
-- Runtime language switch: click the `EN` chip in the bottom status bar → context menu.
+- Theme and language live in the Settings dialog: click the gear in the bottom status bar
+  (or `Cmd+,` on macOS), then the `#settings-theme` / `#settings-language` dropdowns →
+  context menu. Both apply instantly; `Esc` closes the dialog.

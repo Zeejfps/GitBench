@@ -1,13 +1,13 @@
 using GitBench.App;
 using GitBench.Controls;
+using GitBench.Controls.Dialogs;
 using GitBench.Features.Identity;
-using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
+using GitBench.Features.Settings;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Theming;
 using ZGF.Gui;
 using ZGF.Observable;
 
@@ -29,11 +29,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     private readonly IdentityProfileService _profiles;
     private readonly IGitConfigOperations _git;
     private readonly IMessageBus _bus;
-    private readonly State<ThemeMode> _themeMode;
     private readonly UpdateService _updateService;
     private readonly ILocalizationService _loc;
-    private readonly State<Locale> _locale;
-    private readonly State<bool> _enableUntrackedCache;
     private readonly SpinnerAnimation _updateSpinner;
     private readonly GenerationGuard _identityLane;
     private CancellationTokenSource? _feedbackCts;
@@ -50,9 +47,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
     public IReadable<string> IdentityText { get; }
     public IReadable<string> IdentityGlyph { get; }
 
-    public Command ToggleTheme { get; }
-    public IReadable<ThemeMode> Theme => _themeMode;
-    public IReadable<Locale> ActiveLocale => _locale;
+    public Command OpenSettings { get; }
 
     public Command CheckForUpdates { get; }
     public IReadable<bool> IsCheckingUpdates => _updateService.IsChecking;
@@ -68,11 +63,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IdentityProfileService profiles,
         IGitConfigOperations git,
         IMessageBus bus,
-        State<ThemeMode> themeMode,
         UpdateService updateService,
-        ILocalizationService loc,
-        State<Locale> locale,
-        State<bool> enableUntrackedCache)
+        ILocalizationService loc)
         : base(dispatcher, StatusBarState.Initial)
     {
         _registry = registry;
@@ -80,11 +72,8 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         _profiles = profiles;
         _git = git;
         _bus = bus;
-        _themeMode = themeMode;
         _updateService = updateService;
         _loc = loc;
-        _locale = locale;
-        _enableUntrackedCache = enableUntrackedCache;
         _updateSpinner = new SpinnerAnimation(ticker);
         _identityLane = CreateLane();
 
@@ -100,7 +89,7 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         IdentityText = Slice(s => s.IdentityText ?? string.Empty);
         IdentityGlyph = Slice(s => s.IdentityIsWarning ? LucideIcons.TriangleAlert : LucideIcons.PencilLine);
 
-        ToggleTheme = new Command(DoToggleTheme);
+        OpenSettings = new Command(DoOpenSettings);
         CheckForUpdates = new Command(DoCheckForUpdates);
 
         // Re-resolve the active repo's identity whenever profiles or refs change (the resolver
@@ -122,8 +111,9 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
 
     private static bool HasTracking(StatusBarState s) => s.HasUpstream && !s.IsDetached;
 
-    private void DoToggleTheme() =>
-        _themeMode.Value = _themeMode.Value == ThemeMode.Dark ? ThemeMode.Light : ThemeMode.Dark;
+    private void DoOpenSettings() =>
+        _bus.Broadcast(new ShowDialogMessage(onClose =>
+            new SettingsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
 
     private void DoCheckForUpdates() =>
         _ = _updateService.CheckForUpdatesAsync(Dispatcher, userInitiated: true);
@@ -210,71 +200,6 @@ internal sealed class StatusBarViewModel : ViewModelBase<StatusBarState>
         => c.UserEmail != null
             ? (c.UserName != null ? $"{c.UserName} <{c.UserEmail}>" : c.UserEmail)
             : c.UserName;
-
-    // Each selectable locale paired with its endonym (the language's own name — script-neutral, so
-    // not itself localized). Pseudo is the dev/layout-test locale, kept here for parity with the
-    // native macOS Language menu.
-    private static readonly (Locale Locale, string Name)[] LanguageOptions =
-    {
-        (Locale.En, "English"),
-        (Locale.Es, "Español"),
-        (Locale.Ja, "日本語"),
-        (Locale.ZhHans, "简体中文"),
-        (Locale.Ko, "한국어"),
-        (Locale.Ar, "العربية"),
-        (Locale.Ru, "Русский"),
-        (Locale.Pseudo, "Pseudo"),
-    };
-
-    // Compact code shown on the status-bar chip (the menu carries the full endonyms).
-    public static string Code(Locale locale) => locale switch
-    {
-        Locale.En => "EN",
-        Locale.Es => "ES",
-        Locale.Ja => "JA",
-        Locale.ZhHans => "ZH",
-        Locale.Ko => "KO",
-        Locale.Ar => "AR",
-        Locale.Ru => "RU",
-        Locale.Pseudo => "PS",
-        _ => "EN",
-    };
-
-    // The language picker — the cross-platform way to switch locale (the native macOS menu carries
-    // the same items but exists only on macOS). A checkmark marks the active locale.
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildLanguageMenu()
-    {
-        var active = _locale.Value;
-        var items = new List<RepoBarContextMenu.Item>(LanguageOptions.Length);
-        foreach (var (locale, name) in LanguageOptions)
-        {
-            var target = locale;
-            items.Add(new RepoBarContextMenu.Item(
-                name,
-                () => _locale.Value = target,
-                Checked: active == locale));
-        }
-
-        return items;
-    }
-
-    // The shared app-preferences menu (the first of its kind — theme and language have their own
-    // controls). One checkable toggle for the opt-in untracked cache; a check marks it on.
-    public IReadOnlyList<RepoBarContextMenu.Item> BuildSettingsMenu()
-    {
-        var s = _loc.Strings.Value;
-        return new[]
-        {
-            new RepoBarContextMenu.Item(
-                s.StatusbarEnableUntrackedCache,
-                () => _enableUntrackedCache.Value = !_enableUntrackedCache.Value,
-                Checked: _enableUntrackedCache.Value),
-            new RepoBarContextMenu.Item(
-                s.LanguageServersMenuItem,
-                () => _bus.Broadcast(new ShowDialogMessage(onClose =>
-                    new LanguageServersDialog { OnClose = onClose }))),
-        };
-    }
 
     // Built fresh on each chip click so it reflects the current profiles + resolution.
     public IReadOnlyList<RepoBarContextMenu.Item> BuildIdentityMenu()

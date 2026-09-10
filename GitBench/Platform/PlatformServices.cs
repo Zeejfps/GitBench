@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using GitBench.App;
 using GitBench.Controls.Dialogs;
+using GitBench.Features.Settings;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -85,6 +86,9 @@ internal static class PlatformServices
             void ShowAbout() =>
                 bus.Broadcast(new ShowDialogMessage(onClose =>
                     new AboutDialog { OnClose = onClose }.WithController<DialogKbmController>()));
+            void ShowSettings() =>
+                bus.Broadcast(new ShowDialogMessage(onClose =>
+                    new SettingsDialog { OnClose = onClose }.WithController<DialogKbmController>()));
 
             AppMenuBar BuildMenuBar()
             {
@@ -100,6 +104,8 @@ internal static class PlatformServices
                             Items =
                             {
                                 new AppMenuItem { Title = s.MenuAppAbout(AppIdentity.DisplayName), OnClick = ShowAbout },
+                                AppMenuItem.Separator,
+                                new AppMenuItem { Title = s.MenuAppSettings, OnClick = ShowSettings, KeyEquivalent = "," },
                                 AppMenuItem.Separator,
                                 new AppMenuItem { Title = s.MenuAppCheckUpdates, OnClick = CheckForUpdates },
                                 AppMenuItem.Separator,
@@ -122,15 +128,6 @@ internal static class PlatformServices
                             Items =
                             {
                                 new AppMenuItem { Title = s.MenuViewToggleTheme, OnClick = ToggleTheme },
-                                AppMenuItem.Separator,
-                                new AppMenuItem { Title = s.MenuViewLanguageEnglish, OnClick = () => locale.Value = Locale.En },
-                                new AppMenuItem { Title = s.MenuViewLanguageSpanish, OnClick = () => locale.Value = Locale.Es },
-                                new AppMenuItem { Title = s.MenuViewLanguageJapanese, OnClick = () => locale.Value = Locale.Ja },
-                                new AppMenuItem { Title = s.MenuViewLanguageChinese, OnClick = () => locale.Value = Locale.ZhHans },
-                                new AppMenuItem { Title = s.MenuViewLanguageKorean, OnClick = () => locale.Value = Locale.Ko },
-                                new AppMenuItem { Title = s.MenuViewLanguageArabic, OnClick = () => locale.Value = Locale.Ar },
-                                new AppMenuItem { Title = s.MenuViewLanguageRussian, OnClick = () => locale.Value = Locale.Ru },
-                                new AppMenuItem { Title = s.MenuViewLanguagePseudo, OnClick = () => locale.Value = Locale.Pseudo },
                                 AppMenuItem.Separator,
                                 new AppMenuItem
                                 {

@@ -15,7 +15,7 @@ using ZGF.Observable;
 namespace GitBench.Features.StatusBar;
 
 /// <summary>
-/// The status bar's own row: the theme, settings, and language controls, then the ambient repo
+/// The status bar's own row: the settings control, then the ambient repo
 /// context — active repo, current branch, ahead/behind counts, and the commit identity — with the
 /// update check and running build version at the trailing edge.
 /// </summary>
@@ -57,24 +57,10 @@ internal sealed record StatusBarContentView : Widget
             [
                 new StatusBarIconButton
                 {
-                    Icon = Prop.Bind<string?>(() => vm.Theme.Value == ThemeMode.Dark ? LucideIcons.Sun : LucideIcons.Moon),
-                    Command = vm.ToggleTheme,
-                }.WithTooltip(L.T(s => s.StatusbarToggleThemeTooltip))
-                    .WithController<KbmController>(),
-                new StatusBarIconButton
-                {
                     Icon = LucideIcons.Settings,
-                    // The press is owned by the menu controller below; this
-                    // just satisfies the button's required command.
-                    Command = new Command(static () => { }),
+                    Command = vm.OpenSettings,
                 }.WithTooltip(L.T(s => s.StatusbarSettingsTooltip))
-                    .WithMenuController(rect =>
-                        RepoBarContextMenu.Show(ctx, rect.TopLeft, vm.BuildSettingsMenu(), MenuPlacement.Above)),
-                new LanguageChipButton
-                {
-                    Label = vm.ActiveLocale.Bind(string? (l) => StatusBarViewModel.Code(l)),
-                }.WithMenuController(rect =>
-                    RepoBarContextMenu.Show(ctx, rect.TopLeft, vm.BuildLanguageMenu(), MenuPlacement.Above)),
+                    .WithController<KbmController>(),
                 new Grow { Child = left },
                 new Text
                 {
