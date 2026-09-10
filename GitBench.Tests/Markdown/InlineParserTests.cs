@@ -9,8 +9,8 @@ namespace GitBench.Tests.Markdown;
 /// the pins are binding on the implementation:
 ///
 /// <list type="bullet">
-/// <item>Hard break: two or more trailing spaces before a newline yield a run whose Text is
-/// exactly "\n", always unstyled (no flags, no link) — there is no LineBreak node in the AST, so
+/// <item>Hard break: two or more trailing spaces (or a backslash) before a newline yield a run
+/// whose Text is exactly "\n", always unstyled (no flags, no link) — there is no LineBreak node in the AST, so
 /// the renderer treats a lone "\n" run as a break. The break-forming spaces are consumed. Soft
 /// breaks (a bare "\n") collapse to a single space, taking the line's trailing spaces with them,
 /// so no run text but a hard break ever contains a "\n"; trailing spaces at end of input (no
@@ -28,12 +28,16 @@ namespace GitBench.Tests.Markdown;
 /// whitespace cannot close. Intraword underscores never emphasize (snake_case stays literal);
 /// intraword asterisks do. Delimiters match across the whole input, including across soft
 /// breaks. Nesting flattens to style flags on flat runs.</item>
-/// <item>Links: [text](url) with inline styles allowed inside the text; the URL is taken
-/// verbatim to the matching ')' and is never styled; no title syntax; no nested links — the
-/// inner link wins and the outer brackets stay literal.</item>
+/// <item>Links: [text](url) with inline styles allowed inside the text; the URL runs to the
+/// first whitespace or unbalanced ')' (balanced parens stay in), is never styled, and may be
+/// followed by a quoted title that is discarded; no nested links — the inner link wins and the
+/// outer brackets stay literal.</item>
+/// <item>Images: ![alt](url) becomes the alt text linked to the image URL; an image is not a
+/// link, so a link wrapping one still forms and its URL wins.</item>
 /// <item>Autolinks: lowercase "http://" or "https://" with at least one character after "://",
 /// terminated by whitespace or end of input. Trailing characters from the set .,;:!?) are
-/// trimmed repeatedly (no paren balancing).</item>
+/// trimmed repeatedly (plus '&gt;'), a ')' only while the URL has unbalanced closers. "&lt;url&gt;" takes the
+/// URL exactly, nothing trimmed.</item>
 /// <item>Unmatched or misused delimiters stay literal. Empty input yields an empty list. Parse
 /// never throws.</item>
 /// </list>
@@ -327,6 +331,35 @@ public class InlineParserTests
         AssertRuns(markdown, spec);
     }
 
+    [Theory]
+    [InlineData("[t](https://x.com \"Title\")")]
+    [InlineData("[t](https://x.com 'Title')")]
+    [InlineData("[t](https://x.com (Title))")]
+    [InlineData("[t](https://x.com   \"Title with ) paren\"  )")]
+    [InlineData("[t]( https://x.com )")]
+    public void LinkTitleIsAcceptedAndDiscarded(string markdown)
+    {
+        Assert.Equal(new[] { new InlineRun("t", LinkUrl: "https://x.com") }, Parse(markdown));
+    }
+
+    [Theory]
+    [InlineData("[w](https://en.wikipedia.org/wiki/Foo_(bar))", "https://en.wikipedia.org/wiki/Foo_(bar)")]
+    [InlineData("[w](https://x.com/a_(b)_(c))", "https://x.com/a_(b)_(c)")]
+    [InlineData("[w](https://x.com/\\))", "https://x.com/)")]
+    public void BalancedAndEscapedParensStayInTheUrl(string markdown, string url)
+    {
+        Assert.Equal(new[] { new InlineRun("w", LinkUrl: url) }, Parse(markdown));
+    }
+
+    [Theory]
+    [InlineData("[a](b c)", "-:[a](b c)")] // whitespace ends the URL and "c" is not a title
+    [InlineData("[a](u \"unterminated)", "-:[a](u \"unterminated)")]
+    [InlineData("[a](u(v)", "-:[a](u(v)")] // unbalanced opener
+    public void MalformedDestinationsStayLiteral(string markdown, string spec)
+    {
+        AssertRuns(markdown, spec);
+    }
+
     [Fact]
     public void NestedLinksAreNotAllowedInnerWins()
     {
@@ -340,7 +373,77 @@ public class InlineParserTests
             Parse("[a [b](u)](v)"));
     }
 
+    // ------------------------------------------------------------------ images
+
+    [Fact]
+    public void ImageBecomesAltTextLinkedToTheImage()
+    {
+        Assert.Equal(
+            new[] { new InlineRun("alt", LinkUrl: "https://x.com/a.png") },
+            Parse("![alt](https://x.com/a.png)"));
+    }
+
+    [Fact]
+    public void ImageAltTextKeepsInlineStyles()
+    {
+        Assert.Equal(
+            new[] { new InlineRun("a", Italic: true, LinkUrl: "u") },
+            Parse("![*a*](u)"));
+    }
+
+    [Fact]
+    public void LinkWrappingAnImageFormsAndItsUrlWins()
+    {
+        Assert.Equal(
+            new[] { new InlineRun("badge tail", LinkUrl: "https://x.com") },
+            Parse("[![badge](https://img/b.svg) tail](https://x.com)"));
+    }
+
+    [Fact]
+    public void ImageWithEmptyAltRendersNothing()
+    {
+        Assert.Empty(Parse("![](u)"));
+    }
+
+    [Theory]
+    [InlineData("![alt", "-:![alt")]
+    [InlineData("![alt](u", "-:![alt](u")]
+    [InlineData("hi!", "-:hi!")]
+    [InlineData("a! [b](u)", "-:a! ¦-:b")]
+    public void UnmatchedImageOpenersStayLiteral(string markdown, string spec)
+    {
+        var runs = Parse(markdown);
+        AssertWellFormed(runs);
+        if (markdown == "a! [b](u)")
+        {
+            Assert.Equal(new[] { new InlineRun("a! "), new InlineRun("b", LinkUrl: "u") }, runs);
+            return;
+        }
+        Assert.Equal(ExpectedRuns(spec), runs);
+    }
+
     // --------------------------------------------------------------- autolinks
+
+    [Theory]
+    [InlineData("<https://x.com>", "L:https://x.com")]
+    [InlineData("see <http://x.com/a.> now", "-:see ¦L:http://x.com/a.¦-: now")] // nothing trimmed
+    [InlineData("<https://x.com/Foo_(bar>", "L:https://x.com/Foo_(bar")]
+    [InlineData("**<https://x.com>**", "BL:https://x.com")]
+    public void AngleBracketAutolinksTakeTheUrlExactly(string markdown, string spec)
+    {
+        AssertRuns(markdown, spec);
+    }
+
+    [Theory]
+    [InlineData("<https://x.com/a b>", "-:<¦L:https://x.com/a¦-: b>")] // falls back to a bare autolink
+    [InlineData("<ftp://x.com>", "-:<ftp://x.com>")]
+    [InlineData("<https://>", "-:<https://>")]
+    [InlineData("<https://x.com", "-:<¦L:https://x.com")]
+    [InlineData("a < b", "-:a < b")]
+    public void NonAngleAutolinksStayLiteral(string markdown, string spec)
+    {
+        AssertRuns(markdown, spec);
+    }
 
     [Theory]
     [InlineData("https://example.com", "L:https://example.com")]
@@ -357,7 +460,9 @@ public class InlineParserTests
     [InlineData("https://e.com, then", "L:https://e.com¦-:, then")]
     [InlineData("is it https://e.com?", "-:is it ¦L:https://e.com¦-:?")]
     [InlineData("(https://e.com)", "-:(¦L:https://e.com¦-:)")]
-    [InlineData("https://e.com/x).", "L:https://e.com/x¦-:).")] // trims repeatedly, no balancing
+    [InlineData("https://e.com/x).", "L:https://e.com/x¦-:).")] // trims repeatedly
+    [InlineData("https://e.com/Foo_(bar)", "L:https://e.com/Foo_(bar)")] // balanced paren stays
+    [InlineData("(see https://e.com/Foo_(bar))", "-:(see ¦L:https://e.com/Foo_(bar)¦-:)")]
     [InlineData("at https://e.com; and http://f.io!", "-:at ¦L:https://e.com¦-:; and ¦L:http://f.io¦-:!")]
     public void AutolinkTrailingPunctuationIsTrimmed(string markdown, string spec)
     {
@@ -412,6 +517,20 @@ public class InlineParserTests
         // Pinned representation: the break is a dedicated unstyled run of exactly "\n"; the
         // break-forming spaces are consumed.
         AssertRuns("a  \nb", "-:a¦-:\n¦-:b");
+    }
+
+    [Fact]
+    public void BackslashBeforeNewlineIsAHardBreak()
+    {
+        Assert.Equal(
+            new[] { new InlineRun("a"), new InlineRun("\n"), new InlineRun("b") },
+            Parse("a\\\nb"));
+    }
+
+    [Fact]
+    public void BackslashAtEndOfInputStaysLiteral()
+    {
+        Assert.Equal(new[] { new InlineRun("a\\") }, Parse("a\\"));
     }
 
     [Fact]

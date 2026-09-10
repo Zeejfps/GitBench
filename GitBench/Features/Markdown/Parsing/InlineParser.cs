@@ -7,10 +7,11 @@ namespace GitBench.Features.Markdown.Parsing;
 /// and produces the flat, pre-resolved <see cref="InlineRun"/> list the renderer consumes.
 /// Covers the scoped subset (docs/plans/markdown-renderer.md): emphasis (<c>*</c>/<c>**</c>/
 /// <c>***</c>/<c>_</c>), inline code (backtick runs, code wins over emphasis), strikethrough,
-/// links, bare-URL autolinks, backslash escapes, and line breaks — a hard break becomes a
-/// dedicated "\n" run, a soft break collapses to a space. Nesting resolves into style flags on
-/// flat runs; adjacent runs with identical styling merge; unmatched delimiters degrade to literal
-/// text. Never throws.
+/// links (with optional titles and balanced parens in the destination), images (rendered as
+/// their alt text linked to the image), angle and bare-URL autolinks, backslash escapes, and line
+/// breaks — a hard break (trailing spaces or a trailing backslash) becomes a dedicated "\n" run,
+/// a soft break collapses to a space. Nesting resolves into style flags on flat runs; adjacent
+/// runs with identical styling merge; unmatched delimiters degrade to literal text. Never throws.
 ///
 /// Shape: a single left-to-right scan turns the text into a node list — literal text, resolved
 /// atoms (code spans, links, autolinks), hard breaks, '[' openers, and emphasis delimiter runs.
@@ -50,8 +51,15 @@ internal static class InlineParser
             switch (c)
             {
                 case '\\':
-                    // Escapes cover ASCII punctuation; before anything else the backslash stays.
-                    if (i + 1 < s.Length && IsEscapable(s[i + 1]))
+                    // A backslash before a newline is a hard break; escapes cover ASCII
+                    // punctuation; before anything else the backslash stays.
+                    if (i + 1 < s.Length && s[i + 1] == '\n')
+                    {
+                        Flush();
+                        nodes.Add(new BreakNode());
+                        i += 2;
+                    }
+                    else if (i + 1 < s.Length && IsEscapable(s[i + 1]))
                     {
                         text.Append(s[i + 1]);
                         i += 2;
@@ -81,10 +89,39 @@ internal static class InlineParser
                     break;
                 }
 
+                case '!':
+                    if (i + 1 < s.Length && s[i + 1] == '[')
+                    {
+                        Flush();
+                        nodes.Add(new BracketNode { IsImage = true });
+                        i += 2;
+                    }
+                    else
+                    {
+                        text.Append('!');
+                        i++;
+                    }
+                    break;
+
                 case '[':
                     Flush();
                     nodes.Add(new BracketNode());
                     i++;
+                    break;
+
+                case '<':
+                    if (TryMatchAngleAutolink(s, i, out var angleEnd))
+                    {
+                        Flush();
+                        var url = s[(i + 1)..(angleEnd - 1)];
+                        nodes.Add(new AtomNode(new[] { new InlineRun(url, LinkUrl: url) }));
+                        i = angleEnd;
+                    }
+                    else
+                    {
+                        text.Append('<');
+                        i++;
+                    }
                     break;
 
                 case ']':
@@ -181,8 +218,8 @@ internal static class InlineParser
     // -------------------------------------------------------------------- links
 
     // Called with i at ']'. On success the bracketed slice collapses into one linked atom and i
-    // moves past "(url)"; on a failed "(url)" the matched opener is spent — a later ']' cannot
-    // reuse it — and the ']' stays literal.
+    // moves past the destination; on a failed destination the matched opener is spent — a later
+    // ']' cannot reuse it — and the ']' stays literal.
     private static bool TryCloseLink(string s, List<Node> nodes, ref int i)
     {
         BracketNode? opener = null;
@@ -198,15 +235,13 @@ internal static class InlineParser
         }
         if (opener is null) return false;
 
-        // This subset requires "(url)" immediately after "]"; the URL runs verbatim to the
-        // first ')' and is never inline-parsed or styled.
-        var close = i + 1 < s.Length && s[i + 1] == '(' ? s.IndexOf(')', i + 2) : -1;
-        if (close < 0)
+        // This subset requires "(" immediately after "]"; the destination is never
+        // inline-parsed or styled, and an optional quoted title is accepted and discarded.
+        if (i + 1 >= s.Length || s[i + 1] != '(' || !TryParseLinkDestination(s, i + 2, out var url, out var close))
         {
             opener.Active = false;
             return false;
         }
-        var url = s[(i + 2)..close];
 
         // The link text resolves its own emphasis in isolation — delimiters inside never pair
         // with delimiters outside the brackets.
@@ -224,12 +259,74 @@ internal static class InlineParser
         nodes.RemoveRange(oi, nodes.Count - oi);
         nodes.Add(new AtomNode(linked));
         // No nested links — the inner link wins: forming this one spends every enclosing '[',
-        // so an outer pair can never become a link and its brackets stay literal.
-        foreach (var node in nodes)
+        // so an outer pair can never become a link and its brackets stay literal. An image is
+        // not a link, so an enclosing "[![alt](img)](url)" still forms and its URL replaces the
+        // image's.
+        if (!opener.IsImage)
         {
-            if (node is BracketNode remaining) remaining.Active = false;
+            foreach (var node in nodes)
+            {
+                if (node is BracketNode remaining) remaining.Active = false;
+            }
         }
         i = close + 1;
+        return true;
+    }
+
+    // Parses "url" or "url \"title\"" from just after "(" up to the closing ')', which is
+    // returned in close. The URL runs to the first whitespace or unbalanced ')', with
+    // backslash escapes honored, so "https://x/Foo_(bar)" survives intact. The title may be
+    // quoted with "", '' or (); it is not kept.
+    private static bool TryParseLinkDestination(string s, int start, out string url, out int close)
+    {
+        url = string.Empty;
+        close = -1;
+        var k = start;
+        while (k < s.Length && s[k] == ' ') k++;
+
+        var dest = new StringBuilder();
+        var depth = 0;
+        while (k < s.Length)
+        {
+            var c = s[k];
+            if (c == '\\' && k + 1 < s.Length && IsEscapable(s[k + 1]))
+            {
+                dest.Append(s[k + 1]);
+                k += 2;
+                continue;
+            }
+            if (char.IsWhiteSpace(c)) break;
+            if (c == '(') depth++;
+            else if (c == ')')
+            {
+                if (depth == 0) break;
+                depth--;
+            }
+            dest.Append(c);
+            k++;
+        }
+        if (depth != 0) return false;
+
+        while (k < s.Length && s[k] == ' ') k++;
+        if (k >= s.Length) return false;
+        if (s[k] is '"' or '\'' or '(')
+        {
+            var closer = s[k] == '(' ? ')' : s[k];
+            k++;
+            while (k < s.Length && s[k] != closer)
+            {
+                if (s[k] == '\\' && k + 1 < s.Length) k++;
+                k++;
+            }
+            if (k >= s.Length) return false;
+            k++;
+            while (k < s.Length && s[k] == ' ') k++;
+            if (k >= s.Length) return false;
+        }
+        if (s[k] != ')') return false;
+
+        url = dest.ToString();
+        close = k;
         return true;
     }
 
@@ -238,24 +335,67 @@ internal static class InlineParser
     private static bool TryMatchAutolink(string s, int i, out int end)
     {
         end = 0;
-        int schemeEnd;
-        if (s.AsSpan(i).StartsWith("https://", StringComparison.Ordinal)) schemeEnd = i + 8;
-        else if (s.AsSpan(i).StartsWith("http://", StringComparison.Ordinal)) schemeEnd = i + 7;
-        else return false;
+        if (!TryMatchScheme(s, i, out var schemeEnd)) return false;
 
         var stop = schemeEnd;
         while (stop < s.Length && !char.IsWhiteSpace(s[stop])) stop++;
-        // Repeated trailing-punctuation trim, no paren balancing. Emphasis/strike markers trim
-        // too; trimmed characters are re-scanned rather than consumed, so the closer in
-        // "**https://e.com**" still pairs with its opener.
-        while (stop > schemeEnd && IsAutolinkTrailing(s[stop - 1])) stop--;
+        // Repeated trailing-punctuation trim. Emphasis/strike markers trim too; trimmed
+        // characters are re-scanned rather than consumed, so the closer in "**https://e.com**"
+        // still pairs with its opener. A trailing ')' only trims while the URL has more closing
+        // parens than opening ones (GFM), so "https://x/Foo_(bar)" keeps its paren.
+        while (stop > schemeEnd && IsAutolinkTrailing(s[stop - 1]))
+        {
+            if (s[stop - 1] == ')' && !HasUnbalancedCloseParen(s, schemeEnd, stop)) break;
+            stop--;
+        }
         if (stop == schemeEnd) return false;
         end = stop;
         return true;
     }
 
+    // Called with i at '<'. CommonMark's absolute-URI autolink, narrowed to the same http(s)
+    // schemes as bare autolinks: "<scheme:...>" with no whitespace or '<' inside and nothing
+    // trimmed — the '>' delimits, so the URL is taken exactly. end is the index after '>'.
+    private static bool TryMatchAngleAutolink(string s, int i, out int end)
+    {
+        end = 0;
+        if (!TryMatchScheme(s, i + 1, out var schemeEnd)) return false;
+        var k = schemeEnd;
+        while (k < s.Length && s[k] != '>')
+        {
+            if (char.IsWhiteSpace(s[k]) || s[k] == '<') return false;
+            k++;
+        }
+        if (k >= s.Length || k == schemeEnd) return false;
+        end = k + 1;
+        return true;
+    }
+
+    private static bool TryMatchScheme(string s, int i, out int schemeEnd)
+    {
+        if (s.AsSpan(i).StartsWith("https://", StringComparison.Ordinal)) schemeEnd = i + 8;
+        else if (s.AsSpan(i).StartsWith("http://", StringComparison.Ordinal)) schemeEnd = i + 7;
+        else
+        {
+            schemeEnd = 0;
+            return false;
+        }
+        return true;
+    }
+
+    private static bool HasUnbalancedCloseParen(string s, int from, int to)
+    {
+        var balance = 0;
+        for (var k = from; k < to; k++)
+        {
+            if (s[k] == '(') balance++;
+            else if (s[k] == ')') balance--;
+        }
+        return balance < 0;
+    }
+
     private static bool IsAutolinkTrailing(char c)
-        => c is '.' or ',' or ';' or ':' or '!' or '?' or ')' or '*' or '_' or '~';
+        => c is '.' or ',' or ';' or ':' or '!' or '?' or ')' or '>' or '*' or '_' or '~';
 
     // --------------------------------------------------------------- code spans
 
@@ -420,8 +560,8 @@ internal static class InlineParser
                     lastIsBreak = true;
                     break;
 
-                case BracketNode:
-                    Emit("[", bold > 0, italic > 0, false, strike > 0, null);
+                case BracketNode bracket:
+                    Emit(bracket.IsImage ? "![" : "[", bold > 0, italic > 0, false, strike > 0, null);
                     break;
 
                 case DelimiterNode d:
@@ -489,10 +629,12 @@ internal static class InlineParser
     {
     }
 
-    /// <summary>A '[' that may yet open a link; flattens to a literal "[" when it never does.</summary>
+    /// <summary>A '[' (or "![" for an image) that may yet open a link; flattens to a literal
+    /// "[" or "![" when it never does.</summary>
     private sealed class BracketNode : Node
     {
         public bool Active = true;
+        public bool IsImage;
     }
 
     /// <summary>

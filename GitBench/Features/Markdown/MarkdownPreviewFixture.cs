@@ -34,8 +34,14 @@ internal static class MarkdownPreviewFixture
         ~~strikethrough~~, a [styled link](https://example.com/docs), and an
         autolink https://example.com/api/v1.
 
+        A [titled link](https://example.com/titled "hover title"), a wiki-style
+        [parenthesized URL](https://en.wikipedia.org/wiki/Markdown_(disambiguation)),
+        an angle autolink <https://example.com/angle>, an image ![alt text](https://example.com/a.png),
+        and a [![badge](https://example.com/b.svg)](https://example.com/badge-target) linked image.
+
         This line ends in a hard break:{{HardBreakSpaces}}
-        so this text starts a new line inside the same paragraph.
+        so this text starts a new line inside the same paragraph,\
+        and a trailing backslash breaks the line too.
 
         ## Lists
 
