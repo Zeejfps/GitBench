@@ -61,6 +61,11 @@ internal static class AppServices
         context.AddService(themeMode);
         context.AddSingleton<IThemeService<ThemeStyles>, ThemeService>();
 
+        var uiScale = new State<UiScale>(preferences.Current.UiScale);
+        uiScale.Changed += preferences.SetUiScale;
+        context.AddService(uiScale);
+        context.AddService<IUiScale>(new PreferredUiScale(uiScale));
+
         var locale = new State<Locale>(preferences.Current.Language);
         locale.Changed += preferences.SetLanguage;
         context.AddService(locale);

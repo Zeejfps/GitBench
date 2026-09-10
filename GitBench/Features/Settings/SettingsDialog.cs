@@ -1,4 +1,4 @@
-using GitBench.Controls;
+using GitBench.App;
 using GitBench.Controls.Dialogs;
 using GitBench.Features.LanguageServers;
 using GitBench.Features.Repos;
@@ -18,6 +18,7 @@ internal sealed record SettingsDialog : Widget<DialogState>
 {
     public const string ThemePickerId = "settings-theme";
     public const string LanguagePickerId = "settings-language";
+    public const string UiScalePickerId = "settings-ui-scale";
     public const string UntrackedCacheId = "settings-untracked-cache";
     public const string LanguageServersId = "settings-language-servers";
 
@@ -31,6 +32,7 @@ internal sealed record SettingsDialog : Widget<DialogState>
     {
         var themeMode = ctx.Require<State<ThemeMode>>();
         var locale = ctx.Require<State<Locale>>();
+        var uiScale = ctx.Require<State<UiScale>>();
         var untrackedCache = ctx.Require<State<bool>>();
         var loc = ctx.Localization();
 
@@ -77,51 +79,38 @@ internal sealed record SettingsDialog : Widget<DialogState>
                                 SettingRow(
                                     L.T(s => s.SettingsTheme),
                                     L.T(s => s.SettingsThemeDesc),
-                                    new DropdownWidget
+                                    new SettingsDropdown
                                     {
                                         Id = ThemePickerId,
                                         Width = ControlWidth,
                                         Height = Sizes.ControlHeight,
-                                        Children =
-                                        [
-                                            new Grow
-                                            {
-                                                Child = new Text
-                                                {
-                                                    Value = Prop.Bind<string?>(
-                                                        () => ThemeLabel(loc.Strings.Value, themeMode.Value)),
-                                                    FontSize = FontSize.Caption,
-                                                    VAlign = TextAlignment.Center,
-                                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                                },
-                                            },
-                                        ],
-                                    }.WithMenuController(rect => RepoBarContextMenu.Show(
-                                        ctx, rect.BottomLeft, ThemeMenu(loc.Strings.Value, themeMode)))),
+                                        Selected = Prop.Bind<string?>(
+                                            () => ThemeLabel(loc.Strings.Value, themeMode.Value)),
+                                        Options = () => ThemeMenu(loc.Strings.Value, themeMode),
+                                    }),
                                 SettingRow(
                                     L.T(s => s.SettingsLanguage),
                                     L.T(s => s.SettingsLanguageDesc),
-                                    new DropdownWidget
+                                    new SettingsDropdown
                                     {
                                         Id = LanguagePickerId,
                                         Width = ControlWidth,
                                         Height = Sizes.ControlHeight,
-                                        Children =
-                                        [
-                                            new Grow
-                                            {
-                                                Child = new Text
-                                                {
-                                                    Value = Prop.Bind<string?>(
-                                                        () => LocaleOptions.Endonym(locale.Value)),
-                                                    FontSize = FontSize.Caption,
-                                                    VAlign = TextAlignment.Center,
-                                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                                },
-                                            },
-                                        ],
-                                    }.WithMenuController(rect => RepoBarContextMenu.Show(
-                                        ctx, rect.BottomLeft, LanguageMenu(locale)))),
+                                        Selected = Prop.Bind<string?>(
+                                            () => LocaleOptions.Endonym(locale.Value)),
+                                        Options = () => LanguageMenu(locale),
+                                    }),
+                                SettingRow(
+                                    L.T(s => s.SettingsUiScale),
+                                    L.T(s => s.SettingsUiScaleDesc),
+                                    new SettingsDropdown
+                                    {
+                                        Id = UiScalePickerId,
+                                        Width = ControlWidth,
+                                        Height = Sizes.ControlHeight,
+                                        Selected = Prop.Bind<string?>(() => uiScale.Value.Label),
+                                        Options = () => UiScaleMenu(uiScale),
+                                    }),
                                 SectionHeader(L.T(s => s.SettingsRepository)),
                                 SettingRow(
                                     L.T(s => s.SettingsUntrackedCache),
@@ -216,6 +205,22 @@ internal sealed record SettingsDialog : Widget<DialogState>
             new(strings.SettingsThemeDark, () => themeMode.Value = ThemeMode.Dark, Checked: active == ThemeMode.Dark),
             new(strings.SettingsThemeLight, () => themeMode.Value = ThemeMode.Light, Checked: active == ThemeMode.Light),
         ];
+    }
+
+    private static IReadOnlyList<RepoBarContextMenu.Item> UiScaleMenu(State<UiScale> uiScale)
+    {
+        var active = uiScale.Value;
+        var items = new List<RepoBarContextMenu.Item>(UiScale.All.Count);
+        foreach (var option in UiScale.All)
+        {
+            var target = option;
+            items.Add(new RepoBarContextMenu.Item(
+                target.Label,
+                () => uiScale.Value = target,
+                Checked: active == target));
+        }
+
+        return items;
     }
 
     private static IReadOnlyList<RepoBarContextMenu.Item> LanguageMenu(State<Locale> locale)

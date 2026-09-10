@@ -43,15 +43,15 @@ internal sealed class HoverPopupService : IHoverPresenter, IDisposable
 
         var rendered = MarkdownFile.Render(hover.Markdown);
 
-        var anchor = _coordinates.ToScreenPoints(anchorCanvas);
+        var anchor = _coordinates.ToScreenPoints(CanvasRect.From(anchorCanvas));
         _owner = owner;
         _popup = _factory.Acquire(new PopupRequest
         {
             BuildRoot = ctx => Direction.Wrap(new HoverCard { Render = rendered }).BuildView(ctx),
-            Place = (width, height) =>
+            Place = size =>
             {
-                var preferred = new RectI(anchor.X, anchor.Y + anchor.Height + Gap, width, height);
-                var flipped = new RectI(anchor.X, anchor.Y - Gap - height, width, height);
+                var preferred = new ScreenRect(anchor.X, anchor.Y + anchor.Height + Gap, size.Width, size.Height);
+                var flipped = new ScreenRect(anchor.X, anchor.Y - Gap - size.Height, size.Width, size.Height);
                 return (preferred, flipped);
             },
             MousePassThrough = true,

@@ -35,6 +35,8 @@ public sealed class PreferencesService : IDisposable
 
     public void SetLanguage(Locale language) => Mutate(p => p with { Language = language });
 
+    public void SetUiScale(UiScale scale) => Mutate(p => p with { UiScale = scale });
+
     public void SetWindowSize(int width, int height)
     {
         if (width <= 0 || height <= 0) return;

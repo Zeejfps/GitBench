@@ -8,6 +8,11 @@ public sealed record Preferences
 {
     public ThemeMode Theme { get; init; } = ThemeMode.Dark;
     public Locale Language { get; init; } = Locale.En;
+
+    /// <summary>How much the UI is magnified on top of the monitor's own content scale. The monitor's
+    /// scale is never stored: it is a property of the display, not of the user.</summary>
+    public UiScale UiScale { get; init; } = UiScale.Default;
+
     public int WindowWidth { get; init; } = 1400;
     public int WindowHeight { get; init; } = 900;
 

@@ -123,6 +123,8 @@
   "settings.theme_light": "Светлая",
   "settings.language": "Язык",
   "settings.language_desc": "Язык, на котором отображается текст приложения.",
+  "settings.ui_scale": "Масштаб интерфейса",
+  "settings.ui_scale_desc": "Размер, с которым отрисовываются текст и элементы управления приложения.",
   "settings.repository": "Репозиторий",
   "settings.untracked_cache": "Кэш неотслеживаемых файлов",
   "settings.untracked_cache_desc": "Ускоряет поиск новых файлов в больших репозиториях.",

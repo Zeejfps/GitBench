@@ -130,6 +130,8 @@
   "settings.theme_light": "فاتح",
   "settings.language": "اللغة",
   "settings.language_desc": "اللغة التي يُعرض بها نص التطبيق.",
+  "settings.ui_scale": "مقياس الواجهة",
+  "settings.ui_scale_desc": "حجم عرض نص التطبيق وعناصر التحكم فيه.",
   "settings.repository": "المستودع",
   "settings.untracked_cache": "ذاكرة الملفات غير المتتبَّعة",
   "settings.untracked_cache_desc": "يسرّع فحص الملفات الجديدة في المستودعات الكبيرة.",

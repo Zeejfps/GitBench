@@ -59,7 +59,7 @@ public static class RepoBarContextMenu
         manager.CloseAllImmediately();
 
         var coords = context.Get<IWindowCoordinates>();
-        var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
+        var screen = coords != null ? coords.ToScreenPoints(CanvasPoint.From(anchor)) : default;
         var opened = manager.ShowContextMenu(
             popupCtx => BuildMenu(popupCtx, manager, items),
             screen, placement: placement);
@@ -95,7 +95,7 @@ public static class RepoBarContextMenu
         manager.CloseAllImmediately();
 
         var coords = context.Get<IWindowCoordinates>();
-        var screen = coords != null ? coords.ToScreenPoints(anchor) : default;
+        var screen = coords != null ? coords.ToScreenPoints(CanvasPoint.From(anchor)) : default;
         return manager.ShowContextMenu(
             popupCtx => BuildSearchableMenu(popupCtx, manager, items, searchPlaceholder, noMatchesLabel),
             screen, placement: placement);

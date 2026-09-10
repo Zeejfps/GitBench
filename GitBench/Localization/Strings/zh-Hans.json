@@ -88,6 +88,8 @@
   "settings.theme_light": "浅色",
   "settings.language": "语言",
   "settings.language_desc": "应用界面文本显示所用的语言。",
+  "settings.ui_scale": "界面缩放",
+  "settings.ui_scale_desc": "应用的文字和控件的绘制大小。",
   "settings.repository": "仓库",
   "settings.untracked_cache": "未跟踪文件缓存",
   "settings.untracked_cache_desc": "加快在大型仓库中扫描新文件的速度。",

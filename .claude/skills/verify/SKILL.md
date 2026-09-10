@@ -55,6 +55,13 @@ SSE (`data:` lines).
 
 Gotchas:
 - Coordinates are **bottom-up Y** (y=0 is the window bottom; the status bar is at low y).
+- Click coordinates are **logical points**, the same units `gui_snapshot` reports view positions in,
+  so snapshot-derived clicking works at any UI scale. What does *not* match them is `gui_screenshot`,
+  whose pixels are device pixels — at a scale other than 100% (Settings → Appearance, and the OS
+  display scaling on Windows) a point is `scale` pixels wide. Take click targets from the snapshot;
+  a coordinate read off a screenshot has to be divided by the scale first, and a mis-scaled click
+  looks like "the click did nothing" rather than an error. Each window's `gui_snapshot` header
+  carries `scale=` when it isn't 1 (its `[x,y wxh]` bounds are screen coordinates, not points).
 - `gui_click` targets `id`/`label`/`text`, but virtualized lists (`VirtualRowListView`,
   e.g. the unstaged file list) don't expose row views — click by coordinates instead.
   The unstaged list's first row is near the top of its rect (y ≈ rect.y + height − 15,

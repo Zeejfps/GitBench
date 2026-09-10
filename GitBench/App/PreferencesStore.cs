@@ -20,6 +20,11 @@ public static class PreferencesStore
         // later version, or a hand-edited file) parses leniently instead of throwing inside the
         // enum converter — which would discard every other preference along with it.
         public string? Language { get; set; } = nameof(Locale.En);
+
+        // A raw float, snapped to the nearest offered scale as it is parsed. Stored as a number rather
+        // than a named rung on purpose: an enum converter throws on a value it doesn't recognize, and
+        // that throw is caught below and discards every other preference along with it.
+        public float? UiScale { get; set; } = 1f;
         public int? WindowWidth { get; set; } = 1400;
         public int? WindowHeight { get; set; } = 900;
 
@@ -85,6 +90,7 @@ public static class PreferencesStore
             {
                 Theme = file.Theme ?? defaults.Theme,
                 Language = ParseLocale(file.Language) ?? defaults.Language,
+                UiScale = file.UiScale is { } uiScale ? new UiScale(uiScale) : defaults.UiScale,
                 WindowWidth = file.WindowWidth is > 0 ? file.WindowWidth.Value : defaults.WindowWidth,
                 WindowHeight = file.WindowHeight is > 0 ? file.WindowHeight.Value : defaults.WindowHeight,
                 WindowX = file.WindowX,
@@ -125,6 +131,7 @@ public static class PreferencesStore
             SchemaVersion = CurrentSchemaVersion,
             Theme = preferences.Theme,
             Language = preferences.Language.ToString(),
+            UiScale = preferences.UiScale.Factor,
             WindowWidth = preferences.WindowWidth,
             WindowHeight = preferences.WindowHeight,
             WindowX = preferences.WindowX,
