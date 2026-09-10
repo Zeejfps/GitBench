@@ -1,6 +1,7 @@
 using ZGF.Gui.Views;
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
 using GitBench.Widgets;
@@ -58,6 +59,7 @@ internal sealed record CommitsView : Widget
         private readonly Context _ctx;
         private readonly ICanvas _canvas;
         private readonly ILocalizationService _loc;
+        private readonly IKeyMap _keys;
         private readonly CommitsViewModel _vm;
         private readonly VirtualRowListView _list;
         private readonly ListArrowKbmController _arrowController;
@@ -138,6 +140,7 @@ internal sealed record CommitsView : Widget
             _ctx = ctx;
             _canvas = ctx.Canvas;
             _loc = ctx.Localization();
+            _keys = ctx.KeyMap();
             var vm = ctx.Require<CommitsViewModel>();
             _vm = vm;
             var input = ctx.Require<InputSystem>();
@@ -199,6 +202,7 @@ internal sealed record CommitsView : Widget
             _arrowController = new ListArrowKbmController(
                 this,
                 input,
+                _keys,
                 (delta, _) => _vm.MoveSelection(delta),
                 _ => { },
                 () => { },
@@ -1044,7 +1048,7 @@ internal sealed record CommitsView : Widget
             var actions = CommitActionsFor(node.Sha);
             var items = new List<RepoBarContextMenu.Item>
             {
-                RepoBarContextMenu.ToItem(actions.CreateBranch),
+                RepoBarContextMenu.ToItem(actions.CreateBranch, _keys),
                 new(s.CommitsContextDeleteTag, () => _vm.RequestDeleteTag(tagName), LucideIcons.Trash),
             };
             _list.SetContextHighlight(rowIndex);
@@ -1088,14 +1092,14 @@ internal sealed record CommitsView : Widget
             // Create / apply actions share one definition with the keyboard (see CommitActionsFor),
             // so their menu shortcut hints derive from the same gestures the list dispatches on.
             var actions = CommitActionsFor(sha);
-            items.Add(RepoBarContextMenu.ToItem(actions.CreateBranch));
-            items.Add(RepoBarContextMenu.ToItem(actions.CreateTag));
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateBranch, _keys));
+            items.Add(RepoBarContextMenu.ToItem(actions.CreateTag, _keys));
 
             // Apply-this-commit actions. Both run immediately (no dialog): they're non-destructive
             // and any conflict is recoverable via the operation banner, so no "…" suffix.
             items.Add(RepoBarContextMenu.Separator);
-            items.Add(RepoBarContextMenu.ToItem(actions.CherryPick));
-            items.Add(RepoBarContextMenu.ToItem(actions.Revert));
+            items.Add(RepoBarContextMenu.ToItem(actions.CherryPick, _keys));
+            items.Add(RepoBarContextMenu.ToItem(actions.Revert, _keys));
 
             return items;
         }
@@ -1175,10 +1179,10 @@ internal sealed record CommitsView : Widget
         {
             var s = _loc.Strings.Value;
             return (
-                new RowAction(s.CommitsContextCreateBranch, () => _vm.RequestCreateBranch(sha), LucideIcons.Branch, new KeyGesture(KeyboardKey.B)),
-                new RowAction(s.CommitsContextCreateTag, () => _vm.RequestCreateTag(sha), LucideIcons.Tag, new KeyGesture(KeyboardKey.T)),
-                new RowAction(s.CommitsContextCherryPick, () => _vm.RequestCherryPick(sha), LucideIcons.Copy, new KeyGesture(KeyboardKey.C)),
-                new RowAction(s.CommitsContextRevert, () => _vm.RequestRevert(sha), LucideIcons.Undo, new KeyGesture(KeyboardKey.V)));
+                new RowAction(s.CommitsContextCreateBranch, () => _vm.RequestCreateBranch(sha), LucideIcons.Branch, KeyCommand.CommitCreateBranch),
+                new RowAction(s.CommitsContextCreateTag, () => _vm.RequestCreateTag(sha), LucideIcons.Tag, KeyCommand.CommitCreateTag),
+                new RowAction(s.CommitsContextCherryPick, () => _vm.RequestCherryPick(sha), LucideIcons.Copy, KeyCommand.CommitCherryPick),
+                new RowAction(s.CommitsContextRevert, () => _vm.RequestRevert(sha), LucideIcons.Undo, KeyCommand.CommitRevert));
         }
 
         private IReadOnlyList<RowAction> SelectedCommitActions()

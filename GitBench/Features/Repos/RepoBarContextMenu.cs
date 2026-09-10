@@ -1,4 +1,5 @@
 using GitBench.Controls;
+using GitBench.Input;
 using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui.Bindings;
@@ -40,15 +41,15 @@ public static class RepoBarContextMenu
     public static readonly Item Separator = new(string.Empty, static () => { }, IsSeparator: true);
 
     /// <summary>
-    /// Projects a <see cref="RowAction"/> into a menu item, deriving the shortcut hint from the
-    /// action's gesture so the menu and the keyboard never disagree about a key.
+    /// Projects a <see cref="RowAction"/> into a menu item, reading the shortcut hint from the
+    /// keymap the keyboard dispatches through so the menu and the keyboard never disagree about a key.
     /// </summary>
-    public static Item ToItem(RowAction action) => new(
+    public static Item ToItem(RowAction action, IKeyMap keys) => new(
         action.Label,
         action.Invoke,
         action.Icon,
         action.Enabled,
-        Shortcut: action.Gesture?.Display);
+        Shortcut: action.Command is { } command ? keys.Display(command) : null);
 
     public static IOpenedContextMenu? Show(Context context, PointF anchor, IReadOnlyList<Item> items, MenuPlacement placement = MenuPlacement.Below)
     {

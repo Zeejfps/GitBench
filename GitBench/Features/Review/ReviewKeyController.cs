@@ -1,3 +1,4 @@
+using GitBench.Input;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -10,9 +11,9 @@ namespace GitBench.Features.Review;
 /// hover/bubble dispatch path for the whole window. Handles the keys on bubbling — after the focused
 /// file list (which only consumes its own arrow/enter keys), so navigation there is untouched:
 /// <list type="bullet">
-/// <item><c>j</c> / <c>k</c> — next / previous file in the range.</item>
-/// <item><c>v</c> / <c>Space</c> / <c>Enter</c> — toggle the selected file's mark.</item>
-/// <item><c>?</c> — show / hide the keyboard cheatsheet; <c>Esc</c> dismisses it.</item>
+/// <item><see cref="KeyCommand.ReviewNextFile"/> / <see cref="KeyCommand.ReviewPrevFile"/> — step through the range.</item>
+/// <item><see cref="KeyCommand.ReviewToggleMark"/> — toggle the selected file's mark.</item>
+/// <item><see cref="KeyCommand.ReviewToggleHelp"/> — show / hide the keyboard cheatsheet; <c>Esc</c> dismisses it.</item>
 /// </list>
 /// It never steals focus, so the file list keeps the focus it needs for its own Up/Down arrows. While
 /// the cheatsheet is open the loop keys are swallowed so they don't drive the surface behind it.
@@ -20,16 +21,21 @@ namespace GitBench.Features.Review;
 internal sealed class ReviewKeyController : KeyboardMouseController
 {
     private readonly IReviewSurfaceModel _vm;
+    private readonly IKeyMap _keys;
 
-    public ReviewKeyController(IReviewSurfaceModel vm) => _vm = vm;
+    public ReviewKeyController(IReviewSurfaceModel vm, IKeyMap keys)
+    {
+        _vm = vm;
+        _keys = keys;
+    }
 
     public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
     {
         if (e.Phase != EventPhase.Bubbling) return;
         if (e.State != InputState.Pressed) return;
 
-        // '?' (Shift+/) toggles the cheatsheet from any state.
-        if (e.Key == KeyboardKey.Slash && e.Modifiers.HasFlag(InputModifiers.Shift))
+        // Toggles the cheatsheet from any state.
+        if (_keys.Matches(KeyCommand.ReviewToggleHelp, e.Key, e.Modifiers))
         {
             _vm.ToggleCheatsheet();
             e.Consume();
@@ -44,23 +50,20 @@ internal sealed class ReviewKeyController : KeyboardMouseController
             return;
         }
 
-        switch (e.Key)
+        if (_keys.Matches(KeyCommand.ReviewNextFile, e.Key, e.Modifiers))
         {
-            case KeyboardKey.J:
-                _vm.NextFile();
-                e.Consume();
-                break;
-            case KeyboardKey.K:
-                _vm.PrevFile();
-                e.Consume();
-                break;
-            case KeyboardKey.V:
-            case KeyboardKey.Space:
-            case KeyboardKey.Enter:
-            case KeyboardKey.NumpadEnter:
-                _vm.ToggleActiveFileViewed();
-                e.Consume();
-                break;
+            _vm.NextFile();
+            e.Consume();
+        }
+        else if (_keys.Matches(KeyCommand.ReviewPrevFile, e.Key, e.Modifiers))
+        {
+            _vm.PrevFile();
+            e.Consume();
+        }
+        else if (_keys.Matches(KeyCommand.ReviewToggleMark, e.Key, e.Modifiers))
+        {
+            _vm.ToggleActiveFileViewed();
+            e.Consume();
         }
     }
 }

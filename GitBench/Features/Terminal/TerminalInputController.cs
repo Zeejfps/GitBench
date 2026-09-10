@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -149,30 +150,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     const InputModifiers CommandLike =
         InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
 
-    /// <summary>
-    /// The pane's own chords: Cmd on macOS, Ctrl+Shift elsewhere.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Ctrl+Shift rather than Ctrl, because Ctrl+C is the interrupt and a terminal that swallowed it
-    /// would be broken. Shift is already the modifier this pane takes back from the shell for the
-    /// wheel and the page keys, so it is one convention rather than three.
-    /// </para>
-    /// <para>
-    /// Held as gestures rather than as a comparison, because the context menu prints them beside the
-    /// items they run, and a hint that disagreed with the key would be worse than no hint.
-    /// </para>
-    /// </remarks>
-    static readonly KeyGesture CopyChord = PaneChord(KeyboardKey.C);
-    static readonly KeyGesture PasteChord = PaneChord(KeyboardKey.V);
-    static readonly KeyGesture SelectAllChord = PaneChord(KeyboardKey.A);
-
-    static KeyGesture PaneChord(KeyboardKey key) => new(
-        key,
-        OperatingSystem.IsMacOS()
-            ? InputModifiers.Super
-            : InputModifiers.Control | InputModifiers.Shift);
-
     readonly View _view;
     readonly InputSystem _input;
     readonly ITerminalInput _terminal;
@@ -181,6 +158,12 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     readonly IPlatformShell? _shell;
     readonly Context? _ctx;
     readonly ILocalizationService? _localization;
+
+    /// <summary>
+    /// Where the pane's own chords come from, and the context menu prints them from the same table
+    /// beside the items they run, so a hint can never disagree with the key.
+    /// </summary>
+    readonly IKeyMap _keys;
 
     float _wheelRemainder;
     (int Column, int Row)? _reportedCell;
@@ -199,7 +182,8 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         IClipboard? clipboard = null,
         IPlatformShell? shell = null,
         Context? ctx = null,
-        ILocalizationService? localization = null)
+        ILocalizationService? localization = null,
+        IKeyMap? keys = null)
     {
         _view = view;
         _input = input;
@@ -209,6 +193,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         _shell = shell;
         _ctx = ctx;
         _localization = localization;
+        _keys = keys ?? KeyMap.Defaults;
     }
 
     /// <summary>
@@ -255,21 +240,21 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         // pane's chords are Super, and every Super chord is otherwise handed straight back.
         // Copy is claimed whether or not anything is highlighted, so that the chord means one thing;
         // Ctrl+C on its own carries no Shift and is still the shell's interrupt.
-        if (CopyChord.Matches(e.Key, e.Modifiers))
+        if (_keys.Matches(KeyCommand.TerminalCopy, e.Key, e.Modifiers))
         {
             Copy();
             e.Consume();
             return;
         }
 
-        if (PasteChord.Matches(e.Key, e.Modifiers))
+        if (_keys.Matches(KeyCommand.TerminalPaste, e.Key, e.Modifiers))
         {
             Paste();
             e.Consume();
             return;
         }
 
-        if (SelectAllChord.Matches(e.Key, e.Modifiers))
+        if (_keys.Matches(KeyCommand.TerminalSelectAll, e.Key, e.Modifiers))
         {
             SelectAll();
             e.Consume();
@@ -781,17 +766,11 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     /// <summary>
     /// The screens of history this chord asks for, or null when it is not one of them.
     /// </summary>
-    static int? PagesOfHistory(KeyboardKey key, InputModifiers modifiers)
+    int? PagesOfHistory(KeyboardKey key, InputModifiers modifiers)
     {
-        if ((modifiers & CommandLike) != 0) return null;
-        if (!modifiers.HasFlag(InputModifiers.Shift)) return null;
-
-        return key switch
-        {
-            KeyboardKey.PageUp => 1,
-            KeyboardKey.PageDown => -1,
-            _ => null,
-        };
+        if (_keys.Matches(KeyCommand.TerminalPageUp, key, modifiers)) return 1;
+        if (_keys.Matches(KeyCommand.TerminalPageDown, key, modifiers)) return -1;
+        return null;
     }
 
     bool HasTheKeyboard()
@@ -894,28 +873,28 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
                 Copy,
                 LucideIcons.Copy,
                 Enabled: _terminal.SelectionText().Length > 0,
-                Shortcut: CopyChord.Display),
+                Shortcut: _keys.Display(KeyCommand.TerminalCopy)),
             new RepoBarContextMenu.Item(
                 strings.CommonPaste,
                 Paste,
                 LucideIcons.ClipboardPaste,
                 Enabled: _terminal.IsAcceptingInput && _clipboard.GetText() is { Length: > 0 },
-                Shortcut: PasteChord.Display),
+                Shortcut: _keys.Display(KeyCommand.TerminalPaste)),
             RepoBarContextMenu.Separator,
             new RepoBarContextMenu.Item(
                 strings.CommonSelectAll,
                 SelectAll,
                 LucideIcons.BoxSelect,
                 Enabled: _terminal.HasScreen,
-                Shortcut: SelectAllChord.Display),
+                Shortcut: _keys.Display(KeyCommand.TerminalSelectAll)),
         };
 
         return RepoBarContextMenu.Show(_ctx, point, items) is not null;
     }
 
-    static bool IsReservedForTheApplication(KeyboardKey key, InputModifiers modifiers) =>
+    bool IsReservedForTheApplication(KeyboardKey key, InputModifiers modifiers) =>
         modifiers.HasFlag(InputModifiers.Super)
-        || AppKeybindController.IsRepoHotkeyChord(key, modifiers);
+        || AppKeybindController.RepoHotkeySlot(_keys, key, modifiers) is not null;
 
     static bool WillTypeACharacter(KeyboardKey key, InputModifiers modifiers) =>
         (modifiers & CommandLike) == 0 && TerminalKeyMap.CanTypeACharacter(key);

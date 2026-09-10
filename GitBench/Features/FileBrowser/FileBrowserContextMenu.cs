@@ -3,6 +3,7 @@ using GitBench.Controls;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Terminal;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Platform;
@@ -42,16 +43,13 @@ internal sealed class FileBrowserContextMenu
     private readonly ITerminalSessionStore? _terminals;
     private readonly IContentNavigator? _navigator;
     private readonly FileBrowserFileOps _ops;
-
-    /// <summary>The key the tree's own list controller deletes on, as the menu says it. Literal for
-    /// the same reason the Changes list's is: the list controller dispatches on the key itself, not
-    /// through a gesture that could be asked what it is called.</summary>
-    private const string DeleteShortcut = "Delete";
+    private readonly IKeyMap _keys;
 
     public FileBrowserContextMenu(Context ctx)
     {
         _ops = new FileBrowserFileOps(ctx);
         _loc = ctx.Localization();
+        _keys = ctx.KeyMap();
         _shell = ctx.Get<IPlatformShell>();
         _clipboard = ctx.Get<IClipboard>();
         _bus = ctx.Get<IMessageBus>();
@@ -115,7 +113,7 @@ internal sealed class FileBrowserContextMenu
                 s.CommonDelete,
                 () => _ops.Delete(browser, row),
                 LucideIcons.Trash,
-                Shortcut: DeleteShortcut));
+                Shortcut: _keys.Display(KeyCommand.ListDelete)));
         }
 
         return items;

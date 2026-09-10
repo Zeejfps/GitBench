@@ -1,5 +1,6 @@
 using GitBench.Controls.Dialogs;
 using GitBench.Features.Commits;
+using GitBench.Input;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Input;
@@ -163,9 +164,6 @@ internal sealed class GrowingDescriptionField : ContainerView
     // carry them.
     private sealed class FieldController : BaseTextInputKbmController
     {
-        private const InputModifiers RelevantMask =
-            InputModifiers.Shift | InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
-
         private InputModifiers _modifiers;
 
         public FieldController(TextInputView textInput, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard)
@@ -183,7 +181,7 @@ internal sealed class GrowingDescriptionField : ContainerView
 
         protected override void Enter(char c)
         {
-            if (c == '\n' && OnSubmit != null && (_modifiers & RelevantMask) == InputModifiers.None)
+            if (c == '\n' && OnSubmit != null && (_modifiers & KeyGesture.RelevantMask) == InputModifiers.None)
             {
                 OnSubmit();
                 return;

@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Features.Submodules;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -37,6 +38,7 @@ internal sealed class LocalChangesContentView : ContainerView
     private readonly LocalChangesViewModel _vm;
     private readonly ListArrowKbmController _arrowController;
     private readonly ILocalizationService _loc;
+    private readonly IKeyMap _keys;
     private readonly FileOpsContextMenu _fileOps;
     private readonly State<WorkingChangesLayout> _layout;
     private readonly WorkingTreeReviewViewModel _review;
@@ -51,6 +53,7 @@ internal sealed class LocalChangesContentView : ContainerView
     {
         _vm = vm;
         _loc = ctx.Localization();
+        _keys = ctx.KeyMap();
         _fileOps = new FileOpsContextMenu(vm, _loc);
         _layout = ctx.Require<State<WorkingChangesLayout>>();
         _review = ctx.Require<WorkingTreeReviewViewModel>();
@@ -200,6 +203,7 @@ internal sealed class LocalChangesContentView : ContainerView
         _arrowController = new ListArrowKbmController(
             this,
             input,
+            _keys,
             (delta, extend) => _vm.MoveSelection(delta, extend),
             expand => _vm.SetCursorFolderExpanded(expand),
             OnActivateSelection,
@@ -369,7 +373,11 @@ internal sealed class LocalChangesContentView : ContainerView
         if (target != null)
         {
             var paths = ResolveTargetPaths(target);
-            _fileOps.AppendFileOps(items, paths, stageShortcut: "Enter", discardShortcut: "Delete");
+            _fileOps.AppendFileOps(
+                items,
+                paths,
+                stageShortcut: _keys.Display(KeyCommand.ListActivate),
+                discardShortcut: _keys.Display(KeyCommand.ListDelete));
             AppendViewInDiff(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
@@ -407,7 +415,7 @@ internal sealed class LocalChangesContentView : ContainerView
         if (target != null)
         {
             var paths = ResolveTargetPaths(target);
-            _fileOps.AppendFileOps(items, paths, unstageShortcut: "Enter");
+            _fileOps.AppendFileOps(items, paths, unstageShortcut: _keys.Display(KeyCommand.ListActivate));
             AppendViewInDiff(items, target);
             _fileOps.AppendUtilities(items, paths, Representative(target));
             items.Add(RepoBarContextMenu.Separator);
@@ -430,7 +438,7 @@ internal sealed class LocalChangesContentView : ContainerView
             _loc.Strings.Value.LocalchangesViewInDiff,
             () => ViewInDiff(path),
             LucideIcons.ScrollText,
-            Shortcut: "Space"));
+            Shortcut: _keys.Display(KeyCommand.ListViewInDiff)));
     }
 
     // Open-folder / terminal target the clicked row: the folder itself for a folder row,

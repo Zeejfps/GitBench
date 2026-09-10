@@ -8,6 +8,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -178,6 +179,7 @@ internal sealed class AssistantViewFixture : IDisposable
                 ctx.AddService(Placement);
 
                 keybind = new AppKeybindController(
+                    new KeyMap(),
                     _registry,
                     new RepoHoverState(),
                     new RepoBarCollapseState(Preferences),

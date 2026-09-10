@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -146,6 +147,7 @@ internal sealed class CommitChangesPanelView : ContainerView
         _arrowController = new ListArrowKbmController(
             this,
             input,
+            ctx.KeyMap(),
             (delta, shift) =>
             {
                 var next = _changesSection.NextRow(vm.CursorFolder.Value, cursor.Value, delta);

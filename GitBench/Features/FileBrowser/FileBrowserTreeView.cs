@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.LocalChanges;
+using GitBench.Input;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Geometry;
@@ -110,6 +111,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         _arrows = new ListArrowKbmController(
             this,
             input,
+            ctx.KeyMap(),
             onMove: (delta, _) => _vm.MoveCursor(delta),
             onExpand: open => { if (open) _vm.ExpandOrDescend(); else _vm.CollapseOrAscend(); },
             onActivate: ActivateCursor,

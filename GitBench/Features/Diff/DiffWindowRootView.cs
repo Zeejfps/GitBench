@@ -1,3 +1,4 @@
+using GitBench.Input;
 using GitBench.Widgets;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
@@ -38,10 +39,10 @@ internal sealed record DiffWindowRootView : Widget
         var panel = new RectView { Children = { layout } };
         panel.BindThemedBackgroundColor(ctx.Theme(), s => s.DiffView.PanelBackground);
 
-        // The pop-out has no file list to host the "F" full-file toggle, so wire it at the
+        // The pop-out has no file list to host the full-file toggle key, so wire it at the
         // window root instead (the toolbar button is the other entry point).
         panel.UseController(ctx.Require<InputSystem>(),
-            () => new DiffWindowKeyController(panel, ctx.Require<InputSystem>(), vm.Diff.ToggleFullFile));
+            () => new DiffWindowKeyController(panel, ctx.Require<InputSystem>(), ctx.KeyMap(), vm.Diff.ToggleFullFile));
 
         toolbar.Bind(vm.Diff);
 

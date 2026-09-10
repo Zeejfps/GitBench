@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Input;
 using GitBench.Localization;
 using ZGF.Desktop;
 using ZGF.Geometry;
@@ -35,6 +36,8 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
 
     // Per-frame auto-scroll while the pointer is dragged past an edge, ramped by how far past.
     private const float AutoScrollMaxPerFrame = 24f;
+
+    private static readonly KeyGesture CopyChord = KeyGesture.WithPrimary(KeyboardKey.C);
 
     private readonly MarkdownSelectionScope _scope;
     private readonly View _surface;
@@ -175,12 +178,13 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
         if (e.State != InputState.Pressed) return;
         if (!_scope.Selection.HasRange) return;
 
-        var command = (e.Modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0;
+        if (CopyChord.Matches(e.Key, e.Modifiers))
+        {
+            if (Copy()) e.Consume();
+            return;
+        }
         switch (e.Key)
         {
-            case KeyboardKey.C when command:
-                if (Copy()) e.Consume();
-                return;
             case KeyboardKey.Escape:
                 if (_scope.Selection.Clear())
                 {

@@ -2,6 +2,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using ZGF.Gui.Desktop.Controllers;
@@ -13,14 +14,7 @@ namespace GitBench.App;
 
 internal sealed class AppKeybindController : KeyboardMouseController
 {
-    // The "switch to tab N" modifier: Cmd on macOS, Ctrl elsewhere. Lock keys (Caps/Num) are masked
-    // out so the gesture still matches with them on.
-    private static readonly InputModifiers PrimaryModifier =
-        OperatingSystem.IsMacOS() ? InputModifiers.Super : InputModifiers.Control;
-
-    private const InputModifiers RelevantMask =
-        InputModifiers.Shift | InputModifiers.Control | InputModifiers.Alt | InputModifiers.Super;
-
+    private readonly IKeyMap _keys;
     private readonly IRepoRegistry _registry;
     private readonly RepoHoverState _hover;
     private readonly RepoBarCollapseState _repoBarCollapse;
@@ -32,6 +26,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
     private readonly State<SidebarPane> _sidebar;
 
     public AppKeybindController(
+        IKeyMap keys,
         IRepoRegistry registry,
         RepoHoverState hover,
         RepoBarCollapseState repoBarCollapse,
@@ -42,6 +37,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
         IFileBrowserStore browsers,
         State<SidebarPane> sidebar)
     {
+        _keys = keys;
         _sidebar = sidebar;
         _registry = registry;
         _hover = hover;
@@ -57,21 +53,21 @@ internal sealed class AppKeybindController : KeyboardMouseController
     {
         if (e.State != InputState.Pressed) return;
 
-        if (e.Key == KeyboardKey.F5)
+        if (_keys.Matches(KeyCommand.Refresh, e.Key, e.Modifiers))
         {
             ForceRefresh();
             e.Consume();
             return;
         }
 
-        if (e.Key == KeyboardKey.B && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        if (_keys.Matches(KeyCommand.ToggleRepoBar, e.Key, e.Modifiers))
         {
             _repoBarCollapse.Toggle();
             e.Consume();
             return;
         }
 
-        if (e.Key == KeyboardKey.K && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        if (_keys.Matches(KeyCommand.ToggleAssistant, e.Key, e.Modifiers))
         {
             _assistant.Toggle.Execute();
             e.Consume();
@@ -81,7 +77,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
         // Find in file. Here rather than on the pane, because the chord has to work the moment the
         // Files mode is on screen, and a controller down there is only sent keys once something
         // inside it has taken focus.
-        if (e.Key == KeyboardKey.F && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        if (_keys.Matches(KeyCommand.FindInFile, e.Key, e.Modifiers))
         {
             if (_mode.Value == MainViewMode.Files && _browsers.Active.Value is { CanSearch: true } browser)
             {
@@ -93,7 +89,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
 
         // Find a file by name. Swings the rail over to the files first: the chord means "take me to
         // a file", and refusing it because the branches happened to be showing would be a riddle.
-        if (e.Key == KeyboardKey.P && (e.Modifiers & RelevantMask) == PrimaryModifier)
+        if (_keys.Matches(KeyCommand.FindFile, e.Key, e.Modifiers))
         {
             if (_browsers.Active.Value is { } files)
             {
@@ -113,7 +109,7 @@ internal sealed class AppKeybindController : KeyboardMouseController
             return;
         }
 
-        if (IsRepoHotkeyChord(e.Key, e.Modifiers) && DigitFromKey(e.Key) is { } slot)
+        if (RepoHotkeySlot(_keys, e.Key, e.Modifiers) is { } slot)
             HandleHotkey(slot, ref e);
     }
 
@@ -156,25 +152,13 @@ internal sealed class AppKeybindController : KeyboardMouseController
         }
     }
 
-    /// <summary>Whether this chord is one of the repo hotkeys, which the terminal pane hands back.</summary>
-    /// <remarks>
-    /// Here rather than restated in the pane so the two cannot drift: the modifier differs by platform
-    /// (Cmd on macOS) and the lock keys have to be masked out of the comparison either way.
-    /// </remarks>
-    internal static bool IsRepoHotkeyChord(KeyboardKey key, InputModifiers modifiers) =>
-        DigitFromKey(key) is not null && (modifiers & RelevantMask) == PrimaryModifier;
-
-    private static int? DigitFromKey(KeyboardKey key) => key switch
+    /// <summary>The repo hotkey slot this chord is bound to, or null. Shared with the terminal pane,
+    /// which hands these chords back to the application.</summary>
+    internal static int? RepoHotkeySlot(IKeyMap keys, KeyboardKey key, InputModifiers modifiers)
     {
-        KeyboardKey.Alpha1 or KeyboardKey.Numpad1 => 1,
-        KeyboardKey.Alpha2 or KeyboardKey.Numpad2 => 2,
-        KeyboardKey.Alpha3 or KeyboardKey.Numpad3 => 3,
-        KeyboardKey.Alpha4 or KeyboardKey.Numpad4 => 4,
-        KeyboardKey.Alpha5 or KeyboardKey.Numpad5 => 5,
-        KeyboardKey.Alpha6 or KeyboardKey.Numpad6 => 6,
-        KeyboardKey.Alpha7 or KeyboardKey.Numpad7 => 7,
-        KeyboardKey.Alpha8 or KeyboardKey.Numpad8 => 8,
-        KeyboardKey.Alpha9 or KeyboardKey.Numpad9 => 9,
-        _ => null,
-    };
+        foreach (var command in KeyCommands.RepoHotkeys)
+            if (keys.Matches(command, key, modifiers))
+                return KeyCommands.RepoHotkeySlot(command);
+        return null;
+    }
 }

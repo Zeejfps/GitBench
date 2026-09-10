@@ -1,3 +1,4 @@
+using GitBench.Input;
 using ZGF.Desktop;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -73,6 +74,9 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
     private const float MultiClickSlopPx = 4f;
     // Per-frame auto-scroll while the pointer is dragged past an edge, ramped by how far past.
     private const float AutoScrollMaxPerFrame = 24f;
+
+    private static readonly KeyGesture CopyChord = KeyGesture.WithPrimary(KeyboardKey.C);
+    private static readonly KeyGesture SelectAllChord = KeyGesture.WithPrimary(KeyboardKey.A);
 
     private readonly IDiffSelectionSurface _surface;
     private readonly InputSystem _input;
@@ -293,15 +297,18 @@ internal sealed class DiffSelectionController : KeyboardMouseController, IProvid
         // actually over, even while this controller holds focus.
         if (!_pointerInside && !_dragging) return;
 
-        var command = (e.Modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0;
+        if (CopyChord.Matches(e.Key, e.Modifiers))
+        {
+            if (Copy()) e.Consume();
+            return;
+        }
+        if (SelectAllChord.Matches(e.Key, e.Modifiers))
+        {
+            if (SelectAll()) e.Consume();
+            return;
+        }
         switch (e.Key)
         {
-            case KeyboardKey.C when command:
-                if (Copy()) e.Consume();
-                return;
-            case KeyboardKey.A when command:
-                if (SelectAll()) e.Consume();
-                return;
             case KeyboardKey.Escape:
             {
                 var dropped = EditorKeys != null

@@ -1,3 +1,4 @@
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -5,6 +6,7 @@ using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.KeyboardModule;
 
 namespace GitBench.Features.Review;
 
@@ -32,6 +34,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
     protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
+        var keys = ctx.KeyMap();
         var staged = MarkKind == ReviewMarkKind.Staged;
 
         var card = new Box
@@ -60,12 +63,14 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                                     FontSize = FontSize.Heading,
                                     Color = Theme.Color(s => s.Palette.TextPrimary),
                                 },
-                                ShortcutRow(["j", "k"], L.T(s => s.ReviewShortcutFileNav)),
-                                ShortcutRow(["v", "Space"], staged
+                                ShortcutRow(
+                                    [keys.Display(KeyCommand.ReviewNextFile), keys.Display(KeyCommand.ReviewPrevFile)],
+                                    L.T(s => s.ReviewShortcutFileNav)),
+                                ShortcutRow(Caps(keys, KeyCommand.ReviewToggleMark), staged
                                     ? L.T(s => s.ReviewShortcutToggleStaged)
                                     : L.T(s => s.ReviewShortcutToggleViewed)),
-                                ShortcutRow(["?"], L.T(s => s.ReviewShortcutHelp)),
-                                ShortcutRow(["Esc"], L.T(s => s.ReviewShortcutClose)),
+                                ShortcutRow(Caps(keys, KeyCommand.ReviewToggleHelp), L.T(s => s.ReviewShortcutHelp)),
+                                ShortcutRow([new KeyGesture(KeyboardKey.Escape).Display], L.T(s => s.ReviewShortcutClose)),
                             ],
                         },
                     ],
@@ -81,6 +86,10 @@ internal sealed record ReviewCheatsheetOverlay : Widget
             Children = [new Center { Child = card }],
         }.WithController(input, () => new ScrimController(OnClose));
     }
+
+    // Every distinct cap a command answers to: Enter and its numpad twin read the same.
+    private static string[] Caps(IKeyMap keys, KeyCommand command) =>
+        keys.GesturesFor(command).Select(g => g.Display).Distinct().ToArray();
 
     // One shortcut row: the key cap(s) in a fixed leading column, the description filling the rest.
     private static IWidget ShortcutRow(string[] keys, Prop<string?> description) => new Row

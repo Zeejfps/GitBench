@@ -1,6 +1,7 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Theming;
@@ -222,7 +223,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         this.UseController(input, () => new DiffMouseController(this), EventPhaseFilter.Capture);
         _clipboard = ctx.Get<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
-        _editorController = new Features.Editor.EditorController(this, input);
+        _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap());
         _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController);
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 

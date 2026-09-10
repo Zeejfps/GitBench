@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using GitBench.Features.Diff;
+using GitBench.Input;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
 
@@ -57,8 +58,7 @@ internal sealed class EditorController
     private static readonly bool IsMac = RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
 
     // The shortcut modifier: Cmd on macOS, Ctrl everywhere else.
-    private static readonly InputModifiers Command =
-        IsMac ? InputModifiers.Super : InputModifiers.Control;
+    private static readonly InputModifiers Command = KeyGesture.Primary;
 
     // The word-step modifier, which on macOS is not the shortcut one.
     private static readonly InputModifiers Word =
@@ -79,14 +79,16 @@ internal sealed class EditorController
     }
 
     private readonly IEditorSurface _surface;
+    private readonly IKeyMap _keys;
     private readonly ImeSession _ime;
 
     private DiffTextPos _caret;
     private bool _hasCaret;
 
-    public EditorController(IEditorSurface surface, InputSystem input)
+    public EditorController(IEditorSurface surface, InputSystem input, IKeyMap keys)
     {
         _surface = surface;
+        _keys = keys;
         _ime = new ImeSession(input);
     }
 
@@ -167,6 +169,19 @@ internal sealed class EditorController
     private Claimed Handle(
         EditorBuffer editor, DiffSelectionModel selection, KeyboardKey key, InputModifiers modifiers)
     {
+        if (_keys.Matches(KeyCommand.SaveFile, key, modifiers))
+        {
+            _surface.RequestSave();
+            return Claimed.Command;
+        }
+
+        if (_keys.Matches(KeyCommand.ToggleLineComment, key, modifiers))
+        {
+            Edit(editor, selection, editor.Session.ToggleLineComment(editor.SelectionOf(selection)));
+            return Claimed.Command;
+        }
+
+        // The editing conventions every editor shares, which are not anyone's to rebind.
         if ((modifiers & Command) != 0 && !Composes(modifiers))
         {
             var chord = Chord(editor, selection, key, (modifiers & InputModifiers.Shift) != 0);
@@ -223,14 +238,6 @@ internal sealed class EditorController
 
             case KeyboardKey.Y:
                 Restore(editor, selection, session.Redo());
-                return Claimed.Command;
-
-            case KeyboardKey.Slash:
-                Edit(editor, selection, session.ToggleLineComment(editor.SelectionOf(selection)));
-                return Claimed.Command;
-
-            case KeyboardKey.S:
-                _surface.RequestSave();
                 return Claimed.Command;
 
             default:

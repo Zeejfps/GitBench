@@ -3,6 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -38,7 +39,7 @@ internal sealed record WorkingTreeReviewView : Widget
         {
             Background = Theme.Color(s => s.Palette.Surface),
             Children = [body],
-        }.WithController(input, () => new ReviewKeyController(model));
+        }.WithController(input, () => new ReviewKeyController(model, ctx.KeyMap()));
 
         var content = new Stack
         {

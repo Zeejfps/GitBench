@@ -1,6 +1,7 @@
 using GitBench.App;
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
+using GitBench.Input;
 using GitBench.Lsp.Documents;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -30,6 +31,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
     private readonly Func<InputModifiers> _modifiers;
     private readonly Func<TimeSpan, CancellationToken, Task> _dwell;
     private readonly IUsagesPresenter? _usages;
+    private readonly IKeyMap _keys;
 
     private CancellationTokenSource? _pending;
     private CancellationTokenSource? _probing;
@@ -52,7 +54,8 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         Func<(string Root, string Path)?> document,
         Func<InputModifiers> modifiers,
         Func<TimeSpan, CancellationToken, Task>? dwell = null,
-        IUsagesPresenter? usages = null)
+        IUsagesPresenter? usages = null,
+        IKeyMap? keys = null)
     {
         _surface = surface;
         _servers = servers;
@@ -63,6 +66,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         _modifiers = modifiers;
         _dwell = dwell ?? Task.Delay;
         _usages = usages;
+        _keys = keys ?? KeyMap.Defaults;
     }
 
     public override void OnMouseMoved(ref MouseMoveEvent e) => MovedTo(e.Mouse.Point);
@@ -254,21 +258,19 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
 
     internal bool PressedKey(KeyboardKey key, InputModifiers modifiers)
     {
-        switch (key)
+        if (_keys.Matches(KeyCommand.FindUsages, key, modifiers)) return ShowUsages(_pointer);
+        if (_keys.Matches(KeyCommand.GoToDefinition, key, modifiers)) return Ask(_pointer);
+        if (_keys.Matches(KeyCommand.NavigateBack, key, modifiers))
         {
-            case KeyboardKey.F12 when (modifiers & InputModifiers.Shift) != 0:
-                return ShowUsages(_pointer);
-            case KeyboardKey.F12:
-                return Ask(_pointer);
-            case KeyboardKey.LeftBracket when IsCommand(modifiers):
-                _history.GoBack();
-                return true;
-            case KeyboardKey.RightBracket when IsCommand(modifiers):
-                _history.GoForward();
-                return true;
-            default:
-                return false;
+            _history.GoBack();
+            return true;
         }
+        if (_keys.Matches(KeyCommand.NavigateForward, key, modifiers))
+        {
+            _history.GoForward();
+            return true;
+        }
+        return false;
     }
 
     /// <summary>Asks where the identifier under a pixel is used, at the same position a click
@@ -305,7 +307,7 @@ internal sealed class DefinitionProbeController : KeyboardMouseController, IDisp
         probed is Probed.Reachable reachable ? reachable.Link : null;
 
     private static bool IsCommand(InputModifiers modifiers) =>
-        (modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0;
+        (modifiers & KeyGesture.Primary) != 0;
 
     private bool Ask(PointF point)
     {

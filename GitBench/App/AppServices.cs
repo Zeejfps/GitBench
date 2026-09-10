@@ -18,6 +18,7 @@ using GitBench.Features.Terminal;
 using GitBench.Terminal.Vt;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
+using GitBench.Input;
 using GitBench.Lsp.Lifecycle;
 using GitBench.Localization;
 using GitBench.Messages;
@@ -39,6 +40,9 @@ internal static class AppServices
     public static void AddAppServices(this Context context, PreferencesService preferences)
     {
         context.AddService(preferences);
+        // Which keys run which commands. Every handler matches through it and every shortcut hint
+        // reads from it, so a binding is decided in one table.
+        context.AddService<IKeyMap>(new KeyMap());
 
         var profilesPath = AppPaths.AppDataPath("identity-profiles.json");
         context.AddSingleton(_ => new IdentityProfileService(

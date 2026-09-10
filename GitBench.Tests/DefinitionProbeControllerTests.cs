@@ -1,6 +1,7 @@
 using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.LanguageServers;
+using GitBench.Input;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
 using ZGF.Geometry;
@@ -17,7 +18,8 @@ public sealed class DefinitionProbeControllerTests
     private const string Root = "/repo";
     private const string File = "/repo/src/main.rs";
 
-    private static readonly InputModifiers Command = InputModifiers.Super;
+    // The platform's shortcut modifier, so the same press collides with the same chord the app claims.
+    private static readonly InputModifiers Command = KeyGesture.Primary;
 
     // Asked at the symbol's own first column rather than wherever in it the pointer landed: the
     // caret column past a word's last glyph is the whitespace after it, which servers answer

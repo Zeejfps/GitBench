@@ -4,6 +4,7 @@ using GitBench.App;
 using GitBench.Features.Assistant;
 using GitBench.Features.Repos;
 using GitBench.Features.Terminal;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Pty;
@@ -373,13 +374,11 @@ public class TerminalKeybindCollisionTests : IDisposable
     /// The modifier the application's own chords carry: Cmd on macOS, Ctrl elsewhere.
     /// </summary>
     /// <remarks>
-    /// Mirrors <c>AppKeybindController.PrimaryModifier</c>, which is the whole point of these tests:
-    /// a collision only happens on the chord the application actually claims, and pressing Ctrl on
-    /// macOS collides with nothing — the assertions then fail, or worse, pass without exercising
-    /// anything.
+    /// The keymap's own primary modifier, which is the whole point of these tests: a collision only
+    /// happens on the chord the application actually claims, and pressing Ctrl on macOS collides
+    /// with nothing — the assertions then fail, or worse, pass without exercising anything.
     /// </remarks>
-    private static InputModifiers Primary =>
-        OperatingSystem.IsMacOS() ? InputModifiers.Super : InputModifiers.Control;
+    private static InputModifiers Primary => KeyGesture.Primary;
 
     private readonly CollidingApp _app = new();
 
@@ -581,7 +580,7 @@ public class TerminalKeybindCollisionTests : IDisposable
             _assistant = new AssistantViewModel(new StubAssistantStore(), localization, _bus);
 
             var keybind = new AppKeybindController(
-                _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
+                new KeyMap(), _registry, new RepoHoverState(), CollapseState, localization, _bus, _assistant,
                 new State<MainViewMode>(MainViewMode.LocalChanges), new NoFileBrowsers(),
                 new State<SidebarPane>(SidebarPane.Branches));
 

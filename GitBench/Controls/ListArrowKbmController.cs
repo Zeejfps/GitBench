@@ -1,5 +1,6 @@
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
+using GitBench.Input;
 using ZGF.Gui;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -23,6 +24,7 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
 {
     private readonly View _view;
     private readonly InputSystem _input;
+    private readonly IKeyMap _keys;
     private readonly Action<int, bool> _onMove;
     private readonly Action<bool> _onExpand;
     private readonly Action _onActivate;
@@ -33,12 +35,12 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     public Action? OnTab { get; set; }
     public Action? OnShiftTab { get; set; }
 
-    // Optional "F" hotkey for the paired diff's full-file toggle. Left null on lists with no
-    // diff pane (e.g. the commit history list), where F should do nothing.
+    // Optional full-file toggle for the paired diff. Left null on lists with no diff pane (e.g.
+    // the commit history list), where the key should do nothing.
     public Action? OnToggleFullFile { get; set; }
 
-    // Optional Space "view the selected file in the Diff layout". Left null on lists with no
-    // diff surface to jump to, where Space passes through.
+    // Optional "view the selected file in the Diff layout". Left null on lists with no diff
+    // surface to jump to, where the key passes through.
     public Action? OnViewInDiff { get; set; }
 
     // Optional Ctrl/Cmd+A "select all rows". Left null on single-select lists, where the key
@@ -54,6 +56,7 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     public ListArrowKbmController(
         View view,
         InputSystem input,
+        IKeyMap keys,
         Action<int, bool> onMove,
         Action<bool> onExpand,
         Action onActivate,
@@ -61,6 +64,7 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
     {
         _view = view;
         _input = input;
+        _keys = keys;
         _onMove = onMove;
         _onExpand = onExpand;
         _onActivate = onActivate;
@@ -83,22 +87,22 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
         }
 
         var shift = (e.Modifiers & InputModifiers.Shift) != 0;
+        // Shift extends a move rather than changing which key it is.
+        var moveModifiers = e.Modifiers & ~InputModifiers.Shift;
 
         if (RowActions?.Invoke() is { } actions)
         {
             foreach (var action in actions)
             {
-                if (!action.Enabled || action.Gesture is not { } gesture) continue;
-                if (!gesture.Matches(e.Key, e.Modifiers)) continue;
+                if (!action.Enabled || action.Command is not { } command) continue;
+                if (!_keys.Matches(command, e.Key, e.Modifiers)) continue;
                 action.Invoke();
                 e.Consume();
                 return;
             }
         }
 
-        if (e.Key == KeyboardKey.A
-            && (e.Modifiers & (InputModifiers.Control | InputModifiers.Super)) != 0
-            && OnSelectAll != null)
+        if (OnSelectAll != null && SelectAllChord.Matches(e.Key, e.Modifiers))
         {
             OnSelectAll();
             e.Consume();
@@ -109,47 +113,49 @@ internal sealed class ListArrowKbmController : KeyboardMouseController
             else OnTab?.Invoke();
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.UpArrow)
+        else if (_keys.Matches(KeyCommand.ListUp, e.Key, moveModifiers))
         {
             _onMove(-1, shift);
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.DownArrow)
+        else if (_keys.Matches(KeyCommand.ListDown, e.Key, moveModifiers))
         {
             _onMove(+1, shift);
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.RightArrow)
+        else if (_keys.Matches(KeyCommand.ListExpand, e.Key, e.Modifiers))
         {
             _onExpand(true);
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.LeftArrow)
+        else if (_keys.Matches(KeyCommand.ListCollapse, e.Key, e.Modifiers))
         {
             _onExpand(false);
             e.Consume();
         }
-        else if (e.Key is KeyboardKey.Enter or KeyboardKey.NumpadEnter)
+        else if (_keys.Matches(KeyCommand.ListActivate, e.Key, e.Modifiers))
         {
             _onActivate();
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.Delete)
+        else if (_keys.Matches(KeyCommand.ListDelete, e.Key, e.Modifiers))
         {
             _onDelete();
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.F && OnToggleFullFile != null)
+        else if (OnToggleFullFile != null && _keys.Matches(KeyCommand.ToggleFullFile, e.Key, e.Modifiers))
         {
             OnToggleFullFile();
             e.Consume();
         }
-        else if (e.Key == KeyboardKey.Space && OnViewInDiff != null)
+        else if (OnViewInDiff != null && _keys.Matches(KeyCommand.ListViewInDiff, e.Key, e.Modifiers))
         {
             OnViewInDiff();
             e.Consume();
         }
     }
+
+    private static readonly KeyGesture SelectAllChord = KeyGesture.WithPrimary(KeyboardKey.A);
 
     private bool IsOnScreen()
     {

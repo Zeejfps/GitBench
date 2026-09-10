@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
+using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -53,7 +54,7 @@ internal sealed record ReviewWindowRootView : Widget
                     Center = body,
                 },
             ],
-        }.WithController(input, () => new ReviewKeyController(Model));
+        }.WithController(input, () => new ReviewKeyController(Model, ctx.KeyMap()));
 
         // The cheatsheet overlay layers over everything when open; when closed it collapses to a
         // zero-sized child so it never intercepts input meant for the surface below.
