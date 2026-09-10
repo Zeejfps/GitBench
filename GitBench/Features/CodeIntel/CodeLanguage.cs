@@ -18,6 +18,7 @@ internal enum CodeLanguage
     Bash,
     C,
     Toml,
+    Svelte,
     MarkdownInline,
 }
 
@@ -70,6 +71,7 @@ internal static class CodeLanguages
         // Only C ships, so a .h is unambiguous here in a way it is not in general.
         new(CodeLanguage.C, "c", [".c", ".h"], None),
         new(CodeLanguage.Toml, "toml", [".toml"], None),
+        new(CodeLanguage.Svelte, "svelte", [".svelte"], None),
         // No file is written in it: Markdown's block grammar leaves every span of inline syntax as
         // one node, and this is what gets injected into those.
         new(CodeLanguage.MarkdownInline, "markdown_inline", [], None, InjectedOnly: true),

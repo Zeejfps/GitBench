@@ -78,6 +78,14 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
         ("html", "<p class=\"a\">hi</p>",
             [("p", TokenColorSlot.Keyword), ("class", TokenColorSlot.Variable)]),
 
+        // The markup half comes from HTML's query and the template half from Svelte's own; the
+        // bodies and expressions between them are injections, covered in TreeSitterInjectionTests.
+        ("svelte", "{#if shown}<p id=\"a\">hi</p>{:else}<b>no</b>{/if}\n{#each rows as row}{row}{/each}",
+            [("if", TokenColorSlot.Keyword), ("else", TokenColorSlot.Keyword),
+             ("each", TokenColorSlot.Keyword), ("as", TokenColorSlot.Keyword),
+             ("p", TokenColorSlot.Keyword), ("id", TokenColorSlot.Variable),
+             ("{#", TokenColorSlot.Punctuation)]),
+
         // The table header is a type and the key under it a property, which is the local edit
         // to the vendored query: upstream paints both with the same catch-all.
         ("toml", "[package]\nname = \"gitbench\"\nedition = 2021\n",
@@ -249,6 +257,7 @@ public class TreeSitterHighlightTests(TreeSitterHighlightFixture fixture)
         CodeLanguage.Bash => "shellscript",
         CodeLanguage.C => "c",
         CodeLanguage.Toml => "toml",
+        CodeLanguage.Svelte => "svelte",
         _ => null,
     };
 

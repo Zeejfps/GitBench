@@ -38,6 +38,48 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
     }
 
     [Fact]
+    public void ASvelteScriptBodyIsJavaScriptUnlessItsLangAttributeSaysTypeScript()
+    {
+        // `: number` is a type annotation only TypeScript parses; JavaScript reads it as an error and
+        // colors nothing there. Both scripts sit in one file so the general rule and the specific
+        // one that overrides it are exercised against the same query.
+        const string source =
+            "<script>\nconst total = 42;\n</script>\n" +
+            "<script lang=\"ts\">\nlet count: number = 1;\n</script>";
+
+        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        Assert.NotNull(spans);
+
+        Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "const"));
+        Assert.Equal(TokenColorSlot.Number, TreeSitterHighlightTests.SlotOf(source, spans, "42"));
+        Assert.Equal(TokenColorSlot.Keyword, TreeSitterHighlightTests.SlotOf(source, spans, "let"));
+        Assert.Equal(TokenColorSlot.Type, TreeSitterHighlightTests.SlotOf(source, spans, "number"));
+    }
+
+    [Fact]
+    public void ASvelteStyleBodyIsColoredAsCss()
+    {
+        const string source = "<style>\n.card { color: red; }\n</style>";
+
+        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        Assert.NotNull(spans);
+
+        Assert.Equal(TokenColorSlot.Variable, TreeSitterHighlightTests.SlotOf(source, spans, "color"));
+    }
+
+    [Fact]
+    public void SvelteTemplateExpressionsAreColoredAsJavaScript()
+    {
+        const string source = "{#if total > 42}<p>{name.toUpperCase()}</p>{/if}";
+
+        var spans = fixture.Highlighter.Highlight(source, "svelte");
+        Assert.NotNull(spans);
+
+        Assert.Equal(TokenColorSlot.Number, TreeSitterHighlightTests.SlotOf(source, spans, "42"));
+        Assert.Equal(TokenColorSlot.Function, TreeSitterHighlightTests.SlotOf(source, spans, "toUpperCase"));
+    }
+
+    [Fact]
     public void AFencedBlockIsColoredInTheLanguageItsInfoStringNames()
     {
         const string source = "text\n\n```csharp\nclass Box { }\n```\n";
@@ -179,6 +221,7 @@ public class TreeSitterInjectionTests(TreeSitterHighlightFixture fixture)
         Assert.Empty(log);
         Assert.True(highlighter.Supports("markdown"));
         Assert.True(highlighter.Supports("html"));
+        Assert.True(highlighter.Supports("svelte"));
     }
 
     [Fact]

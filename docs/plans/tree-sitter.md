@@ -1133,6 +1133,30 @@ One local edit came with it: upstream paints `**` and the backticks as plain
 delimiters, which leaves a bold run three colors wide. TextMate colors them with
 what they delimit, and a file changing engines should not change appearance.
 
+**Svelte ✅ Shipped**, the first language injections made *possible* rather than
+merely better: a `.svelte` file is HTML markup, a `<script>` in JavaScript or
+TypeScript, a `<style>` in CSS and template expressions in JavaScript again, and
+no single grammar colors that. `tree-sitter-svelte` is HTML's grammar with the
+template syntax added, and its queries say so with nvim-treesitter's
+`; inherits: html` line — which the vendoring script honors by concatenating
+HTML's queries ahead of Svelte's, the way TypeScript's already concatenate
+JavaScript's. Two things it settled:
+
+- **Two patterns naming one region resolve to the later pattern.** A `<script>`
+  body matches HTML's rule (JavaScript) and, when its `lang` attribute says so,
+  Svelte's (TypeScript). Upstream hosts run both layers and let them fight;
+  here the region is keyed and the later pattern wins, the same "specific rule
+  below the general one" convention the highlight queries follow. Upstream's
+  catch-all that hands *every* `raw_text` to JavaScript — a `<style>` body
+  included — is dropped as a local edit for the same reason.
+- **Template expressions are a local addition.** The grammar's own injections
+  leave `{count * 2}`, an `{#if}` condition and the list an `{#each}` walks as
+  opaque `svelte_raw_text`; nvim-treesitter's queries inject them as JavaScript,
+  and the vendored file appends that rule.
+
+The TextMate grammar stays as the fallback for a file the parser declines, and
+the outline is HTML's element tree plus `{#snippet name()}` as a function.
+
 **Start with a measurement, not an implementation.** Once Phase 1 lands both
 engines are in-process, so a benchmark over a few hundred real files comparing
 `SyntaxHighlighter.Highlight` against a tree-sitter highlights query on the same

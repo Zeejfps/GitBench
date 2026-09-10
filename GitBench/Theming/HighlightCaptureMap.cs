@@ -35,6 +35,8 @@ internal static class HighlightCaptureMap
         new("exception", TokenColorSlot.Keyword),
         new("storageclass", TokenColorSlot.Keyword),
         new("tag", TokenColorSlot.Keyword),
+        // nvim's name for `const`, `static` and the like: a keyword modifying a type, not a type.
+        new("type.qualifier", TokenColorSlot.Keyword),
 
         new("operator", TokenColorSlot.Operator),
         new("keyword.operator", TokenColorSlot.Operator),
@@ -55,6 +57,7 @@ internal static class HighlightCaptureMap
         new("label", TokenColorSlot.Variable),
 
         new("punctuation", TokenColorSlot.Punctuation),
+        new("tag.delimiter", TokenColorSlot.Punctuation),
 
         // Markup captures, matching the Markdown intents ScopeColorMap already resolves.
         new("text.title", TokenColorSlot.Heading),

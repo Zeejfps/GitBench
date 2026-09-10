@@ -30,6 +30,9 @@ SOURCES = {
     "bash": ["tree-sitter-bash"],
     "c": ["tree-sitter-c"],
     "toml": ["tree-sitter-toml"],
+    # Svelte's grammar is HTML's with template syntax added, and its queries say so with an
+    # `; inherits: html` line -- nvim-treesitter's include directive, which concatenation satisfies.
+    "svelte": ["tree-sitter-html", "tree-sitter-svelte"],
 }
 
 # The same, for injections.scm. Only the grammars that embed another language have one, and only
@@ -39,6 +42,28 @@ INJECTION_SOURCES = {
     "html": ["tree-sitter-html"],
     "markdown": ["tree-sitter-markdown/tree-sitter-markdown"],
     "markdown_inline": ["tree-sitter-markdown/tree-sitter-markdown-inline"],
+    "svelte": ["tree-sitter-html", "tree-sitter-svelte"],
+}
+
+# Local edits to injections.scm, on the same terms as SUBSTITUTIONS below.
+INJECTION_SUBSTITUTIONS = {
+    "svelte": [(
+        """((raw_text) @injection.content
+  (#set! injection.language "javascript"))""",
+        "; LOCAL: upstream hands every raw_text to JavaScript, a <style> body included, and leaves\n"
+        "; LOCAL: the host it inherits html_tags from to sort that out. The html rules above already\n"
+        "; LOCAL: send a <script> body to JavaScript and a <style> body to CSS, so the catch-all is\n"
+        "; LOCAL: dropped; the lang=\"ts\" rule below still overrides the script one, being later.",
+    )],
+}
+
+# Appended after the vendored injections.
+INJECTION_ADDITIONS = {
+    "svelte": "; LOCAL: upstream leaves template expressions -- `{count * 2}`, an {#if} condition, the\n"
+              "; LOCAL: list an {#each} walks -- uncolored; nvim-treesitter's own svelte queries inject\n"
+              "; LOCAL: them, and this is that rule.\n"
+              "((svelte_raw_text) @injection.content\n"
+              "  (#set! injection.language \"javascript\"))",
 }
 
 # Local edits, re-applied on every regeneration. A substitution that stops matching is an error
@@ -117,8 +142,17 @@ INJECTION_HEADER = """; Injected languages, vendored from the grammar's own repo
 ; capture (a fenced block's info string) or set outright by the pattern. A language we bundle no
 ; grammar for leaves its region uncolored, which is why the ones naming latex and toml are kept.
 ;
+; Two patterns naming the same region resolve to the later one, so a specific rule (a <script>
+; whose lang attribute says TypeScript) is written after the general one it refines.
+;
 ; Source:
 """
+
+
+# nvim-treesitter's include directive. A file that carries it lists the file it inherits from in
+# SOURCES ahead of itself, which is the same thing; the line is dropped so nobody goes looking for
+# a loader that honors it.
+INHERITS = re.compile(r"^; inherits:.*\n", re.MULTILINE)
 
 
 def pin(source):
@@ -143,6 +177,7 @@ def main():
                 sys.exit(f"{name}: {repo} ships no queries/highlights.scm")
 
             text = re.sub(r"[ \t]*\(#is-not\?[^)]*\)", "", open(path, encoding="utf-8").read())
+            text = INHERITS.sub("", text)
             sources.append(f";   {repo}/queries/highlights.scm @ {pin(repo)}")
             parts.append(text.strip())
 
@@ -178,10 +213,20 @@ def main():
                 sys.exit(f"{name}: {repo} ships no queries/injections.scm")
 
             sources.append(f";   {repo}/queries/injections.scm @ {pin(repo)}")
-            parts.append(open(path, encoding="utf-8").read().strip())
+            parts.append(INHERITS.sub("", open(path, encoding="utf-8").read()).strip())
+
+        body = "\n\n".join(parts)
+
+        for old, new in INJECTION_SUBSTITUTIONS.get(name, []):
+            if old not in body:
+                sys.exit(f"injections/{name}: a local edit no longer matches upstream; review it:\n{old}")
+            body = body.replace(old, new)
+
+        if name in INJECTION_ADDITIONS:
+            body += "\n\n" + INJECTION_ADDITIONS[name]
 
         with open(os.path.join(INJECTIONS_OUT, name + ".scm"), "w", encoding="utf-8", newline="\n") as f:
-            f.write(INJECTION_HEADER + "\n".join(sources) + "\n\n" + "\n\n".join(parts) + "\n")
+            f.write(INJECTION_HEADER + "\n".join(sources) + "\n\n" + body + "\n")
 
         print(f"injections/{name}.scm <- {' + '.join(repos)}")
 

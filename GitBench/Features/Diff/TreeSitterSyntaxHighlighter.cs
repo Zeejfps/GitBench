@@ -52,6 +52,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         ("toml", CodeLanguage.Toml),
         ("markdown", CodeLanguage.Markdown),
         ("html", CodeLanguage.Html),
+        ("svelte", CodeLanguage.Svelte),
     ];
 
     private readonly Dictionary<CodeLanguage, CompiledHighlights> _compiled = [];
@@ -209,7 +210,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
             (compiled, utf8, regions, depth, captures, follow: depth < MaxInjectionDepth),
             static (session, s) =>
             {
-                List<Injection>? found = null;
+                Dictionary<Region, Injection>? found = null;
                 foreach (var region in s.regions)
                 {
                     Scan(session, s.compiled, s.utf8, region, s.depth, s.captures, s.follow, ref found);
@@ -228,7 +229,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
             (compiled, tree, captures, region: new Region(0, utf8.Length)),
             static (session, s) =>
             {
-                List<Injection>? found = null;
+                Dictionary<Region, Injection>? found = null;
                 ScanTree(
                     session, s.compiled, s.tree.RootNode, s.region,
                     depth: 0, s.captures, followInjections: true, ref found);
@@ -238,11 +239,11 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         Follow(injected, utf8, depth: 0, captures);
     }
 
-    private void Follow(List<Injection>? injected, byte[] utf8, int depth, List<Capture> captures)
+    private void Follow(Dictionary<Region, Injection>? injected, byte[] utf8, int depth, List<Capture> captures)
     {
         if (injected is null) return;
 
-        foreach (var group in injected.GroupBy(i => i.Language))
+        foreach (var group in injected.Values.GroupBy(i => i.Language))
         {
             Collect(group.Key, utf8, [.. group.Select(i => i.Region)], depth + 1, captures);
         }
@@ -256,7 +257,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         int depth,
         List<Capture> captures,
         bool followInjections,
-        ref List<Injection>? injected)
+        ref Dictionary<Region, Injection>? injected)
     {
         if (region.Length <= 0) return;
 
@@ -272,7 +273,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         int depth,
         List<Capture> captures,
         bool followInjections,
-        ref List<Injection>? injected)
+        ref Dictionary<Region, Injection>? injected)
     {
         var origin = region.Start;
 
@@ -296,6 +297,11 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
 
         if (!followInjections || compiled.Injections is not { } injections) return;
 
+        // Two patterns naming one region resolve to the later pattern, the same "specific rule
+        // below the general one" convention the highlight queries follow: a <script> body goes to
+        // JavaScript unless a later pattern read its lang attribute and said TypeScript. Keyed on
+        // the region rather than deduplicated after the fact because matches arrive in tree order,
+        // not pattern order.
         var found = injected;
         session.Cursor.ForEachMatch(injections.Query, root, match =>
         {
@@ -313,7 +319,11 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
 
                 if (target == compiled.Language && content == region) continue;
 
-                (found ??= []).Add(new Injection(target, content));
+                found ??= [];
+                if (!found.TryGetValue(content, out var existing) || existing.PatternIndex <= match.PatternIndex)
+                {
+                    found[content] = new Injection(target, content, match.PatternIndex);
+                }
             }
         });
 
@@ -444,7 +454,7 @@ internal sealed class TreeSitterSyntaxHighlighter : ISyntaxHighlighter, IDisposa
         public int End => Start + Length;
     }
 
-    private readonly record struct Injection(CodeLanguage Language, Region Region);
+    private readonly record struct Injection(CodeLanguage Language, Region Region, int PatternIndex);
 
     /// <summary>One language's compiled query, its parser pool, and its capture ids already
     /// resolved to color slots so the per-match path is an array index.</summary>

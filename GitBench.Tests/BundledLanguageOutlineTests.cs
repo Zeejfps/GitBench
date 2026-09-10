@@ -281,6 +281,23 @@ public class BundledLanguageOutlineTests(CodeIntelFixture fixture)
              ("div", SymbolKind.Type, 2),
              ("span", SymbolKind.Type, 3)]),
 
+        // HTML's element tree plus the one template construct with a name of its own.
+        (CodeLanguage.Svelte, """
+            <script>
+              let rows = [];
+            </script>
+
+            {#snippet row(item)}
+              <li>{item}</li>
+            {/snippet}
+
+            <ul class="list">{#each rows as r}{@render row(r)}{/each}</ul>
+            """,
+            [("script", SymbolKind.Type, 0),
+             ("row", SymbolKind.Function, 0),
+             ("li", SymbolKind.Type, 1),
+             ("ul", SymbolKind.Type, 0)]),
+
         // The section is the declaration, not the heading, so folding one takes the prose with it.
         (CodeLanguage.Markdown, """
             # Title

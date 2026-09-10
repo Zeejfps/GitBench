@@ -6,6 +6,9 @@
 ; capture (a fenced block's info string) or set outright by the pattern. A language we bundle no
 ; grammar for leaves its region uncolored, which is why the ones naming latex and toml are kept.
 ;
+; Two patterns naming the same region resolve to the later one, so a specific rule (a <script>
+; whose lang attribute says TypeScript) is written after the general one it refines.
+;
 ; Source:
 ;   tree-sitter-markdown/tree-sitter-markdown/queries/injections.scm @ f969cd3
 

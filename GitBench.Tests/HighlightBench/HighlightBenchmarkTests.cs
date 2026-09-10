@@ -50,6 +50,7 @@ public sealed class HighlightBenchmarkTests(ITestOutputHelper output)
         (CodeLanguage.C, "c"),
         (CodeLanguage.Markdown, "markdown"),
         (CodeLanguage.Html, "html"),
+        (CodeLanguage.Svelte, "svelte"),
     ];
 
     [Fact]
