@@ -57,6 +57,32 @@ public class KeyboardShortcutsDialogTests
     }
 
     [Fact]
+    public void TypingFiltersTheList_WithoutAClickFirst()
+    {
+        using var harness = Mount(() => { });
+
+        harness.Type("F12");
+        harness.Layout();
+
+        var canvas = harness.Render();
+        Assert.True(HasText(canvas, "Code navigation"));
+        Assert.True(HasText(canvas, "Go to definition"));
+        Assert.False(HasText(canvas, "Application"));
+        Assert.False(HasText(canvas, "Refresh"));
+    }
+
+    [Fact]
+    public void AQueryNothingMatches_SaysSo()
+    {
+        using var harness = Mount(() => { });
+
+        harness.Type("zzzz");
+        harness.Layout();
+
+        Assert.True(HasText(harness.Render(), "No shortcuts match."));
+    }
+
+    [Fact]
     public void EscapeCloses()
     {
         var closed = false;

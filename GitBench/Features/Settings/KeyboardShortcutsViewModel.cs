@@ -13,16 +13,26 @@ internal sealed record ShortcutSection(KeyCommandSection Section, string Title, 
 /// <summary>
 /// The whole key map as a list to read: every command, grouped by the surface it belongs to, with
 /// the caps the active <see cref="IKeyMap"/> binds it to. Follows the locale, so the names re-read
-/// in the new language.
+/// in the new language, and narrows to what <see cref="Query"/> matches — a command's name, one of
+/// its caps, or the group it sits in.
 /// </summary>
 internal sealed class KeyboardShortcutsViewModel
 {
     public KeyboardShortcutsViewModel(IKeyMap keys, ILocalizationService localization)
     {
-        Sections = new Derived<IReadOnlyList<ShortcutSection>>(() => Build(keys, localization.Strings.Value));
+        Sections = new Derived<IReadOnlyList<ShortcutSection>>(
+            () => Filter(Build(keys, localization.Strings.Value), Query.Value.Trim()));
+        NoMatches = new Derived<bool>(() => Sections.Value.Count == 0);
     }
 
+    /// <summary>What the search box holds. Empty shows everything.</summary>
+    public State<string> Query { get; } = new(string.Empty);
+
+    /// <summary>The groups with at least one row matching <see cref="Query"/>, in display order.</summary>
     public IReadable<IReadOnlyList<ShortcutSection>> Sections { get; }
+
+    /// <summary>True when a query rules every command out.</summary>
+    public IReadable<bool> NoMatches { get; }
 
     private static IReadOnlyList<ShortcutSection> Build(IKeyMap keys, Strings s)
     {
@@ -38,6 +48,42 @@ internal sealed class KeyboardShortcutsViewModel
 
         return sections;
     }
+
+    private static IReadOnlyList<ShortcutSection> Filter(IReadOnlyList<ShortcutSection> all, string query)
+    {
+        if (query.Length == 0) return all;
+
+        var kept = new List<ShortcutSection>(all.Count);
+        foreach (var section in all)
+        {
+            if (Contains(section.Title, query))
+            {
+                kept.Add(section);
+                continue;
+            }
+
+            var rows = new List<ShortcutRow>();
+            foreach (var row in section.Rows)
+                if (Matches(row, query))
+                    rows.Add(row);
+            if (rows.Count > 0)
+                kept.Add(section with { Rows = rows });
+        }
+
+        return kept;
+    }
+
+    private static bool Matches(ShortcutRow row, string query)
+    {
+        if (Contains(row.Label, query)) return true;
+        foreach (var cap in row.Caps)
+            if (Contains(cap, query))
+                return true;
+        return false;
+    }
+
+    private static bool Contains(string text, string query) =>
+        text.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     // Enter and its numpad twin read the same, and one cap says it.
     private static IReadOnlyList<string> Caps(IKeyMap keys, KeyCommand command)

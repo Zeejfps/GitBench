@@ -102,6 +102,8 @@
 
   "shortcuts.title": "键盘快捷键",
   "shortcuts.description": "每组快捷键在其界面获得焦点时生效。",
+  "shortcuts.search_placeholder": "按命令或按键搜索",
+  "shortcuts.no_matches": "没有匹配的快捷键。",
 
   "shortcuts.section.application": "应用程序",
   "shortcuts.section.lists": "列表",

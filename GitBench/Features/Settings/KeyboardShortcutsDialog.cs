@@ -3,14 +3,18 @@ using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
+using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Settings;
 
-/// <summary>The key map as a scrolling reference: every command grouped by surface, with its caps.</summary>
+/// <summary>The key map as a searchable reference: every command grouped by surface, with its caps.</summary>
 internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
 {
+    public const string SearchInputId = "shortcuts-search";
+
     private const float DialogHeight = 560f;
 
     public required Action OnClose { get; init; }
@@ -68,17 +72,62 @@ internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
                                     FontSize = FontSize.Caption,
                                     Color = Theme.Color(s => s.Palette.TextMuted),
                                 },
+                                new SearchInputBox
+                                {
+                                    Input = new TextInput
+                                    {
+                                        Id = SearchInputId,
+                                        Value = vm.Query,
+                                        AutoFocus = true,
+                                        Placeholder = L.T(s => s.ShortcutsSearchPlaceholder),
+                                        Wrap = TextWrap.NoWrap,
+                                        Height = Sizes.RowHeight,
+                                        VAlign = TextAlignment.Center,
+                                        Background = Theme.Color(s => s.TextInput.Background),
+                                        Color = Theme.Color(s => s.TextInput.Text),
+                                        CaretColor = Theme.Color(s => s.TextInput.Caret),
+                                        SelectionColor = Theme.Color(s => s.TextInput.Selection),
+                                        PlaceholderColor = Theme.Color(s => s.TextInput.PlaceholderText),
+                                    },
+                                },
                                 new Grow
                                 {
-                                    Child = new DialogScrollList
+                                    Child = new DialogScrollRegion
                                     {
-                                        Content = new Column<ShortcutSection>
+                                        FillParent = true,
+                                        Content = new Padding
                                         {
-                                            Gap = Spacing.Lg,
-                                            CrossAxis = CrossAxisAlignment.Stretch,
-                                            Items = Prop.Bind(vm.Sections),
-                                            Template = section => new ShortcutSectionWidget { Section = section },
-                                        }.BuildView(ctx),
+                                            // Keeps the cards off the scrollbar when it appears.
+                                            Amount = new PaddingStyle { Right = Spacing.Sm },
+                                            Children =
+                                            [
+                                                new Column
+                                                {
+                                                    Gap = Spacing.Lg,
+                                                    CrossAxis = CrossAxisAlignment.Stretch,
+                                                    Children =
+                                                    [
+                                                        new Show
+                                                        {
+                                                            When = vm.NoMatches,
+                                                            Then = () => new Text
+                                                            {
+                                                                Value = L.T(s => s.ShortcutsNoMatches),
+                                                                FontSize = FontSize.Caption,
+                                                                Color = Theme.Color(s => s.DialogBody.RowTextMissing),
+                                                            },
+                                                        },
+                                                        new Column<ShortcutSection>
+                                                        {
+                                                            Gap = Spacing.Lg,
+                                                            CrossAxis = CrossAxisAlignment.Stretch,
+                                                            Items = Prop.Bind(vm.Sections),
+                                                            Template = section => new ShortcutSectionWidget { Section = section },
+                                                        },
+                                                    ],
+                                                },
+                                            ],
+                                        },
                                     },
                                 },
                             ],
@@ -90,31 +139,50 @@ internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
     }
 }
 
-/// <summary>One group of the shortcuts list: its heading and the rows beneath it.</summary>
+/// <summary>One group of the shortcuts list: its heading over a card holding the rows.</summary>
 internal sealed record ShortcutSectionWidget : Widget
 {
     public required ShortcutSection Section { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var rows = new List<IWidget>(Section.Rows.Count + 1)
-        {
-            new Text
-            {
-                Value = Section.Title,
-                FontSize = FontSize.Caption,
-                Weight = FontWeight.Bold,
-                Color = Theme.Color(s => s.DialogBody.SectionHeaderText),
-            },
-        };
-        foreach (var row in Section.Rows)
-            rows.Add(new ShortcutRowWidget { Row = row });
+        var rows = new IWidget[Section.Rows.Count];
+        for (var i = 0; i < rows.Length; i++)
+            rows[i] = new ShortcutRowWidget { Row = Section.Rows[i] };
 
         return new Column
         {
-            Gap = Spacing.Xs,
+            Gap = Spacing.Sm,
             CrossAxis = CrossAxisAlignment.Stretch,
-            Children = rows.ToArray(),
+            Children =
+            [
+                new Text
+                {
+                    Value = Section.Title,
+                    FontSize = FontSize.Body,
+                    Weight = FontWeight.Bold,
+                    Color = Theme.Color(s => s.Palette.TextPrimary),
+                },
+                new DialogInsetCard
+                {
+                    Children =
+                    [
+                        new Padding
+                        {
+                            Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
+                            Children =
+                            [
+                                new Column
+                                {
+                                    Gap = Spacing.Xs,
+                                    CrossAxis = CrossAxisAlignment.Stretch,
+                                    Children = rows,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
         };
     }
 }

@@ -102,6 +102,8 @@
 
   "shortcuts.title": "キーボードショートカット",
   "shortcuts.description": "各グループは、その画面にフォーカスがあるときに有効です。",
+  "shortcuts.search_placeholder": "コマンドまたはキーで検索",
+  "shortcuts.no_matches": "一致するショートカットはありません。",
 
   "shortcuts.section.application": "アプリケーション",
   "shortcuts.section.lists": "リスト",

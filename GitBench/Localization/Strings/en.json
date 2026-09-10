@@ -102,6 +102,8 @@
 
   "shortcuts.title": "Keyboard shortcuts",
   "shortcuts.description": "Each group applies while its surface has the focus.",
+  "shortcuts.search_placeholder": "Search by command or key",
+  "shortcuts.no_matches": "No shortcuts match.",
 
   "shortcuts.section.application": "Application",
   "shortcuts.section.lists": "Lists",

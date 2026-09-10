@@ -102,6 +102,8 @@
 
   "shortcuts.title": "Atajos de teclado",
   "shortcuts.description": "Cada grupo se aplica mientras su superficie tiene el foco.",
+  "shortcuts.search_placeholder": "Buscar por comando o tecla",
+  "shortcuts.no_matches": "Ningún atajo coincide.",
 
   "shortcuts.section.application": "Aplicación",
   "shortcuts.section.lists": "Listas",

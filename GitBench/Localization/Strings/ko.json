@@ -102,6 +102,8 @@
 
   "shortcuts.title": "키보드 단축키",
   "shortcuts.description": "각 그룹은 해당 화면에 포커스가 있을 때 적용됩니다.",
+  "shortcuts.search_placeholder": "명령 또는 키로 검색",
+  "shortcuts.no_matches": "일치하는 단축키가 없습니다.",
 
   "shortcuts.section.application": "애플리케이션",
   "shortcuts.section.lists": "목록",

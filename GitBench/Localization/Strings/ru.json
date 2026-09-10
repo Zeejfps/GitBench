@@ -137,6 +137,8 @@
 
   "shortcuts.title": "Сочетания клавиш",
   "shortcuts.description": "Каждая группа действует, пока фокус находится в её области.",
+  "shortcuts.search_placeholder": "Поиск по команде или клавише",
+  "shortcuts.no_matches": "Нет подходящих сочетаний.",
 
   "shortcuts.section.application": "Приложение",
   "shortcuts.section.lists": "Списки",

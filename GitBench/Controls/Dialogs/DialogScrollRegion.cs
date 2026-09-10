@@ -21,9 +21,13 @@ internal sealed record DialogScrollRegion : Widget
 {
     public required IWidget Content { get; init; }
 
+    /// <summary>Claim no height of the region's own, so a fixed-height dialog's body Grow hands it the
+    /// leftover space and the content scrolls inside that (see <see cref="VerticalScrollPane.FillParent"/>).</summary>
+    public bool FillParent { get; init; }
+
     protected override View CreateView(Context ctx)
     {
-        var pane = new VerticalScrollPane { StretchContent = true };
+        var pane = new VerticalScrollPane { StretchContent = true, FillParent = FillParent };
         // Wrap the content in a Grow so the pane's stretch reaches it: when the viewport is taller
         // than the content, the content is laid out at the viewport height and its own Grow children
         // (e.g. a fill-parent list) get real slack to expand into.
