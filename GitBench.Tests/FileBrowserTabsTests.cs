@@ -225,6 +225,50 @@ public sealed class FileBrowserTabsTests(CodeIntelFixture fixture) : IDisposable
         Assert.All(reopened.Tabs, tab => Assert.False(tab.Transient.Value));
     }
 
+    [Fact]
+    public void AClosedTabStaysClosedAcrossARestart()
+    {
+        Write("Auth.cs", "class AuthService", "{", "}");
+        using (var browser = Show("Auth.cs"))
+        {
+            browser.Activate(Row(browser, "Auth.cs"));
+            browser.CloseTab(browser.Tabs[0]);
+            Settle(browser);
+        }
+
+        // The cursor is still on the closed file's row; that is not a tab.
+        Assert.Empty(_persisted[^1].Tabs);
+        Assert.Equal("Auth.cs", _persisted[^1].Cursor);
+
+        using var reopened = Browser(_persisted[^1]);
+        reopened.Invalidate();
+        Settle(reopened, () => reopened.Rows.Value.Count > 0);
+
+        Assert.Empty(reopened.Tabs);
+        Assert.Equal(At("Auth.cs"), reopened.Cursor.Value);
+    }
+
+    [Fact]
+    public void ATabOnAFileThatHasGoneIsNotReopened()
+    {
+        Write("Auth.cs", "class AuthService", "{", "}");
+        Write("Token.cs", "class TokenCache", "{", "}");
+        using (var browser = Show("Auth.cs"))
+        {
+            browser.Activate(Row(browser, "Auth.cs"));
+            browser.NavigateTo(At("Token.cs"), 1);
+            Settle(browser, () => Preview(browser) == At("Token.cs"));
+        }
+
+        File.Delete(At("Token.cs"));
+
+        using var reopened = Browser(_persisted[^1]);
+        reopened.Invalidate();
+        Settle(reopened, () => Preview(reopened) == At("Auth.cs"));
+
+        Assert.Equal(["Auth.cs"], Names(reopened));
+    }
+
     private static IReadOnlyList<string> Names(FileBrowserViewModel browser) =>
         browser.Tabs.Select(tab => tab.Name).ToList();
 

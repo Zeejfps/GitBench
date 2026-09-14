@@ -135,18 +135,26 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
 
     /// <summary>Reopens the tabs and the cursor the reader left, without any of it counting as
     /// somewhere they have navigated: a fresh session's history starts empty.</summary>
+    /// <remarks>
+    /// Only the tabs decide what is open. The cursor is where the keyboard was — after closing the
+    /// last tab it is still on that file's row — and a restore that opened it would hand back the
+    /// tab the reader just closed, every launch. A tab whose file has gone since is dropped rather
+    /// than reopened onto nothing.
+    /// </remarks>
     private void Restore(FileBrowserUiState state)
     {
         _restoring = true;
         try
         {
             foreach (var relative in state.Tabs)
-                if (Restored(relative) is { } path) _tabs.Open(path, pinned: true);
+                if (RestoredFile(relative) is { } path) _tabs.Open(path, pinned: true);
 
-            var cursor = Restored(state.Cursor);
-            var active = Restored(state.ActiveTab) ?? cursor;
-            if (active is not null) Show(active, pinned: true, line: null);
-            if (cursor is not null) _cursor.Value = cursor;
+            if (RestoredFile(state.ActiveTab) is { } active && _tabs.Find(active) is not null)
+                Show(active, pinned: true, line: null);
+            else if (_tabs.Items.Count > 0)
+                Show(_tabs.Items[^1].Path, pinned: true, line: null);
+
+            if (Restored(state.Cursor) is { } cursor) _cursor.Value = cursor;
         }
         finally
         {
@@ -1064,6 +1072,11 @@ internal sealed class FileBrowserViewModel : IFileNavigator, IDisposable
         var absolute = PathKey.Normalize(Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar)));
         return ToRelative(absolute) is null ? null : absolute;
     }
+
+    /// <summary>A restored path that is still a file on disk. A directory or a path that has gone
+    /// is not something a tab can show.</summary>
+    private string? RestoredFile(string? relative) =>
+        Restored(relative) is { } absolute && File.Exists(absolute) ? absolute : null;
 
     private string? ToRelative(string absolute)
     {

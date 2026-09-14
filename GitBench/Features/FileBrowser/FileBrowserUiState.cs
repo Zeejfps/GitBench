@@ -23,8 +23,8 @@ public sealed class FileBrowserUiState
     /// anything else is a place this repository cannot name.</summary>
     public List<string> Tabs { get; set; } = [];
 
-    /// <summary>Which of <see cref="Tabs"/> was on screen. Falls back to <see cref="Cursor"/>'s
-    /// file when it names nothing.</summary>
+    /// <summary>Which of <see cref="Tabs"/> was on screen. Never the cursor: a closed tab leaves the
+    /// cursor on its row, and the tab has to stay closed.</summary>
     public string? ActiveTab { get; set; }
 
     public FileBrowserUiState Clone() => new()
