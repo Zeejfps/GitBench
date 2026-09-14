@@ -62,6 +62,7 @@ internal sealed record StatusBarContentView : Widget
                 }.WithTooltip(L.T(s => s.StatusbarSettingsTooltip))
                     .WithController<KbmController>(),
                 new Grow { Child = left },
+                new AgentConnectionsBadge(),
                 new Text
                 {
                     FontSize = FontSize.Caption,

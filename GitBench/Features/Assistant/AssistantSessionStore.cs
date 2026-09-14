@@ -66,6 +66,10 @@ internal interface IAssistantSessionStore
 /// swaps on repo switch, and a <see cref="Start"/> that wires the registry once the UI loop exists.
 /// Credentials resolve off the UI thread — the OS secret store blocks and can raise an unlock
 /// prompt, which on the UI thread would freeze the app on first open.
+///
+/// A review window's walkthrough runs in the conversation of the window's own repository — the one
+/// its tools are bound to — whether or not that is the main window's active one; the rail is
+/// where the reviewer reads it, and the transcript it also lands in is that repository's.
 /// </remarks>
 internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedService, IDisposable
 {
@@ -76,14 +80,18 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     private readonly ILocalizationService _loc;
     private readonly IUiDispatcher _dispatcher;
     private readonly IReviewProgressStore _reviewProgress;
+    private readonly IReviewWindowRegistry _reviewWindows;
     private readonly AgentCatalog _catalog;
     private readonly AgentDefinition _agent;
     private readonly AgentDefinition _commitMessageAgent;
+    private readonly AgentDefinition _walkthroughAgent;
     private readonly IAssistantBackend _backend;
     private readonly AssistantWriteSurface _writes;
+    private readonly IMessageBus _bus;
 
     private readonly Dictionary<Guid, AssistantSession> _sessions = new();
     private readonly Dictionary<Guid, CommitMessageQuickAction> _commitMessages = new();
+    private readonly Dictionary<Guid, AssistantWalkthroughNarration> _narrations = new();
     private readonly State<AssistantSession?> _active = new(null);
     private readonly State<CommitMessageQuickAction?> _activeCommitMessage = new(null);
     private readonly State<AssistantSettings> _settings;
@@ -104,6 +112,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     private Task _resolving = Task.CompletedTask;
 
     private IDisposable? _activeSub;
+    private IDisposable? _narrateSub;
     private bool _started;
     private bool _disposed;
 
@@ -118,6 +127,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         IMessageBus bus,
         ICommitEditor commitEditor,
         IReviewProgressStore reviewProgress,
+        IReviewWindowRegistry reviewWindows,
         IRepoOperationsStore operations,
         IDocumentStore documents,
         AssistantBackendFactory backendFactory)
@@ -130,11 +140,14 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         _loc = loc;
         _dispatcher = dispatcher;
         _reviewProgress = reviewProgress;
+        _reviewWindows = reviewWindows;
+        _bus = bus;
         _writes = new AssistantWriteSurface(dispatcher, bus, registry, commitEditor, operations, documents);
         _connection = settings.Value.Connect(null);
         _catalog = AgentCatalog.LoadEmbedded();
         _agent = _catalog.Get(AgentCatalog.GeneralAgent);
         _commitMessageAgent = _catalog.Get(AgentCatalog.CommitMessageAgent);
+        _walkthroughAgent = _catalog.Get(AgentCatalog.WalkthroughReviewAgent);
         _backend = backendFactory(() => Volatile.Read(ref _connection));
     }
 
@@ -153,6 +166,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_started) return; // idempotent
         _started = true;
         _activeSub = _registry.Active.Subscribe(_ => OnActiveChanged());
+        _narrateSub = _bus.SubscribeScoped<NarrateWalkthroughMessage>(OnNarrate);
         Resolve(_settings.Value, save: null);
     }
 
@@ -199,6 +213,8 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         var notice = _loc.Strings.Value.AssistantProviderSwitched(provider.DisplayName);
         foreach (var session in _sessions.Values)
             session.RestartForProviderChange(notice);
+        foreach (var narration in _narrations.Values)
+            narration.RestartForProviderChange();
     }
 
     // Reads (and optionally rewrites) the secret store on a worker, then posts the result back. What
@@ -268,6 +284,44 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         session.RunPreset(prompt, new AssistantAgentLoop(_backend, agent, toolset, ToolCallingIsUnproven));
     }
 
+    // A review window's cue for the assistant as narrator. Runs in the window repository's own
+    // conversation with the full toolset, since the presentation tools need the window registry.
+    // With no key to answer with, the rail is told its narrator is gone rather than left saying
+    // the assistant is working on something nothing will ever send.
+    private void OnNarrate(NarrateWalkthroughMessage m)
+    {
+        if (_disposed) return;
+        if (_registry.Repos.FirstOrDefault(r => r.Id == m.RepoId) is not { } repo) return;
+
+        if (!_isConfigured.Value)
+        {
+            _reviewWindows.LatestFor(repo.Id)?.Walkthrough.MarkDisconnected();
+            return;
+        }
+
+        NarrationFor(repo).Cue(m.Cue);
+    }
+
+    private AssistantWalkthroughNarration NarrationFor(Repo repo)
+    {
+        if (_narrations.TryGetValue(repo.Id, out var existing)) return existing;
+
+        var narration = new AssistantWalkthroughNarration(
+            repo.Id,
+            SessionFor(repo),
+            observer =>
+            {
+                var toolset = AssistantToolset.ForRepo(
+                    _git, repo, _extractor, _walkthroughAgent, _reviewProgress, _reviewWindows, _writes);
+                return new AssistantThread(
+                    new AssistantAgentLoop(_backend, _walkthroughAgent, toolset, ToolCallingIsUnproven), observer);
+            },
+            _reviewWindows,
+            _dispatcher);
+        _narrations[repo.Id] = narration;
+        return narration;
+    }
+
     private void OnActiveChanged()
     {
         if (_disposed) return;
@@ -281,7 +335,7 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_sessions.TryGetValue(repo.Id, out var existing)) return existing;
 
         // The toolset is bound to this one checkout, so the assistant cannot reach the others.
-        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _agent, _reviewProgress, _writes);
+        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _agent, _reviewProgress, _reviewWindows, _writes);
         var session = new AssistantSession(
             repo, _git, new AssistantAgentLoop(_backend, _agent, toolset, ToolCallingIsUnproven), _loc, _dispatcher);
         _sessions[repo.Id] = session;
@@ -295,7 +349,8 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
     {
         if (_commitMessages.TryGetValue(repo.Id, out var existing)) return existing;
 
-        var toolset = AssistantToolset.ForRepo(_git, repo, _extractor, _commitMessageAgent, _reviewProgress, _writes);
+        var toolset = AssistantToolset.ForRepo(
+            _git, repo, _extractor, _commitMessageAgent, _reviewProgress, _reviewWindows, _writes);
         var action = new CommitMessageQuickAction(
             repo,
             _git,
@@ -316,6 +371,9 @@ internal sealed class AssistantSessionStore : IAssistantSessionStore, IHostedSer
         if (_disposed) return;
         _disposed = true;
         _activeSub?.Dispose();
+        _narrateSub?.Dispose();
+        foreach (var narration in _narrations.Values) narration.Dispose();
+        _narrations.Clear();
         foreach (var session in _sessions.Values) session.Dispose();
         _sessions.Clear();
         foreach (var action in _commitMessages.Values) action.Dispose();

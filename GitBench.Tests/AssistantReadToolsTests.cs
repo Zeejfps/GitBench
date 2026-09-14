@@ -144,15 +144,16 @@ public sealed class AssistantReadToolsTests : IDisposable
         Assert.Equal("modified", unstaged[0].GetProperty("status").GetString());
     }
 
+    // Every line carries its own old|new numbers, so a model can name a line without counting from
+    // the hunk header: the context line exists on both sides, the added one only on the new side.
     [Fact]
-    public async Task GetDiff_ReturnsPrefixedUnifiedLines()
+    public async Task GetDiff_ReturnsNumberedPrefixedUnifiedLines()
     {
         using var json = await InvokeOk("get_diff", """{"path":"a.txt","side":"unstaged"}""");
         var lines = json.RootElement.GetProperty("hunks")[0].GetProperty("lines")
             .EnumerateArray().Select(l => l.GetString()).ToList();
 
-        Assert.Contains("+two", lines);
-        Assert.Contains(" one", lines);
+        Assert.Equal(["1|1| one", "|2|+two"], lines);
         Assert.False(json.RootElement.GetProperty("truncated").GetBoolean());
     }
 
@@ -213,13 +214,13 @@ public sealed class AssistantReadToolsTests : IDisposable
 
         using var staged = await InvokeOk("get_diff", """{"path":"b.txt","side":"staged"}""");
         Assert.Contains(
-            "+fresh",
+            "|1|+fresh",
             staged.RootElement.GetProperty("hunks")[0].GetProperty("lines")
                 .EnumerateArray().Select(l => l.GetString()));
 
         using var commit = await InvokeOk("get_diff", $$"""{"path":"a.txt","side":"commit","commit_sha":"{{_headSha}}"}""");
         Assert.Contains(
-            "+one",
+            "|1|+one",
             commit.RootElement.GetProperty("hunks")[0].GetProperty("lines")
                 .EnumerateArray().Select(l => l.GetString()));
     }
@@ -241,7 +242,7 @@ public sealed class AssistantReadToolsTests : IDisposable
 
         using var json = await InvokeOk("get_diff", """{"path":"new.cs","side":"unstaged"}""");
         Assert.Contains(
-            "+class New;",
+            "|1|+class New;",
             json.RootElement.GetProperty("hunks")[0].GetProperty("lines")
                 .EnumerateArray().Select(l => l.GetString()));
     }

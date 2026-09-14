@@ -18,12 +18,16 @@ internal sealed class FakeAssistantBackend : IAssistantBackend
 
     public List<AssistantTurn> Requests { get; } = new();
 
+    /// <summary>The names of the tools each request was offered, in request order.</summary>
+    public List<IReadOnlyList<string>> OfferedTools { get; } = new();
+
     public async IAsyncEnumerable<BackendEvent> SendAsync(
         AssistantTurn turn,
         IReadOnlyList<IAssistantTool> tools,
         [EnumeratorCancellation] CancellationToken ct)
     {
         Requests.Add(turn);
+        OfferedTools.Add(tools.Select(t => t.Name).ToArray());
         var script = _turns.Count > 0
             ? _turns.Dequeue()
             : new BackendEvent[] { new BackendEvent.TurnComplete(StopReason.EndTurn) };

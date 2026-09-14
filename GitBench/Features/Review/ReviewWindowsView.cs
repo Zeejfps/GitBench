@@ -47,9 +47,10 @@ internal sealed record ReviewWindowsView : Widget
             _windowChrome = ctx.Get<IWindowChrome>();
             _themeMode = ctx.Get<State<ThemeMode>>();
 
+            // The registry is an app singleton (the assistant's review tools reach windows through
+            // it), so it outlives this view rather than being owned by it.
             var vm = ctx.Require<ReviewWindowsViewModel>();
             _vm = vm;
-            this.UseViewModel(() => vm, _ => { });
             this.Use(() => vm.Windows.Subscribe(OnWindowsChanged));
 
             // Focus-existing: a repeat open request for an already-open review raises this instead

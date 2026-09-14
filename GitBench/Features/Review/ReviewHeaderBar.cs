@@ -1,5 +1,6 @@
 using GitBench.Controls;
 using GitBench.Features.Repos;
+using GitBench.Features.Review.Walkthrough;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -12,10 +13,10 @@ namespace GitBench.Features.Review;
 
 /// <summary>
 /// The review window's top bar: the range (<c>head → base</c>) on the leading edge and, on the
-/// trailing edge, the review progress ("N / M files viewed" with a meter, or a "Review complete"
-/// badge once every file is viewed). The primary action lives on the active file's header in the
-/// stacked diff list, not here. Reads the pinned <see cref="ReviewWindowViewModel"/> from the
-/// build context.
+/// trailing edge, the assistant's "Walk me through this", then the review progress ("N / M files
+/// viewed" with a meter, or a "Review complete" badge once every file is viewed). The primary
+/// action lives on the active file's header in the stacked diff list, not here. Reads the pinned
+/// <see cref="ReviewWindowViewModel"/> from the build context.
 /// </summary>
 internal sealed record ReviewHeaderBar : Widget
 {
@@ -45,6 +46,7 @@ internal sealed record ReviewHeaderBar : Widget
                             Children =
                             [
                                 new Grow { Child = BaseRange(vm, ctx) },
+                                new WalkthroughStartButton(),
                                 ProgressGroup(vm),
                                 HelpButton(vm),
                             ],

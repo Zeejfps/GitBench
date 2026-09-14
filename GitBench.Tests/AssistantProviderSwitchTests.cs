@@ -294,6 +294,7 @@ public sealed class AssistantProviderKeyIsolationTests : IDisposable
             _bus,
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             _ => new FakeAssistantBackend());
@@ -560,6 +561,7 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
             _bus,
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             connection =>
@@ -754,6 +756,7 @@ public sealed class AssistantProviderSwitchConversationTests : IDisposable
             new MessageBus(),
             new AssistantViewFixture.FakeCommitEditor(),
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             _ => backend);

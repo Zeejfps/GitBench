@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using GitBench.Controls;
+using GitBench.Features.AgentConnections;
 using GitBench.Features.Diff;
 using GitBench.Features.Markdown.Rendering;
 using GitBench.Localization;
@@ -54,6 +55,24 @@ internal static class AppHostSetup
             var dispatcher = services.Require<IUiDispatcher>();
             _ = updateService.CheckForUpdatesAsync(dispatcher, userInitiated: false);
             updateService.StartAutoChecks(dispatcher);
+        }
+
+        /// <summary>
+        /// Starts the agent-connections server when its preference says so, and keeps it in step
+        /// from then on. After Build, so the debug server an environment variable asks for is
+        /// already up and reported rather than raced.
+        /// </summary>
+        public void UseAgentConnections()
+        {
+            var services = appHost.Context;
+            var service = new AgentConnectionService(
+                services.Require<State<AgentConnectionSettings>>(),
+                services.Require<State<AgentConnectionState>>(),
+                services.Require<AgentToolMcpSource>(),
+                new WalkthroughPrompt(),
+                new GuiAppMcpServerHost(appHost));
+            // Lives as long as the app, like the server it drives.
+            services.AddService(service);
         }
 
         public void UseThemedTitleBar()

@@ -120,6 +120,18 @@ internal sealed record DiffSelectionQuote(
         return builder.ToString();
     }
 
+    /// <summary>Where the selection is, as a reader cites it: <c>path:12-18</c>, or just the path
+    /// when it covers no numbered line.</summary>
+    public string Location
+    {
+        get
+        {
+            if (StartLine is not { } start) return Path;
+            var end = EndLine ?? start;
+            return start == end ? $"{Path}:{start.Value}" : $"{Path}:{start.Value}-{end.Value}";
+        }
+    }
+
     private string SideName => Side switch
     {
         DiffQuoteSide.Added => "added lines",

@@ -31,11 +31,40 @@ internal sealed record ReviewCheatsheetOverlay : Widget
     /// <summary>What the surface's marks mean, so the two mark rows read "viewed" or "staged".</summary>
     public ReviewMarkKind MarkKind { get; init; } = ReviewMarkKind.Viewed;
 
+    /// <summary>Whether this surface can host a walkthrough, so its keys are listed only where a
+    /// narrator could ever drive one.</summary>
+    public bool HasWalkthrough { get; init; } = true;
+
     protected override IWidget Build(Context ctx)
     {
         var input = ctx.Require<InputSystem>();
         var keys = ctx.KeyMap();
         var staged = MarkKind == ReviewMarkKind.Staged;
+
+        var rows = new List<IWidget>
+        {
+            new Text
+            {
+                Value = L.T(s => s.ReviewShortcutsTitle),
+                FontSize = FontSize.Heading,
+                Color = Theme.Color(s => s.Palette.TextPrimary),
+            },
+            ShortcutRow(
+                [keys.Display(KeyCommand.ReviewNextFile), keys.Display(KeyCommand.ReviewPrevFile)],
+                L.T(s => s.ReviewShortcutFileNav)),
+            ShortcutRow(Caps(keys, KeyCommand.ReviewToggleMark), staged
+                ? L.T(s => s.ReviewShortcutToggleStaged)
+                : L.T(s => s.ReviewShortcutToggleViewed)),
+        };
+        if (HasWalkthrough)
+        {
+            rows.Add(ShortcutRow(Caps(keys, KeyCommand.WalkthroughNext), L.T(s => s.ReviewShortcutWalkthroughNext)));
+            rows.Add(ShortcutRow(Caps(keys, KeyCommand.WalkthroughBack), L.T(s => s.ReviewShortcutWalkthroughBack)));
+            rows.Add(ShortcutRow(Caps(keys, KeyCommand.WalkthroughAsk), L.T(s => s.ReviewShortcutWalkthroughAsk)));
+        }
+
+        rows.Add(ShortcutRow(Caps(keys, KeyCommand.ReviewToggleHelp), L.T(s => s.ReviewShortcutHelp)));
+        rows.Add(ShortcutRow([new KeyGesture(KeyboardKey.Escape).Display], L.T(s => s.ReviewShortcutClose)));
 
         var card = new Box
         {
@@ -55,23 +84,7 @@ internal sealed record ReviewCheatsheetOverlay : Widget
                         {
                             Gap = Spacing.Md,
                             CrossAxis = CrossAxisAlignment.Stretch,
-                            Children =
-                            [
-                                new Text
-                                {
-                                    Value = L.T(s => s.ReviewShortcutsTitle),
-                                    FontSize = FontSize.Heading,
-                                    Color = Theme.Color(s => s.Palette.TextPrimary),
-                                },
-                                ShortcutRow(
-                                    [keys.Display(KeyCommand.ReviewNextFile), keys.Display(KeyCommand.ReviewPrevFile)],
-                                    L.T(s => s.ReviewShortcutFileNav)),
-                                ShortcutRow(Caps(keys, KeyCommand.ReviewToggleMark), staged
-                                    ? L.T(s => s.ReviewShortcutToggleStaged)
-                                    : L.T(s => s.ReviewShortcutToggleViewed)),
-                                ShortcutRow(Caps(keys, KeyCommand.ReviewToggleHelp), L.T(s => s.ReviewShortcutHelp)),
-                                ShortcutRow([new KeyGesture(KeyboardKey.Escape).Display], L.T(s => s.ReviewShortcutClose)),
-                            ],
+                            Children = [.. rows],
                         },
                     ],
                 },

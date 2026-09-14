@@ -147,6 +147,10 @@ public sealed class KeyMap : IKeyBindingsStore
             [new(KeyboardKey.V), new(KeyboardKey.Space), new(KeyboardKey.Enter), new(KeyboardKey.NumpadEnter)],
         KeyCommand.ReviewToggleHelp => [new(KeyboardKey.Slash, InputModifiers.Shift)],
 
+        KeyCommand.WalkthroughNext => [new(KeyboardKey.Space), new(KeyboardKey.N)],
+        KeyCommand.WalkthroughBack => [new(KeyboardKey.P)],
+        KeyCommand.WalkthroughAsk => [new(KeyboardKey.Slash)],
+
         KeyCommand.GoToDefinition => [new(KeyboardKey.F12)],
         KeyCommand.FindUsages => [new(KeyboardKey.F12, InputModifiers.Shift)],
         KeyCommand.NavigateBack => [KeyGesture.WithPrimary(KeyboardKey.LeftBracket)],

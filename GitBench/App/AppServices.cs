@@ -1,6 +1,8 @@
-﻿using GitBench.Controls;
+using GitBench.Controls;
+using GitBench.Features.AgentConnections;
 using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
+using GitBench.Features.Assistant.Tools;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Commits;
 using GitBench.Features.Editor;
@@ -192,10 +194,17 @@ internal static class AppServices
         // Review windows' data seam: the real base..head range source (first-parent, merge-base
         // anchored). StubReviewStackSource remains as the Phase-3 reference impl behind this seam.
         context.AddSingleton<IReviewStackSource, GitReviewStackSource>();
+        // The open review windows, one registry for the app: the windows view reflects it into OS
+        // windows and the assistant's review tools point through it at what the reviewer sees.
+        context.AddSingleton<ReviewWindowsViewModel>();
 
         // Review progress (marked-Viewed files) lives for the app session, shared across review
         // windows so closing and reopening a branch's review keeps its progress.
         context.AddSingleton<IReviewProgressStore, ReviewProgressStore>();
+
+        // The open review windows, one instance: the ReviewWindowsView reflects it into OS windows
+        // and the assistant's walkthrough tools find the window a narration targets through it.
+        context.AddSingleton<ReviewWindowsViewModel>();
 
         // The terminal pane's two halves: what spawns the shell, and what parses what it writes.
         // Both stateless, and both registered rather than constructed at the pane — this is the only
@@ -305,17 +314,44 @@ internal static class AppServices
             ctx.Require<IMessageBus>(),
             ctx.Require<LocalChangesViewModel>(),
             ctx.Require<IReviewProgressStore>(),
+            ctx.Require<ReviewWindowsViewModel>(),
             ctx.Require<IRepoOperationsStore>(),
             ctx.Require<IDocumentStore>(),
             connection => new AssistantBackendRouter(AssistantHttp, connection)));
         context.AddSingleton<AssistantPanelPlacement>();
         context.AddSingleton<AssistantViewModel>();
 
+        // Local agents over MCP. The preference is one value so the server sees enabled, port and
+        // token move together; the state is what the settings card and status bar bind to. The
+        // service that keeps the server in step is attached after Build (UseAgentConnections),
+        // because the server is the app's. The write surface here is the same hop the assistant's
+        // session store builds for itself: a record over shared services, not state of its own.
+        var agentConnections = new State<AgentConnectionSettings>(AgentConnectionSettings.From(preferences.Current));
+        agentConnections.Changed += s => preferences.SetAgentConnections(s.Enabled, s.Port, s.Token);
+        context.AddService(agentConnections);
+        context.AddService(new State<AgentConnectionState>(new AgentConnectionState.Off()));
+        context.AddSingleton(ctx => new AssistantWriteSurface(
+            ctx.Require<IUiDispatcher>(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<LocalChangesViewModel>(),
+            ctx.Require<IRepoOperationsStore>(),
+            ctx.Require<IDocumentStore>()));
+        context.AddSingleton(ctx => new AgentToolMcpSource(
+            new AgentToolExport(
+                ctx.Require<IGitService>(),
+                ctx.Require<ISymbolExtractor>(),
+                ctx.Require<IReviewProgressStore>(),
+                ctx.Require<ReviewWindowsViewModel>(),
+                ctx.Require<AssistantWriteSurface>()),
+            ctx.Require<IRepoRegistry>(),
+            ctx.Require<ReviewWindowsViewModel>(),
+            ctx.Require<AssistantWriteSurface>(),
+            TimeProvider.System));
+
         context.AddHostedService<IToastService, ToastService>();
 
-        context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(
-            ctx.Require<IPopupWindowFactory>(),
-            ctx.Require<IWindowCoordinates>()));
+        context.AddSingleton<ITooltipService>(ctx => new PopupTooltipService(ctx.Require<IPopupWindowFactory>()));
 
         context.AddSingleton(ctx => new HoverPopupService(
             ctx.Require<IPopupWindowFactory>(),

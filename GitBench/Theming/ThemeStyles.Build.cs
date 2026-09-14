@@ -53,6 +53,7 @@ public partial record ThemeStyles
             ContextMenu = BuildContextMenu(p),
             CommitsView = BuildCommitsView(p, commitBadge),
             RowSelection = BuildRowSelection(p),
+            ReviewSpotlight = BuildReviewSpotlight(p),
             Markdown = BuildMarkdown(p),
             Terminal = BuildTerminal(p, ansi),
             TabStrip = BuildTabStrip(p),

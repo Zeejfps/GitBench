@@ -3,6 +3,7 @@ using GitBench.Features.Branches;
 using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.Repos;
+using GitBench.Features.Review.Walkthrough;
 using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
@@ -46,7 +47,7 @@ internal sealed record ReviewHud(
 /// <see cref="CommitDetailsViewModel"/>. Tracks which files the reviewer has marked Viewed (ephemeral
 /// for the window's lifetime) and offers step-through navigation over the unviewed ones.
 /// </summary>
-internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IReviewSurfaceModel
+internal sealed partial class ReviewWindowViewModel : ViewModelBase<ReviewState>, IReviewSurfaceModel
 {
     private const int StackCap = 200;
 
@@ -109,6 +110,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     // pane can never drive it. Owned here and disposed with the window.
     public CommitDetailsViewModel Details => _details;
 
+    // The guided walkthrough a narrator drives over this window's diff. Owned here and disposed
+    // with the window, so closing the window ends the walkthrough.
+    public ReviewWalkthroughStore Walkthrough { get; }
+
+    // The walkthrough's line to the built-in assistant: the header's request and, while the
+    // assistant narrates, the store's cues go out on the bus through it.
+    private readonly AssistantNarratorRelay _narrator;
+
     public IReadable<ReviewContentKind> ContentKind { get; }
     public IReadable<string> PlaceholderText { get; }
 
@@ -170,6 +179,8 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
         _reviewedFiles = new BranchReviewedFiles(reviewProgress, session.RepoId, session.HeadRef);
         _cursor = new ReviewFileCursor(Files, _reviewedFiles);
         _reloadLane = CreateLane();
+        Walkthrough = new ReviewWalkthroughStore(this, dispatcher, TimeProvider.System);
+        _narrator = new AssistantNarratorRelay(Walkthrough, session.RepoId, bus);
         Subscriptions.Add(_cheatsheetOpen);
         Subscriptions.Add(_baseOverride);
         Subscriptions.Add(_detailsEverLoaded);
@@ -395,6 +406,15 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
         else _cursor.ToggleActiveFileMarked();
     }
 
+    /// <summary>The header's "Walk me through this": asks the built-in assistant to narrate this
+    /// window's change. A new walkthrough each time, whoever was narrating before; the rail is up
+    /// from the click, showing the assistant at work until its first step.</summary>
+    public void StartWalkthrough()
+    {
+        Walkthrough.Begin(Narrator.Assistant);
+        _narrator.Begin();
+    }
+
     public void ToggleCheatsheet() => _cheatsheetOpen.Value = !_cheatsheetOpen.Value;
     public void CloseCheatsheet() => _cheatsheetOpen.Value = false;
 
@@ -416,10 +436,14 @@ internal sealed class ReviewWindowViewModel : ViewModelBase<ReviewState>, IRevie
     public void NextFile() => _cursor.NextFile();
     public void PrevFile() => _cursor.PrevFile();
 
-    // Disposes the owned Viewed tracker and the window's commit-details VM (no view owns it in the
-    // two-column layout), then the base (slices/subscriptions).
+    // Disposes the owned walkthrough (ending it for its narrator), the Viewed tracker and the
+    // window's commit-details VM (no view owns it in the two-column layout), then the base
+    // (slices/subscriptions).
     public override void Dispose()
     {
+        _narrator.Dispose();
+        Walkthrough.Dispose();
+        DisposePresentation();
         _reviewedFiles.Dispose();
         _details.Dispose();
         base.Dispose();

@@ -3,6 +3,7 @@ using GitBench.Features.Commits;
 using GitBench.Features.Diff;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
+using GitBench.Features.Review.Walkthrough;
 using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Theming;
@@ -110,8 +111,42 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         VerticalAlignment = TextAlignment.Center,
     };
 
+    // A spotlight's numbered pin: a small pill hanging over the card's leading edge on the range's
+    // first row — in the margin, so the gutter numbers stay readable — or on the header band while
+    // the file is folded.
+    private const float PinWidth = 18f;
+    private const float PinHeight = 16f;
+    private const float PinInset = 2f;
+    private const float PinGap = 4f;
+    private static readonly TextStyle PinStyle = new()
+    {
+        FontSize = FontSize.Caption,
+        HorizontalAlignment = TextAlignment.Center,
+        VerticalAlignment = TextAlignment.Center,
+    };
+
     // Render states that take over a card's body with their own view instead of diff rows.
     private enum BodyViewKind { None, Conflict, Image, Markdown }
+
+    // A narrator's lookup as this list is servicing it: which steps have been taken, so a step
+    // taken on one draw is not repeated on the next while its effect (a load, a scroll, a gap
+    // reveal) is still landing.
+    private sealed class PendingLookup
+    {
+        public PendingLookup(ReviewLineLookup lookup) => Lookup = lookup;
+
+        public ReviewLineLookup Lookup { get; }
+
+        // The file was activated, unfolded and its header brought onto the pin line.
+        public bool Landed;
+
+        // The line's own scroll target is set; the lookup completes once it settles.
+        public bool Scrolled;
+
+        // The gap asked to reveal the line, so that once it is fully open a line still missing is
+        // reported rather than asked for again.
+        public int? ExpandedGap;
+    }
 
     // One file's slice of the flattened surface: the header row (gap band + header) plus its body
     // rows — the built diff rows once loaded, a single message row (loading / binary / error /
@@ -155,6 +190,14 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     private readonly List<Section> _sections = new();
     private readonly Dictionary<string, Section> _byPath = new(StringComparer.Ordinal);
     private HashSet<string> _viewedSnapshot = new(StringComparer.Ordinal);
+
+    // The narrator seam, present only on a review window (the working-tree surface has none):
+    // lookups in progress, the spotlight set to draw, and the last viewport report.
+    private readonly IReviewPresentationSurface? _presentation;
+    private readonly List<PendingLookup> _lookups = new();
+    private IReadOnlyList<ReviewSpotlight> _spotlights = Array.Empty<ReviewSpotlight>();
+    private bool _spotlightDim;
+    private ReviewVisibleLines? _visible;
     private readonly HunkButtonBar _buttonBar;
     private Section? _hoveredHunkSection;
     private int _hoveredHunkIndex = -1;
@@ -263,6 +306,30 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             _vm.ScrollToFileRequested += handler;
             return new ActionDisposable(() => _vm.ScrollToFileRequested -= handler);
         });
+
+        // A narrator's focus and spotlights, on a review window: its lookups are serviced across
+        // draws, its spotlights repaint, and the reviewer's selection and viewport go back to it.
+        _presentation = ctx.Get<IReviewPresentationSurface>();
+        if (_presentation is { } presentation)
+        {
+            this.Use(() => presentation.ServiceLookups(OnLookupRequested));
+            this.Use(() => new ActionDisposable(AbandonLookups));
+            this.Bind(presentation.Spotlights, spotlights =>
+            {
+                _spotlights = spotlights;
+                SetDirty();
+            });
+            this.Bind(presentation.SpotlightDim, dim =>
+            {
+                _spotlightDim = dim;
+                SetDirty();
+            });
+            this.Use(() =>
+            {
+                _selection.Changed += ReportSelection;
+                return new ActionDisposable(() => _selection.Changed -= ReportSelection);
+            });
+        }
 
         // Per-file diff view models are owned here; drop them with the view.
         this.Use(() => new ActionDisposable(ClearSections));
@@ -1131,8 +1198,10 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         ClampHorizontalScroll();
         ReassertPendingScroll();
         EnsureVisibleLoaded();
+        ServiceLookups();
         _selectionController.Tick();
         NotifyScrollChanged(viewportFits: false);
+        ReportVisible();
     }
 
     private void EnsureMetrics(ICanvas c)
@@ -1585,9 +1654,353 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         {
             var z = GetDrawZIndex();
             _owner.DrawMargins(c, z);
+            _owner.DrawSpotlights(c, z + 1);
             _owner.DrawStickyHeader(c, z + 2);
             _owner.DrawTopPad(c, z + 8);
         }
+    }
+
+    // ---- narrator: focus, spotlights, reports ----
+
+    private void OnLookupRequested(ReviewLineLookup lookup)
+    {
+        _lookups.Add(new PendingLookup(lookup));
+        SetDirty();
+    }
+
+    // The list is going away under its lookups (a base switch remounts the split); a narrator
+    // blocked on one learns that now rather than at the timeout.
+    private void AbandonLookups()
+    {
+        foreach (var pending in _lookups)
+            pending.Lookup.TryComplete(
+                new ReviewLineResolution.Unavailable(pending.Lookup.Path, "the diff surface was rebuilt; ask again"));
+        _lookups.Clear();
+    }
+
+    // One pass per draw: each lookup takes whatever step it can (load, unfold, scroll, reveal a
+    // gap) and completes once its line is laid out. Steps whose effect lands asynchronously — a
+    // diff load, a gap's file fetch, a scroll that has to settle — leave it pending for the next
+    // draw, which SetDirty from the landing effect guarantees.
+    private void ServiceLookups()
+    {
+        for (var i = _lookups.Count - 1; i >= 0; i--)
+        {
+            var pending = _lookups[i];
+            if (!pending.Lookup.IsCompleted) Service(pending);
+            if (pending.Lookup.IsCompleted) _lookups.RemoveAt(i);
+        }
+    }
+
+    private void Service(PendingLookup pending)
+    {
+        var lookup = pending.Lookup;
+        if (!_byPath.TryGetValue(lookup.Path, out var s))
+        {
+            // This list only mounts once the range resolved, so a file list that is not Loaded is
+            // a reload in flight — the file may be about to appear.
+            if (_details.RenderState.Value is CommitDetailsRenderState.Loaded)
+                lookup.TryComplete(new ReviewLineResolution.NoSuchFile(lookup.Path));
+            return;
+        }
+
+        if (lookup.Target is not ReviewLookupTarget.Range && !pending.Landed)
+        {
+            pending.Landed = true;
+            _vm.ReportActiveFile(s.File.Path);
+            SetFolded(s, false);
+            SetScrollTarget(SectionTopOffset(s) - TopPadRowHeight);
+        }
+
+        // A spotlight resolves against a folded file too: its diff loads behind the header, and
+        // the pins ride the header band until the reviewer unfolds it.
+        if (s.Diff == null) StartLoad(s);
+        if (s.Diff == null)
+        {
+            lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, "no diff is loaded for this range"));
+            return;
+        }
+
+        switch (s.Render)
+        {
+            case null:
+                return;
+            case DiffRenderState.Placeholder placeholder:
+                // A diff view model reports "still loading" as a placeholder carrying the loading
+                // caption; any other caption is how its load failed.
+                if (placeholder.Text != _loc.Strings.Value.CommonLoading)
+                    lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, placeholder.Text));
+                return;
+            case DiffRenderState.Conflict:
+                lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, "shown as a conflict to resolve, not as a diff"));
+                return;
+            case DiffRenderState.Image:
+                lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, "an image, which has no lines"));
+                return;
+            case DiffRenderState.Markdown:
+                lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, "shown as a rendered markdown preview"));
+                return;
+            case DiffRenderState.Loaded { Result.IsBinary: true }:
+                lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, "a binary file, which has no diff lines"));
+                return;
+            case DiffRenderState.Loaded { Result.ErrorMessage: { Length: > 0 } error }:
+                lookup.TryComplete(new ReviewLineResolution.Unavailable(lookup.Path, error));
+                return;
+        }
+
+        switch (lookup.Target)
+        {
+            case ReviewLookupTarget.Header:
+                if (_pendingScrollY != null) return;
+                lookup.TryComplete(ReviewLineLocator.FirstLine(s.RowSet) is { } first
+                    ? new ReviewLineResolution.Resolved(new ReviewLineRef(s.File.Path, first.Side, first.Line), first.Text)
+                    : new ReviewLineResolution.Unavailable(lookup.Path, "the diff holds no lines"));
+                return;
+
+            case ReviewLookupTarget.At at:
+            {
+                var line = at.Line;
+                if (RowForLine(s, pending, line.Side, line.Line) is not { } row) return;
+                if (!pending.Scrolled)
+                {
+                    pending.Scrolled = true;
+                    SetScrollTarget(BodyRowContentTop(s, row.Value) - _list.Position.Height / 3f);
+                    return;
+                }
+                if (_pendingScrollY != null) return;
+                lookup.TryComplete(new ReviewLineResolution.Resolved(
+                    line, ReviewLineLocator.RangeText(s.RowSet, line.Side, line.Line, line.Line)));
+                return;
+            }
+
+            case ReviewLookupTarget.Range range:
+            {
+                var spotlight = range.Spotlight;
+                if (RowForLine(s, pending, spotlight.Side, spotlight.From) is null) return;
+                lookup.TryComplete(new ReviewLineResolution.Resolved(
+                    new ReviewLineRef(spotlight.Path, spotlight.Side, spotlight.From),
+                    ReviewLineLocator.RangeText(s.RowSet, spotlight.Side, spotlight.From, spotlight.To)));
+                return;
+            }
+
+            default:
+                throw new InvalidOperationException($"Unhandled lookup target {lookup.Target.GetType().Name}.");
+        }
+    }
+
+    // The row holding a line, or null when the lookup has to wait — a gap was just asked to
+    // reveal it — or is over, completed NotInDiff with the neighbours the rows do hold. A gap is
+    // asked once; a line the fully opened gap still lacks is not in the file.
+    private RowIndex? RowForLine(Section s, PendingLookup pending, DiffLineSide side, FileLine line)
+    {
+        if (s.RowSet.RowFor(ReviewLineLocator.KeyOf(side, line)) is { } row) return row;
+
+        if (s.Render is DiffRenderState.Loaded loaded && s.Diff != null
+            && ReviewLineLocator.GapHiding(loaded, side, line) is { } gap)
+        {
+            if (pending.ExpandedGap != gap.GapIndex)
+            {
+                pending.ExpandedGap = gap.GapIndex;
+                s.Diff.Diff.ExpandGap(gap.GapIndex, GapExpandDirection.All);
+                return null;
+            }
+            if (!ReviewLineLocator.IsRevealed(loaded, gap)) return null;
+        }
+
+        var (before, after) = ReviewLineLocator.Neighbours(s.RowSet, side, line);
+        pending.Lookup.TryComplete(new ReviewLineResolution.NotInDiff(
+            new ReviewLineRef(s.File.Path, side, line), before, after));
+        return null;
+    }
+
+    // Content-space top of a body row, summing the rows above it through the shared measure.
+    private float BodyRowContentTop(Section s, int bodyRow)
+    {
+        var y = SectionTopOffset(s) + HeaderRowHeight;
+        var rows = s.RowSet.Rows;
+        for (var i = 0; i < bodyRow && i < rows.Count; i++)
+            y += DiffRowMetrics.HeightOf(rows[i], LineHeight());
+        return y;
+    }
+
+    // The reviewer's selection as the quote the assistant menu would send, rebuilt only when the
+    // selection itself changes. Null once it collapses or clears.
+    private void ReportSelection()
+    {
+        if (_presentation == null) return;
+        DiffSelectionQuote? quote = null;
+        if (_selection.HasRange && _selection.Scope is string path
+            && _byPath.TryGetValue(path, out var s) && s.RowSet.Rows.Count > 0)
+        {
+            quote = DiffSelectionQuote.Build(
+                s.RowSet.Rows, _selection.Start, _selection.End, path, AnnotationsOf(s.Render));
+        }
+        _presentation.ReportSelection(quote);
+    }
+
+    private static DiffAnnotations? AnnotationsOf(DiffRenderState? state) => state switch
+    {
+        DiffRenderState.Loaded loaded => loaded.Annotations,
+        DiffRenderState.FullFile fullFile => fullFile.Annotations,
+        _ => null,
+    };
+
+    // The file at the viewport top and the span of its lines on screen, reported when it moves.
+    private void ReportVisible()
+    {
+        if (_presentation == null) return;
+        var (first, last) = _list.VisibleRange();
+        Section? on = null;
+        FileLine? from = null;
+        FileLine? to = null;
+        for (var index = first; index <= last; index++)
+        {
+            var s = Locate(index, out var local);
+            if (s == null || local == 0 || (on != null && !ReferenceEquals(s, on)))
+            {
+                if (on != null) break;
+                continue;
+            }
+            if (local - 1 >= s.RowSet.Rows.Count || s.RowSet.Rows[local - 1] is not DiffRow.Line line) continue;
+            if ((line.NewNumber.Line ?? line.OldNumber.Line) is not { } number) continue;
+            on = s;
+            from ??= number;
+            to = number;
+        }
+
+        var visible = on != null && from is { } f && to is { } t ? new ReviewVisibleLines(on.File.Path, f, t) : null;
+        if (visible == _visible) return;
+        _visible = visible;
+        _presentation.ReportVisible(visible);
+    }
+
+    // Spotlights are stored in file coordinates and resolved to rows here, per draw, so a gap
+    // opening or a file folding under them moves the band with the line. Nothing is drawn — and
+    // nothing is computed — while the set is empty.
+    private void DrawSpotlights(ICanvas c, int z)
+    {
+        if (_spotlights.Count == 0 || _sections.Count == 0) return;
+        var pos = _list.Position;
+        if (pos.Height <= 0) return;
+        var (first, last) = _list.VisibleRange();
+        if (last < first) return;
+
+        var cardLeft = CardLeft();
+        var cardWidth = CardViewportWidth();
+        c.PushClip(pos);
+        foreach (var s in _sections)
+        {
+            if (!HasSpotlight(s.File.Path)) continue;
+            if (s.Folded)
+            {
+                if (s.StartRow >= first && s.StartRow <= last)
+                    DrawFoldedPins(c, s, cardLeft, cardWidth, z);
+                continue;
+            }
+            if (s.RowSet.Rows.Count == 0) continue;
+
+            var fromRow = Math.Max(first, s.StartRow + 1);
+            var toRow = Math.Min(last, s.StartRow + s.BodyRows);
+            for (var index = fromRow; index <= toRow; index++)
+            {
+                var bodyRow = index - s.StartRow - 1;
+                if (bodyRow >= s.RowSet.Rows.Count || !_list.TryGetRowRect(index, out var rowRect)) continue;
+                var band = new RectF(cardLeft, rowRect.Bottom, cardWidth, rowRect.Height);
+                var (lit, pin) = SpotlightAt(s.File.Path, s.RowSet.Rows[bodyRow]);
+                if (lit)
+                {
+                    c.DrawRect(new DrawRectInputs
+                    {
+                        Position = band,
+                        Style = new RectStyle { BackgroundColor = _theme.ReviewSpotlight.Band },
+                        ZIndex = z,
+                    });
+                    if (pin > 0)
+                        DrawPin(c, pin, PillIn(band, cardLeft - PanelPaddingX + PinInset), z + 1);
+                }
+                else if (_spotlightDim)
+                {
+                    c.DrawRect(new DrawRectInputs
+                    {
+                        Position = band,
+                        Style = new RectStyle { BackgroundColor = _theme.ReviewSpotlight.Wash },
+                        ZIndex = z,
+                    });
+                }
+            }
+        }
+        c.PopClip();
+    }
+
+    private bool HasSpotlight(string path)
+    {
+        foreach (var spotlight in _spotlights)
+            if (spotlight.Path == path) return true;
+        return false;
+    }
+
+    // Whether a row is inside any of its file's spotlights, and the 1-based number of the
+    // spotlight whose first line it is (0 when it starts none).
+    private (bool Lit, int Pin) SpotlightAt(string path, DiffRow row)
+    {
+        if (row is not DiffRow.Line line) return (false, 0);
+        var lit = false;
+        var pin = 0;
+        for (var i = 0; i < _spotlights.Count; i++)
+        {
+            var spotlight = _spotlights[i];
+            if (spotlight.Path != path) continue;
+            if (ReviewLineLocator.LineOf(line, spotlight.Side) is not { } number
+                || !spotlight.Contains(spotlight.Side, number)) continue;
+            lit = true;
+            if (pin == 0 && number == spotlight.From) pin = i + 1;
+        }
+        return (lit, pin);
+    }
+
+    // A folded file has no rows to light, so its pins line up on the header band, inboard of the
+    // toggles, mirrored with the rest of the header layout.
+    private void DrawFoldedPins(ICanvas c, Section s, float cardLeft, float cardWidth, int z)
+    {
+        if (!_list.TryGetRowRect(s.StartRow, out var rowRect)) return;
+        var band = new RectF(cardLeft, rowRect.Bottom, cardWidth, HeaderBandHeight);
+        var x = cardLeft + cardWidth - ViewedZoneWidth - FullFileZoneWidth - PreviewZoneWidth - PinWidth;
+        for (var i = _spotlights.Count - 1; i >= 0; i--)
+        {
+            if (_spotlights[i].Path != s.File.Path) continue;
+            var slot = Place(band, x, PinWidth);
+            DrawPin(c, i + 1, PillIn(slot, slot.Left), z + 1);
+            x -= PinWidth + PinGap;
+        }
+    }
+
+    // The pill's rect: pin-sized, vertically centred on the row or band it marks.
+    private static RectF PillIn(in RectF row, float left)
+    {
+        var height = Math.Min(PinHeight, Math.Max(0f, row.Height - PinInset * 2));
+        return new RectF(left, row.Bottom + (row.Height - height) / 2f, PinWidth, height);
+    }
+
+    private void DrawPin(ICanvas c, int number, RectF pill, int z)
+    {
+        c.DrawRect(new DrawRectInputs
+        {
+            Position = pill,
+            Style = new RectStyle
+            {
+                BackgroundColor = _theme.ReviewSpotlight.PinBackground,
+                BorderRadius = BorderRadiusStyle.All(pill.Height / 2f),
+            },
+            ZIndex = z,
+        });
+        PinStyle.TextColor = _theme.ReviewSpotlight.PinText;
+        c.DrawText(new DrawTextInputs
+        {
+            Position = pill,
+            Text = number.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Style = PinStyle,
+            ZIndex = z + 1,
+        });
     }
 
     // ---- scrolling ----

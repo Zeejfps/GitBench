@@ -101,6 +101,7 @@ internal sealed class AssistantViewFixture : IDisposable
             Bus,
             CommitBox,
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             _ => backend);
@@ -428,7 +429,7 @@ internal sealed class AssistantViewFixture : IDisposable
 
     // Stands in for the OS store so the panel is past onboarding and the environment variable on the
     // machine running the tests cannot change the outcome.
-    private sealed class FakeSecretStore : ISecretStore
+    internal sealed class FakeSecretStore : ISecretStore
     {
         private string? _secret;
 

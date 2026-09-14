@@ -163,7 +163,8 @@ internal sealed class GetReviewDiffTool : IAssistantTool
 
     public string Description =>
         "One file's diff across the whole review — base to branch tip, not the last commit and not "
-        + "the working tree. This is what a reviewer reads; get_diff answers a different question.";
+        + "the working tree. This is what a reviewer reads; get_diff answers a different question. "
+        + ReadTools.LineFormat + " Those numbers are what review_focus and review_spotlight take.";
 
     public string JsonSchema =>
         """

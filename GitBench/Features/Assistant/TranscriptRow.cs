@@ -6,6 +6,7 @@ using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.Controls;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
+using ZGF.Observable;
 
 namespace GitBench.Features.Assistant;
 
@@ -23,18 +24,18 @@ internal sealed record TranscriptRow : Widget
         {
             AssistantRowKind.User => new TranscriptMessageRow
             {
-                Row = row,
+                Text = row.Text,
                 Label = L.T(s => s.AssistantYou),
                 LabelColor = static s => s.Palette.TextSecondary,
             },
-            AssistantRowKind.Reply => new TranscriptReplyRow { Row = row },
+            AssistantRowKind.Reply => new TranscriptReplyRow { Text = row.Text },
             AssistantRowKind.Tool => row.Group is { } group
                 ? new ToolGroupRow { Group = group }
                 : new ToolCallRow { Row = row },
             AssistantRowKind.Approval => new ToolApprovalCard { Row = row },
-            AssistantRowKind.Refusal => new TranscriptNoticeRow { Row = row, Tone = TranscriptNoticeTone.Refusal },
-            AssistantRowKind.Notice => new TranscriptNoticeRow { Row = row, Tone = TranscriptNoticeTone.Advisory },
-            _ => new TranscriptNoticeRow { Row = row },
+            AssistantRowKind.Refusal => new TranscriptNoticeRow { Text = row.Text, Tone = TranscriptNoticeTone.Refusal },
+            AssistantRowKind.Notice => new TranscriptNoticeRow { Text = row.Text, Tone = TranscriptNoticeTone.Advisory },
+            _ => new TranscriptNoticeRow { Text = row.Text },
         };
 
         return new FadeIn { Child = content };
@@ -44,13 +45,13 @@ internal sealed record TranscriptRow : Widget
 /// <summary>A spoken turn: who said it, then the text, wrapped and selectable.</summary>
 internal sealed record TranscriptMessageRow : Widget
 {
-    public required AssistantRow Row { get; init; }
+    public required IReadable<string> Text { get; init; }
     public required Prop<string?> Label { get; init; }
     public required Func<ThemeStyles, uint> LabelColor { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var row = Row;
+        var text = Text;
 
         return new Column
         {
@@ -67,7 +68,7 @@ internal sealed record TranscriptMessageRow : Widget
                 },
                 new TranscriptBodyText
                 {
-                    Value = Prop.Bind(() => row.Text.Value),
+                    Value = Prop.Bind(() => text.Value),
                     Color = Theme.Color(s => s.Palette.TextPrimary),
                 },
             ],
@@ -87,11 +88,11 @@ internal sealed record TranscriptMessageRow : Widget
 /// </remarks>
 internal sealed record TranscriptReplyRow : Widget
 {
-    public required AssistantRow Row { get; init; }
+    public required IReadable<string> Text { get; init; }
 
     protected override IWidget Build(Context ctx)
     {
-        var row = Row;
+        var text = Text;
 
         return new Column
         {
@@ -99,8 +100,8 @@ internal sealed record TranscriptReplyRow : Widget
             CrossAxis = CrossAxisAlignment.Stretch,
             Children =
             [
-                new TranscriptReplyHeader { GetText = () => row.Text.Value },
-                new TranscriptMarkdownBody { Text = row.Text },
+                new TranscriptReplyHeader { GetText = () => text.Value },
+                new TranscriptMarkdownBody { Text = text },
             ],
         };
     }
@@ -174,13 +175,13 @@ internal enum TranscriptNoticeTone
 /// </summary>
 internal sealed record TranscriptNoticeRow : Widget
 {
-    public required AssistantRow Row { get; init; }
+    public required IReadable<string> Text { get; init; }
 
     public TranscriptNoticeTone Tone { get; init; } = TranscriptNoticeTone.Error;
 
     protected override IWidget Build(Context ctx)
     {
-        var row = Row;
+        var text = Text;
         var tone = Tone;
         var loc = ctx.Localization();
 
@@ -203,10 +204,10 @@ internal sealed record TranscriptNoticeRow : Widget
                             // it is supplied here.
                             Value = Prop.Bind(() =>
                             {
-                                var text = row.Text.Value;
-                                if (tone != TranscriptNoticeTone.Refusal) return text;
+                                var body = text.Value;
+                                if (tone != TranscriptNoticeTone.Refusal) return body;
                                 var declined = loc.Strings.Value.AssistantRefused;
-                                return text.Length == 0 ? declined : declined + " " + text;
+                                return body.Length == 0 ? declined : declined + " " + body;
                             }),
                             Color = Theme.Color(s => tone == TranscriptNoticeTone.Advisory
                                 ? s.Status.Warning

@@ -10,17 +10,15 @@ public sealed class PopupTooltipService : ITooltipService
     private const int Gap = 8;
 
     private readonly IPopupWindowFactory _factory;
-    private readonly IWindowCoordinates _coordinates;
     private object? _currentOwner;
     private IPopupWindow? _currentPopup;
 
-    public PopupTooltipService(IPopupWindowFactory factory, IWindowCoordinates coordinates)
+    public PopupTooltipService(IPopupWindowFactory factory)
     {
         _factory = factory;
-        _coordinates = coordinates;
     }
 
-    public void Show(object owner, string text, RectF anchorRectCanvas)
+    public void Show(object owner, string text, ScreenRect anchorScreen)
     {
         // Release whatever's currently up regardless of owner. Hide(owner) is a
         // no-op when a different owner held the previous tooltip, which would
@@ -31,8 +29,6 @@ public sealed class PopupTooltipService : ITooltipService
             _currentPopup = null;
             _currentOwner = null;
         }
-
-        var anchorScreen = _coordinates.ToScreenPoints(CanvasRect.From(anchorRectCanvas));
 
         _currentOwner = owner;
         _currentPopup = _factory.Acquire(new PopupRequest

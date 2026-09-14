@@ -2,6 +2,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
+using ZGF.Gui.Desktop;
 
 namespace GitBench.App;
 
@@ -100,6 +101,19 @@ public sealed class PreferencesService : IDisposable
 
     /// <summary>Records every shortcut the user has changed from the built-in table.</summary>
     public void SetKeyBindings(IReadOnlyList<KeyBinding> bindings) => Mutate(p => p with { KeyBindings = bindings });
+
+    /// <summary>Records the agent-connections preference: on or off, the port, and the endpoint's
+    /// token. A port outside 1–65535 is refused, since no server could bind it.</summary>
+    public void SetAgentConnections(bool enabled, int port, McpPathToken? token)
+    {
+        if (port is < 1 or > 65535) return;
+        Mutate(p => p with
+        {
+            AgentConnectionsEnabled = enabled,
+            AgentConnectionsPort = port,
+            AgentConnectionsToken = token,
+        });
+    }
 
     private void Mutate(Func<Preferences, Preferences> mutator)
     {

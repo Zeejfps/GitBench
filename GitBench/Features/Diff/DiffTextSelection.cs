@@ -36,10 +36,13 @@ internal readonly record struct DiffRowSelection(
 /// (<see cref="DiffContentView"/>, the review list) and driven by <see cref="DiffSelectionController"/>;
 /// the painter reads it back per row through <see cref="TryRowSpan"/>.
 ///
-/// Mutators return true when something actually changed, so callers only repaint on real edits.
+/// Mutators return true when something actually changed, so callers only repaint on real edits;
+/// <see cref="Changed"/> fires on exactly those edits, for a surface that reports the selection on.
 /// </summary>
 internal sealed class DiffSelectionModel
 {
+    public event Action? Changed;
+
     public object? Scope { get; private set; }
     public DiffTextPos Anchor { get; private set; }
     public DiffTextPos Focus { get; private set; }
@@ -58,6 +61,7 @@ internal sealed class DiffSelectionModel
         Scope = scope;
         Anchor = Focus = pos;
         IsActive = true;
+        Changed?.Invoke();
     }
 
     public bool SetRange(object? scope, DiffTextPos anchor, DiffTextPos focus)
@@ -67,6 +71,7 @@ internal sealed class DiffSelectionModel
         Anchor = anchor;
         Focus = focus;
         IsActive = true;
+        Changed?.Invoke();
         return true;
     }
 
@@ -76,6 +81,7 @@ internal sealed class DiffSelectionModel
     {
         if (!IsActive || !Equals(Scope, scope) || Focus == pos) return false;
         Focus = pos;
+        Changed?.Invoke();
         return true;
     }
 
@@ -83,6 +89,7 @@ internal sealed class DiffSelectionModel
     {
         if (!IsActive || Anchor == Focus) return false;
         Anchor = Focus;
+        Changed?.Invoke();
         return true;
     }
 
@@ -92,6 +99,7 @@ internal sealed class DiffSelectionModel
         IsActive = false;
         Scope = null;
         Anchor = Focus = default;
+        Changed?.Invoke();
         return true;
     }
 
@@ -104,6 +112,7 @@ internal sealed class DiffSelectionModel
         if (anchor == Anchor && focus == Focus) return false;
         Anchor = anchor;
         Focus = focus;
+        Changed?.Invoke();
         return true;
     }
 

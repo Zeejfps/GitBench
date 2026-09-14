@@ -148,6 +148,9 @@ internal sealed class AssistantSession : IDisposable
     // ordinary message; a throwaway list and a preset's loop for a one-shot ask.
     private List<AssistantMessage> _turnMessages;
     private AssistantAgentLoop _turnLoop;
+    // Who else hears the running turn's events, for a thread whose owner renders them somewhere
+    // other than the transcript. Null for the repository's own thread and for a preset.
+    private Action<AssistantEvent>? _turnObserver;
     private AssistantRow? _reply;
     private PendingToolApproval? _pending;
     private AssistantToolGroup? _run;
@@ -193,7 +196,7 @@ internal sealed class AssistantSession : IDisposable
     public IReadable<bool> IsThinking => _thinking;
 
     /// <summary>Starts a turn. A send while one is running is dropped rather than queued.</summary>
-    public void Send(string message) => Start(message, _loop, _conversation);
+    public void Send(string message) => Start(message, _loop, _conversation, observer: null);
 
     /// <summary>
     /// Runs a one-shot agent — a diff selection's "Explain this" and its siblings — in this
@@ -205,9 +208,18 @@ internal sealed class AssistantSession : IDisposable
     /// point: "explain this" is asked about one selection, and carrying it forward would have every
     /// later answer reasoning from a fragment nobody is still looking at.
     /// </remarks>
-    public void RunPreset(string prompt, AssistantAgentLoop loop) => Start(prompt, loop, []);
+    public void RunPreset(string prompt, AssistantAgentLoop loop) => Start(prompt, loop, [], observer: null);
 
-    private void Start(string message, AssistantAgentLoop loop, List<AssistantMessage> messages)
+    /// <summary>
+    /// Runs a turn of a detached thread in this transcript: the thread's own agent over the thread's
+    /// own messages, which it keeps, so the next turn on it carries on from this one. The thread's
+    /// observer hears every event the transcript does, and a turn that dies of an exception as a
+    /// <see cref="AssistantEvent.Failed"/>.
+    /// </summary>
+    public void RunThread(string prompt, AssistantThread thread) =>
+        Start(prompt, thread.Loop, thread.Messages, thread.Observer);
+
+    private void Start(string message, AssistantAgentLoop loop, List<AssistantMessage> messages, Action<AssistantEvent>? observer)
     {
         var text = message.Trim();
         if (text.Length == 0 || _busy.Value || _disposed) return;
@@ -218,6 +230,7 @@ internal sealed class AssistantSession : IDisposable
         Add(AssistantRow.User(text));
         _turnMessages = messages;
         _turnLoop = loop;
+        _turnObserver = observer;
         _turnStart = messages.Count;
         messages.Add(new AssistantMessage.User(text));
         _reply = null;
@@ -421,6 +434,7 @@ internal sealed class AssistantSession : IDisposable
     {
         if (_disposed) return;
 
+        _turnObserver?.Invoke(e);
         switch (e)
         {
             case AssistantEvent.TextDelta delta:
@@ -522,6 +536,7 @@ internal sealed class AssistantSession : IDisposable
 
         if (failure is not null)
         {
+            _turnObserver?.Invoke(new AssistantEvent.Failed(failure, null));
             FinishReply();
             Add(AssistantRow.Error(failure));
             _resolved = false;
@@ -545,6 +560,7 @@ internal sealed class AssistantSession : IDisposable
         _pending = null;
 
         FinishReply();
+        _turnObserver = null;
         _busy.Value = false;
         _thinking.Value = false;
         if (ReferenceEquals(_turn, cts)) _turn = null;

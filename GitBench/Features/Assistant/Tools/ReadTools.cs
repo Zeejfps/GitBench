@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using GitBench.Features.Branches;
 using GitBench.Features.CodeIntel;
@@ -71,10 +72,18 @@ internal static class ReadTools
         writer.WriteEndArray();
     }
 
+    /// <summary>How a hunk line reads to the model, quoted verbatim in every diff tool's
+    /// description so the format is documented where the model sees it.</summary>
+    internal const string LineFormat =
+        "Each hunk line is 'old|new|<marker><text>': the 1-based line number on the old and new "
+        + "side (empty where the line has none), then '+', '-' or ' ' and the text.";
+
     /// <summary>A diff's path, kind and hunks, capped at <see cref="DiffLineCap"/> emitted lines.
     /// Shared so a review diff and a working-tree diff read identically to the model. Hunk headers
     /// come from <paramref name="annotations"/> where it can name the enclosing declaration, so the
-    /// model reads the same header the diff view shows rather than git's xfuncname guess.</summary>
+    /// model reads the same header the diff view shows rather than git's xfuncname guess. Every line
+    /// carries its own numbers (<see cref="LineFormat"/>), so a model that wants to point at one
+    /// has a number to give back rather than a count from the hunk header.</summary>
     internal static void WriteDiffBody(Utf8JsonWriter writer, DiffResult diff, DiffAnnotations? annotations)
     {
         writer.WriteString("path", diff.Path);
@@ -112,13 +121,7 @@ internal static class ReadTools
                     break;
                 }
 
-                var prefix = line.Kind switch
-                {
-                    DiffLineKind.Added => '+',
-                    DiffLineKind.Removed => '-',
-                    _ => ' ',
-                };
-                writer.WriteStringValue(prefix + line.Text);
+                writer.WriteStringValue(FormatLine(line));
                 emitted++;
             }
 
@@ -129,6 +132,18 @@ internal static class ReadTools
         writer.WriteEndArray();
         writer.WriteBoolean("truncated", diff.Truncated || capped);
         WriteDeclarations(writer, diff, annotations);
+    }
+
+    // "old|new|+text" — see LineFormat. Numbers stay the invariant digits git reported.
+    internal static string FormatLine(DiffLine line)
+    {
+        var marker = line.Kind switch
+        {
+            DiffLineKind.Added => '+',
+            DiffLineKind.Removed => '-',
+            _ => ' ',
+        };
+        return string.Create(CultureInfo.InvariantCulture, $"{line.OldLineNumber}|{line.NewLineNumber}|{marker}{line.Text}");
     }
 
     /// <summary>
@@ -267,7 +282,7 @@ internal sealed class GetDiffTool : IAssistantTool
         "The unified diff of one file. side picks what is compared: 'unstaged' (working tree vs "
         + "index), 'staged' (index vs HEAD), 'commit' (a commit vs its parent, needs commit_sha), "
         + "'range' (base_sha..commit_sha) or 'working_tree' (HEAD vs working tree, staged and "
-        + "unstaged together). Lines come back prefixed '+', '-' or ' '. Repo-relative paths only: "
+        + "unstaged together). " + ReadTools.LineFormat + " Repo-relative paths only: "
         + "ignored, credential-shaped and out-of-repository paths are refused.";
 
     public string JsonSchema =>

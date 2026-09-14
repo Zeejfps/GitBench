@@ -118,7 +118,7 @@ public sealed class AssistantTranscriptSelectionTests
                 Gap = 8,
                 MainAxis = MainAxisAlignment.Start,
                 CrossAxis = CrossAxisAlignment.Stretch,
-                Children = rows.Select(IWidget (r) => new TranscriptReplyRow { Row = r }).ToArray(),
+                Children = rows.Select(IWidget (r) => new TranscriptReplyRow { Text = r.Text }).ToArray(),
             }.BuildView(ctx),
             width: 420,
             height: 500,

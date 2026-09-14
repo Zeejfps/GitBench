@@ -87,6 +87,14 @@ internal sealed class GrowingDescriptionField : ContainerView
         set => _inputController.OnSubmitChord = value;
     }
 
+    /// <summary>Claims Escape for the owner; unset, the key bubbles past the field as any other
+    /// non-typing key does.</summary>
+    public Action? OnEscape
+    {
+        get => _inputController.OnEscape;
+        set => _inputController.OnEscape = value;
+    }
+
     public void Clear() => _input.Clear();
 
     public void SetText(ReadOnlySpan<char> text) => _input.SetText(text);
@@ -172,11 +180,24 @@ internal sealed class GrowingDescriptionField : ContainerView
         }
 
         public Action? OnSubmit { get; set; }
+        public Action? OnEscape { get; set; }
 
         public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
         {
             _modifiers = e.Modifiers;
             base.OnKeyboardKeyStateChanged(ref e);
+        }
+
+        protected override void OnKeyboardKeyPressed(ref KeyboardKeyEvent e)
+        {
+            if (e.Key == KeyboardKey.Escape && OnEscape is { } escape)
+            {
+                e.Consume();
+                escape();
+                return;
+            }
+
+            base.OnKeyboardKeyPressed(ref e);
         }
 
         protected override void Enter(char c)

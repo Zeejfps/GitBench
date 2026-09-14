@@ -11,6 +11,7 @@ public enum KeyCommandSection
     Diff,
     Commits,
     Review,
+    Walkthrough,
     CodeNavigation,
     Editor,
     Terminal,
@@ -67,6 +68,10 @@ public static class KeyCommandSections
             or KeyCommand.ReviewPrevFile
             or KeyCommand.ReviewToggleMark
             or KeyCommand.ReviewToggleHelp => KeyCommandSection.Review,
+
+        KeyCommand.WalkthroughNext
+            or KeyCommand.WalkthroughBack
+            or KeyCommand.WalkthroughAsk => KeyCommandSection.Walkthrough,
 
         KeyCommand.GoToDefinition
             or KeyCommand.FindUsages

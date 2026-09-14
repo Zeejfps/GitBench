@@ -109,7 +109,7 @@ public sealed class AssistantTranscriptMarkdownTests
             {
                 MainAxis = MainAxisAlignment.Start,
                 CrossAxis = CrossAxisAlignment.Stretch,
-                Children = [new TranscriptReplyRow { Row = row }],
+                Children = [new TranscriptReplyRow { Text = row.Text }],
             }.BuildView(ctx),
             width: 420,
             height: 300,

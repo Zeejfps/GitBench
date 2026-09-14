@@ -85,6 +85,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
             new UnparsedFiles(),
             AgentCatalog.LoadEmbedded().Get(AgentCatalog.GeneralAgent),
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new AssistantWriteSurface(_dispatcher, _bus, _registry, _commitBox, new IdleRemoteOperations(), new TestDocuments.Empty()));
 
     public void Dispose()

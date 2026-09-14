@@ -44,20 +44,27 @@ internal sealed class AssistantToolset
         IGitService git, Repo repo, ISymbolExtractor extractor, AgentDefinition agent) =>
         Create(Reads(git, repo, extractor), agent.AllowedTools);
 
+    /// <summary>The full set. The walkthrough tools drive a review window, so they are offered only
+    /// where the window registry is in hand; the built-in assistant narrates in
+    /// <see cref="WalkthroughNarratorMode.Immediate"/> mode, its reviewer's replies arriving as
+    /// user turns.</summary>
     public static AssistantToolset ForRepo(
         IGitService git,
         Repo repo,
         ISymbolExtractor extractor,
         AgentDefinition agent,
         IReviewProgressStore reviewProgress,
+        IReviewWindowRegistry reviewWindows,
         AssistantWriteSurface writes) =>
         Create(
             [
                 .. Reads(git, repo, extractor),
                 .. WriteTools.CreateAll(git, repo, writes),
                 .. ReviewTools.CreateWrites(git, repo, reviewProgress, writes),
+                .. ReviewPresentationTools.CreateAll(git, repo, reviewWindows, writes),
                 .. ConflictTools.CreateAll(git, repo, writes),
                 .. RemoteTools.CreateAll(repo, writes),
+                .. WalkthroughTools.CreateAll(repo, reviewWindows, writes.Dispatcher, WalkthroughNarratorMode.Immediate),
             ],
             agent.AllowedTools);
 

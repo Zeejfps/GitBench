@@ -5,6 +5,7 @@ using GitBench.Infrastructure;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
+using ZGF.Gui.Desktop;
 
 namespace GitBench.App;
 
@@ -67,6 +68,13 @@ public static class PreferencesStore
         public float? AssistantPanelY { get; set; }
 
         public List<KeyBindingShape>? KeyBindings { get; set; }
+
+        public bool? AgentConnectionsEnabled { get; set; } = false;
+        public int? AgentConnectionsPort { get; set; } = 5577;
+
+        // Free text, parsed back through McpPathToken: a hand-edited token that could not sit in
+        // a URL is dropped and regenerated, not carried into the endpoint.
+        public string? AgentConnectionsToken { get; set; }
     }
 
     internal sealed class AssistantProviderShape
@@ -127,6 +135,11 @@ public static class PreferencesStore
                 AssistantPanelX = file.AssistantPanelX,
                 AssistantPanelY = file.AssistantPanelY,
                 KeyBindings = ReadKeyBindings(file),
+                AgentConnectionsEnabled = file.AgentConnectionsEnabled ?? defaults.AgentConnectionsEnabled,
+                AgentConnectionsPort = file.AgentConnectionsPort is >= 1 and <= 65535
+                    ? file.AgentConnectionsPort.Value
+                    : defaults.AgentConnectionsPort,
+                AgentConnectionsToken = McpPathToken.TryParse(file.AgentConnectionsToken, out var token) ? token : null,
             };
         }
         catch (Exception ex)
@@ -177,6 +190,9 @@ public static class PreferencesStore
                     Keys = b.Gestures.Select(g => g.Serialize()).ToList(),
                 })
                 .ToList(),
+            AgentConnectionsEnabled = preferences.AgentConnectionsEnabled,
+            AgentConnectionsPort = preferences.AgentConnectionsPort,
+            AgentConnectionsToken = preferences.AgentConnectionsToken?.Value,
         };
         var json = JsonSerializer.Serialize(file, PreferencesJsonContext.Default.FileShape);
         AtomicFile.WriteAllText(path, json);

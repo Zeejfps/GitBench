@@ -60,6 +60,7 @@ internal sealed class GitBenchAppHost : IDisposable
         app.UseNativeAppMenu();
         app.UseWarmHighlighter();
         app.UseUpdateChecks();
+        app.UseAgentConnections();
         app.UseQuitConfirmation();
 
         return new GitBenchAppHost(preferences, app);

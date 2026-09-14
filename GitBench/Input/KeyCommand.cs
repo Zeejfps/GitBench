@@ -47,6 +47,11 @@ public enum KeyCommand
     ReviewToggleMark,
     ReviewToggleHelp,
 
+    // The walkthrough rail, while a narrator has steps up in a review window.
+    WalkthroughNext,
+    WalkthroughBack,
+    WalkthroughAsk,
+
     // Code navigation over a source view.
     GoToDefinition,
     FindUsages,

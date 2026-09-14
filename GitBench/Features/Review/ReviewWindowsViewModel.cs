@@ -9,12 +9,35 @@ using ZGF.Observable;
 
 namespace GitBench.Features.Review;
 
+/// <summary>The open review windows as a reader sees them — a list to read on the UI thread, in
+/// the order they were opened. <see cref="ReviewWindowsViewModel"/> is the app's one registry; the
+/// assistant's review tools point through this seam, and a test with no windows passes an empty
+/// one.</summary>
+internal interface IReviewWindowRegistry
+{
+    IReadOnlyList<ReviewWindowViewModel> Windows { get; }
+}
+
+internal static class ReviewWindowRegistryExtensions
+{
+    /// <summary>The window a repository's narrator means: several may be open for one repository
+    /// (one per head), and the most recently opened is the one being read. UI thread only.</summary>
+    public static ReviewWindowViewModel? LatestFor(this IReviewWindowRegistry registry, Guid repoId)
+    {
+        var windows = registry.Windows;
+        for (var i = windows.Count - 1; i >= 0; i--)
+            if (windows[i].Session.RepoId == repoId)
+                return windows[i];
+        return null;
+    }
+}
+
 // Owns the set of open review windows as observable state. Subscribes to OpenReviewWindowMessage
 // and, for each request, pins a per-window ReviewWindowViewModel to the requested repo+range so the
 // window stays locked to that review regardless of the main window's active repo. ReviewWindowsView
 // reflects this list into real OS windows. Mirrors DiffWindowsViewModel: it injects the services the
 // per-window VM (and its own commit-details VM) need, then constructs them per request.
-internal sealed class ReviewWindowsViewModel : IDisposable
+internal sealed class ReviewWindowsViewModel : IReviewWindowRegistry, IDisposable
 {
     private readonly IMessageBus _bus;
     private readonly IReviewStackSource _source;
@@ -31,8 +54,11 @@ internal sealed class ReviewWindowsViewModel : IDisposable
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
     private readonly IDisposable _subscription;
+    private bool _disposed;
 
     public ObservableList<ReviewWindowViewModel> Windows { get; } = new();
+
+    IReadOnlyList<ReviewWindowViewModel> IReviewWindowRegistry.Windows => Windows;
 
     // Raised when an open request matches an already-open window (same repo + head ref). The view
     // focuses that window's OS window instead of opening a duplicate — a review is a place you
@@ -107,8 +133,12 @@ internal sealed class ReviewWindowsViewModel : IDisposable
             window.Dispose();
     }
 
+    // Idempotent: the hosting view disposes it on unmount and the app context disposes it as a
+    // singleton, and either may come first at shutdown.
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
         _subscription.Dispose();
         foreach (var w in Windows) w.Dispose();
         Windows.Clear();

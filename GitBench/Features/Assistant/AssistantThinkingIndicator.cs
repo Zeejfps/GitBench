@@ -21,6 +21,10 @@ internal sealed record AssistantThinkingIndicator : Widget
     private const float BarHeight = 8f;
     private static readonly float[] BarWidths = [220f, 168f];
 
+    /// <summary>What the model is doing, over the skeleton; "Thinking…" unless the caller knows
+    /// better.</summary>
+    public Prop<string?> Label { get; init; } = L.T(s => s.AssistantThinking);
+
     protected override IWidget Build(Context ctx)
     {
         var theme = ctx.Theme();
@@ -48,7 +52,7 @@ internal sealed record AssistantThinkingIndicator : Widget
             [
                 new Text
                 {
-                    Value = L.T(s => s.AssistantThinking),
+                    Value = Label,
                     FontSize = FontSize.Caption,
                     Color = Theme.Color(s => s.Palette.TextMuted),
                 },

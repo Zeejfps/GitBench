@@ -41,6 +41,7 @@ public sealed partial record ThemeStyles
     public required ContextMenuStyles ContextMenu { get; init; }
     public required CommitsViewStyles CommitsView { get; init; }
     public required RowSelectionStyles RowSelection { get; init; }
+    public required ReviewSpotlightStyles ReviewSpotlight { get; init; }
     public required MarkdownStyles Markdown { get; init; }
     public required TerminalStyles Terminal { get; init; }
     public required TabStripStyles TabStrip { get; init; }

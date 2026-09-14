@@ -3,6 +3,7 @@ using System.Text;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
+using GitBench.Features.Review;
 using GitBench.Git;
 using ZGF.Observable;
 
@@ -25,6 +26,13 @@ internal sealed class UnparsedFiles : ISymbolExtractor
     public CodeIntelAvailability Availability { get; } = new CodeIntelAvailability.Unavailable("parsing off in tests");
 
     public FileOutline? Extract(string text, CodeLanguage language) => null;
+}
+
+// Stands in for the review-window registry where a test never opens a review: there is nothing for
+// the presentation tools to point at, and they say so.
+internal sealed class NoReviewWindows : IReviewWindowRegistry
+{
+    public IReadOnlyList<ReviewWindowViewModel> Windows { get; } = Array.Empty<ReviewWindowViewModel>();
 }
 
 // Stands in for the remote-operations store where a test's tools never fetch or pull: nothing is

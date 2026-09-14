@@ -91,7 +91,7 @@ public sealed class AssistantTranscriptNoticeTests
             {
                 MainAxis = MainAxisAlignment.Start,
                 CrossAxis = CrossAxisAlignment.Stretch,
-                Children = [new TranscriptNoticeRow { Row = row, Tone = tone }],
+                Children = [new TranscriptNoticeRow { Text = row.Text, Tone = tone }],
             }.BuildView(ctx),
             width: 420,
             height: 200,

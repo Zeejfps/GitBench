@@ -2,6 +2,7 @@ using GitBench.Features.LocalChanges;
 using GitBench.Input;
 using GitBench.Localization;
 using GitBench.Theming;
+using ZGF.Gui.Desktop;
 
 namespace GitBench.App;
 
@@ -60,6 +61,14 @@ public sealed record Preferences
     /// <summary>The shortcuts the user has changed from the built-in table; every other command
     /// runs on its default.</summary>
     public IReadOnlyList<KeyBinding> KeyBindings { get; init; } = [];
+
+    /// <summary>Whether local agents may connect over MCP, and on which port.</summary>
+    public bool AgentConnectionsEnabled { get; init; }
+    public int AgentConnectionsPort { get; init; } = 5577;
+
+    /// <summary>The secret path segment the endpoint carries. Null until the first enable
+    /// generates one; kept afterwards so a command copied from the settings stays valid.</summary>
+    public McpPathToken? AgentConnectionsToken { get; init; }
 
     public static Preferences Default { get; } = new();
 }

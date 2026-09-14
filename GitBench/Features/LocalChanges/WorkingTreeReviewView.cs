@@ -54,6 +54,7 @@ internal sealed record WorkingTreeReviewView : Widget
                         {
                             OnClose = model.CloseCheatsheet,
                             MarkKind = ReviewMarkKind.Staged,
+                            HasWalkthrough = false,
                         }
                         : Empty.Widget,
                 },

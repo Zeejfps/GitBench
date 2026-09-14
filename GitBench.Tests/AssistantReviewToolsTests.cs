@@ -225,8 +225,8 @@ public sealed class AssistantReviewToolsTests : IDisposable
         var lines = json.RootElement.GetProperty("hunks")[0].GetProperty("lines")
             .EnumerateArray().Select(l => l.GetString()).ToList();
 
-        Assert.Contains("+TWO", lines);
-        Assert.Contains("-two", lines);
+        Assert.Contains("|2|+TWO", lines);
+        Assert.Contains("2||-two", lines);
     }
 
     [Fact]

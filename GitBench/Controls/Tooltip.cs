@@ -1,4 +1,6 @@
+using ZGF.Geometry;
 using ZGF.Gui;
+using ZGF.Gui.Desktop;
 using ZGF.Observable;
 
 namespace GitBench.Controls;
@@ -107,13 +109,17 @@ public sealed class Tooltip : IDisposable
         _pendingCts = null;
     }
 
+    // The anchor is placed on screen here, with the coordinates of the window the target sits in:
+    // the service is one per app, and a review window's button is not where the main window's
+    // origin would put it.
     private void ShowNow()
     {
         var text = _text.Value;
         if (string.IsNullOrEmpty(text)) return;
         var service = _context.Get<ITooltipService>();
-        if (service == null) return;
-        service.Show(this, text, _target.Position);
+        var coordinates = _context.Get<IWindowCoordinates>();
+        if (service == null || coordinates == null) return;
+        service.Show(this, text, coordinates.ToScreenPoints(CanvasRect.From(_target.Position)));
         _isShown = true;
     }
 

@@ -101,7 +101,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
     {
         var agent = AgentCatalog.LoadEmbedded().Get(AgentCatalog.CommitMessageAgent);
         var toolset = AssistantToolset.ForRepo(
-            _git, ActiveRepo(), new UnparsedFiles(), agent, new ReviewProgressStore(), WriteSurface());
+            _git, ActiveRepo(), new UnparsedFiles(), agent, new ReviewProgressStore(), new NoReviewWindows(), WriteSurface());
 
         Assert.Equal(
             new[] { "get_diff", "get_local_changes", "set_commit_message" },
@@ -399,6 +399,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             _bus,
             _commitBox,
             new ReviewProgressStore(),
+            new NoReviewWindows(),
             new IdleRemoteOperations(),
             new TestDocuments.Empty(),
             _ => backend);
