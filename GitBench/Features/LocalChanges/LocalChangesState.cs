@@ -17,6 +17,10 @@ internal readonly record struct LocalChangesState(
     IReadOnlyList<FileChange> Unstaged,
     IReadOnlyList<FileChange> Staged,
     Selection Selection,
+    // Paths whose stage/unstage is running in git. The rows stay on their current side, drawn
+    // as in flight, until the post-mutation reload moves them — the lists are never rearranged
+    // ahead of git.
+    IReadOnlySet<string> PendingPaths,
     bool CommitBusy,
     // Submodules whose current HEAD differs from the parent's recorded pointer. Empty
     // when nothing is drifted. Shown in a dedicated section above the file panels.
@@ -30,7 +34,7 @@ internal readonly record struct LocalChangesState(
     public const string OpenRepoPlaceholder = "Open a repository to see local changes.";
     public const string LoadingPlaceholder = "Loading…";
 
-    private static readonly IReadOnlySet<string> EmptyCollapsed = new HashSet<string>();
+    private static readonly IReadOnlySet<string> EmptyPathSet = new HashSet<string>();
 
     public bool Amend => Editor is EditorMode.Amending;
 
@@ -49,11 +53,12 @@ internal readonly record struct LocalChangesState(
         Unstaged: [],
         Staged: [],
         Selection: Selection.Empty,
+        PendingPaths: EmptyPathSet,
         CommitBusy: false,
         DriftedSubmodules: [],
         ViewMode: FileViewMode.Flat,
-        UnstagedCollapsed: EmptyCollapsed,
-        StagedCollapsed: EmptyCollapsed);
+        UnstagedCollapsed: EmptyPathSet,
+        StagedCollapsed: EmptyPathSet);
 
     // Placeholder is derived, not settable. Loading never tears the panels down when
     // there is data on screen — that's reserved for "nothing to render at all"

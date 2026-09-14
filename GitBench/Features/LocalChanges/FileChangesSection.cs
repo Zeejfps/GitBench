@@ -65,6 +65,10 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     // draw a trailing check and dim their label. Reflect-only: the toggle lives on the diff header.
     private readonly IReviewedFileTracker? _reviewedFiles;
     private string? _reviewSha;
+    // The tracker's in-flight marks (a stage/unstage still running in git): those rows draw dimmed
+    // and the header spins while any of them is a row here.
+    private IReadOnlySet<string> _pending = new HashSet<string>();
+    private readonly SpinnerAnimation _pendingSpinner;
     private readonly TextStyle _viewedIconStyle = new()
     {
         FontFamily = LucideIcons.FontFamily,
@@ -201,31 +205,8 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _scrollBar = ScrollBars.CreateVertical(ctx);
         _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
-        View headerContent;
-        if (headerActions is { Count: > 0 })
-        {
-            var actionRow = new FlexRowView
-            {
-                Gap = Spacing.Hair,
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-            };
-            foreach (var action in headerActions)
-                actionRow.Children.Add(action);
-
-            headerContent = new FlexRowView
-            {
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-                Children =
-                {
-                    new FlexItem { Grow = 1, Child = _headerText },
-                    actionRow,
-                },
-            };
-        }
-        else
-        {
-            headerContent = _headerText;
-        }
+        _pendingSpinner = new SpinnerAnimation(ctx.Require<IFrameTicker>());
+        var headerContent = FileChangesUI.CreateHeaderContent(_headerText, headerActions);
 
         AddChildToSelf(new BorderLayoutView
         {
@@ -267,9 +248,33 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
         // Repaint when a file is toggled Viewed on the diff header so its row's check/dim updates live.
         if (_reviewedFiles != null)
+        {
             this.Bind(_reviewedFiles.Revision, _ => SetDirty());
+            this.Bind(_reviewedFiles.InFlight, pending =>
+            {
+                _pending = pending;
+                SyncPendingSpinner();
+                SetDirty();
+            });
+        }
+        this.Bind(_pendingSpinner.Rotation, _ => SetDirty());
+        this.Use(() => _pendingSpinner);
 
         this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+    }
+
+    private void SyncPendingSpinner()
+    {
+        if (HasPendingRow()) _pendingSpinner.Start();
+        else _pendingSpinner.Stop();
+    }
+
+    private bool HasPendingRow()
+    {
+        if (_pending.Count == 0) return false;
+        foreach (var f in _files)
+            if (_pending.Contains(f.Path)) return true;
+        return false;
     }
 
     // preserveScroll marks an in-place refresh of the same list (the working-tree review re-pushes on
@@ -279,6 +284,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _files = files;
         _headerText.Text = FileChangesUI.FormatHeader(_title, files.Count);
         RebuildRows();
+        SyncPendingSpinner();
         _list.SetScrollY(preserveScroll ? _list.ScrollY : 0f);
         NotifyScrollChanged();
     }
@@ -448,7 +454,9 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
             isViewed: isViewed,
             viewedIconStyle: _viewedIconStyle,
             drawSelectionAccent: isLead,
-            guides: row.Guides);
+            guides: row.Guides,
+            isPending: _pending.Count > 0 && _pending.Contains(file.Path),
+            pendingRotation: _pendingSpinner.Rotation.Value);
     }
 
     // Retargets the floating selection bar. Slides only between two real rows; first-select and

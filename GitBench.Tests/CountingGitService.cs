@@ -33,12 +33,14 @@ internal sealed class CountingGitService(IGitService inner) :
     private int _localChangesCalls;
     private int _headMessageCalls;
     private int _amendStagedCalls;
+    private int _stageCalls;
     private int _applyUntrackedCacheCalls;
     public int StatusSummaryCalls => Volatile.Read(ref _statusSummaryCalls);
     public int SyncSummaryCalls => Volatile.Read(ref _syncSummaryCalls);
     public int GetLocalChangesCalls => Volatile.Read(ref _localChangesCalls);
     public int GetHeadCommitMessageCalls => Volatile.Read(ref _headMessageCalls);
     public int GetAmendStagedFilesCalls => Volatile.Read(ref _amendStagedCalls);
+    public int StageCalls => Volatile.Read(ref _stageCalls);
     public int ApplyUntrackedCacheCalls => Volatile.Read(ref _applyUntrackedCacheCalls);
 
     // The repos ApplyUntrackedCache was invoked on, in call order — lets a test assert which rows
@@ -120,7 +122,18 @@ internal sealed class CountingGitService(IGitService inner) :
     public bool HasUnmergedPaths(Repo repo) => inner.HasUnmergedPaths(repo);
     public string? GetMergeMessage(Repo repo) => inner.GetMergeMessage(repo);
 
-    public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths) => inner.Stage(repo, paths);
+    // When set, Stage parks here before running, so a test can observe the in-flight state and
+    // then release it deterministically. StageFailure, when set, is returned instead of running.
+    public ManualResetEventSlim? StageGate { get; set; }
+    public string? StageFailure { get; set; }
+
+    public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths)
+    {
+        StageGate?.Wait();
+        Interlocked.Increment(ref _stageCalls);
+        if (StageFailure is { } failure) return new GitOutcome.Failed(failure);
+        return inner.Stage(repo, paths);
+    }
     public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths) => inner.Unstage(repo, paths);
     public GitOutcome ResetToParent(Repo repo, IReadOnlyList<string> paths) => inner.ResetToParent(repo, paths);
     public GitOutcome DiscardChanges(Repo repo, IReadOnlyList<string> paths) => inner.DiscardChanges(repo, paths);

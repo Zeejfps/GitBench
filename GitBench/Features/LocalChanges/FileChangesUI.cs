@@ -40,6 +40,33 @@ internal static class FileChangesUI
         return view;
     }
 
+    /// <summary>
+    /// The header row shared by the file-list sections: the title grows and the action buttons
+    /// (when any) trail it.
+    /// </summary>
+    public static View CreateHeaderContent(View headerText, IReadOnlyList<View>? headerActions)
+    {
+        if (headerActions is not { Count: > 0 }) return headerText;
+
+        var actionRow = new FlexRowView
+        {
+            Gap = Spacing.Hair,
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+        };
+        foreach (var action in headerActions)
+            actionRow.Children.Add(action);
+
+        return new FlexRowView
+        {
+            CrossAxisAlignment = CrossAxisAlignment.Center,
+            Children =
+            {
+                new FlexItem { Grow = 1, Child = headerText },
+                actionRow,
+            },
+        };
+    }
+
     public static TextView CreateEmptyPlaceholder(Context ctx, string emptyText)
     {
         var view = new TextView(ctx.Canvas) { Text = emptyText };
@@ -168,7 +195,9 @@ internal static class FileChangesUI
         bool isViewed = false,
         TextStyle? viewedIconStyle = null,
         bool drawSelectionAccent = true,
-        TreeGuides guides = default)
+        TreeGuides guides = default,
+        bool isPending = false,
+        float pendingRotation = 0f)
     {
         // When the host floats an animated selection bar it owns the selected row's fill; skip the
         // static one so the two don't double-paint, but still draw hover on non-selected rows.
@@ -184,14 +213,19 @@ internal static class FileChangesUI
         // icon lines up under sibling folder icons (and one level right of its parent's).
         var iconLeft = rowRect.Left + RowPaddingLeft + indent
             + (reserveChevronColumn ? ChevronWidth + ChevronGap : 0f);
-        statusIconStyle.TextColor = styles.StatusColor(file.Status);
+        // An in-flight row (its stage/unstage is still running) swaps its status badge for a turning
+        // loader and dims its label, so the eye reads it as "on its way" rather than as a
+        // viewed-but-present file. The turn comes from the host's spinner via pendingRotation.
+        statusIconStyle.TextColor = isPending ? Dim(styles.RowText) : styles.StatusColor(file.Status);
+        statusIconStyle.Rotation = isPending ? pendingRotation : 0f;
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, iconLeft, BadgeSize, isRtl),
-            Text = FileChangeFormatting.StatusIcon(file.Status),
+            Text = isPending ? LucideIcons.Loader : FileChangeFormatting.StatusIcon(file.Status),
             Style = statusIconStyle,
             ZIndex = z + 1,
         });
+        statusIconStyle.Rotation = 0f;
 
         var textLeft = iconLeft + BadgeSize + BadgeGap;
         // Keep clear of the trailing Viewed column (reserved whether or not this row is viewed) so the
@@ -206,7 +240,7 @@ internal static class FileChangesUI
         var rendered = TextEllipsis.Truncate(canvas, pathText, renderStyle, textWidth);
         // A viewed file is "done" — dim its label (half alpha) so the eye skips to what's left.
         var baseColor = renderStyle.TextColor;
-        if (isViewed) renderStyle.TextColor = Dim(baseColor);
+        if (isViewed || isPending) renderStyle.TextColor = Dim(baseColor);
         canvas.DrawText(new DrawTextInputs
         {
             Position = Place(rowRect, textLeft, textWidth, isRtl),

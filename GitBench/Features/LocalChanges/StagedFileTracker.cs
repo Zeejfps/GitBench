@@ -33,6 +33,8 @@ internal sealed class StagedFileTracker : IReviewedFileTracker, IDisposable
 
     public IReadable<int> Revision => _revision;
 
+    public IReadable<IReadOnlySet<string>> InFlight => _local.PendingPaths;
+
     public bool IsViewed(string path) => _fullyStaged.Contains(path);
 
     /// <summary>Whether the file has staged content <em>and</em> further unstaged edits on top — the
@@ -61,8 +63,8 @@ internal sealed class StagedFileTracker : IReviewedFileTracker, IDisposable
         }
         if (targets.Count == 0) return;
 
-        // The index op moves the file between the staged / unstaged lists, which bumps Revision
-        // through Recompute — optimistically, before git returns.
+        // The paths sit in InFlight until the index op's reload moves them between the staged /
+        // unstaged lists, which bumps Revision through Recompute.
         if (viewed) _local.Stage(targets);
         else _local.Unstage(targets);
     }

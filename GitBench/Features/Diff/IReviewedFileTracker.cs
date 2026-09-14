@@ -22,4 +22,15 @@ internal interface IReviewedFileTracker
 
     /// <summary>Marks every given path viewed / not viewed, bumping <see cref="Revision"/> once.</summary>
     void SetViewed(IReadOnlyList<string> paths, bool viewed);
+
+    /// <summary>
+    /// Paths whose mark is being written and not yet reflected by <see cref="IsViewed"/> — a tracker
+    /// whose marks live in git (the working-tree review's staged state) has a round-trip between the
+    /// request and the answer, and the file list draws those rows as in flight meanwhile. A tracker
+    /// that marks synchronously never has any.
+    /// </summary>
+    IReadable<IReadOnlySet<string>> InFlight => NoneInFlight;
+
+    private static readonly IReadable<IReadOnlySet<string>> NoneInFlight =
+        new State<IReadOnlySet<string>>(new HashSet<string>());
 }

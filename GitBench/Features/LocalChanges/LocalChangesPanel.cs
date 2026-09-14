@@ -55,6 +55,11 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private FileViewMode _viewMode = FileViewMode.Flat;
     private IReadOnlySet<string> _collapsed = new HashSet<string>();
 
+    private readonly SpinnerAnimation _pendingSpinner;
+    // Paths with an index move in flight (both sides share the set); the spinner runs only while
+    // one of them is actually a row on this side.
+    private IReadOnlySet<string> _pending = new HashSet<string>();
+
     // A single floating selection bar that slides between rows — but only while exactly one row
     // is selected. Multi-select falls back to static per-row fills (_selectedIndex = -1 hides the
     // bar); the bar draws at CurrentSelectionIndex(), lerping _animFromIndex → _animToIndex.
@@ -144,31 +149,10 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _headerText = FileChangesUI.CreateHeaderText(ctx, _titleSelector(_loc.Strings.Value));
         _emptyPlaceholder = emptyPlaceholder;
 
-        View headerContent;
-        if (headerActions is { Count: > 0 })
-        {
-            var actionRow = new FlexRowView
-            {
-                Gap = Spacing.Hair,
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-            };
-            foreach (var action in headerActions)
-                actionRow.Children.Add(action);
-
-            headerContent = new FlexRowView
-            {
-                CrossAxisAlignment = CrossAxisAlignment.Center,
-                Children =
-                {
-                    new FlexItem { Grow = 1, Child = _headerText },
-                    actionRow,
-                },
-            };
-        }
-        else
-        {
-            headerContent = _headerText;
-        }
+        // Turns the loader on this side's in-flight rows while any has a stage/unstage running in
+        // git; parked (no ticking) otherwise.
+        _pendingSpinner = new SpinnerAnimation(ctx.Require<IFrameTicker>());
+        var headerContent = FileChangesUI.CreateHeaderContent(_headerText, headerActions);
 
         var headerBar = FileChangesUI.CreateHeaderBar(
             ctx, headerContent, topBorder: false, background: RepoContentTabs.Content);
@@ -216,6 +200,8 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         this.Bind(selection, sel => { UpdateSelectionAnimation(sel); SetDirty(); });
         this.Bind(_selectionTween.Progress, _ => SetDirty());
         this.Use(() => _selectionTween);
+        this.Bind(_pendingSpinner.Rotation, _ => SetDirty());
+        this.Use(() => _pendingSpinner);
 
         this.BindThemed(ctx.Theme(), s =>
         {
@@ -243,9 +229,31 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _files = files;
         UpdateHeaderText();
         RebuildRows();
+        SyncPendingSpinner();
         // New data: jump back to the top rather than preserving a now-meaningless offset.
         _list.SetScrollY(0f);
         NotifyScrollChanged();
+    }
+
+    public void SetPending(IReadOnlySet<string> pending)
+    {
+        _pending = pending;
+        SyncPendingSpinner();
+        SetDirty();
+    }
+
+    private void SyncPendingSpinner()
+    {
+        if (HasPendingRow()) _pendingSpinner.Start();
+        else _pendingSpinner.Stop();
+    }
+
+    private bool HasPendingRow()
+    {
+        if (_pending.Count == 0) return false;
+        foreach (var f in _files)
+            if (_pending.Contains(f.Path)) return true;
+        return false;
     }
 
     // Scrolls just enough to bring the keyboard cursor's row into view. Ignores cursors on
@@ -433,7 +441,9 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             reserveChevronColumn: _viewMode == FileViewMode.Tree,
             isRtl: IsRtl,
             drawSelectionBackground: !floatsBar,
-            guides: row.Guides);
+            guides: row.Guides,
+            isPending: _pending.Count > 0 && _pending.Contains(file.Path),
+            pendingRotation: _pendingSpinner.Rotation.Value);
     }
 
     // Retargets the floating bar from the current selection: the lone selected row's index when

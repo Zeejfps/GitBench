@@ -232,6 +232,11 @@ internal sealed class LocalChangesContentView : ContainerView
         });
         this.Bind(vm.Unstaged, list => _unstagedPanel.SetFiles(list));
         this.Bind(vm.Staged, list => _stagedPanel.SetFiles(list));
+        this.Bind(vm.PendingPaths, pending =>
+        {
+            _unstagedPanel.SetPending(pending);
+            _stagedPanel.SetPending(pending);
+        });
         this.Bind(vm.ViewMode, mode =>
         {
             _unstagedPanel.SetViewMode(mode);
