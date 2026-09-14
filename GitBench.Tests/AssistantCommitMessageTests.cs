@@ -65,6 +65,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             _dispatcher,
             new FrameTicker(),
             _bus,
+            StartedIndexOperationsStore.Create(_registry, _bus, _loc, _dispatcher),
             new LocalChangesSelectionStore(),
             new NoopShell(),
             new NoopClipboard(),

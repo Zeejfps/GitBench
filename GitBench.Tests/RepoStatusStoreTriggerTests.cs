@@ -35,7 +35,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         _sweep = new StartupSweepCoordinator(_gate);
         var head = new SettledHead();
         _store = new RepoStatusStore(
-            new IdleOperations(), _registry, new GitService(new RepoActivityTracker()),
+            new IdleOperations(), new IdleIndexOperations(), _registry, new GitService(new RepoActivityTracker()),
             new MessageBus(), _gate, _dispatcher, head, head);
     }
 
@@ -445,7 +445,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
     {
         var gate = new GitReadGate();
         var head = new SettledHead();
-        return new(new IdleOperations(), _registry, git, new MessageBus(), gate, dispatcher, head, head);
+        return new(new IdleOperations(), new IdleIndexOperations(), _registry, git, new MessageBus(), gate, dispatcher, head, head);
     }
 
     // Two real repos with "active" made the active one, over a store wired to a counting GitService.
@@ -564,7 +564,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         public CountingHarness(IRepoRegistry registry)
         {
             var head = new SettledHead();
-            Store = new RepoStatusStore(new IdleOperations(), registry, Git, Bus, Gate, Dispatcher, head, head);
+            Store = new RepoStatusStore(new IdleOperations(), new IdleIndexOperations(), registry, Git, Bus, Gate, Dispatcher, head, head);
         }
 
         public void Dispose() => Store.Dispose();

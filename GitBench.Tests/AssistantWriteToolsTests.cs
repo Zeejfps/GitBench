@@ -59,18 +59,20 @@ public sealed class AssistantWriteToolsTests : IDisposable
         _inactive = _registry.Repos.Single(r => r.Path == _other);
         _registry.SetActive(_repo.Id);
 
+        var loc = new LocalizationService(new State<Locale>(Locale.En));
         _commitBox = new LocalChangesViewModel(
             _registry,
             _git, _git, _git, _git, _git,
             _dispatcher,
             new FrameTicker(),
             _bus,
+            StartedIndexOperationsStore.Create(_registry, _bus, loc, _dispatcher),
             new LocalChangesSelectionStore(),
             new NoopShell(),
             new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
-            new LocalizationService(new State<Locale>(Locale.En)),
+            loc,
             new NoUnsavedEdits());
 
         _toolset = ToolsetFor(_repo);

@@ -44,8 +44,10 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
         _repoB = _registry.Repos.Single(r => r.Path == _pathB).Id;
         _registry.SetActive(_repoA);
 
+        var bus = new MessageBus();
         _vm = new LocalChangesViewModel(
-            _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), new MessageBus(),
+            _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), bus,
+            StartedIndexOperationsStore.Create(_registry, bus, _loc, _dispatcher),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json")),
             _store, _loc, new NoUnsavedEdits());

@@ -123,15 +123,23 @@ internal sealed class CountingGitService(IGitService inner) :
     public string? GetMergeMessage(Repo repo) => inner.GetMergeMessage(repo);
 
     // When set, Stage parks here before running, so a test can observe the in-flight state and
-    // then release it deterministically. StageFailure, when set, is returned instead of running.
+    // then release it deterministically. StagePermits does the same one call at a time, for a
+    // request that runs as several chunks. StageDelay holds every call for that long, so chunk
+    // sizing can be steered. StageFailure, when set, is returned instead of running — from the
+    // first call, or only once StageFailureAfterCalls calls have gone through.
     public ManualResetEventSlim? StageGate { get; set; }
+    public SemaphoreSlim? StagePermits { get; set; }
+    public TimeSpan StageDelay { get; set; }
     public string? StageFailure { get; set; }
+    public int StageFailureAfterCalls { get; set; }
 
     public GitOutcome Stage(Repo repo, IReadOnlyList<string> paths)
     {
         StageGate?.Wait();
-        Interlocked.Increment(ref _stageCalls);
-        if (StageFailure is { } failure) return new GitOutcome.Failed(failure);
+        StagePermits?.Wait();
+        if (StageDelay > TimeSpan.Zero) Thread.Sleep(StageDelay);
+        var call = Interlocked.Increment(ref _stageCalls);
+        if (StageFailure is { } failure && call > StageFailureAfterCalls) return new GitOutcome.Failed(failure);
         return inner.Stage(repo, paths);
     }
     public GitOutcome Unstage(Repo repo, IReadOnlyList<string> paths) => inner.Unstage(repo, paths);

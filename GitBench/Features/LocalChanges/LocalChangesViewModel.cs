@@ -36,11 +36,14 @@ namespace GitBench.Features.LocalChanges;
 /// generation lane, so no op can drop another's result — the continuation is the only carrier of the
 /// error and of the revalidation that reconciles the optimistic move. The base <c>Gen</c> lane is
 /// left to the amend head-files refresh, which is a load and should supersede.
+///
+/// Whole-file stage / unstage is the exception: it runs through <see cref="IRepoIndexOperationsStore"/>,
+/// which keeps the in-flight paths per repo, so a move survives the user switching away and back.
+/// This VM only projects the active repo's pending set and steers the selection when a move lands.
 /// </summary>
 internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, ICommitEditor
 {
     private static readonly IReadOnlyList<FileChange> Empty = [];
-    private static readonly IReadOnlySet<string> EmptyPaths = new HashSet<string>();
 
     private readonly IRepoRegistry _registry;
     private readonly IGitStatusReader _gitStatus;
@@ -49,6 +52,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private readonly IGitStashOperations _gitStash;
     private readonly IGitSubmoduleOperations _gitSubmodules;
     private readonly IMessageBus _bus;
+    private readonly IRepoIndexOperationsStore _indexOps;
     private readonly LocalChangesSelectionStore _selectionStore;
     private readonly IPlatformShell _shell;
     private readonly IClipboard _clipboard;
@@ -77,7 +81,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     public IReadable<IReadOnlySet<string>> UnstagedCollapsed { get; }
     public IReadable<IReadOnlySet<string>> StagedCollapsed { get; }
     /// <summary>Paths whose stage/unstage is running in git and not yet reflected in the lists.
-    /// The panels draw those rows as in flight instead of moving them ahead of git.</summary>
+    /// The panels draw those rows as in flight instead of moving them ahead of git. Projected from
+    /// the index-operations store's active repo.</summary>
     public IReadable<IReadOnlySet<string>> PendingPaths { get; }
     public Command Discard { get; }
     public Command StageSelected { get; }
@@ -127,6 +132,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         IUiDispatcher dispatcher,
         IFrameTicker ticker,
         IMessageBus bus,
+        IRepoIndexOperationsStore indexOps,
         LocalChangesSelectionStore selectionStore,
         IPlatformShell shell,
         IClipboard clipboard,
@@ -144,6 +150,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         _gitStash = gitStash;
         _gitSubmodules = gitSubmodules;
         _bus = bus;
+        _indexOps = indexOps;
         _selectionStore = selectionStore;
         _shell = shell;
         _clipboard = clipboard;
@@ -201,6 +208,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         Subscriptions.Add(_registry.Active.Subscribe(SwitchDraftTo));
         Subscriptions.Add(Slice(s => (s.Title, s.Description, Amending: s.Editor is EditorMode.Amending))
             .Subscribe(OnCommitMessageChanged));
+        Subscriptions.Add(_indexOps.Active.Subscribe(ops =>
+            Update(s => s with { PendingPaths = ops.PendingPaths })));
         Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
         Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
@@ -283,7 +292,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
             // When the file fully moves to the other side, keep the user's focus on it by
             // shifting the selection to the destination side — same behavior as the
-            // full-file stage/unstage flow in RunIndexOp.
+            // full-file stage/unstage flow when a pending index move lands.
             Selection selection;
             if (msg.IsLastHunk && msg.ToSide is DiffSide moved)
                 selection = LocalChanges.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
@@ -665,7 +674,14 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void DoDiscardAll()
         => RequestDiscard(State.Value.Unstaged.Select(f => f.Path).ToList());
 
-    public void Stage(IReadOnlyList<string> paths) => RunIndexOp(paths, isStage: true);
+    public void Stage(IReadOnlyList<string> paths)
+    {
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        _indexOps.Run(repo, paths, DiffSide.Staged,
+            moved => _gitWorkingTree.Stage(repo, moved),
+            s => s.LocalchangesErrorStageFailed);
+    }
 
     // The subset of the given paths that are still conflicted (unmerged) in the unstaged
     // panel — drives the "Mark as Resolved" context-menu item, which only applies to those.
@@ -689,30 +705,22 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     {
         var repo = _registry.Active.Value;
         if (repo == null) return;
-        paths = ExcludePending(paths);
-        if (paths.Count == 0) return;
 
-        var move = BeginPendingMove(paths, DiffSide.Staged);
-
-        RunMutation(
-            MutationEffects.WorkingTree(_bus, repo.Id),
-            work: () =>
+        _indexOps.Run(repo, paths, DiffSide.Staged,
+            moved =>
             {
                 // Every path is attempted even after one fails — the rest are independent
                 // resolutions — and the first failure is what the dialog reports.
                 GitOutcome.Failed? firstFailure = null;
-                foreach (var path in paths)
+                foreach (var path in moved)
                 {
                     if (_gitConflicts.MarkResolved(repo, path) is GitOutcome.Failed failed)
                         firstFailure ??= failed;
                 }
                 return firstFailure ?? GitOutcome.Ok;
             },
-            onResult: outcome =>
-            {
-                FinishPendingMove(move, outcome);
-                ReportFailure(outcome, s => s.LocalchangesErrorMarkResolvedFailed);
-            });
+            s => s.LocalchangesErrorMarkResolvedFailed,
+            IndexMoveEffect.WorkingTree);
     }
 
     // Resets a submodule's working tree back to the SHA the parent has recorded. Runs
@@ -758,7 +766,12 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 return;
             }
         }
-        RunIndexOp(paths, isStage: false);
+
+        var repo = _registry.Active.Value;
+        if (repo == null) return;
+        _indexOps.Run(repo, paths, DiffSide.Unstaged,
+            moved => _gitWorkingTree.Unstage(repo, moved),
+            s => s.LocalchangesErrorUnstageFailed);
     }
 
     // Routes through the bus so DialogPresenter owns the modal lifecycle; the dialog's
@@ -918,9 +931,9 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         if (isCrossRepoSwitch)
         {
             DropAmendSession();
-            // The pending moves belonged to the old repo; the new repo's data must win.
+            // The optimistic hold belonged to the old repo; the new repo's data must win. Pending
+            // index moves stay with their repo in the store.
             _deferStoreReloadUntilWorkingTreeChange = false;
-            ClearPendingMoves();
         }
         else if (_deferStoreReloadUntilWorkingTreeChange)
         {
@@ -949,7 +962,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         DropAmendSession();
         _stagedFromIndex = Empty;
         _renderedRepoId = null;
-        _pendingMoves.Clear();
         Update(s => s with
         {
             HasRepo = false,
@@ -959,7 +971,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
-            PendingPaths = EmptyPaths,
             DriftedSubmodules = [],
             Editor = EditorMode.Idle,
         });
@@ -984,7 +995,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private void ApplyLoadFailure(Fetched<LocalChangesData>.Failed failed)
     {
         _stagedFromIndex = Empty;
-        _pendingMoves.Clear();
         Update(s => s with
         {
             HasRepo = true,
@@ -994,7 +1004,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             Staged = Empty,
             Unstaged = Empty,
             Selection = LocalChanges.Selection.Empty,
-            PendingPaths = EmptyPaths,
             DriftedSubmodules = [],
         });
     }
@@ -1135,7 +1144,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         IReadOnlyList<SubmoduleInfo>? drift = null)
     {
         _stagedFromIndex = snap.Staged;
-        var pending = PendingUnion();
         Update(s =>
         {
             var staged = ComputeDisplayedStaged(s.Editor);
@@ -1147,7 +1155,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
                 Unstaged = snap.Unstaged,
                 Staged = staged,
                 Selection = selectionFor(s, staged),
-                PendingPaths = pending,
                 DriftedSubmodules = drift ?? s.DriftedSubmodules,
             };
         });
@@ -1158,126 +1165,26 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     // ticks, refs changes, and post-commit snapshots — anywhere the lists change but the
     // selection isn't being explicitly steered to a new place. The one steer: a pending
     // index move whose git op has finished lands here, and the selection follows its paths
-    // to the side they moved to.
+    // to the side they moved to. The store settles against the raw index lists, not the amend
+    // view of the staged side, which lags a snapshot behind while its diff refreshes.
     private void ApplySnapshot(LocalChangesSnapshot snap, IReadOnlyList<SubmoduleInfo>? drift = null)
     {
-        var landed = SettleFinishedMoves();
-        ApplySnapshot(snap, (s, staged) => landed != null
+        var landed = _renderedRepoId is { } repoId
+            ? _indexOps.Settle(repoId, snap.Unstaged, snap.Staged)
+            : null;
+        ApplySnapshot(snap, (s, staged) => landed != null && FollowsRequest(s.Selection, landed)
             ? LocalChanges.Selection.FromPaths(landed.Paths, landed.ToSide, snap.Unstaged, staged)
             : LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, snap.Unstaged, staged), drift);
     }
 
-    private void RunIndexOp(IReadOnlyList<string> paths, bool isStage)
+    // A landing steers the selection only while it is still on the request's own rows: the files the
+    // user staged follow across as they land. A large request lands in several waves, and a click
+    // elsewhere in the meantime must not be yanked back by each one.
+    private static bool FollowsRequest(Selection selection, LandedMove landed)
     {
-        var repo = _registry.Active.Value;
-        if (repo == null) return;
-
-        // A path already in flight is dropped rather than queued behind itself: the pending op
-        // will land it, and a second `git add` of the same path is a no-op that only serializes
-        // behind the first.
-        paths = ExcludePending(paths);
-        if (paths.Count == 0) return;
-
-        var move = BeginPendingMove(paths, isStage ? DiffSide.Staged : DiffSide.Unstaged);
-
-        RunIndexMutation(repo, () => isStage
-            ? _gitWorkingTree.Stage(repo, paths)
-            : _gitWorkingTree.Unstage(repo, paths),
-            isStage,
-            move,
-            paths.Count == 1 ? paths[0] : null);
-    }
-
-    private void RunIndexMutation(Repo repo, Func<GitOutcome> mutate, bool isStage, PendingMove move, string? path = null)
-        => RunMutation(
-            MutationEffects.Index(_bus, repo.Id, path),
-            work: mutate,
-            onResult: outcome =>
-            {
-                FinishPendingMove(move, outcome);
-                ReportFailure(outcome, s => isStage
-                    ? s.LocalchangesErrorStageFailed
-                    : s.LocalchangesErrorUnstageFailed);
-            });
-
-    // An index move the user asked for whose git op has not been reconciled by a reload yet. The
-    // rows stay where they are (dimmed, as in flight) until the post-mutation snapshot lands; the
-    // lists are never rearranged by hand, so a 16k-file stage costs the same UI work as one file.
-    private sealed class PendingMove(IReadOnlyList<string> paths, DiffSide toSide)
-    {
-        public IReadOnlyList<string> Paths { get; } = paths;
-        public DiffSide ToSide { get; } = toSide;
-        // The git op succeeded; the next snapshot is what moves the rows and the selection.
-        public bool Finished;
-    }
-
-    private readonly List<PendingMove> _pendingMoves = new();
-
-    private PendingMove BeginPendingMove(IReadOnlyList<string> paths, DiffSide toSide)
-    {
-        var move = new PendingMove(paths, toSide);
-        _pendingMoves.Add(move);
-        PublishPending();
-        return move;
-    }
-
-    // A failed op leaves the rows where they were, so their in-flight mark clears now. A successful
-    // one keeps them marked until the reload the mutation's broadcast triggers reconciles the
-    // lists — clearing at this point would un-dim the rows a beat before they jump sides.
-    private void FinishPendingMove(PendingMove move, GitOutcome outcome)
-    {
-        if (outcome is GitOutcome.Failed)
-        {
-            _pendingMoves.Remove(move);
-            PublishPending();
-            return;
-        }
-        move.Finished = true;
-    }
-
-    // Drops every finished move and returns the most recent one, whose paths the selection follows.
-    private PendingMove? SettleFinishedMoves()
-    {
-        PendingMove? landed = null;
-        for (var i = _pendingMoves.Count - 1; i >= 0; i--)
-        {
-            if (!_pendingMoves[i].Finished) continue;
-            landed ??= _pendingMoves[i];
-            _pendingMoves.RemoveAt(i);
-        }
-        return landed;
-    }
-
-    private void ClearPendingMoves()
-    {
-        if (_pendingMoves.Count == 0) return;
-        _pendingMoves.Clear();
-        PublishPending();
-    }
-
-    private IReadOnlySet<string> PendingUnion()
-    {
-        if (_pendingMoves.Count == 0) return EmptyPaths;
-        var union = new HashSet<string>();
-        foreach (var move in _pendingMoves)
-            union.UnionWith(move.Paths);
-        return union;
-    }
-
-    private void PublishPending()
-    {
-        var pending = PendingUnion();
-        Update(s => s with { PendingPaths = pending });
-    }
-
-    private IReadOnlyList<string> ExcludePending(IReadOnlyList<string> paths)
-    {
-        var pending = State.Value.PendingPaths;
-        if (pending.Count == 0) return paths;
-        var kept = new List<string>(paths.Count);
-        foreach (var p in paths)
-            if (!pending.Contains(p)) kept.Add(p);
-        return kept;
+        foreach (var row in selection.Rows)
+            if (row.IsFolder || !landed.Requested.Contains(row.FullPath)) return false;
+        return true;
     }
 
     // Every git op here reports its failure the same way the rest of the app does — the modal
@@ -1297,17 +1204,22 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         var movedToUnstaged = new List<string>(toUnstage.Count + toResetToParent.Count);
         movedToUnstaged.AddRange(toUnstage);
         movedToUnstaged.AddRange(toResetToParent);
+        var resetSet = new HashSet<string>(toResetToParent, StringComparer.Ordinal);
 
-        var move = BeginPendingMove(movedToUnstaged, DiffSide.Unstaged);
-
-        RunIndexMutation(repo, () =>
-        {
-            if (toUnstage.Count > 0 && _gitWorkingTree.Unstage(repo, toUnstage) is GitOutcome.Failed failed)
-                return failed;
-            return toResetToParent.Count > 0
-                ? _gitWorkingTree.ResetToParent(repo, toResetToParent)
-                : GitOutcome.Ok;
-        }, isStage: false, move, movedToUnstaged.Count == 1 ? movedToUnstaged[0] : null);
+        _indexOps.Run(repo, movedToUnstaged, DiffSide.Unstaged,
+            moved =>
+            {
+                var unstage = new List<string>(moved.Count);
+                var reset = new List<string>(resetSet.Count);
+                foreach (var path in moved)
+                    (resetSet.Contains(path) ? reset : unstage).Add(path);
+                if (unstage.Count > 0 && _gitWorkingTree.Unstage(repo, unstage) is GitOutcome.Failed failed)
+                    return failed;
+                return reset.Count > 0
+                    ? _gitWorkingTree.ResetToParent(repo, reset)
+                    : GitOutcome.Ok;
+            },
+            s => s.LocalchangesErrorUnstageFailed);
     }
 
     private IReadOnlyList<FileChange> ComputeDisplayedStaged(EditorMode editor)

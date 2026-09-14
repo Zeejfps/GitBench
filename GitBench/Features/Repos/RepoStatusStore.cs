@@ -80,6 +80,7 @@ internal interface IRepoStatusIngest
 internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHostedService, IDisposable
 {
     private readonly IRepoOperationsStore _ops;
+    private readonly IRepoIndexOperationsStore _indexOps;
     private readonly IRepoRegistry _registry;
     private readonly IGitStatusReader _git;
     private readonly IMessageBus _bus;
@@ -108,9 +109,10 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
 
     public IReadable<RepoStatus> Active => _active;
 
-    public RepoStatusStore(IRepoOperationsStore ops, IRepoRegistry registry, IGitStatusReader git, IMessageBus bus, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
+    public RepoStatusStore(IRepoOperationsStore ops, IRepoIndexOperationsStore indexOps, IRepoRegistry registry, IGitStatusReader git, IMessageBus bus, IGitReadGate gate, IUiDispatcher dispatcher, IRepoHeadStore head, IRepoHeadConfirm headConfirm)
     {
         _ops = ops;
+        _indexOps = indexOps;
         _registry = registry;
         _git = git;
         _bus = bus;
@@ -158,7 +160,7 @@ internal sealed class RepoStatusStore : IRepoStatusStore, IRepoStatusIngest, IHo
         return new RepoStatus(
             p.Branch, p.IsDetached, p.HasUpstream, p.Ahead, p.Behind, p.IsDirty,
             IsBusy: _ops.IsBusy(repoId),
-            HasUnseenError: _ops.HasUnseenError(repoId),
+            HasUnseenError: _ops.HasUnseenError(repoId) || _indexOps.HasUnseenError(repoId),
             // The probe names the branch the user left until a checkout settles; carrying the pending
             // name here is what stops five view models each answering "current branch" differently.
             PendingBranchName: _head.For(repoId).PendingBranch);

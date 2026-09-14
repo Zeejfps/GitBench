@@ -257,6 +257,7 @@ internal static class AppServices
             ctx.Require<IGitReadGate>(),
             ctx.Require<IUiDispatcher>()));
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
+        context.AddHostedService<IRepoIndexOperationsStore, RepoIndexOperationsStore>();
         // Samples the read gate + the operations store once a frame into the per-repo "loading" flag
         // the RepoBar rows spin on. Registered after both, and hosted so its frame tick starts with
         // the rest of the app rather than on first row build.
@@ -268,6 +269,7 @@ internal static class AppServices
         context.AddSingleton<IRepoHeadStore, RepoHeadStore>();
         context.AddHostedService<IRepoStatusStore, RepoStatusStore>(ctx => new RepoStatusStore(
             ctx.Require<IRepoOperationsStore>(),
+            ctx.Require<IRepoIndexOperationsStore>(),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<IGitStatusReader>(),
             ctx.Require<IMessageBus>(),
