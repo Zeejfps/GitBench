@@ -681,19 +681,51 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     }
 
     // Folds files as they become Viewed and unfolds them when un-viewed — diffed against the last
-    // snapshot so a manual fold/unfold isn't fought over on unrelated toggles.
+    // snapshot so a manual fold/unfold isn't fought over on unrelated toggles. Every changed
+    // section flips first and the index rebuilds once: a bulk stage marks thousands of files in one
+    // revision, and a per-section reindex walks the whole row table each time.
     private void SyncViewedFolds()
     {
         if (_sections.Count == 0) return;
         var current = CurrentViewedSet();
+        var scroll = _list.ScrollY;
+        var anchor = SectionAtOffset(scroll, out var anchorTop);
+        var anchorFolded = false;
+        var changed = false;
         foreach (var s in _sections)
         {
             var viewed = current.Contains(s.File.Path);
-            if (viewed == _viewedSnapshot.Contains(s.File.Path)) continue;
-            SetFolded(s, viewed);
+            if (viewed == _viewedSnapshot.Contains(s.File.Path) || s.Folded == viewed) continue;
+            s.Folded = viewed;
+            changed = true;
+            if (ReferenceEquals(s, anchor)) anchorFolded = viewed;
         }
         _viewedSnapshot = current;
+        if (changed)
+        {
+            RebuildIndex();
+            // The section under the viewport top stays put, so the folds happen around the reader;
+            // when that section itself just folded, its header is all that's left to rest on.
+            if (anchor != null)
+            {
+                var newTop = SectionTopOffset(anchor);
+                _list.SetScrollY(anchorFolded && scroll > anchorTop ? newTop : scroll + (newTop - anchorTop));
+            }
+        }
         SetDirty();
+    }
+
+    // The section whose band (header + body) contains content offset y, with that band's top.
+    private Section? SectionAtOffset(float y, out float top)
+    {
+        top = TopPadRowHeight;
+        foreach (var s in _sections)
+        {
+            var bottom = top + HeaderRowHeight + BodyHeight(s);
+            if (y < bottom) return s;
+            top = bottom;
+        }
+        return null;
     }
 
     // Scrolls a file's header band exactly onto the pin line, unfolding it so the diff is
