@@ -142,6 +142,15 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
     // is not inside a draw, and aliasing the two would leave a half-read row behind for the frame.
     TerminalCell[] _probe = [];
 
+    // The live screen as it last stood between synchronized-update frames, row after row, and the
+    // cursor with it. This is what is drawn while the program is part-way through its next frame:
+    // the engine applies the frame as it arrives, so the grid itself has nothing older to show.
+    // History rows are never held, since a frame redraws the screen and not the history above it.
+    TerminalCell[] _held = [];
+    TerminalSize _heldSize;
+    TerminalCursor _heldCursor;
+    long _heldRevision = -1;
+
     // The whole of the hover state, and deliberately a window-space point: a grid coordinate is
     // already a resolution against a scroll offset that moves without the pointer.
     PointF? _hoverPoint;
@@ -371,6 +380,15 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         var size = grid.Size;
         EnsureBuffers(size.Columns);
 
+        // Refreshed only from a screen with no frame open, so what is held is always a complete
+        // image; a frame that opened before anything was ever held is drawn live, since there is no
+        // previous image to prefer. A resize mid-frame drops the hold rather than mapping one shape
+        // of screen onto another.
+        if (!session.IsHoldingFrame && _heldRevision != session.Revision)
+            HoldScreen(grid, session.State.Cursor, session.Revision);
+
+        var holding = session.IsHoldingFrame && _heldRevision >= 0 && _heldSize == size;
+
         // The grid is only resized on the next frame after the pane changes shape, so a draw can
         // land on a screen taller than the space it has. Drawing what fits beats drawing past the
         // bottom edge for the one frame it takes to catch up.
@@ -399,13 +417,40 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         for (var row = 0; row < visibleRows; row++)
         {
             var top = bounds.Top - row * metrics.Height;
-            grid.CopyRow(row - offset, _cells.AsSpan(0, size.Columns));
+            CopyScreenRow(grid, row - offset, holding, _cells.AsSpan(0, size.Columns));
             DrawRow(c, _cells.AsSpan(0, size.Columns), bounds.Left, top, metrics, z);
             DrawSelection(c, selection, row - offset, size.Columns, bounds.Left, top, metrics, z + 1);
             DrawHoveredLink(c, _cells.AsSpan(0, size.Columns), hovered, bounds.Left, top, metrics, z + 1);
         }
 
-        DrawCursor(c, grid, session.State.Cursor, offset, visibleRows, bounds, metrics, z);
+        var cursor = holding ? _heldCursor : session.State.Cursor;
+        DrawCursor(c, grid, cursor, holding, offset, visibleRows, bounds, metrics, z);
+    }
+
+    void HoldScreen(ITerminalGrid grid, TerminalCursor cursor, long revision)
+    {
+        var size = grid.Size;
+        var needed = size.Rows * size.Columns;
+        if (_held.Length < needed) _held = new TerminalCell[needed];
+
+        for (var row = 0; row < size.Rows; row++)
+            grid.CopyRow(row, _held.AsSpan(row * size.Columns, size.Columns));
+
+        _heldSize = size;
+        _heldCursor = cursor;
+        _heldRevision = revision;
+    }
+
+    /// <summary>
+    /// One row as the pane shows it: the held image for a screen row while a frame is held, the
+    /// grid otherwise, and always the grid for history rows.
+    /// </summary>
+    void CopyScreenRow(ITerminalGrid grid, int gridRow, bool holding, Span<TerminalCell> destination)
+    {
+        if (holding && gridRow >= 0)
+            _held.AsSpan(gridRow * _heldSize.Columns, _heldSize.Columns).CopyTo(destination);
+        else
+            grid.CopyRow(gridRow, destination);
     }
 
     void DrawRow(ICanvas c, ReadOnlySpan<TerminalCell> cells, float left, float top, CellMetrics metrics, int z)
@@ -563,6 +608,7 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         ICanvas c,
         ITerminalGrid grid,
         TerminalCursor cursor,
+        bool holding,
         int offset,
         int visibleRows,
         RectF bounds,
@@ -598,13 +644,14 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         // A block fills the whole cell, so the glyph the row already drew is behind it. Terminals
         // read it back out by inverting that one cell: the character is drawn again over the block
         // in the colour it was sitting on.
-        DrawCursorGlyph(c, grid, cursor, left, top, metrics, z + 3);
+        DrawCursorGlyph(c, grid, cursor, holding, left, top, metrics, z + 3);
     }
 
     void DrawCursorGlyph(
         ICanvas c,
         ITerminalGrid grid,
         TerminalCursor cursor,
+        bool holding,
         float left,
         float top,
         CellMetrics metrics,
@@ -613,7 +660,7 @@ internal sealed class TerminalGridView : View, ITerminalCellGeometry
         var columns = grid.Size.Columns;
         if (cursor.Column < 0 || cursor.Column >= columns) return;
 
-        grid.CopyRow(cursor.Row, _cells.AsSpan(0, columns));
+        CopyScreenRow(grid, cursor.Row, holding, _cells.AsSpan(0, columns));
 
         ref readonly var cell = ref _cells[cursor.Column];
         if (cell.Width == CellWidth.WideTrailer) return;

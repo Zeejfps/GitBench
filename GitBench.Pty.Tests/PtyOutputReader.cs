@@ -8,6 +8,15 @@ namespace GitBench.Pty.Tests;
 /// </summary>
 sealed class PtyOutputReader
 {
+    /// <summary>
+    /// What the terminal says it is when the host asks. The bundled Windows console host opens every
+    /// session by sending DA1 and holds the child back until it is answered, for three seconds if it
+    /// never is; a real terminal answers at once, and so does this one, with the same reply the
+    /// engine gives. The host consumes the reply itself, so the child never sees it.
+    /// </summary>
+    static readonly byte[] DeviceAttributesQuery = "\u001b[c"u8.ToArray();
+    static readonly byte[] DeviceAttributesReply = "\u001b[?1;2c"u8.ToArray();
+
     readonly object _gate = new();
     readonly MemoryStream _received = new();
     bool _ended;
@@ -91,11 +100,15 @@ sealed class PtyOutputReader
                 if (read <= 0)
                     break;
 
+                long before;
                 lock (_gate)
                 {
+                    before = _received.Length;
                     _received.Write(buffer, 0, read);
                     Monitor.PulseAll(_gate);
                 }
+
+                AnswerDeviceAttributes(session, before);
             }
         }
         catch (Exception ex)
@@ -110,6 +123,33 @@ sealed class PtyOutputReader
                 _ended = true;
                 Monitor.PulseAll(_gate);
             }
+        }
+    }
+
+    /// <summary>
+    /// Answers a DA1 that ended inside the bytes just received. Checked against the stream rather
+    /// than the read, so a query split across two reads is still seen exactly once.
+    /// </summary>
+    void AnswerDeviceAttributes(IPtySession session, long before)
+    {
+        bool asked;
+        lock (_gate)
+        {
+            var stream = _received.GetBuffer().AsSpan(0, (int)_received.Length);
+            var from = (int)Math.Max(0, before - (DeviceAttributesQuery.Length - 1));
+            asked = stream[from..].IndexOf(DeviceAttributesQuery) >= 0;
+        }
+
+        if (!asked)
+            return;
+
+        try
+        {
+            session.WriteInput(DeviceAttributesReply);
+        }
+        catch (ObjectDisposedException)
+        {
+            // Asked on the way out; nobody is waiting for the answer.
         }
     }
 

@@ -80,14 +80,16 @@ internal static unsafe partial class WindowsNative
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool CloseHandle(IntPtr handle);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    // The three pseudo-console entry points come from the ConPTY shipped beside the app, not from
+    // kernel32: see GitBench.Pty.csproj for why the inbox host is not used.
+    [LibraryImport("conpty.dll", SetLastError = true)]
     public static partial int CreatePseudoConsole(
         Coord size, SafeFileHandle input, SafeFileHandle output, uint flags, out IntPtr pseudoConsole);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("conpty.dll", SetLastError = true)]
     public static partial int ResizePseudoConsole(SafePseudoConsoleHandle pseudoConsole, Coord size);
 
-    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [LibraryImport("conpty.dll", SetLastError = true)]
     public static partial void ClosePseudoConsole(IntPtr pseudoConsole);
 
     [LibraryImport("kernel32.dll", SetLastError = true)]

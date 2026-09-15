@@ -42,10 +42,19 @@ internal sealed class TerminalSession : IDisposable
 
     const int OutgoingBufferBytes = 4 * 1024;
 
+    /// <summary>How long a synchronized-update frame is honoured before the screen is shown as it is.</summary>
+    /// <remarks>
+    /// A program opens a frame with <c>?2026h</c> and is expected to close it within a few
+    /// milliseconds; one that crashes or stalls in between would otherwise leave the pane frozen on
+    /// the last complete image with no way out. The limit is the one other terminals settled on.
+    /// </remarks>
+    static readonly TimeSpan FrameHoldLimit = TimeSpan.FromMilliseconds(150);
+
     readonly IPtySession _pty;
     readonly ITerminalEngine _engine;
     readonly IUiDispatcher _dispatcher;
     readonly IClipboard? _clipboard;
+    readonly TimeProvider _time;
     readonly Thread _reader;
     readonly Thread _writer;
     readonly Lock _gate = new();
@@ -70,17 +79,23 @@ internal sealed class TerminalSession : IDisposable
     bool _faulted;
     int _scrollOffset;
     TerminalSpan? _selection;
+    long _revision;
+
+    // When the frame the program is painting was opened, or null while none is open.
+    long? _frameOpenedAt;
 
     TerminalSession(
         IPtySession pty,
         ITerminalEngine engine,
         IUiDispatcher dispatcher,
-        IClipboard? clipboard)
+        IClipboard? clipboard,
+        TimeProvider time)
     {
         _pty = pty;
         _engine = engine;
         _dispatcher = dispatcher;
         _clipboard = clipboard;
+        _time = time;
 
         _reader = new Thread(Read) { IsBackground = true, Name = "terminal-pty-reader" };
         _reader.Start();
@@ -101,7 +116,8 @@ internal sealed class TerminalSession : IDisposable
         IUiDispatcher dispatcher,
         int scrollbackLines = DefaultScrollbackLines,
         IClipboard? clipboard = null,
-        ITerminalPalette? palette = null) =>
+        ITerminalPalette? palette = null,
+        TimeProvider? time = null) =>
         Start(
             () => sessions.Start(options),
             engines,
@@ -109,7 +125,8 @@ internal sealed class TerminalSession : IDisposable
             dispatcher,
             scrollbackLines,
             clipboard,
-            palette);
+            palette,
+            time);
 
     /// <summary>
     /// Starts on whatever pseudo-terminal <paramref name="open"/> produces, for a caller that has
@@ -126,13 +143,14 @@ internal sealed class TerminalSession : IDisposable
         IUiDispatcher dispatcher,
         int scrollbackLines = DefaultScrollbackLines,
         IClipboard? clipboard = null,
-        ITerminalPalette? palette = null)
+        ITerminalPalette? palette = null,
+        TimeProvider? time = null)
     {
         var engine = engines.Create(new TerminalSetup(size, scrollbackLines) { Palette = palette });
 
         try
         {
-            return new TerminalSession(open(), engine, dispatcher, clipboard);
+            return new TerminalSession(open(), engine, dispatcher, clipboard, time ?? TimeProvider.System);
         }
         catch
         {
@@ -145,6 +163,22 @@ internal sealed class TerminalSession : IDisposable
     public ITerminalGrid Grid => _engine.Grid;
 
     public TerminalState State => _engine.State;
+
+    /// <summary>Counts the batches of output the screen has taken, so a reader can tell whether it has moved.</summary>
+    public long Revision => _revision;
+
+    /// <summary>
+    /// Whether the program is part-way through a synchronized-update frame that the pane should not
+    /// show yet: it has opened one, and not so long ago that it is presumed abandoned.
+    /// </summary>
+    /// <remarks>
+    /// The engine keeps applying bytes either way, so <see cref="Grid"/> already holds the half-drawn
+    /// frame; what this answers is whether to draw it. Decided here because the frame's age is a fact
+    /// about when output arrived, which only this class sees, and a renderer that timed it would have
+    /// to be told about every drain to get it right.
+    /// </remarks>
+    public bool IsHoldingFrame =>
+        _frameOpenedAt is { } openedAt && _time.GetElapsedTime(openedAt) < FrameHoldLimit;
 
     /// <summary>
     /// How many lines above the live screen the viewport is showing. Zero means it is following the
@@ -552,6 +586,9 @@ internal sealed class TerminalSession : IDisposable
             return;
         }
 
+        _revision++;
+        TrackFrame();
+
         // Device-status and capability replies are the program's question answered; they go back up
         // the terminal as input, which is where the program is waiting for them.
         if (result.HasResponse) Write(result.Response.Span);
@@ -561,6 +598,18 @@ internal sealed class TerminalSession : IDisposable
         FollowSelection(result.LinesScrolled, alternateBefore, _engine.State.Modes.AlternateScreen);
 
         Updated?.Invoke();
+    }
+
+    /// <remarks>
+    /// The opening time is kept from the first batch that found the frame open, so a program that
+    /// never closes one runs out the limit once rather than restarting it with every byte it sends.
+    /// </remarks>
+    void TrackFrame()
+    {
+        if (!_engine.State.Modes.SynchronizedOutput)
+            _frameOpenedAt = null;
+        else
+            _frameOpenedAt ??= _time.GetTimestamp();
     }
 
     /// <summary>

@@ -194,6 +194,22 @@ There is no passthrough mode. `consoleapi.h` in SDK 10.0.26100 declares exactly 
 `PSEUDOCONSOLE_INHERIT_CURSOR`. The reflow is not opt-out-able. (Win11 adds
 `ReleasePseudoConsole`, for detaching without killing the child — possibly useful in Phase 5.)
 
+**Addendum, 2026-09-15 — the inbox host was replaced.** Recording Codex CLI through
+`ConPtySession` showed the inbox conhost (10.0.26100.1) painting on its own renderer thread: it
+passes `?2026h/l` and `DECSCUSR` through at once, but paints text and the closing cursor move some
+15ms later, outside the program's frame. Codex parks the cursor on an intermediate cell mid-frame
+and splits its frame over two writes, so every frame closed with the cursor shown on the wrong
+cell and a fix-up chunk moved it back — the caret visibly jumping on every keystroke. The session
+now binds `CreatePseudoConsole` to the `conpty.dll` from the `Microsoft.Windows.Console.ConPTY`
+package (Windows Terminal's host, `OpenConsole.exe` shipped beside it; see `GitBench.Pty.csproj`),
+which forwards the program's bytes as written. Two consequences: the same recording arrives with
+the cursor only ever shown after a frame's final move, and **DA1 and DSR now reach the engine
+instead of being answered by conhost**, which the engine already handles. `ConPtyHostTests` pins
+that the bundled host is the one actually spawned, since the launcher falls back to the inbox
+conhost silently when it cannot find its OpenConsole. The pane also honours `?2026` now:
+`TerminalSession.IsHoldingFrame` reports an open frame for up to 150ms and `TerminalGridView` keeps
+drawing the last complete screen while it does.
+
 **Teardown, measured separately.** Run because the end-of-stream contract on `IPtySession` hangs off
 it. Same host, same machine.
 
@@ -671,5 +687,5 @@ over an empty pane.
 | **No Unix corpus** | Every committed recording is a Windows capture, so the engine is pinned against ConPTY's output only and nothing asserts what a macOS or Linux pseudo-terminal produces. The two platforms are separate recordings asserting the same grid, not one stream — and only one of them exists. See Findings. |
 | Terminal identity is repo-scoped in three places | `TerminalSessionStore` keys by repo id, `HasLiveShell(repoId)` answers per repository, and `ConfirmQuitDialog` names repositories. Tabs make the terminal the unit while the quit path still wants repository names, so the store has to answer both questions over the same list. Getting it wrong shows up as the quit confirmation naming a repository whose live shell was in a tab that is already closed — or worse, not naming one whose live shell is in a tab that is merely not on screen. |
 | A close request is not a close | The confirmation is a modal answered through a callback, so the tab lives on between the middle click and the answer, still taking output. Anything that removes by index rather than by identity ends the wrong shell when the list moves under the dialog. |
-| conhost owns DA1/DSR | Capability replies on Windows are conhost's, not ours, and we cannot override them. Fine for `claude`; a constraint on anything that negotiates through DA1. |
+| conhost owns DA1/DSR | Capability replies on Windows are conhost's, not ours, and we cannot override them. Fine for `claude`; a constraint on anything that negotiates through DA1. Superseded by the 2026-09-15 addendum: the bundled ConPTY forwards both, and the engine answers them. |
 | Own-engine cost on Windows | Escaping conhost entirely means reimplementing a console host over the undocumented ConDrv protocol — months, plus a permanent break-on-update liability. Ruled out; the divergence above does not come close to justifying it. |
