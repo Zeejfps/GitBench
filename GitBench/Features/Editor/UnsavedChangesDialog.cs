@@ -64,12 +64,7 @@ internal sealed record UnsavedChangesDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = body,
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = body },
                 new Text
                 {
                     Value = string.Join(", ", Files),

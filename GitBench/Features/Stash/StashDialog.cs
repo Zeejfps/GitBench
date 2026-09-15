@@ -54,7 +54,7 @@ internal sealed record StashDialog : Widget
                 },
                 new Text
                 {
-                    Value = Prop.Bind(vm.Files.Header),
+                    Value = Prop.Bind<string?>(vm.Files.Header),
                     Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
                 },
                 new Grow { Child = new DialogFileList { List = vm.Files, EmptyText = s.StashDialogNoChanges } },

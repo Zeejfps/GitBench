@@ -38,12 +38,7 @@ internal sealed record MarkResolvedDialog : Widget
             ConfirmKeys = true,
             Body =
             [
-                new Text
-                {
-                    Value = s.EditorMarkResolvedBody(RelativePath),
-                    Wrap = TextWrap.Wrap,
-                    Color = Theme.Color(t => t.DialogBody.BodyText),
-                },
+                new DialogBodyText { Value = s.EditorMarkResolvedBody(RelativePath) },
                 new Text
                 {
                     Value = s.EditorMarkResolvedHint,

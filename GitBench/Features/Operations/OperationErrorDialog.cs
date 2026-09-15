@@ -86,7 +86,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                                         }.WithController<KbmController>(),
                                         new Text
                                         {
-                                            Value = Prop.Bind(() => _recoveryStatus.Value ?? string.Empty),
+                                            Value = Prop.Bind<string?>(() => _recoveryStatus.Value ?? string.Empty),
                                             VAlign = TextAlignment.Center,
                                             Color = Theme.Color(t => t.DialogBody.RowTextMissing),
                                             Visible = Prop.Bind(() => _recoveryStatus.Value != null),

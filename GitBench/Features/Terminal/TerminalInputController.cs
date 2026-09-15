@@ -154,10 +154,12 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     readonly InputSystem _input;
     readonly ITerminalInput _terminal;
     readonly ITerminalCellGeometry _cells;
-    readonly IClipboard? _clipboard;
-    readonly IPlatformShell? _shell;
-    readonly Context? _ctx;
-    readonly ILocalizationService? _localization;
+    readonly IClipboard _clipboard;
+    readonly IPlatformShell _shell;
+    readonly Context _ctx;
+    readonly ILocalizationService _localization;
+    readonly IMessageBus _bus;
+    readonly IUiDispatcher _dispatcher;
 
     /// <summary>
     /// Where the pane's own chords come from, and the context menu prints them from the same table
@@ -179,11 +181,13 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         InputSystem input,
         ITerminalInput terminal,
         ITerminalCellGeometry cells,
-        IClipboard? clipboard = null,
-        IPlatformShell? shell = null,
-        Context? ctx = null,
-        ILocalizationService? localization = null,
-        IKeyMap? keys = null)
+        IClipboard clipboard,
+        IPlatformShell shell,
+        Context ctx,
+        ILocalizationService localization,
+        IKeyMap keys,
+        IMessageBus bus,
+        IUiDispatcher dispatcher)
     {
         _view = view;
         _input = input;
@@ -193,7 +197,9 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         _shell = shell;
         _ctx = ctx;
         _localization = localization;
-        _keys = keys ?? KeyMap.Defaults;
+        _keys = keys;
+        _bus = bus;
+        _dispatcher = dispatcher;
     }
 
     /// <summary>
@@ -433,7 +439,7 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
         // where anything that escapes takes the window down with it.
         try
         {
-            _shell?.OpenUrl(gesture.Target.Text);
+            _shell.OpenUrl(gesture.Target.Text);
         }
         catch (Exception e)
         {
@@ -802,8 +808,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
 
     void Copy()
     {
-        if (_clipboard is null) return;
-
         var text = _terminal.SelectionText();
         if (text.Length == 0) return;
 
@@ -813,30 +817,23 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     void Paste()
     {
         if (!_terminal.IsAcceptingInput) return;
-        if (_clipboard?.GetText() is not { Length: > 0 } text) return;
+        if (_clipboard.GetText() is not { Length: > 0 } text) return;
 
         var lines = TerminalPasteEncoder.LinesToRun(text, _terminal.Modes.BracketedPaste);
-        if (lines > 1 && AskAboutPaste(text, lines)) return;
-
-        _terminal.Paste(text);
+        if (lines > 1)
+            AskAboutPaste(text, lines);
+        else
+            _terminal.Paste(text);
     }
 
-    /// <summary>
-    /// Puts a multi-line paste to the user before it runs. Returns whether the question was asked —
-    /// false means it could not be, and the paste is the caller's to send as it stands.
-    /// </summary>
+    /// <summary>Puts a multi-line paste to the user before it runs.</summary>
     /// <remarks>
     /// Posted rather than shown here, for the reason the quit prompt is: this runs inside input
     /// dispatch, and a modal wants a settled view tree. The tick that drains the queue is the next
     /// thing the run loop does, so the prompt still lands in the frame the paste was asked for.
     /// </remarks>
-    bool AskAboutPaste(string text, int lines)
-    {
-        if (_ctx is null) return false;
-        if (_ctx.Get<IMessageBus>() is not { } bus) return false;
-        if (_ctx.Get<IUiDispatcher>() is not { } dispatcher) return false;
-
-        dispatcher.Post(() => bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmPasteDialog
+    void AskAboutPaste(string text, int lines) =>
+        _dispatcher.Post(() => _bus.Broadcast(new ShowDialogMessage(onClose => new ConfirmPasteDialog
         {
             Lines = lines,
             FirstLine = TerminalPasteEncoder.FirstLine(text),
@@ -844,9 +841,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
             OnRun = () => _terminal.Paste(text),
             OnFlatten = () => _terminal.Paste(TerminalPasteEncoder.Flatten(text)),
         })));
-
-        return true;
-    }
 
     void SelectAll() => _terminal.SelectAll();
 
@@ -863,8 +857,6 @@ internal sealed class TerminalInputController : KeyboardMouseController, IProvid
     /// </remarks>
     bool ShowContextMenu(PointF point)
     {
-        if (_ctx is null || _localization is null || _clipboard is null) return false;
-
         var strings = _localization.Strings.Value;
         var items = new[]
         {

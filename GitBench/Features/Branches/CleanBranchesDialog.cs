@@ -187,7 +187,7 @@ internal sealed record CleanBranchesDialog : Widget
 
         body.Add(new Text
         {
-            Value = Prop.Bind(selectedHeader),
+            Value = Prop.Bind<string?>(selectedHeader),
             Color = Theme.Color(t => t.DialogBody.SectionHeaderText),
         });
         body.Add(new Grow

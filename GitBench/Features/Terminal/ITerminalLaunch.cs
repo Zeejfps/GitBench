@@ -41,7 +41,7 @@ internal sealed class ShellLaunch : ITerminalLaunch
     readonly string _workingDirectory;
     readonly IPtySessionFactory _sessions;
     readonly ITerminalEngineFactory _engines;
-    readonly IClipboard? _clipboard;
+    readonly IClipboard _clipboard;
     readonly ITerminalPalette _palette;
 
     public ShellLaunch(
@@ -49,7 +49,7 @@ internal sealed class ShellLaunch : ITerminalLaunch
         IPtySessionFactory sessions,
         ITerminalEngineFactory engines,
         ITerminalPalette palette,
-        IClipboard? clipboard = null)
+        IClipboard clipboard)
     {
         _workingDirectory = workingDirectory;
         _sessions = sessions;

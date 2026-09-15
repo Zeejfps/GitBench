@@ -31,10 +31,11 @@ internal sealed record ReviewScope(
         Files.FirstOrDefault(file => string.Equals(file.Path, path, StringComparison.Ordinal));
 
     /// <summary>Resolves the range, or the sentence explaining why there is nothing to review.</summary>
-    public static (ReviewScope? Scope, string? Error) Resolve(IGitService git, Repo repo, string? baseRef)
+    public static ReviewScopeResolution Resolve(IGitService git, Repo repo, string? baseRef)
     {
         if (RepoHead.Branch(git, repo) is not { } headRef)
-            return (null, "This repository has no checked-out branch (detached HEAD), so there is no review range.");
+            return new ReviewScopeResolution.Refused(
+                "This repository has no checked-out branch (detached HEAD), so there is no review range.");
 
         ResolvedReviewBase resolved;
         if (!string.IsNullOrWhiteSpace(baseRef))
@@ -48,23 +49,25 @@ internal sealed record ReviewScope(
         }
         else
         {
-            return (null, $"No review base resolves for '{headRef}': it has no upstream and no default "
-                          + "branch to compare against. Pass base_ref to pick one.");
+            return new ReviewScopeResolution.Refused(
+                $"No review base resolves for '{headRef}': it has no upstream and no default "
+                + "branch to compare against. Pass base_ref to pick one.");
         }
 
         if (git.LoadReviewStack(repo, resolved.Sha, headRef, StackCap) is not Fetched<ReviewStack>.Ok stack)
-            return (null, $"The review range for '{headRef}' could not be loaded.");
+            return new ReviewScopeResolution.Refused($"The review range for '{headRef}' could not be loaded.");
 
         if (git.LoadRangeFiles(repo, stack.Value.BaseSha, stack.Value.HeadSha) is not Fetched<IReadOnlyList<FileChange>>.Ok files)
-            return (null, $"The files changed between {resolved.Ref} and {headRef} could not be listed.");
+            return new ReviewScopeResolution.Refused(
+                $"The files changed between {resolved.Ref} and {headRef} could not be listed.");
 
-        return (new ReviewScope(
+        return new ReviewScopeResolution.Resolved(new ReviewScope(
             headRef,
             stack.Value.HeadSha,
             resolved.Ref,
             stack.Value.BaseSha,
             stack.Value.Increments,
-            files.Value), null);
+            files.Value));
     }
 
     public void WriteRange(Utf8JsonWriter writer)
@@ -74,6 +77,15 @@ internal sealed record ReviewScope(
         writer.WriteString("base_ref", BaseRef);
         writer.WriteString("base_sha", ReadTools.ShortSha(BaseSha));
     }
+}
+
+internal abstract record ReviewScopeResolution
+{
+    private ReviewScopeResolution() { }
+
+    public sealed record Resolved(ReviewScope Scope) : ReviewScopeResolution;
+
+    public sealed record Refused(string Refusal) : ReviewScopeResolution;
 }
 
 /// The read-only surface over the review the user would open for the checked-out branch, plus the
@@ -122,29 +134,31 @@ internal sealed class GetReviewStackTool : IAssistantTool
 
     public bool IsWrite => false;
 
-    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
-    {
-        var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
-        if (scope is null) return Task.FromResult(ToolInvocation.Error(error!));
-
-        return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct) =>
+        Task.FromResult(ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref")) switch
         {
-            scope.WriteRange(writer);
-            writer.WritePropertyName("commits");
-            writer.WriteStartArray();
-            foreach (var increment in scope.Increments)
-            {
-                writer.WriteStartObject();
-                writer.WriteString("sha", increment.ShortSha);
-                writer.WriteString("summary", increment.Summary);
-                writer.WriteString("author", increment.Author);
-                writer.WriteEndObject();
-            }
+            ReviewScopeResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            ReviewScopeResolution.Resolved resolved => Stack(resolved.Scope),
+            _ => throw new UnreachableException(),
+        });
 
-            writer.WriteEndArray();
-            ReadTools.WriteFiles(writer, "files", scope.Files);
-        })));
-    }
+    private static ToolInvocation Stack(ReviewScope scope) => ToolInvocation.Ok(ToolJson.Write(writer =>
+    {
+        scope.WriteRange(writer);
+        writer.WritePropertyName("commits");
+        writer.WriteStartArray();
+        foreach (var increment in scope.Increments)
+        {
+            writer.WriteStartObject();
+            writer.WriteString("sha", increment.ShortSha);
+            writer.WriteString("summary", increment.Summary);
+            writer.WriteString("author", increment.Author);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+        ReadTools.WriteFiles(writer, "files", scope.Files);
+    }));
 }
 
 internal sealed class GetReviewDiffTool : IAssistantTool
@@ -180,20 +194,27 @@ internal sealed class GetReviewDiffTool : IAssistantTool
         if (string.IsNullOrWhiteSpace(path))
             return Task.FromResult(ToolInvocation.Error("Argument 'path' is required."));
 
-        var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
-        if (scope is null) return Task.FromResult(ToolInvocation.Error(error!));
+        return Task.FromResult(ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref")) switch
+        {
+            ReviewScopeResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+            ReviewScopeResolution.Resolved resolved => Diff(resolved.Scope, path),
+            _ => throw new UnreachableException(),
+        });
+    }
 
+    private ToolInvocation Diff(ReviewScope scope, string path)
+    {
         var diff = _git.GetDiff(_repo, path, DiffSide.Range, scope.HeadSha, scope.BaseSha);
         if (diff.ErrorMessage is { Length: > 0 } message)
-            return Task.FromResult(ToolInvocation.Error(message));
+            return ToolInvocation.Error(message);
 
         var annotations = DiffAnnotationCoordinator.ComputeOutlines(
             _extractor, _git, _repo, diff, scope.HeadSha, scope.BaseSha);
-        return Task.FromResult(ToolInvocation.Ok(ToolJson.Write(writer =>
+        return ToolInvocation.Ok(ToolJson.Write(writer =>
         {
             scope.WriteRange(writer);
             ReadTools.WriteDiffBody(writer, diff, annotations);
-        })));
+        }));
     }
 }
 
@@ -246,15 +267,18 @@ internal sealed class GetFileAtBaseTool : IAssistantTool
         Task.FromResult(RepoFileGuard.ResolveForDiff(_git, _repo, ToolJson.String(args, "path")) switch
         {
             RepoFileResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
-            RepoFileResolution.Allowed allowed => Read(allowed.RelativePath, args),
+            RepoFileResolution.Allowed allowed =>
+                ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref")) switch
+                {
+                    ReviewScopeResolution.Refused refused => ToolInvocation.Error(refused.Refusal),
+                    ReviewScopeResolution.Resolved resolved => Read(resolved.Scope, allowed.RelativePath, args),
+                    _ => throw new UnreachableException(),
+                },
             _ => throw new UnreachableException(),
         });
 
-    private ToolInvocation Read(string path, JsonElement args)
+    private ToolInvocation Read(ReviewScope scope, string path, JsonElement args)
     {
-        var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
-        if (scope is null) return ToolInvocation.Error(error!);
-
         var text = _git.GetFileText(_repo, path, DiffSide.Range, oldSide: true, scope.HeadSha, scope.BaseSha);
         if (text is null)
             return ToolInvocation.Error(
@@ -340,17 +364,24 @@ internal sealed class MarkViewedTool : IAssistantTool
 
     public bool IsWrite => true;
 
-    public async Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
+    public Task<ToolInvocation> InvokeAsync(JsonElement args, CancellationToken ct)
     {
         var paths = ToolJson.Strings(args, "paths");
         if (paths.Count == 0)
-            return ToolInvocation.Error("Argument 'paths' must list at least one repo-relative path.");
+            return Task.FromResult(ToolInvocation.Error("Argument 'paths' must list at least one repo-relative path."));
 
         var viewed = ToolJson.Bool(args, "viewed", true);
+        return ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref")) switch
+        {
+            ReviewScopeResolution.Refused refused => Task.FromResult(ToolInvocation.Error(refused.Refusal)),
+            ReviewScopeResolution.Resolved resolved => MarkAsync(resolved.Scope, paths, viewed, ct),
+            _ => throw new UnreachableException(),
+        };
+    }
 
-        var (scope, error) = ReviewScope.Resolve(_git, _repo, ToolJson.String(args, "base_ref"));
-        if (scope is null) return ToolInvocation.Error(error!);
-
+    private async Task<ToolInvocation> MarkAsync(
+        ReviewScope scope, IReadOnlyList<string> paths, bool viewed, CancellationToken ct)
+    {
         var files = new List<FileChange>(paths.Count);
         var unknown = new List<string>();
         foreach (var path in paths)

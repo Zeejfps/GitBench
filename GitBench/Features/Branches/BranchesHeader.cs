@@ -139,7 +139,7 @@ internal sealed record BranchLabel : Widget
                 [
                     new Text
                     {
-                        Value = Prop.Bind(() => IsSwitching.Value ? LucideIcons.Loader : LucideIcons.Branch),
+                        Value = Prop.Bind<string?>(() => IsSwitching.Value ? LucideIcons.Loader : LucideIcons.Branch),
                         FontFamily = LucideIcons.FontFamily,
                         FontSize = FontSize.Heading,
                         VAlign = TextAlignment.Center,

@@ -165,7 +165,7 @@ internal sealed record TerminalTab : Widget
             },
             // Tracked: the label follows the running command's title, and the trailing index follows
             // whichever siblings currently share it.
-            Label = Prop.Bind(() => Label(loc.Strings.Value, tabs.Terminals, terminal)),
+            Label = Prop.Bind<string?>(() => Label(loc.Strings.Value, tabs.Terminals, terminal)),
             ContentBackground = static s => s.Terminal.DefaultBackground,
             IsActive = IsShowing,
             OnActivate = () =>

@@ -992,18 +992,12 @@ public class TerminalInputControllerEdgeTests
                 {
                     var input = ctx.Require<InputSystem>();
                     view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                    controller = new TerminalInputController(view, input, terminal, view);
+                    controller = TerminalTestHost.Controller(ctx, view, terminal, view);
                     input.RegisterController(view, app);
                     input.RegisterController(view, controller);
                     return view;
                 },
-                configure: ctx =>
-                {
-                    ctx.AddService<IThemeService<ThemeStyles>>(
-                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                    ctx.AddService<ILocalizationService>(
-                        new LocalizationService(new State<Locale>(Locale.En)));
-                });
+                configure: TerminalTestHost.Configure);
 
             return new Pane(harness, view!, controller!, app, terminal);
         }

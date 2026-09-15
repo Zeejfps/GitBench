@@ -2,6 +2,7 @@ using GitBench.Controls;
 using GitBench.Input;
 using GitBench.Platform;
 using GitBench.Localization;
+using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Gui;
@@ -107,7 +108,17 @@ internal sealed record TerminalScreen : Widget
         grid.Bind(instance.Render, grid.SetRenderState);
         grid.Use(() => new TerminalRepaintLink(instance, grid));
         grid.UseController(input, () => new TerminalInputController(
-            grid, input, instance, grid, ctx.Require<IClipboard>(), ctx.Require<IPlatformShell>(), ctx, loc, ctx.KeyMap()));
+            grid,
+            input,
+            instance,
+            grid,
+            ctx.Require<IClipboard>(),
+            ctx.Require<IPlatformShell>(),
+            ctx,
+            loc,
+            ctx.KeyMap(),
+            ctx.Require<IMessageBus>(),
+            ctx.Require<IUiDispatcher>()));
         grid.Use(() => new TerminalKeyboardHandover(instance, grid, input));
 
         return new Stack

@@ -74,17 +74,6 @@ public class TerminalPasteGuardTests
     /// The pane is wired without a bus in most of the suite and in any host that has not registered
     /// one. It must still paste rather than swallowing the text into a question nobody can answer.
     /// </remarks>
-    [Fact]
-    public void WithNowhereToAsk_TheTextIsSentRatherThanLost()
-    {
-        using var pane = DragPane.Unhosted();
-        pane.Clipboard.Text = "one\ntwo";
-
-        Paste(pane);
-
-        Assert.Equal("one\ntwo", pane.Terminal.Pasted);
-    }
-
     static void Paste(DragPane pane)
     {
         pane.RightPressAt(2, 0);

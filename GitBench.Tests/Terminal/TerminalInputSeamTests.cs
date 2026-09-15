@@ -255,8 +255,6 @@ public class TerminalPaneWiringTests : IDisposable
 
             _store = new TerminalSessionStore(
                 _registry,
-                new UnusedPtyFactory(),
-                new XtermSharpEngineFactory(),
                 Dispatcher,
                 _ => new PaneLaunch());
             _store.Start();
@@ -279,12 +277,7 @@ public class TerminalPaneWiringTests : IDisposable
                 height: 600,
                 configure: ctx =>
                 {
-                    ctx.AddService<IThemeService<ThemeStyles>>(
-                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                    ctx.AddService<ILocalizationService>(
-                        new LocalizationService(new State<Locale>(Locale.En)));
-                    ctx.AddService<IClipboard>(new NoopClipboard());
-                    ctx.AddService<IPlatformShell>(new NoopPlatformShell());
+                    TerminalTestHost.Configure(ctx);
                     ctx.AddService<IUiDispatcher>(Dispatcher);
                     ctx.AddService<ITerminalEngineFactory>(new XtermSharpEngineFactory());
                     ctx.AddService<IPtySessionFactory>(new UnusedPtyFactory());
@@ -596,7 +589,7 @@ public class TerminalKeybindCollisionTests : IDisposable
                         Width = PaneWidth,
                         Height = PaneHeight,
                     };
-                    Controller = new TerminalInputController(Grid, input, Terminal, Grid);
+                    Controller = TerminalTestHost.Controller(ctx, Grid, Terminal, Grid);
 
                     // The spy is registered before the keybind, so it sees - without consuming -
                     // everything that reaches the application layer at all.
@@ -613,11 +606,8 @@ public class TerminalKeybindCollisionTests : IDisposable
                 height: PaneHeight,
                 configure: ctx =>
                 {
-                    ctx.AddService<IThemeService<ThemeStyles>>(
-                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
+                    TerminalTestHost.Configure(ctx);
                     ctx.AddService<ILocalizationService>(localization);
-                    ctx.AddService<IClipboard>(new NoopClipboard());
-                    ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 });
         }
 
@@ -849,7 +839,7 @@ public class TerminalModeSwitchSeamTests
                         Width = PaneWidth,
                         Height = PaneHeight,
                     };
-                    Controller = new TerminalInputController(Grid, input, Terminal, Grid);
+                    Controller = TerminalTestHost.Controller(ctx, Grid, Terminal, Grid);
 
                     IWidget terminalBranch =
                         new Raw { View = Grid }.WithController(input, () => Controller);
@@ -877,8 +867,7 @@ public class TerminalModeSwitchSeamTests
                 },
                 width: PaneWidth,
                 height: PaneHeight,
-                configure: ctx => ctx.AddService<IThemeService<ThemeStyles>>(
-                    new ThemeService(new State<ThemeMode>(ThemeMode.Dark))));
+                configure: TerminalTestHost.Configure);
         }
 
         public State<MainViewMode> Mode { get; } = new(MainViewMode.Terminal);
@@ -954,7 +943,7 @@ public class TerminalFocusArbitrationTests : IDisposable
                     Width = WindowWidth,
                     Height = WindowHeight / 2f,
                 };
-                _controller = new TerminalInputController(_grid, input, _terminal, _grid);
+                _controller = TerminalTestHost.Controller(ctx, _grid, _terminal, _grid);
                 _thief.Input = input;
 
                 return new Column
@@ -969,8 +958,7 @@ public class TerminalFocusArbitrationTests : IDisposable
             },
             width: WindowWidth,
             height: WindowHeight,
-            configure: ctx => ctx.AddService<IThemeService<ThemeStyles>>(
-                new ThemeService(new State<ThemeMode>(ThemeMode.Dark))));
+            configure: TerminalTestHost.Configure);
     }
 
     public void Dispose() => _harness.Dispose();
@@ -1241,8 +1229,11 @@ public class TerminalLiveModeSeamTests
         // Starting - before there is a session, let alone a mode to capture.
         using var run = TerminalRun.NotYetStarted();
         var input = new InputSystem();
+        var ctx = new Context();
+        ctx.AddService(input);
+        TerminalTestHost.Configure(ctx);
         var view = new View { Width = 100f, Height = 100f };
-        var controller = new TerminalInputController(view, input, run.Vm, new NoCells());
+        var controller = TerminalTestHost.Controller(ctx, view, run.Vm, new NoCells());
         input.RegisterController(view, controller);
         input.StealFocus(controller);
 
@@ -1352,15 +1343,14 @@ public class TerminalInputRegressionTests
                     Height = PaneHeight,
                 };
                 built.SetRenderState(new TerminalRenderState.Running(run.Session!));
-                var controller = new TerminalInputController(built, input, run.Vm, built);
+                var controller = TerminalTestHost.Controller(ctx, built, run.Vm, built);
                 return new Raw { View = built }
                     .WithController(input, () => controller)
                     .BuildView(ctx);
             },
             width: PaneWidth,
             height: PaneHeight,
-            configure: ctx => ctx.AddService<IThemeService<ThemeStyles>>(
-                new ThemeService(new State<ThemeMode>(ThemeMode.Dark))));
+            configure: TerminalTestHost.Configure);
 
         grid = built!;
         return harness;
@@ -1408,15 +1398,14 @@ public class TerminalLiveShellRoundTripTests
                     Height = PaneHeight,
                 };
                 grid.SetRenderState(new TerminalRenderState.Running(session));
-                var controller = new TerminalInputController(grid, input, terminal, grid);
+                var controller = TerminalTestHost.Controller(ctx, grid, terminal, grid);
                 return new Raw { View = grid }
                     .WithController(input, () => controller)
                     .BuildView(ctx);
             },
             width: PaneWidth,
             height: PaneHeight,
-            configure: ctx => ctx.AddService<IThemeService<ThemeStyles>>(
-                new ThemeService(new State<ThemeMode>(ThemeMode.Dark))));
+            configure: TerminalTestHost.Configure);
 
         harness.Render();
         harness.Click(PaneWidth / 2f, PaneHeight / 2f);

@@ -52,7 +52,7 @@ public class KeyboardShortcutsDialogTests
             ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
             ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
             ctx.AddService<IKeyMap>(keys);
-            ctx.AddService<IKeyBindingsStore>(keys);
+            ctx.AddService(keys);
         });
 
     [Fact]

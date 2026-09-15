@@ -48,8 +48,6 @@ public class TerminalSessionStoreTests : IDisposable
         var empty = new RepoRegistry(RepoStateStore.Load(statePath), statePath);
         using var store = new TerminalSessionStore(
             empty,
-            new UnusedPtySessionFactory(),
-            new XtermSharpEngineFactory(),
             _dispatcher,
             StubLaunch);
         store.Start();
@@ -277,8 +275,6 @@ public class TerminalSessionStoreTests : IDisposable
     {
         var store = new TerminalSessionStore(
             _registry,
-            new UnusedPtySessionFactory(),
-            new XtermSharpEngineFactory(),
             _dispatcher,
             StubLaunch);
         store.Start();
@@ -328,12 +324,5 @@ public class TerminalSessionStoreTests : IDisposable
 
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
             TerminalSession.Start(_open, new XtermSharpEngineFactory(), size, dispatcher);
-    }
-
-    /// <summary>The store must never reach the real spawn path in a test.</summary>
-    sealed class UnusedPtySessionFactory : IPtySessionFactory
-    {
-        public IPtySession Start(PtySessionOptions options) =>
-            throw new InvalidOperationException("The store spawned a real shell.");
     }
 }

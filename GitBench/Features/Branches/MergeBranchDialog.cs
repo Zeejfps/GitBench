@@ -99,7 +99,7 @@ internal sealed record MergeBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
-                    Value = previewState.Bind(ps => ps switch
+                    Value = previewState.Bind<MergePreviewState, string?>(ps => ps switch
                     {
                         MergePreviewState.Clean => LucideIcons.CheckSquare,
                         MergePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -110,7 +110,7 @@ internal sealed record MergeBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = previewState.Bind(ps => ps switch
+                    Value = previewState.Bind<MergePreviewState, string?>(ps => ps switch
                     {
                         MergePreviewState.Clean => s.BranchesMergePreviewClean,
                         MergePreviewState.Conflicts => s.BranchesMergePreviewConflicts,

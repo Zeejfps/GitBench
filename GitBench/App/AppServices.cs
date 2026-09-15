@@ -49,7 +49,7 @@ internal static class AppServices
         // Lives as long as the app, like the map it follows.
         _ = keyMap.Version.Subscribe(_ => preferences.Update(p => p with { KeyBindings = keyMap.Overrides }));
         context.AddService<IKeyMap>(keyMap);
-        context.AddService<IKeyBindingsStore>(keyMap);
+        context.AddService(keyMap);
 
         var profilesPath = AppPaths.AppDataPath("identity-profiles.json");
         context.AddSingleton(_ => new IdentityProfileService(
@@ -212,7 +212,17 @@ internal static class AppServices
         // repositories swaps which shell the pane shows rather than retargeting the one it has.
         // Hosted for the same reason the assistant's store is — it watches the registry, which it
         // can only do once the UI loop exists.
-        context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>();
+        context.AddHostedService<ITerminalSessionStore, TerminalSessionStore>(ctx =>
+        {
+            var ptys = ctx.Require<IPtySessionFactory>();
+            var engines = ctx.Require<ITerminalEngineFactory>();
+            var palette = ctx.Require<ITerminalPalette>();
+            var clipboard = ctx.Require<IClipboard>();
+            return new TerminalSessionStore(
+                ctx.Require<IRepoRegistry>(),
+                ctx.Require<IUiDispatcher>(),
+                repo => new ShellLaunch(repo.Path, ptys, engines, palette, clipboard));
+        });
 
         context.AddSingleton<IFileSystemReader, FileSystemReader>();
         context.AddHostedService<IDocumentStore, DocumentStore>();

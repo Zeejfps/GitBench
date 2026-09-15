@@ -37,7 +37,7 @@ internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
     protected override IWidget Build(Context ctx, DialogState state)
     {
         var input = ctx.Require<InputSystem>();
-        var vm = new KeyboardShortcutsViewModel(ctx.Require<IKeyBindingsStore>(), ctx.Localization());
+        var vm = new KeyboardShortcutsViewModel(ctx.Require<KeyMap>(), ctx.Localization());
 
         return new Box
         {

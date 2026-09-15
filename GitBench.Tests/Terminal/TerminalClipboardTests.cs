@@ -382,16 +382,14 @@ internal sealed class ClipboardPane : IDisposable
             {
                 var input = ctx.Require<InputSystem>();
                 var view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                controller = new TerminalInputController(view, input, shell, view, clipboard);
+                controller = TerminalTestHost.Controller(ctx, view, shell, view);
                 input.RegisterController(view, controller);
                 return view;
             },
             configure: ctx =>
             {
-                ctx.AddService<IThemeService<ThemeStyles>>(
-                    new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(
-                    new LocalizationService(new State<Locale>(Locale.En)));
+                TerminalTestHost.Configure(ctx);
+                ctx.AddService<IClipboard>(clipboard);
             });
 
         var pane = new ClipboardPane(harness, controller!, shell, clipboard);

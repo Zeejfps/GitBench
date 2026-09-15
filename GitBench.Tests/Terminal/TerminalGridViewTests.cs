@@ -444,17 +444,13 @@ public class TerminalGridViewTests
                 var input = ctx.Require<InputSystem>();
                 view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
                 view.SetRenderState(new TerminalRenderState.Running(session));
-                controller = new TerminalInputController(view, input, new IdleTerminal(), view);
+                controller = TerminalTestHost.Controller(ctx, view, new IdleTerminal(), view);
                 input.RegisterController(view, controller);
                 return view;
             },
             width: Width,
             height: Height,
-            configure: ctx =>
-            {
-                ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-            });
+            configure: TerminalTestHost.Configure);
 
         harness.Render();
 

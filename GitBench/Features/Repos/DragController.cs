@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using GitBench.Git;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -68,6 +69,7 @@ public sealed class DragController
             DragSession.Repo => ResolveRepoTarget(mouse),
             DragSession.Group group => ResolveGroupTarget(mouse, group.GroupId),
             null => null,
+            _ => throw new UnreachableException(),
         };
     }
 

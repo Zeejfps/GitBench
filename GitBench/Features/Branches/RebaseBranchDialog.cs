@@ -102,7 +102,7 @@ internal sealed record RebaseBranchDialog : Widget
                     FontFamily = LucideIcons.FontFamily,
                     FontSize = FontSize.Default,
                     VAlign = TextAlignment.Center,
-                    Value = previewState.Bind(ps => ps switch
+                    Value = previewState.Bind<RebasePreviewState, string?>(ps => ps switch
                     {
                         RebasePreviewState.Clean => LucideIcons.CheckSquare,
                         RebasePreviewState.Conflicts => LucideIcons.CloudOff,
@@ -113,7 +113,7 @@ internal sealed record RebaseBranchDialog : Widget
                 new Text
                 {
                     VAlign = TextAlignment.Center,
-                    Value = previewState.Bind(ps => ps switch
+                    Value = previewState.Bind<RebasePreviewState, string?>(ps => ps switch
                     {
                         RebasePreviewState.Clean => s.BranchesRebasePreviewClean,
                         RebasePreviewState.Conflicts => s.BranchesRebasePreviewConflicts,

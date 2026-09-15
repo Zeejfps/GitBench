@@ -659,7 +659,7 @@ public class TerminalInputControllerTests
                 {
                     var input = ctx.Require<InputSystem>();
                     view = new TerminalGridView(ctx.Require<IThemeService<ThemeStyles>>());
-                    controller = new TerminalInputController(view, input, shell, cells ?? view);
+                    controller = TerminalTestHost.Controller(ctx, view, shell, cells ?? view);
 
                     // The app's keybindings live on the window root, an ancestor of the pane, so
                     // they sit earlier in the capture path than the terminal's own controller and
@@ -668,13 +668,7 @@ public class TerminalInputControllerTests
                     input.RegisterController(view, controller);
                     return view;
                 },
-                configure: ctx =>
-                {
-                    ctx.AddService<IThemeService<ThemeStyles>>(
-                        new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
-                    ctx.AddService<ILocalizationService>(
-                        new LocalizationService(new State<Locale>(Locale.En)));
-                });
+                configure: TerminalTestHost.Configure);
 
             return new Pane(harness, view!, controller!, app, shell);
         }
