@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Features.Worktrees;
@@ -6,7 +5,6 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Observable;
 using Xunit;
 
@@ -22,7 +20,7 @@ public sealed class RemoveWorktreeDialogViewModelTests
     private readonly MessageBus _bus = new();
     private readonly LocalizationService _loc = new(new State<Locale>(Locale.En));
     private readonly ScriptedWorktrees _git = new();
-    private readonly RecordingShell _shell = new();
+    private readonly FakeShell _shell = new();
     private readonly Repo _primary = new(Guid.NewGuid(), "C:/repos/app", "app");
     private readonly Repo _worktree = new(Guid.NewGuid(), "C:/repos/app-feature", "app-feature");
 
@@ -68,7 +66,7 @@ public sealed class RemoveWorktreeDialogViewModelTests
         Assert.Contains("Access to the path is denied.", toast.Message);
 
         toast.Action!.Invoke();
-        Assert.Equal(_worktree.Path, _shell.Opened);
+        Assert.Equal(_worktree.Path, Assert.Single(_shell.OpenedFolders));
     }
 
     [Fact]
@@ -111,29 +109,5 @@ public sealed class RemoveWorktreeDialogViewModelTests
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => Outcome;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
         public GitOutcome PruneWorktrees(Repo primary) => GitOutcome.Ok;
-    }
-
-    private sealed class RecordingShell : IPlatformShell
-    {
-        public string? Opened;
-
-        public void OpenFolder(string path) => Opened = path;
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public int Queued => _queue.Count;
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

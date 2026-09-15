@@ -25,13 +25,6 @@ public class GitIdentityServiceTests
         public void AttachIdentityResolver(GitIdentityService identity) { }
     }
 
-    private sealed class FakeBus : IMessageBus
-    {
-        public void Broadcast<T>(T message = default) where T : struct { }
-        public void Subscribe<T>(Action<T> handler) where T : struct { }
-        public void Unsubscribe<T>(Action<T> handler) where T : struct { }
-    }
-
     private sealed class FakeOverrides : IIdentityOverrides
     {
         public Func<string, Guid?> ByPath = _ => null;

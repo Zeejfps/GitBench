@@ -244,7 +244,6 @@ public sealed class DefinitionProbeControllerTests
 
         Assert.Equal(8, Assert.Single(fx.Source.Asked).Line.Value);
         Assert.Single(fx.Navigator.Went);
-
     }
 
     [Fact]
@@ -659,17 +658,5 @@ public sealed class DefinitionProbeControllerTests
 
             return new DefinitionReply(Targets, Origin);
         }
-    }
-
-    private sealed class FakeNavigator : IFileNavigator
-    {
-        public List<(string Path, int Line)> Went { get; } = [];
-
-        public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
-    }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
     }
 }

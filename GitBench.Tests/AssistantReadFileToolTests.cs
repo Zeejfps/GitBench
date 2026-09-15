@@ -15,13 +15,6 @@ namespace GitBench.Tests;
 /// </summary>
 public sealed class AssistantReadFileToolTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
     private readonly string _sandbox;
     private readonly string _root;
     private readonly string _outside;
@@ -43,9 +36,7 @@ public sealed class AssistantReadFileToolTests : IDisposable
         _git = new GitService(new NullActivityTracker());
         _repo = new Repo(Guid.NewGuid(), _root, "test");
 
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
 
         Directory.CreateDirectory(Path.Combine(_root, "src"));
         File.WriteAllLines(Path.Combine(_root, "src", "app.cs"), Enumerable.Range(1, 40).Select(i => $"line {i}"));
@@ -62,7 +53,7 @@ public sealed class AssistantReadFileToolTests : IDisposable
         Git("add", "src/app.cs", ".env", ".gitignore", "blob.bin");
         Git("add", "-f", "logs/app.log");
         if (_escapeLinkExists) Git("add", "escape");
-        Git("-c", "commit.gpgsign=false", "commit", "-m", "seed");
+        Git("commit", "-m", "seed");
 
         _tool = new ReadFileTool(_git, _repo);
     }
@@ -100,21 +91,7 @@ public sealed class AssistantReadFileToolTests : IDisposable
         DirectoryTree.Delete(_sandbox);
     }
 
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private string Git(params string[] args) => TestGit.Run(_root, args);
 
     // Fixtures the guard will let through: written into the working tree and staged, which is all
     // `git ls-files` needs to call them tracked.

@@ -39,21 +39,6 @@ namespace GitBench.Tests.Markdown;
 [Collection(nameof(CodeIntelCollection))]
 public class MarkdownWidgetTests(CodeIntelFixture fixture)
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public readonly List<string> OpenedUrls = new();
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) => OpenedUrls.Add(url);
-    }
 
     private static MarkdownDocument Parse(string markdown) => new BasicMarkdownParser().Parse(markdown);
 

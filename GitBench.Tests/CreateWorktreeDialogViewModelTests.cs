@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using GitBench.Features.Worktrees;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -166,17 +165,5 @@ public sealed class CreateWorktreeDialogViewModelTests
         public WorktreeRemoveOutcome RemoveWorktree(Repo primary, string worktreePath, bool force) => WorktreeRemoveOutcome.Ok;
         public GitOutcome UnlockWorktree(Repo primary, string worktreePath) => GitOutcome.Ok;
         public GitOutcome PruneWorktrees(Repo primary) => GitOutcome.Ok;
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

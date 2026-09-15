@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Repos;
 using Xunit;
 
@@ -137,35 +136,14 @@ public sealed class RepoGitDirTests : IDisposable
     {
         var path = Path.Combine(_dir.Path, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", "main");
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
         return path;
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose() => _dir.Dispose();
 }

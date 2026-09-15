@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
@@ -31,11 +30,8 @@ public sealed class GitStatusSummaryParseTests : IDisposable
         Directory.CreateDirectory(_work);
         Directory.CreateDirectory(_origin);
 
-        RunGit(_origin, "init", "--bare", "-b", "main");
-        Git("init", "-b", "main");
-        Git("config", "user.name", "Test");
-        Git("config", "user.email", "test@example.com");
-        Git("config", "commit.gpgsign", "false");
+        TestGit.Run(_origin, "init", "--bare", "-b", "main");
+        TestGit.Init(_work);
         Git("remote", "add", "origin", _origin.Replace('\\', '/'));
 
         _git = new GitService(new RepoActivityTracker());
@@ -249,14 +245,14 @@ public sealed class GitStatusSummaryParseTests : IDisposable
     {
         var parent = Path.GetDirectoryName(_work)!;
         var clone = Path.Combine(parent, "clone");
-        RunGit(parent, "clone", _origin.Replace('\\', '/'), clone);
-        RunGit(clone, "config", "user.name", "Test");
-        RunGit(clone, "config", "user.email", "test@example.com");
-        RunGit(clone, "config", "commit.gpgsign", "false");
+        TestGit.Run(parent, "clone", _origin.Replace('\\', '/'), clone);
+        TestGit.Run(clone, "config", "user.name", "Test");
+        TestGit.Run(clone, "config", "user.email", "test@example.com");
+        TestGit.Run(clone, "config", "commit.gpgsign", "false");
         File.WriteAllText(Path.Combine(clone, "remote-change.txt"), "r");
-        RunGit(clone, "add", "remote-change.txt");
-        RunGit(clone, "commit", "-m", "remote work");
-        RunGit(clone, "push", "origin", "main");
+        TestGit.Run(clone, "add", "remote-change.txt");
+        TestGit.Run(clone, "commit", "-m", "remote work");
+        TestGit.Run(clone, "push", "origin", "main");
     }
 
     private void WriteFile(string name, string content) =>
@@ -269,41 +265,10 @@ public sealed class GitStatusSummaryParseTests : IDisposable
         Git("commit", "-m", message);
     }
 
-    private void Git(params string[] args) => RunGit(_work, args);
+    private void Git(params string[] args) => TestGit.Run(_work, args);
 
-    private void GitAllowFail(params string[] args)
-    {
-        var psi = StartInfo(_work, args);
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-    }
+    private void GitAllowFail(params string[] args) => TestGit.Try(_work, args);
 
-    private static string RunGit(string cwd, params string[] args)
-    {
-        using var proc = Process.Start(StartInfo(cwd, args))!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
-
-    private static ProcessStartInfo StartInfo(string cwd, string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        return psi;
-    }
 
     public void Dispose()
     {

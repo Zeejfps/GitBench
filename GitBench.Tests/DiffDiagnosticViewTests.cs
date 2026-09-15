@@ -117,7 +117,7 @@ public sealed class DiffDiagnosticViewTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(themes);
                 ctx.AddService<ILocalizationService>(loc);
-                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
 

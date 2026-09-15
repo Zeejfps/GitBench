@@ -1,5 +1,4 @@
 using GitBench.Platform;
-using System.Diagnostics;
 using GitBench.App;
 using GitBench.Controls;
 using GitBench.Features.Assistant;
@@ -212,9 +211,7 @@ internal sealed class AssistantViewFixture : IDisposable
     {
         var path = Path.Combine(_dir.Path, name);
         Directory.CreateDirectory(path);
-        RunGit(path, "init", "--initial-branch=main");
-        RunGit(path, "config", "user.email", "test@test");
-        RunGit(path, "config", "user.name", "test");
+        TestGit.Init(path);
         _registry.Open(path);
         return path;
     }
@@ -359,27 +356,6 @@ internal sealed class AssistantViewFixture : IDisposable
         _dir.Dispose();
     }
 
-    private static void RunGit(string workingDirectory, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var arg in args) psi.ArgumentList.Add(arg);
-        using var process = Process.Start(psi)!;
-        process.WaitForExit();
-    }
-
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
     // Records what reaches the surface below the overlay. Consumes nothing, so anything it sees is
     // something the overlay let through.
     internal sealed class PointerSpy : KeyboardMouseController
@@ -411,15 +387,6 @@ internal sealed class AssistantViewFixture : IDisposable
         }
     }
 
-    internal sealed class FakeClipboard : IClipboard
-    {
-        public string? Text { get; private set; }
-
-        public void SetText(string text) => Text = text;
-
-        public string? GetText() => Text;
-    }
-
     // The commit bar's stand-in: the two setters a write tool drives, and the text they land in.
     internal sealed class FakeCommitEditor : ICommitEditor
     {
@@ -431,28 +398,5 @@ internal sealed class AssistantViewFixture : IDisposable
 
         public void SetTitle(string value) => _title.Value = value;
         public void SetDescription(string value) => _description.Value = value;
-    }
-
-    // Stands in for the OS store so the panel is past onboarding and the environment variable on the
-    // machine running the tests cannot change the outcome.
-    internal sealed class FakeSecretStore : ISecretStore
-    {
-        private string? _secret;
-
-        public FakeSecretStore(string? secret) => _secret = secret;
-
-        public string? Get(string name) => _secret;
-
-        public bool Set(string name, string secret)
-        {
-            _secret = secret;
-            return true;
-        }
-
-        public bool Delete(string name)
-        {
-            _secret = null;
-            return true;
-        }
     }
 }

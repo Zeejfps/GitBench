@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Git;
 using Xunit;
 
@@ -130,10 +129,7 @@ public sealed class GitRepoLocksTests : IDisposable
     {
         var primary = Path.Combine(_dir.Path, "primary");
         Directory.CreateDirectory(primary);
-        Git(primary, "init", "-q", "-b", "main");
-        Git(primary, "config", "user.name", "Test");
-        Git(primary, "config", "user.email", "test@example.com");
-        Git(primary, "config", "commit.gpgsign", "false");
+        TestGit.Init(primary);
         File.WriteAllText(Path.Combine(primary, "a.txt"), "0");
         Git(primary, "add", "a.txt");
         Git(primary, "commit", "-qm", "base");
@@ -176,26 +172,7 @@ public sealed class GitRepoLocksTests : IDisposable
 
     private static void Git(string cwd, params string[] args) => Run(cwd, args);
 
-    private static string Run(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
+    private static string Run(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose() => _dir.Dispose();
 }

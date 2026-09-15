@@ -65,7 +65,7 @@ public class CodeBlockHighlightTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(mode));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<ISyntaxHighlighter>(highlighter);
                 ctx.AddService<IUiDispatcher>(dispatcher);

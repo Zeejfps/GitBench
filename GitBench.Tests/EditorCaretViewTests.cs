@@ -29,23 +29,6 @@ public class EditorCaretViewTests
     private static readonly InputModifiers Word =
         IsMac ? InputModifiers.Alt : InputModifiers.Control;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class KeyProbe : KeyboardMouseController
-    {
-        public readonly List<KeyboardKey> Seen = new();
-
-        public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
-        {
-            if (e.State == InputState.Pressed) Seen.Add(e.Key);
-        }
-    }
-
     private static (GuiTestHarness Harness, DiffContentView View, KeyProbe Probe) Create()
     {
         DiffContentView view = null!;

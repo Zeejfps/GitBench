@@ -24,21 +24,6 @@ public class LinkControllerTests
     private const string Url = "https://example.com/docs";
     private const float FirstLineY = 592f;
 
-    private sealed class FakeShell : IPlatformShell
-    {
-        public readonly List<string> OpenedUrls = new();
-        public Exception? OpenUrlThrows;
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-
-        public void OpenUrl(string url)
-        {
-            OpenedUrls.Add(url);
-            if (OpenUrlThrows is { } e) throw e;
-        }
-    }
-
     private static TextStyle Style(uint color) => new() { TextColor = color };
 
     private static RichTextRun Run(string text) => new(text, Style(PlainColor));

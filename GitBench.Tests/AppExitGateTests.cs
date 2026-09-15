@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using GitBench.App;
 using GitBench.Features.Terminal;
 using GitBench.Messages;
@@ -69,17 +68,5 @@ public class AppExitGateTests
 
         public void Subscribe<T>(Action<T> handler) where T : struct { }
         public void Unsubscribe<T>(Action<T> handler) where T : struct { }
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

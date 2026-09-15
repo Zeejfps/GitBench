@@ -315,9 +315,4 @@ public sealed class HoverProbeControllerTests
 
         public void Hide(object owner) => Showing = null;
     }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
-    }
 }

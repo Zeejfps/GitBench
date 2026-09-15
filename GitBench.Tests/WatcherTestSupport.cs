@@ -43,24 +43,6 @@ internal sealed class FakeReadGate : IGitReadGate
     public bool HasOutstandingReads(Guid repoId) => false;
 }
 
-// Shared scaffolding for the filesystem-watcher and reconcile tests. Both drive real components
-// whose broadcasts arrive through IUiDispatcher, so the test thread decides when they land.
-internal sealed class QueuedDispatcher : IUiDispatcher
-{
-    private readonly ConcurrentQueue<Action> _queue = new();
-
-    public void Post(Action action) => _queue.Enqueue(action);
-
-    // Lets a test wait for a continuation to be posted without running it — needed when draining is
-    // itself the thing under test (a continuation that throws).
-    public int Queued => _queue.Count;
-
-    public void Drain()
-    {
-        while (_queue.TryDequeue(out var action)) action();
-    }
-}
-
 // Stands in for "a git process is running on this repo right now". Flipping Active is how a test
 // opens and closes the gate RepoWatcher consults.
 internal sealed class GateTracker : IRepoActivityTracker

@@ -9,7 +9,7 @@ namespace GitBench.Tests;
 public sealed class GitProcessEnvironmentTests : IDisposable
 {
     private readonly string _root;
-    private readonly GitProcessRunner _runner = new(new NoopActivityTracker());
+    private readonly GitProcessRunner _runner = new(new NullActivityTracker());
 
     public GitProcessEnvironmentTests()
     {
@@ -70,12 +70,5 @@ public sealed class GitProcessEnvironmentTests : IDisposable
     public void Dispose()
     {
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class NoopActivityTracker : IRepoActivityTracker
-    {
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-        private sealed class Scope : IDisposable { public void Dispose() { } }
     }
 }

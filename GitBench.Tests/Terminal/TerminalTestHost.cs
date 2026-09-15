@@ -18,7 +18,7 @@ internal static class TerminalTestHost
         ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
         ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
         ctx.AddService<IClipboard>(new FakeClipboard());
-        ctx.AddService<IPlatformShell>(new RecordingShell());
+        ctx.AddService<IPlatformShell>(new FakeShell());
         ctx.AddService<IMessageBus>(new MessageBus());
         ctx.AddService<IUiDispatcher>(new QueuedUiDispatcher());
     }

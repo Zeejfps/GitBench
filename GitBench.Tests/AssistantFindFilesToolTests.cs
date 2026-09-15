@@ -1,9 +1,7 @@
-using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -16,29 +14,16 @@ namespace GitBench.Tests;
 /// </summary>
 public sealed class AssistantFindFilesToolTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
     private readonly FindFilesTool _tool;
 
     public AssistantFindFilesToolTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-findfiles-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
 
         _git = new GitService(new NullActivityTracker());
-        _repo = new Repo(Guid.NewGuid(), _root, "test");
-
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test");
 
         Track("src/Features/Assistant/AgentCatalog.cs");
         Track("src/Features/Assistant/Tools/ReadFileTool.cs");
@@ -52,14 +37,14 @@ public sealed class AssistantFindFilesToolTests : IDisposable
         Track("config/secrets.json");
         Track("keys/deploy.pem");
 
-        Git("-c", "commit.gpgsign=false", "commit", "-m", "seed");
+        _work.Git("commit", "-m", "seed");
 
         _tool = new FindFilesTool(_git, _repo);
     }
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
+        _work.Dispose();
     }
 
     [Fact]
@@ -187,25 +172,10 @@ public sealed class AssistantFindFilesToolTests : IDisposable
 
     private void Track(string relative)
     {
-        var full = Path.Combine(_root, relative.Replace('/', Path.DirectorySeparatorChar));
+        var full = Path.Combine(_work.Path, relative.Replace('/', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         File.WriteAllText(full, "content\n");
-        Git("add", "-f", relative);
+        _work.Git("add", "-f", relative);
     }
 
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
 }

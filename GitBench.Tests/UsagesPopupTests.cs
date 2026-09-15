@@ -168,7 +168,7 @@ public class UsagesPopupTests
                         new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                     ctx.AddService<ILocalizationService>(
                         new LocalizationService(new State<Locale>(Locale.En)));
-                    ctx.AddService<IClipboard>(new NoopClipboard());
+                    ctx.AddService<IClipboard>(new FakeClipboard());
                     ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 });
 
@@ -206,8 +206,11 @@ public class UsagesPopupTests
 
         // The request runs on the thread pool and comes back through the dispatcher; running what
         // it posted on this thread is what the real UI thread does with it.
-        public void Settle() =>
-            Assert.True(Dispatcher.Drain(TimeSpan.FromSeconds(5)), "no answer reached the dispatcher");
+        public void Settle()
+        {
+            Assert.True(Dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "no answer reached the dispatcher");
+            Dispatcher.Drain();
+        }
 
         public void Dispose()
         {
@@ -259,32 +262,6 @@ public class UsagesPopupTests
             Asked.Add((absolutePath, line, column));
             if (Gate is { } gate) await gate.Task.ConfigureAwait(false);
             return new ReferenceReply.Answered(Sites);
-        }
-    }
-
-    private sealed class FakeNavigator : IFileNavigator
-    {
-        public List<(string Path, int Line)> Went { get; } = [];
-
-        public void NavigateTo(string absolutePath, int line) => Went.Add((absolutePath, line));
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _posted = new();
-        private readonly ManualResetEventSlim _arrived = new(initialState: false);
-
-        public void Post(Action action)
-        {
-            _posted.Enqueue(action);
-            _arrived.Set();
-        }
-
-        public bool Drain(TimeSpan timeout)
-        {
-            if (!_arrived.Wait(timeout)) return false;
-            while (_posted.TryDequeue(out var action)) action();
-            return true;
         }
     }
 }

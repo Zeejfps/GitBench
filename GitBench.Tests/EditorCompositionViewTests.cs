@@ -25,13 +25,6 @@ public class EditorCompositionViewTests
     private const float ViewHeight = 600f;
     private const float PaneWidth = 400f;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
     private sealed class FakeImeHost : IImeHost
     {
         public bool Enabled;
@@ -48,16 +41,6 @@ public class EditorCompositionViewTests
         public void SetImeCaretRect(RectF caretRect) => CaretRect = caretRect;
 
         public void ResetComposition() => Resets++;
-    }
-
-    private sealed class KeyProbe : KeyboardMouseController
-    {
-        public readonly List<KeyboardKey> Seen = new();
-
-        public override void OnKeyboardKeyStateChanged(ref KeyboardKeyEvent e)
-        {
-            if (e.State == InputState.Pressed) Seen.Add(e.Key);
-        }
     }
 
     private sealed record Surface(

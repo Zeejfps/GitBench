@@ -97,7 +97,7 @@ public class ThemeMarkdownStylesTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(themeMode));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
                 ctx.AddService<ISyntaxHighlighter>(new PlainText());

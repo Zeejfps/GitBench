@@ -79,7 +79,7 @@ public class DiffContextExpansionViewTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
         return (harness, view);

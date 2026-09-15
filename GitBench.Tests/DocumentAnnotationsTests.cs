@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
@@ -34,7 +33,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void TypingAtTheHeadOfALineRepaintsTheRowsBeneathTheCaret()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
 
         var buffer = Open(documents, "Widget.cs", Source);
@@ -54,7 +53,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void ADeclarationTypedInGetsFoldChevronsOfItsOwn()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
 
         var buffer = Open(documents, "Widget.cs", Source);
@@ -79,7 +78,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void AnUndoOfAWholeTransactionIsStampedWithTheLastOfItsRevisions()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
 
         var buffer = Open(documents, "Widget.cs", Source);
@@ -107,7 +106,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void AParseOfARevisionTheDocumentHasMovedPastIsRefused()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
 
         var buffer = Open(documents, "Widget.cs", Source);
@@ -129,7 +128,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void ReplacingTheFileOnDiskBuildsAFreshTreeRatherThanEditingTheOldOne()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
         var repo = documents.For(Guid.NewGuid());
 
@@ -156,7 +155,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     public void AFileTreeSitterDoesNotColourIsLeftAlone()
     {
         var documents = new TestDocuments.Empty();
-        var posted = new Posted();
+        var posted = new QueuedDispatcher();
         using var annotations = Producer(documents, posted);
 
         // TextMate colours this one, and it does so once, at open. Publishing an annotation with
@@ -224,7 +223,7 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
     // Blocking rather than awaited, and deliberately: a buffer belongs to the thread that built it,
     // so the work the worker hands back has to be run on this one — an await would resume the test
     // on a pool thread and the projection would refuse it.
-    private static void Quiet(DocumentAnnotations annotations, Posted posted)
+    private static void Quiet(DocumentAnnotations annotations, QueuedDispatcher posted)
     {
         // More than one round because a parse the worker could not follow asks the UI thread for
         // the text again, which puts another message in the queue.
@@ -261,18 +260,4 @@ public sealed class DocumentAnnotationsTests(CodeIntelFixture fixture)
             " | ",
             buffer.Rows.Rows.OfType<DiffRow.Line>().Select(row =>
                 string.Join(' ', (row.Spans ?? []).Select(s => $"{s.Start}+{s.Length}:{s.Slot}"))));
-
-    /// <summary>Work handed to the UI thread, run when the test says so rather than when the worker
-    /// finishes — which is what lets a result be held back until the document has moved on.</summary>
-    private sealed class Posted : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _actions = new();
-
-        public void Post(Action action) => _actions.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_actions.TryDequeue(out var action)) action();
-        }
-    }
 }

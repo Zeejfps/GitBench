@@ -72,22 +72,6 @@ public class TableLayoutTests
             Assert.Equal(expected[i], result.Widths[i], 3);
     }
 
-    // Style-aware synthetic metrics, the RichTextLayoutTests house pattern: bold advances 12px
-    // instead of 8px, so a measurement that flattens runs into one style gets a wrong total.
-    private sealed class StyledMeasurer : ITextMeasurer
-    {
-        public float MeasureTextWidth(ReadOnlySpan<char> text, TextStyle style) =>
-            text.Length * AdvanceOf(style);
-
-        public float MeasureTextPrefix(ReadOnlySpan<char> text, int prefixLength, TextStyle style) =>
-            Math.Clamp(prefixLength, 0, text.Length) * AdvanceOf(style);
-
-        public float MeasureTextLineHeight(TextStyle style) => 16f;
-
-        private static float AdvanceOf(TextStyle style) =>
-            style.FontWeight is { IsSet: true, Value: FontWeight.Bold } ? 12f : 8f;
-    }
-
     // ---------- min-content: the widest unbreakable chunk ----------
 
     [Fact]

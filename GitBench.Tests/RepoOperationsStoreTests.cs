@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Notifications;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -431,26 +430,9 @@ public sealed class RepoOperationsStoreTests : IDisposable
     {
         var path = Path.Combine(_root.Path, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", "main");
-        Git(path, "config", "user.email", "test@test");
-        Git(path, "config", "user.name", "test");
+        TestGit.Init(path);
         Assert.Equal(OpenRepoOutcome.Opened, _registry.Open(path));
         return _registry.Repos.Single(r => r.Path == path);
     }
 
-    private static void Git(string workingDirectory, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = workingDirectory,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
 }

@@ -21,20 +21,6 @@ namespace GitBench.Tests;
 /// </summary>
 public class PreviewScrollPositionTests
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        private string? _text;
-        public void SetText(string text) => _text = text;
-        public string? GetText() => _text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
 
     // A document with no document in between: the state the markdown body is put in for as long as
     // the next read takes, which is where its height — and with it the pane's offset — used to go.

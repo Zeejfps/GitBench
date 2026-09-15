@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using GitBench.App;
@@ -16,9 +15,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Gui;
-using ZGF.Gui.Desktop;
 using ZGF.Observable;
 using Xunit;
 
@@ -45,12 +42,10 @@ public sealed class AssistantCommitMessageTests : IDisposable
     public AssistantCommitMessageTests()
     {
         _root = NewDir();
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
         File.WriteAllText(Path.Combine(_root, "a.txt"), "one\n");
         Git("add", "a.txt");
-        Git("-c", "commit.gpgsign=false", "commit", "-m", "seed the tree");
+        Git("commit", "-m", "seed the tree");
         File.WriteAllText(Path.Combine(_root, "a.txt"), "one\ntwo\n");
         Git("add", "a.txt");
 
@@ -67,10 +62,10 @@ public sealed class AssistantCommitMessageTests : IDisposable
             _bus,
             StartedIndexOperationsStore.Create(_registry, _bus, _loc, _dispatcher),
             new LocalChangesSelectionStore(),
-            new NoopShell(),
-            new NoopClipboard(),
+            new FakeShell(),
+            new FakeClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
-            new IdleSnapshotStore(),
+            new FakeSnapshotStore(),
             new NoStatusIngest(),
             _loc,
             new NoUnsavedEdits());
@@ -433,70 +428,5 @@ public sealed class AssistantCommitMessageTests : IDisposable
         return path;
     }
 
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
-
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
-    private sealed class NoopShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class NoopClipboard : IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
-    }
-
-    private sealed class IdleSnapshotStore : IRepoSnapshotStore
-    {
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges { get; } = new State<Fetched<LocalChangesData>?>(null);
-    }
-
-    // Stands in for the OS store, so whatever key the machine running the tests has in its
-    // environment cannot change the outcome.
-    private sealed class FakeSecretStore : ISecretStore
-    {
-        private string? _secret;
-
-        public FakeSecretStore(string? secret) => _secret = secret;
-
-        public string? Get(string name) => _secret;
-
-        public bool Set(string name, string secret)
-        {
-            _secret = secret;
-            return true;
-        }
-
-        public bool Delete(string name)
-        {
-            _secret = null;
-            return true;
-        }
-    }
+    private string Git(params string[] args) => TestGit.Run(_root, args);
 }

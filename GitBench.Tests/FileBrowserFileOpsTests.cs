@@ -181,18 +181,10 @@ public class FileBrowserFileOpsTests(CodeIntelFixture fixture) : IDisposable
     [Fact]
     public void APlatformThatSaysNothingHasNoTrash()
     {
-        IPlatformShell shell = new SilentShell();
+        IPlatformShell shell = new FakeShell();
 
         Assert.False(shell.CanMoveToTrash);
         Assert.Throws<NotSupportedException>(() => shell.MoveToTrash("/tmp/whatever"));
-    }
-
-    private sealed class SilentShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
     }
 
     private static Strings Strings() => GitBench.Localization.Strings.For(Locale.En);

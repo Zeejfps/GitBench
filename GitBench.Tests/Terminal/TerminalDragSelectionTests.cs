@@ -208,7 +208,7 @@ internal sealed class DragPane : IDisposable
         GuiTestHarness harness,
         ScriptedCells cells,
         TerminalInputController controller,
-        RecordingShell shell,
+        FakeShell shell,
         FakeClipboard clipboard,
         QueuedUiDispatcher dispatcher,
         List<ShowDialogMessage> dialogs)
@@ -233,7 +233,7 @@ internal sealed class DragPane : IDisposable
 
     public SeamTerminal Terminal { get; }
 
-    public RecordingShell Shell { get; }
+    public FakeShell Shell { get; }
 
     public FakeClipboard Clipboard { get; }
 
@@ -260,7 +260,7 @@ internal sealed class DragPane : IDisposable
     static DragPane Build(SeamTerminal terminal)
     {
         var cells = new ScriptedCells();
-        var shell = new RecordingShell();
+        var shell = new FakeShell();
         var clipboard = new FakeClipboard();
         var dispatcher = new QueuedUiDispatcher();
         var bus = new MessageBus();

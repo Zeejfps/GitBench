@@ -1,9 +1,7 @@
-using System.Diagnostics;
 using GitBench.Features.Commits;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -13,20 +11,14 @@ namespace GitBench.Tests;
 // throwaway repo on disk via the git CLI, then drives the real GitService against it.
 public sealed class ReviewStackTests : IDisposable
 {
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
 
     public ReviewStackTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-review-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
-        Git("init", "-b", "main");
-        Git("config", "user.name", "Test");
-        Git("config", "user.email", "test@example.com");
-        Git("config", "commit.gpgsign", "false");
         _git = new GitService(new RepoActivityTracker());
-        _repo = new Repo(Guid.NewGuid(), _root, "test");
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test");
     }
 
     [Fact]
@@ -90,12 +82,12 @@ public sealed class ReviewStackTests : IDisposable
     public void LoadReviewStack_MergeCommit_FollowsFirstParentOnly()
     {
         var c0 = Commit("a.txt", "0", "base");
-        Git("checkout", "-b", "feature");
+        _work.Git("checkout", "-b", "feature");
         Commit("f.txt", "1", "feature-1");
         Commit("f.txt", "2", "feature-2");
-        Git("checkout", "main");
+        _work.Git("checkout", "main");
         var m1 = Commit("m.txt", "1", "main-1");
-        Git("merge", "--no-ff", "feature", "-m", "merge feature");
+        _work.Git("merge", "--no-ff", "feature", "-m", "merge feature");
         var merge = Head();
 
         var stack = Ok(_git.LoadReviewStack(_repo, c0, "main", 100));
@@ -119,9 +111,9 @@ public sealed class ReviewStackTests : IDisposable
     public void MergeBase_DivergedBranches_ReturnsCommonAncestor()
     {
         var c0 = Commit("a.txt", "0", "base");
-        Git("checkout", "-b", "feature");
+        _work.Git("checkout", "-b", "feature");
         Commit("f.txt", "1", "feature-1");
-        Git("checkout", "main");
+        _work.Git("checkout", "main");
         Commit("m.txt", "1", "main-1");
 
         Assert.Equal(c0, _git.MergeBase(_repo, "main", "feature"));
@@ -140,7 +132,7 @@ public sealed class ReviewStackTests : IDisposable
     {
         Commit("a.txt", "0", "base");
         // An orphan branch shares no history with main.
-        Git("checkout", "--orphan", "orphan");
+        _work.Git("checkout", "--orphan", "orphan");
         Commit("b.txt", "0", "orphan-base");
 
         Assert.Null(_git.MergeBase(_repo, "main", "orphan"));
@@ -150,7 +142,7 @@ public sealed class ReviewStackTests : IDisposable
     public void ResolveAutoReviewBase_NoUpstream_FallsBackToDefaultBranch()
     {
         var c0 = Commit("a.txt", "0", "base");
-        Git("checkout", "-b", "feature");
+        _work.Git("checkout", "-b", "feature");
         Commit("f.txt", "1", "feature-1");
         Commit("f.txt", "2", "feature-2");
 
@@ -169,7 +161,7 @@ public sealed class ReviewStackTests : IDisposable
     {
         // Only a non-default branch exists: switching off the unborn main before the first commit
         // leaves no main/master ref (and there's no upstream or origin/HEAD).
-        Git("checkout", "-b", "solo");
+        _work.Git("checkout", "-b", "solo");
         Commit("a.txt", "0", "base");
 
         Assert.Null(_git.ResolveAutoReviewBase(_repo, "solo"));
@@ -185,8 +177,8 @@ public sealed class ReviewStackTests : IDisposable
         Commit("a.txt", "1", "modify a");        // touch a
         Commit("b.txt", "x", "add b");           // add b (absent in base)
         Commit("a.txt", "2", "modify a again");  // touch a again
-        Git("rm", "b.txt");
-        Git("commit", "-m", "remove b");
+        _work.Git("rm", "b.txt");
+        _work.Git("commit", "-m", "remove b");
         var head = Head();
 
         var files = OkFiles(_git.LoadRangeFiles(_repo, c0, head));
@@ -217,8 +209,8 @@ public sealed class ReviewStackTests : IDisposable
     public void LoadRangeFiles_RenameAcrossRange_StatusRenamed()
     {
         var c0 = Commit("a.txt", "the quick brown fox jumps over the lazy dog\n", "base");
-        Git("mv", "a.txt", "b.txt");
-        Git("commit", "-m", "rename a to b");
+        _work.Git("mv", "a.txt", "b.txt");
+        _work.Git("commit", "-m", "rename a to b");
         var head = Head();
 
         var files = OkFiles(_git.LoadRangeFiles(_repo, c0, head));
@@ -274,37 +266,16 @@ public sealed class ReviewStackTests : IDisposable
 
     private string Commit(string file, string content, string message)
     {
-        File.WriteAllText(Path.Combine(_root, file), content);
-        Git("add", file);
-        Git("commit", "-m", message);
+        File.WriteAllText(Path.Combine(_work.Path, file), content);
+        _work.Git("add", file);
+        _work.Git("commit", "-m", message);
         return Head();
     }
 
-    private string Head() => Git("rev-parse", "HEAD").Trim();
-
-    private string Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
+    private string Head() => _work.Git("rev-parse", "HEAD").Trim();
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
+        _work.Dispose();
     }
 }

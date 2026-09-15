@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GitBench.Features.Commits;
 using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
@@ -13,13 +12,6 @@ namespace GitBench.Tests;
 // staged list the way the VM's reload path does.
 public sealed class AmendUnstageTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
     private readonly string _root;
     private readonly GitService _git;
     private readonly Repo _repo;
@@ -37,22 +29,7 @@ public sealed class AmendUnstageTests : IDisposable
         DirectoryTree.Delete(_root);
     }
 
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        psi.ArgumentList.Add("-c");
-        psi.ArgumentList.Add("commit.gpgsign=false");
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private string Git(params string[] args) => TestGit.Run(_root, args);
 
     private void WriteFile(string name, string content)
         => File.WriteAllText(Path.Combine(_root, name), content);
@@ -66,9 +43,7 @@ public sealed class AmendUnstageTests : IDisposable
     [Fact]
     public void UnstagingHeadFileDuringAmend_LeavesStagedAndPopulatesUnstaged()
     {
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
         WriteFile("a.txt", "one\n");
         Git("add", "a.txt");
         Git("commit", "-m", "base");
@@ -99,9 +74,7 @@ public sealed class AmendUnstageTests : IDisposable
     [Fact]
     public void UnstagingFileStagedDuringAmend_TakesNormalUnstagePath()
     {
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
         WriteFile("a.txt", "one\n");
         Git("add", "a.txt");
         Git("commit", "-m", "base");

@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Backend;
@@ -14,13 +13,6 @@ namespace GitBench.Tests;
 // repository rather than a mock — a shape change in git's output should fail here.
 public sealed class AssistantReadToolsTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
-
     private readonly string _sandbox;
     private readonly string _root;
     private readonly string _outsideSecret;
@@ -40,13 +32,11 @@ public sealed class AssistantReadToolsTests : IDisposable
         _git = new GitService(new NullActivityTracker());
         _repo = new Repo(Guid.NewGuid(), _root, "test");
 
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
         File.WriteAllText(Path.Combine(_root, "a.txt"), "one\n");
         File.WriteAllText(Path.Combine(_root, "secrets.json"), "{\"token\":\"hunter2\"}\n");
         Git("add", "a.txt", "secrets.json");
-        Git("-c", "commit.gpgsign=false", "commit", "-m", "seed the tree");
+        Git("commit", "-m", "seed the tree");
         _headSha = GitOut("rev-parse", "HEAD").Trim();
 
         File.AppendAllText(Path.Combine(_root, "a.txt"), "two\n");
@@ -66,26 +56,9 @@ public sealed class AssistantReadToolsTests : IDisposable
         DirectoryTree.Delete(_sandbox);
     }
 
-    private void Git(params string[] args) => Run(args);
+    private void Git(params string[] args) => TestGit.Run(_root, args);
 
-    private string GitOut(params string[] args) => Run(args);
-
-    private string Run(string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-        return stdout;
-    }
+    private string GitOut(params string[] args) => TestGit.Run(_root, args);
 
     private async Task<JsonDocument> InvokeOk(string tool, string args = "{}")
     {

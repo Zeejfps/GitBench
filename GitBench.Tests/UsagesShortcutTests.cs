@@ -132,7 +132,7 @@ public class UsagesShortcutTests
                     new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
-                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IClipboard>(new FakeClipboard());
                 ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
         view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
@@ -177,10 +177,5 @@ public class UsagesShortcutTests
     private sealed class NoNavigation : IFileNavigator
     {
         public void NavigateTo(string absolutePath, int line) { }
-    }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
     }
 }

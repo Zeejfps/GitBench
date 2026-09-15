@@ -595,15 +595,6 @@ public sealed class AssistantProviderSwitchTimingTests : IDisposable
     }
 }
 
-/// Nothing is being tracked here: the git service these tests hand out is never asked to read.
-internal sealed class NullActivityTracker : IRepoActivityTracker
-{
-    private sealed class Scope : IDisposable { public void Dispose() { } }
-
-    public IDisposable Begin(string repoPath) => new Scope();
-    public bool IsActive(string repoPath) => false;
-}
-
 /// What a provider switch does to a conversation already under way.
 public sealed class AssistantProviderSwitchConversationTests : IDisposable
 {

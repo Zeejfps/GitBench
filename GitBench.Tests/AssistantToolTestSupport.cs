@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text;
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
@@ -41,23 +40,6 @@ internal sealed class NoReviewWindows : IReviewWindowRegistry
 internal sealed class PlainText : ISyntaxHighlighter
 {
     public IReadOnlyList<IReadOnlyList<TokenSpan>>? Highlight(string fileText, FileLanguage language) => null;
-}
-
-// Stands in for the remote-operations store where a test's tools never fetch or pull: nothing is
-// ever in flight, and nothing it is asked to start does anything.
-internal sealed class IdleRemoteOperations : IRepoOperationsStore
-{
-    private readonly State<RepoOperations> _active = new(RepoOperations.Idle);
-
-    public IReadable<RepoOperations> Active => _active;
-    public bool HasUnseenError(Guid repoId) => false;
-    public bool IsBusy(Guid repoId) => false;
-    public event Action<Repo>? PullDiverged { add { } remove { } }
-    public void Push(Repo repo, bool force = false) { }
-    public void Pull(Repo repo, PullStrategy? strategy = null) { }
-    public void Fetch(Repo repo) { }
-    public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
-    public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
 }
 
 /// <summary>
@@ -152,7 +134,7 @@ internal sealed class ConflictedRepo : IDisposable
         it.Commit("what main did");
 
         it.Git("checkout", "-q", "feature");
-        it.Expect(false, "-c", "commit.gpgsign=false", "rebase", "main");
+        it.Expect(false, "rebase", "main");
         return it;
     }
 
@@ -174,13 +156,11 @@ internal sealed class ConflictedRepo : IDisposable
     /// rather than the service's.</summary>
     public string UnmergedIndex() => Git("ls-files", "-u");
 
-    public string Commit(string message) => Git("-c", "commit.gpgsign=false", "commit", "-m", message);
+    public string Commit(string message) => Git("commit", "-m", message);
 
     private void Init()
     {
-        Git("init", "-q", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(Path);
         // The listing has to survive a path git would otherwise C-quote; turning quoting off in the
         // repository's own config would hide exactly the bug worth catching.
         Git("config", "core.quotePath", "true");
@@ -195,22 +175,11 @@ internal sealed class ConflictedRepo : IDisposable
 
     private string Expect(bool success, params string[] args)
     {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = Path,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        if (success && process.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed: {stderr}");
-        if (!success && process.ExitCode == 0)
+        var run = TestGit.Try(Path, args);
+        if (success && run.ExitCode != 0)
+            throw new InvalidOperationException($"git {string.Join(' ', args)} failed: {run.Stderr}");
+        if (!success && run.ExitCode == 0)
             throw new InvalidOperationException($"git {string.Join(' ', args)} was expected to conflict but succeeded.");
-        return stdout;
+        return run.Stdout;
     }
 }

@@ -39,22 +39,6 @@ public class MarkdownSelectionTests
     private const float Advance = 8f;
     private const float LineH = 16f;
 
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public readonly List<string> OpenedUrls = new();
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) => OpenedUrls.Add(url);
-    }
-
     private sealed class Surface : IDisposable
     {
         public required GuiTestHarness Harness { get; init; }

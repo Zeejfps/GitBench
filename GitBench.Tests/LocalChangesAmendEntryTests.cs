@@ -9,7 +9,6 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
-using GitBench.Platform;
 using ZGF.Gui;
 using ZGF.Observable;
 using Xunit;
@@ -21,28 +20,6 @@ namespace GitBench.Tests;
 // index-vs-HEAD list the panel already holds; the amend diff is deferred to an async refresh.
 public sealed class LocalChangesAmendEntryTests : IDisposable
 {
-    private sealed class NoopShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
-
-    private sealed class NoopClipboard : IClipboard
-    {
-        public void SetText(string text) { }
-        public string? GetText() => null;
-    }
-
-    private sealed class FakeSnapshotStore : IRepoSnapshotStore
-    {
-        public State<Fetched<LocalChangesData>?> LocalState { get; } = new(null);
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges => LocalState;
-    }
-
     private readonly string _root;
     private readonly RepoRegistry _registry;
     private readonly CountingGitService _git;
@@ -57,9 +34,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
     {
         _root = Path.Combine(Path.GetTempPath(), "gitbench-amend-entry-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
+        TestGit.Init(_root);
         WriteFile("a.txt", "one\n");
         Git("add", "a.txt");
         Git("commit", "-m", "base");
@@ -91,7 +66,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
         _vm = new LocalChangesViewModel(
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), bus,
             StartedIndexOperationsStore.Create(_registry, bus, _loc, _dispatcher),
-            new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
+            new LocalChangesSelectionStore(), new FakeShell(), new FakeClipboard(),
             _preferences, _store, new NoStatusIngest(), _loc, new NoUnsavedEdits());
     }
 
@@ -137,24 +112,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
     private void WriteFile(string name, string content)
         => File.WriteAllText(Path.Combine(_root, name), content);
 
-    private void Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        psi.ArgumentList.Add("-c");
-        psi.ArgumentList.Add("commit.gpgsign=false");
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi)!;
-        var stderr = p.StandardError.ReadToEnd();
-        p.WaitForExit();
-        Assert.True(p.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-    }
+    private string Git(params string[] args) => TestGit.Run(_root, args);
 
     public void Dispose()
     {

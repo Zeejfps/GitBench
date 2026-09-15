@@ -187,7 +187,7 @@ public class TerminalScrollbackTests
     sealed class ShellUnderTest : IDisposable
     {
         readonly SeamPty _pty = new();
-        readonly QueueDispatcher _dispatcher = new();
+        readonly QueuedDispatcher _dispatcher = new();
 
         int _printed;
 
@@ -223,7 +223,7 @@ public class TerminalScrollbackTests
         {
             _pty.Emit(output);
             Assert.True(_dispatcher.WaitForPost(TimeSpan.FromSeconds(5)), "The output never arrived.");
-            _dispatcher.Pump();
+            _dispatcher.Drain();
         }
 
         public void Dispose()

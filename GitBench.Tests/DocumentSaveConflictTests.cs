@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Text;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
@@ -169,17 +168,5 @@ public sealed class DocumentSaveConflictTests : IDisposable
 
         public ConflictStages? GetConflictStages(Repo repo, string path) =>
             inner.GetConflictStages(repo, path);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

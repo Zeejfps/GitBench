@@ -13,13 +13,6 @@ namespace GitBench.Tests;
 // Empty(repo.Id), which feeds the dialogs' empty state instead of blocking.
 public sealed class LocalChangesProjectionTests
 {
-    private sealed class FakeSnapshotStore : IRepoSnapshotStore
-    {
-        public State<Fetched<LocalChangesData>?> LocalState { get; } = new(null);
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges => LocalState;
-    }
 
     private static readonly Repo Repo = new(Guid.NewGuid(), "/tmp/repo", "test");
 

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.App;
 using GitBench.Features.Branches;
@@ -42,10 +41,7 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
 
         _repoPath = Path.Combine(_root, "solo");
         Directory.CreateDirectory(_repoPath);
-        Git("init", "-q", "-b", "main");
-        Git("config", "user.name", "Test");
-        Git("config", "user.email", "test@example.com");
-        Git("config", "commit.gpgsign", "false");
+        TestGit.Init(_repoPath);
         File.WriteAllText(Path.Combine(_repoPath, "a.txt"), "0");
         Git("add", "a.txt");
         Git("commit", "-qm", "base");
@@ -198,9 +194,9 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
             _bus,
             new State<MainViewMode>(MainViewMode.LocalChanges),
             new FakeContentNavigator(),
-            new IdleSnapshotStore(),
+            new FakeSnapshotStore(),
             new IdleStatusStore(),
-            new IdleOperations(),
+            new IdleRemoteOperations(),
             new RepoHeadStore(_git, _bus, _loc, _dispatcher, guard),
             new ManualTicker(),
             _loc,
@@ -235,32 +231,11 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
         buffer!.Session.Type(SelectionRange.At(TextPosition.At(1, 0)), "x");
     }
 
-    private string Sha(string rev) => RunGit("rev-parse", rev).Trim();
+    private string Sha(string rev) => Git("rev-parse", rev).Trim();
 
-    private bool HasBranch(string name) => RunGit("branch", "--list", name).Trim().Length > 0;
+    private bool HasBranch(string name) => Git("branch", "--list", name).Trim().Length > 0;
 
-    private void Git(params string[] args) => RunGit(args);
-
-    private string RunGit(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _repoPath,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-        return stdout;
-    }
+    private string Git(params string[] args) => TestGit.Run(_repoPath, args);
 
     private void Drain()
     {
@@ -313,51 +288,11 @@ public sealed class UnsavedEditsGuardedFlowsTests : IDisposable
         }
     }
 
-    private sealed class IdleSnapshotStore : IRepoSnapshotStore
-    {
-        public IReadable<Fetched<CommitSnapshot>?> Commits { get; } = new State<Fetched<CommitSnapshot>?>(null);
-        public IReadable<Fetched<BranchListing>?> Branches { get; } = new State<Fetched<BranchListing>?>(null);
-        public IReadable<Fetched<LocalChangesData>?> LocalChanges { get; } = new State<Fetched<LocalChangesData>?>(null);
-    }
-
     private sealed class IdleStatusStore : IRepoStatusStore
     {
         private readonly State<RepoStatus> _active = new(RepoStatus.Unknown);
 
         public IReadable<RepoStatus> Active => _active;
         public RepoStatus For(Guid repoId) => RepoStatus.Unknown;
-    }
-
-    private sealed class IdleOperations : IRepoOperationsStore
-    {
-        private readonly State<RepoOperations> _active = new(RepoOperations.Idle);
-
-        public IReadable<RepoOperations> Active => _active;
-        public bool HasUnseenError(Guid repoId) => false;
-        public bool IsBusy(Guid repoId) => false;
-        public event Action<Repo>? PullDiverged { add { } remove { } }
-        public void Push(Repo repo, bool force = false) { }
-        public void Pull(Repo repo, PullStrategy? strategy = null) { }
-        public void Fetch(Repo repo) { }
-        public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
-        public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
-    }
-
-    private sealed class ManualTicker : IFrameTicker
-    {
-        public void Add(Action<float> tick) { }
-        public void Remove(Action<float> tick) { }
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-
-        public void Post(Action action) => _queue.Enqueue(action);
-
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

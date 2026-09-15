@@ -22,11 +22,7 @@ public sealed class GitBlobReaderTests : IDisposable
     public GitBlobReaderTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "gitblobreader-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(_root);
-        Git("init -q .");
-        Git("config user.email t@t");
-        Git("config user.name t");
-        Git("config commit.gpgsign false");
+        TestGit.Init(_root);
 
         // One commit per content shape, so every case has both a HEAD and a parent version.
         Write("plain.txt", "first\nsecond\n"u8.ToArray());
@@ -288,23 +284,11 @@ public sealed class GitBlobReaderPoolTests : IDisposable
     private string MakeRepo(int index)
     {
         var root = Path.Combine(Path.GetTempPath(), "gitblobpool-" + Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(root);
-        foreach (var args in new[] { "init -q .", "config user.email t@t", "config user.name t" })
-            Run(root, args);
+        TestGit.Init(root);
         File.WriteAllText(Path.Combine(root, "f.txt"), $"blob {index}\n");
-        Run(root, "add -A");
-        Run(root, "commit -qm one");
+        TestGit.Run(root, "add", "-A");
+        TestGit.Run(root, "commit", "-qm", "one");
         return root;
-    }
-
-    private static void Run(string cwd, string args)
-    {
-        var psi = new ProcessStartInfo("git") { WorkingDirectory = cwd, RedirectStandardOutput = true, RedirectStandardError = true };
-        foreach (var a in args.Split(' ', StringSplitOptions.RemoveEmptyEntries)) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        process.StandardOutput.ReadToEnd();
-        process.StandardError.ReadToEnd();
-        process.WaitForExit();
     }
 
     public void Dispose()

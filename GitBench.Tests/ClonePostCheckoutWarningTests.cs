@@ -125,13 +125,4 @@ public sealed class ClonePostCheckoutWarningTests : IDisposable
         public PullOutcome Pull(Repo repo, PullStrategy? strategy = null) => PullOutcome.Ok;
         public GitOutcome Fetch(Repo repo) => GitOutcome.Ok;
     }
-
-    private sealed class StubReader : IGitRawConfigReader
-    {
-        public bool IsRepoAvailable(string repoPath) => true;
-        public IReadOnlyList<string> GetRemoteNamesRaw(string repoPath) => Array.Empty<string>();
-        public string? GetRemoteUrlRaw(string repoPath, string remoteName) => null;
-        public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
-        public void AttachIdentityResolver(GitIdentityService identity) { }
-    }
 }

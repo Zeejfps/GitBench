@@ -151,21 +151,4 @@ public class DiffPreviewLoaderTests(CodeIntelFixture fixture)
         public byte[]? GetFileBytes(Repo repo, string path, DiffSide side, bool oldSide, int maxBytes, string? commitSha = null, string? baseSha = null)
             => null;
     }
-
-    private sealed class NoConflicts : IGitConflictOperations
-    {
-        public ConflictContext? GetConflictContext(Repo repo, string path) => null;
-
-        public GitOutcome TakeOurs(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome TakeTheirs(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome TakeBoth(Repo repo, string path) => throw new NotSupportedException();
-
-        public GitOutcome MarkResolved(Repo repo, string path) => throw new NotSupportedException();
-
-        public IReadOnlyList<ConflictedPath> GetConflictedPaths(Repo repo) => throw new NotSupportedException();
-
-        public ConflictStages? GetConflictStages(Repo repo, string path) => throw new NotSupportedException();
-    }
 }

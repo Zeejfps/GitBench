@@ -168,19 +168,4 @@ public sealed class AssistantTranscriptSelectionTests
             foreach (var row in Rows) row.Dispose();
         }
     }
-
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
 }

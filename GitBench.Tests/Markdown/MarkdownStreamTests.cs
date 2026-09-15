@@ -32,20 +32,6 @@ namespace GitBench.Tests.Markdown;
 // would hand it), so h.Tick drives the throttle exactly like a live frame.
 public class MarkdownStreamTests
 {
-    private sealed class FakeClipboard : IClipboard
-    {
-        public string? Text;
-        public void SetText(string text) => Text = text;
-        public string? GetText() => Text;
-    }
-
-    private sealed class FakeShell : IPlatformShell
-    {
-        public void OpenFolder(string path) { }
-        public void OpenTerminal(string path) { }
-        public void OpenFile(string path) { }
-        public void OpenUrl(string url) { }
-    }
 
     private static (GuiTestHarness Harness, MarkdownBlockList List) Create(
         int width = 800, int height = 600)

@@ -361,7 +361,7 @@ public sealed class UsageLensCoordinatorTests
     {
         private readonly Dictionary<string, UsageLensTarget> _targets = [];
         private readonly Dictionary<FileLine, string> _idOfLine = [];
-        private readonly QueueingDispatcher? _queued;
+        private readonly QueuedDispatcher? _queued;
 
         private int _readsOutsideTheLoop;
 
@@ -372,7 +372,7 @@ public sealed class UsageLensCoordinatorTests
         /// </param>
         public World(bool settleOffThread = false)
         {
-            _queued = settleOffThread ? new QueueingDispatcher() : null;
+            _queued = settleOffThread ? new QueuedDispatcher() : null;
 
             Coordinator = new UsageLensCoordinator(
                 Servers,
@@ -533,37 +533,6 @@ public sealed class UsageLensCoordinatorTests
             var pending = _pending.ToArray();
             _pending.Clear();
             foreach (var (_, completion) in pending) completion.TrySetResult(reply);
-        }
-    }
-
-    private sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
-    }
-
-    /// <summary>The dispatcher as the app has it: work handed to it runs on the thread that drains
-    /// it, not on whichever thread handed it over.</summary>
-    private sealed class QueueingDispatcher : IUiDispatcher
-    {
-        private readonly System.Collections.Concurrent.ConcurrentQueue<Action> _queued = new();
-
-        /// <summary>Whether the loop is running queued work right now. What the fixture's guard on
-        /// the view's rows is measured against.</summary>
-        public bool Draining { get; private set; }
-
-        public void Post(Action action) => _queued.Enqueue(action);
-
-        public void Drain()
-        {
-            Draining = true;
-            try
-            {
-                while (_queued.TryDequeue(out var action)) action();
-            }
-            finally
-            {
-                Draining = false;
-            }
         }
     }
 }

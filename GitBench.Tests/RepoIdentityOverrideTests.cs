@@ -1,7 +1,6 @@
 using GitBench.Features.Identity;
 using GitBench.Features.Repos;
 using GitBench.Git;
-using GitBench.Messages;
 using Xunit;
 
 namespace GitBench.Tests;
@@ -47,13 +46,6 @@ public class RepoIdentityOverrideTests
         public string? GetRemoteUrlRaw(string repoPath, string remoteName) => Url;
         public (string? Name, string? Email) GetLocalIdentityRaw(string repoPath) => (null, null);
         public void AttachIdentityResolver(GitIdentityService identity) { }
-    }
-
-    private sealed class FakeBus : IMessageBus
-    {
-        public void Broadcast<T>(T message = default) where T : struct { }
-        public void Subscribe<T>(Action<T> handler) where T : struct { }
-        public void Unsubscribe<T>(Action<T> handler) where T : struct { }
     }
 
     [Fact]

@@ -137,10 +137,7 @@ public sealed class GitReadGateStoreTests : IDisposable
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", branch);
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path, branch);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
@@ -148,39 +145,11 @@ public sealed class GitReadGateStoreTests : IDisposable
         return _registry.Repos.Single(r => r.DisplayName == name).Id;
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose()
     {
         _registry.Dispose();
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-        public void Post(Action action) => _queue.Enqueue(action);
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
     }
 }

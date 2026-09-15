@@ -9,30 +9,6 @@ public class FileBrowserTreeTests
 
     private static string At(params string[] segments) => Path.Combine([Root, .. segments]);
 
-    private sealed class FakeFileSystem : IFileSystemReader
-    {
-        public readonly Dictionary<string, List<FileSystemEntry>> Directories = new(StringComparer.Ordinal);
-        public readonly Dictionary<string, string> LinkTargets = new(StringComparer.Ordinal);
-        public readonly List<string> Listed = [];
-
-        public DirectoryListing List(string absoluteDirectory, CancellationToken cancellation)
-        {
-            Listed.Add(absoluteDirectory);
-            return Directories.TryGetValue(absoluteDirectory, out var entries)
-                ? new DirectoryListing.Listed(entries)
-                : new DirectoryListing.Unavailable("No such directory.");
-        }
-
-        public string? ResolveLinkTarget(string absolutePath) =>
-            LinkTargets.TryGetValue(absolutePath, out var target) ? target : null;
-
-        public FakeFileSystem With(string directory, params FileSystemEntry[] entries)
-        {
-            Directories[directory] = [.. entries];
-            return this;
-        }
-    }
-
     private sealed class FakeIgnoreOracle
     {
         public readonly HashSet<string> IgnoredPaths = new(StringComparer.Ordinal);

@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Diagnostics;
 using GitBench.Features.Repos;
 using GitBench.Git;
@@ -35,7 +34,7 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         var git = new GitService(new RepoActivityTracker());
         _sweep = new StartupSweepCoordinator(_gate);
         var head = new SettledHead();
-        _status = new RepoStatusStore(new IdleOperations(), new IdleIndexOperations(), _registry, git, _bus, _gate, _dispatcher, head, head);
+        _status = new RepoStatusStore(new IdleRemoteOperations(), new IdleIndexOperations(), _registry, git, _bus, _gate, _dispatcher, head, head);
         _snapshots = new RepoSnapshotStore(_registry, git, git, git, git, _bus, _status, _gate, _dispatcher);
     }
 
@@ -68,10 +67,7 @@ public sealed class StatusIngestIntegrationTests : IDisposable
     {
         var path = Path.Combine(_root, name);
         Directory.CreateDirectory(path);
-        Git(path, "init", "-q", "-b", branch);
-        Git(path, "config", "user.name", "Test");
-        Git(path, "config", "user.email", "test@example.com");
-        Git(path, "config", "commit.gpgsign", "false");
+        TestGit.Init(path, branch);
         File.WriteAllText(Path.Combine(path, "a.txt"), "0");
         Git(path, "add", "a.txt");
         Git(path, "commit", "-qm", "base");
@@ -90,25 +86,7 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         throw new TimeoutException($"Timed out waiting for {what}.");
     }
 
-    private static void Git(string cwd, params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = cwd,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-
-        using var proc = Process.Start(psi)!;
-        proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
-        if (proc.ExitCode != 0)
-            throw new InvalidOperationException($"git {string.Join(' ', args)} failed ({proc.ExitCode}): {stderr}");
-    }
+    private static string Git(string cwd, params string[] args) => TestGit.Run(cwd, args);
 
     public void Dispose()
     {
@@ -116,39 +94,5 @@ public sealed class StatusIngestIntegrationTests : IDisposable
         _status.Dispose();
         _registry.Dispose();
         DirectoryTree.Delete(_root);
-    }
-
-    private sealed class QueuedDispatcher : IUiDispatcher
-    {
-        private readonly ConcurrentQueue<Action> _queue = new();
-        public void Post(Action action) => _queue.Enqueue(action);
-        public void Drain()
-        {
-            while (_queue.TryDequeue(out var action)) action();
-        }
-    }
-
-    // No checkout ever in flight — these tests are about the ingest path, not HEAD motion.
-    private sealed class SettledHead : IRepoHeadStore, IRepoHeadConfirm
-    {
-        public RepoHead For(Guid repoId) => RepoHead.Settled;
-        public void Checkout(Repo repo, string branchName) { }
-        public void RunMove(Repo repo, string branchName, Func<GitOutcome> work, string? failureTitle = null) { }
-        public Action<bool> BeginMove(Repo repo, string branchName) => _ => { };
-        public void Confirm(Guid repoId) { }
-    }
-
-    private sealed class IdleOperations : IRepoOperationsStore
-    {
-        private readonly State<RepoOperations> _active = new(RepoOperations.Idle);
-        public IReadable<RepoOperations> Active => _active;
-        public bool HasUnseenError(Guid repoId) => false;
-        public bool IsBusy(Guid repoId) => false;
-        public event Action<Repo>? PullDiverged { add { } remove { } }
-        public void Push(Repo repo, bool force = false) { }
-        public void Pull(Repo repo, PullStrategy? strategy = null) { }
-        public void Fetch(Repo repo) { }
-        public Task<RemoteOpResult> PullAsync(Repo repo, PullStrategy? strategy = null) => Task.FromResult(RemoteOpResult.Ok);
-        public Task<RemoteOpResult> FetchAsync(Repo repo) => Task.FromResult(RemoteOpResult.Ok);
     }
 }

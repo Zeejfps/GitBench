@@ -1244,9 +1244,4 @@ public class TerminalInstanceInputEdgeTests
         public TerminalSession Start(TerminalSize size, IUiDispatcher dispatcher) =>
             throw new InvalidOperationException("This launch is never started.");
     }
-
-    sealed class ImmediateDispatcher : IUiDispatcher
-    {
-        public void Post(Action action) => action();
-    }
 }

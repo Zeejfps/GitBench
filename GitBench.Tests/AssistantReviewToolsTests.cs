@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Text.Json;
 using GitBench.Features.Assistant.Agents;
 using GitBench.Features.Assistant.Tools;
@@ -6,7 +5,6 @@ using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Features.Review;
 using GitBench.Git;
-using GitBench.Infrastructure;
 using GitBench.Messages;
 using ZGF.Observable;
 using Xunit;
@@ -20,12 +18,6 @@ namespace GitBench.Tests;
 /// </summary>
 public sealed class AssistantReviewToolsTests : IDisposable
 {
-    private sealed class NullActivityTracker : IRepoActivityTracker
-    {
-        private sealed class Scope : IDisposable { public void Dispose() { } }
-        public IDisposable Begin(string repoPath) => new Scope();
-        public bool IsActive(string repoPath) => false;
-    }
 
     // The commit box plays no part in a Viewed mark; the write surface is here for the thread it
     // hops to, not for what else it reaches.
@@ -40,7 +32,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     private const int BigLineLength = 1000;
     private const int BigLineCount = 200;
 
-    private readonly string _root;
+    private readonly TempGitRepo _work = TempGitRepo.Init();
     private readonly GitService _git;
     private readonly Repo _repo;
     private readonly ReviewProgressStore _progress = new();
@@ -49,33 +41,28 @@ public sealed class AssistantReviewToolsTests : IDisposable
 
     public AssistantReviewToolsTests()
     {
-        _root = Path.Combine(Path.GetTempPath(), "gitbench-review-tools-" + Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(_root);
         _git = new GitService(new NullActivityTracker());
 
-        Git("init", "--initial-branch=main");
-        Git("config", "user.email", "test@test");
-        Git("config", "user.name", "test");
         Write("a.txt", "one\ntwo\nthree\n");
         Write("b.txt", "kept\n");
         // Committed at the base and left alone by the branch: a secret the repository should never
         // have tracked, and a file long enough to be worth capping.
         Write(".env", "API_TOKEN=sk-live-not-a-real-secret\n");
         Write("big.txt", string.Concat(Enumerable.Repeat(new string('x', BigLineLength) + "\n", BigLineCount)));
-        Git("add", ".");
+        _work.Git("add", ".");
         Commit("seed the tree");
 
         // A branch off main with two commits, which is what a review is: main is the base the
         // auto-resolver lands on, since the branch has no upstream.
-        Git("checkout", "-b", "feature");
+        _work.Git("checkout", "-b", "feature");
         Write("a.txt", "one\nTWO\nthree\n");
-        Git("add", ".");
+        _work.Git("add", ".");
         Commit("rewrite the second line");
         Write("c.txt", "added on the branch\n");
-        Git("add", ".");
+        _work.Git("add", ".");
         Commit("add c");
 
-        _repo = new Repo(Guid.NewGuid(), _root, "test") { Branch = "feature" };
+        _repo = new Repo(Guid.NewGuid(), _work.Path, "test") { Branch = "feature" };
         _toolset = ReviewToolsetFor(_repo);
     }
 
@@ -89,7 +76,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
 
     private AssistantWriteSurface WriteSurface()
     {
-        var statePath = Path.Combine(_root, ".git", "repos.json");
+        var statePath = Path.Combine(_work.Path, ".git", "repos.json");
         return new AssistantWriteSurface(
             _dispatcher,
             new MessageBus(),
@@ -101,29 +88,12 @@ public sealed class AssistantReviewToolsTests : IDisposable
 
     public void Dispose()
     {
-        DirectoryTree.Delete(_root);
+        _work.Dispose();
     }
 
-    private void Write(string path, string text) => File.WriteAllText(Path.Combine(_root, path), text);
+    private void Write(string path, string text) => File.WriteAllText(Path.Combine(_work.Path, path), text);
 
-    private void Commit(string message) => Git("-c", "commit.gpgsign=false", "commit", "-m", message);
-
-    private string Git(params string[] args)
-    {
-        var psi = new ProcessStartInfo("git")
-        {
-            WorkingDirectory = _root,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        foreach (var a in args) psi.ArgumentList.Add(a);
-        using var process = Process.Start(psi)!;
-        var stdout = process.StandardOutput.ReadToEnd();
-        var stderr = process.StandardError.ReadToEnd();
-        process.WaitForExit();
-        Assert.True(process.ExitCode == 0, $"git {string.Join(' ', args)} failed: {stderr}");
-        return stdout;
-    }
+    private void Commit(string message) => _work.Git("commit", "-m", message);
 
     // mark_viewed hops to the UI thread to touch the reviewer's own store, so the dispatcher has to
     // be pumped before it can finish.
@@ -194,9 +164,9 @@ public sealed class AssistantReviewToolsTests : IDisposable
     [Fact]
     public void GetReviewStack_FollowsABranchSwitchMadeAfterTheToolsetWasBuilt()
     {
-        Git("checkout", "-b", "second", "main");
+        _work.Git("checkout", "-b", "second", "main");
         Write("d.txt", "added on second\n");
-        Git("add", ".");
+        _work.Git("add", ".");
         Commit("add d");
 
         using var json = InvokeOk("get_review_stack");
@@ -240,7 +210,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     [Fact]
     public void GetFileAtBase_RefusesACredentialShapedNameEvenThoughTheBaseTracksIt()
     {
-        Assert.Contains("sk-live-not-a-real-secret", Git("show", "main:.env"), StringComparison.Ordinal);
+        Assert.Contains("sk-live-not-a-real-secret", _work.Git("show", "main:.env"), StringComparison.Ordinal);
 
         var invocation = Invoke("get_file_at_base", """{"path":".env"}""");
 
@@ -254,7 +224,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     [Fact]
     public void GetFileAtBase_StillReadsAFileTheBranchDeleted()
     {
-        Git("rm", "b.txt");
+        _work.Git("rm", "b.txt");
         Commit("drop b");
 
         using var json = InvokeOk("get_file_at_base", """{"path":"b.txt"}""");
@@ -274,7 +244,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     [Fact]
     public void GetFileAtBase_RefusesAnAbsolutePath()
     {
-        var absolute = JsonSerializer.Serialize(Path.Combine(_root, "a.txt"));
+        var absolute = JsonSerializer.Serialize(Path.Combine(_work.Path, "a.txt"));
         var invocation = Invoke("get_file_at_base", $$"""{"path":{{absolute}}}""");
 
         Assert.True(invocation.IsError);
@@ -334,7 +304,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
         Assert.True(_progress.IsViewed(_repo.Id, "feature", "a.txt", before));
 
         Write("a.txt", "one\nTWO\nTHREE\n");
-        Git("add", ".");
+        _work.Git("add", ".");
         Commit("change a again");
 
         var after = ContentIdOf("a.txt");
@@ -375,7 +345,7 @@ public sealed class AssistantReviewToolsTests : IDisposable
     [Fact]
     public void ADetachedHead_HasNoReviewAndSaysSoRatherThanGuessing()
     {
-        Git("checkout", "--detach", "HEAD");
+        _work.Git("checkout", "--detach", "HEAD");
 
         var invocation = Invoke("get_review_stack");
 

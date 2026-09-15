@@ -337,16 +337,6 @@ public class TerminalClipboardChordTests
     }
 }
 
-/// <summary>A clipboard that stays in the test rather than on the machine running it.</summary>
-internal sealed class FakeClipboard : IClipboard
-{
-    public string? Text { get; set; }
-
-    public void SetText(string text) => Text = text;
-
-    public string? GetText() => Text;
-}
-
 /// <summary>
 /// A mounted pane whose controller has a clipboard, which the shared harness deliberately does not
 /// give it.
