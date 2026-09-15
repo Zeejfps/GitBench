@@ -44,8 +44,8 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
     private readonly Context _ctx;
     private readonly InputSystem _input;
     private readonly IFrameTicker? _ticker;
-    private readonly IClipboard? _clipboard;
-    private readonly ILocalizationService? _localization;
+    private readonly IClipboard _clipboard;
+    private readonly ILocalizationService _localization;
 
     // A press landed on text; a selection starts if the pointer travels before release.
     private bool _armed;
@@ -59,8 +59,8 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
         Context ctx,
         InputSystem input,
         IFrameTicker? ticker,
-        IClipboard? clipboard,
-        ILocalizationService? localization)
+        IClipboard clipboard,
+        ILocalizationService localization)
     {
         _scope = scope;
         _surface = surface;
@@ -198,7 +198,7 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
     private bool Copy()
     {
         var selection = _scope.Selection;
-        if (!selection.HasRange || _clipboard == null) return false;
+        if (!selection.HasRange) return false;
 
         var text = MarkdownSelectionModel.BuildCopyText(
             _scope.DocumentOrder(), selection.Start, selection.End);
@@ -209,7 +209,6 @@ internal sealed class MarkdownSelectionController : KeyboardMouseController, IPr
 
     private bool ShowSelectionMenu(PointF point)
     {
-        if (_clipboard == null || _localization == null) return false;
         var items = new[]
         {
             new RepoBarContextMenu.Item(

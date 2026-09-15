@@ -49,7 +49,7 @@ internal sealed record GroupRenameField : Widget
         var root = new ContainerView { Height = Sizes.RowHeight };
         root.Children.Add(box);
 
-        root.UseController(inputSystem, () => new GroupRenameKbmController(input, inputSystem, ctx.Get<IClipboard>(), Group.Id, registry));
+        root.UseController(inputSystem, () => new GroupRenameKbmController(input, inputSystem, ctx.Require<IClipboard>(), Group.Id, registry));
         return root;
     }
 }

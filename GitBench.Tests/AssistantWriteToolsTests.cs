@@ -72,6 +72,7 @@ public sealed class AssistantWriteToolsTests : IDisposable
             new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
+            new NoStatusIngest(),
             loc,
             new NoUnsavedEdits());
 

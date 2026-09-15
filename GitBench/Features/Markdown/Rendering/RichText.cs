@@ -45,10 +45,7 @@ internal sealed record RichText : Widget
         if (ctx.Get<IMarkdownSelectionScope>() is { } selection)
             view.Use(() => selection.Register(view));
 
-        // IPlatformShell is an interface, so Get returns null (not a transient) when no shell is
-        // registered — links then render styled but inert.
-        if (ctx.Get<IPlatformShell>() is { } shell)
-            view.UseController(ctx.Require<InputSystem>(), () => new LinkController(view, shell));
+        view.UseController(ctx.Require<InputSystem>(), () => new LinkController(view, ctx.Require<IPlatformShell>()));
 
         return view;
     }

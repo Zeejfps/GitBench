@@ -12,8 +12,8 @@ namespace GitBench.Features.Diff;
 /// <summary>
 /// Headless host that reflects <see cref="DiffWindowsViewModel.Windows"/> into real,
 /// decorated OS windows — the top-level-window analogue of <c>BindChildren</c>. It draws
-/// nothing itself (zero-sized); it exists so the diff-windows view model is created and bound
-/// through the standard <c>UseViewModel</c> flow. On Added it opens a window hosting a
+/// nothing itself (zero-sized); it exists to reflect the app-wide diff-windows view model, which
+/// every diff pane's "open in new window" reaches directly. On Added it opens a window hosting a
 /// <see cref="DiffWindowRootView"/> bound to the entry's <see cref="DiffWindowViewModel"/>; on
 /// Removed/Cleared it tears the window down. Native title-bar closes route back through the view
 /// model so its observable list stays the single source of truth.
@@ -46,7 +46,6 @@ internal sealed record DiffWindowsView : Widget
 
             var vm = ctx.Require<DiffWindowsViewModel>();
             _vm = vm;
-            this.UseViewModel(() => vm, _ => { });
             this.Use(() => vm.Windows.Subscribe(OnWindowsChanged));
 
             // Match every open window's native title bar to the active theme, like the main window

@@ -92,7 +92,7 @@ public sealed class LocalChangesAmendEntryTests : IDisposable
             _registry, _git, _git, _git, _git, _git, _dispatcher, new FrameTicker(), bus,
             StartedIndexOperationsStore.Create(_registry, bus, _loc, _dispatcher),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
-            _preferences, _store, _loc, new NoUnsavedEdits());
+            _preferences, _store, new NoStatusIngest(), _loc, new NoUnsavedEdits());
     }
 
     [Fact]

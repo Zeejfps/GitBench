@@ -71,6 +71,7 @@ public sealed class AssistantCommitMessageTests : IDisposable
             new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_root, "prefs.json")),
             new IdleSnapshotStore(),
+            new NoStatusIngest(),
             _loc,
             new NoUnsavedEdits());
 

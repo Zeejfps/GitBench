@@ -21,10 +21,10 @@ internal sealed class RepoNodeFactory
     private readonly IMessageBus _bus;
     private readonly IGitRemoteOperations _gitRemotes;
     private readonly IGitWorktreeOperations _gitWorktrees;
-    private readonly IPlatformShell? _shell;
+    private readonly IPlatformShell _shell;
     private readonly ILocalizationService _loc;
-    private readonly IClipboard? _clipboard;
-    private readonly IFilePicker? _filePicker;
+    private readonly IClipboard _clipboard;
+    private readonly IFilePicker _filePicker;
     private readonly IUiDispatcher _dispatcher;
 
     public RepoNodeFactory(
@@ -34,10 +34,10 @@ internal sealed class RepoNodeFactory
         IMessageBus bus,
         IGitRemoteOperations gitRemotes,
         IGitWorktreeOperations gitWorktrees,
-        IPlatformShell? shell,
+        IPlatformShell shell,
         ILocalizationService loc,
-        IClipboard? clipboard,
-        IFilePicker? filePicker,
+        IClipboard clipboard,
+        IFilePicker filePicker,
         IUiDispatcher dispatcher)
     {
         _registry = registry;

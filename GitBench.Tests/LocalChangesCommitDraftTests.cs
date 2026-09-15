@@ -50,7 +50,7 @@ public sealed class LocalChangesCommitDraftTests : IDisposable
             StartedIndexOperationsStore.Create(_registry, bus, _loc, _dispatcher),
             new LocalChangesSelectionStore(), new NoopShell(), new NoopClipboard(),
             new PreferencesService(Preferences.Default, Path.Combine(_dir.Path, "prefs.json")),
-            _store, _loc, new NoUnsavedEdits());
+            _store, new NoStatusIngest(), _loc, new NoUnsavedEdits());
 
         Push();
     }

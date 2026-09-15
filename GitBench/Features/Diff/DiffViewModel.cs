@@ -114,15 +114,15 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     private readonly DiffPreviewLoader _loader;
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
+    private readonly LocalChangesViewModel _localChanges;
+    private readonly DiffWindowsViewModel _windows;
+    private readonly IPlatformShell _shell;
     // The pane is pinned to a specific repo (a commit diff in the Review window or a pop-out) and
     // resolves it by id, so its diff stays correct no matter which repo is active in the main window.
     private readonly Guid _pinnedRepoId;
 
     private string EmptyText => _loc.Strings.Value.DiffNoSelection;
     private string LoadingText => _loc.Strings.Value.CommonLoading;
-    // Used only for "Open in editor" on a conflict. Null in panes that never show conflicts
-    // (commit details, and pop-out windows pinned to a commit diff).
-    private readonly IPlatformShell? _shell;
     private int _hunkStateGen;
 
     // The lazy file-text fetch behind the first gap-expander click. Its own lane so it never
@@ -169,8 +169,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         IMessageBus bus,
         ISymbolExtractor extractor,
         ILocalizationService loc,
-        Guid pinnedRepoId,
-        IPlatformShell? shell = null)
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell,
+        Guid pinnedRepoId)
         : base(dispatcher, new DiffState(
             new DiffRenderState.Placeholder(loc.Strings.Value.DiffNoSelection), DiffViewMode.Diff))
     {
@@ -181,8 +183,10 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         _gitConflicts = gitConflicts;
         _loader = new DiffPreviewLoader(gitDiff, gitConflicts, extractor);
         _bus = bus;
-        _shell = shell;
         _loc = loc;
+        _localChanges = localChanges;
+        _windows = windows;
+        _shell = shell;
         _pinnedRepoId = pinnedRepoId;
         _expandLane = CreateLane();
 
@@ -373,13 +377,13 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     }
 
 
-    // Pops the current diff into its own top-level window. DiffWindowPresenter handles the
-    // message and spins up an independent, live DiffViewModel pinned to this target.
+    // Pops the current diff into its own top-level window: an independent, live DiffViewModel
+    // pinned to this target.
     public void RequestOpenInWindow()
     {
         var target = _target.Value;
         if (target == null) return;
-        _bus.Broadcast(new OpenDiffWindowMessage(target, _pinnedRepoId));
+        _windows.Open(target, _pinnedRepoId);
     }
 
     // Flips this pane between Diff and FullFile, then reloads so the render state is rebuilt for
@@ -452,7 +456,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
     public void OpenConflictInEditor()
     {
         var repo = ResolveRepo();
-        if (repo == null || _shell == null) return;
+        if (repo == null) return;
         if (State.Value.Render is not DiffRenderState.Conflict conflict) return;
         _shell.OpenFile(System.IO.Path.Combine(repo.Path, conflict.Path));
     }
@@ -649,7 +653,7 @@ internal sealed class DiffViewModel : ViewModelBase<DiffState>
         var toSide = ResolveApplyToSide(cached, reverse);
 
         ApplyOptimisticHunkRemoval(diff, hunkIndex, isLastHunk, toSide);
-        _bus.Broadcast(new HunkAppliedOptimisticMessage(repo.Id, diff.Path, diff.Side, toSide, isLastHunk));
+        _localChanges.ApplyHunkOptimistic(repo.Id, diff.Path, diff.Side, toSide, isLastHunk);
         RunApplyPatch(repo, patch, cached, reverse, diff);
     }
 

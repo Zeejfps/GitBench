@@ -141,6 +141,7 @@ public class MarkdownImageTests
             {
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new NoopClipboard());
                 ctx.AddService<IPlatformShell>(new FakeShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
                 if (loader != null) ctx.AddService<IMarkdownImageLoader>(loader);

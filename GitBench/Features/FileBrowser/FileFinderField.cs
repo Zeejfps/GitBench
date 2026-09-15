@@ -50,7 +50,7 @@ internal sealed record FileFinderField : Widget
         field.Bind(ctx.Localization().Strings, s => field.PlaceholderText = s.FileFinderTitle);
         field.SetText(finder.Text.Value);
 
-        var controller = new FileFinderInputController(field, inputSystem, ctx.Get<IClipboard>())
+        var controller = new FileFinderInputController(field, inputSystem, ctx.Require<IClipboard>())
         {
             OnEscape = finder.Close,
             OnActivate = browser.ActivateBestMatch,
@@ -159,7 +159,7 @@ internal sealed class FileFinderInputController : BaseTextInputKbmController
     /// <summary>Called with the number of rows to move by, negative for upwards.</summary>
     public Action<int>? OnMove { get; set; }
 
-    public FileFinderInputController(TextInputView input, InputSystem inputSystem, IClipboard? clipboard)
+    public FileFinderInputController(TextInputView input, InputSystem inputSystem, IClipboard clipboard)
         : base(input, inputSystem, clipboard)
     {
         _input = input;

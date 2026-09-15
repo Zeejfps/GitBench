@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using GitBench.Platform;
 using System.Text;
 using GitBench.App;
 using GitBench.Features.Assistant;
@@ -282,6 +283,8 @@ public class TerminalPaneWiringTests : IDisposable
                         new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                     ctx.AddService<ILocalizationService>(
                         new LocalizationService(new State<Locale>(Locale.En)));
+                    ctx.AddService<IClipboard>(new NoopClipboard());
+                    ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                     ctx.AddService<IUiDispatcher>(Dispatcher);
                     ctx.AddService<ITerminalEngineFactory>(new XtermSharpEngineFactory());
                     ctx.AddService<IPtySessionFactory>(new UnusedPtyFactory());
@@ -613,6 +616,8 @@ public class TerminalKeybindCollisionTests : IDisposable
                     ctx.AddService<IThemeService<ThemeStyles>>(
                         new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                     ctx.AddService<ILocalizationService>(localization);
+                    ctx.AddService<IClipboard>(new NoopClipboard());
+                    ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 });
         }
 

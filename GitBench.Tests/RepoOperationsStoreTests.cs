@@ -30,7 +30,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
     private readonly List<RefsChangedMessage> _refs = new();
     private readonly List<RemoteSyncOptimisticMessage> _optimistic = new();
     private readonly List<ShowOperationErrorMessage> _errorDialogs = new();
-    private readonly List<PullDivergedMessage> _diverged = new();
+    private readonly List<Repo> _diverged = new();
 
     public RepoOperationsStoreTests()
     {
@@ -48,7 +48,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
         _bus.Subscribe<RefsChangedMessage>(_refs.Add);
         _bus.Subscribe<RemoteSyncOptimisticMessage>(_optimistic.Add);
         _bus.Subscribe<ShowOperationErrorMessage>(_errorDialogs.Add);
-        _bus.Subscribe<PullDivergedMessage>(_diverged.Add);
+        _store.PullDiverged += _diverged.Add;
     }
 
     public void Dispose()
@@ -237,7 +237,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
         _store.Pull(_onScreen);
         Settle(() => _diverged.Count > 0, "the diverged message");
 
-        Assert.Equal(_onScreen, Assert.Single(_diverged).Repo);
+        Assert.Equal(_onScreen, Assert.Single(_diverged));
         Assert.Empty(_errorDialogs);
         Assert.False(_store.HasUnseenError(_onScreen.Id));
         Assert.Empty(_toasts);
@@ -383,7 +383,7 @@ public sealed class RepoOperationsStoreTests : IDisposable
         Assert.IsType<RemoteOpResult.Diverged>(await task);
     }
 
-    // The store only broadcasts PullDivergedMessage for the repo on screen, but the divergence is a
+    // The store only raises PullDiverged for the repo on screen, but the divergence is a
     // fact about the pull either way — a caller told "failed" here would report the wrong reason.
     [Fact]
     public async Task PullAsync_DivergingOnARepoTheUserIsNotLookingAt_StillCompletesAsDiverged()

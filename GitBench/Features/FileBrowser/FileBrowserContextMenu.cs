@@ -37,9 +37,9 @@ namespace GitBench.Features.FileBrowser;
 internal sealed class FileBrowserContextMenu
 {
     private readonly ILocalizationService _loc;
-    private readonly IPlatformShell? _shell;
-    private readonly IClipboard? _clipboard;
-    private readonly IMessageBus? _bus;
+    private readonly IPlatformShell _shell;
+    private readonly IClipboard _clipboard;
+    private readonly IMessageBus _bus;
     private readonly ITerminalSessionStore? _terminals;
     private readonly IContentNavigator? _navigator;
     private readonly FileBrowserFileOps _ops;
@@ -50,9 +50,9 @@ internal sealed class FileBrowserContextMenu
         _ops = new FileBrowserFileOps(ctx);
         _loc = ctx.Localization();
         _keys = ctx.KeyMap();
-        _shell = ctx.Get<IPlatformShell>();
-        _clipboard = ctx.Get<IClipboard>();
-        _bus = ctx.Get<IMessageBus>();
+        _shell = ctx.Require<IPlatformShell>();
+        _clipboard = ctx.Require<IClipboard>();
+        _bus = ctx.Require<IMessageBus>();
         _terminals = ctx.Get<ITerminalSessionStore>();
         _navigator = ctx.Get<IContentNavigator>();
     }
@@ -161,14 +161,12 @@ internal sealed class FileBrowserContextMenu
 
     private void Copy(string text, string toast)
     {
-        if (_clipboard is null) return;
         _clipboard.SetText(text);
-        _bus?.Broadcast(new ShowToastMessage(ToastIntent.Success(toast)));
+        _bus.Broadcast(new ShowToastMessage(ToastIntent.Success(toast)));
     }
 
     private void Shell(Action<IPlatformShell> act)
     {
-        if (_shell is null) return;
         try
         {
             act(_shell);

@@ -10,12 +10,12 @@ using ZGF.Observable;
 
 namespace GitBench.Features.LanguageServers;
 
-internal sealed class LanguageServersViewModel : IDialogViewModel
+internal sealed class LanguageServersViewModel
 {
     private readonly ILanguageServerStore _store;
-    private readonly IMessageBus? _bus;
+    private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
-    private readonly IClipboard? _clipboard;
+    private readonly IClipboard _clipboard;
     private const int ReloadSettleMs = 500;
 
     private readonly State<string?> _reloadResult = new(null);
@@ -24,8 +24,8 @@ internal sealed class LanguageServersViewModel : IDialogViewModel
         ILanguageServerStore store,
         ILocalizationService loc,
         IUiDispatcher dispatcher,
-        IMessageBus? bus = null,
-        IClipboard? clipboard = null)
+        IMessageBus bus,
+        IClipboard clipboard)
     {
         _store = store;
         _loc = loc;
@@ -41,8 +41,6 @@ internal sealed class LanguageServersViewModel : IDialogViewModel
         CanCreateConfig = new Derived<bool>(() =>
             !store.Active.Value.ConfigFileExists && store.Active.Value.Suggestions.Count > 0);
     }
-
-    public event Action? CloseRequested;
 
     public IReadable<string?> ReloadResult => _reloadResult;
 
@@ -117,15 +115,9 @@ internal sealed class LanguageServersViewModel : IDialogViewModel
 
     public void CopyEntry(StarterServer server)
     {
-        if (_clipboard is null) return;
         _clipboard.SetText(StarterServers.EntryText(server));
         Toast(ToastIntent.Success(_loc.Strings.Value.LanguageServersSnippetCopied));
     }
 
-    public void Dispose()
-    {
-        CloseRequested = null;
-    }
-
-    private void Toast(ToastIntent intent) => _bus?.Broadcast(new ShowToastMessage(intent));
+    private void Toast(ToastIntent intent) => _bus.Broadcast(new ShowToastMessage(intent));
 }

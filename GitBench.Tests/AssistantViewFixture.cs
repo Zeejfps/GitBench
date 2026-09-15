@@ -1,3 +1,4 @@
+using GitBench.Platform;
 using System.Diagnostics;
 using GitBench.App;
 using GitBench.Controls;
@@ -170,6 +171,7 @@ internal sealed class AssistantViewFixture : IDisposable
                 configureCanvas?.Invoke((RecordingCanvas)ctx.Canvas);
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(localization);
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<IClipboard>(Clipboard);
                 ctx.AddService<IUiDispatcher>(Dispatcher);
                 ctx.AddService<IRepoRegistry>(_registry);

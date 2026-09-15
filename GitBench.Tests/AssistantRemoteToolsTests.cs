@@ -236,12 +236,12 @@ public sealed class AssistantRemoteToolsTests : IDisposable
     public void Pull_WhenTheBranchDiverges_AlsoPutsTheReconcileDialogInFrontOfThePerson()
     {
         _git.OnPull = (_, _) => new PullOutcome.Diverged();
-        var diverged = new List<PullDivergedMessage>();
-        _bus.Subscribe<PullDivergedMessage>(diverged.Add);
+        var diverged = new List<Repo>();
+        _operations.PullDiverged += diverged.Add;
 
         Invoke("pull", "{}");
 
-        Assert.Equal(_repo, Assert.Single(diverged).Repo);
+        Assert.Equal(_repo, Assert.Single(diverged));
     }
 
     [Fact]

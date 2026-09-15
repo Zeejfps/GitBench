@@ -2,7 +2,7 @@ namespace GitBench.Features.Diff;
 
 // One popped-out diff window. Owns a live, pinned DiffViewModel (independent of the main
 // window's file selection, but still refreshing on working-tree changes) plus the window
-// title. Created and owned by DiffWindowsViewModel; the view layer (DiffWindowsPresenter)
+// title. Created and owned by DiffWindowsViewModel; the view layer (DiffWindowsView)
 // binds a DiffView to <see cref="Diff"/>.
 internal sealed class DiffWindowViewModel : IDisposable
 {

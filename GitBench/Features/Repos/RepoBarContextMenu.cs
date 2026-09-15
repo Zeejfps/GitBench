@@ -221,7 +221,7 @@ public static class RepoBarContextMenu
     {
         var theme = ctx.Theme();
         var input = ctx.Require<InputSystem>();
-        var clipboard = ctx.Get<IClipboard>();
+        var clipboard = ctx.Require<IClipboard>();
 
         var field = new TextInputView(ctx.Canvas)
         {
@@ -292,7 +292,7 @@ public static class RepoBarContextMenu
         private readonly Action _onEscape;
         private readonly Action _onCommit;
 
-        public SearchMenuInputController(TextInputView view, InputSystem input, IClipboard? clipboard, Action onEscape, Action onCommit)
+        public SearchMenuInputController(TextInputView view, InputSystem input, IClipboard clipboard, Action onEscape, Action onCommit)
             : base(view, input, clipboard)
         {
             _onEscape = onEscape;

@@ -108,15 +108,17 @@ internal sealed class ActionsToolbarViewModel : ViewModelBase<ActionsToolbarStat
         // and a background op keeps tracking after the switch.
         Subscriptions.Add(_ops.Active.Subscribe(OnOps));
 
-        // A diverged pull on the active repo is recoverable — open the reconcile dialog.
-        Subscriptions.Add(_bus.SubscribeScoped<PullDivergedMessage>(m =>
+        _ops.PullDiverged += OnPullDiverged;
+        Subscriptions.Add(() => _ops.PullDiverged -= OnPullDiverged);
+    }
+
+    private void OnPullDiverged(Repo repo)
+    {
+        if (_registry.Active.Value?.Id != repo.Id) return;
+        _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog
         {
-            if (_registry.Active.Value?.Id == m.Repo.Id)
-                _bus.Broadcast(new ShowDialogMessage(onClose => new ReconcilePullDialog
-                {
-                    Repo = m.Repo,
-                    OnClose = onClose,
-                }));
+            Repo = repo,
+            OnClose = onClose,
         }));
     }
 

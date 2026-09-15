@@ -1,3 +1,4 @@
+using GitBench.Platform;
 using System.Reflection;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -95,6 +96,8 @@ public class ThemeMarkdownStylesTests
                 ctx.AddService<IThemeService<ThemeStyles>>(new ThemeService(themeMode));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 ctx.AddService<IUiDispatcher>(new QueuedDispatcher());
             });
         return (harness, themeMode);

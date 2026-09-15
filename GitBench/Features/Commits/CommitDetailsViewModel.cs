@@ -9,6 +9,7 @@ using GitBench.Git;
 using GitBench.Infrastructure;
 using GitBench.Localization;
 using GitBench.Messages;
+using GitBench.Platform;
 using ZGF.Observable;
 
 namespace GitBench.Features.Commits;
@@ -40,6 +41,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     private readonly IMessageBus _bus;
     private readonly ILocalizationService _loc;
     private readonly PreferencesService _preferences;
+    private readonly LocalChangesViewModel _localChanges;
+    private readonly DiffWindowsViewModel _windows;
+    private readonly IPlatformShell _shell;
     private string? _currentSha;
     // Non-null only in the Review window's Combined mode: the range base. When set, opened files are
     // range tabs (base→head) rather than commit-vs-parent. Null for every commit/History selection.
@@ -78,6 +82,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         IMessageBus bus,
         ILocalizationService loc,
         PreferencesService preferences,
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell,
         bool subscribeToSelection = true)
         : base(dispatcher, new CommitDetailsState(
             new CommitDetailsRenderState.Placeholder(loc.Strings.Value.CommitsDetailsNoSelection),
@@ -93,6 +100,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
         _bus = bus;
         _loc = loc;
         _preferences = preferences;
+        _localChanges = localChanges;
+        _windows = windows;
+        _shell = shell;
 
         RenderState = Slice(s => s.Render);
         SelectedPath = Slice(s => s.SelectedPath);
@@ -223,7 +233,7 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     {
         if (string.IsNullOrEmpty(_currentSha)) return;
         if (FindTab(path) == null)
-            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha));
+            OpenTabs.Add(new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell, _currentBaseSha));
         Update(s => s with { SelectedPath = path });
     }
 
@@ -236,9 +246,9 @@ internal sealed class CommitDetailsViewModel : ViewModelBase<CommitDetailsState>
     public CommitFileTab? CreateFileDiff(string path)
     {
         if (_workingTree)
-            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc);
+            return CommitFileTab.ForWorkingTree(path, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell);
         if (string.IsNullOrEmpty(_currentSha)) return null;
-        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _currentBaseSha);
+        return new CommitFileTab(path, _currentSha, _currentRepoId, _registry, _gitDiff, _gitWorkingTree, _gitConflicts, Dispatcher, _bus, _extractor, _loc, _localChanges, _windows, _shell, _currentBaseSha);
     }
 
     /// <summary>Switches the active tab. A null path activates the implicit Details tab.</summary>

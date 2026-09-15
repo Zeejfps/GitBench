@@ -1,3 +1,4 @@
+using ZGF.Gui;
 using ZGF.Gui.Desktop.Components.TextInput;
 using ZGF.Gui.Desktop.Input;
 using ZGF.KeyboardModule;
@@ -11,7 +12,7 @@ internal sealed class RepoRenameKbmController : BaseTextInputKbmController
     private readonly IRepoRegistry _registry;
     private bool _finished;
 
-    public RepoRenameKbmController(TextInputView input, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard, Guid repoId, IRepoRegistry registry) : base(input, inputSystem, clipboard)
+    public RepoRenameKbmController(TextInputView input, InputSystem inputSystem, IClipboard clipboard, Guid repoId, IRepoRegistry registry) : base(input, inputSystem, clipboard)
     {
         _input = input;
         _repoId = repoId;

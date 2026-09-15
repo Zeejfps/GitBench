@@ -265,7 +265,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // before the selection controller to mirror DiffContentView's ordering.
         this.UseController(input, () => new HunkHoverController(this), EventPhaseFilter.Capture);
         this.UseController(input, () => new PanelWheelController(this));
-        _selectionController = new DiffSelectionController(this, input, ctx.Get<IClipboard>());
+        _selectionController = new DiffSelectionController(this, input, ctx.Require<IClipboard>());
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
         this.BindThemed(ctx.Theme(), s =>

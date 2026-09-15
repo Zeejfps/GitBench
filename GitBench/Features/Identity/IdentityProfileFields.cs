@@ -33,7 +33,7 @@ internal sealed record IdentityProfileFields : Widget
         {
             Label = s.CommonBrowse,
             Command = new Command(() =>
-                ctx.Get<IFilePicker>()?.PickFile(
+                ctx.Require<IFilePicker>().PickFile(
                     s.IdentityPickerChooseSshKey,
                     IdentityProfileEditing.InitialSshKeyDirectory(SshKeyPath.Value),
                     filters: null,

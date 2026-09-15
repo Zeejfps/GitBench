@@ -5,6 +5,7 @@ using GitBench.Git;
 using GitBench.Localization;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
+using GitBench.Platform;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -131,6 +132,8 @@ public class UsagesShortcutTests
                     new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                 ctx.AddService<ILocalizationService>(
                     new LocalizationService(new State<Locale>(Locale.En)));
+                ctx.AddService<IClipboard>(new NoopClipboard());
+                ctx.AddService<IPlatformShell>(new NoopPlatformShell());
             });
         view.SetRenderState(new DiffRenderState.Loaded(Diff()), document: null);
         harness.Render(); // resolve font metrics

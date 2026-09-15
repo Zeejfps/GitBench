@@ -295,6 +295,7 @@ public sealed class RepoHeadStoreTests : IDisposable
         public IReadable<RepoOperations> Active => _active;
         public bool HasUnseenError(Guid repoId) => false;
         public bool IsBusy(Guid repoId) => false;
+        public event Action<Repo>? PullDiverged { add { } remove { } }
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }

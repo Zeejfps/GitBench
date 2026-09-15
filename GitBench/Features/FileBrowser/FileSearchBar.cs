@@ -90,7 +90,7 @@ internal sealed record FileSearchBar : Widget
         field.Bind(ctx.Localization().Strings, s => field.PlaceholderText = s.FileSearchTitle);
         field.SetText(model.Text.Value);
 
-        var controller = new FileSearchInputController(field, inputSystem, ctx.Get<IClipboard>())
+        var controller = new FileSearchInputController(field, inputSystem, ctx.Require<IClipboard>())
         {
             OnEscape = model.Close,
             OnStep = backwards => { if (backwards) model.Previous(); else model.Next(); },
@@ -287,7 +287,7 @@ internal sealed class FileSearchInputController : BaseTextInputKbmController
     /// <summary>Called with true for a backwards step.</summary>
     public Action<bool>? OnStep { get; set; }
 
-    public FileSearchInputController(TextInputView input, InputSystem inputSystem, IClipboard? clipboard)
+    public FileSearchInputController(TextInputView input, InputSystem inputSystem, IClipboard clipboard)
         : base(input, inputSystem, clipboard)
     {
         _input = input;

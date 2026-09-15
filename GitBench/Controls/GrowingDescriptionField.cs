@@ -120,7 +120,7 @@ internal sealed class GrowingDescriptionField : ContainerView
             _input.SelectionRectColor = s.TextInput.Selection;
             _input.PlaceholderTextColor = s.TextInput.PlaceholderText;
         });
-        _inputController = new FieldController(_input, inputSystem, ctx.Get<ZGF.Gui.IClipboard>()) { IsMultiLine = true };
+        _inputController = new FieldController(_input, inputSystem, ctx.Require<IClipboard>()) { IsMultiLine = true };
         _input.UseController(inputSystem, _inputController);
 
         _scrollPane = new ScrollPane();
@@ -174,7 +174,7 @@ internal sealed class GrowingDescriptionField : ContainerView
     {
         private InputModifiers _modifiers;
 
-        public FieldController(TextInputView textInput, InputSystem inputSystem, ZGF.Gui.IClipboard? clipboard)
+        public FieldController(TextInputView textInput, InputSystem inputSystem, IClipboard clipboard)
             : base(textInput, inputSystem, clipboard)
         {
         }

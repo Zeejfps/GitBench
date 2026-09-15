@@ -49,7 +49,7 @@ internal sealed record CommitSearchBarView : Widget
             textInput.Clear(); // fires TextValue → OnQueryChanged("")
         }
 
-        var controller = new SearchInputKbmController(textInput, inputSystem, ctx.Get<IClipboard>()) { OnEscape = Clear };
+        var controller = new SearchInputKbmController(textInput, inputSystem, ctx.Require<IClipboard>()) { OnEscape = Clear };
         textInput.UseController(inputSystem, controller);
         textInput.Bind(textInput.TextValue, OnQueryChanged);
 
@@ -143,7 +143,7 @@ internal sealed class SearchInputKbmController : BaseTextInputKbmController
 
     public Action? OnEscape { get; set; }
 
-    public SearchInputKbmController(TextInputView input, InputSystem inputSystem, IClipboard? clipboard)
+    public SearchInputKbmController(TextInputView input, InputSystem inputSystem, IClipboard clipboard)
         : base(input, inputSystem, clipboard)
     {
         _input = input;

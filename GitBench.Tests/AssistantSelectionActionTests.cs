@@ -30,13 +30,11 @@ public sealed class AssistantSelectionActionTests
             Rows, new DiffTextPos(default, default), new DiffTextPos(default, new ExpandedColumn(13)),
             "src/Runner.cs")!;
 
-    private static (List<AskAssistantAboutSelectionMessage> Asks, IReadOnlyList<RepoBarContextMenu.Item> Items) Menu()
+    private static (List<(string? AgentName, string Prompt)> Asks, IReadOnlyList<RepoBarContextMenu.Item> Items) Menu()
     {
-        var bus = new MessageBus();
-        var asks = new List<AskAssistantAboutSelectionMessage>();
-        bus.Subscribe<AskAssistantAboutSelectionMessage>(asks.Add);
+        var asks = new List<(string? AgentName, string Prompt)>();
         using var loc = new LocalizationService(new State<Locale>(Locale.En));
-        return (asks, DiffAssistantMenu.Items(loc.Strings.Value, bus, Quote()));
+        return (asks, DiffAssistantMenu.Items(loc.Strings.Value, Quote(), (agent, prompt) => asks.Add((agent, prompt))));
     }
 
     [Fact]
@@ -178,8 +176,8 @@ public sealed class AssistantSelectionActionTests
 
     private static void Ask(AssistantViewFixture fixture, string? agentName)
     {
-        fixture.Bus.Broadcast(new AskAssistantAboutSelectionMessage(agentName, Quote().ToPrompt(
-            agentName is null ? null : "Explain this selection.")));
+        fixture.Vm.AskAboutSelection(agentName, Quote().ToPrompt(
+            agentName is null ? null : "Explain this selection."));
         if (agentName is null)
         {
             fixture.Frames();

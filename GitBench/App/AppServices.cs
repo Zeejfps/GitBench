@@ -4,6 +4,7 @@ using GitBench.Features.Assistant;
 using GitBench.Features.Assistant.Backend;
 using GitBench.Features.Assistant.Tools;
 using GitBench.Features.CodeIntel;
+using GitBench.Features.Diff;
 using GitBench.Features.Commits;
 using GitBench.Features.Editor;
 using GitBench.Features.FileBrowser;
@@ -95,13 +96,14 @@ internal static class AppServices
         // parse tree between edits, which is a seam only the parser-backed extractor has.
         context.AddSingleton(_ =>
             new TreeSitterSymbolExtractor(reason => CrashLog.Note(crashLogPath, reason)));
-        context.AddSingleton<ISymbolExtractor>(ctx => ctx.Require<TreeSitterSymbolExtractor>());
+        context.AddAlias<ISymbolExtractor, TreeSitterSymbolExtractor>();
 
         context.AddPlatformServices();
 
         var statePath = AppPaths.AppDataPath("state.json");
-        context.AddSingleton<IRepoRegistry>(_ =>
-            new RepoRegistry(RepoStateStore.Load(statePath), statePath));
+        context.AddSingleton(_ => new RepoRegistry(RepoStateStore.Load(statePath), statePath));
+        context.AddAlias<IRepoRegistry, RepoRegistry>();
+        context.AddAlias<IIdentityOverrides, RepoRegistry>();
         // Defers the all-repos startup sweeps (status / worktree / submodule) behind the active
         // repo's first load so they don't contend with it. Resolved by the stores/services below.
         context.AddSingleton<AppViewModel>();
@@ -134,30 +136,20 @@ internal static class AppServices
         context.AddService<IGitRawConfigReader>(gitService);
         // Reads config through gitService and back-wires itself into it (its hosted Start) so every
         // git invocation gets the right per-repo name/email/SSH key injected without touching repo
-        // config. Hosted via a factory because its deps need an interface cast the container can't do.
-        context.AddHostedService(ctx => new GitIdentityService(
-            ctx.Require<IGitRawConfigReader>(), ctx.Require<IdentityProfileService>(),
-            ctx.Require<IMessageBus>(), (IIdentityOverrides)ctx.Require<IRepoRegistry>()));
+        // config.
+        context.AddHostedService<GitIdentityService>();
         context.AddSingleton<IDragController, DragController>();
         context.AddSingleton<RepoHoverState>();
         context.AddSingleton<RepoBarCollapseState>();
-        context.AddSingleton(ctx => new RepoNodeFactory(
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IRepoStatusStore>(),
-            ctx.Require<IRepoLoadStore>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<IGitRemoteOperations>(),
-            ctx.Require<IGitWorktreeOperations>(),
-            ctx.Get<IPlatformShell>(),
-            ctx.Require<ILocalizationService>(),
-            ctx.Get<IClipboard>(),
-            ctx.Get<IFilePicker>(),
-            ctx.Require<IUiDispatcher>()));
+        context.AddSingleton<RepoNodeFactory>();
         context.AddSingleton<LocalChangesSelectionStore>();
         context.AddSingleton<OperationViewModel>();
         // Shared so the Local Changes file list and the workspace-footer merge bar drive the same
         // staging / commit state from either tab.
         context.AddSingleton<LocalChangesViewModel>();
+        // The pop-out diff windows: one owner for the app, reached directly by every diff pane's
+        // "open in new window", so a pane in a pop-out can open another.
+        context.AddSingleton<DiffWindowsViewModel>();
 
         // The Changes tab's Review layout. Its commit-details VM is its own — opted out of the
         // selection bus so the History pane's commit selection can never drive the working-tree
@@ -176,6 +168,9 @@ internal static class AppServices
                 ctx.Require<IMessageBus>(),
                 ctx.Require<ILocalizationService>(),
                 preferences,
+                ctx.Require<LocalChangesViewModel>(),
+                ctx.Require<DiffWindowsViewModel>(),
+                ctx.Require<IPlatformShell>(),
                 subscribeToSelection: false),
             ctx.Require<IRepoRegistry>(),
             ctx.Require<ILocalizationService>()));
@@ -250,21 +245,7 @@ internal static class AppServices
         // Hosted because it follows the registry, which it can only do once the UI loop exists.
         context.AddHostedService<ILanguageServerStore, LanguageServerStore>();
 
-        // Factory because the snapshot store ingests the active repo's file-list summary into the
-        // status store, an interface cast (IRepoStatusIngest) the container can't do by plain
-        // injection — the same shape GitIdentityService uses above. IRepoStatusIngest is deliberately
-        // not its own registration: the container owns every factory result, so a second delegating
-        // registration would dispose RepoStatusStore twice.
-        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>(ctx => new RepoSnapshotStore(
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitHistoryReader>(),
-            ctx.Require<IGitStatusReader>(),
-            ctx.Require<IGitBranchOperations>(),
-            ctx.Require<IGitSubmoduleOperations>(),
-            ctx.Require<IMessageBus>(),
-            (IRepoStatusIngest)ctx.Require<IRepoStatusStore>(),
-            ctx.Require<IGitReadGate>(),
-            ctx.Require<IUiDispatcher>()));
+        context.AddHostedService<IRepoSnapshotStore, RepoSnapshotStore>();
         context.AddHostedService<IRepoOperationsStore, RepoOperationsStore>();
         context.AddHostedService<IRepoIndexOperationsStore, RepoIndexOperationsStore>();
         // Samples the read gate + the operations store once a frame into the per-repo "loading" flag
@@ -272,20 +253,13 @@ internal static class AppServices
         // the rest of the app rather than on first row build.
         context.AddHostedService<IRepoLoadStore, RepoLoadStore>();
         // The head store owns the checkout; the status store composes its pending branch into
-        // RepoStatus and, in return, tells it when a fresh read has landed. Same factory-plus-cast
-        // shape as the ingest wiring above, and for the same reason: the container can't cast, and a
-        // second delegating registration would dispose the store twice.
-        context.AddSingleton<IRepoHeadStore, RepoHeadStore>();
-        context.AddHostedService<IRepoStatusStore, RepoStatusStore>(ctx => new RepoStatusStore(
-            ctx.Require<IRepoOperationsStore>(),
-            ctx.Require<IRepoIndexOperationsStore>(),
-            ctx.Require<IRepoRegistry>(),
-            ctx.Require<IGitStatusReader>(),
-            ctx.Require<IMessageBus>(),
-            ctx.Require<IGitReadGate>(),
-            ctx.Require<IUiDispatcher>(),
-            ctx.Require<IRepoHeadStore>(),
-            (IRepoHeadConfirm)ctx.Require<IRepoHeadStore>()));
+        // RepoStatus and, in return, tells it when a fresh read has landed.
+        context.AddSingleton<RepoHeadStore>();
+        context.AddAlias<IRepoHeadStore, RepoHeadStore>();
+        context.AddAlias<IRepoHeadConfirm, RepoHeadStore>();
+        context.AddHostedService<RepoStatusStore>();
+        context.AddAlias<IRepoStatusStore, RepoStatusStore>();
+        context.AddAlias<IRepoStatusIngest, RepoStatusStore>();
         // Pushes the active repo's id into the read gate, which is what makes the gate admit that
         // repo's reads ahead of the startup sweep instead of behind it.
         context.AddHostedService<GitReadPriorityService>();

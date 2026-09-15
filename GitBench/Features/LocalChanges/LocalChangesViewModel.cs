@@ -121,6 +121,7 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
     private bool _deferStoreReloadUntilWorkingTreeChange;
 
     private readonly IUnsavedEditsGuard _unsavedEdits;
+    private readonly IRepoStatusIngest _status;
 
     public LocalChangesViewModel(
         IRepoRegistry registry,
@@ -138,11 +139,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         IClipboard clipboard,
         PreferencesService preferences,
         IRepoSnapshotStore store,
+        IRepoStatusIngest status,
         ILocalizationService loc,
         IUnsavedEditsGuard unsavedEdits)
         : base(dispatcher, LocalChangesState.Initial)
     {
         _registry = registry;
+        _status = status;
         _unsavedEdits = unsavedEdits;
         _gitStatus = gitStatus;
         _gitWorkingTree = gitWorkingTree;
@@ -211,7 +214,6 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         Subscriptions.Add(_indexOps.Active.Subscribe(ops =>
             Update(s => s with { PendingPaths = ops.PendingPaths })));
         Subscriptions.Add(store.LocalChanges.Subscribe(OnStoreLocalChanges));
-        Subscriptions.Add(_bus.SubscribeScoped<HunkAppliedOptimisticMessage>(OnHunkAppliedOptimistic));
         Subscriptions.Add(_bus.SubscribeScoped<WorkingTreeChangedMessage>(OnWorkingTreeChanged));
         Subscriptions.Add(Selection.Subscribe(sel =>
             _selectionStore.UnstagedPaths.Value = sel.PathsOn(DiffSide.Unstaged)));
@@ -257,10 +259,13 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
         else _drafts[repoId] = draft;
     }
 
-    private void OnHunkAppliedOptimistic(HunkAppliedOptimisticMessage msg)
+    // Called by DiffViewModel right before git apply runs, so the file lists paint the expected end
+    // state without waiting on the eventual `git status` reload. The reload still runs and
+    // reconciles.
+    public void ApplyHunkOptimistic(Guid repoId, string path, DiffSide fromSide, DiffSide? toSide, bool isLastHunk)
     {
         var active = _registry.Active.Value;
-        if (active == null || active.Id != msg.RepoId) return;
+        if (active == null || active.Id != repoId) return;
 
         _deferStoreReloadUntilWorkingTreeChange = true;
 
@@ -269,24 +274,24 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             var unstaged = s.Unstaged;
             var staged = s.Staged;
 
-            FileChange? entry = msg.FromSide == DiffSide.Unstaged
-                ? FindByPath(unstaged, msg.Path)
-                : FindByPath(staged, msg.Path);
+            FileChange? entry = fromSide == DiffSide.Unstaged
+                ? FindByPath(unstaged, path)
+                : FindByPath(staged, path);
             if (entry == null) return s;
 
-            if (msg.IsLastHunk)
+            if (isLastHunk)
             {
-                if (msg.FromSide == DiffSide.Unstaged)
-                    unstaged = RemoveByPath(unstaged, msg.Path);
-                else if (msg.FromSide == DiffSide.Staged)
-                    staged = RemoveByPath(staged, msg.Path);
+                if (fromSide == DiffSide.Unstaged)
+                    unstaged = RemoveByPath(unstaged, path);
+                else if (fromSide == DiffSide.Staged)
+                    staged = RemoveByPath(staged, path);
             }
 
-            if (msg.ToSide is DiffSide to)
+            if (toSide is DiffSide to)
             {
-                if (to == DiffSide.Unstaged && FindByPath(unstaged, msg.Path) == null)
+                if (to == DiffSide.Unstaged && FindByPath(unstaged, path) == null)
                     unstaged = InsertSorted(unstaged, entry);
-                else if (to == DiffSide.Staged && FindByPath(staged, msg.Path) == null)
+                else if (to == DiffSide.Staged && FindByPath(staged, path) == null)
                     staged = InsertSorted(staged, entry);
             }
 
@@ -294,8 +299,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
             // shifting the selection to the destination side — same behavior as the
             // full-file stage/unstage flow when a pending index move lands.
             Selection selection;
-            if (msg.IsLastHunk && msg.ToSide is DiffSide moved)
-                selection = LocalChanges.Selection.FromPaths(new[] { msg.Path }, moved, unstaged, staged);
+            if (isLastHunk && toSide is DiffSide moved)
+                selection = LocalChanges.Selection.FromPaths(new[] { path }, moved, unstaged, staged);
             else
                 selection = LocalChanges.Selection.Create(s.Selection.Rows, s.Selection.Anchor, s.Selection.Cursor, unstaged, staged);
 
@@ -892,8 +897,8 @@ internal sealed class LocalChangesViewModel : ViewModelBase<LocalChangesState>, 
 
                 // Same reasoning for the ahead count the push button reads: on the active repo it
                 // only refreshes when that reload's `git status` lands, so the button would sit
-                // disabled behind an emptied panel. Amend is left to the reload — see the message.
-                if (!amend) _bus.Broadcast(new LocalCommitOptimisticMessage(repo.Id));
+                // disabled behind an emptied panel. Amend is left to the reload.
+                if (!amend) _status.NoteLocalCommit(repo.Id);
 
                 // After a successful commit the editor is cleared regardless of mode.
                 // When amending we also drop the session — bypassing SetAmend(false)'s

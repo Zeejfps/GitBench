@@ -1,5 +1,6 @@
 using GitBench.Features.CodeIntel;
 using GitBench.Features.Diff;
+using GitBench.Features.LocalChanges;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Infrastructure;
@@ -45,8 +46,10 @@ internal sealed class CommitFileTab : IDisposable
         IMessageBus bus,
         ISymbolExtractor extractor,
         ILocalizationService loc,
-        IPlatformShell? shell = null)
-        => new(path, repoId, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, shell);
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell)
+        => new(path, repoId, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell);
 
     private CommitFileTab(
         string path,
@@ -59,13 +62,15 @@ internal sealed class CommitFileTab : IDisposable
         IMessageBus bus,
         ISymbolExtractor extractor,
         ILocalizationService loc,
-        IPlatformShell? shell)
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell)
     {
         Path = path;
         FileName = LastSegment(path);
         Sha = WorkingTreeSha;
         _target = new State<DiffTarget?>(new DiffTarget(path, DiffSide.WorkingTree));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, repoId, shell);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell, repoId);
     }
 
     public CommitFileTab(
@@ -80,6 +85,9 @@ internal sealed class CommitFileTab : IDisposable
         IMessageBus bus,
         ISymbolExtractor extractor,
         ILocalizationService loc,
+        LocalChangesViewModel localChanges,
+        DiffWindowsViewModel windows,
+        IPlatformShell shell,
         string? baseSha = null)
     {
         Path = path;
@@ -90,7 +98,7 @@ internal sealed class CommitFileTab : IDisposable
         _target = new State<DiffTarget?>(baseSha == null
             ? new DiffTarget(path, DiffSide.Commit, sha)
             : new DiffTarget(path, DiffSide.Range, sha, baseSha));
-        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, repoId);
+        Diff = new DiffViewModel(_target, registry, gitDiff, gitWorkingTree, gitConflicts, dispatcher, bus, extractor, loc, localChanges, windows, shell, repoId);
     }
 
     public void Dispose()

@@ -389,7 +389,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         Seed(h, id, Tracked(ahead: 0));
         var before = h.Git.StatusSummaryCalls;
 
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
 
         // Synchronous, like every other write to the slot — no drain window can be needed.
         Assert.Equal(1, h.Store.For(id).Ahead);
@@ -403,7 +403,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         var id = RepoId("active");
         Seed(h, id, Summary("active-branch"));
 
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
 
         // Ahead means nothing without an upstream, and the toolbar already enables push as a publish.
         Assert.Equal(0, h.Store.For(id).Ahead);
@@ -415,7 +415,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         using var h = StartActive();
         var id = RepoId("active");
         Seed(h, id, Tracked(ahead: 0));
-        h.Bus.Broadcast(new LocalCommitOptimisticMessage(id));
+        h.Store.NoteLocalCommit(id);
         Assert.Equal(1, h.Store.For(id).Ahead);
 
         // The bump stands in for the reload's answer; it never becomes part of it.
@@ -587,6 +587,7 @@ public sealed class RepoStatusStoreTriggerTests : IDisposable
         public IReadable<RepoOperations> Active => _active;
         public bool HasUnseenError(Guid repoId) => false;
         public bool IsBusy(Guid repoId) => false;
+        public event Action<Repo>? PullDiverged { add { } remove { } }
         public void Push(Repo repo, bool force = false) { }
         public void Pull(Repo repo, PullStrategy? strategy = null) { }
         public void Fetch(Repo repo) { }

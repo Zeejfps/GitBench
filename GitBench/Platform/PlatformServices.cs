@@ -16,9 +16,8 @@ namespace GitBench.Platform;
 
 internal static class PlatformServices
 {
-    // Clipboard is only registered on Windows/macOS, which have native APIs; Linux (and anything
-    // else) falls through to GuiApp's default, which routes through the GLFW window's connection to
-    // the display server. Window chrome likewise falls through to GuiApp's no-op outside the three.
+    // The clipboard, popup decorator and window chrome all fall through to GuiApp's defaults where
+    // no entry registers one.
     extension(Context context)
     {
         public void AddPlatformServices()
@@ -35,7 +34,6 @@ internal static class PlatformServices
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 context.AddService<IPlatformShell>(new WindowsPlatformShell());
-                context.AddService<IClipboard>(new Win32Clipboard());
                 context.AddService<IPopupNativeDecorator>(new WindowsPopupDecorator());
                 context.AddService<IWindowChrome>(new WindowsWindowChrome());
                 context.AddService<IAppMenu>(new NoopAppMenu());
@@ -43,7 +41,6 @@ internal static class PlatformServices
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
                 context.AddService<IPlatformShell>(new MacOSPlatformShell());
-                context.AddService<IClipboard>(new OsxClipboard());
                 context.AddService<IPopupNativeDecorator>(new MacOsPopupDecorator());
                 context.AddService<IWindowChrome>(new MacOsWindowChrome());
                 context.AddService<IAppMenu>(new MacOsAppMenu());
@@ -51,14 +48,12 @@ internal static class PlatformServices
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
                 context.AddService<IPlatformShell>(new LinuxPlatformShell());
-                context.AddService<IPopupNativeDecorator>(new NoopPopupDecorator());
                 context.AddService<IWindowChrome>(new LinuxWindowChrome());
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
             else
             {
                 context.AddService<IPlatformShell>(new NoopPlatformShell());
-                context.AddService<IPopupNativeDecorator>(new NoopPopupDecorator());
                 context.AddService<IAppMenu>(new NoopAppMenu());
             }
         }

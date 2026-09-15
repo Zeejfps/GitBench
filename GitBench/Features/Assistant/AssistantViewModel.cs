@@ -53,7 +53,6 @@ internal sealed class AssistantViewModel : IDisposable
     private readonly Derived<string> _baseUrlHint;
     private readonly Derived<string> _keyHint;
     private readonly IDisposable _availableSub;
-    private readonly IDisposable _selectionSub;
 
     // Which provider the key field's contents are for, and whether they are that provider's stored
     // key rather than something typed. Only the stored case makes emptying the box a deletion — an
@@ -125,24 +124,23 @@ internal sealed class AssistantViewModel : IDisposable
             if (!available) _open.Value = false;
         });
 
-        _selectionSub = bus.SubscribeScoped<AskAssistantAboutSelectionMessage>(AskAboutSelection);
     }
 
-    // The diff's quick actions land here. A preset runs at once and answers in the transcript
-    // without joining the thread; the free-form one only fills the composer, because the question is
-    // still the person's to write and sending it is still their move.
-    private void AskAboutSelection(AskAssistantAboutSelectionMessage m)
+    // The diff's quick actions land here. A preset (agentName) runs at once and answers in the
+    // transcript without joining the thread; the free-form one (null) only fills the composer,
+    // because the question is still the person's to write and sending it is still their move.
+    public void AskAboutSelection(string? agentName, string prompt)
     {
         if (!_available.Value) return;
         _open.Value = true;
 
-        if (m.AgentName is { Length: > 0 } agent)
+        if (agentName is { Length: > 0 } agent)
         {
-            _store.RunPreset(agent, m.Prompt);
+            _store.RunPreset(agent, prompt);
             return;
         }
 
-        _draft.Value = m.Prompt + "\n\n";
+        _draft.Value = prompt + "\n\n";
     }
 
     // The review runs the moment it is picked, in the overlay, as a one-shot detached from the
@@ -479,7 +477,6 @@ internal sealed class AssistantViewModel : IDisposable
 
     public void Dispose()
     {
-        _selectionSub.Dispose();
         _availableSub.Dispose();
         _keyHint.Dispose();
         _baseUrlHint.Dispose();

@@ -28,13 +28,13 @@ internal sealed record CopyIconButton : Widget
 
     protected override IWidget Build(Context ctx)
     {
-        var clipboard = ctx.Get<IClipboard>();
+        var clipboard = ctx.Require<IClipboard>();
         var label = Label;
         var text = GetText;
 
         return new IconButtonWidget
         {
-            Command = new Command(() => clipboard?.SetText(text())),
+            Command = new Command(() => clipboard.SetText(text())),
             Icon = LucideIcons.Copy,
             Width = Sizes.RowHeight,
             Height = Sizes.RowHeight,

@@ -53,7 +53,7 @@ internal sealed record RepoRenameField : Widget
         var root = new ContainerView { Height = RowHeight };
         root.Children.Add(box);
 
-        root.UseController(inputSystem, () => new RepoRenameKbmController(input, inputSystem, ctx.Get<IClipboard>(), RepoId, registry));
+        root.UseController(inputSystem, () => new RepoRenameKbmController(input, inputSystem, ctx.Require<IClipboard>(), RepoId, registry));
         return root;
     }
 }

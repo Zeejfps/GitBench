@@ -1,9 +1,9 @@
 using GitBench.Controls;
+using GitBench.Features.Assistant;
 using GitBench.Features.Repos;
 using GitBench.Git;
 using GitBench.Input;
 using GitBench.Localization;
-using GitBench.Messages;
 using GitBench.Theming;
 using GitBench.Widgets;
 using ZGF.Desktop;
@@ -161,11 +161,10 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private readonly VirtualRowListView _list;
     private readonly ILocalizationService _loc;
     private readonly Context _ctx;
-    private readonly IMessageBus? _bus;
     private readonly DiffSelectionModel _selection = new();
     private readonly DiffSelectionController _selectionController;
     private readonly Features.Editor.EditorController _editorController;
-    private readonly IClipboard? _clipboard;
+    private readonly IClipboard _clipboard;
     private readonly Features.Editor.DocumentSaves? _saves;
 
     /// <summary>Whether a selection here offers the assistant's quick actions. Only the main
@@ -202,7 +201,6 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         var input = ctx.Require<InputSystem>();
         var theme = ctx.Theme();
         _ctx = ctx;
-        _bus = ctx.Get<IMessageBus>();
         _loc = ctx.Localization();
         _painter = new DiffRowPainter(_loc);
         _buttonBar = new HunkButtonBar(_loc);
@@ -221,7 +219,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         AddChildToSelf(_list);
         _list.UseController(input, () => new VirtualRowListController(_list));
         this.UseController(input, () => new DiffMouseController(this), EventPhaseFilter.Capture);
-        _clipboard = ctx.Get<IClipboard>();
+        _clipboard = ctx.Require<IClipboard>();
         _saves = Features.Editor.DocumentSaves.From(ctx);
         _editorController = new Features.Editor.EditorController(this, input, ctx.KeyMap());
         _selectionController = new DiffSelectionController(this, input, _clipboard, _editorController);
@@ -1156,7 +1154,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     void Features.Editor.IEditorSurface.RequestRedraw() => SetDirty();
     bool Features.Editor.IEditorSurface.CopySelection() => _selectionController.Copy();
     bool Features.Editor.IEditorSurface.SelectAllText() => _selectionController.SelectAll();
-    string? Features.Editor.IEditorSurface.ClipboardText() => _clipboard?.GetText();
+    string? Features.Editor.IEditorSurface.ClipboardText() => _clipboard.GetText();
 
     void Features.Editor.IEditorSurface.RequestSave()
     {
@@ -1431,13 +1429,14 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
 
     bool IDiffSelectionSurface.ShowSelectionMenu(PointF point)
     {
-        if (!AssistantActions || _bus is null) return false;
+        if (!AssistantActions) return false;
         if (DescribeState(_renderState).Path is not { } path) return false;
         if (DiffSelectionQuote.Build(
                 RowSource.Rows, _selection.Start, _selection.End, path, AnnotationsOf(_renderState)) is not { } quote)
             return false;
 
-        return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, _bus, quote)) != null;
+        var assistant = _ctx.Require<AssistantViewModel>();
+        return RepoBarContextMenu.Show(_ctx, point, DiffAssistantMenu.Items(_loc.Strings.Value, quote, assistant.AskAboutSelection)) != null;
     }
 
     private static DiffAnnotations? AnnotationsOf(DiffRenderState state) => state switch

@@ -4,6 +4,7 @@ using GitBench.Features.LanguageServers;
 using GitBench.Localization;
 using GitBench.Lsp;
 using GitBench.Lsp.Documents;
+using GitBench.Platform;
 using GitBench.Theming;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -167,6 +168,8 @@ public class UsagesPopupTests
                         new ThemeService(new State<ThemeMode>(ThemeMode.Dark)));
                     ctx.AddService<ILocalizationService>(
                         new LocalizationService(new State<Locale>(Locale.En)));
+                    ctx.AddService<IClipboard>(new NoopClipboard());
+                    ctx.AddService<IPlatformShell>(new NoopPlatformShell());
                 });
 
             Popup = new UsagesPopup(
