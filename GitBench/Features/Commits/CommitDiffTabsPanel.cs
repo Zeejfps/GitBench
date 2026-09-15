@@ -64,7 +64,7 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
 
         _headerScrollPane = new ScrollPane();
         _headerScrollPane.Children.Add(_headerInfo);
-        _headerScrollPane.UseController(input, () => new ScrollPaneWheelController(_headerScrollPane));
+        _headerScrollPane.UseController(input, () => WheelScrollController.For(_headerScrollPane));
 
         var headerVScrollBar = ScrollBars.CreateVertical(ctx);
         var headerHScrollBar = ScrollBars.CreateHorizontal(ctx);
@@ -329,22 +329,5 @@ internal sealed class CommitDiffTabsPanelView : ContainerView
             return rest.ToString().TrimEnd();
         }
         return normalized.TrimEnd();
-    }
-}
-
-internal sealed class ScrollPaneWheelController : KeyboardMouseController
-{
-    private readonly ScrollPane _pane;
-
-    public ScrollPaneWheelController(ScrollPane pane)
-    {
-        _pane = pane;
-    }
-
-    public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-    {
-        if (e.DeltaY != 0f) _pane.ScrollVertical(-e.DeltaY * Scrolling.WheelStep);
-        if (e.DeltaX != 0f) _pane.ScrollHorizontal(-e.DeltaX * Scrolling.WheelStep);
-        e.Consume();
     }
 }

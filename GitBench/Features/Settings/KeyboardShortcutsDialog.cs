@@ -106,9 +106,10 @@ internal sealed record KeyboardShortcutsDialog : Widget<DialogState>
                                 },
                                 new Grow
                                 {
-                                    Child = new DialogScrollRegion
+                                    Child = new ScrollRegion
                                     {
                                         FillParent = true,
+                                        StretchContent = true,
                                         Content = new Padding
                                         {
                                             // Keeps the cards off the scrollbar when it appears.

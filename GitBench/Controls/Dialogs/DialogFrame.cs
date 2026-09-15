@@ -51,7 +51,7 @@ internal static class DialogFrame
                 {
                     Grow = 1,
                     Shrink = 1,
-                    Child = new DialogScrollRegion { Content = new Raw { View = body } }.BuildView(ctx),
+                    Child = new ScrollRegion { Content = new Raw { View = body }, StretchContent = true }.BuildView(ctx),
                 },
             },
         };

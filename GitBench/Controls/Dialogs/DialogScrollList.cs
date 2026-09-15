@@ -13,7 +13,7 @@ namespace GitBench.Controls.Dialogs;
 /// view in full rather than truncating, and a long list scrolls vertically; both scrollbars
 /// auto-hide when their axis fits. <see cref="ScrollPane.FillParent"/> makes the card claim no
 /// height of its own, so a fixed-height dialog's body Grow hands it all the leftover space and the
-/// frame's outer bar stays out of it (see <see cref="DialogScrollRegion"/>); place it in a Grow.
+/// frame's outer bar stays out of it (see <see cref="ScrollRegion"/>); place it in a Grow.
 /// A min height keeps the card usable when the window caps the dialog below its fixed height —
 /// past that floor the body stops shrinking and the frame's outer bar scrolls it instead.
 /// </summary>
@@ -38,7 +38,7 @@ internal sealed record DialogScrollList : Widget
             Padding = PaddingStyle.All(Spacing.Sm),
             Children = { Content },
         });
-        pane.UseController(input, () => new WheelController(pane));
+        pane.UseController(input, () => WheelScrollController.For(pane));
 
         var vBar = ScrollBars.CreateVertical(ctx);
         var hBar = ScrollBars.CreateHorizontal(ctx);
@@ -62,18 +62,5 @@ internal sealed record DialogScrollList : Widget
         card.Use(() => new ScrollSyncController(pane, vBar, hBar));
 
         return card;
-    }
-
-    // Innermost scroll target: scrolls both axes off the wheel and consumes only when it actually
-    // moved, so a wheel over a list with nothing to scroll bubbles back out rather than dead-ending.
-    private sealed class WheelController(ScrollPane pane) : KeyboardMouseController
-    {
-        public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-        {
-            var moved = false;
-            if (e.DeltaY != 0f) moved |= pane.ScrollVertical(-e.DeltaY * Scrolling.WheelStep);
-            if (e.DeltaX != 0f) moved |= pane.ScrollHorizontal(-e.DeltaX * Scrolling.WheelStep);
-            if (moved) e.Consume();
-        }
     }
 }

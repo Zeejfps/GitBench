@@ -1,4 +1,4 @@
-using GitBench.Features.Operations;
+using GitBench.Controls;
 using GitBench.Features.Markdown;
 using GitBench.Features.Markdown.Parsing;
 using GitBench.Features.Markdown.Rendering;
@@ -86,7 +86,7 @@ internal sealed record HoverCard : Widget
     {
         var pane = new VerticalScrollPane { FillParent = false, StretchContent = false };
         pane.Children.Add(new MarkdownWidget { Document = Render.Document }.BuildView(ctx));
-        pane.UseController(ctx.Require<InputSystem>(), () => new VerticalScrollPaneWheelController(pane));
+        pane.UseController(ctx.Require<InputSystem>(), () => WheelScrollController.For(pane));
         return pane;
     }
 

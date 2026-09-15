@@ -9,8 +9,6 @@ using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -27,10 +25,9 @@ namespace GitBench.Features.LocalChanges;
 /// forwards clicks (with modifiers) to a callback that routes into the VM.
 ///
 /// Row scroll/hit-test/wheel/double-click plumbing lives in <see cref="VirtualRowListView"/>.
-/// This view owns the per-row drawing (status badge + path text), the empty-state
-/// swap, and the <see cref="IScrollableContent"/> surface for the external scroll bars.
+/// This view owns the per-row drawing (status badge + path text) and the empty-state swap.
 /// </summary>
-internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
+internal sealed class LocalChangesPanel : ContainerView
 {
     private readonly Context _ctx;
     private readonly ICanvas _canvas;
@@ -47,8 +44,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private readonly View _emptyPlaceholder;
     private readonly PaddingView _bodyContainer;
     private readonly VirtualRowListView _list;
-    private readonly VerticalScrollBarView _scrollBar;
-    private readonly HorizontalScrollBarView _hScrollBar;
+    private readonly VerticalScrollBar _scrollBar;
 
     private IReadOnlyList<FileChange> _files = Array.Empty<FileChange>();
     private IReadOnlyList<FileRow> _rows = Array.Empty<FileRow>();
@@ -106,19 +102,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
     private FileChangeRowStyles _rowStyles = ThemeStyles.Dark.FileChangeRow;
     private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
 
-    // Sentinel start so the first NotifyScrollChanged fires even when the computed scale
-    // equals 1 — otherwise the scrollbar thumb's built-in 0.5 default sticks until a real
-    // change forces an update. Same root cause as the fix in DiffContentView.
-    private float _lastVerticalScale = -1f;
-    private float _lastHorizontalScale = -1f;
-    private float _lastNormalizedY;
-
     public IReadOnlyList<FileChange> Files => _files;
-
-    public event Action<float>? VerticalScrollPositionChanged;
-    public event Action<float>? HorizontalScrollPositionChanged;
-    public float VerticalScale { get; private set; } = 1f;
-    public float HorizontalScale { get; private set; } = 1f;
 
     public LocalChangesPanel(
         Context ctx,
@@ -171,7 +155,6 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _list.RowClicked += OnRowClicked;
         if (onRowActivated != null) _list.RowActivated += OnRowActivated;
         if (buildContextMenu != null) _list.RowContextRequested += OnRowContextRequested;
-        _list.ScrollChanged += NotifyScrollChanged;
 
         // Empty placeholder swaps in as the body when there are no files; the widget swaps
         // back in when files arrive. Keeps the layout (header / center / scrollbars) intact.
@@ -183,14 +166,12 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _currentBody = _emptyPlaceholder;
 
         _scrollBar = ScrollBars.CreateVertical(ctx);
-        _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         AddChildToSelf(new BorderLayoutView
         {
             North = headerBar,
             Center = _bodyContainer,
             East = _scrollBar,
-            South = _hScrollBar,
         });
 
         _list.UseController(input, () => new VirtualRowListController(_list));
@@ -214,7 +195,7 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
             SetDirty();
         });
 
-        this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+        this.Use(() => new ScrollSyncController(_list, _scrollBar));
 
         // The header reads "Title (count)"; the title is localized, so re-render it on a live
         // locale switch (the count is preserved from the current file list).
@@ -232,7 +213,6 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         SyncPendingSpinner();
         // New data: jump back to the top rather than preserving a now-meaningless offset.
         _list.SetScrollY(0f);
-        NotifyScrollChanged();
     }
 
     public void SetPending(IReadOnlySet<string> pending)
@@ -277,14 +257,12 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         if (_viewMode == mode) return;
         _viewMode = mode;
         RebuildRows();
-        NotifyScrollChanged();
     }
 
     public void SetCollapsed(IReadOnlySet<string> collapsed)
     {
         _collapsed = collapsed;
         RebuildRows();
-        NotifyScrollChanged();
     }
 
     private void RebuildRows()
@@ -310,14 +288,6 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         _bodyContainer.Children.Clear();
         _bodyContainer.Children.Add(body);
         _currentBody = body;
-    }
-
-    protected override void OnDrawSelf(ICanvas c)
-    {
-        // Resync every frame so layout changes (splitter drag, window resize) immediately
-        // republish scale/normalized to the scrollbars. NotifyScrollChanged is dedup-protected,
-        // so this is cheap when nothing actually changed.
-        NotifyScrollChanged();
     }
 
     private void OnRowClicked(int rowIndex, InputModifiers modifiers, PointF point)
@@ -500,57 +470,5 @@ internal sealed class LocalChangesPanel : ContainerView, IScrollableContent
         var rowTop = viewport.Top + _list.ScrollY - index * FileChangesUI.RowHeight;
         var rowRect = new RectF(viewport.Left, rowTop - FileChangesUI.RowHeight, viewport.Width, FileChangesUI.RowHeight);
         RowSelection.DrawBackground(c, rowRect, isSelected: true, isHovered: false, _rowSelection, z, isRtl: IsRtl);
-    }
-
-    // ---- IScrollableContent ----
-    //
-    // Horizontal scroll is intentionally inert here: the path text truncates to fit and the
-    // status badge has fixed width, so the row never exceeds the viewport. We still wire
-    // the bar so the layout slot stays consistent with the rest of the GitGui panels; the
-    // bar collapses (PreferredHeight = 0) because Scale is always 1.
-
-    public void SetVerticalNormalizedScrollPosition(float normalized)
-    {
-        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
-        var bodyHeight = _list.Position.Height;
-        var range = contentHeight - bodyHeight;
-        _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
-    }
-
-    public void SetHorizontalNormalizedScrollPosition(float normalized) { /* no-op */ }
-
-    private void NotifyScrollChanged()
-    {
-        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
-        var bodyHeight = _list.Position.Height;
-
-        float vScale, normalizedY;
-        if (contentHeight <= bodyHeight || bodyHeight <= 0)
-        {
-            vScale = 1f;
-            normalizedY = 0f;
-        }
-        else
-        {
-            vScale = bodyHeight / contentHeight;
-            var range = contentHeight - bodyHeight;
-            normalizedY = Math.Clamp(_list.ScrollY / range, 0f, 1f);
-        }
-
-        VerticalScale = vScale;
-        HorizontalScale = 1f;
-
-        if (Math.Abs(vScale - _lastVerticalScale) > 0.0001f
-            || Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-        {
-            _lastVerticalScale = vScale;
-            _lastNormalizedY = normalizedY;
-            VerticalScrollPositionChanged?.Invoke(normalizedY);
-        }
-        if (Math.Abs(1f - _lastHorizontalScale) > 0.0001f)
-        {
-            _lastHorizontalScale = 1f;
-            HorizontalScrollPositionChanged?.Invoke(0f);
-        }
     }
 }

@@ -222,14 +222,16 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
     // just-set offset, so the target re-applies until it sticks or the budget runs out.
     private float? _pendingScrollY;
     private int _pendingScrollFrames;
-    private float _lastNormalizedY;
     private float _lastNormalizedX;
-    private float _lastVerticalScale = -1f;
     private float _lastHorizontalScale = -1f;
 
-    public event Action<float>? VerticalScrollPositionChanged;
+    public event Action<float>? VerticalScrollPositionChanged
+    {
+        add => _list.VerticalScrollPositionChanged += value;
+        remove => _list.VerticalScrollPositionChanged -= value;
+    }
     public event Action<float>? HorizontalScrollPositionChanged;
-    public float VerticalScale { get; private set; } = 1f;
+    public float VerticalScale => _list.VerticalScale;
     public float HorizontalScale { get; private set; } = 1f;
 
     public ReviewDiffListView(Context ctx)
@@ -250,8 +252,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
             ScrollWheelStep = Scrolling.WheelStep,
             CursorAt = CursorAt,
         };
-        _list.ScrollChanged += OnScrolled;
-        _list.HorizontalWheelHandler = OnHorizontalWheel;
+        _list.HorizontalWheelHandler = deltaX => ScrollHorizontalBy(-deltaX * _list.ScrollWheelStep);
         _list.RowClicked += OnRowClicked;
         _list.RowContextRequested += OnRowContextRequested;
 
@@ -264,7 +265,13 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         // Hover only — clicks flow through the list's RowClicked like the gap expanders. Attached
         // before the selection controller to mirror DiffContentView's ordering.
         this.UseController(input, () => new HunkHoverController(this), EventPhaseFilter.Capture);
-        this.UseController(input, () => new PanelWheelController(this));
+        // Wheel over a conflict view (a sibling of the list) still scrolls the list beneath it.
+        this.UseController(input, () => new WheelScrollController((dx, dy) =>
+        {
+            _list.SetScrollY(_list.ScrollY + dy);
+            ScrollHorizontalBy(dx);
+            return true;
+        }));
         _selectionController = new DiffSelectionController(this, input, ctx.Require<IClipboard>());
         this.UseController(input, _selectionController, EventPhaseFilter.Both);
 
@@ -962,20 +969,15 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // ---- input ----
 
-    // Scrolling moves the reader, not the selection: the tree's highlight stays on the file the user
-    // actually picked. The sticky header derives the file being read from the scroll offset directly,
-    // so it still follows along.
-    private void OnScrolled() => NotifyScrollChanged(viewportFits: false);
-
-    private void OnHorizontalWheel(float deltaX)
+    private void ScrollHorizontalBy(float delta)
     {
         var prev = _scrollX;
-        _scrollX -= deltaX * _list.ScrollWheelStep;
+        _scrollX += delta;
         ClampHorizontalScroll();
         if (_scrollX != prev)
         {
             SetDirty();
-            NotifyScrollChanged(viewportFits: false);
+            PublishHorizontalScroll();
         }
     }
 
@@ -1200,7 +1202,7 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         EnsureVisibleLoaded();
         ServiceLookups();
         _selectionController.Tick();
-        NotifyScrollChanged(viewportFits: false);
+        PublishHorizontalScroll();
         ReportVisible();
     }
 
@@ -1606,23 +1608,6 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
 
     // Halves a packed 0xAARRGGBB color's alpha, leaving RGB intact — the "viewed/done" dim.
     private static uint Dim(uint color) => (color & 0x00FFFFFFu) | (0x80u << 24);
-
-    private sealed class PanelWheelController : KeyboardMouseController
-    {
-        private readonly ReviewDiffListView _owner;
-
-        public PanelWheelController(ReviewDiffListView owner) => _owner = owner;
-
-        public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-        {
-            var list = _owner._list;
-            if (e.DeltaY != 0f)
-                list.SetScrollY(list.ScrollY - e.DeltaY * list.ScrollWheelStep);
-            if (e.DeltaX != 0f)
-                _owner.OnHorizontalWheel(e.DeltaX);
-            e.Consume();
-        }
-    }
 
     // Forwards pointer motion into the hunk hover state (outline + action pills). Clicks stay on
     // the list's RowClicked path, like the gap expanders.
@@ -2034,12 +2019,8 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         _list.SetScrollY(clamped);
     }
 
-    public void SetVerticalNormalizedScrollPosition(float normalized)
-    {
-        var range = _list.ContentHeight - Position.Height;
-        if (range <= 0) { _list.SetScrollY(0f); }
-        else { _list.SetScrollY(Math.Clamp(normalized, 0f, 1f) * range); }
-    }
+    public void SetVerticalNormalizedScrollPosition(float normalized) =>
+        _list.SetVerticalNormalizedScrollPosition(normalized);
 
     public void SetHorizontalNormalizedScrollPosition(float normalized)
     {
@@ -2049,58 +2030,24 @@ internal sealed class ReviewDiffListView : View, IScrollableContent, IDiffSelect
         SetDirty();
     }
 
-    private void NotifyScrollChanged(bool viewportFits)
+    private void PublishHorizontalScroll()
     {
-        float normalizedY, normalizedX, vScale, hScale;
-        if (viewportFits)
+        float normalizedX, hScale;
+        var contentW = ContentWidth();
+        var vpw = CardViewportWidth();
+        if (contentW <= vpw || vpw <= 0)
         {
-            normalizedY = 0f;
-            normalizedX = 0f;
-            vScale = 1f;
             hScale = 1f;
+            normalizedX = 0f;
         }
         else
         {
-            var contentH = _list.ContentHeight;
-            var contentW = ContentWidth();
-            var vph = Position.Height;
-            var vpw = CardViewportWidth();
-
-            if (contentH <= vph || vph <= 0)
-            {
-                vScale = 1f;
-                normalizedY = 0f;
-            }
-            else
-            {
-                vScale = vph / contentH;
-                var range = contentH - vph;
-                normalizedY = Math.Clamp(_list.ScrollY / range, 0f, 1f);
-            }
-
-            if (contentW <= vpw || vpw <= 0)
-            {
-                hScale = 1f;
-                normalizedX = 0f;
-            }
-            else
-            {
-                hScale = vpw / contentW;
-                var range = contentW - vpw;
-                normalizedX = Math.Clamp(_scrollX / range, 0f, 1f);
-            }
+            hScale = vpw / contentW;
+            normalizedX = Math.Clamp(_scrollX / (contentW - vpw), 0f, 1f);
         }
 
-        VerticalScale = vScale;
         HorizontalScale = hScale;
 
-        if (Math.Abs(vScale - _lastVerticalScale) > 0.0001f ||
-            Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-        {
-            _lastVerticalScale = vScale;
-            _lastNormalizedY = normalizedY;
-            VerticalScrollPositionChanged?.Invoke(normalizedY);
-        }
         if (Math.Abs(hScale - _lastHorizontalScale) > 0.0001f ||
             Math.Abs(normalizedX - _lastNormalizedX) > 0.0001f)
         {

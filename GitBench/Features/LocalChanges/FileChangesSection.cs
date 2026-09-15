@@ -11,8 +11,6 @@ using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.HorizontalScrollBar;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -39,7 +37,7 @@ namespace GitBench.Features.LocalChanges;
 /// mark. Submodule pointer rows handle their own click (activate the submodule) without going
 /// through the callback.
 /// </summary>
-public sealed class FileChangesSection : ContainerView, IScrollableContent
+public sealed class FileChangesSection : ContainerView
 {
     private readonly string _title;
     private readonly ICanvas _canvas;
@@ -48,8 +46,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private readonly View _emptyPlaceholder;
     private readonly PaddingView _bodyContainer;
     private readonly VirtualRowListView _list;
-    private readonly VerticalScrollBarView _scrollBar;
-    private readonly HorizontalScrollBarView _hScrollBar;
+    private readonly VerticalScrollBar _scrollBar;
     private readonly IReadable<string?>? _selectedPath;
     private readonly IReadable<IReadOnlySet<string>>? _selectedPaths;
     private readonly Action<FileChange, InputModifiers>? _onRowClicked;
@@ -129,18 +126,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     private FileChangeRowStyles _rowStyles = ThemeStyles.Dark.FileChangeRow;
     private RowSelectionStyles _rowSelection = ThemeStyles.Dark.RowSelection;
 
-    // Sentinel start so the first NotifyScrollChanged fires even when the computed scale
-    // equals 1 — otherwise the scrollbar thumb's built-in 0.5 default sticks until a real
-    // change forces an update.
-    private float _lastVerticalScale = -1f;
-    private float _lastHorizontalScale = -1f;
-    private float _lastNormalizedY;
-
-    public event Action<float>? VerticalScrollPositionChanged;
-    public event Action<float>? HorizontalScrollPositionChanged;
-    public float VerticalScale { get; private set; } = 1f;
-    public float HorizontalScale { get; private set; } = 1f;
-
     /// <param name="headsContentPanel">Whether this section is the top of the content panel rather
     /// than a section inside one. When it is, the header bar drops its own top rule and wears the
     /// panel's fill, so the tab strip's join — the one the active tab breaks — is the only line
@@ -191,7 +176,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _list.RowClicked += OnRowClicked;
         if (_onFileContextMenu != null || _onFolderContextMenu != null || _onEmptyContextMenu != null)
             _list.RowContextRequested += OnRowContextRequested;
-        _list.ScrollChanged += NotifyScrollChanged;
 
         _bodyContainer = new PaddingView
         {
@@ -201,7 +185,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         _currentBody = _emptyPlaceholder;
 
         _scrollBar = ScrollBars.CreateVertical(ctx);
-        _hScrollBar = ScrollBars.CreateHorizontal(ctx);
 
         _pendingSpinner = new SpinnerAnimation(ctx.Require<IFrameTicker>());
         var headerContent = FileChangesUI.CreateHeaderContent(_headerText, headerActions);
@@ -214,7 +197,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
                 : FileChangesUI.CreateHeaderBar(ctx, headerContent),
             Center = _bodyContainer,
             East = _scrollBar,
-            South = _hScrollBar,
         });
 
         _list.UseController(input, () => new VirtualRowListController(_list));
@@ -258,7 +240,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         this.Bind(_pendingSpinner.Rotation, _ => SetDirty());
         this.Use(() => _pendingSpinner);
 
-        this.Use(() => new ScrollSyncController(this, _scrollBar, _hScrollBar));
+        this.Use(() => new ScrollSyncController(_list, _scrollBar));
     }
 
     private void SyncPendingSpinner()
@@ -284,7 +266,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         RebuildRows();
         SyncPendingSpinner();
         _list.SetScrollY(preserveScroll ? _list.ScrollY : 0f);
-        NotifyScrollChanged();
     }
 
     public void SetViewMode(FileViewMode mode)
@@ -292,14 +273,12 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         if (_viewMode == mode) return;
         _viewMode = mode;
         RebuildRows();
-        NotifyScrollChanged();
     }
 
     public void SetCollapsedFolders(IReadOnlySet<string> collapsed)
     {
         _collapsed = collapsed;
         RebuildRows();
-        NotifyScrollChanged();
     }
 
     /// <summary>Parks the keyboard cursor on a folder row (null = the cursor is on the selected file).
@@ -384,13 +363,6 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
     {
         var index = IndexOfFolder(folderPath);
         if (index >= 0) _list.EnsureRowVisible(index);
-    }
-
-    protected override void OnDrawSelf(ICanvas c)
-    {
-        // Resync every frame so layout changes (splitter drag, window resize) immediately
-        // republish scale/normalized to the scrollbars. NotifyScrollChanged is dedup-protected.
-        NotifyScrollChanged();
     }
 
     private void DrawFileRowAt(ICanvas c, RectF rowRect, int rowIndex, RowRenderState state, int z)
@@ -608,7 +580,7 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
         var active = registry.Active.Value;
         if (active == null) return;
 
-        var primaryId = active.IsPrimary ? active.Id : (active.ParentRepoId ?? active.Id);
+        var primaryId = active.PrimaryId;
         var parentPath = active.IsPrimary
             ? active.Path
             : (FindParentPath(registry, primaryId) ?? active.Path);
@@ -633,49 +605,4 @@ public sealed class FileChangesSection : ContainerView, IScrollableContent
 
     private static readonly StringComparison PathComparison =
         OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-
-    public void SetVerticalNormalizedScrollPosition(float normalized)
-    {
-        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
-        var bodyHeight = _list.Position.Height;
-        var range = contentHeight - bodyHeight;
-        _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
-    }
-
-    public void SetHorizontalNormalizedScrollPosition(float normalized) { /* no-op */ }
-
-    private void NotifyScrollChanged()
-    {
-        var contentHeight = _rows.Count * FileChangesUI.RowHeight;
-        var bodyHeight = _list.Position.Height;
-
-        float vScale, normalizedY;
-        if (contentHeight <= bodyHeight || bodyHeight <= 0)
-        {
-            vScale = 1f;
-            normalizedY = 0f;
-        }
-        else
-        {
-            vScale = bodyHeight / contentHeight;
-            var range = contentHeight - bodyHeight;
-            normalizedY = Math.Clamp(_list.ScrollY / range, 0f, 1f);
-        }
-
-        VerticalScale = vScale;
-        HorizontalScale = 1f;
-
-        if (Math.Abs(vScale - _lastVerticalScale) > 0.0001f
-            || Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-        {
-            _lastVerticalScale = vScale;
-            _lastNormalizedY = normalizedY;
-            VerticalScrollPositionChanged?.Invoke(normalizedY);
-        }
-        if (Math.Abs(1f - _lastHorizontalScale) > 0.0001f)
-        {
-            _lastHorizontalScale = 1f;
-            HorizontalScrollPositionChanged?.Invoke(0f);
-        }
-    }
 }

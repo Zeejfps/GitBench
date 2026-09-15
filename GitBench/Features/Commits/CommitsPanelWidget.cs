@@ -2,7 +2,6 @@ using GitBench.Controls;
 using GitBench.Localization;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -52,70 +51,47 @@ public sealed record CommitsPanelWidget : Widget
                 ],
             },
         }
-        .Use(_ => new CommitsPanelController(commits, scrollBar, showBanner));
+        .Use(_ => new ScrollSyncController(commits.Scroll, scrollBar))
+        .Use(_ => new TruncationBanner(commits, showBanner));
     }
 }
 
-internal sealed class CommitsPanelController : IDisposable
+// The banner only appears once the user scrolls to the end of the list. Showing it steals its
+// height from the list, pushing "the bottom" further away — so while visible, the at-bottom test
+// gets that much extra slack (hysteresis, no flicker).
+internal sealed class TruncationBanner : IDisposable
 {
     private const float BottomSlack = 8f;
 
     private readonly CommitsView.Core _commits;
-    private readonly VerticalScrollBarView _scrollBar;
     private readonly State<bool> _showBanner;
     private bool _isTruncated;
 
-    public CommitsPanelController(
-        CommitsView.Core commits, VerticalScrollBarView scrollBar, State<bool> showBanner)
+    public TruncationBanner(CommitsView.Core commits, State<bool> showBanner)
     {
         _commits = commits;
-        _scrollBar = scrollBar;
         _showBanner = showBanner;
 
-        _commits.ScrollPositionChanged += OnCommitsScrollChanged;
-        _commits.ScaleChanged += OnCommitsScaleChanged;
+        _commits.Scroll.VerticalScrollPositionChanged += OnScrolled;
         _commits.TruncatedChanged += OnTruncatedChanged;
-        _scrollBar.ScrollPositionChanged += OnScrollBarScrollChanged;
         OnTruncatedChanged(_commits.Truncated);
-        OnCommitsScaleChanged(_commits.Scale);
     }
 
     public void Dispose()
     {
-        _commits.ScrollPositionChanged -= OnCommitsScrollChanged;
-        _commits.ScaleChanged -= OnCommitsScaleChanged;
+        _commits.Scroll.VerticalScrollPositionChanged -= OnScrolled;
         _commits.TruncatedChanged -= OnTruncatedChanged;
-        _scrollBar.ScrollPositionChanged -= OnScrollBarScrollChanged;
     }
 
-    private void OnCommitsScrollChanged(float normalized)
-    {
-        _scrollBar.SetNormalizedScrollPosition(normalized);
-        UpdateBanner();
-    }
-
-    private void OnCommitsScaleChanged(float scale)
-    {
-        _scrollBar.Width = scale < 1f ? ScrollBarSync.Thickness : 0f;
-        _scrollBar.Scale = scale;
-        UpdateBanner();
-    }
-
-    private void OnScrollBarScrollChanged(float normalized)
-    {
-        _commits.SetNormalizedScrollPosition(normalized);
-    }
+    private void OnScrolled(float normalized) => Update();
 
     private void OnTruncatedChanged(bool truncated)
     {
         _isTruncated = truncated;
-        UpdateBanner();
+        Update();
     }
 
-    // The banner only appears once the user scrolls to the end of the list. Showing it
-    // steals its height from the list, pushing "the bottom" further away — so while
-    // visible, the at-bottom test gets that much extra slack (hysteresis, no flicker).
-    private void UpdateBanner()
+    private void Update()
     {
         var threshold = _showBanner.Value
             ? CommitsPanelWidget.WarningBarHeight + BottomSlack

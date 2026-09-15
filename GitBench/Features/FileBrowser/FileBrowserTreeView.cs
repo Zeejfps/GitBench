@@ -6,7 +6,6 @@ using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
 using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Components.VirtualRowList;
 using ZGF.Gui.Desktop.Controllers;
 using ZGF.Gui.Desktop.Input;
@@ -24,21 +23,17 @@ namespace GitBench.Features.FileBrowser;
 /// the model — the row list is the view model's, published whole, and the cursor is read back from
 /// it — so a re-list can never leave the painter and the keyboard disagreeing about what row 12 is.
 /// </remarks>
-internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
+internal sealed class FileBrowserTreeView : ContainerView
 {
     private readonly FileBrowserViewModel _vm;
     private readonly ICanvas _canvas;
     private readonly VirtualRowListView _list;
-    private readonly VerticalScrollBarView _scrollBar;
+    private readonly VerticalScrollBar _scrollBar;
     private readonly ListArrowKbmController _arrows;
 
     private IReadOnlyList<FileBrowserRow> _rows = [];
     private RowSelectionStyles _selection = ThemeStyles.Dark.RowSelection;
     private FileBrowserRowStyles _rowColors = ThemeStyles.Dark.FileBrowserRow;
-
-    private float _lastVerticalScale = -1f;
-    private float _lastNormalizedY;
-    private bool _publishedHorizontal;
 
     private readonly TextStyle _chevronStyle = new()
     {
@@ -65,13 +60,6 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         VerticalAlignment = TextAlignment.Center,
     };
 
-    public event Action<float>? VerticalScrollPositionChanged;
-
-    public event Action<float>? HorizontalScrollPositionChanged;
-
-    public float VerticalScale { get; private set; } = 1f;
-    public float HorizontalScale => 1f;
-
     /// <summary>Where a right-click landed, for the pane's context menu. Null when it landed on no
     /// row.</summary>
     public event Action<FileBrowserRow?, PointF>? RowContextRequested;
@@ -92,7 +80,6 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         _list.RowClicked += OnRowClicked;
         _list.RowActivated += OnRowActivated;
         _list.RowContextRequested += OnRowContextRequested;
-        _list.ScrollChanged += NotifyScrollChanged;
 
         _scrollBar = ScrollBars.CreateVertical(ctx);
 
@@ -128,7 +115,7 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
             SetDirty();
         });
 
-        this.Use(() => new ScrollSyncController(this, _scrollBar, null));
+        this.Use(() => new ScrollSyncController(_list, _scrollBar));
     }
 
     private void SetRows(IReadOnlyList<FileBrowserRow> rows)
@@ -140,7 +127,6 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
         _list.ItemCount = rows.Count;
         _list.NotifyItemsChanged();
         EnsureCursorVisible();
-        NotifyScrollChanged();
         SetDirty();
     }
 
@@ -235,48 +221,5 @@ internal sealed class FileBrowserTreeView : ContainerView, IScrollableContent
             _textActiveStyle,
             z,
             IsRtl);
-    }
-
-    protected override void OnDrawSelf(ICanvas c) => NotifyScrollChanged();
-
-
-    public void SetVerticalNormalizedScrollPosition(float normalized)
-    {
-        var range = _list.ContentHeight - _list.Position.Height;
-        _list.SetScrollY(range <= 0 ? 0f : Math.Clamp(normalized, 0f, 1f) * range);
-    }
-
-    public void SetHorizontalNormalizedScrollPosition(float normalized) { /* no-op */ }
-
-    private void NotifyScrollChanged()
-    {
-        var contentHeight = _list.ContentHeight;
-        var bodyHeight = _list.Position.Height;
-
-        float scale, normalizedY;
-        if (contentHeight <= bodyHeight || bodyHeight <= 0)
-        {
-            scale = 1f;
-            normalizedY = 0f;
-        }
-        else
-        {
-            scale = bodyHeight / contentHeight;
-            normalizedY = Math.Clamp(_list.ScrollY / (contentHeight - bodyHeight), 0f, 1f);
-        }
-
-        VerticalScale = scale;
-
-        if (Math.Abs(scale - _lastVerticalScale) > 0.0001f
-            || Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-        {
-            _lastVerticalScale = scale;
-            _lastNormalizedY = normalizedY;
-            VerticalScrollPositionChanged?.Invoke(normalizedY);
-        }
-
-        if (_publishedHorizontal) return;
-        _publishedHorizontal = true;
-        HorizontalScrollPositionChanged?.Invoke(0f);
     }
 }

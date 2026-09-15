@@ -91,7 +91,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         VerticalAlignment = TextAlignment.Center,
     };
 
-    public event Action<float>? VerticalScrollPositionChanged;
+    public event Action<float>? VerticalScrollPositionChanged
+    {
+        add => _list.VerticalScrollPositionChanged += value;
+        remove => _list.VerticalScrollPositionChanged -= value;
+    }
 
     /// <summary>The new-file line at the top of the viewport, or null while there is none to
     /// report. Raised only when it changes, and only once metrics have resolved — row geometry is
@@ -108,7 +112,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     public event Action<UsageLensTarget, PointF>? UsageLensActivated;
     public event Action<float>? HorizontalScrollPositionChanged;
 
-    public float VerticalScale { get; private set; } = 1f;
+    public float VerticalScale => _list.VerticalScale;
     public float HorizontalScale { get; private set; } = 1f;
 
     private DiffContentStyles _styles = ThemeStyles.Dark.DiffContent;
@@ -186,14 +190,12 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
     private bool _topLinePublished;
     private FoldState? _foldState;
     private int _hoveredFoldRow = -1;
-    private float _lastNormalizedY;
     private float _lastNormalizedX;
-    // Sentinel start so the very first NotifyScrollChanged fires the event even when the
+    // Sentinel start so the very first PublishHorizontalScroll fires the event even when the
     // computed scale equals 1. The scrollbar thumb's built-in default is Scale=0.5 with
     // PreferredHeight=12 — without an explicit "scale=1, hide" message it stays visible
     // at half width until something else (a file that genuinely needs scroll) forces a
     // change. -1f is impossible for a real scale.
-    private float _lastVerticalScale = -1f;
     private float _lastHorizontalScale = -1f;
 
     public DiffContentView(Context ctx)
@@ -213,7 +215,6 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             ScrollWheelStep = Scrolling.WheelStep,
             CursorAt = CursorAt,
         };
-        _list.ScrollChanged += () => NotifyScrollChanged(viewportFits: false);
         _list.HorizontalWheelHandler = OnHorizontalWheel;
 
         AddChildToSelf(_list);
@@ -249,7 +250,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         if (_scrollX != prev)
         {
             SetDirty();
-            NotifyScrollChanged(viewportFits: false);
+            PublishHorizontalScroll(viewportFits: false);
         }
     }
 
@@ -427,12 +428,8 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         _ => (null, false),
     };
 
-    public void SetVerticalNormalizedScrollPosition(float normalized)
-    {
-        var range = ContentHeight() - Position.Height;
-        if (range <= 0) { _list.SetScrollY(0f); }
-        else { _list.SetScrollY(Math.Clamp(normalized, 0f, 1f) * range); }
-    }
+    public void SetVerticalNormalizedScrollPosition(float normalized) =>
+        _list.SetVerticalNormalizedScrollPosition(normalized);
 
     public void SetHorizontalNormalizedScrollPosition(float normalized)
     {
@@ -552,12 +549,6 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         return rowIndex >= 0 && rowIndex < rows.Count ? DiffRowMetrics.HeightOf(rows[rowIndex], height) : height;
     }
 
-    private float ContentHeight()
-    {
-        if (_lineHeight <= 0) return 0f;
-        return _list.ContentHeight;
-    }
-
     private float ContentWidth()
     {
         // Always at least the viewport: short diffs shouldn't leave dead space on the right
@@ -628,25 +619,25 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         {
             case DiffRenderState.Placeholder p:
                 DrawPlaceholder(c, pos, p.Text, _styles.PlaceholderText, z + 1);
-                NotifyScrollChanged(viewportFits: true);
+                PublishHorizontalScroll(viewportFits: true);
                 return;
             case DiffRenderState.Conflict:
                 // The embedded pane swaps in the rich resolution view; this fallback is only
                 // hit by the pop-out window, which has no resolution UI.
                 DrawPlaceholder(c, pos, _loc.Strings.Value.DiffResolveInMain, _styles.PlaceholderText, z + 1);
-                NotifyScrollChanged(viewportFits: true);
+                PublishHorizontalScroll(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.ErrorMessage != null:
                 DrawPlaceholder(c, pos, loaded.Result.ErrorMessage, _styles.ErrorText, z + 1);
-                NotifyScrollChanged(viewportFits: true);
+                PublishHorizontalScroll(viewportFits: true);
                 return;
             case DiffRenderState.Loaded loaded when loaded.Result.IsBinary:
                 DrawPlaceholder(c, pos, _loc.Strings.Value.DiffBinaryNotShown, _styles.PlaceholderText, z + 1);
-                NotifyScrollChanged(viewportFits: true);
+                PublishHorizontalScroll(viewportFits: true);
                 return;
             case DiffRenderState.Loaded when RowSource.Rows.Count == 0:
                 DrawPlaceholder(c, pos, _loc.Strings.Value.DiffNoChanges, _styles.PlaceholderText, z + 1);
-                NotifyScrollChanged(viewportFits: true);
+                PublishHorizontalScroll(viewportFits: true);
                 return;
         }
 
@@ -660,7 +651,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         NoteCaretMoved();
         // After the geometry above and before the child list draws its rows.
         _editorController.SyncIme();
-        NotifyScrollChanged(viewportFits: false);
+        PublishHorizontalScroll(viewportFits: false);
     }
 
     // Re-applies a pending programmatic scroll until it takes (the scrollbar's hidden→visible
@@ -1211,7 +1202,7 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         ClampHorizontalScroll();
         if (_scrollX == prev) return;
         SetDirty();
-        NotifyScrollChanged(viewportFits: false);
+        PublishHorizontalScroll(viewportFits: false);
     }
 
     private RectF? CaretRectOn(int rowIndex, float rowLeft, RectF rowRect) =>
@@ -1568,60 +1559,26 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
         return _buttonBar.HitTest(point, _list.Position.Right, rowRect.Top, ActionsForHunk(hunkIndex));
     }
 
-    private void NotifyScrollChanged(bool viewportFits)
+    private void PublishHorizontalScroll(bool viewportFits)
     {
-        float normalizedY, normalizedX, vScale, hScale;
-        if (viewportFits)
+        float normalizedX, hScale;
+        var contentW = ContentWidth();
+        var vpw = Position.Width;
+        if (viewportFits || contentW <= vpw || vpw <= 0)
         {
-            normalizedY = 0f;
-            normalizedX = 0f;
-            vScale = 1f;
             hScale = 1f;
+            normalizedX = 0f;
         }
         else
         {
-            var contentH = ContentHeight();
-            var contentW = ContentWidth();
-            var vph = Position.Height;
-            var vpw = Position.Width;
-
-            if (contentH <= vph || vph <= 0)
-            {
-                vScale = 1f;
-                normalizedY = 0f;
-            }
-            else
-            {
-                vScale = vph / contentH;
-                var range = contentH - vph;
-                normalizedY = Math.Clamp(_list.ScrollY / range, 0f, 1f);
-            }
-
-            if (contentW <= vpw || vpw <= 0)
-            {
-                hScale = 1f;
-                normalizedX = 0f;
-            }
-            else
-            {
-                hScale = vpw / contentW;
-                var range = contentW - vpw;
-                normalizedX = Math.Clamp(_scrollX / range, 0f, 1f);
-            }
+            hScale = vpw / contentW;
+            normalizedX = Math.Clamp(_scrollX / (contentW - vpw), 0f, 1f);
         }
 
-        VerticalScale = vScale;
         HorizontalScale = hScale;
 
         // Dedup against the last published value — otherwise we'd retrigger scrollbar
         // layout every frame, even when nothing actually changed.
-        if (Math.Abs(vScale - _lastVerticalScale) > 0.0001f ||
-            Math.Abs(normalizedY - _lastNormalizedY) > 0.0001f)
-        {
-            _lastVerticalScale = vScale;
-            _lastNormalizedY = normalizedY;
-            VerticalScrollPositionChanged?.Invoke(normalizedY);
-        }
         if (Math.Abs(hScale - _lastHorizontalScale) > 0.0001f ||
             Math.Abs(normalizedX - _lastNormalizedX) > 0.0001f)
         {

@@ -64,8 +64,6 @@ internal sealed record CommitsView : Widget
         private readonly VirtualRowListView _list;
         private readonly ListArrowKbmController _arrowController;
 
-        private float _lastNormalizedScroll;
-        private float _lastScale = 1f;
         private string? _selectedSha;
         // A selection SHA whose scroll-into-view was requested before the list had a measured
         // viewport; applied on the next layout, then cleared (so it never fights user scroll).
@@ -92,8 +90,7 @@ internal sealed record CommitsView : Widget
         // Repaints the relative dates ("3m ago"), which go stale with no state change to dirty us.
         private const int DateRefreshMs = 30_000;
 
-        public event Action<float>? ScrollPositionChanged;
-        public event Action<float>? ScaleChanged;
+        public IScrollableContent Scroll => _list;
 
         private readonly TextStyle _rowTextStyle = TextStyles.Row(0u);
         private readonly TextStyle _rowTextActiveStyle = TextStyles.Row(0u);
@@ -162,7 +159,6 @@ internal sealed record CommitsView : Widget
             };
             _list.RowClicked += OnRowClicked;
             _list.RowContextRequested += OnRowContextRequested;
-            _list.ScrollChanged += NotifyScrollChanged;
 
             AddChildToSelf(_list);
             _list.UseController(input, () => new VirtualRowListController(_list));
@@ -299,12 +295,8 @@ internal sealed record CommitsView : Widget
         {
             base.OnLayoutChildren();
             // Reconcile a selection scroll that couldn't land yet (no viewport, or the scrollbar
-            // thumb's first-layout reset undid it). Runs before NotifyScrollChanged so the gutter
-            // re-syncs to the position we just applied.
+            // thumb's first-layout reset undid it).
             ApplyPendingScroll();
-            // Emit each layout pass (as VerticalScrollPane does) so a resize that changes the
-            // viewport/content ratio re-syncs a bound scrollbar's gutter, not just user scrolls.
-            NotifyScrollChanged();
         }
 
         private void SetRenderState(CommitsRenderState vm)
@@ -341,8 +333,6 @@ internal sealed record CommitsView : Widget
             // Row indices shifted under the selection: re-resolve and snap the bar there without
             // sliding (the contents moved, not the user).
             SnapSelectionToSha();
-
-            NotifyScrollChanged();
 
             var newTruncated = newSnap?.Truncated == true;
             if (newTruncated != _truncated)
@@ -427,20 +417,6 @@ internal sealed record CommitsView : Widget
         public bool Truncated => _truncated;
         public event Action<bool>? TruncatedChanged;
 
-        public float Scale
-        {
-            get
-            {
-                var snap = _snapshot;
-                if (snap == null || snap.Commits.Count == 0) return 1f;
-                var bodyHeight = _list.Position.Height;
-                if (bodyHeight <= 0) return 1f;
-                var contentHeight = snap.Commits.Count * RowHeight;
-                if (contentHeight <= bodyHeight) return 1f;
-                return bodyHeight / contentHeight;
-            }
-        }
-
         public float DistanceFromBottom
         {
             get
@@ -451,47 +427,6 @@ internal sealed record CommitsView : Widget
                 var contentHeight = snap.Commits.Count * RowHeight;
                 var maxScroll = Math.Max(0f, contentHeight - bodyHeight);
                 return Math.Max(0f, maxScroll - _list.ScrollY);
-            }
-        }
-
-        public void SetNormalizedScrollPosition(float normalized)
-        {
-            var snap = _snapshot;
-            if (snap == null) return;
-            var bodyHeight = _list.Position.Height;
-            var contentHeight = snap.Commits.Count * RowHeight;
-            var maxScroll = Math.Max(0f, contentHeight - bodyHeight);
-            var newScroll = maxScroll * Math.Clamp(normalized, 0f, 1f);
-            _list.SetScrollY(newScroll);
-        }
-
-        private void NotifyScrollChanged()
-        {
-            var snap = _snapshot;
-            float normalized = 0f;
-            float scale = 1f;
-            if (snap != null && snap.Commits.Count > 0)
-            {
-                var bodyHeight = _list.Position.Height;
-                var contentHeight = snap.Commits.Count * RowHeight;
-                var maxScroll = Math.Max(0f, contentHeight - bodyHeight);
-                if (bodyHeight > 0 && maxScroll > 0)
-                {
-                    scale = bodyHeight / contentHeight;
-                    normalized = Math.Clamp(_list.ScrollY / maxScroll, 0f, 1f);
-                }
-            }
-
-            if (Math.Abs(scale - _lastScale) > 0.0001f)
-            {
-                _lastScale = scale;
-                ScaleChanged?.Invoke(scale);
-            }
-
-            if (Math.Abs(normalized - _lastNormalizedScroll) > 0.0001f)
-            {
-                _lastNormalizedScroll = normalized;
-                ScrollPositionChanged?.Invoke(normalized);
             }
         }
 

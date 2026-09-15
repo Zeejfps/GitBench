@@ -6,11 +6,7 @@ using GitBench.Localization;
 using GitBench.Messages;
 using GitBench.Widgets;
 using ZGF.Gui;
-using ZGF.Gui.Bindings;
-using ZGF.Gui.Desktop.Components.VerticalScrollBar;
 using ZGF.Gui.Desktop.Controllers;
-using ZGF.Gui.Desktop.Input;
-using ZGF.Gui.VerticalScrollBar;
 using ZGF.Gui.Views;
 using ZGF.Gui.Widgets;
 using ZGF.Observable;
@@ -73,7 +69,7 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
                             [
                                 BuildHeader(s),
                                 new Box { Height = 1, Background = Theme.Color(t => t.DialogFrame.HeaderSeparator) },
-                                new Grow { Child = new Raw { View = BuildScrollHost(ctx) } },
+                                new Grow { Child = BuildScrollHost() },
                                 new Row
                                 {
                                     CrossAxis = CrossAxisAlignment.Center,
@@ -155,93 +151,30 @@ internal sealed record OperationErrorDialog : Widget<DialogState>
         ],
     };
 
-    // The error body scrolls vertically only. VerticalScrollPane forces its child to viewport
-    // width — that gives the wrapping TextView the bound it needs to wrap instead of measuring its
-    // own one-line natural width and stretching the layout horizontally. A two-axis ScrollPane would
-    // let one long line balloon past the dialog edges. The scroll plumbing has no widget form, so it
-    // rides in as a raw view.
-    private View BuildScrollHost(Context ctx)
+    // The error body scrolls vertically only: the region forces its content to viewport width, which
+    // gives the wrapping text the bound it needs instead of one long line stretching the dialog.
+    private IWidget BuildScrollHost() => new DialogInsetCard
     {
-        var messageView = new Text
-        {
-            Value = Message,
-            FontFamily = MonoFonts.Regular,
-            Wrap = TextWrap.Wrap,
-            Color = Theme.Color(s => s.DialogBody.BodyText),
-        }.BuildView(ctx);
-
-        var scrollPane = new VerticalScrollPane();
-        scrollPane.Children.Add(new PaddingView
-        {
-            Padding = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
-            Children = { messageView },
-        });
-        scrollPane.UseController(ctx.Require<InputSystem>(),
-            () => new VerticalScrollPaneWheelController(scrollPane));
-
-        var vScrollBar = ScrollBars.CreateVertical(ctx);
-
-        var scrollHost = new DialogInsetCard
-        {
-            Children =
-            [
-                new Raw
+        Children =
+        [
+            new ScrollRegion
+            {
+                FillParent = true,
+                Content = new Padding
                 {
-                    View = new BorderLayoutView
-                    {
-                        Center = scrollPane,
-                        East = vScrollBar,
-                    },
+                    Amount = new PaddingStyle { Left = Spacing.Md, Right = Spacing.Md, Top = Spacing.Sm, Bottom = Spacing.Sm },
+                    Children =
+                    [
+                        new Text
+                        {
+                            Value = Message,
+                            FontFamily = MonoFonts.Regular,
+                            Wrap = TextWrap.Wrap,
+                            Color = Theme.Color(s => s.DialogBody.BodyText),
+                        },
+                    ],
                 },
-            ],
-        }.BuildView(ctx);
-        scrollHost.Use(() => new VerticalScrollBarSyncController(scrollPane, vScrollBar));
-
-        return scrollHost;
-    }
-}
-
-internal sealed class VerticalScrollPaneWheelController : KeyboardMouseController
-{
-    private readonly VerticalScrollPane _pane;
-
-    public VerticalScrollPaneWheelController(VerticalScrollPane pane)
-    {
-        _pane = pane;
-    }
-
-    public override void OnMouseWheelScrolled(ref MouseWheelScrolledEvent e)
-    {
-        // Consume only if we actually moved. The wheel dispatches root→leaf in the capture phase,
-        // so an outer pane that can't scroll (e.g. a dialog body that fits) must let the event reach
-        // the inner list instead of swallowing it.
-        if (_pane.Scroll(-e.DeltaY * Scrolling.WheelStep))
-            e.Consume();
-    }
-}
-
-internal sealed class VerticalScrollBarSyncController : IDisposable
-{
-    private readonly VerticalScrollPane _pane;
-    private readonly VerticalScrollBarView _bar;
-
-    public VerticalScrollBarSyncController(VerticalScrollPane pane, VerticalScrollBarView bar)
-    {
-        _pane = pane;
-        _bar = bar;
-        _pane.ScrollPositionChanged += OnPaneScrolled;
-        _bar.ScrollPositionChanged += OnBarMoved;
-    }
-
-    public void Dispose()
-    {
-        _pane.ScrollPositionChanged -= OnPaneScrolled;
-        _bar.ScrollPositionChanged -= OnBarMoved;
-    }
-
-    private void OnPaneScrolled(float normalized)
-        => ScrollBarSync.ApplyVertical(_bar, _pane.Scale, normalized);
-
-    private void OnBarMoved(float normalized)
-        => _pane.SetNormalizedScrollPosition(normalized, notify: false);
+            },
+        ],
+    };
 }
