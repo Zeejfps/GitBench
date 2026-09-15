@@ -159,16 +159,16 @@ internal sealed class RepoNodeViewModel : IDisposable
         Activate = new Command(() => _registry.SetActive(RepoId), _canActivate);
     }
 
-    // Worktrees first, then submodules — both recurse, same order/indent at every level. Empty while
+    // Submodules first, then worktrees — both recurse, same order/indent at every level. Empty while
     // collapsed so a folded subtree builds no rows (and spawns no child view models).
     private IReadOnlyList<Repo> ComputeChildRepos()
     {
         if (!IsExpanded.Value) return Array.Empty<Repo>();
         var repos = new List<Repo>();
         foreach (var r in _registry.Repos)
-            if (r.ParentRepoId == RepoId && r.IsWorktree) repos.Add(r);
-        foreach (var r in _registry.Repos)
             if (r.ParentRepoId == RepoId && r.IsSubmodule) repos.Add(r);
+        foreach (var r in _registry.Repos)
+            if (r.ParentRepoId == RepoId && r.IsWorktree) repos.Add(r);
         return repos;
     }
 
@@ -200,17 +200,17 @@ internal sealed class RepoNodeViewModel : IDisposable
         return mask;
     }
 
-    // Whether a repo is the last among its siblings, in the same order the rows render: worktrees then
-    // submodules under a parent repo, or the group's repo order for a top-level primary.
+    // Whether a repo is the last among its siblings, in the same order the rows render: submodules then
+    // worktrees under a parent repo, or the group's repo order for a top-level primary.
     private bool IsLastSibling(Repo repo)
     {
         if (repo.ParentRepoId is { } pid)
         {
             Repo? last = null;
             foreach (var r in _registry.Repos)
-                if (r.ParentRepoId == pid && r.IsWorktree) last = r;
-            foreach (var r in _registry.Repos)
                 if (r.ParentRepoId == pid && r.IsSubmodule) last = r;
+            foreach (var r in _registry.Repos)
+                if (r.ParentRepoId == pid && r.IsWorktree) last = r;
             return last is null || last.Id == repo.Id;
         }
 
