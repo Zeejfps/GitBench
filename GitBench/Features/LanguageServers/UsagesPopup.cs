@@ -2,6 +2,7 @@ using GitBench.Features.Diff;
 using GitBench.Features.FileBrowser;
 using GitBench.Features.Repos;
 using GitBench.Localization;
+using GitBench.Lsp.Documents;
 using GitBench.Widgets;
 using ZGF.Geometry;
 using ZGF.Gui;
@@ -26,11 +27,9 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
     private readonly Context _context;
     private readonly IReferenceSource _servers;
     private readonly IFileNavigator _navigator;
-    private readonly IUiDispatcher _dispatcher;
     private readonly Func<(string Root, string Path)?> _document;
     private readonly IFileTextSource _files;
-
-    private CancellationTokenSource? _pending;
+    private readonly ProbeSlot _probe;
 
     public UsagesPopup(
         Context context,
@@ -43,9 +42,9 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
         _context = context;
         _servers = servers;
         _navigator = navigator;
-        _dispatcher = dispatcher;
         _document = document;
         _files = files;
+        _probe = new ProbeSlot(dispatcher);
     }
 
     public void ShowUsagesOf(PointF anchor, FileLine line, RawColumn column)
@@ -53,44 +52,27 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
         if (_document() is not { } document) return;
         if (!_servers.CanReference(document.Path)) return;
 
-        Cancel();
-        var cancel = new CancellationTokenSource();
-        _pending = cancel;
-        var token = cancel.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
+        _probe.Ask(
+            TimeSpan.Zero,
+            async token =>
             {
                 var reply = await _servers
                     .ReferencesAsync(document.Path, line, column, token)
                     .ConfigureAwait(false);
-                if (token.IsCancellationRequested) return;
                 // Nobody could be asked. Opening an empty popup would say the symbol is unused,
                 // which is a different thing and not one this knows.
-                if (reply is not ReferenceReply.Answered answered) return;
+                if (reply is not ReferenceReply.Answered answered) return null;
 
                 // Off the UI thread on purpose: this opens up to a hundred files, and the answer is
                 // already late enough that a frozen frame while it lands would be the visible part.
-                var usages = await Usages
-                    .From(document.Root, answered.Sites, _files, token)
-                    .ConfigureAwait(false);
-
-                _dispatcher.Post(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    if (_document() is not { } still || still.Path != document.Path) return;
-                    Present(anchor, usages);
-                });
-            }
-            catch (OperationCanceledException)
+                return await Usages.From(document.Root, answered.Sites, _files, token).ConfigureAwait(false);
+            },
+            usages =>
             {
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[LanguageServers] find usages failed: {ex.Message}");
-            }
-        }, token);
+                if (usages is null) return;
+                if (_document() is not { } still || still.Path != document.Path) return;
+                Present(anchor, usages);
+            });
     }
 
     private void Present(PointF anchor, UsageList usages)
@@ -153,12 +135,5 @@ internal sealed class UsagesPopup : IUsagesPresenter, IDisposable
         _ => throw new NotSupportedException($"unhandled usage text {text.GetType().Name}"),
     };
 
-    private void Cancel()
-    {
-        _pending?.Cancel();
-        _pending?.Dispose();
-        _pending = null;
-    }
-
-    public void Dispose() => Cancel();
+    public void Dispose() => _probe.Dispose();
 }

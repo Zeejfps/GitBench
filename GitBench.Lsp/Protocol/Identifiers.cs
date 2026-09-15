@@ -233,3 +233,19 @@ public readonly record struct LspRange(LspPosition Start, LspPosition End)
 {
     public static LspRange Empty(LspPosition at) => new(at, at);
 }
+
+/// <summary>An optional range, as a sum rather than a nullable field: LSP marks a location link's
+/// origin range optional, and "absent" is a case the reader has to answer for rather than a null
+/// to trip over.</summary>
+public abstract record OptionalRange
+{
+    private OptionalRange() { }
+
+    public static readonly OptionalRange Absent = new NotGiven();
+
+    public static OptionalRange Of(LspRange range) => new Present(range);
+
+    public sealed record NotGiven : OptionalRange;
+
+    public sealed record Present(LspRange Range) : OptionalRange;
+}

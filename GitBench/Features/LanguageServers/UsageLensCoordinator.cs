@@ -1,4 +1,5 @@
 using GitBench.Features.Diff;
+using GitBench.Lsp.Documents;
 using ZGF.Observable;
 
 namespace GitBench.Features.LanguageServers;
@@ -46,7 +47,6 @@ internal sealed class UsageLensCoordinator : IDisposable
     private readonly Func<IReadOnlyList<UsageLensTarget>> _everywhere;
     private readonly Action<bool> _showRows;
     private readonly Action<UsageLensOverlay> _publish;
-    private readonly Func<TimeSpan, CancellationToken, Task> _settle;
 
     private readonly Dictionary<string, UsageLensState> _known = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _asks = new(StringComparer.Ordinal);
@@ -62,7 +62,7 @@ internal sealed class UsageLensCoordinator : IDisposable
     // every time the view moves; the questions themselves outlive that and end only when the file
     // does — cancelling those on each scroll would mean a reader who keeps scrolling never gets an
     // answer to anything.
-    private CancellationTokenSource? _settling;
+    private readonly ProbeSlot _settling;
     private CancellationTokenSource _asking = new();
     private int _disposed;
 
@@ -83,7 +83,7 @@ internal sealed class UsageLensCoordinator : IDisposable
         _everywhere = everywhere;
         _showRows = showRows;
         _publish = publish;
-        _settle = settle ?? Task.Delay;
+        _settling = new ProbeSlot(dispatcher, settle);
     }
 
     /// <summary>
@@ -120,46 +120,20 @@ internal sealed class UsageLensCoordinator : IDisposable
             return;
         }
 
-        StopSettling();
-        var settling = new CancellationTokenSource();
-        _settling = settling;
-        _ = SettleThenAskAsync(path, settling.Token, _asking.Token);
-    }
-
-    /// <summary>
-    /// Waits for the view to stop moving, then goes back to the UI thread to decide what to ask.
-    /// </summary>
-    /// <remarks>
-    /// The hand-back is load-bearing. The wait resumes on whichever pool thread the timer finished
-    /// on, and everything the decision reads — which rows are on screen, and the bookkeeping of
-    /// what has already been asked — belongs to the thread that built them. Deciding here instead
-    /// threw on every refresh of an editable file, which is every refresh of the pane this runs in.
-    /// </remarks>
-    private async Task SettleThenAskAsync(string path, CancellationToken settling, CancellationToken asking)
-    {
-        try
-        {
-            await _settle(TimeSpan.FromMilliseconds(SettleMs), settling).ConfigureAwait(false);
-            if (settling.IsCancellationRequested || asking.IsCancellationRequested) return;
-
-            _dispatcher.Post(() => AskAboutWhatIsOnScreen(path, settling, asking));
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[LanguageServers] usage lens refresh failed: {ex.Message}");
-        }
+        // Waits for the view to stop moving, then decides back on the UI thread: everything the
+        // decision reads — which rows are on screen, and the bookkeeping of what has already been
+        // asked — belongs to the thread that built them.
+        var asking = _asking.Token;
+        _settling.Wait(TimeSpan.FromMilliseconds(SettleMs), () => AskAboutWhatIsOnScreen(path, asking));
     }
 
     /// <summary>Puts a question out for every declaration on screen that is worth one. On the UI
-    /// thread, always: see <see cref="SettleThenAskAsync"/>.</summary>
-    private void AskAboutWhatIsOnScreen(string path, CancellationToken settling, CancellationToken asking)
+    /// thread, always.</summary>
+    private void AskAboutWhatIsOnScreen(string path, CancellationToken asking)
     {
-        // The wait was abandoned, the file left, or this was disposed while the hand-back was
-        // queued — all three mean the question is about a screen that has moved on.
-        if (_disposed != 0 || settling.IsCancellationRequested || asking.IsCancellationRequested) return;
+        // The file left, or this was disposed while the hand-back was queued — both mean the
+        // question is about a screen that has moved on.
+        if (_disposed != 0 || asking.IsCancellationRequested) return;
         if (path != _path) return;
 
         var targets = Unanswered(_onScreen());
@@ -321,12 +295,7 @@ internal sealed class UsageLensCoordinator : IDisposable
         _publish(UsageLensOverlay.Empty);
     }
 
-    private void StopSettling()
-    {
-        _settling?.Cancel();
-        _settling?.Dispose();
-        _settling = null;
-    }
+    private void StopSettling() => _settling.Cancel();
 
     private void StopAsking()
     {

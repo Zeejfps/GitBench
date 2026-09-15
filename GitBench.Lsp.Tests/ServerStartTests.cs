@@ -144,7 +144,7 @@ public class ServerStartTests
     {
         using var harness = new SupervisorHarness();
 
-        var state = harness.Servers.StateFor(harness.File("src/main.rs"));
+        var state = harness.StateFor(harness.File("src/main.rs"));
 
         Assert.IsType<ServerState.Stopped>(state);
         Assert.Empty(harness.Launcher.Started);

@@ -15,14 +15,12 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
     private readonly IHoverSurface _surface;
     private readonly IHoverSource _servers;
     private readonly IHoverPresenter _popups;
-    private readonly IUiDispatcher _dispatcher;
     private readonly Func<(string Root, string Path)?> _document;
+    private readonly ProbeSlot _probe;
 
-    private CancellationTokenSource? _pending;
     private FilePositionHit? _asking;
     private FilePositionHit? _showing;
     private PointF _anchor;
-    private readonly Func<TimeSpan, CancellationToken, Task> _dwell;
 
     public HoverProbeController(
         IHoverSurface surface,
@@ -32,12 +30,11 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
         Func<(string Root, string Path)?> document,
         Func<TimeSpan, CancellationToken, Task>? dwell = null)
     {
-        _dwell = dwell ?? Task.Delay;
         _surface = surface;
         _servers = servers;
         _popups = popups;
-        _dispatcher = dispatcher;
         _document = document;
+        _probe = new ProbeSlot(dispatcher, dwell);
     }
 
     public override void OnMouseExit(ref MouseExitEvent e) => Dismiss();
@@ -77,37 +74,23 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
         PointF anchor,
         IReadOnlyList<Diagnostic> problems)
     {
-        var cancel = new CancellationTokenSource();
-        _pending = cancel;
         _asking = at;
-        var token = cancel.Token;
-
-        _ = Task.Run(async () =>
-        {
-            try
+        _probe.Ask(
+            TimeSpan.FromMilliseconds(DwellMs),
+            async token =>
             {
-                await _dwell(TimeSpan.FromMilliseconds(DwellMs), token).ConfigureAwait(false);
                 var answer = _servers.Handles(path)
                     ? await _servers.HoverAsync(repoRoot, path, at.Line, at.Column, token).ConfigureAwait(false)
                     : null;
-                var hover = HoverCardText.Compose(problems, answer);
-                if (hover is null || token.IsCancellationRequested) return;
-
-                _dispatcher.Post(() =>
-                {
-                    if (token.IsCancellationRequested) return;
-                    _showing = at;
-                    _anchor = anchor;
-                    _popups.Show(this, hover, new RectF(anchor.X, anchor.Y, 1, 1));
-                });
-            }
-            catch (OperationCanceledException)
+                return HoverCardText.Compose(problems, answer);
+            },
+            hover =>
             {
-            }
-            catch (Exception)
-            {
-            }
-        }, token);
+                if (hover is null) return;
+                _showing = at;
+                _anchor = anchor;
+                _popups.Show(this, hover, new RectF(anchor.X, anchor.Y, 1, 1));
+            });
     }
 
     private bool OverTheCard(PointF point) =>
@@ -126,9 +109,7 @@ internal sealed class HoverProbeController : KeyboardMouseController, IDisposabl
 
     private void Cancel()
     {
-        _pending?.Cancel();
-        _pending?.Dispose();
-        _pending = null;
+        _probe.Cancel();
         _asking = null;
     }
 

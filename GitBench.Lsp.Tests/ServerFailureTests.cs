@@ -25,7 +25,7 @@ public class ServerFailureTests
 
         harness.Launcher.Last.Crash();
 
-        Assert.IsType<ServerState.Failed>(harness.Servers.StateFor(harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(harness.StateFor(harness.File(RustFile)));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public class ServerFailureTests
         harness.Advance(TimeSpan.FromHours(1));
 
         Assert.Single(harness.Launcher.Started);
-        Assert.IsType<ServerState.Failed>(harness.Servers.StateFor(harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(harness.StateFor(harness.File(RustFile)));
     }
 
     // However long it had been working. A crash an hour in is still a crash, and the reader is
@@ -53,7 +53,7 @@ public class ServerFailureTests
 
         harness.Launcher.Last.Crash();
 
-        Assert.IsType<ServerState.Failed>(harness.Servers.StateFor(harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(harness.StateFor(harness.File(RustFile)));
         Assert.Single(harness.Launcher.Started);
     }
 
@@ -67,7 +67,7 @@ public class ServerFailureTests
 
         harness.Launcher.Last.Crash(exitCode: 101);
 
-        var failed = Assert.IsType<ServerState.Failed>(harness.Servers.StateFor(harness.File(RustFile)));
+        var failed = Assert.IsType<ServerState.Failed>(harness.StateFor(harness.File(RustFile)));
         Assert.Contains("101", failed.Reason);
         Assert.Contains("crashed", failed.Reason);
     }
@@ -132,7 +132,7 @@ public class ServerFailureTests
         harness.Servers.OpenFile(harness.File(RustFile));
 
         harness.Launcher.StopFailing();
-        var state = harness.Servers.Retry(harness.File(RustFile));
+        var state = harness.Retry(harness.File(RustFile));
 
         Assert.IsType<ServerState.Starting>(state);
         Assert.Single(harness.Launcher.Started);

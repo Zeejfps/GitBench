@@ -24,7 +24,7 @@ public sealed class SupervisorHarness : IDisposable
     public SupervisorHarness(string configJson = TwoServers, SupervisorPolicy? policy = null)
     {
         Config = Parsed(configJson);
-        Servers = new LanguageServerSupervisor(Launcher, Clock, policy);
+        Servers = new LanguageServerSupervisor<FakeLanguageServer>(Launcher, Clock, policy);
         Servers.ApplyConfig(Config);
         Servers.SetActiveRepository(Repo);
     }
@@ -33,7 +33,7 @@ public sealed class SupervisorHarness : IDisposable
 
     public FakeLauncher Launcher { get; } = new();
 
-    public LanguageServerSupervisor Servers { get; }
+    public LanguageServerSupervisor<FakeLanguageServer> Servers { get; }
 
     public LanguageServerConfig Config { get; private set; }
 
@@ -46,6 +46,20 @@ public sealed class SupervisorHarness : IDisposable
 
     public string FileIn(Repository repository, string relativePath) =>
         Path.Combine(repository.RootPath, relativePath);
+
+    /// <summary>Where the server for a file in the active repository stands, without starting it.</summary>
+    public ServerState StateFor(string filePath) =>
+        Config.ServerFor(filePath) is { } entry
+            ? Servers.StateFor(Repo.Id, entry.Language)
+            : new ServerState.NotConfigured();
+
+    /// <summary>The reader asking for a failed or stopped server back.</summary>
+    public ServerState Retry(string filePath)
+    {
+        var entry = Config.ServerFor(filePath);
+        Assert.NotNull(entry);
+        return Servers.RestartServer(Repo.Id, entry.Language);
+    }
 
     public void Reconfigure(string configJson)
     {

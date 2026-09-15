@@ -12,7 +12,6 @@ public sealed record LanguageServerEntry(
     IReadOnlyList<string> RootMarkers,
     IReadOnlyDictionary<string, string> Environment,
     string? InitializationOptionsJson,
-    string? SettingsJson,
     TimeSpan RequestTimeout,
     TimeSpan IdleShutdown)
 {
@@ -27,8 +26,7 @@ public sealed record LanguageServerEntry(
         RootMarkers.SequenceEqual(other.RootMarkers) &&
         Environment.Count == other.Environment.Count &&
         Environment.All(kv => other.Environment.TryGetValue(kv.Key, out var v) && v == kv.Value) &&
-        InitializationOptionsJson == other.InitializationOptionsJson &&
-        SettingsJson == other.SettingsJson;
+        InitializationOptionsJson == other.InitializationOptionsJson;
 }
 
 /// <summary>The usable content of the config file: which servers exist, and how many may run.</summary>

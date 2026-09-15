@@ -50,12 +50,11 @@ public class ConfigParseTests
     [Fact]
     public void Parse_ServerSuppliedJson_IsKeptVerbatimRatherThanReshaped()
     {
-        // initializationOptions and settings are handed back to the server as it wrote them. The
-        // client has no business understanding either.
+        // initializationOptions are handed back to the server as it wrote them. The client has no
+        // business understanding them.
         var entry = Assert.Single(Loaded(PlanExample).Config.Servers);
 
         Assert.Contains("cachePriming", entry.InitializationOptionsJson);
-        Assert.Contains("checkOnSave", entry.SettingsJson);
     }
 
     [Fact]
@@ -69,7 +68,6 @@ public class ConfigParseTests
         Assert.Empty(entry.Args);
         Assert.Empty(entry.RootMarkers);
         Assert.Empty(entry.Environment);
-        Assert.Null(entry.SettingsJson);
         Assert.True(entry.RequestTimeout > TimeSpan.Zero);
         Assert.True(entry.IdleShutdown > TimeSpan.Zero);
     }
@@ -165,7 +163,6 @@ public class ConfigParseTests
     [InlineData("""{ "command": "ra", "extensions": [".rs"], "args": "--stdio" }""")]
     [InlineData("""{ "command": "ra", "extensions": [".rs"], "enabled": "yes" }""")]
     [InlineData("""{ "command": "ra", "extensions": [".rs"], "env": { "N": 1 } }""")]
-    [InlineData("""{ "command": "ra", "extensions": [".rs"], "settings": [] }""")]
     [InlineData("""{ "command": "ra", "extensions": [".rs"], "requestTimeoutMs": 0 }""")]
     [InlineData("""{ "command": "ra", "extensions": [".rs"], "idleShutdownMs": -1 }""")]
     [InlineData("""[ "rust-analyzer" ]""")]                                        // not an object

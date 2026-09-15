@@ -6,25 +6,25 @@ namespace GitBench.Lsp.Lifecycle;
 /// The seam in front of process creation. Everything below this line is a real subprocess, a real
 /// pipe, and a real protocol client; everything above it is a state machine that can be tested.
 /// </summary>
-public interface ILanguageServerLauncher
+public interface ILanguageServerLauncher<TProcess> where TProcess : class, ILanguageServerProcess
 {
     /// <summary>
     /// Spawns the server and starts its handshake. Returns as soon as the process exists —
     /// "started" is not "handshaked" and neither is "ready", which is why they are three things.
     /// </summary>
-    LaunchResult Launch(ServerLaunchRequest request);
+    LaunchResult<TProcess> Launch(ServerLaunchRequest request);
 }
 
 public sealed record ServerLaunchRequest(LanguageServerEntry Entry, string ProjectRoot, string RepoRoot);
 
-public abstract record LaunchResult
+public abstract record LaunchResult<TProcess> where TProcess : class, ILanguageServerProcess
 {
     LaunchResult() { }
 
-    public sealed record Started(ILanguageServerProcess Process) : LaunchResult;
+    public sealed record Started(TProcess Process) : LaunchResult<TProcess>;
 
     /// <summary>The process never existed — no such command on PATH, no permission, bad root.</summary>
-    public sealed record Failed(string Reason) : LaunchResult;
+    public sealed record Failed(string Reason) : LaunchResult<TProcess>;
 }
 
 /// <summary>

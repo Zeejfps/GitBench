@@ -21,7 +21,7 @@ public sealed class ReferenceShapeTests
         return References.Reader.Read(document.RootElement);
     }
 
-    private static IReadOnlyList<Documents.Location> SitesOf(string resultJson) =>
+    private static IReadOnlyList<Location> SitesOf(string resultJson) =>
         Assert.IsType<References.Sites>(Read(resultJson)).Items;
 
     // A symbol nothing uses is the case the count exists to show, and both spellings of it have to

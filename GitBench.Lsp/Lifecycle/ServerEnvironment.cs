@@ -66,30 +66,3 @@ public sealed class MapServerEnvironment(IReadOnlyDictionary<string, string> var
         yield break;
     }
 }
-
-/// <summary>The environment this process is already running in. The fallback when the app has
-/// nothing better to offer, and correct everywhere except a macOS desktop launch.</summary>
-public sealed class CurrentProcessEnvironment : IServerEnvironment
-{
-    public static readonly CurrentProcessEnvironment Instance = new();
-
-    private readonly MapServerEnvironment _environment = new(Read());
-
-    private CurrentProcessEnvironment() { }
-
-    public IReadOnlyDictionary<string, string> Variables => _environment.Variables;
-
-    public string? ResolveCommand(string command) => _environment.ResolveCommand(command);
-
-    private static Dictionary<string, string> Read()
-    {
-        var variables = new Dictionary<string, string>(
-            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
-
-        foreach (System.Collections.DictionaryEntry entry in Environment.GetEnvironmentVariables())
-            if (entry.Key is string key && entry.Value is string value)
-                variables[key] = value;
-
-        return variables;
-    }
-}

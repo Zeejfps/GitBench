@@ -18,7 +18,7 @@ public sealed class ServerEnvironmentTests
 
         var result = launcher.Launch(new ServerLaunchRequest(Entry("definitely-not-installed"), "/repo", "/repo"));
 
-        var failed = Assert.IsType<LaunchResult.Failed>(result);
+        var failed = Assert.IsType<LaunchResult<ProcessLanguageServer>.Failed>(result);
         Assert.Contains("definitely-not-installed", failed.Reason, StringComparison.Ordinal);
     }
 
@@ -26,7 +26,7 @@ public sealed class ServerEnvironmentTests
     // handed out for a supervisor to wait on.
     [Fact]
     public void AFailedLaunchYieldsNoProcess() =>
-        Assert.IsNotType<LaunchResult.Started>(
+        Assert.IsNotType<LaunchResult<ProcessLanguageServer>.Started>(
             new ProcessLanguageServerLauncher(new NoCommands(), RunHere)
                 .Launch(new ServerLaunchRequest(Entry("nope"), "/repo", "/repo")));
 
@@ -37,7 +37,7 @@ public sealed class ServerEnvironmentTests
         File.WriteAllText(file, "");
         try
         {
-            Assert.Equal(file, CurrentProcessEnvironment.Instance.ResolveCommand(file));
+            Assert.Equal(file, Bare.ResolveCommand(file));
         }
         finally
         {
@@ -47,14 +47,16 @@ public sealed class ServerEnvironmentTests
 
     [Fact]
     public void AnAbsolutePathThatIsNotThereResolvesToNothing() =>
-        Assert.Null(CurrentProcessEnvironment.Instance.ResolveCommand(
+        Assert.Null(Bare.ResolveCommand(
             Path.Combine(Path.GetTempPath(), $"absent-{Guid.NewGuid():N}")));
 
     [Theory]
     [InlineData("")]
     [InlineData("   ")]
     public void AnEmptyCommandResolvesToNothing(string command) =>
-        Assert.Null(CurrentProcessEnvironment.Instance.ResolveCommand(command));
+        Assert.Null(Bare.ResolveCommand(command));
+
+    private static readonly MapServerEnvironment Bare = new(new Dictionary<string, string>());
 
     private static LanguageServerEntry Entry(string command) => new(
         LanguageId.Of("rust"),
@@ -64,7 +66,6 @@ public sealed class ServerEnvironmentTests
         RootMarkers: [],
         Environment: new Dictionary<string, string>(),
         InitializationOptionsJson: null,
-        SettingsJson: null,
         RequestTimeout: TimeSpan.FromSeconds(5),
         IdleShutdown: TimeSpan.FromMinutes(5));
 

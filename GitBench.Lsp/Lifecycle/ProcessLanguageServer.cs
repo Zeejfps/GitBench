@@ -23,17 +23,17 @@ public sealed class ProcessLanguageServerLauncher(
     IServerEnvironment environment,
     Action<Action> post,
     TimeProvider? time = null,
-    ILspTraceSource? trace = null) : ILanguageServerLauncher
+    ILspTraceSource? trace = null) : ILanguageServerLauncher<ProcessLanguageServer>
 {
     private readonly TimeProvider _time = time ?? TimeProvider.System;
 
     private readonly ILspTraceSource _trace = trace ?? NoLspTrace.Instance;
 
-    public LaunchResult Launch(ServerLaunchRequest request)
+    public LaunchResult<ProcessLanguageServer> Launch(ServerLaunchRequest request)
     {
         var entry = request.Entry;
         if (environment.ResolveCommand(entry.Command) is not { } executable)
-            return new LaunchResult.Failed($"'{entry.Command}' was not found.");
+            return new LaunchResult<ProcessLanguageServer>.Failed($"'{entry.Command}' was not found.");
 
         var trace = _trace.Open(entry.Language.Value);
         var start = new ProcessStartInfo(executable)
@@ -64,10 +64,11 @@ public sealed class ProcessLanguageServerLauncher(
         {
             trace.Note($"could not start: {ex.Message}");
             trace.Dispose();
-            return new LaunchResult.Failed($"'{entry.Command}' could not be started: {ex.Message}");
+            return new LaunchResult<ProcessLanguageServer>.Failed($"'{entry.Command}' could not be started: {ex.Message}");
         }
 
-        return new LaunchResult.Started(new ProcessLanguageServer(process, request, post, _time, trace));
+        return new LaunchResult<ProcessLanguageServer>.Started(
+            new ProcessLanguageServer(process, request, post, _time, trace));
     }
 }
 
@@ -279,7 +280,17 @@ public sealed class ProcessLanguageServer : ILanguageServerSession, ILspServerMe
             ? new InboundReply.Ok(writer => writer.WriteNullValue())
             : new InboundReply.NotHandled();
 
-    void ILspServerMessages.OnFault(LspFault fault) { }
+    /// <summary>
+    /// Written down, and in one case acted on: a stream that can no longer be framed ends the
+    /// conversation while the process lives on, and nothing else would tell the supervisor that a
+    /// server it is showing as ready will never answer again.
+    /// </summary>
+    void ILspServerMessages.OnFault(LspFault fault)
+    {
+        _trace.Note($"fault: {fault}");
+        if (fault is LspFault.FramingFailed(_, var detail))
+            Raise(() => Exited?.Invoke(new ServerExit(Detail: $"Its output could not be read: {detail}")));
+    }
 
     public void Dispose()
     {

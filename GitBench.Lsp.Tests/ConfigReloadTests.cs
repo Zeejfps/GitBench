@@ -81,7 +81,7 @@ public class ConfigReloadTests
         harness.Reconfigure(RustWithADifferentTimeout);
 
         Assert.True(server.IsRunning);
-        Assert.IsType<ServerState.Ready>(harness.Servers.StateFor(harness.File(RustFile)));
+        Assert.IsType<ServerState.Ready>(harness.StateFor(harness.File(RustFile)));
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public class ConfigReloadTests
         harness.Reconfigure(RustDisabled);
 
         Assert.False(server.IsRunning);
-        Assert.IsType<ServerState.NotConfigured>(harness.Servers.StateFor(harness.File(RustFile)));
+        Assert.IsType<ServerState.NotConfigured>(harness.StateFor(harness.File(RustFile)));
     }
 
     [Fact]

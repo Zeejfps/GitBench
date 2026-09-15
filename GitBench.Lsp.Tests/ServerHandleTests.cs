@@ -48,7 +48,7 @@ public sealed class ServerHandleTests : IDisposable
         _harness.Servers.OpenFile(_harness.File(RustFile));
         _harness.Launcher.Last.Crash();
 
-        Assert.IsType<ServerState.Failed>(_harness.Servers.StateFor(_harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(_harness.StateFor(_harness.File(RustFile)));
         Assert.Null(Handle());
     }
 
@@ -61,7 +61,7 @@ public sealed class ServerHandleTests : IDisposable
         var first = _harness.Launcher.Last;
         first.Crash();
 
-        _harness.Servers.Retry(_harness.File(RustFile));
+        _harness.Retry(_harness.File(RustFile));
 
         var second = _harness.Launcher.Last;
         Assert.NotSame(first, second);
@@ -107,7 +107,7 @@ public sealed class ServerHandleTests : IDisposable
 
         Assert.Equal(1, server.ShutdownRequests);
         Assert.Null(Handle());
-        Assert.IsType<ServerState.Stopped>(_harness.Servers.StateFor(_harness.File(RustFile)));
+        Assert.IsType<ServerState.Stopped>(_harness.StateFor(_harness.File(RustFile)));
     }
 
     // Stopping is not banning: the next file of that language starts it again, which is what makes
@@ -150,7 +150,7 @@ public sealed class ServerHandleTests : IDisposable
             _harness.Advance(TimeSpan.FromSeconds(60));
         }
 
-        Assert.IsType<ServerState.Failed>(_harness.Servers.StateFor(_harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(_harness.StateFor(_harness.File(RustFile)));
         _harness.Launcher.StopFailing();
 
         var state = _harness.Servers.RestartServer(_harness.Repo.Id, LanguageId.Of("rust"));
@@ -182,7 +182,7 @@ public sealed class ServerHandleTests : IDisposable
             _harness.Advance(TimeSpan.FromSeconds(60));
         }
 
-        Assert.IsType<ServerState.Failed>(_harness.Servers.StateFor(_harness.File(RustFile)));
+        Assert.IsType<ServerState.Failed>(_harness.StateFor(_harness.File(RustFile)));
         Assert.Null(Handle());
     }
 }
