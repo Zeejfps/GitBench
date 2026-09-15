@@ -46,7 +46,7 @@ internal sealed record StagingProgressRow : Widget
                         },
                         new Text
                         {
-                            Value = Prop.Bind(review.FilesStagedLabel),
+                            Value = Prop.Bind<string?>(review.FilesStagedLabel),
                             FontSize = FontSize.Caption,
                             Color = Theme.Color(s => s.Palette.TextSecondary),
                             VAlign = TextAlignment.Center,

@@ -749,20 +749,6 @@
   "review.files_staged": "{staged} / {total} ملفات مُجهَّزة",
   "review.working_tree_title": "شجرة العمل",
   "review.no_local_changes": "لا توجد تغييرات محلية لمراجعتها.",
-  "review.context_stage": {
-    "one": "تجهيز الملف",
-    "two": "تجهيز ملفين",
-    "few": "تجهيز {count} ملفات",
-    "many": "تجهيز {count} ملفًا",
-    "other": "تجهيز {count} ملف"
-  },
-  "review.context_unstage": {
-    "one": "إلغاء تجهيز الملف",
-    "two": "إلغاء تجهيز ملفين",
-    "few": "إلغاء تجهيز {count} ملفات",
-    "many": "إلغاء تجهيز {count} ملفًا",
-    "other": "إلغاء تجهيز {count} ملف"
-  },
   "review.context_mark_viewed": {
     "one": "وضع علامة مُراجَع",
     "two": "وضع علامة مُراجَع على ملفين",

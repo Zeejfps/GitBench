@@ -119,6 +119,40 @@ internal sealed class CommitChangesPanelView : ContainerView
         var headerActions = new List<IWidget> { viewModeButton };
         if (props.HeaderActions is { } extra) headerActions.AddRange(extra);
 
+        // Up/Down arrow navigation over the rows, mirroring the local-changes panels: folder rows are
+        // cursor stops too, so the keyboard can fold them with Left/Right. Stepping onto a file
+        // resumes the normal selection gesture (Shift-extend continues from the cursor) and hands the
+        // folder cursor back; stepping onto a folder leaves the file selection where it was.
+        _arrowController = new ListArrowKbmController(
+            this,
+            input,
+            ctx.KeyMap(),
+            (delta, shift) =>
+            {
+                var rows = Rows();
+                if (rows.Count == 0) return;
+                var current = vm.CursorFolder.Value is { } folder
+                    ? IndexOf(rows, folder, isFolder: true)
+                    : cursor.Value is { } path ? IndexOf(rows, path, isFolder: false) : -1;
+                var next = rows[ListNavigation.NextIndex(rows.Count, current, delta)];
+                if (next is FileRow.Folder)
+                {
+                    vm.SetCursorFolder(next.FullPath);
+                    _scrollTo.Value = next.Ref;
+                    return;
+                }
+                vm.SetCursorFolder(null);
+                Gesture(next.FullPath, shift ? InputModifiers.Shift : InputModifiers.None);
+                _scrollTo.Value = next.Ref;
+            },
+            vm.SetCursorFolderExpanded,
+            () => props.OnActivateSelection?.Invoke(),
+            () => { });
+        _arrowController.OnToggleFullFile = () => vm.ActiveDiff?.ToggleFullFile();
+        if (props.OnSelectAll is { } selectAll)
+            _arrowController.OnSelectAll = () => selectAll(VisibleFilePaths());
+        this.UseController(input, _arrowController);
+
         AddChildToSelf(new FileRowList
         {
             Title = "Changes",
@@ -163,40 +197,6 @@ internal sealed class CommitChangesPanelView : ContainerView
                 _ => null,
             },
         }.BuildView(ctx));
-
-        // Up/Down arrow navigation over the rows, mirroring the local-changes panels: folder rows are
-        // cursor stops too, so the keyboard can fold them with Left/Right. Stepping onto a file
-        // resumes the normal selection gesture (Shift-extend continues from the cursor) and hands the
-        // folder cursor back; stepping onto a folder leaves the file selection where it was.
-        _arrowController = new ListArrowKbmController(
-            this,
-            input,
-            ctx.KeyMap(),
-            (delta, shift) =>
-            {
-                var rows = Rows();
-                if (rows.Count == 0) return;
-                var current = vm.CursorFolder.Value is { } folder
-                    ? IndexOf(rows, folder, isFolder: true)
-                    : cursor.Value is { } path ? IndexOf(rows, path, isFolder: false) : -1;
-                var next = rows[ListNavigation.NextIndex(rows.Count, current, delta)];
-                if (next is FileRow.Folder)
-                {
-                    vm.SetCursorFolder(next.FullPath);
-                    _scrollTo.Value = next.Ref;
-                    return;
-                }
-                vm.SetCursorFolder(null);
-                Gesture(next.FullPath, shift ? InputModifiers.Shift : InputModifiers.None);
-                _scrollTo.Value = next.Ref;
-            },
-            vm.SetCursorFolderExpanded,
-            () => props.OnActivateSelection?.Invoke(),
-            () => { });
-        _arrowController.OnToggleFullFile = () => vm.ActiveDiff?.ToggleFullFile();
-        if (props.OnSelectAll is { } selectAll)
-            _arrowController.OnSelectAll = () => selectAll(VisibleFilePaths());
-        this.UseController(input, _arrowController);
 
         // A multi-select host owns the gesture (modifiers, ranges); everyone else just activates.
         void Gesture(string path, InputModifiers modifiers)

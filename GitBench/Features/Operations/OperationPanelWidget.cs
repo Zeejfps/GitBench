@@ -103,7 +103,7 @@ internal sealed record OperationPanelWidget : Widget
 
     private static IWidget Subject(OperationViewModel vm) => new Text
     {
-        Value = L.T(s => s.OperationsStoppedCommit(vm.Subject.Value)),
+        Value = L.T(s => s.OperationsStoppedCommit(vm.Subject.Value ?? string.Empty)),
         Wrap = TextWrap.NoWrap,
         Overflow = TextOverflow.Ellipsis,
         FontSize = FontSize.Caption,

@@ -33,12 +33,12 @@ internal sealed class CodeBlockViewModel : ViewModelBase<CodeBlockState>
         if (!block.IsClosed || block.Language is not { } name) return;
 
         var language = FileLanguage.Named(name);
-        RunBackground<Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>>(
-            work: () => new Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>.Ok(
+        RunBackground<Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>?>>(
+            work: () => new Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>?>.Ok(
                 highlighter.Highlight(block.Text, language)),
             onResult: spans =>
             {
-                if (spans is Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>>.Ok ok)
+                if (spans is Fetched<IReadOnlyList<IReadOnlyList<TokenSpan>>?>.Ok ok)
                     Update(s => s with { Spans = ok.Value });
             });
     }

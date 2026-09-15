@@ -73,13 +73,13 @@ internal sealed record ReviewHeaderBar : Widget
             {
                 // The arrow points at the base chip, which the mirrored Row puts on the other side
                 // in RTL; U+2192 is not bidi-mirrored, so it has to be picked by direction.
-                Value = Prop.Bind(() => $"{vm.Session.HeadLabel} {(Direction.IsRtl(ctx) ? "←" : "→")}"),
+                Value = Prop.Bind<string?>(() => $"{vm.Session.HeadLabel} {(Direction.IsRtl(ctx) ? "←" : "→")}"),
                 FontSize = FontSize.Body,
                 Color = Theme.Color(s => s.Palette.TextPrimary),
                 Overflow = TextOverflow.Ellipsis,
                 VAlign = TextAlignment.Center,
             },
-            new ReviewBaseChip { Label = Prop.Bind(vm.BaseChipLabel) }
+            new ReviewBaseChip { Label = Prop.Bind<string?>(vm.BaseChipLabel) }
                 .WithTooltip(Prop.Bind(vm.BaseTooltip))
                 .WithMenuController(rect =>
                 {
@@ -114,7 +114,7 @@ internal sealed record ReviewHeaderBar : Widget
                     },
                     new Text
                     {
-                        Value = Prop.Bind(vm.FilesViewedLabel),
+                        Value = Prop.Bind<string?>(vm.FilesViewedLabel),
                         FontSize = FontSize.Caption,
                         Color = Theme.Color(s => s.Palette.TextSecondary),
                         VAlign = TextAlignment.Center,

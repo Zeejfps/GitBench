@@ -191,11 +191,11 @@ internal sealed class DiffContentView : View, IScrollableContent, IDiffSelection
             ScrollWheelStep = Scrolling.WheelStep,
             CursorAt = CursorAt,
         };
+        _scroll = new DiffListScroll(_list, ContentWidth, () => Position.Width);
         _list.HorizontalWheelHandler = deltaX =>
         {
             if (_scroll.ScrollXBy(-deltaX * _list.ScrollWheelStep)) SetDirty();
         };
-        _scroll = new DiffListScroll(_list, ContentWidth, () => Position.Width);
         _surface = new DiffRowSurface(_list, _painter, _buttonBar, _scroll, SetDirty)
         {
             Selection = _selection,

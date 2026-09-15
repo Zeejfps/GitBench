@@ -153,10 +153,10 @@ internal sealed class FileRowListView : ContainerView
         {
             RowHeight = FileChangesUI.RowHeight,
             ItemBuilder = DrawFileRowAt,
-            SelectionOverlayBuilder = (c, viewport, z) =>
-                _selectionBar.Draw(c, viewport, _list.ScrollY, FileChangesUI.RowHeight, _rowSelection, z, IsRtl),
             ScrollWheelStep = Scrolling.WheelStep,
         };
+        _list.SelectionOverlayBuilder = (c, viewport, z) =>
+            _selectionBar.Draw(c, viewport, _list.ScrollY, FileChangesUI.RowHeight, _rowSelection, z, IsRtl);
         _list.RowClicked += OnRowClicked;
         if (w.OnRowActivated != null) _list.RowActivated += OnRowActivated;
         if (w.ContextMenu != null) _list.RowContextRequested += OnRowContextRequested;

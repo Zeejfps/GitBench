@@ -56,8 +56,7 @@ public sealed record StatusPalette(
     uint DangerLineGlyph,
     uint Other,
     uint DialogError,
-    uint DialogWarning,
-    uint DiffError);
+    uint DialogWarning);
 
 public sealed record BannerStyles(
     uint Background,
